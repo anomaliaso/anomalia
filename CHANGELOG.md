@@ -2,6 +2,20 @@
 
 ## 2026-08-27
 
+### Il pannello agente non si ricordava come lo avevi lasciato
+
+`agentPanelOpen` era uno `$state(false)` locale alla pagina del thread: ogni navigazione lo
+riportava chiuso. Chi teneva il pannello aperto su un agente e tornava nella chat dalla
+sidebar lo ritrovava chiuso, e viceversa.
+
+La preferenza ora segue l'AGENTE (`custom_agent_id ?? agent`) e vive in localStorage
+(`anomalia:chat-agent-panel:<brand>:<agent>`, stesso pattern delle bozze di chat): atterrando
+su un thread il pannello torna com'era stato lasciato per l'agente di quella chat, e ogni
+cambio — toggle in topbar o X del pannello — la riscrive. Chiuso = chiave assente: il default
+è già chiuso. Lettura a un `$effect` di atterraggio (ri-allineato quando cambia il thread),
+scrittura a un `$effect` idempotente: entrambi passano da `chat-agent-panel-pref.ts`, mai
+dallo storage diretto.
+
 ### La resa dei video generativi/UGC passa al secondo agente con tier pro
 
 Come per il motion (`motion_write` accoda, la resa gira su un agente con modello avanzato),
@@ -69,6 +83,7 @@ muta: app mobile e desktop «coming soon». Componente nuovo `HomePricing`
 con scoped styles sui token di landing.css; testi nuovi sotto
 `landing.pricing.*` in en/it/es/fr, `svelte-check` non aggiunge errori.
 
+>>>>>>> origin/dev
 ### Self-host: nascondere il sito di marketing, partire dall'app
 
 Non c'era. `TENANT_BRAND_ID` salta lo switcher dei brand, `BILLING_PROVIDER=open`

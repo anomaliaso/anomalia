@@ -9,6 +9,7 @@
       date: 'August 27, 2026',
       title: 'Tools work on every message, not just the first',
       items: [
+        'The agent panel now remembers how you left it — open or closed — separately for each agent, so returning to a chat restores your view.',
         'AI and UGC video renders now get their shot brief written by a director-grade agent (the same advanced model tier as motion videos), with the old template brief kept as a safety net.',
         'Agents now write minimal replies by rule, not by taste: every sentence must carry a fact — no greetings, no transitions, no filler.',
         'Sending your first message now shows a spinner right away: no more silent gap while the conversation is being created.',
