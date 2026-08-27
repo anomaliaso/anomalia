@@ -13,10 +13,9 @@
  * `ai_calls` che mente sul provider e` un conto che non torna.
  */
 import { env } from '$env/dynamic/private';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
-import { harnessSdkModel } from '$lib/agent/bridge/adapters';
 import { geminiFlash } from '$lib/server/gemini';
+import { craftAgentModel } from '$lib/server/craft-model';
 
 export type MotionAgentModel = {
 	model: LanguageModel;
@@ -33,19 +32,8 @@ export type MotionAgentModel = {
  * composizione Remotion e` la cosa piu` difficile che il prodotto chiede a un modello, e la chat
  * puo` restare sul veloce mentre questo no.
  */
-const MOTION_TIER = 'pro' as const;
-
-function google(id: string): LanguageModel {
-	return createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY })(id);
-}
-
 export function motionAgentModel(): MotionAgentModel {
-	const forced = env.MOTION_VIDEO_MODEL?.trim();
-	if (forced) return { model: google(forced), modelId: forced, provider: 'gemini' };
-
-	const routed = harnessSdkModel(MOTION_TIER);
-	if (routed) return routed;
-
-	const id = geminiFlash();
-	return { model: google(id), modelId: id, provider: 'gemini' };
+	// La fabbrica è condivisa (craft-model.ts): stessa misura delle rese UGC, un posto solo
+	// che decide su cosa gira una resa. Il fallback su Gemini resta dichiarato.
+	return craftAgentModel({ envModel: env.MOTION_VIDEO_MODEL, fallbackId: geminiFlash() });
 }
