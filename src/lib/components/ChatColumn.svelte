@@ -580,6 +580,10 @@
   });
 
   const loading = $derived(!!session?.loading);
+  // Il primo invio deve nascere il thread: fra lo svuotamento della textarea e
+  // `createThread` la sessione non esiste ancora e `loading` resta falso — senza
+  // questo stato il bottone muto fa credere che il messaggio non sia partito.
+  let sending = $state(false);
   const streamBuf = $derived(session?.streamBuf ?? '');
   const streamToolCalls = $derived(session?.streamToolCalls ?? []);
   const streamReasoning = $derived(session?.streamReasoning ?? '');
@@ -1095,6 +1099,7 @@
 
     // Must run before ensureThread: createThread sets threadId and can flush
     // the history $effect before we return here.
+    sending = true;
     flashSent();
     prepareOptimisticSend(brandSlug, displayText);
     const id = await ensureThread();
@@ -1103,11 +1108,14 @@
       // sparire, e il testo in attesa va buttato o riapparirebbe come bolla fantasma altrove.
       clearOptimisticSend();
       input = t;
+      sending = false;
       return;
     }
 
     takeOptimisticPending(brandSlug, id);
     primeChatSession({ brandSlug, threadId: id, pendingUserText: displayText });
+    // Il turno ora vive nella sessione (`loading`): la rotella del primo invio ha fatto il suo.
+    sending = false;
 
     if (editingIndex !== null) {
       const idx = editingIndex;
@@ -1706,6 +1714,7 @@
       onsubmit={(text, meta) => send(text, meta)}
       onstop={stopRequest}
       loading={loading}
+      sending={sending}
       placeholder={placeholder}
       showHint={false}
       agentOptions={embedded ? null : agentOptions}

@@ -2,6 +2,23 @@
 
 ## 2026-08-27
 
+### Il primo invio in chat restava muto mentre nasceva il thread
+
+Sulla home del brand ("Assumi un agente") il primo messaggio deve nascere un
+thread via `createThread`: finché non esiste, la sessione non c'è e `loading`
+resta falso. In quel lasso (1-2s in produzione) la textarea si svuotava, il
+bottone diventava microfono, e l'unico segno di vita — la progress bar di
+navigazione — partiva solo dopo. L'utente credeva di non aver inviato nulla.
+
+Fix: ChatColumn tiene uno stato `sending` vero dall'invio fino a che
+`primeChatSession` non prende il turno (o fino al fallimento di
+`createThread`, dove il testo torna nel composer com'era già), e lo passa a
+ChatPrompt: niente microfono mentre l'invio è in volo, e la rotella
+(`ch-busy`, lo stesso pattern della trascrizione) al posto del piano.
+Verificato nel browser sullo stack locale con la latenza di creazione
+strozzata a 1.2s: la rotella riempie il gap su desktop e su viewport stretto,
+il doppio click non manda doppioni.
+
 ### Homepage: la scelta cloud / self-host prima della FAQ
 
 La homepage raccontava il prodotto ma non diceva mai che ci sono due modi di
