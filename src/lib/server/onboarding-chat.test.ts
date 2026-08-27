@@ -150,6 +150,21 @@ describe('buildOnboardingSetupBrief', () => {
     expect(brief).toContain('Content Creator');
     expect(brief).toContain('message_agent');
   });
+
+  it('l\'Analyst salva i social di persona (save_social_handles è SUO), non li delega', () => {
+    const brief = buildOnboardingSetupBrief({ ...base, plan: null });
+    // Il tool è nell'insieme dell'Analyst: il brief lo chiama in prima persona.
+    expect(brief).toContain('save_social_handles');
+    // E non dice la bugia "quello è del Content Creator": la social-identity è un suo mestiere.
+    expect(brief).toContain('save_social_handles (you own it');
+    expect(brief).not.toContain("that tool is the Content Creator's");
+  });
+
+  it('il piano editoriale promesso nel messaggio arriva: si delega al Content Creator, non resta promesso', () => {
+    const brief = buildOnboardingSetupBrief({ ...base, plan: null });
+    expect(brief).toContain('hand the plan itself to the Content Creator');
+    expect(brief).toContain('generate_strategy');
+  });
 });
 
 // ── il brief arriva al modello solo sul thread di setup ────────────────────────────────────────

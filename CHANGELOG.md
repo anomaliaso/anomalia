@@ -16,8 +16,11 @@ Fix:
   che è il mestiere giusto per instradare l'utente e comporre la squadra. Il
   brief (lato server) smette di chiamare in prima i tool che sono dei mestieri:
   l'**analisi SEO/GEO** si **delega al Web Specialist** e la **produzione di
-  contenuti** si **delega al Content Creator**, entrambe via `message_agent`.
-  L'Analyst dirige e compone, non produce e non audita.
+  contenuti** (e il **piano editoriale** quando manca) si **delega al Content
+  Creator**, via `message_agent`. L'Analyst dirige e compone, non produce e non
+  audita — ma **salva i social di persona** (`save_social_handles`, insieme a
+  `sync_social_history`): l'identità social è un suo mestiere, non un'altra
+  delega. La strategia (GTM) resta sua.
 - il messaggio pre-scritto è esplicito sull'incarico di setup: analizza il
   brand, fai l'analisi SEO e AI-visibility del sito, imposta strategia GTM e
   piano editoriale, dimmi cosa automatizzeresti e chiedi cosa tenere.
