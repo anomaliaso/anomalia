@@ -17,6 +17,7 @@
  * freschezza dichiarata (`FRESH_MS`).
  */
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { captureScreenshot, ensureGraphicalMode } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider, graphicalBootstrapDeps } from '$lib/agent/bridge/adapters';
 import type { AdapterContext } from '$lib/agent/kit/types';
@@ -26,7 +27,7 @@ const FRESH_MS = 2_000;
 /** ponytail: Map in-process, niente TTL sweep — poche entry (una per computer attiva), si svuota da sola al cold start. */
 const cache = new Map<string, { at: number; png: Buffer }>();
 
-export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession } }) => {
+export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
 
@@ -51,7 +52,7 @@ export const GET: RequestHandler = async ({ params, url, locals: { supabase, saf
 
 	try {
 		const sandbox = createVercelSandboxProvider();
-		const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-screen', locale: 'it', agentId: url.searchParams.get('agent') || undefined };
+		const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-screen', locale: bilingualNoticeLocale(uiLocale), agentId: url.searchParams.get('agent') || undefined };
 		const ref = await sandbox.provision({ brandId: brand.id, agentId: url.searchParams.get('agent') || undefined }, ctx);
 		let shot = await captureScreenshot(sandbox, ref, ctx);
 		// Xvfb muore col riavvio della VM ma il marker resta: la cattura fallisce con «unable to

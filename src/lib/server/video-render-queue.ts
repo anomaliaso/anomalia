@@ -326,7 +326,11 @@ async function notifyThread(
 			userId: row.user_id,
 			threadId: row.thread_id,
 			userMessage: `[background] The video render you started has finished: ${outcome}. Report it to the user in one short line, referring to what they originally asked for. Do not re-run the render.`,
-			locale: 'it',
+			// La nota `[background]` è per il MODELLO: inglese a prescindere. Il locale del job qui
+			// sotto pilota le notice visibili della coda — e nessun profilo reale è in mano a questo
+			// sweep: niente locale significa notice inglesi per tutti (il vecchio hardcoded 'it'
+			// avrebbe parlato italiano con chiunque). La coda rifiuta stringhe vuote: 'en' esplicito.
+			locale: 'en',
 			origin,
 			continuation: true
 		});

@@ -351,10 +351,12 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			({ run } = await resume(admin, waitingId));
 		} catch (e) {
 			if (e instanceof Error && e.message.includes('stato cambiato sotto le mani')) {
-				return new Response(
-					JSON.stringify({ error: 'resume_conflict', message: 'Qualcun altro ha già risposto in questa conversazione.' }),
-					{ status: 409, headers: { 'Content-Type': 'application/json' } }
-				);
+			// API payload, non chat: nessuna persona la legge in un fumetto. In inglese comunque,
+			// come ogni nota che il backend consegna fuori dal proprio turno.
+			return new Response(
+				JSON.stringify({ error: 'resume_conflict', message: 'Someone else already replied in this conversation.' }),
+				{ status: 409, headers: { 'Content-Type': 'application/json' } }
+			);
 			}
 			throw e;
 		}
@@ -1129,16 +1131,16 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					detail: `run ${run.id} · agente ${spec.id}`
 				}).catch((e) => console.error('[AGENT_KIT] report fallito', e));
 				if (brandSandbox) {
-				const corrective =
-					locale === 'it'
-						? `Il tuo tentativo precedente è fallito con questo errore: ${why.slice(0, 300)}. Spiega in una frase all'utente, nella lingua del suo ultimo messaggio, cosa non ha funzionato e riprova l'azione originale.`
-						: `Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.`;
+				// Regola assoluta: le note del backend all'AI NON si travestono da utente (niente
+				// `role: 'user'`) e non esistono in italiano — sono dirette al modello, e il modello
+				// poi parla nella lingua dell'utente. `role: 'system'` le tiene fuori dalla chat.
+				const corrective = `Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.`;
 				try {
 					const retryTurn = await startHarnessTurn({
 						runId: `${run.id}-retry`,
 						model: modelRef ?? undefined,
 						system,
-						messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
+						messages: stripProviderRefs([...messages, { role: 'system', content: corrective } as ModelMessage]),
 						tools: toolSet,
 						stopWhen: [isStepCount(TURN_MAX_STEPS)],
 						sandboxSession: brandSandbox?.session,

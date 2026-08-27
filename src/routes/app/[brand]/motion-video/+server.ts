@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
 import { CreditsExhaustedError } from '$lib/server/credits';
 import { runMotionVideoTurn } from '$lib/server/motion-video/run-turn';
@@ -104,7 +105,7 @@ async function loadBrand(supabase: SupabaseClient, slug: string) {
 export const POST: RequestHandler = async ({
 	request,
 	params,
-	locals: { supabase, safeGetSession },
+	locals: { supabase, safeGetSession, locale: uiLocale },
 	platform
 }) => {
 	const { user } = await safeGetSession();
@@ -198,9 +199,10 @@ export const POST: RequestHandler = async ({
 	}
 
 	const origin = new URL(request.url).origin;
-	const locale = (request.headers.get('accept-language') || '').toLowerCase().startsWith('en')
-		? 'en'
-		: 'it';
+	// Stesso locale della pagina (hooks → pickLocale): l'inversione `startsWith('en') ? 'en' : 'it'`
+	// mandava in italiano chi ha header vuoto, `*` o solo lingue non supportate — la classe di bug
+	// di amazon.in, qui sulla superficie Motion.
+	const locale = bilingualNoticeLocale(uiLocale);
 	const deadline = chatTurnDeadline(Date.now());
 	const abortController = new AbortController();
 	const hardStop = setTimeout(() => abortController.abort(), CHAT_TURN_ABORT_MS);
@@ -256,6 +258,7 @@ export const POST: RequestHandler = async ({
 				// Lo stesso thread in cui la risposta viene scritta: è quello a cui appartiene un
 				// eventuale artefatto consegnato durante il giro.
 				threadId: thread?.id ?? null,
+				locale,
 				abortSignal: abortController.signal,
 				deadline,
 				onSaved: (id) => {

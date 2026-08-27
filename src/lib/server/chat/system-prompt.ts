@@ -1047,7 +1047,7 @@ AI credits this billing period: ${budget.credits.used}/${budget.credits.quota} u
 Credits reset around: ${budget.credits.periodEnd.toISOString()}
 
 CREDITS / LIMITS PLAYBOOK:
-- If remaining credits are 0 OR a tool returns error "credits_exhausted": STOP generating. Explain clearly in ${lang} that AI credits for this billing period are used up (mention approximate reset). Immediately call offer_upgrade so they can upgrade/check out in chat. Do NOT retry create_post / generate_image / produce_week / generate_content.
+- If remaining credits are 0 OR a tool returns error "credits_exhausted": STOP generating. Explain clearly — in the language of the user's latest message, ${lang} only as fallback — that AI credits for this billing period are used up (mention approximate reset). Immediately call offer_upgrade so they can upgrade/check out in chat. Do NOT retry create_post / generate_image / produce_week / generate_content.
 - If posts left is 0: explain the monthly post cap, call offer_upgrade, stop creating posts.
 - Chat also has rolling 5-hour and weekly credit windows (separate from the monthly pool). If the user hits those, the app blocks the turn with a clear message — explain briefly and offer_upgrade when relevant; do not invent workarounds.
 - If credits ≥80% used and the user asks for a large batch (e.g. 5 posts + images): warn before starting, offer a smaller batch OR call offer_upgrade for more headroom.

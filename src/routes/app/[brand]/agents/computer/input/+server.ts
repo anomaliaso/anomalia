@@ -9,6 +9,7 @@
  * Non è un canale generico di comandi: passano `type` e `key`, niente altro.
  */
 import { json } from '@sveltejs/kit';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { runActions } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider } from '$lib/agent/bridge/adapters';
 import type { AdapterContext } from '$lib/agent/kit/types';
@@ -23,7 +24,7 @@ const ALLOWED_KEYS = new Set([
 	'ctrl+c', 'ctrl+v', 'ctrl+a', 'ctrl+x', 'ctrl+z'
 ]);
 
-export const POST: RequestHandler = async ({ params, request, url, locals: { supabase, safeGetSession } }) => {
+export const POST: RequestHandler = async ({ params, request, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
 
@@ -37,7 +38,7 @@ export const POST: RequestHandler = async ({ params, request, url, locals: { sup
 	if (!text && !key) return json({ error: 'empty' }, { status: 400 });
 
 	const sandbox = createVercelSandboxProvider();
-	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-input', locale: 'it', agentId: url.searchParams.get('agent') || undefined };
+	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-input', locale: bilingualNoticeLocale(uiLocale), agentId: url.searchParams.get('agent') || undefined };
 	const ref = await sandbox.provision({ brandId: brand.id, agentId: url.searchParams.get('agent') || undefined }, ctx);
 	const res = await runActions(sandbox, ref, ctx, key ? [{ kind: 'key', key }] : [{ kind: 'type', text }]);
 	if (!res.ok) return json({ error: 'input_failed', detail: res.error }, { status: 502 });

@@ -335,23 +335,26 @@ async function roomRecentLines(
  * regola sta in tre posti (campo obbligatorio, forma del JSON, `parseNextSpeaker` che scarta se è
  * vuoto), così un modello che imita il formato senza avere niente da dire non passa lo stesso.
  */
-const NEXT_PROMPT = `Sei lo smistatore di una chat di gruppo di lavoro. Un agente ha appena risposto all'utente.
-Decidi se manca ancora qualcosa di IMPORTANTE che un ALTRO mestiere deve dire, e chi.
+// Questo è testo per il MODELLO, non per l'utente: sempre inglese (stessa regola delle note
+// del backend — REPLY LANGUAGE decide poi la lingua della risposta). Il roster sotto resta
+// "chiave — nome: mestiere" e i nomi viaggiano nei dati.
+const NEXT_PROMPT = `You are the dispatcher of a working group chat. An agent has just replied to the user.
+Decide whether anything IMPORTANT is still missing that a DIFFERENT trade should say, and who.
 
-La risposta normale è NESSUNO. Rispondi {"speaker":null} e basta se:
-- la risposta data copre già la richiesta;
-- quello che si potrebbe aggiungere è d'accordo, un complimento, un riassunto o una ripetizione;
-- l'aggiunta sarebbe una cosa generica che l'utente non ha chiesto;
-- il messaggio dell'utente era di una sola area e quell'area ha già parlato.
+The normal answer is NOBODY. Reply {"speaker":null} and nothing else if:
+- the given reply already covers the request;
+- whatever could be added would be agreement, a compliment, a summary or a repetition;
+- the addition would be generic and the user never asked for it;
+- the user's message touched only one area and that area has already spoken.
 
-Scegli qualcuno SOLO se:
-- una parte esplicita della richiesta dell'utente non ha ancora avuto risposta, e non è del mestiere di chi ha parlato;
-- oppure chi ha parlato ha detto qualcosa che un altro mestiere deve correggere o contraddire, perché così com'è porta l'utente fuori strada.
+Pick someone ONLY if:
+- an explicit part of the user's request has not been answered yet, and it is not the speaker's trade;
+- or the speaker said something another trade must correct or contradict, because as-is it leads the user astray.
 
-Se scegli qualcuno devi dire in poche parole COSA aggiunge, di concreto, che l'utente non ha già.
-Se non sai dirlo, allora non manca niente: rispondi {"speaker":null}.
+If you pick someone you must say in a few words WHAT concretely they add, beyond what the user already has.
+If you cannot say it, then nothing is missing: reply {"speaker":null}.
 
-Rispondi SOLO con JSON: {"adds":"<cosa manca, poche parole>","speaker":"<chiave>"} oppure {"speaker":null}`;
+Reply ONLY with JSON: {"adds":"<what's missing, few words>","speaker":"<key>"} or else {"speaker":null}`;
 
 /**
  * L'uscita del router di continuazione. Torna null per "nessuno" — che è il caso normale, non un
@@ -382,20 +385,20 @@ export function parseNextSpeaker(
   return { adds, speaker: key };
 }
 
-const ROUTER_PROMPT = `Sei lo smistatore di una chat di gruppo di lavoro. Nella stanza ci sono più agenti.
-Decidi CHI risponde all'ultimo messaggio dell'utente.
+const ROUTER_PROMPT = `You are the dispatcher of a working group chat. Several agents are in the room.
+Decide WHO answers the user's latest message.
 
-Regole:
-- Di norma parla UNO solo: quello il cui mestiere copre la richiesta.
-- Un membro può essere il generalista (chiave "auto"): è lui la scelta quando la richiesta non è di nessun mestiere in particolare. Non sceglierlo per rubare il lavoro a uno specialista che c'è.
-- Due solo se la richiesta chiede davvero due mestieri diversi nella stessa risposta. Mai più di due.
-- Chi non ha niente da aggiungere non compare nell'elenco: restare in silenzio è la scelta normale, non un fallimento.
-- LEGGI LE ULTIME BATTUTE PRIMA DI SCEGLIERE. Se il nuovo messaggio risponde, conferma o corregge qualcosa che ha detto un membro ("sì fallo", "no, più corto", "e i numeri?"), parla QUEL membro — non chi viene prima nella lista.
-- Se l'utente nomina uno specialista, è quello.
-- Solo se davvero nessuna delle regole sopra decide (un saluto a stanza fredda, una domanda generica senza un filo aperto): il generalista "auto" se c'è, altrimenti il primo della lista.
-- L'ordine della lista NON è una preferenza: è solo l'ordine in cui l'utente ha messo insieme la stanza.
+Rules:
+- As a rule exactly ONE agent speaks: the one whose trade covers the request.
+- A member can be the generalist (key "auto"): that is the choice when the request belongs to no particular trade. Do not pick it to steal work from a specialist who is present.
+- Two speakers only when the request truly demands two different trades in the same reply. Never more than two.
+- Whoever has nothing to add is not in the list: staying silent is the normal choice, not a failure.
+- READ THE LATEST EXCHANGES BEFORE CHOOSING. If the new message confirms, corrects or follows up on what one member said ("yes do it", "no, shorter", "what about the numbers?"), THAT member speaks — not whoever comes first in the list.
+- If the user names a specialist, it is that one.
+- Only if none of the rules above decides (a greeting to a cold room, a generic question with no open thread): the generalist "auto" if present, otherwise the first in the list.
+- The order of the list is NOT a preference: it is only the order in which the user assembled the room.
 
-Rispondi SOLO con JSON: {"speakers":["<chiave>"]}`;
+Reply ONLY with JSON: {"speakers":["<key>"]}`;
 
 /**
  * Chi parla in questa battuta. Una chiamata corta su modello economico; qualunque cosa vada storta

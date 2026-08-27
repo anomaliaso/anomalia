@@ -10,12 +10,13 @@
  * non è accesa, `graphical` è `false` senza nessuna chiamata: non c'è niente da leggere.
  */
 import { json } from '@sveltejs/kit';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { probeGraphicalMode } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider } from '$lib/agent/bridge/adapters';
 import type { AdapterContext } from '$lib/agent/kit/types';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession } }) => {
+export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
 
@@ -36,7 +37,7 @@ export const GET: RequestHandler = async ({ params, url, locals: { supabase, saf
 	if (state === 'running' && row?.provider_ref) {
 		try {
 			const sandbox = createVercelSandboxProvider();
-			const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-status', locale: 'it', agentId: url.searchParams.get('agent') || undefined };
+			const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-status', locale: bilingualNoticeLocale(uiLocale), agentId: url.searchParams.get('agent') || undefined };
 			const ref = await sandbox.provision({ brandId: brand.id, agentId: url.searchParams.get('agent') || undefined }, ctx);
 			graphical = (await probeGraphicalMode(sandbox, ref, ctx)).active;
 		} catch {

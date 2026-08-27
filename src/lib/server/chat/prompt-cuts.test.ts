@@ -243,3 +243,26 @@ describe('il prompt non ricresce da solo', () => {
     expect(p.length, `${id ?? 'null'}: ${p.length} caratteri`).toBeLessThan(TETTO[id ?? 'null']);
   });
 });
+
+/**
+ * La regola che ha fermato amazon.in (27/8/2026): un messaggio inglese non deve poter diventare
+ * una risposta italiana. Vale per OGNI mestiere — non solo per i turni del kit, dove
+ * `live.test.ts` la copia già con il messaggio reale di quella sessione.
+ */
+describe('REPLY LANGUAGE nel prompt classico', () => {
+  it('il blocco assoluta è in ogni prompt, e nessuna direttiva contraddice il messaggio dell\'utente', async () => {
+    for (const id of EVERY) {
+      const p = await promptFor(id);
+      expect(p, String(id)).toContain("REPLY LANGUAGE — ABSOLUTE RULE: write every user-facing message in the language of the user's latest message");
+      expect(p, String(id)).not.toMatch(/Respond in (Italian|English)\b/);
+    }
+  });
+
+  it('nemmeno il playbook dei crediti pinnna una lingua al posto dell\'utente', async () => {
+    // Il blocco crediti sta dietro i dati del budget (qui nudi nello stub): si copia il
+    // sorgente, che è ciò che il prompt poi incolla.
+    const src = (await import('node:fs')).readFileSync('src/lib/server/chat/system-prompt.ts', 'utf8');
+    expect(src).toContain("in the language of the user's latest message, ${lang} only as fallback");
+    expect(src).not.toContain('Explain clearly in ${lang}');
+  });
+});
