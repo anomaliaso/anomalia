@@ -98,3 +98,30 @@ alter table public.posts
   add column if not exists title text,
   add column if not exists link_url text,
   add column if not exists subreddit text;
+
+-- ── Owner delle funzioni SECURITY DEFINER ────────────────────────────────────────────────────
+-- In questo stack compose le migrazioni girano come `postgres`, ma `postgres` non può tornare ad
+-- essere `anon` alla fine di una chiamata SECURITY DEFINER fatta via PostgREST: l'RPC fallisce con
+-- "permission denied to set role anon" e il codice che la chiama cade sul fallback (es. il gate
+-- della waitlist legge il flag come attivo anche quando è spento). L'owner del DBA dello stack
+-- (`supabase_admin`) invece funziona. Riassegniamo solo se quel ruolo esiste, così su Supabase
+-- hosted/cli — dove le stesse funzioni possedute da `postgres` sono la norma e funzionano — tutto
+-- resta com'è. Idempotente: le funzioni già riassegnate non matchano il filtro.
+do $$
+declare
+  fn record;
+begin
+  if not exists (select 1 from pg_roles where rolname = 'supabase_admin') then
+    return;
+  end if;
+  for fn in
+    select p.oid::regprocedure as sig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.prosecdef
+      and pg_get_userbyid(p.proowner) = 'postgres'
+  loop
+    execute format('alter function %s owner to supabase_admin', fn.sig);
+  end loop;
+end $$;
