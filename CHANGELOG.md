@@ -2,6 +2,32 @@
 
 ## 2026-08-27
 
+### Il setup del brand si fa con l'Analyst e ci si atterra dentro
+
+Il thread di setup creato a fine onboarding era con l'agente omni (agent=null,
+"Anomalia") e il messaggio pre-scritto chiedeva un incarico vago ("studia il
+brand, dimmi come va la SEO"). Gli utenti non lo vedevano: il wizard li
+ributtava sulla dashboard, o sulla scelta dell'agente, e la chat di setup restava
+orfana — in produzione aprivano una sessione NUOVA senza sapere che ne esisteva
+una già impostata.
+
+Fix:
+- il thread di setup parla con l'**Analyst** (`chat_threads.agent='analyst'`),
+  che è il mestiere giusto per instradare l'utente e comporre la squadra. Il
+  brief (lato server) smette di chiamare in prima i tool che sono dei mestieri:
+  l'**analisi SEO/GEO** si **delega al Web Specialist** e la **produzione di
+  contenuti** (e il **piano editoriale** quando manca) si **delega al Content
+  Creator**, via `message_agent`. L'Analyst dirige e compone, non produce e non
+  audita — ma **salva i social di persona** (`save_social_handles`, insieme a
+  `sync_social_history`): l'identità social è un suo mestiere, non un'altra
+  delega. La strategia (GTM) resta sua.
+- il messaggio pre-scritto è esplicito sull'incarico di setup: analizza il
+  brand, fai l'analisi SEO e AI-visibility del sito, imposta strategia GTM e
+  piano editoriale, dimmi cosa automatizzeresti e chiedi cosa tenere.
+- dopo la fine del wizard l'utente atterra **dentro il thread di setup**
+  (`/app/{slug}/chat/{thread}`) invece che su `/app/{slug}`: sia la `finish`
+  dell'action sia la scelta dell'agente (AgentPick) aprono il thread già
+  creato, che porta il nome e la bandiera Analyst in sidebar.
 ### Il pannello agente non si ricordava come lo avevi lasciato
 
 `agentPanelOpen` era uno `$state(false)` locale alla pagina del thread: ogni navigazione lo
@@ -38,7 +64,6 @@ Test: tier del modello (pro del provider, override env, fabbrica condivisa col m
 prompt del crafter porta tutti i contesti e il divieto di toccare le RULE, e i tre percorsi
 (successo, modello a terra, output muto) con il deterministico come rete.
 
-## 2026-08-27
 
 ### La direttiva del minimo entra nel contratto di consegna
 
@@ -51,8 +76,6 @@ NOMINATI (no greeting, no "Great news!", no transizioni, aggettivi senza fatto) 
 forza operativa — ogni frase deve guadagnarsi il posto: se tagliandola non sparisce nessun
 fatto, si taglia. Il posto è il blocco unico letto da testa omni e specialisti; il test
 esistente che separa «trasmettere meno» da «lavorare meno» (75 passi) resta pinnato e verde.
-
-## 2026-08-27
 
 ### Il primo invio in chat restava muto mentre nasceva il thread
 
@@ -83,7 +106,6 @@ muta: app mobile e desktop «coming soon». Componente nuovo `HomePricing`
 con scoped styles sui token di landing.css; testi nuovi sotto
 `landing.pricing.*` in en/it/es/fr, `svelte-check` non aggiunge errori.
 
->>>>>>> origin/dev
 ### Self-host: nascondere il sito di marketing, partire dall'app
 
 Non c'era. `TENANT_BRAND_ID` salta lo switcher dei brand, `BILLING_PROVIDER=open`
