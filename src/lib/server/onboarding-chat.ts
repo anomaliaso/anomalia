@@ -32,7 +32,7 @@ import { enqueueQueuedChatTurn } from '$lib/server/chat/queue';
 import { rosterForPrompt, scheduledWorkAllowed } from '$lib/server/job-roster';
 import { PLANS, visiblePlans } from '$lib/plans';
 import { isPlanGoEnabled } from '$lib/server/feature-flags';
-import { DEFAULT_LOCALE, isLocale, localeLanguageName, type Locale } from '$lib/i18n/locale';
+import { DEFAULT_LOCALE, bilingualNoticeLocale, isLocale, localeLanguageName, type Locale } from '$lib/i18n/locale';
 
 /** Il valore di `chat_threads.surface` del thread di setup. Uno per brand (key = brandId). */
 export const ONBOARDING_CHAT_SURFACE = 'onboarding';
@@ -246,7 +246,8 @@ export async function seedOnboardingChat(
       userId: opts.userId,
       threadId: thread.id,
       userMessage: visible,
-      locale: opts.locale === 'en' ? 'en' : opts.locale === 'it' ? 'it' : 'en',
+      // Stessa normalizzazione di tutto il resto: non-italiano → inglese.
+      locale: bilingualNoticeLocale(opts.locale),
       origin: opts.origin
     });
     return thread.id;

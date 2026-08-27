@@ -1,4 +1,5 @@
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { genaiClient, groundedText, structured } from './research';
 import { syncZernioAnalytics } from './zernio';
@@ -466,7 +467,7 @@ async function gatherRecapData(
     brandName: brand.name,
     brandSlug: brand.slug,
     ownerEmail: profile.email,
-    ownerLocale: profile.locale ?? 'it',
+    ownerLocale: profile.locale ?? 'en',
     postsPublished: published.length,
     postsPending: pending.length,
     postsScheduled: scheduled.length,
@@ -815,7 +816,9 @@ function buildActionItems(
   growth: GrowthReadiness | null = null
 ): { label: string; url?: string }[] {
   const items: { label: string; url?: string }[] = [];
-  const isIt = locale === 'it' || locale === 'it-IT';
+  // Normalizzazione unica del brand: it/it-IT/it-CH → italiano, tutto il resto (incluso
+  // profilo senza locale) → inglese. Lo stretto `=== 'it' || 'it-IT'` perdeva `it-CH`.
+  const isIt = bilingualNoticeLocale(locale) === 'it';
 
   if (growth && (!growth.ready || growth.warnings.length > 0)) {
     const pending = [...growth.blocking, ...growth.warnings];

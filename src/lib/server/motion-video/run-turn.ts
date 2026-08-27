@@ -152,6 +152,8 @@ export async function runMotionVideoTurn(opts: {
 	 * montato qui dentro perché sta nei tool condivisi della chat — rifiuta ogni chiamata.
 	 */
 	threadId?: string | null;
+	/** Dashboard locale: attraversa fino ai tool condivisi (report_locale dei job async). */
+	locale?: string;
 	deadline?: ChatTurnDeadline;
 	consumeSseStream?: (args: { stream: ReadableStream<string | Uint8Array> }) => Promise<void>;
 	onSaved?: (id: string) => void;
@@ -233,6 +235,7 @@ export async function runMotionVideoTurn(opts: {
 		supabase: opts.supabase,
 		abortSignal: opts.abortSignal,
 		threadId: opts.threadId ?? undefined,
+		locale: opts.locale,
 		deadlineReached: opts.deadline ? () => opts.deadline!.reached() : undefined,
 		// I sotto-agenti devono sapere quanto tempo resta PRIMA di partire, non scoprirlo a metà.
 		remainingMs: opts.deadline ? () => opts.deadline!.remainingMs() : undefined,

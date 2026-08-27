@@ -1,4 +1,5 @@
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { tool, stepCountIs, hasToolCall, type ModelMessage, type UIMessage } from 'ai';
 import { harnessStreamText } from '$lib/server/harness';
@@ -203,10 +204,14 @@ function studioChatTools(
 	supabase: SupabaseClient,
 	brandId: string,
 	userId: string,
-	threadId?: string
+	threadId?: string,
+	/** Dashboard locale: feeds `report_locale` of the async jobs these tools enqueue. */
+	locale?: string
 ) {
 	const scoped = pickTools(
-		createChatTools(supabase, brandId, 'Europe/Rome', userId, '', 'it', threadId),
+		// Bilingual normalization here, not at each caller: an untyped/absent locale must be
+		// English — the hardcoded 'it' used to send amazon.in-style users Italian job reports.
+		createChatTools(supabase, brandId, 'Europe/Rome', userId, '', bilingualNoticeLocale(locale), threadId),
 		'motion'
 	);
 	const out: Record<string, unknown> = {};
@@ -311,6 +316,8 @@ export async function runMotionVideoAgent(opts: {
 	userId?: string;
 	/** Thread di questo giro: un artefatto appartiene a una conversazione (vedi run-turn). */
 	threadId?: string;
+	/** Dashboard locale: i tool condivisi della chat firmano così i job async che aprono. */
+	locale?: string;
 	supabase?: SupabaseClient;
 	/** Persist successful writes so a dropped SSE still leaves a row in the gallery. */
 	persist?: MotionPersistFn;
@@ -497,7 +504,7 @@ Need photo assets? Call read_media first. If a library image fits, use_library_i
 	// selection-bound source tools and its reference tools win every name collision below.
 	const chatTools =
 		supabase && brandId && userId
-			? studioChatTools(supabase, brandId, userId, opts.threadId)
+			? studioChatTools(supabase, brandId, userId, opts.threadId, opts.locale)
 			: {};
 	const libraryTools =
 		supabase && brandId && userId ? createMediaLibraryTools({ supabase, brandId, userId }) : {};

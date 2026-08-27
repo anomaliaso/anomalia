@@ -180,22 +180,23 @@ describe('benchAwarePrepareStep — il tool in panchina sparisce dal tavolo, con
 	}
 
 	it('senza panchina non tocca niente', async () => {
-		const prepare = benchAwarePrepareStep(createChatLoopGuard(), toolNames, 'it');
+		const prepare = benchAwarePrepareStep(createChatLoopGuard(), toolNames);
 		expect(await prepare({ messages: messaggi })).toEqual({});
 	});
 
-	it('con panchina: activeTools senza il tool, e il perché in coda ai messaggi', async () => {
-		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames, 'it');
+	it('con panchina: activeTools senza il tool, e il perché in coda ai messaggi come nota nascosta al modello', async () => {
+		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames);
 		const out = await prepare({ messages: messaggi });
 		expect(out.activeTools).toEqual(['replace_motion_source', 'reply']);
 		const appended = (out.messages as Array<{ role: string; content: string }>).at(-1)!;
-		expect(appended.role).toBe('user');
+		// Mai a nome dell'utente: le note del backend all'AI viaggiano come `system`.
+		expect(appended.role).toBe('system');
 		expect(appended.content).toContain('create_motion_video');
 		expect(appended.content).toContain('Import not allowed');
 	});
 
 	it('la spiegazione entra UNA volta, activeTools resta a ogni step', async () => {
-		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames, 'it');
+		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames);
 		const primo = await prepare({ messages: messaggi });
 		const secondo = await prepare({ messages: primo.messages as typeof messaggi });
 		expect(secondo.activeTools).toEqual(['replace_motion_source', 'reply']);
@@ -203,7 +204,7 @@ describe('benchAwarePrepareStep — il tool in panchina sparisce dal tavolo, con
 	});
 
 	it('compone un prepareStep interno (la mailbox) invece di sostituirlo', async () => {
-		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames, 'it', async ({ messages }) => ({
+		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames, async ({ messages }) => ({
 			messages: [...(messages ?? []), { role: 'user', content: 'follow-up assorbito' }]
 		}));
 		const out = await prepare({ messages: messaggi });
@@ -214,18 +215,18 @@ describe('benchAwarePrepareStep — il tool in panchina sparisce dal tavolo, con
 
 	it('se la panchina svuoterebbe il tavolo, non restringe', async () => {
 		const g = guardConPanchina();
-		const prepare = benchAwarePrepareStep(g, ['create_motion_video'], 'it');
+		const prepare = benchAwarePrepareStep(g, ['create_motion_video']);
 		const out = await prepare({ messages: messaggi });
 		expect(out.activeTools).toBeUndefined();
 	});
 });
 
 describe('toolBenchNotice', () => {
-	it('nomina il tool e il dettaglio, in entrambe le lingue', () => {
-		for (const locale of ['it', 'en'] as const) {
-			const notice = toolBenchNotice('create_motion_video', erroreImportNonAmmesso, locale);
-			expect(notice).toContain('create_motion_video');
-			expect(notice).toContain('Import not allowed');
-		}
+	it('è una nota al modello in inglese, comunque — la lingua dell\'utente la decide lui', () => {
+		const notice = toolBenchNotice('create_motion_video', erroreImportNonAmmesso);
+		expect(notice).toContain('create_motion_video');
+		expect(notice).toContain('Import not allowed');
+		expect(notice.startsWith('[SYSTEM NOTE]')).toBe(true);
+		expect(notice).not.toMatch(/[àèéìòù]/);
 	});
 });

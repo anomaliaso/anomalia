@@ -33,6 +33,11 @@ describe('bilingualNoticeLocale', () => {
     expect(bilingualNoticeLocale('es')).toBe('en');
     expect(bilingualNoticeLocale(null)).toBe('en');
     expect(bilingualNoticeLocale('')).toBe('en');
+    // Queued jobs persist params as jsonb: locale arrives untyped, and a non-string
+    // must fall to English just like an unknown string.
+    expect(bilingualNoticeLocale(undefined)).toBe('en');
+    expect(bilingualNoticeLocale(42)).toBe('en');
+    expect(bilingualNoticeLocale({ lang: 'it' })).toBe('en');
     expect(bilingualNoticeLocale('it')).toBe('it');
     expect(bilingualNoticeLocale('it-IT')).toBe('it');
   });

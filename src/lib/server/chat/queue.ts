@@ -361,7 +361,7 @@ async function failChatJob(
 		const wrote = !!(failedRow.partial as { text?: string } | null)?.text;
 		if (!wrote) {
 			const line =
-				params?.locale === 'en'
+				bilingualNoticeLocale(params?.locale) === 'en'
 					? 'The background pass did not run — it stopped before calling anything. Nothing is running now: tell me to try again.'
 					: 'La ripresa in background non è partita — si è fermata prima di fare qualsiasi cosa. Adesso non sta girando niente: dimmi di riprovare.';
 			await admin
@@ -574,11 +574,10 @@ export async function processNextQueuedChatJob(
 		// qualunque blocco — è il bug provato in produzione (il modello che saluta il brand per nome).
 		// ponytail: taggato solo l'ULTIMO messaggio; lo storico resta nudo — se i DM lunghi
 		// confondono, il tag va applicato in loadHistory per i thread col marker.
+		// Il tag è una nota al MODELLO: sempre inglese, a prescindere dalla lingua della chat.
 		const dmTaggedContent =
 			isDm && dmOtherName
-				? locale === 'en'
-					? `[Message from ${dmOtherName} — a fellow AI agent of this brand, NOT the user]: ${userMessageContent}`
-					: `[Messaggio da ${dmOtherName} — un altro agente AI di questo brand, NON l'utente]: ${userMessageContent}`
+				? `[Message from ${dmOtherName} — a fellow AI agent of this brand, NOT the user]: ${userMessageContent}`
 				: null;
 		const modelUserContent = turnDocuments.length
 			? stripAttachedDocsForDisplay(userMessageContent) + formatAttachedDocsForModel(turnDocuments)
@@ -1039,7 +1038,6 @@ export async function processNextQueuedChatJob(
 				prepareStep: benchAwarePrepareStep(
 					loopGuard,
 					Object.keys(customTools),
-					locale,
 					midTurnMailbox.prepareStep
 				),
 				onStepFinish: ({ toolCalls, text, content }: { toolCalls?: Array<{ toolName: string; input?: unknown }>; text?: string; content?: unknown }) => {

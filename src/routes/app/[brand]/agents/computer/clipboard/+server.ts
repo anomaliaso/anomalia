@@ -13,6 +13,7 @@
  * esplicito («Prendi il controllo»), non l'effetto collaterale di un pulsante appunti.
  */
 import { json } from '@sveltejs/kit';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { readClipboard, writeClipboard } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider } from '$lib/agent/bridge/adapters';
 import type { AdapterContext } from '$lib/agent/kit/types';
@@ -21,9 +22,9 @@ import type { RequestHandler } from './$types';
 /** Un appunto non è un trasferimento file: oltre questo, è un altro problema (e un'altra rotta). */
 const MAX_CLIPBOARD_CHARS = 100_000;
 
-async function connect(brandId: string, userId: string, agentId?: string) {
+async function connect(brandId: string, userId: string, agentId?: string, uiLocale?: unknown) {
 	const sandbox = createVercelSandboxProvider();
-	const ctx: AdapterContext = { brandId, userId, runId: 'computer-clipboard', locale: 'it', agentId };
+	const ctx: AdapterContext = { brandId, userId, runId: 'computer-clipboard', locale: bilingualNoticeLocale(uiLocale), agentId };
 	return { sandbox, ctx, ref: await sandbox.provision({ brandId, agentId }, ctx) };
 }
 
@@ -32,19 +33,19 @@ async function brandFor(supabase: App.Locals['supabase'], slug: string) {
 	return data;
 }
 
-export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession } }) => {
+export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
 	const brand = await brandFor(supabase, params.brand);
 	if (!brand) return new Response('Not found', { status: 404 });
 
-	const { sandbox, ctx, ref } = await connect(brand.id, user.id, url.searchParams.get('agent') || undefined);
+	const { sandbox, ctx, ref } = await connect(brand.id, user.id, url.searchParams.get('agent') || undefined, uiLocale);
 	const res = await readClipboard(sandbox, ref, ctx);
 	if (!res.ok) return json({ error: 'clipboard_failed', detail: res.error }, { status: 502 });
 	return json({ text: res.text.slice(0, MAX_CLIPBOARD_CHARS) }, { headers: { 'cache-control': 'no-store' } });
 };
 
-export const POST: RequestHandler = async ({ params, request, url, locals: { supabase, safeGetSession } }) => {
+export const POST: RequestHandler = async ({ params, request, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
 	const brand = await brandFor(supabase, params.brand);
@@ -54,7 +55,7 @@ export const POST: RequestHandler = async ({ params, request, url, locals: { sup
 	const text = typeof body?.text === 'string' ? body.text.slice(0, MAX_CLIPBOARD_CHARS) : '';
 	if (!text) return json({ error: 'empty' }, { status: 400 });
 
-	const { sandbox, ctx, ref } = await connect(brand.id, user.id, url.searchParams.get('agent') || undefined);
+	const { sandbox, ctx, ref } = await connect(brand.id, user.id, url.searchParams.get('agent') || undefined, uiLocale);
 	const res = await writeClipboard(sandbox, ref, ctx, text);
 	if (!res.ok) return json({ error: 'clipboard_failed', detail: res.error }, { status: 502 });
 	return json({ ok: true });

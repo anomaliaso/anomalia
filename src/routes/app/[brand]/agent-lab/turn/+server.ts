@@ -13,6 +13,7 @@ import { createServerBrandFs, createPostgresMemoryStore, createHarnessRuntime, r
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { createQueryTool } from '$lib/server/chat/query-tool';
 import { logAiCall } from '$lib/server/ai-log';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
 // Banco di prova del nuovo sistema agenti — SOLO dev, mai in produzione.
 // run-store scrive `agent_kit_runs` con la service role (RLS dà solo select), quindi il client
@@ -75,7 +76,7 @@ function toLine(e: RunEvent): Record<string, unknown> | null {
 	return null;
 }
 
-export const POST: RequestHandler = async ({ request, params, locals: { supabase, safeGetSession } }) => {
+export const POST: RequestHandler = async ({ request, params, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	if (!dev) throw error(404, 'Not found');
 
 	try {
@@ -129,7 +130,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 			brandId: brand.id,
 			userId: user.id,
 			runId: 'preload',
-			locale: 'it'
+			locale: bilingualNoticeLocale(uiLocale)
 		});
 		const memoryMd = memoryEntries.map((e) => `### ${e.path}\n${e.content}`).join('\n\n');
 
@@ -138,7 +139,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 			brandId: brand.id,
 			threadId: null,
 			userId: user.id,
-			locale: 'it',
+			locale: bilingualNoticeLocale(uiLocale),
 			messages,
 			tools: BUILTIN_TOOLS,
 			// ponytail: fileIndex vuoto — costruirlo richiede un altro giro su agent-files.ts che il
@@ -164,7 +165,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 							brandId: brand.id,
 							threadId: null,
 							userId: user.id,
-							locale: 'it',
+							locale: bilingualNoticeLocale(uiLocale),
 							messages,
 							tools: BUILTIN_TOOLS,
 							extras: { memoryMd, fileIndex: '' },

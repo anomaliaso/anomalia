@@ -505,7 +505,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
     model: chatModel.model,
     system: systemPrompt,
     messages,
-    prepareStep: benchAwarePrepareStep(loopGuard, Object.keys(guardedTools), locale, midTurnMailbox.prepareStep),
+    prepareStep: benchAwarePrepareStep(loopGuard, Object.keys(guardedTools), midTurnMailbox.prepareStep),
     tools: guardedTools,
     // Four ceilings, whichever comes first — all end through the normal finish path. The fourth is
     // per-STEP and lives on the tools themselves (withStepDeadline), because the three below are

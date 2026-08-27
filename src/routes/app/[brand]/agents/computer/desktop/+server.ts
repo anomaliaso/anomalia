@@ -13,6 +13,7 @@
  * (`agent-desktop.ts`) è l'unico confine, ed è per quello che non esiste un ramo "senza password".
  */
 import { json } from '@sveltejs/kit';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { ensureGraphicalMode, ensureRemoteDesktop } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider, graphicalBootstrapDeps, sandboxPortUrl } from '$lib/agent/bridge/adapters';
 import { desktopPassword, desktopUrl, publishComputerRunning } from '$lib/server/agent-desktop';
@@ -22,7 +23,7 @@ import { env } from '$env/dynamic/private';
 import type { AdapterContext } from '$lib/agent/kit/types';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession } }) => {
+export const POST: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
 
@@ -41,7 +42,7 @@ export const POST: RequestHandler = async ({ params, url, locals: { supabase, sa
 	const agentId = url.searchParams.get('agent') || undefined;
 
 	const sandbox = createVercelSandboxProvider();
-	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-desktop', locale: 'it', agentId: url.searchParams.get('agent') || undefined };
+	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-desktop', locale: bilingualNoticeLocale(uiLocale), agentId: url.searchParams.get('agent') || undefined };
 	// Accende la macchina se dorme, invece di rispondere «torna quando l'agente l'avrà accesa».
 	// È la stessa VM del brand: chi arriva primo la crea, e qui chi arriva è l'utente.
 	// L'affitto massimo, non quello di un turno: chi prende il controllo resta lì a lavorare, e
