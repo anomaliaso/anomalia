@@ -44,7 +44,7 @@ describe('chatReplyLanguageBlock', () => {
     expect(en).toContain('REPLY LANGUAGE — ABSOLUTE RULE');
     expect(en).toContain("language of the user's latest message");
     expect(en).toContain('English message gets an English reply');
-    expect(en).toContain('dashboard locale (English) is only a fallback');
+    expect(en).toContain('Dashboard locale (English) is only a fallback');
     expect(localeLanguageName('fr')).toBe('French');
   });
 });
