@@ -51,7 +51,6 @@ Test: tier del modello (pro del provider, override env, fabbrica condivisa col m
 prompt del crafter porta tutti i contesti e il divieto di toccare le RULE, e i tre percorsi
 (successo, modello a terra, output muto) con il deterministico come rete.
 
-## 2026-08-27
 
 ### La direttiva del minimo entra nel contratto di consegna
 
