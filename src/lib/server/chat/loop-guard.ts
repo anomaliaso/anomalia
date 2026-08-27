@@ -173,9 +173,11 @@ export function benchAwarePrepareStep<M>(
 		const messages = base.messages ?? args.messages;
 		if (!messages) return out;
 		const notice = fresh.map((b) => toolBenchNotice(b.toolName, b.detail)).join('\n');
-		// `role: 'system'`: la nota va al modello e non deve comparire in chat né farsi passare
-		// per l'utente — stesso patto del correttivo retry di live.ts.
-		return { ...out, messages: [...messages, { role: 'system', content: notice } as M] };
+		// MAI `role: 'system'`: il provider Google rifiuta con UnsupportedFunctionalityError i
+		// messaggi system NON in testa alla conversazione ("only supported at the beginning").
+		// Resta il patto: nota al MODELLO, inglese, marcata così non si finge l'utente — e
+		// transitoria per questo step solo, quindi non finisce mai come riga in chat.
+		return { ...out, messages: [...messages, { role: 'user', content: notice } as M] };
 	};
 }
 
