@@ -14,7 +14,10 @@ brand restano. Non è nella guida: si accende dall'env, si rilegge a ogni
 richiesta, il hosted product senza la variabile non cambia. Un bounce OAuth
 sul Site URL con `?code=` passa ancora da `/auth/callback` prima del
 redirect, altrimenti il code si perde. Lo sitemap smette di elencare le
-pagine che ormai 303-ano.
+pagine che ormai 303-ano e, se manca la service-role key (CI, self-host
+minimale), esce con la sola parte statica invece di un 500 permanente;
+in produzione una query fallita resta comunque un errore — il crawler
+mantieni l'ultima copia buona invece di vedere mezzo sitemap svanire.
 
 L'healthcheck di compose picchiava `/`: busybox wget tratta un 303 come
 errore, quindi accendere la flag avrebbe lasciato l'app forever-unhealthy.
