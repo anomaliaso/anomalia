@@ -23,7 +23,10 @@ export interface DelegationPluginDeps {
 export function createDelegationPlugin(deps: DelegationPluginDeps): ToolPlugin {
 	const delegation = deps.tools as ChatToolsRecord;
 
-	const tools: ToolSpec[] = SUBAGENT_TOOL_KEYS.map((name) => ({
+	// Solo i tre tool di DISPATCH: qui le run girano inline (niente job `subagent_run`), quindi
+	// `check_subagent` non avrebbe nulla da leggere — resta un tool della chat accodata.
+	const dispatchKeys = SUBAGENT_TOOL_KEYS.filter((k) => k !== 'check_subagent');
+	const tools: ToolSpec[] = dispatchKeys.map((name) => ({
 		name,
 		description: String(delegation[name]?.description ?? ''),
 		requiresMode: 'agent',
