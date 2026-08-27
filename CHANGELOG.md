@@ -2,6 +2,18 @@
 
 ## 2026-08-27
 
+### Homepage: la scelta cloud / self-host prima della FAQ
+
+La homepage raccontava il prodotto ma non diceva mai che ci sono due modi di
+averlo. Ora, fra «Why us» e la FAQ, c'è una griglia a due card nello stile
+delle comparison-card di Rakazo: **Cloud** (badge «Ready to go», feature list,
+CTA «Start free» che punta al `startHref` già calcolato dalla pagina — quindi
+waitlist-aware e login-aware) e **Self-host** (badge «Apache-2.0», feature
+list, CTA «View on GitHub» verso `anomaliaso/anomalia`). Sotto, una riga
+muta: app mobile e desktop «coming soon». Componente nuovo `HomePricing`
+con scoped styles sui token di landing.css; testi nuovi sotto
+`landing.pricing.*` in en/it/es/fr, `svelte-check` non aggiunge errori.
+
 ### Self-host: nascondere il sito di marketing, partire dall'app
 
 Non c'era. `TENANT_BRAND_ID` salta lo switcher dei brand, `BILLING_PROVIDER=open`

@@ -9,6 +9,7 @@
       date: 'August 27, 2026',
       title: 'Tools work on every message, not just the first',
       items: [
+        'The homepage now shows the two ways to use Anomalia side by side — ready-to-go cloud or self-hosted on your own server — with mobile and desktop apps marked as coming soon.',
         'Sending a second message in a chat no longer makes every tool refuse with “turn closed by the system”: the agent keeps working for the whole conversation.',
         'Self-hosting: the production build now reads your .env on start, the database is reachable on whatever port you set, and a fresh install boots instead of stopping on an empty ORIGIN.',
         'Self-hosting: usage and cost are recorded again on a fresh install — eight columns the app writes were missing from the database. Run the migrations once more to get them.',

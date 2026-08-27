@@ -598,6 +598,33 @@
       ],
       "subtitle": "Conecta tu marca, deja que la IA construya estrategia y contenido, publica, y deja que el radar encuentre oportunidades — todo desde un solo panel."
     },
+    "pricing": {
+      "kicker": "Precios",
+      "titleLead": "Listo para usar o",
+      "titleAccent": "en tu servidor.",
+      "lede": "Un producto, dos formas de tenerlo. Mismos agentes, mismas aprobaciones — elige dónde vive.",
+      "apps": "Apps móviles y de escritorio — próximamente.",
+      "cloud": {
+        "name": "Cloud",
+        "badge": "Listo ahora",
+        "meta": "Lo gestionamos todo. Regístrate, conecta una marca, aprueba.",
+        "f0": "Los agentes planifican, escriben y publican por ti, semana tras semana",
+        "f1": "Nada se publica sin tu aprobación",
+        "f2": "Plan gratuito con créditos de IA cada mes",
+        "f3": "Sin servidores ni configuración — funciona al instante",
+        "cta": "Empieza gratis"
+      },
+      "selfhost": {
+        "name": "Self-host",
+        "badge": "Apache-2.0",
+        "meta": "Tu máquina, tus claves, tus datos. Clona y listo.",
+        "f0": "Funciona con Docker Compose en tu propio servidor",
+        "f1": "Tus claves de modelo y API — nada sale de tu infraestructura",
+        "f2": "Los mismos agentes que la nube, marcas ilimitadas",
+        "f3": "CLI y servidor MCP incluidos para tus agentes",
+        "cta": "Ver en GitHub"
+      }
+    },
     "whyus": {
       "kicker": "Por qué nosotros",
       "title": "Esto lo construimos para nosotros primero.",
