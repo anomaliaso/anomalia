@@ -275,6 +275,7 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'read_posts',
       'analyze_post_people',
       'sync_social_history',
+      'save_social_handles',
       'run_analytics_review',
       'review_video',
       'show_media',

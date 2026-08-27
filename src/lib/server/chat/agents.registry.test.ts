@@ -115,6 +115,17 @@ describe('agent registry', () => {
 		expect(inert).toEqual([]);
 	});
 
+	// Il thread di setup parla con l'Analyst e il brief si aspetta CHE SIA LUI a salvare i social
+	// (save_social_handles) e a direzionare la strategia: se il tool non gli arrivasse, il brief
+	// prometterebbe un lavoro che il modello non può fare.
+	it('l\'Analyst ha i tool del setup che il brief gli affida', () => {
+		const analyst = mountedFor('analyst');
+		expect(analyst).toContain('save_social_handles');
+		expect(analyst).toContain('sync_social_history');
+		expect(analyst).toContain('generate_strategy');
+		expect(analyst).toContain('update_gtm_plan');
+	});
+
 	it('the maker agents got the tools their pages are built on', () => {
 		const motion = mountedFor('motion');
 		expect(motion).toContain('create_motion_video');
