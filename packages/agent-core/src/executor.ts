@@ -239,5 +239,5 @@ export function buildSystemPrompt(
 
 function fixedPreamble(spec: AgentSpec): string {
 	const title = spec.title ? ` (${spec.title})` : '';
-	return `Sei ${spec.name}${title}, un agente Anomalia.`;
+	return `You are ${spec.name}${title}, an Anomalia agent.`;
 }
