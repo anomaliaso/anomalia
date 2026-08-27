@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ensureDemoUser, ensureOrg, ensureBrand } from './db-seed.mjs';
+import { ensureDemoUser, ensureOrg, ensureBrand, ensurePrivileges } from './db-seed.mjs';
 
 describe('ensureDemoUser', () => {
   it('returns the id from a successful admin create', async () => {
@@ -93,5 +93,25 @@ describe('ensureBrand', () => {
     ]);
     // ...but a re-seed must not rewrite them on an instance already in use.
     expect(client.calls[0].sql).toContain('do update set name = excluded.name, website = excluded.website');
+  });
+});
+
+describe('ensurePrivileges', () => {
+  it('runs every grant idempotently and survives a restricted statement without failing the seed', async () => {
+    const executed: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        executed.push(sql);
+        if (sql.startsWith('alter default privileges in schema public grant usage')) {
+          throw new Error('must be owner of …');
+        }
+        return { rows: [] };
+      }
+    };
+    await expect(ensurePrivileges(client as any)).resolves.toBeUndefined();
+    const tables = executed.filter((s) => s.startsWith('grant') && s.includes('on all tables'));
+    expect(tables.some((s) => s.includes('to anon'))).toBe(true);
+    expect(tables.some((s) => s.includes('to authenticated'))).toBe(true);
+    expect(executed.some((s) => s.startsWith('grant execute on all functions'))).toBe(true);
   });
 });
