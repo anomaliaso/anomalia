@@ -9,13 +9,17 @@ describe('buildToolJobSummary', () => {
   });
 
   it('summarizes strategy phases', () => {
-    const text = buildToolJobSummary('generate_strategy', {
-      objective: 'Crescita',
-      phases: [
-        { name: 'Awareness', objective: 'farsi conoscere' },
-        { name: 'Conversion', objective: 'vendere' }
-      ]
-    });
+    const text = buildToolJobSummary(
+      'generate_strategy',
+      {
+        objective: 'Crescita',
+        phases: [
+          { name: 'Awareness', objective: 'farsi conoscere' },
+          { name: 'Conversion', objective: 'vendere' }
+        ]
+      },
+      'it'
+    );
     expect(text).toContain('Strategia attiva');
     expect(text).toContain('Crescita');
     expect(text).toContain('Awareness');
@@ -23,10 +27,14 @@ describe('buildToolJobSummary', () => {
   });
 
   it('summarizes editorial plan weeks', () => {
-    const text = buildToolJobSummary('generate_editorial_plan', {
-      cadence: { instagram: 3 },
-      weeks: [{ theme: 'Lancio', focus: 'teaser' }]
-    });
+    const text = buildToolJobSummary(
+      'generate_editorial_plan',
+      {
+        cadence: { instagram: 3 },
+        weeks: [{ theme: 'Lancio', focus: 'teaser' }]
+      },
+      'it'
+    );
     expect(text).toContain('Piano editoriale attivo');
     expect(text).toContain('Lancio');
   });
@@ -41,7 +49,7 @@ describe('buildToolJobSummary', () => {
       ]
     };
     for (const name of ['produce_week', 'generate_content'] as const) {
-      const text = buildToolJobSummary(name, result);
+      const text = buildToolJobSummary(name, result, 'it');
       expect(text).toContain('Settimana 1');
       expect(text).toContain('2 bozze');
       expect(text).toContain('hero shot');
@@ -60,7 +68,29 @@ describe('buildToolJobSummary', () => {
     expect(text).toContain('instagram');
   });
 
-  it('falls back for unknown tools', () => {
+	it('falls back for unknown tools', () => {
     expect(buildToolJobSummary('mystery_tool', { ok: true })).toContain('mystery_tool');
+  });
+
+  it('omitted locale is English — never Italian', () => {
+    const text = buildToolJobSummary('seo_geo_audit', {
+      tech_score: 19,
+      issues: 8,
+      share_of_voice: 76,
+      gaps: 54
+    });
+    expect(text).toContain('SEO & GEO audit complete');
+    expect(text).not.toMatch(/completato|Punteggio|Problemi rilevati/);
+  });
+
+  it('writes the SEO audit in English when the chat locale is English — never Italian', () => {
+    const text = buildToolJobSummary(
+      'seo_geo_audit',
+      { tech_score: 19, issues: 8, share_of_voice: 76, gaps: 54 },
+      'en'
+    );
+    expect(text).toContain('SEO & GEO audit complete');
+    expect(text).toContain('Technical score: 19/100');
+    expect(text).not.toMatch(/completato|Punteggio|Problemi rilevati/);
   });
 });

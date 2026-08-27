@@ -27,6 +27,7 @@ import { buildConnectorsPrompt } from '$lib/composio-agent';
 import { isConnectorKind, listedForToolkit } from '$lib/composio-catalog';
 import { aiActSystemSection } from '$lib/ai-act';
 import { buildDisruptiveIdeasSection } from '$lib/server/disruptive-ideas';
+import { chatReplyLanguageBlock, localeLanguageName } from '$lib/i18n/locale';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -100,7 +101,7 @@ function wantsPack(
 export async function buildSystemPrompt(
   supabase: SupabaseClient,
   brand: AnyRec,
-  locale: string = 'it',
+  locale: string = 'en',
   agentId: AgentId | null = null,
   opts?: {
     consultation?: boolean;
@@ -250,7 +251,7 @@ export async function buildSystemPrompt(
       ? await fetchChatUserContext(supabase, opts.userId, { id: brandId, org_id: orgId })
       : null;
 
-  const lang = locale === 'it' ? 'Italian' : 'English';
+  const lang = localeLanguageName(locale);
   const tz = (brand.timezone as string) || 'Europe/Rome';
 
   const sections: string[] = [];
@@ -401,7 +402,7 @@ ${onboarding.phase === 'welcome' ? `FIRST-TURN HINT (only if this is clearly the
 RULES:
 - Always READ data before WRITING it. Use read tools to understand current state before making changes.
 - For destructive actions (deleting posts, rejecting drafts, major strategy changes), confirm with the user first.
-- Respond in ${lang}. Match the user's language.
+- ${chatReplyLanguageBlock(locale)}
 - What a reply contains is the delivery contract below, not a matter of taste.
 - You have full read/write access to: brand materials, strategy, editorial plan, GTM roadmap, posts, products, and team members.
 - Hub context for every section is preloaded below. Use read_* tools anytime you need fresher or deeper data.
@@ -1016,11 +1017,11 @@ export function wrapTurnMessage(block: string, message: ModelMessage): ModelMess
 export async function buildTurnVolatileBlock(
   supabase: SupabaseClient,
   brand: AnyRec,
-  locale: string = 'it'
+  locale: string = 'en'
 ): Promise<string> {
   const brandId = brand.id as string;
   const tz = (brand.timezone as string) || 'Europe/Rome';
-  const lang = locale === 'it' ? 'Italian' : 'English';
+  const lang = localeLanguageName(locale);
   const planKey = (brand.plan as string | null) ?? null;
   const planLabel = planKey ? (PLAN_LABELS[planKey] ?? planKey) : 'none (free / unpaid)';
   const subStatus = (brand.status as string) || 'trial';

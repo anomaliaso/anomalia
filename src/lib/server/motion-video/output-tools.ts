@@ -16,6 +16,7 @@
  * composizione, così la scelta diventa aritmetica invece che speranza.
  */
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -184,7 +185,7 @@ export async function enqueueMotionQcJob(
 		tool_name: MOTION_QC_JOB,
 		input_params: {
 			video_id: opts.videoId,
-			report_locale: opts.locale === 'en' ? 'en' : 'it',
+			report_locale: bilingualNoticeLocale(opts.locale),
 			report_origin: opts.origin ?? ''
 		},
 		status: 'pending',

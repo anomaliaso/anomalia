@@ -32,6 +32,7 @@
  * cui c'è.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
 /**
  * Riprese per un video non finito. Ventiquattro come `DESIGNER_MAX_CONTINUATIONS`: è lo stesso
@@ -218,8 +219,9 @@ async function threadSpendSince(
 }
 
 function continuationPrompt(title: string | null, score: number | null, locale?: string): string {
-	const name = title ? `"${title}"` : locale === 'en' ? 'the motion video' : 'il motion video';
-	if (locale === 'en') {
+	const en = bilingualNoticeLocale(locale) === 'en';
+	const name = title ? `"${title}"` : en ? 'the motion video' : 'il motion video';
+	if (en) {
 		return [
 			`${name} is NOT delivered: ${score == null ? 'no reviewed MP4 exists yet' : `the craft verdict is ${score}/10, not shippable`}.`,
 			'Pick it back up where you left it. Call render_motion_video: the first call on this version hands you the storyboard — one frame per scene — plus the source checks a still cannot show.',
@@ -244,7 +246,7 @@ function continuationPrompt(title: string | null, score: number | null, locale?:
  */
 export function motionUnfinishedNotice(d: MotionContinuation | null, locale: string): string | null {
 	if (!d || d.continue || d.reason === 'shipped' || d.reason === 'no_video_id') return null;
-	const en = locale === 'en';
+	const en = bilingualNoticeLocale(locale) === 'en';
 	const best = d.scores?.length ? Math.max(...d.scores) : null;
 	const grade = best == null ? '' : en ? ` The best it reached is ${best}/10.` : ` Il voto più alto raggiunto è ${best}/10.`;
 	if (d.reason === 'not_improving') {

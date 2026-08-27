@@ -24,10 +24,11 @@ import {
 import { listThreadAgentAvatars } from '$lib/server/custom-agents';
 import { isUnread, loadLastReads, loadUnreadCounts, markThreadRead } from '$lib/server/chat/unread';
 import { hasWebHub } from '$lib/server/plans';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { RequestHandler } from './$types';
 
 // GET: list all threads for this brand+user
-export const GET: RequestHandler = async ({ request, params, locals: { supabase, safeGetSession } }) => {
+export const GET: RequestHandler = async ({ params, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
   const { user } = await safeGetSession();
   if (!user) return json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -49,7 +50,7 @@ export const GET: RequestHandler = async ({ request, params, locals: { supabase,
   // quindi sidebar e `threadIdentity` non imparano niente di nuovo.
   // ponytail: una roster per thread-stanza. Le stanze sono poche e la query sui custom agent
   // parte solo se ce ne sono; se un giorno saranno tante, si accorpano in una query sola.
-  const locale = (request.headers.get('accept-language') ?? '').includes('en') ? 'en' : 'it';
+  const locale = bilingualNoticeLocale(uiLocale);
   const roomRows = threads.filter((t) => isRoomThread(t as { room_agents?: unknown }));
   const roomAvatarsByThread: Record<string, ReturnType<typeof roomAvatars>> = {};
   await Promise.all(

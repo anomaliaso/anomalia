@@ -3,6 +3,7 @@
  * and bounded parallelism so a 20-pack does not wait fully sequential.
  */
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { GoogleGenAI } from '@google/genai';
 import { googleGenaiClient } from '$lib/server/gemini';
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
@@ -1275,7 +1276,7 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
             : false;
           const aborted = !!opts.abortSignal?.aborted;
           if (timedOut || aborted) {
-            const locale = opts.locale === 'en' ? 'en' : 'it';
+            const locale = bilingualNoticeLocale(opts.locale);
             writer.write({
               type: 'text-delta',
               id: textId,
@@ -1397,7 +1398,7 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
           // accodare una continuazione che riprenderebbe zero clip.
           ((timedOut || aborted) && finished.size + failed.size < videoCount);
         if (needsContinue) {
-          const locale = opts.locale === 'en' ? 'en' : 'it';
+          const locale = bilingualNoticeLocale(opts.locale);
           writer.write({
             type: 'text-delta',
             id: textId,

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
 import {
 	CHAT_PENDING_STALE_MS,
@@ -95,7 +96,7 @@ async function runClaimedDesignerJob(
 ): Promise<{ processed: boolean; jobId: string; error?: string }> {
 	const jobId = job.id;
 	const params = (job.input_params ?? {}) as Record<string, unknown>;
-	const locale = params.locale === 'en' ? 'en' : 'it';
+	const locale = bilingualNoticeLocale(params.locale);
 	const depth = Math.max(0, Math.trunc(Number(params.continuation_depth)) || 0);
 	const toolName = job.tool_name as DesignerToolName;
 	if (!isDesignerTool(toolName)) {

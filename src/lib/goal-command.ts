@@ -14,6 +14,8 @@
  *   CLI, da un incarico ricorrente. Una regola che vive solo nel client è una regola che sparisce
  *   appena il messaggio arriva da un'altra parte.
  */
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
+
 export type GoalCommand =
   /** `/goal <testo>` — apre (o riformula) l'obiettivo della conversazione. */
   | { kind: 'set'; statement: string }
@@ -71,7 +73,7 @@ export function parseGoalCommand(text: string | null | undefined): GoalCommand |
  * scomporlo in criteri verificabili e che deve iniziare, non chiedere conferma.
  */
 export function goalCommandInstruction(cmd: GoalCommand, locale: string): string {
-  const en = locale === 'en';
+  const en = bilingualNoticeLocale(locale) === 'en';
   if (cmd.kind === 'set') {
     return en
       ? [

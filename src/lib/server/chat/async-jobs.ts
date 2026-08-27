@@ -119,7 +119,7 @@ export async function runGenerateStrategy(
   const plan = await proposeGtmDual(genaiClient(), profile, {
     objective: params.objective ?? '',
     platforms,
-    outputLanguage: localeLanguageName(params.locale ?? 'it'),
+    outputLanguage: localeLanguageName(params.locale ?? 'en'),
     benchmark: evidence.benchmark,
     topPosts: evidence.topPosts,
     zeroToOne: evidence.historyCount < 10,
@@ -203,7 +203,7 @@ export async function runGenerateEditorialPlan(
   const proposal = await proposePlan(genaiClient(), profile, {
     platforms,
     allowedCadences: cadenceAllowed(brandRow?.plan ?? null),
-    outputLanguage: localeLanguageName(params.locale ?? 'it'),
+    outputLanguage: localeLanguageName(params.locale ?? 'en'),
     strategyBrief: [gtmBrief, evidence.strategyBrief].filter(Boolean).join('\n\n'),
     benchmark: evidence.benchmark,
     topPosts: evidence.topPosts,

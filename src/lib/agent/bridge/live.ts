@@ -1096,12 +1096,19 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				// chiuso. Vedi `dropLiveHarnessSession`.
 				await dropLiveHarnessSession(threadId).catch(() => undefined);
 				const why = error instanceof Error ? error.message : String(error);
+				// English unless this chat is actually Italian — missing/en-IN/es used to dump
+				// Italian into an English thread (amazon.in, 27/8/2026). Keep the Italian template
+				// literal in this file so the abort-guard tests can still find it.
+				const turnErrorText =
+					locale === 'it'
+						? `Errore del turno: ${why.slice(0, 400)}`
+						: `Turn error: ${why.slice(0, 400)}`;
 				try {
 					await closeRunSaving(
 						admin,
 						run.id,
 						{ kind: 'finish', reason: 'aborted' },
-						closeMessageFields([{ type: 'text', text: `Errore del turno: ${why.slice(0, 400)}` }], [])
+						closeMessageFields([{ type: 'text', text: turnErrorText }], [])
 					);
 				} catch {}
 				reportChatError(supabase, error, {
@@ -1116,7 +1123,10 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					detail: `run ${run.id} · agente ${spec.id}`
 				}).catch((e) => console.error('[AGENT_KIT] report fallito', e));
 				if (brandSandbox) {
-				const corrective = `Il tuo tentativo precedente è fallito con questo errore: ${why.slice(0, 300)}. Spiega in una frase all'utente cosa non ha funzionato e riprova l'azione originale.`;
+				const corrective =
+					locale === 'it'
+						? `Il tuo tentativo precedente è fallito con questo errore: ${why.slice(0, 300)}. Spiega in una frase all'utente, nella lingua del suo ultimo messaggio, cosa non ha funzionato e riprova l'azione originale.`
+						: `Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.`;
 				try {
 					const retryTurn = await startHarnessTurn({
 						runId: `${run.id}-retry`,

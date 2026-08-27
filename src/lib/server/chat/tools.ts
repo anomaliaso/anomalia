@@ -43,7 +43,7 @@ export function createChatTools(
   tz: string = 'Europe/Rome',
   userId: string = '',
   origin: string = '',
-  locale: string = 'it',
+  locale: string = 'en',
   threadId?: string,
   _cookieHeader: string = '',
   /** Images the user attached to THIS turn — always available to the renderer as references. */

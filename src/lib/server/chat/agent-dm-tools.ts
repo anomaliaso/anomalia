@@ -36,6 +36,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { AGENTS, AGENT_IDS, resolveAgent, type AgentId } from '$lib/server/chat/agents';
 import { createThread, getThread, saveMessages, type ChatThreadRow } from '$lib/server/chat/persistence';
 import { markThreadRead } from '$lib/server/chat/unread';
@@ -71,7 +72,7 @@ export type DmMember = {
   customAgentId: string | null;
 };
 
-const lang = (locale: string) => (locale === 'en' ? 'en' : 'it');
+const lang = (locale: string) => bilingualNoticeLocale(locale);
 
 /**
  * Le chiavi con cui un modello prova a scrivere ad ANOMALIA. Non è un destinatario: è il

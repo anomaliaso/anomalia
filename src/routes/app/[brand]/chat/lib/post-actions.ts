@@ -39,6 +39,7 @@ import {
   deletePendingChatJobOrReportFailure,
   type Platform
 } from './jobs';
+import { bilingualNoticeLocale, type Locale } from '$lib/i18n/locale';
 
 /**
  * Le azioni del POST che NON aprono un turno di modello: coda, annullamenti, /clear di contesto e
@@ -56,8 +57,9 @@ export async function handlePostAction(input: {
   threadId: string;
   threadAgent: string | null;
   threadCustomAgentId: string | null;
+  locale: Locale;
 }): Promise<Response | null> {
-  const { supabase, brand, user, request, platform, body, webHubEnabled, threadId, threadAgent, threadCustomAgentId } = input;
+  const { supabase, brand, user, request, platform, body, webHubEnabled, threadId, threadAgent, threadCustomAgentId, locale } = input;
   const action = body.action as string | undefined;
 
   // Handle clear history action
@@ -78,7 +80,7 @@ export async function handlePostAction(input: {
   // sintomo sarebbe un agente che ricomincia da capo senza spiegazione. Il rifiuto lascia una riga
   // nella trascrizione — costa meno di un turno impazzito, e si vede.
   if (action === 'clear_context' || isClearCommand(lastUserText(body.messages as ModelMessage[] | undefined))) {
-    const en = (request.headers.get('accept-language') ?? '').includes('en');
+    const en = bilingualNoticeLocale(locale) === 'en';
     if (await threadHasActiveChatResponse(supabase, { userId: user.id, threadId })) {
       await saveMessages(
         supabase,
@@ -111,7 +113,7 @@ export async function handlePostAction(input: {
       supabase,
       current.id,
       'abandoned',
-      (request.headers.get('accept-language') ?? '').includes('en')
+      bilingualNoticeLocale(locale) === 'en'
         ? 'Closed by the user.'
         : "Chiuso dall'utente."
     );
@@ -224,10 +226,9 @@ export async function handlePostAction(input: {
     const queuedUserMessage = textContent + formatAttachedDocsBlock(queuedDocs, CHAT_HISTORY_DOC_CAP);
     if (!queuedUserMessage.trim()) return new Response('Empty message', { status: 400 });
 
-    const acceptLang = request.headers.get('accept-language') ?? '';
-    const locale = acceptLang.includes('en') ? 'en' : 'it';
+    const noticeLocale = bilingualNoticeLocale(locale);
     const rate = await getChatRateUsage(supabase, brand.id, brand.plan);
-    if (!rate.ok) return chatRateLimitResponse(rate, locale);
+    if (!rate.ok) return chatRateLimitResponse(rate, noticeLocale);
     // Accodare un turno è già spendere: il worker lo eseguirà comunque. Si controlla qui, non solo
     // sul percorso interattivo, o la coda diventa il modo per aggirare la quota mensile.
     if (await chatCreditsBlocked(brand.id)) {

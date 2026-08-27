@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { LIBRARY_DOCS_PROMPT } from '$lib/server/chat/motion-video-tools';
 import { REPLY_CONTRACT_BLOCK } from '$lib/server/chat/reply-contract';
+import { chatReplyLanguageBlock, localeLanguageName } from '$lib/i18n/locale';
 
 // Il registro degli agenti di chat. L'utente ne sceglie UNO per turno (cambiabile a metà chat come
 // un model picker), e quella scelta restringe SIA la testa del system prompt SIA il set di tool: le
@@ -673,7 +674,7 @@ export function buildAgentHead(
   /** False per i consulti e i sotto-agenti: chi è già stato delegato non delega a sua volta. */
   withOrchestration: boolean = true
 ): string {
-  const lang = locale === 'it' ? 'Italian' : 'English';
+  const lang = localeLanguageName(locale);
   const def = AGENTS[agentId];
   const label = def.labels.en;
   const area = def.area.en;
@@ -683,7 +684,7 @@ export function buildAgentHead(
 RULES:
 - Always READ data before WRITING it. Use read tools to understand the current state before making changes.
 - For destructive actions (deleting posts, rejecting drafts, major changes), confirm with the user first.
-- Respond in ${lang}. Match the user's language.
+- ${chatReplyLanguageBlock(locale)}
 - What a reply contains is the delivery contract below, not a matter of taste.
 
 AGENTIC LOOP (critical — multi-step agent, not one-shot):

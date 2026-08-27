@@ -11,6 +11,7 @@ import { extractMemoryFromChat } from '$lib/server/brand-memory';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
 import { resolveChatModel, takeKieUsage } from '$lib/server/chat/model';
 import { sourcesFromSteps } from '$lib/chat-sources';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import {
   goalTurnNotice,
   loadOpenGoal,
@@ -383,7 +384,7 @@ export async function finishSuccessfulTurn(input: {
   try {
     const { sendPushToUser } = await import('$lib/server/web-push');
     const readyBody =
-      locale === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere";
+      bilingualNoticeLocale(locale) === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere";
     await sendPushToUser(supabase, user.id, {
       title: 'Anomalia',
       body: readyBody,

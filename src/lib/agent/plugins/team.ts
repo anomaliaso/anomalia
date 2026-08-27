@@ -35,7 +35,7 @@ export function createTeamPlugin(deps: TeamPluginDeps): ToolPlugin {
 		userId: deps.userId,
 		threadId: deps.threadId ?? undefined,
 		origin: deps.origin ?? '',
-		locale: deps.locale ?? 'it'
+		locale: deps.locale ?? 'en'
 	}) as unknown as ChatToolsRecord;
 
 	const tools: ToolSpec[] = [

@@ -12,6 +12,7 @@
  * confrontare gli id, non allargare la regex.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { leftATrace } from '$lib/server/chat/goal';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,7 +86,7 @@ export function turnRanNoTool(content: readonly Part[]): boolean {
 }
 
 export function idleTurnNotice(locale: string): string {
-  if (locale === 'en') {
+  if (bilingualNoticeLocale(locale) === 'en') {
     return '\n\n_Nothing ran in this turn: no tool was called, so nothing new was produced — any file linked above already existed._';
   }
   return '\n\n_In questo turno non è girato niente: nessuno strumento è stato chiamato, quindi non è stato prodotto nulla di nuovo — i file linkati qui sopra esistevano già._';
@@ -113,7 +114,7 @@ export function refusedAndNotRetried(content: readonly Part[]): string[] {
 
 export function refusedToolsNotice(names: string[], locale: string): string {
   const list = names.join(', ');
-  if (locale === 'en') {
+  if (bilingualNoticeLocale(locale) === 'en') {
     return `\n\n_Did not go through in this turn: ${list}. Nothing they were asked to produce exists yet._`;
   }
   return `\n\n_Non è andato a buon fine in questo turno: ${list}. Niente di ciò che dovevano produrre esiste ancora._`;
@@ -136,14 +137,14 @@ export function wroteNothing(content: readonly Part[]): boolean {
 }
 
 export function wroteNothingNotice(locale: string): string {
-  if (locale === 'en') {
+  if (bilingualNoticeLocale(locale) === 'en') {
     return '\n\n_Nothing was written in this turn: every tool that ran was a read. Whatever is described above as created or changed does not exist yet._';
   }
   return '\n\n_In questo turno non è stato scritto niente: tutti gli strumenti usati erano letture. Quello che qui sopra risulta creato o modificato non esiste ancora._';
 }
 
 export function productionClaimNotice(locale: string): string {
-  if (locale === 'en') {
+  if (bilingualNoticeLocale(locale) === 'en') {
     return "\n\n_Correction: no content was actually produced — nothing above exists as a post, image or article yet. What I described is the plan, not finished work. Ask me to produce it and it will appear right here as preview cards._";
   }
   return '\n\n_Correzione: non è stato prodotto davvero nessun contenuto — niente di quello che ho scritto sopra esiste ancora come post, immagine o articolo. Quello che ho descritto è il piano, non lavoro fatto. Chiedimi di produrlo e comparirà qui come schede di anteprima._';

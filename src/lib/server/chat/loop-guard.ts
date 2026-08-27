@@ -8,6 +8,8 @@
  * When this fires, do NOT auto-continue the turn: continuing would resume the same loop.
  */
 
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
+
 export const CHAT_LOOP_THRESHOLD = 5;
 export const TOOL_BENCH_FAILURES = 2;
 
@@ -143,7 +145,7 @@ const BENCH_DETAIL_MAX_CHARS = 300;
 
 export function toolBenchNotice(toolName: string, detail: string, locale: string): string {
 	const why = detail.slice(0, BENCH_DETAIL_MAX_CHARS);
-	if (locale === 'en') {
+	if (bilingualNoticeLocale(locale) === 'en') {
 		return `The tool "${toolName}" has been removed for the rest of this turn: it failed ${TOOL_BENCH_FAILURES} times with the same arguments (${why}). Do not try it again — take a different route, or tell the user honestly what is missing.`;
 	}
 	return `Lo strumento "${toolName}" è stato tolto dal tavolo per il resto di questo turno: ha fallito ${TOOL_BENCH_FAILURES} volte con gli stessi argomenti (${why}). Non riprovarlo — cambia strada, oppure di' onestamente all'utente cosa manca.`;
@@ -188,14 +190,14 @@ export function isRepeatedReply(current: string, previous: string | null | undef
 }
 
 export function repeatedReplyContinuation(locale: string): string {
-	if (locale === 'en') {
+	if (bilingualNoticeLocale(locale) === 'en') {
 		return 'Your last reply was identical to your previous one and you executed NO tools this turn: the work you claim does not exist. Do not repeat that text. Either do the work NOW by calling the tools, or use ask_user to ask what is missing.';
 	}
 	return 'La tua ultima risposta è identica alla precedente e in questo turno non hai eseguito NESSUNO strumento: il lavoro che dichiari non esiste. Non ripetere quel testo. O esegui ADESSO il lavoro chiamando gli strumenti, oppure usa ask_user per chiedere cosa ti manca.';
 }
 
 export function repeatedReplyNotice(locale: string): string {
-	if (locale === 'en') {
+	if (bilingualNoticeLocale(locale) === 'en') {
 		return "I keep producing the same reply without doing any new work — what I claimed does not exist. I'm stopping instead of repeating myself: tell me what you expected to see and I'll do it for real, step by step.";
 	}
 	return 'Mi sto ripetendo: stavo per riscriverti la stessa risposta senza aver fatto alcun lavoro nuovo — quello che dichiaravo non esiste. Mi fermo invece di ripetermi: dimmi cosa ti aspettavi di vedere e lo faccio davvero, un passo alla volta.';
@@ -203,7 +205,7 @@ export function repeatedReplyNotice(locale: string): string {
 
 /** Closing line when the turn stopped because the agent was looping. Never promises auto-continue. */
 export function turnLoopNotice(locale: string): string {
-	if (locale === 'en') {
+	if (bilingualNoticeLocale(locale) === 'en') {
 		return '\n\n_Stopped — I was repeating the same steps without progress. Everything above is saved; tell me how you want to continue._';
 	}
 	return '\n\n_Mi fermo — stavo ripetendo gli stessi passi senza avanzare. Tutto quello sopra è salvato; dimmi come vuoi continuare._';

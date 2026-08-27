@@ -53,4 +53,21 @@ describe('buildUserSection', () => {
     );
     expect(s).toContain('shared collaborator');
   });
+
+  it('never treats profile locale as a reason to answer English in Italian', () => {
+    const s = buildUserSection(
+      {
+        userId: 'u-4',
+        name: 'Alex Kumar',
+        email: 'alex@example.com',
+        locale: 'it',
+        orgRole: null,
+        isOrgOwner: false,
+        brandAccess: 'shared'
+      },
+      'Italian'
+    );
+    expect(s).toContain('never a reason to answer English in Italian');
+    expect(s).toContain('Match reply language to their messages');
+  });
 });
