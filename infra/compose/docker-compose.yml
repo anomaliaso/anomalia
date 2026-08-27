@@ -311,7 +311,9 @@ services:
       kong:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/']
+      # Not `/`: HIDE_MARKETING 303s the homepage to /app, and busybox wget treats
+      # 3xx as a failed spider. robots.txt is always 200 and does not need a session.
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/robots.txt']
       timeout: 5s
       interval: 10s
       retries: 5
@@ -331,6 +333,8 @@ services:
       APP_SECRET: ${APP_SECRET:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       CRON_SECRET: ${CRON_SECRET:-}
+      # Undocumented: HIDE_MARKETING=1 serves the app at `/` instead of the marketing site.
+      HIDE_MARKETING: ${HIDE_MARKETING:-}
 
   cron:
     container_name: anomalia-cron

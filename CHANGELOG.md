@@ -2,6 +2,24 @@
 
 ## 2026-08-27
 
+### Self-host: nascondere il sito di marketing, partire dall'app
+
+Non c'era. `TENANT_BRAND_ID` salta lo switcher dei brand, `BILLING_PROVIDER=open`
+toglie i crediti, ma `/` restava la landing di anomalia.so — pricing, pitch,
+waitlist e tutto. Chi installa per sé non ha un sito commerciale da mostrare.
+
+`HIDE_MARKETING=1` (anche `true` / `yes`) reindirizza il gruppo
+`[[lang=locale]]` e `/start` a `/app`. Login, auth, API, admin e i blog dei
+brand restano. Non è nella guida: si accende dall'env, si rilegge a ogni
+richiesta, il hosted product senza la variabile non cambia. Un bounce OAuth
+sul Site URL con `?code=` passa ancora da `/auth/callback` prima del
+redirect, altrimenti il code si perde. Lo sitemap smette di elencare le
+pagine che ormai 303-ano.
+
+L'healthcheck di compose picchiava `/`: busybox wget tratta un 303 come
+errore, quindi accendere la flag avrebbe lasciato l'app forever-unhealthy.
+Ora picchia `/robots.txt`, che è sempre 200.
+
 ### Il secondo messaggio di un thread si vedeva rifiutare OGNI tool
 
 `startHarnessTurn` cuoce il ToolSet una volta per `sessionKey` (il thread) e
