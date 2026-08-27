@@ -620,6 +620,33 @@
       ],
       "subtitle": "Connect your brand, let the AI build strategy and content, publish, then let the radar find opportunities — all from one dashboard."
     },
+    "pricing": {
+      "kicker": "Pricing",
+      "titleLead": "Ready to run or",
+      "titleAccent": "yours to host.",
+      "lede": "One product, two ways to own it. Same agents, same approvals — pick where it lives.",
+      "apps": "Mobile and desktop apps — coming soon.",
+      "cloud": {
+        "name": "Cloud",
+        "badge": "Ready to go",
+        "meta": "We run everything. Sign up, connect a brand, approve.",
+        "f0": "Agents plan, write and publish for you, week after week",
+        "f1": "Nothing goes live without your approval",
+        "f2": "Free plan with monthly AI credits",
+        "f3": "No servers, no setup — it just works",
+        "cta": "Start free"
+      },
+      "selfhost": {
+        "name": "Self-host",
+        "badge": "Apache-2.0",
+        "meta": "Your machine, your keys, your data. Clone it and go.",
+        "f0": "Runs with Docker Compose on your own server",
+        "f1": "Your model and API keys — nothing leaves your stack",
+        "f2": "Same agents as the cloud, unlimited brands",
+        "f3": "CLI and MCP server included for your own agents",
+        "cta": "View on GitHub"
+      }
+    },
     "whyus": {
       "kicker": "Why us",
       "title": "We built this for ourselves first.",
