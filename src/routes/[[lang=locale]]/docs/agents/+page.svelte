@@ -62,7 +62,7 @@
 
 <h2 id="install-skill">{$_('docs.agents.s23')}</h2>
 <p>{$_('docs.agents.s44')}</p>
-<pre><code>npx skills add andreabuttarelli/anomalia-cli --skill anomalia</code></pre>
+<pre><code>npx skills add anomaliaso/anomalia --skill anomalia</code></pre>
 <p>{$_('docs.agents.s45')}</p>
 <pre><code>curl -sSL https://anomalia.so/install-skill.sh | bash</code></pre>
 <p>{$_('docs.agents.s24')}</p>
@@ -125,8 +125,8 @@ anomalia ai &lt;slug&gt; --message "..." --pipe</code></pre>
   <li><a href={lp('/docs/mcp')}>{$_('docs.agents.s67')}</a> — {$_('docs.agents.s68')}</li>
   <li><a href={lp('/docs/cli')}>{$_('docs.agents.s69')}</a> — {$_('docs.agents.s70')}</li>
   <li>
-    <a href="https://github.com/andreabuttarelli/anomalia-cli" target="_blank" rel="noopener noreferrer"
-      >anomalia-cli</a
+    <a href="https://github.com/anomaliaso/anomalia" target="_blank" rel="noopener noreferrer"
+      >anomalia</a
     >
     — {$_('docs.agents.s71')}
   </li>

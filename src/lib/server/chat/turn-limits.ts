@@ -64,6 +64,12 @@ export const CHAT_HEARTBEAT_INTERVAL_MS = 10_000;
  */
 export const HARNESS_START_TIMEOUT_MS = 60_000;
 
+/** Letto a CHIAMATA, non a import: i test accorciano l'attesa senza toccare il default di deploy. */
+export function harnessStartTimeoutMs(): number {
+	const raw = Number(process.env.HARNESS_START_TIMEOUT_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : HARNESS_START_TIMEOUT_MS;
+}
+
 /**
  * QUANTO PUO` STARE ZITTO UN TURNO GIA` PARTITO — e perche` non sono dieci secondi.
  *
@@ -73,6 +79,9 @@ export const HARNESS_START_TIMEOUT_MS = 60_000;
  * per questo il cane da guardia si mette in pausa quando un tool e` in volo.
  */
 export const HARNESS_SILENCE_TIMEOUT_MS = 120_000;
+
+/** Grazia dopo l'abort prima di chiudere FORZA la riga del run: se il trasporto ignora l'abortSignal, `consumeStream` non torna mai e il reaper troverebbe una riga `running` col battito fermo solo al congelamento dell'istanza. */
+export const HARNESS_ABORT_FORCE_CLOSE_MS = 30_000;
 
 /** Well above the heartbeat interval, so a slow UPDATE or a GC pause is never read as death. */
 export const CHAT_HEARTBEAT_STALE_MS = 90_000;

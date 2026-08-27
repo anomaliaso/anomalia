@@ -76,4 +76,18 @@ describe('contratto di consegna', () => {
   it('conta gli elenchi diversamente dalla prosa', () => {
     expect(REPLY_CONTRACT_BLOCK).toMatch(/ten posts are ten short lines/);
   });
+
+  /**
+   * LA DIRETTIVA NUOVA: il minimo è la REGOLA, non un gusto. «Scrivi poco» da solo il modello lo
+   * scarta come consiglio estetico; qui la regola è operativa — ogni frase deve guadagnarsi il
+   * posto con un fatto, e la prova di forza è la domanda «cosa sparisce se la taglio?».
+   */
+  it('dice CHE COSA È il minimo: la frase si guadagna il posto con un fatto', () => {
+    expect(REPLY_CONTRACT_BLOCK).toContain('MINIMAL BY DEFAULT');
+    expect(REPLY_CONTRACT_BLOCK).toMatch(/if cutting it would lose no fact, cut it/);
+    // I riempitivi classici sono NOMINATI, non descritti: un divieto vago si ignora.
+    for (const filler of ['No greeting', 'no transitions']) {
+      expect(REPLY_CONTRACT_BLOCK).toContain(filler);
+    }
+  });
 });

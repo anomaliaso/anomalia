@@ -136,6 +136,8 @@ type FakeTurn = {
 	calls?: FakeCall[];
 	totalUsage?: Record<string, unknown>;
 	onStreamStart?: () => void;
+	/** Non produce MAI il primo evento: la sessione riusata che non parte (incidente reale). */
+	hang?: boolean;
 	capture?: (opts: { system: string; messages: unknown; tools: Record<string, unknown>; stopWhen: unknown[] }) => void;
 };
 
@@ -178,6 +180,7 @@ function buildFakeHarnessResult(turn: FakeTurn, opts: { tools: Record<string, { 
 
 	const run = async (): Promise<void> => {
 		turn.onStreamStart?.();
+		if (turn.hang) await new Promise<void>(() => {});
 		for (const delta of turn.texts ?? []) {
 			text += delta;
 			uiChunks.push({ type: 'text-delta', id: 't1', delta });
@@ -270,6 +273,14 @@ vi.mock('./adapters', async (importOriginal) => {
 			const idx = Math.min(harnessServed, harnessQueue.length - 1);
 			harnessServed += 1;
 			const turn = harnessQueue[idx];
+			console.log(`[MOCK] start idx=${idx} hang=${!!turn?.hang} fresh=${String(opts.freshSession)}`);
+			if (turn?.hang) {
+				// L'incidente reale è lo START appeso (pi non risolve `stream()`), non lo stream:
+				// una promessa mai risolta è ciò che fa scattare il timeout di partenza. L'opzione
+				// arriva comunque al registro: il test vuole vedere ANCHE il tentativo morto.
+				harnessTurnOpts.push(opts);
+				return new Promise<never>(() => {}) as never;
+			}
 			if (!turn) throw new Error('nessun turno scripted per la startHarnessTurn finta');
 			let tools = opts.tools;
 			if (opts.sessionKey) {
@@ -851,6 +862,70 @@ describe('i tool dei plugin sono ANNUNCIATI al modello, non solo eseguibili', ()
 		// Il set che i worker ricevono si riempie DOPO buildTools: alla creazione è vuoto per
 		// costruzione (i plugin stanno nel catalogo che buildTools stesso produce).
 		expect(src).toMatch(/Object\.assign\(scopedTools, toolSet\)/);
+	});
+});
+
+describe('runKitTurn — il turno abortito non può restare appeso se il gateway ignora lo Stop', () => {
+	it('dopo l’abort del cane da guardia esiste una chiusura forzata con scadenza, dentro il ramo che ferma il turno muto', async () => {
+		// Incidente (kit_turn_died): aborting non sblocca `consumeStream` quando il trasporto
+		// ignora l'abortSignal — la riga restava `running` col battito in funzione e il reaper la
+		// raccoglieva solo al congelamento dell'istanza. Il pin: nel ramo del silenzio il turno
+		// viene chiuso FORZA se `settled` è ancora falso dopo una grazia.
+		const fs = await import('node:fs');
+		const src = fs.readFileSync(new URL('./live.ts', import.meta.url), 'utf8');
+		const watchdogIdx = src.indexOf('muto da');
+		expect(watchdogIdx).toBeGreaterThan(-1);
+		const tail = src.slice(watchdogIdx, watchdogIdx + 2500);
+		expect(tail).toContain('turnAbort.abort()');
+		expect(tail).toMatch(/forceCloseAbortedTurn|chiusura forzata/);
+	});
+});
+
+describe('runKitTurn — la sessione avvelenata non uccide il secondo turno', () => {
+	it('il primo start che non parte sfratta la sessione e riprova UNA volta con freshSession', async () => {
+		// Incidente reale (msg1 ok, msg2 muore con 500 dopo 60s): dopo un turno FINITO la sessione
+		// pi riusata non parte («Request was aborted») e `harness_start_timeout` propagava il
+		// 500. Ora il timeout scarta la sessione e riprova con una fresca — stesso gesto che già
+		// faceva il catch, ma senza far pagare il turno all'utente.
+		vi.stubEnv('HARNESS_START_TIMEOUT_MS', '250');
+		try {
+			textThenReplyModel(['uno '], 'prima risposta');
+			const first = fakeDb();
+			const res1 = await runKitTurn({
+				supabase: fakeSupabase,
+				admin: first.db,
+				brand: { id: 'b1' },
+				user: { id: 'u1' },
+				threadId: 't-reuse',
+				spec,
+				messages: [{ role: 'user', content: 'ciao' }],
+				locale: 'it'
+			});
+			await res1.text();
+			expect(first.rows[0].state).toBe('done');
+
+			scriptTurns({ hang: true }, { texts: ['due '], calls: [replyCall('seconda risposta')] });
+			const second = fakeDb();
+			const res2 = await runKitTurn({
+				supabase: fakeSupabase,
+				admin: second.db,
+				brand: { id: 'b1' },
+				user: { id: 'u1' },
+				threadId: 't-reuse',
+				spec,
+				messages: [{ role: 'user', content: 'ancora' }],
+				locale: 'it'
+			});
+			await res2.text();
+
+			const optsForThread = harnessTurnOpts.filter((o) => o.sessionKey === 't-reuse');
+			expect(optsForThread).toHaveLength(3);
+			expect(optsForThread[2]?.freshSession).toBe(true);
+			expect(second.rows[0].state).toBe('done');
+			expect(second.rows[0].reason).toBe('reply');
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 });
 
@@ -1921,10 +1996,14 @@ describe('un turno che non da` segni di vita si ferma da solo', async () => {
 	const fs = await import('node:fs');
 	const src = fs.readFileSync(new URL('./live.ts', import.meta.url), 'utf8');
 
-	it('partire ha un tetto, e allo scadere la sessione se ne va', () => {
-		expect(src).toContain('HARNESS_START_TIMEOUT_MS');
-		const race = src.slice(src.indexOf('Promise.race'), src.indexOf('const result = turn.result'));
-		expect(race).toContain('dropLiveHarnessSession');
+	it('partire ha un tetto, e allo scadere la sessione se ne va — poi si riprova con una fresca', () => {
+		// Il timeout è leggibile a chiamata (`harnessStartTimeoutMs`): i test lo accorciano via
+		// env senza toccare il default di deploy. La sessione morta si scarta, e il turno non
+		// muore con lei: un solo tentativo con `freshSession` prima di dichiarare il guasto.
+		expect(src).toContain('harnessStartTimeoutMs()');
+		const startBlock = src.slice(src.indexOf('const startTurnOnce'), src.indexOf('const result = turn.result'));
+		expect(startBlock).toContain('dropLiveHarnessSession');
+		expect(startBlock).toMatch(/startTurnOnce\(true\)/);
 	});
 
 	it('il cane da guardia si mette IN PAUSA mentre un tool e` in volo', () => {

@@ -16,8 +16,74 @@ cambio — toggle in topbar o X del pannello — la riscrive. Chiuso = chiave as
 scrittura a un `$effect` idempotente: entrambi passano da `chat-agent-panel-pref.ts`, mai
 dallo storage diretto.
 
+### La resa dei video generativi/UGC passa al secondo agente con tier pro
+
+Come per il motion (`motion_write` accoda, la resa gira su un agente con modello avanzato),
+la resa dei video generativi AI e UGC aveva lo stesso buco: lo shot brief per il generatore
+veniva composto da template deterministici (`buildUgcShotBrief` + `formatUgcShotBrief`) e il
+piano dal planner flash. Nessun file decideva il tier di questo mestiere: tutti i call site
+usavano `IMAGE_AGENT_MODEL()` o il modello del turno.
+
+Ora:
+- `craft-model.ts` — la fabbrica condivisa del modello di resa (tier pro del provider attivo,
+  scappatoia esplicita in env, fallback dichiarato su Gemini). `motion-video/model.ts` la usa
+  ed è la stessa cosa che ora usa l'UGC; `UGC_VIDEO_MODEL` è la scappatoia del mestiere.
+- `media-generator/ugc-craft.ts` — il secondo agente: prende il brief deterministico (la rete,
+  con le RULE del generatore) e lo riscrive come farebbe un regista. Output senza le RULE, o
+  modello a terra, o muto → si torna al deterministico: mai un render senza brief.
+- `ugc-batch.ts` — `briefFor` passa dal crafter prima del render: batch UGC e ads remix
+  ereditano gratis. Il planner resta sul flash: è il PIANO, non la resa.
+
+Test: tier del modello (pro del provider, override env, fabbrica condivisa col motion), il
+prompt del crafter porta tutti i contesti e il divieto di toccare le RULE, e i tre percorsi
+(successo, modello a terra, output muto) con il deterministico come rete.
+
 ## 2026-08-27
 
+### La direttiva del minimo entra nel contratto di consegna
+
+La task chiedeva «scrivi pochissimo, diretto al punto, il più minimo possibile». Il contratto
+di consegna (`reply-contract.ts`) diceva già la forma ma lasciava il minimo come gusto:
+"keep it to the sentences that carry a fact" è una descrizione, non una regola operativa.
+
+Ora c'è `MINIMAL BY DEFAULT`: le meno parole che portano i fatti, con i riempitivi classici
+NOMINATI (no greeting, no "Great news!", no transizioni, aggettivi senza fatto) e la prova di
+forza operativa — ogni frase deve guadagnarsi il posto: se tagliandola non sparisce nessun
+fatto, si taglia. Il posto è il blocco unico letto da testa omni e specialisti; il test
+esistente che separa «trasmettere meno» da «lavorare meno» (75 passi) resta pinnato e verde.
+
+## 2026-08-27
+
+### Il primo invio in chat restava muto mentre nasceva il thread
+
+Sulla home del brand ("Assumi un agente") il primo messaggio deve nascere un
+thread via `createThread`: finché non esiste, la sessione non c'è e `loading`
+resta falso. In quel lasso (1-2s in produzione) la textarea si svuotava, il
+bottone diventava microfono, e l'unico segno di vita — la progress bar di
+navigazione — partiva solo dopo. L'utente credeva di non aver inviato nulla.
+
+Fix: ChatColumn tiene uno stato `sending` vero dall'invio fino a che
+`primeChatSession` non prende il turno (o fino al fallimento di
+`createThread`, dove il testo torna nel composer com'era già), e lo passa a
+ChatPrompt: niente microfono mentre l'invio è in volo, e la rotella
+(`ch-busy`, lo stesso pattern della trascrizione) al posto del piano.
+Verificato nel browser sullo stack locale con la latenza di creazione
+strozzata a 1.2s: la rotella riempie il gap su desktop e su viewport stretto,
+il doppio click non manda doppioni.
+
+### Homepage: la scelta cloud / self-host prima della FAQ
+
+La homepage raccontava il prodotto ma non diceva mai che ci sono due modi di
+averlo. Ora, fra «Why us» e la FAQ, c'è una griglia a due card nello stile
+delle comparison-card di Rakazo: **Cloud** (badge «Ready to go», feature list,
+CTA «Start free» che punta al `startHref` già calcolato dalla pagina — quindi
+waitlist-aware e login-aware) e **Self-host** (badge «Apache-2.0», feature
+list, CTA «View on GitHub» verso `anomaliaso/anomalia`). Sotto, una riga
+muta: app mobile e desktop «coming soon». Componente nuovo `HomePricing`
+con scoped styles sui token di landing.css; testi nuovi sotto
+`landing.pricing.*` in en/it/es/fr, `svelte-check` non aggiunge errori.
+
+>>>>>>> origin/dev
 ### Self-host: nascondere il sito di marketing, partire dall'app
 
 Non c'era. `TENANT_BRAND_ID` salta lo switcher dei brand, `BILLING_PROVIDER=open`

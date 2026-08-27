@@ -8,6 +8,7 @@
   import TeamRoster from '$lib/components/TeamRoster.svelte';
   import HomeChatMockup from '$lib/components/HomeChatMockup.svelte';
   import WhyUs from '$lib/components/WhyUs.svelte';
+  import HomePricing from '$lib/components/HomePricing.svelte';
   import LandingFaq from '$lib/components/LandingFaq.svelte';
   import { localePath, type Locale } from '$lib/i18n/locale';
   import SiteNav from '$lib/components/SiteNav.svelte';
@@ -159,6 +160,8 @@
   </section>
 
   <WhyUs />
+
+  <HomePricing startHref={startHref} />
 
   <LandingFaq />
 

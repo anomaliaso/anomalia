@@ -27,8 +27,9 @@ import {
 	chatTurnDeadline,
 	kitRunIsAlive,
 	turnTruncatedNotice,
-	HARNESS_START_TIMEOUT_MS,
+	harnessStartTimeoutMs,
 	HARNESS_SILENCE_TIMEOUT_MS,
+	HARNESS_ABORT_FORCE_CLOSE_MS,
 	type KitRunLiveness
 } from '$lib/server/chat/turn-limits';
 import { logAiCall, extractSdkUsage } from '$lib/server/ai-log';
@@ -729,7 +730,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		}
 		}
 		const brandSandbox = savedResume ? null : await openBrandHarnessSession(brand.id, run.id, spec.id);
-		const startedTurn = startHarnessTurn({
+		const startTurnOnce = (fresh: boolean) => {
+			const startedTurn = startHarnessTurn({
 			runId: run.id,
 			model: modelRef,
 			system,
@@ -746,27 +748,42 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			abortSignal: turnAbort.signal,
 			stopWhen: [isStepCount(TURN_MAX_STEPS)],
 			sessionKey: threadId,
+				...(fresh ? { freshSession: true } : {}),
 				sandboxSession: brandSandbox?.session
 		});
+			return Promise.race([
+				startedTurn,
+				new Promise<never>((_, reject) =>
+					setTimeout(
+						() => reject(new Error('harness_start_timeout: la sessione non e` partita')),
+						harnessStartTimeoutMs()
+					).unref?.()
+				)
+			]);
+		};
 		/**
 		 * PARTIRE NON E` INFERENZA. Un run e` rimasto sei minuti `running` con zero caratteri, zero
 		 * ragionamento, `partial` mai scritto e NESSUNA chiamata al modello: appeso qui dentro,
 		 * prima che esistesse uno stream. Il battito e` un timer e continuava a battere, quindi il
 		 * reaper lo credeva vivo e la chat diceva «sta generando» finche` qualcuno non uccideva la
 		 * sessione a mano. Se non parte, la sessione se ne va e il turno lo dice.
+		 *
+		 * E SE NON PARTE LA SESSIONE RIUSATA: dopo un turno FINITO, pi la riprende e muore dentro
+		 * («Request was aborted») — msg1 ok, msg2 morto con 500 dopo il timeout. Un solo tentativo
+		 * con sessione fresca: il riuso e` un'ottimizzazione, la risposta dell'utente no.
 		 */
-		const turn = await Promise.race([
-			startedTurn,
-			new Promise<never>((_, reject) =>
-				setTimeout(
-					() => reject(new Error('harness_start_timeout: la sessione non e` partita')),
-					HARNESS_START_TIMEOUT_MS
-				).unref?.()
-			)
-		]).catch(async (e) => {
+		let turn: Awaited<ReturnType<typeof startTurnOnce>>;
+		try {
+			turn = await startTurnOnce(false);
+		} catch (firstStartError) {
 			await dropLiveHarnessSession(threadId).catch(() => undefined);
-			throw e;
-		});
+			try {
+				turn = await startTurnOnce(true);
+			} catch {
+				throw firstStartError;
+			}
+			console.warn(`[AGENT_KIT] run ${run.id} la sessione riusata non partiva: ripreso con sessione fresca`);
+		}
 		const result = turn.result;
 		const silenceWatch = setInterval(() => {
 			if (toolsInFlight > 0 || turnAbort.signal.aborted) return;
@@ -775,9 +792,29 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				`[AGENT_KIT] run ${run.id} muto da ${Math.round((Date.now() - lastSign) / 1000)}s senza tool in volo: lo fermo`
 			);
 			turnAbort.abort();
+			// CHIUSURA FORZATA — l'abort del watchdog non è garantito venga onorato dal trasporto:
+			// il gateway può lasciare la chiamata appesa per sempre e `consumeStream` non torna.
+			// Senza questo, la riga resta `running` col battito vivo e il reaper la raccoglie
+			// solo quando l'istanza serverless congela — l'utente intanto vede «sta generando»
+			// per sempre. Se nel frattempo il turno ha finito ONESTAMENTE (`settled`), CAS e
+			// guardia non fanno nulla di doppio.
+			const forceCloseAbortedTurn = setTimeout(() => {
+				if (settled) return;
+				console.error(`[AGENT_KIT] run ${run.id} il trasporto non ha onorato l'abort: chiusura forzata della riga`);
+				closeRunSaving(
+					admin,
+					run.id,
+					{ kind: 'finish', reason: 'aborted' },
+					closeMessageFields([{ type: 'text', text: '_(turno chiuso: il modello non ha risposto in tempo)_' }], [])
+				).catch(() => finish(admin, run.id, 'aborted').catch(() => undefined));
+				kickQueue();
+			}, HARNESS_ABORT_FORCE_CLOSE_MS);
+			forceCloseAbortedTurn.unref?.();
+			stopForceClose = () => clearTimeout(forceCloseAbortedTurn);
 		}, CHAT_HEARTBEAT_INTERVAL_MS);
 		silenceWatch.unref?.();
-		const stopSilenceWatch = () => clearInterval(silenceWatch);
+		const stopSilenceWatch = () => { clearInterval(silenceWatch); stopForceClose?.(); };
+		let stopForceClose: (() => void) | null = null;
 
 		const handleFinish = async ({ steps, text }: { steps: Awaited<typeof result.steps>; text: string }) => {
 			if (settled) return;

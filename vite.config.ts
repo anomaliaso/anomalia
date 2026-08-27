@@ -1,7 +1,18 @@
+import { realpathSync } from 'node:fs';
 import { sentrySvelteKit } from "@sentry/sveltekit";
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
+
+/** Worktree `node_modules` is often a symlink into another checkout; Vite resolves it and
+ *  rejects the real path unless it is on the allow list. */
+const nodeModulesReal = (() => {
+  try {
+    return realpathSync('node_modules');
+  } catch {
+    return null;
+  }
+})();
 
 /**
  * RICARICHE AUTOMATICHE, SPENTE SU RICHIESTA — `NO_HMR=1 npm run dev` (o `npm run dev:stable`).
@@ -20,7 +31,7 @@ import { defineConfig } from 'vitest/config';
 const hmr = process.env.NO_HMR === '1' || process.env.NO_HMR === 'true' ? false : undefined;
 
 export default defineConfig({
-  server: { hmr, fs: { allow: ['..'] } },
+  server: { hmr, fs: { allow: ['..', ...(nodeModulesReal ? [nodeModulesReal] : [])] } },
   plugins: [sentrySvelteKit({
     org: "021-6z",
     project: "021-1m"

@@ -4,14 +4,19 @@ import type { AdapterContext, ToolCall, ToolResult, ToolSpec } from '@anomalia/a
 export type ExecToolCall = (call: ToolCall, context: AdapterContext) => Promise<ToolResult>;
 
 function toModelContent(content: ToolResult['content']) {
-	return content.map((item) =>
+	// Un plugin può rispondere senza `content` (o con l'output interamente assente): qui muore
+	// il turno INTERO — «reading 'map'» nella conversione al prossimo step, run inchiodato su
+	// `running` fino al reaper. Il modello vede testo vuoto, che è esattamente ciò che è.
+	return (content ?? []).map((item) =>
 		item.type === 'text'
 			? { type: 'text' as const, text: item.text }
 			: { type: 'media' as const, data: item.base64, mediaType: item.mimeType }
 	);
 }
 
-function toModelOutput({ output }: { output: ToolResult }) {
+function toModelOutput(args: { output?: ToolResult }) {
+	const output = args?.output;
+	if (!output) return { type: 'content' as const, value: [] };
 	const value = toModelContent(output.content);
 	return output.isError ? ({ type: 'error-json' as const, value: { content: value } }) : ({ type: 'content' as const, value });
 }
