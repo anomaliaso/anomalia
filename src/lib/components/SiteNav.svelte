@@ -6,7 +6,7 @@
   import LangToggle from '$lib/components/LangToggle.svelte';
   import BrandMark from '$lib/components/BrandMark.svelte';
 
-  const GITHUB_CLI_URL = 'https://github.com/andreabuttarelli/anomalia-cli';
+  const GITHUB_CLI_URL = 'https://github.com/anomaliaso/anomalia';
 
   let {
     cta = 'Start',

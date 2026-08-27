@@ -174,7 +174,7 @@ export function anonClient() {
  * Quindi l'issuer sta sull'unico host che risponde 200: issuer, endpoint e host che serve i
  * metadata diventano lo stesso origin e la discovery non dipende più da un redirect.
  *
- * L'altra metà della coppia vive in anomalia-cli (`authServerUrl()` in `lib/config.ts`, che
+ * L'altra metà della coppia vive in anomalia (`authServerUrl()` in `lib/config.ts`, che
  * riempie `authorization_servers` nel documento RFC 9728 di mcp.anomalia.so): i due valori
  * devono restare identici byte per byte, o i client severi rifiutano i metadata. Si spostano
  * insieme, sempre.
