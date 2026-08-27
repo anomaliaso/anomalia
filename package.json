@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "vite dev",
+    "dev": "lsof -ti tcp:5173 | xargs kill -9 2>/dev/null; vite dev",
     "dev:stable": "NO_HMR=1 vite dev",
     "dev:vercel": "vercel dev --listen 5173",
     "build": "node scripts/typecheck-runtime.mjs && vite build",
