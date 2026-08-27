@@ -39,10 +39,10 @@
       "pricing": "Prezzi"
     },
     "hero": {
-      "eyebrow": "La tua squadra marketing AI",
+      "eyebrow": "La tua squadra marketing AI · Apache 2.0 · Disponibile self-hosted",
       "titleLead": "Il tuo reparto marketing,",
       "titleMain": "",
-      "titleEm": "già assunto.",
+      "titleEm": "automatizzato.",
       "titleCalm": "",
       "phrases": [
         "ovunque cercano quello che vendi.",
@@ -51,7 +51,7 @@
         "dove conta esserci davvero.",
         "dove ti trovano prima dei concorrenti."
       ],
-      "subhead": "Squadra, distribuzione e vendite: cinque specialisti creano i contenuti, li pubblicano su nove canali e sul tuo blog, e preparano le risposte a chi ti sta già cercando — niente esce prima del tuo sì.",
+      "subhead": "L'alternativa open source specializzata in marketing, distribuzione e vendite: cinque specialisti creano i contenuti, li pubblicano su nove canali e sul tuo blog, e preparano le risposte a chi ti sta già cercando — niente esce prima del tuo sì.",
       "seeHow": "Scopri come funziona",
       "note": "Oppure chiedi direttamente alla tua AI di iniziare a usare Anomalia",
       "ctaSecondary": "Prenota una call",
@@ -2229,7 +2229,7 @@
       "title": "I tuoi social, in autopilot.",
       "lede": "Affida un brand a Anomalia e lei pianifica, crea e pubblica per te — settimana dopo settimana. Cancelli quando vuoi."
     },
-    "freePill": "Il Free include {credits} di crediti",
+    "freePill": "Gratis per sempre — oppure self-hostalo sotto licenza Apache 2.0",
     "localCurrency": "Prezzi mostrati in EUR. Al di fuori dell'eurozona gli importi sono mostrati e addebitati in USD.",
     "toggle": {
       "monthly": "Mensile",
