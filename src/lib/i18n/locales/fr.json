@@ -598,6 +598,33 @@
       ],
       "subtitle": "Connectez votre marque, laissez l'IA construire la stratégie et le contenu, publiez, puis laissez le radar trouver des opportunités — tout depuis un seul tableau de bord."
     },
+    "pricing": {
+      "kicker": "Tarifs",
+      "titleLead": "Prêt à l'emploi ou",
+      "titleAccent": "sur votre serveur.",
+      "lede": "Un produit, deux façons de l'avoir. Mêmes agents, mêmes validations — choisissez où il vit.",
+      "apps": "Applications mobiles et bureau — bientôt disponibles.",
+      "cloud": {
+        "name": "Cloud",
+        "badge": "Prêt à l'emploi",
+        "meta": "On gère tout. Inscrivez-vous, connectez une marque, validez.",
+        "f0": "Les agents planifient, écrivent et publient pour vous, semaine après semaine",
+        "f1": "Rien n'est publié sans votre validation",
+        "f2": "Formule gratuite avec des crédits IA chaque mois",
+        "f3": "Aucun serveur, aucune configuration — ça marche tout de suite",
+        "cta": "Commencer gratuitement"
+      },
+      "selfhost": {
+        "name": "Self-host",
+        "badge": "Apache-2.0",
+        "meta": "Votre machine, vos clés, vos données. Clonez et c'est parti.",
+        "f0": "Tourne avec Docker Compose sur votre propre serveur",
+        "f1": "Vos clés de modèle et d'API — rien ne quitte votre infrastructure",
+        "f2": "Les mêmes agents que le cloud, marques illimitées",
+        "f3": "CLI et serveur MCP inclus pour vos agents",
+        "cta": "Voir sur GitHub"
+      }
+    },
     "whyus": {
       "kicker": "Pourquoi nous",
       "title": "Nous avons construit ça pour nous-mêmes d'abord.",
@@ -2229,7 +2256,7 @@
       "title": "Vos réseaux sociaux, en pilote automatique.",
       "lede": "Confiez une marque à Anomalia et il planifie, crée et publie pour vous — semaine après semaine. Résiliez quand vous voulez."
     },
-    "freePill": "Gratuit pour toujours — ou auto-hébergez-le sous licence Apache 2.0",
+    "freePill": "Gratuit pour toujours, auto-hébergez-le sous licence Apache 2.0",
     "localCurrency": "Prix affichés en EUR. En dehors de la zone euro, les montants sont affichés et facturés en USD.",
     "toggle": {
       "monthly": "Mensuel",

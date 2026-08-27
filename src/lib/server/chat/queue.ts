@@ -89,7 +89,7 @@ import {
 	stripAttachedDocsForDisplay
 } from '$lib/chat-documents';
 import { hydrateChatDocuments } from '$lib/server/hydrate-chat-documents';
-import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames, dmReplyBackMessage } from '$lib/chat-dm';
+import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
@@ -1302,24 +1302,10 @@ export async function processNextQueuedChatJob(
 				assistantMessageId = savedId;
 			}
 
-			// await:true di message_agent — il riassunto della risposta torna nel thread di partenza
-			// come riga user: se il turno dell'iniziatore gira ancora la assorbe la mailbox a un
-			// confine di step; se è finito, gira come turno normale appena il drain la pesca. In
-			// entrambi i casi l'utente la vede arrivare.
-			if (isDm && typeof params.reply_to_thread === 'string' && params.reply_to_thread && result.text?.trim()) {
-				const who =
-					typeof params.speaker_name === 'string' && params.speaker_name
-						? params.speaker_name
-						: (dmSpeaker && dmMemberNames[dmSpeaker]) || 'Agent';
-				await enqueueQueuedChatTurn(admin, {
-					brandId: brand.id,
-					userId: job.user_id as string,
-					threadId: params.reply_to_thread,
-					userMessage: dmReplyBackMessage(who, result.text, locale),
-					locale,
-					origin
-				});
-			}
+			// await:true di message_agent non versa più nulla nel thread con l'utente: la chip
+			// "N messaggi con X" è l'unica interazione, e la conversazione fra agenti vive nel
+			// thread DM (sola lettura). Un riassunto 📩 qui faceva vedere all'utente messaggi
+			// che non sono suoi.
 
 			// ── La battuta continua? ────────────────────────────────────────────────────────────
 			// Le voci dalla seconda in poi girano da questo runner, quindi è QUI che la catena si

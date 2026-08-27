@@ -46,6 +46,110 @@ Ambiente locale: per la verifica browser il `.env` locale puntava al Supabase ho
 `SUPABASE_SERVICE_ROLE_KEY` hosted contro il DB locale rende il client admin anonimo — tutti
 i percorsi "solo service-role" diventano Unauthorized.
 
+### Il setup del brand si fa con l'Analyst e ci si atterra dentro
+
+Il thread di setup creato a fine onboarding era con l'agente omni (agent=null,
+"Anomalia") e il messaggio pre-scritto chiedeva un incarico vago ("studia il
+brand, dimmi come va la SEO"). Gli utenti non lo vedevano: il wizard li
+ributtava sulla dashboard, o sulla scelta dell'agente, e la chat di setup restava
+orfana — in produzione aprivano una sessione NUOVA senza sapere che ne esisteva
+una già impostata.
+
+Fix:
+- il thread di setup parla con l'**Analyst** (`chat_threads.agent='analyst'`),
+  che è il mestiere giusto per instradare l'utente e comporre la squadra. Il
+  brief (lato server) smette di chiamare in prima i tool che sono dei mestieri:
+  l'**analisi SEO/GEO** si **delega al Web Specialist** e la **produzione di
+  contenuti** (e il **piano editoriale** quando manca) si **delega al Content
+  Creator**, via `message_agent`. L'Analyst dirige e compone, non produce e non
+  audita — ma **salva i social di persona** (`save_social_handles`, insieme a
+  `sync_social_history`): l'identità social è un suo mestiere, non un'altra
+  delega. La strategia (GTM) resta sua.
+- il messaggio pre-scritto è esplicito sull'incarico di setup: analizza il
+  brand, fai l'analisi SEO e AI-visibility del sito, imposta strategia GTM e
+  piano editoriale, dimmi cosa automatizzeresti e chiedi cosa tenere.
+- dopo la fine del wizard l'utente atterra **dentro il thread di setup**
+  (`/app/{slug}/chat/{thread}`) invece che su `/app/{slug}`: sia la `finish`
+  dell'action sia la scelta dell'agente (AgentPick) aprono il thread già
+  creato, che porta il nome e la bandiera Analyst in sidebar.
+### Il pannello agente non si ricordava come lo avevi lasciato
+
+`agentPanelOpen` era uno `$state(false)` locale alla pagina del thread: ogni navigazione lo
+riportava chiuso. Chi teneva il pannello aperto su un agente e tornava nella chat dalla
+sidebar lo ritrovava chiuso, e viceversa.
+
+La preferenza ora segue l'AGENTE (`custom_agent_id ?? agent`) e vive in localStorage
+(`anomalia:chat-agent-panel:<brand>:<agent>`, stesso pattern delle bozze di chat): atterrando
+su un thread il pannello torna com'era stato lasciato per l'agente di quella chat, e ogni
+cambio — toggle in topbar o X del pannello — la riscrive. Chiuso = chiave assente: il default
+è già chiuso. Lettura a un `$effect` di atterraggio (ri-allineato quando cambia il thread),
+scrittura a un `$effect` idempotente: entrambi passano da `chat-agent-panel-pref.ts`, mai
+dallo storage diretto.
+
+### La resa dei video generativi/UGC passa al secondo agente con tier pro
+
+Come per il motion (`motion_write` accoda, la resa gira su un agente con modello avanzato),
+la resa dei video generativi AI e UGC aveva lo stesso buco: lo shot brief per il generatore
+veniva composto da template deterministici (`buildUgcShotBrief` + `formatUgcShotBrief`) e il
+piano dal planner flash. Nessun file decideva il tier di questo mestiere: tutti i call site
+usavano `IMAGE_AGENT_MODEL()` o il modello del turno.
+
+Ora:
+- `craft-model.ts` — la fabbrica condivisa del modello di resa (tier pro del provider attivo,
+  scappatoia esplicita in env, fallback dichiarato su Gemini). `motion-video/model.ts` la usa
+  ed è la stessa cosa che ora usa l'UGC; `UGC_VIDEO_MODEL` è la scappatoia del mestiere.
+- `media-generator/ugc-craft.ts` — il secondo agente: prende il brief deterministico (la rete,
+  con le RULE del generatore) e lo riscrive come farebbe un regista. Output senza le RULE, o
+  modello a terra, o muto → si torna al deterministico: mai un render senza brief.
+- `ugc-batch.ts` — `briefFor` passa dal crafter prima del render: batch UGC e ads remix
+  ereditano gratis. Il planner resta sul flash: è il PIANO, non la resa.
+
+Test: tier del modello (pro del provider, override env, fabbrica condivisa col motion), il
+prompt del crafter porta tutti i contesti e il divieto di toccare le RULE, e i tre percorsi
+(successo, modello a terra, output muto) con il deterministico come rete.
+
+
+### La direttiva del minimo entra nel contratto di consegna
+
+La task chiedeva «scrivi pochissimo, diretto al punto, il più minimo possibile». Il contratto
+di consegna (`reply-contract.ts`) diceva già la forma ma lasciava il minimo come gusto:
+"keep it to the sentences that carry a fact" è una descrizione, non una regola operativa.
+
+Ora c'è `MINIMAL BY DEFAULT`: le meno parole che portano i fatti, con i riempitivi classici
+NOMINATI (no greeting, no "Great news!", no transizioni, aggettivi senza fatto) e la prova di
+forza operativa — ogni frase deve guadagnarsi il posto: se tagliandola non sparisce nessun
+fatto, si taglia. Il posto è il blocco unico letto da testa omni e specialisti; il test
+esistente che separa «trasmettere meno» da «lavorare meno» (75 passi) resta pinnato e verde.
+
+### Il primo invio in chat restava muto mentre nasceva il thread
+
+Sulla home del brand ("Assumi un agente") il primo messaggio deve nascere un
+thread via `createThread`: finché non esiste, la sessione non c'è e `loading`
+resta falso. In quel lasso (1-2s in produzione) la textarea si svuotava, il
+bottone diventava microfono, e l'unico segno di vita — la progress bar di
+navigazione — partiva solo dopo. L'utente credeva di non aver inviato nulla.
+
+Fix: ChatColumn tiene uno stato `sending` vero dall'invio fino a che
+`primeChatSession` non prende il turno (o fino al fallimento di
+`createThread`, dove il testo torna nel composer com'era già), e lo passa a
+ChatPrompt: niente microfono mentre l'invio è in volo, e la rotella
+(`ch-busy`, lo stesso pattern della trascrizione) al posto del piano.
+Verificato nel browser sullo stack locale con la latenza di creazione
+strozzata a 1.2s: la rotella riempie il gap su desktop e su viewport stretto,
+il doppio click non manda doppioni.
+
+### Homepage: la scelta cloud / self-host prima della FAQ
+
+La homepage raccontava il prodotto ma non diceva mai che ci sono due modi di
+averlo. Ora, fra «Why us» e la FAQ, c'è una griglia a due card nello stile
+delle comparison-card di Rakazo: **Cloud** (badge «Ready to go», feature list,
+CTA «Start free» che punta al `startHref` già calcolato dalla pagina — quindi
+waitlist-aware e login-aware) e **Self-host** (badge «Apache-2.0», feature
+list, CTA «View on GitHub» verso `anomaliaso/anomalia`). Sotto, una riga
+muta: app mobile e desktop «coming soon». Componente nuovo `HomePricing`
+con scoped styles sui token di landing.css; testi nuovi sotto
+`landing.pricing.*` in en/it/es/fr, `svelte-check` non aggiunge errori.
+
 ### Self-host: nascondere il sito di marketing, partire dall'app
 
 Non c'era. `TENANT_BRAND_ID` salta lo switcher dei brand, `BILLING_PROVIDER=open`

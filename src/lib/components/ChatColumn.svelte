@@ -70,7 +70,7 @@
   import { normalizeDeviceLoginPayload } from '$lib/chat-device-login';
   import ChatDivider from '$lib/components/ChatDivider.svelte';
   import { dayDividers, firstUnreadIndex } from '$lib/chat-day-groups';
-  import { dmAgents } from '$lib/chat-dm';
+  import { dmAgents, isDmReplyBackMessage } from '$lib/chat-dm';
   import PostCard from '$lib/components/PostCard.svelte';
   import '$lib/styles/chat-messages.css';
   import type { ChatQuestion } from '$lib/chat-questions';
@@ -525,7 +525,13 @@
     }>
   ): UiMsg[] {
     return raw
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .filter((m) => {
+        if (m.role !== 'user' && m.role !== 'assistant') return false;
+        const content = typeof m.content === 'string' ? m.content : '';
+        // La risposta di un DM non entra MAI nella chat con l'utente: vive nel thread privato.
+        if (m.role === 'user' && isDmReplyBackMessage(content)) return false;
+        return true;
+      })
       .map((m) => {
         const content = typeof m.content === 'string' ? m.content : '';
         return {
@@ -574,6 +580,10 @@
   });
 
   const loading = $derived(!!session?.loading);
+  // Il primo invio deve nascere il thread: fra lo svuotamento della textarea e
+  // `createThread` la sessione non esiste ancora e `loading` resta falso — senza
+  // questo stato il bottone muto fa credere che il messaggio non sia partito.
+  let sending = $state(false);
   const streamBuf = $derived(session?.streamBuf ?? '');
   const streamToolCalls = $derived(session?.streamToolCalls ?? []);
   const streamReasoning = $derived(session?.streamReasoning ?? '');
@@ -1089,6 +1099,7 @@
 
     // Must run before ensureThread: createThread sets threadId and can flush
     // the history $effect before we return here.
+    sending = true;
     flashSent();
     prepareOptimisticSend(brandSlug, displayText);
     const id = await ensureThread();
@@ -1097,11 +1108,14 @@
       // sparire, e il testo in attesa va buttato o riapparirebbe come bolla fantasma altrove.
       clearOptimisticSend();
       input = t;
+      sending = false;
       return;
     }
 
     takeOptimisticPending(brandSlug, id);
     primeChatSession({ brandSlug, threadId: id, pendingUserText: displayText });
+    // Il turno ora vive nella sessione (`loading`): la rotella del primo invio ha fatto il suo.
+    sending = false;
 
     if (editingIndex !== null) {
       const idx = editingIndex;
@@ -1409,6 +1423,8 @@
         <p class="goal-hint" role="status">{goalHint}</p>
       {/if}
       {#each messages as msg, i (i)}
+        {#if msg.role === 'user' && isDmReplyBackMessage(msg.content)}
+        {:else}
         <!-- Prima il giorno, poi il confine dei non letti: il secondo sta più vicino al messaggio
              da cui si riprende a leggere. -->
         {#if dayLines[i]}<ChatDivider label={dayLines[i]} />{/if}
@@ -1553,7 +1569,7 @@
                   questions={tc.questions!}
                   toolCallId={tc.toolCallId ?? `qq-${i}-${bi}-${ti}`}
                   threadId={threadId ?? ''}
-                  followingUserTexts={messages.slice(i + 1).filter((m) => m.role === 'user').map((m) => m.content)}
+                  followingUserTexts={messages.slice(i + 1).filter((m) => m.role === 'user' && !isDmReplyBackMessage(m.content)).map((m) => m.content)}
                   disabled={loading}
                   onanswer={(text) => send(text)}
                 />
@@ -1623,6 +1639,7 @@
             {/if}
           </div>
         {/if}
+        {/if}
       {/each}
       {#if looseArtifacts.length}
         <!-- Artefatti la cui chiamata non compare più nella cronologia: il file esiste, mostrarlo
@@ -1642,6 +1659,7 @@
             {streamToolCalls}
             {streamReasoning}
             {streamReasoningSegments}
+            {brandSlug}
             face={liveFace}
             color={liveWho.color}
             />
@@ -1696,6 +1714,7 @@
       onsubmit={(text, meta) => send(text, meta)}
       onstop={stopRequest}
       loading={loading}
+      sending={sending}
       placeholder={placeholder}
       showHint={false}
       agentOptions={embedded ? null : agentOptions}

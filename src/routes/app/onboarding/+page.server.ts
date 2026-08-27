@@ -703,7 +703,7 @@ export const actions: Actions = {
   // Optional second half: enrich an existing brand (continue=) or legacy full submit.
   // MUST stay a named action: SvelteKit throws on any POST to a page that mixes `default` with
   // named actions, which took down BOTH this submit and `?/create` above.
-  finish: async ({ request, cookies, locals: { supabase, safeGetSession, locale } }) => {
+  finish: async ({ request, url, platform, cookies, locals: { supabase, safeGetSession, locale } }) => {
     const user = await requireAdmin(supabase, safeGetSession);
     const data = await request.formData();
     const website = String(data.get('website') ?? '').trim() || null;
@@ -738,7 +738,12 @@ export const actions: Actions = {
 
       if (draftId) await supabase.from('onboarding_drafts').delete().eq('id', draftId).eq('user_id', user.id);
       await redeemReferralQuietly(cookies, user.id, brand.id);
-      throw redirect(303, `/app/${brand.slug}`);
+      // Dopo il setup si atterra nel thread di setup (Analyst), non sulla dashboard: è lì che
+      // l'utente ha appena iniziato il lavoro di instradamento. setupChatTarget è idempotente.
+      throw redirect(
+        303,
+        await setupChatTarget(platform, url.origin, brand, user.id, website, name, locale)
+      );
     }
 
     // ── Legacy full path (draft resumed through preview without early create) ──
@@ -799,7 +804,8 @@ export const actions: Actions = {
 
     if (draftId) await supabase.from('onboarding_drafts').delete().eq('id', draftId).eq('user_id', user.id);
 
-    // Prefer the dashboard; paywall stays action-level. Carry plan params if they came from pricing.
+    // Prefer the setup thread so the user lands where the Analyst starts instradandoli; the
+    // paywall stays action-level. Carry plan params if they came from pricing.
     const plan = String(data.get('plan') ?? '');
     const cycle = String(data.get('cycle') ?? '');
     const pay = new URLSearchParams();
@@ -808,6 +814,7 @@ export const actions: Actions = {
       pay.set('cycle', normalizeCycle(cycle));
     }
     await redeemReferralQuietly(cookies, user.id, brand.id);
-    throw redirect(303, `/app/${slug}${pay.toString() ? `?${pay}` : ''}`);
+    const setupTarget = await setupChatTarget(platform, url.origin, { id: brand.id, slug }, user.id, website ?? (profile?.url as string) ?? null, name, locale);
+    throw redirect(303, `${setupTarget}${pay.toString() ? `?${pay}` : ''}`);
   }
 };

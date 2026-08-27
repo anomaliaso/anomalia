@@ -59,7 +59,7 @@ Anomalia API  (/api/v1/*)</code></pre>
   "mcpServers": &#123;
     "anomalia": &#123;
       "command": "bun",
-      "args": ["run", "/ABS/PATH/to/anomalia-cli/mcp/stdio.ts"]
+      "args": ["run", "/ABS/PATH/to/anomalia/mcp/stdio.ts"]
     &#125;
   &#125;
 &#125;</code></pre>
@@ -204,8 +204,8 @@ bun run mcp:http
   <li><a href={lp('/docs/cli')}>{$_('docs.mcp.s74')}</a> — {$_('docs.mcp.s75')}</li>
   <li><a href={lp('/docs/api')}>{$_('docs.mcp.s76')}</a> — {$_('docs.mcp.s77')}</li>
   <li>
-    <a href="https://github.com/andreabuttarelli/anomalia-cli" target="_blank" rel="noopener noreferrer"
-      >anomalia-cli</a
+    <a href="https://github.com/anomaliaso/anomalia" target="_blank" rel="noopener noreferrer"
+      >anomalia</a
     >
     — {$_('docs.mcp.s78')}
   </li>

@@ -318,6 +318,30 @@ describe('assistantContentFromSteps', () => {
     expect(call.media).toEqual([{ url: frame, kind: 'image', caption: 'Existing · frame 30' }]);
   });
 
+  it('message_agent rides as dmSends, even when the kit wrapped the output as ToolResult', () => {
+    const payload = {
+      success: true,
+      dm_thread_id: 'dm-1',
+      to: 'analyst',
+      to_name: 'Analyst',
+      sends: [{ dm_thread_id: 'dm-1', to: 'analyst', to_name: 'Analyst' }]
+    };
+    const steps = [
+      {
+        toolCalls: [{ toolCallId: 'd', toolName: 'message_agent', input: { to: 'analyst', message: 'ciao' } }],
+        toolResults: [
+          {
+            toolCallId: 'd',
+            toolName: 'message_agent',
+            output: { content: [{ type: 'text', text: JSON.stringify(payload) }] }
+          }
+        ]
+      }
+    ];
+    const call = assistantContentFromSteps(steps).find((p) => p.type === 'tool-call');
+    expect(call.dmSends).toEqual([{ threadId: 'dm-1', to: 'analyst', name: 'Analyst' }]);
+  });
+
   it('read_posts is silent by default: no previews unless show_to_user is set', () => {
     const posts = [{ id: 'a', platform: 'x', caption: 'one', media_url: 'https://a/1.png', status: 'approved' }];
     const stepsFor = (input: unknown) => [

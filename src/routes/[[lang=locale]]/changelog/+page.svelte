@@ -7,9 +7,17 @@
   const entries = [
     {
       date: 'August 27, 2026',
-      title: 'Tools work on every message, not just the first',
+      title: 'Your project setup is a conversation with the Analyst',
       items: [
         'Sub-agent work is now visible while it runs: delegations show up as background tasks with live progress, and the agent can check how each one is doing mid-flight.',
+        'After onboarding, you now land inside the setup conversation instead of back on the dashboard — the chat that gets your brand ready is the one you meet, not one you never knew existed.',
+        'That setup conversation is now with the Analyst, the agent that analyses the numbers and directs the team; it studies your brand, plans the go-to-market strategy and the editorial plan, and asks what else you want automated.',
+        'The SEO and AI-visibility analysis is handed to the Web specialist, and content production to the Content creator, instead of being done vaguely in one place — so each job is done by the right agent.',
+        'The agent panel now remembers how you left it — open or closed — separately for each agent, so returning to a chat restores your view.',
+        'AI and UGC video renders now get their shot brief written by a director-grade agent (the same advanced model tier as motion videos), with the old template brief kept as a safety net.',
+        'Agents now write minimal replies by rule, not by taste: every sentence must carry a fact — no greetings, no transitions, no filler.',
+        'Sending your first message now shows a spinner right away: no more silent gap while the conversation is being created.',
+        'The homepage now shows the two ways to use Anomalia side by side — ready-to-go cloud or self-hosted on your own server — with mobile and desktop apps marked as coming soon.',
         'Sending a second message in a chat no longer makes every tool refuse with “turn closed by the system”: the agent keeps working for the whole conversation.',
         'Self-hosting: the production build now reads your .env on start, the database is reachable on whatever port you set, and a fresh install boots instead of stopping on an empty ORIGIN.',
         'Self-hosting: usage and cost are recorded again on a fresh install — eight columns the app writes were missing from the database. Run the migrations once more to get them.',
