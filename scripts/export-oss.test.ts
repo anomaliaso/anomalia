@@ -116,6 +116,7 @@ describe('regole di esclusione', () => {
   it('della documentazione esce solo ciò che serve a installare e a chiamare l\'API', () => {
     expect(isExcluded('docs/SELF_HOSTING.md', EXCLUSION_RULES)).toBe(false);
     expect(isExcluded('docs/api/03-posts.md', EXCLUSION_RULES)).toBe(false);
+    expect(isExcluded('docs/readme-hero.png', EXCLUSION_RULES)).toBe(false);
     expect(isExcluded('docs/36-leads-gen-playbook.md', EXCLUSION_RULES)).toBe(true);
     expect(isExcluded('docs/29-structural-reviews.md', EXCLUSION_RULES)).toBe(true);
     expect(isExcluded('docs/README.md', EXCLUSION_RULES)).toBe(true);

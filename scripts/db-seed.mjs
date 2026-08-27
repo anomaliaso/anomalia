@@ -9,7 +9,7 @@
  * The organization/brand rows go straight to Postgres: GoTrue has no concept of them.
  *
  *   DATABASE_URL=postgres://... PUBLIC_SUPABASE_URL=http://localhost:8000 \
- *     SUPABASE_SERVICE_ROLE_KEY=... node scripts/db-seed.mjs
+ *     SUPABASE_SERVICE_ROLE_KEY=... node --env-file-if-exists=.env scripts/db-seed.mjs
  *   npm run db:seed
  *
  * Override SEED_DEMO_EMAIL / SEED_DEMO_PASSWORD to not ship the same demo login everywhere.
