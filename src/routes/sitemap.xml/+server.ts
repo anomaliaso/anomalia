@@ -12,6 +12,7 @@ import { STYLE_PRESETS } from '$lib/design/presets';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { listWallSlugs } from '$lib/server/wall';
 import { hideMarketing } from '$lib/server/marketing-shell';
+import { env } from '$env/dynamic/private';
 import type { Locale } from '$lib/i18n/locale';
 
 function alternateLinks(site: string, path: string): string {
@@ -77,17 +78,32 @@ export const GET: RequestHandler = async ({ url }) => {
     ? []
     : INSIGHT_SLUGS.flatMap((slug) => localizedUrlEntries(site, `/insights/${slug}`, '0.75', 'monthly'));
 
-  const admin = createAdminClient();
-  const [{ data: blogs }, { data: talentRows }, { data: agentRows }, wallSlugs] = await Promise.all([
-    admin.from('brands').select('blog_slug').not('blog_slug', 'is', null),
-    appOnly
-      ? Promise.resolve({ data: [] as { slug: string }[] | null })
-      : admin.from('talents').select('slug').eq('status', 'active'),
-    appOnly
-      ? Promise.resolve({ data: [] as { slug: string }[] | null })
-      : admin.from('agent_templates').select('slug').eq('status', 'published'),
-    appOnly ? Promise.resolve([] as Awaited<ReturnType<typeof listWallSlugs>>) : listWallSlugs(admin)
-  ]);
+  // The dynamic entries live in Postgres. Only the "admin key not configured" case degrades to a
+  // static-only map: it is a structural state (CI smoke tier, minimal self-host), and a permanent
+  // 500 would be worse. In production the key exists, so a real query failure still throws and
+  // returns 500 — the crawler keeps its last good copy of the sitemap instead of seeing half
+  // the dynamic URLs vanish (missing lastmod signals) for exactly one fetch.
+  let blogs: { blog_slug: string }[] | null = null;
+  let talentRows: { slug: string }[] | null = null;
+  let agentRows: { slug: string }[] | null = null;
+  let wallSlugs: Awaited<ReturnType<typeof listWallSlugs>> = [];
+  if (!appOnly) {
+    try {
+      const admin = createAdminClient();
+      const [blogRes, talentRes, agentRes, wall] = await Promise.all([
+        admin.from('brands').select('blog_slug').not('blog_slug', 'is', null),
+        admin.from('talents').select('slug').eq('status', 'active'),
+        admin.from('agent_templates').select('slug').eq('status', 'published'),
+        listWallSlugs(admin)
+      ]);
+      blogs = blogRes.data;
+      talentRows = talentRes.data;
+      agentRows = agentRes.data;
+      wallSlugs = wall;
+    } catch (e) {
+      if (env.SUPABASE_SERVICE_ROLE_KEY) throw e;
+    }
+  }
   const blogEntries = (blogs ?? []).map(
     (b) => `  <url>
     <loc>${site}/blog/${b.blog_slug}/</loc>
