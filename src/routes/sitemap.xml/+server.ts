@@ -11,6 +11,7 @@ import { INSIGHT_SLUGS } from '$lib/data/insights';
 import { STYLE_PRESETS } from '$lib/design/presets';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { listWallSlugs } from '$lib/server/wall';
+import { hideMarketing } from '$lib/server/marketing-shell';
 import type { Locale } from '$lib/i18n/locale';
 
 function alternateLinks(site: string, path: string): string {
@@ -46,35 +47,46 @@ function localizedUrlEntries(
 export const GET: RequestHandler = async ({ url }) => {
   const site = siteUrl(url.origin);
   const loc = (p: string) => site + (p === '/' ? '/' : p);
+  // Con HIDE_MARKETING le URL del pitch 303-ano in /app: elencarle nel sitemap è un
+  // invito a indicizzare dei redirect. Restano solo i blog ospitati, che non sono marketing.
+  const appOnly = hideMarketing();
 
-  const marketingEntries = MARKETING_PATHS.flatMap((path) => {
-    const priority =
-      path === '/' ? '1.0' : path.startsWith('/insights') || path.startsWith('/tools') ? '0.8' : '0.7';
-    return localizedUrlEntries(site, path, priority);
-  });
+  const marketingEntries = appOnly
+    ? []
+    : MARKETING_PATHS.flatMap((path) => {
+        const priority =
+          path === '/' ? '1.0' : path.startsWith('/insights') || path.startsWith('/tools') ? '0.8' : '0.7';
+        return localizedUrlEntries(site, path, priority);
+      });
 
-  const staticEntries = STATIC_SITEMAP_PATHS.map(
-    (path) => `  <url>
+  const staticEntries = appOnly
+    ? []
+    : STATIC_SITEMAP_PATHS.map(
+        (path) => `  <url>
     <loc>${loc(path)}</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>`
-  );
+      );
 
-  const playbookEntries = PLAYBOOK_SLUGS.flatMap((slug) =>
-    localizedUrlEntries(site, `/playbooks/${slug}`, '0.6')
-  );
+  const playbookEntries = appOnly
+    ? []
+    : PLAYBOOK_SLUGS.flatMap((slug) => localizedUrlEntries(site, `/playbooks/${slug}`, '0.6'));
 
-  const insightEntries = INSIGHT_SLUGS.flatMap((slug) =>
-    localizedUrlEntries(site, `/insights/${slug}`, '0.75', 'monthly')
-  );
+  const insightEntries = appOnly
+    ? []
+    : INSIGHT_SLUGS.flatMap((slug) => localizedUrlEntries(site, `/insights/${slug}`, '0.75', 'monthly'));
 
   const admin = createAdminClient();
   const [{ data: blogs }, { data: talentRows }, { data: agentRows }, wallSlugs] = await Promise.all([
     admin.from('brands').select('blog_slug').not('blog_slug', 'is', null),
-    admin.from('talents').select('slug').eq('status', 'active'),
-    admin.from('agent_templates').select('slug').eq('status', 'published'),
-    listWallSlugs(admin)
+    appOnly
+      ? Promise.resolve({ data: [] as { slug: string }[] | null })
+      : admin.from('talents').select('slug').eq('status', 'active'),
+    appOnly
+      ? Promise.resolve({ data: [] as { slug: string }[] | null })
+      : admin.from('agent_templates').select('slug').eq('status', 'published'),
+    appOnly ? Promise.resolve([] as Awaited<ReturnType<typeof listWallSlugs>>) : listWallSlugs(admin)
   ]);
   const blogEntries = (blogs ?? []).map(
     (b) => `  <url>
@@ -95,9 +107,9 @@ export const GET: RequestHandler = async ({ url }) => {
 
   // Style presets live in code, not in a table — no query, just the library itself.
   // The /styles index is already in MARKETING_PATHS; these are the per-preset pages.
-  const styleEntries = STYLE_PRESETS.flatMap((p) =>
-    localizedUrlEntries(site, `/styles/${p.slug}`, '0.6', 'monthly')
-  );
+  const styleEntries = appOnly
+    ? []
+    : STYLE_PRESETS.flatMap((p) => localizedUrlEntries(site, `/styles/${p.slug}`, '0.6', 'monthly'));
 
   // One entry per post on the design wall. `lastmod` is the day it was published to the wall — the
   // page's content does not change after that, and claiming it did would train the crawler to

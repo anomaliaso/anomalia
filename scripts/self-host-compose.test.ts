@@ -57,6 +57,18 @@ describe('.env.example', () => {
 	});
 });
 
+describe('healthcheck dell’app', () => {
+	/**
+	 * wget --spider di busybox considera 3xx un errore. La homepage, con HIDE_MARKETING=1,
+	 * risponde 303 verso /app: un healthcheck su `/` farebbe restare l'app forever-unhealthy
+	 * nel momento in cui si accende la flag. robots.txt è sempre 200, senza sessione.
+	 */
+	it('non picchia la homepage: HIDE_MARKETING la reindirizza', () => {
+		expect(COMPOSE).toMatch(/127\.0\.0\.1:3000\/robots\.txt/);
+		expect(COMPOSE).not.toMatch(/127\.0\.0\.1:3000\/'/);
+	});
+});
+
 describe('le migration ricostruiscono ciò che il codice scrive', () => {
 	/**
 	 * Trovato installando: su un database appena migrato ogni riga di `ai_calls` veniva rifiutata
