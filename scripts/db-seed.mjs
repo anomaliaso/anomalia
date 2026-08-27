@@ -129,6 +129,30 @@ export async function ensureBrand(client, orgId, slug, name, website, plan = SEE
   return row.rows[0].id;
 }
 
+/**
+ * Membership + profile rows for the demo user. Without these a pre-existing GoTrue user (created
+ * by an earlier seed run or by hand) logs into an app that shows no brand at all — /app bounces to
+ * onboarding and every /app/[slug] route 404s behind RLS. Every insert is idempotent so re-running
+ * `npm run db:seed` stays a no-op.
+ */
+export async function ensureSeedMemberships(client, userId, email, orgId, brandId) {
+  await client.query(
+    `insert into profiles (id, email, full_name)
+     select u.id, u.email, coalesce(u.raw_user_meta_data->>'full_name', 'Demo User')
+     from auth.users u where u.id = $1
+     on conflict (id) do update set email = excluded.email`,
+    [userId]
+  );
+  await client.query(
+    'insert into org_members (org_id, user_id, role) values ($1, $2, $3::member_role) on conflict do nothing',
+    [orgId, userId, 'owner']
+  );
+  await client.query(
+    'insert into brand_members (brand_id, user_id) values ($1, $2) on conflict do nothing',
+    [brandId, userId]
+  );
+}
+
 async function main() {
   const DATABASE_URL = process.env.DATABASE_URL;
   const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -152,6 +176,7 @@ async function main() {
     await ensurePrivileges(client);
     const orgId = await ensureOrg(client, user.id, SEED_ORG_NAME);
     const brandId = await ensureBrand(client, orgId, SEED_BRAND_SLUG, SEED_BRAND_NAME, SEED_BRAND_WEBSITE);
+    await ensureSeedMemberships(client, user.id, SEED_EMAIL, orgId, brandId);
     console.log(`org ${orgId} / brand ${SEED_BRAND_SLUG} (${brandId}) ready.`);
     console.log(`\nLog in with ${SEED_EMAIL} / ${SEED_PASSWORD} — change SEED_DEMO_PASSWORD before sharing this instance.`);
     // A single-tenant install needs this id: it is what tells the app there is nothing to switch
