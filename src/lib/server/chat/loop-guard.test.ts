@@ -184,13 +184,15 @@ describe('benchAwarePrepareStep — il tool in panchina sparisce dal tavolo, con
 		expect(await prepare({ messages: messaggi })).toEqual({});
 	});
 
-	it('con panchina: activeTools senza il tool, e il perché in coda ai messaggi come nota nascosta al modello', async () => {
+	it('con panchina: activeTools senza il tool, e il perché in coda ai messaggi come nota marcata al modello', async () => {
 		const prepare = benchAwarePrepareStep(guardConPanchina(), toolNames);
 		const out = await prepare({ messages: messaggi });
 		expect(out.activeTools).toEqual(['replace_motion_source', 'reply']);
 		const appended = (out.messages as Array<{ role: string; content: string }>).at(-1)!;
-		// Mai a nome dell'utente: le note del backend all'AI viaggiano come `system`.
-		expect(appended.role).toBe('system');
+		// Non può essere `system`: il provider Google rifiuta i system a metà conversazione.
+		// Resta una nota al modello — marcata, inglese, mai persistita come riga di chat.
+		expect(appended.role).toBe('user');
+		expect(appended.content).toContain('[SYSTEM NOTE]');
 		expect(appended.content).toContain('create_motion_video');
 		expect(appended.content).toContain('Import not allowed');
 	});

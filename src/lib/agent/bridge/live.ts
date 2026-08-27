@@ -1131,16 +1131,23 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					detail: `run ${run.id} · agente ${spec.id}`
 				}).catch((e) => console.error('[AGENT_KIT] report fallito', e));
 				if (brandSandbox) {
-				// Regola assoluta: le note del backend all'AI NON si travestono da utente (niente
-				// `role: 'user'`) e non esistono in italiano — sono dirette al modello, e il modello
-				// poi parla nella lingua dell'utente. `role: 'system'` le tiene fuori dalla chat.
-				const corrective = `Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.`;
+				// Regola assoluta: le note del backend all'AI NON si travestono da utente e non
+				// esistono in italiano — sono dirette al modello, che poi parla nella lingua
+				// dell'utente. Viaggiano nel `system` del turno di retry: è l'unica posizione che
+				// ogni provider accetta (Google rifiuta i system a metà conversazione) ed è
+				// comunque nascosta alla chat.
+				const corrective = `SYSTEM NOTE — your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.`;
 				try {
 					const retryTurn = await startHarnessTurn({
 						runId: `${run.id}-retry`,
 						model: modelRef ?? undefined,
-						system,
-						messages: stripProviderRefs([...messages, { role: 'system', content: corrective } as ModelMessage]),
+						system: `${system}\n\n${corrective}`,
+						messages: stripProviderRefs([...messages]),
+						tools: toolSet,
+						stopWhen: [isStepCount(TURN_MAX_STEPS)],
+						sandboxSession: brandSandbox?.session,
+						sessionKey: threadId
+					});
 						tools: toolSet,
 						stopWhen: [isStepCount(TURN_MAX_STEPS)],
 						sandboxSession: brandSandbox?.session,
