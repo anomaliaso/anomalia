@@ -52,7 +52,7 @@ export function createAnalystPlugin(deps: AnalystPluginDeps): ToolPlugin {
 		'Europe/Rome',
 		userId,
 		'',
-		locale ?? 'it',
+		locale ?? 'en',
 		threadId ?? undefined
 	) as ChatToolsRecord;
 

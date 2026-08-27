@@ -22,6 +22,7 @@ import {
   stripAttachedDocsForDisplay
 } from '$lib/chat-documents';
 import { hydrateChatDocuments } from '$lib/server/hydrate-chat-documents';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { RequestHandler } from './$types';
 
 // Matches the chat route — this path runs a full turn too.
@@ -71,7 +72,7 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
 
     // Scope prompt + tools to the thread's specialized agent (null → full set, legacy/onboarding).
     // agentId prima del modello: su Auto la famiglia la decide lo spec (motion → Grok).
-    const locale = params.locale ?? 'it';
+    const locale = params.locale ?? 'en';
     const origin = params.origin ?? '';
     const webHubEnabled = hasWebHub(brand.plan);
     const threadRow = await getThread(supabase, threadId, brand.id, user.id);
@@ -201,10 +202,10 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
       );
       content.push({
         type: 'text',
-        text: turnTokenBudgetNotice(locale === 'en' ? 'en' : 'it', tokenBudget.usedTokens, tokenBudget.budget)
+        text: turnTokenBudgetNotice(bilingualNoticeLocale(locale), tokenBudget.usedTokens, tokenBudget.budget)
       });
     } else if (loopGuard.stalled) {
-      content.push({ type: 'text', text: turnLoopNotice(locale === 'en' ? 'en' : 'it') });
+      content.push({ type: 'text', text: turnLoopNotice(bilingualNoticeLocale(locale)) });
     }
     const sources = sourcesFromSteps(result.steps, brand.slug ?? '');
 

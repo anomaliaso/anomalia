@@ -21,6 +21,7 @@ import { listThreadArtifacts, formatArtifactsForPrompt } from '$lib/server/chat/
 import { resolveChatModel, modelSeesImages, modelSeesVideo } from '$lib/server/chat/model';
 import { roomBeat, roomSystemBlock, stripRoomPeerTools, type RoomMember } from '$lib/server/chat/room';
 import { filterToolsForMode, isChatMode, modeSystemBlock, type ChatMode } from '$lib/chat-modes';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { createChatTools } from '$lib/server/chat/tools';
 import {
   CHAT_HISTORY_DOC_CAP,
@@ -144,7 +145,7 @@ export async function buildTurnContext(input: {
   if (roomPlan && roomSpeaker) {
     systemPrompt += roomSystemBlock(roomPlan.members, roomSpeaker.key, locale);
   }
-  const lang = locale === 'it' ? 'Italian' : 'English';
+  const lang = bilingualNoticeLocale(locale) === 'it' ? 'Italian' : 'English';
   const mode: ChatMode = isChatMode(body.mode) ? body.mode : 'agent';
   systemPrompt += `\n\n${modeSystemBlock(mode, lang)}`;
 
@@ -440,7 +441,7 @@ export async function buildTurnMessages(input: {
     }
   }
 
-  await attachTurnVolatile(supabase, brand, locale ?? 'it', messages);
+  await attachTurnVolatile(supabase, brand, locale ?? 'en', messages);
 
   return { ok: true, regeneratedFrom, history, lastUserMsg, messages, textContent };
 }
@@ -506,7 +507,7 @@ export async function applyGoalCommand(input: {
         supabase,
         current.id,
         'abandoned',
-        locale === 'en' ? 'Closed by the user.' : "Chiuso dall'utente."
+        bilingualNoticeLocale(locale) === 'en' ? 'Closed by the user.' : "Chiuso dall'utente."
       ).catch(() => null);
     }
   }
@@ -562,7 +563,7 @@ export async function applyTurnBriefings(input: {
     prompt += goalModeActive
       ? `\n\n${goalCommandInstruction(goalCmd, locale)}`
       : `\n\n${
-          locale === 'en'
+          bilingualNoticeLocale(locale) === 'en'
             ? 'The user tried to set a goal, but this chat is in ASK mode, which has no tools to work on one. Say so in one line and suggest switching to Agent or Plan.'
             : "L'utente ha provato a fissare un obiettivo, ma questa chat è in modalità ASK, che non ha i tool per portarlo avanti. Dillo in una riga e proponi di passare ad Agent o Plan."
         }`;

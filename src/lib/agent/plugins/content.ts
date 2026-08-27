@@ -86,7 +86,7 @@ export function createContentPlugin(deps: ContentPluginDeps): ToolPlugin {
 		'Europe/Rome',
 		userId,
 		'',
-		locale ?? 'it',
+		locale ?? 'en',
 		threadId ?? undefined
 	) as ChatToolsRecord;
 

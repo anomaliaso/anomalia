@@ -17,6 +17,7 @@
  * gira a vuoto, e mai contro un turno fermato dall'utente.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { trackGoalEvent } from '$lib/server/chat/goal-log';
 
 export type GoalCriterionStatus = 'open' | 'done' | 'dropped';
@@ -477,7 +478,7 @@ export function goalWorthyRequest(text: string | null | undefined): boolean {
  * già nella descrizione di `set_goal`, questa la ripete sul turno giusto, e si paga solo lì.
  */
 export function goalNudge(locale: string): string {
-  return locale === 'en'
+  return bilingualNoticeLocale(locale) === 'en'
     ? 'THIS REQUEST LOOKS LIKE A MULTI-STEP JOB. Call set_goal BEFORE your first action: one sentence, then the checkable facts that will make it true. Close each one with update_goal as you go — closing is a CALL, not a word: "c1 done" written in your reply closes nothing. Do not ask permission — it is your own working discipline, not a decision for the user.'
     : 'QUESTA RICHIESTA HA LA FORMA DI UN LAVORO IN PIÙ PASSI. Chiama set_goal PRIMA della prima azione: una frase, poi i fatti verificabili che la renderanno vera. Chiudili uno per uno con update_goal mentre procedi — chiudere è una CHIAMATA, non una parola: «c1 chiuso» scritto nella risposta non chiude niente. Non chiedere il permesso — è la tua disciplina di lavoro, non una decisione dell\'utente.';
 }
@@ -489,7 +490,7 @@ export function goalBriefing(goal: ChatGoal, locale: string): string {
     const mark = c.status === 'done' ? '[x]' : c.status === 'dropped' ? '[–]' : '[ ]';
     return `${mark} ${c.id}: ${c.text}${c.note ? ` — ${c.note}` : ''}`;
   });
-  const en = locale === 'en';
+  const en = bilingualNoticeLocale(locale) === 'en';
   const head = en
     ? `OPEN GOAL FOR THIS CONVERSATION (${done}/${total} criteria closed, ${goal.laps} background resume${goal.laps === 1 ? '' : 's'} used)`
     : `OBIETTIVO APERTO DI QUESTA CONVERSAZIONE (${done}/${total} criteri chiusi, ${goal.laps} ripres${goal.laps === 1 ? 'a' : 'e'} in background usat${goal.laps === 1 ? 'a' : 'e'})`;
@@ -558,7 +559,7 @@ export function goalContinuationPrompt(
         '- Ti sei fermato ad aspettare un giudizio che puoi darti da solo (una review, un QC, "dimmi se va bene"). Dattelo e chiudi il criterio.'
       ]
     : [];
-  if (locale === 'en') {
+  if (bilingualNoticeLocale(locale) === 'en') {
     return [
       ...emptyEn,
       'Keep working on the goal you set for yourself. The previous turn ended on a limit, not because the work was done.',
@@ -698,7 +699,7 @@ export function goalTurnNotice(
   if (decision.reason === 'out_of_time') return null;
   const { done, total } = goalProgress(goal.criteria);
   const open = openCriteria(goal.criteria);
-  const en = locale === 'en';
+  const en = bilingualNoticeLocale(locale) === 'en';
     // Questo testo rientra nel transcript a ogni turno successivo, quindi si paga in token per tutto
     // il resto della conversazione — e un elenco parziale spacciato per completo sarebbe peggio del
     // silenzio. ponytail: soglia binaria; se servisse nominarli in blocco, la strada è «x; y; +3».
@@ -1123,7 +1124,7 @@ export async function settleGoalForTurn(
     if (proven.length) {
       const applied = await updateGoalCriteria(supabase, goal, {
         done: proven,
-        note: opts.locale === 'en' ? PROSE_CLOSE_NOTE.en : PROSE_CLOSE_NOTE.it
+        note: bilingualNoticeLocale(opts.locale) === 'en' ? PROSE_CLOSE_NOTE.en : PROSE_CLOSE_NOTE.it
       }).catch(() => null);
       if (applied) goal = applied.goal;
     }
@@ -1145,7 +1146,7 @@ export async function settleGoalForTurn(
         supabase,
         goal,
         bad.map((c) => c.id),
-        opts.locale === 'en'
+        bilingualNoticeLocale(opts.locale) === 'en'
           ? refused.length
             ? `Reopened: ticked off in a turn where ${refused.join(', ')} was refused and never went through.`
             : 'Reopened: this turn never got a successful result from the tool this criterion names.'
@@ -1192,7 +1193,7 @@ export async function settleGoalForTurn(
       supabase,
       goal.id,
       'met',
-      opts.locale === 'en'
+      bilingualNoticeLocale(opts.locale) === 'en'
         ? `Closed by the system, not by the agent: every criterion is ticked off${how(true)}.`
         : `Chiuso dal sistema, non dall'agente: tutti i criteri risultano spuntati${how(false)}.`
     ).catch(() => null);
@@ -1205,7 +1206,7 @@ export async function settleGoalForTurn(
       supabase,
       goal.id,
       'handed_back',
-      opts.locale === 'en'
+      bilingualNoticeLocale(opts.locale) === 'en'
         ? `Stopped after ${goal.laps} automatic pass(es): ${openCriteria(goal.criteria).length} criterion(s) still open.`
         : `Fermato dopo ${goal.laps} ripresa/e automatiche: ${openCriteria(goal.criteria).length} criteri ancora aperti.`
     ).catch(() => null);

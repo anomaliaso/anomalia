@@ -30,6 +30,7 @@ import {
 } from '$lib/agent-avatars';
 import { compactionModel, takeKieUsage } from '$lib/server/chat/model';
 import { getCustomAgentsByIds } from '$lib/server/custom-agents-read';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
 /** Tetto ai membri: oltre, il prompt del router smette di essere corto e la stanza di essere leggibile. */
 export const ROOM_MAX_MEMBERS = 4;
@@ -155,9 +156,9 @@ export async function roomRoster(
   supabase: SupabaseClient,
   brandId: string,
   keys: string[],
-  locale: string = 'it'
+  locale: string = 'en'
 ): Promise<RoomMember[]> {
-  const lang = locale === 'en' ? 'en' : 'it';
+  const lang = bilingualNoticeLocale(locale);
   const customIds = keys
     .filter((k) => k.startsWith(CUSTOM_PREFIX))
     .map((k) => k.slice(CUSTOM_PREFIX.length));
@@ -506,12 +507,12 @@ export async function pickRoomSpeakers(opts: {
  *
  * Entra in OGNI turno di OGNI stanza: per questo l'area di un membro è una riga sola, non il brief.
  */
-export function roomSystemBlock(members: RoomMember[], speakerKey: string, locale = 'it'): string {
+export function roomSystemBlock(members: RoomMember[], speakerKey: string, locale = 'en'): string {
   const me = members.find((m) => m.key === speakerKey);
   const others = members.filter((m) => m.key !== speakerKey);
   if (!me || !others.length) return '';
   const list = others.map((m) => `${m.name} (${m.area})`).join('; ');
-  return locale === 'en'
+  return bilingualNoticeLocale(locale) === 'en'
     ? `\n\n## GROUP CHAT\nThis thread is a room: several agents and the user, in one conversation. You are **${me.name}**. Also here: ${list}. Everyone reads every message, yours included, and only ONE agent writes at a time — you were picked to answer THIS one. So: do not repeat what someone already said, do not summarise them, do not answer for them, do not introduce yourself again. If part of the request belongs to another craft, say so in one line and leave it to them — badly doing their job costs the user more than the handover. And you are not obliged to weigh in on everything: when the message is not really for you, the useful answer is a short one, or none.\nYOUR VOICE IS YOURS, THEIRS IS THEIRS. You may report what a colleague has ALREADY said in this chat, attributed to them (\"as Analyst said, ...\"). NEVER write new words in their name, never answer \"on their behalf\", never sign a section with their craft: they are here and speak for themselves. If you need their input you do not have it yet — say in one line what is needed and end your turn: the floor passes to them after you.`
     : `\n\n## CHAT DI GRUPPO\nQuesto thread è una stanza: più agenti e l'utente, in una conversazione sola. Tu sei **${me.name}**. Ci sono anche: ${list}. Tutti leggono tutti i messaggi, compreso il tuo, e scrive UN agente alla volta — per questo è stato scelto te. Quindi: non ripetere quello che qualcuno ha già detto, non riassumerlo, non rispondere al posto suo, non ripresentarti. Se un pezzo della richiesta è di un altro mestiere, dillo in una riga e lasciaglielo — farglielo male al posto suo costa all'utente più del passaggio di mano. E non sei obbligato a intervenire su tutto: quando il messaggio non è davvero per te, la risposta utile è breve, o nessuna.\nLA TUA VOCE È TUA, QUELLA DEGLI ALTRI È LORO. Puoi riferire quello che un collega ha GIÀ detto in questa chat, attribuendoglielo (\"come diceva Analyst, ...\"). Non scrivere MAI parole nuove a nome suo, non rispondere \"da parte sua\", non firmare un pezzo col suo mestiere: è qui dentro e parla da sé. Se ti serve il suo contributo non ce l'hai ancora — di' in una riga cosa serve e chiudi il tuo turno: la parola passa a lui dopo di te.`;
 }
@@ -594,7 +595,7 @@ export async function roomContinue(
   }
 ): Promise<RoomMember | null> {
   if (!isRoomThread(opts.thread)) return null;
-  const locale = opts.locale === 'en' ? 'en' : 'it';
+  const locale = bilingualNoticeLocale(opts.locale);
   const members = await roomRoster(supabase, opts.brandId, parseRoomAgents(opts.thread.room_agents), locale);
   if (members.length < 2) return null;
 

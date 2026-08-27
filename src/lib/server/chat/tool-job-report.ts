@@ -14,6 +14,7 @@
  * perché il silenzio è il modo peggiore di finire: meglio "l'audit non è riuscito: …" che niente.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { buildToolJobSummary } from './job-summaries';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,7 +42,7 @@ export function toolJobReportMessage(
 	outcome: ToolJobOutcome,
 	locale: string
 ): string {
-	const en = locale === 'en';
+	const en = bilingualNoticeLocale(locale) === 'en';
 	if (outcome.status === 'failed') {
 		const why = (outcome.error || 'unknown error').slice(0, 300);
 		return en
@@ -59,7 +60,7 @@ export function toolJobReportMessage(
 			? `🛠️ The background job "${toolName}" stopped without doing the work: ${why}.${result.action ? ` Required action: ${result.action}.` : ''} Explain it to the user in one line and take that action; do not silently retry.`
 			: `🛠️ Il lavoro in background "${toolName}" si è fermato senza fare il lavoro: ${why}.${action} Spiegalo all'utente in una riga e fai quell'azione; non ritentare da solo.`;
 	}
-	const body = buildToolJobSummary(toolName, result).slice(0, 1200);
+	const body = buildToolJobSummary(toolName, result, locale).slice(0, 1200);
 	return en
 		? `🛠️ The background job "${toolName}" is done. Result:\n${body}\n\nReport it to the user and carry on with what comes next.`
 		: `🛠️ Il lavoro in background "${toolName}" è finito. Esito:\n${body}\n\nRiferiscilo all'utente e prosegui con quello che viene dopo.`;
@@ -81,7 +82,7 @@ export async function enqueueToolJobReport(
 		// Niente thread = niente conversazione dove rientrare (job da CLI, da cron, dal designer).
 		if (!threadId || !toolName || toolName === 'chat_response') return null;
 		const params = (job.input_params ?? {}) as AnyRec;
-		const locale = params.report_locale === 'en' ? 'en' : 'it';
+		const locale = bilingualNoticeLocale(params.report_locale);
 		const { enqueueQueuedChatTurn } = await import('./queue');
 		return await enqueueQueuedChatTurn(admin, {
 			brandId: job.brand_id,

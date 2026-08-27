@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyRec = Record<string, any>;
@@ -44,7 +45,7 @@ export async function startLongToolJob(
   threadId?: string,
   abortSignal?: AbortSignal,
   origin: string = '',
-  locale: string = 'it'
+  locale: string = 'en'
 ): Promise<AnyRec> {
   if (abortSignal?.aborted) {
     return { cancelled: true, error: 'Chat stopped before job could start' };
@@ -56,7 +57,7 @@ export async function startLongToolJob(
     tool_name: toolName,
     // `report_*` viaggiano nei params perché è l'unico posto dove portarli senza una migration:
     // chi chiude la riga (worker o reaper) è un altro processo e non ha né l'origin né la lingua.
-    input_params: { ...params, report_locale: locale === 'en' ? 'en' : 'it', report_origin: origin },
+    input_params: { ...params, report_locale: bilingualNoticeLocale(locale), report_origin: origin },
     status: 'pending',
     thread_id: threadId ?? null
   }).select('id').maybeSingle();

@@ -1,3 +1,4 @@
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SubagentRole } from './subagents';
 
 /**
@@ -193,7 +194,7 @@ export function kitRunIsAlive(run: KitRunLiveness, now?: number): boolean {
 }
 
 export function turnTruncatedNotice(locale: string, willContinue: boolean): string {
-	if (locale === 'en') {
+	if (bilingualNoticeLocale(locale) === 'en') {
 		return willContinue
 			? '\n\n_Hit the time limit for a single turn. Everything above is done and saved — I am picking the rest back up in the background._'
 			: '\n\n_Hit the time limit for a single turn. Everything above is done and saved, but the rest is still open — send "continue" and I will pick it back up._';
@@ -312,7 +313,7 @@ function millions(tokens: number): string {
 
 /** NON promette una ripresa: riprendere un turno fermato per costo raddoppia quel costo. */
 export function turnTokenBudgetNotice(locale: string, usedTokens: number, budget: number): string {
-	if (locale === 'en') {
+	if (bilingualNoticeLocale(locale) === 'en') {
 		return `\n\n_Stopped — this turn burned ${millions(usedTokens)} tokens, past its ${millions(budget)} budget. Everything above is done and saved; the rest is still open. Tell me which part to pick up and I will start a fresh turn on that alone._`;
 	}
 	return `\n\n_Mi fermo — questo turno ha bruciato ${millions(usedTokens)} token, oltre il suo budget di ${millions(budget)}. Tutto quello sopra è fatto e salvato; il resto è ancora aperto. Dimmi quale pezzo riprendere e riparto da lì con un turno nuovo._`;

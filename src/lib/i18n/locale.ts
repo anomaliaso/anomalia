@@ -25,6 +25,26 @@ export function localeLanguageName(locale: string | undefined | null): string {
   return isLocale(locale) ? LOCALE_LANGUAGE_NAME[locale] : LOCALE_LANGUAGE_NAME[DEFAULT_LOCALE];
 }
 
+/**
+ * Notices, job reports and rate-limit copy that only ship English/Italian.
+ * Anything that is not Italian — empty, `en-IN`, Hindi-only, Spanish, `*` — is English.
+ * Never the other way around: missing `en` in Accept-Language used to collapse to Italian.
+ */
+export function bilingualNoticeLocale(locale: string | undefined | null): 'en' | 'it' {
+  return typeof locale === 'string' && locale.toLowerCase().startsWith('it') ? 'it' : 'en';
+}
+
+/**
+ * How the chatbot picks the language of a reply. Same rule as Radar comments: the text the
+ * person just wrote wins. Dashboard locale is only a fallback when there is nothing to detect
+ * (empty, a URL, a chip with no sentence). Brand caption language and Italian prompt examples
+ * must not drag an English message into Italian — production amazon.in, 27/8/2026.
+ */
+export function chatReplyLanguageBlock(uiLocale: string | undefined | null): string {
+  const lang = localeLanguageName(uiLocale);
+  return `REPLY LANGUAGE — ABSOLUTE RULE: write every user-facing message in the language of the user's latest message (detect it from the text they just sent). The dashboard locale (${lang}), the brand's caption language, the brand timezone, the language of these instructions, and any style or voice material are IRRELEVANT when the user wrote in a clear language: an English message gets an English reply even if this dashboard is Italian or a background job summary was Italian, and vice versa. Dashboard locale (${lang}) is only a fallback when the message is empty, a URL, a chip/command with no sentence, or otherwise has no detectable language. Style instructions shape style, never language.`;
+}
+
 // Prefix a canonical (English) marketing path with the active locale: '/pricing' → '/it/pricing',
 // '/' → '/it'. English stays unprefixed (the bare path is canonical). Only use for pages that live
 // under the [[lang=locale]] group — NOT for /login, /app, etc., which are never prefixed.

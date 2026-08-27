@@ -232,7 +232,7 @@ export function createMotionPlugin(deps: MotionPluginDeps): ToolPlugin {
 		'Europe/Rome',
 		userId,
 		'',
-		locale ?? 'it',
+		locale ?? 'en',
 		threadId ?? undefined
 	) as ChatToolsRecord;
 	const audioTools: ToolSpec[] = Object.entries(MOTION_AUDIO_MAP).map(([name, m]) => ({
@@ -334,7 +334,7 @@ export function createMotionPlugin(deps: MotionPluginDeps): ToolPlugin {
 				selectedIds: id ? [id] : [],
 				threadId: threadId ?? null,
 				origin,
-				locale: locale ?? 'it'
+				locale: locale ?? 'en'
 			}
 		});
 		if (!jobId) return fail('could not queue the motion build — nothing is running, say so plainly');

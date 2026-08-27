@@ -14,6 +14,7 @@
  * girate, perché "ho fatto rivedere" detto da chi doveva farlo rivedere non è un'informazione.
  */
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AgentId } from '$lib/server/chat/agents';
 import { GROUNDING_BLOCK } from '$lib/server/chat/agents';
@@ -150,7 +151,7 @@ export async function createAgentBase(opts: AgentBaseOpts): Promise<AgentBase> {
 	const openGoal =
 		supabase && threadId ? await loadOpenGoal(supabase, threadId).catch((error) => { swallow('load open goal', error); return null; }) : null;
 
-	const en = opts.locale === 'en';
+	const en = bilingualNoticeLocale(opts.locale) === 'en';
 	const blocks: string[] = [];
 
 	// Non condizionato a niente: è l'unica regola qui che non dipende da quali tool sono montati.
