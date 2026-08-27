@@ -2,6 +2,7 @@ import { swallow } from '$lib/server/swallow';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { withBrandContext } from '$lib/server/ai-log';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { buildToolJobSummary } from '$lib/server/chat/job-summaries';
 import { executeChatToolJob } from '$lib/server/chat/job-executor';
 import {
@@ -63,7 +64,11 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
 
       await cancel.assertActive();
 
-      const summary = buildToolJobSummary(job.tool_name, result);
+      const summary = buildToolJobSummary(
+        job.tool_name,
+        result,
+        bilingualNoticeLocale((job.input_params as { report_locale?: string } | null)?.report_locale)
+      );
       await supabase.from('chat_messages').insert({
         brand_id: job.brand_id,
         user_id: job.user_id,

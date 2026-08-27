@@ -91,6 +91,7 @@ import {
 import { hydrateChatDocuments } from '$lib/server/hydrate-chat-documents';
 import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames, dmReplyBackMessage } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
 export function kickChatQueueWork(origin: string): Promise<void> {
 	const headers: Record<string, string> = {};
@@ -151,7 +152,7 @@ export async function enqueueQueuedChatTurn(
 		userMessageSaved?: boolean;
 	}
 ): Promise<string | null> {
-	const locale = opts.locale === 'en' ? 'en' : 'it';
+	const locale = bilingualNoticeLocale(opts.locale);
 	const { data, error } = await supabase
 		.from('chat_jobs')
 		.insert({
@@ -246,7 +247,7 @@ export async function enqueueTurnContinuation(
 		.maybeSingle();
 	if (waiting) return null;
 
-	const locale = opts.locale === 'en' ? 'en' : 'it';
+	const locale = bilingualNoticeLocale(opts.locale);
 	return enqueueQueuedChatTurn(supabase, {
 		brandId: opts.brandId,
 		userId: opts.userId,
@@ -467,7 +468,7 @@ export async function processNextQueuedChatJob(
 	// è entrata in coda una CONTINUAZIONE si rifiuta invece di azzerare — riprenderebbe leggendo
 	// una storia che non c'è più, e ricomincerebbe da capo senza che nessuno sappia perché.
 	if (isClearCommand(userMessageContent)) {
-		const en = String(params.locale ?? 'it') === 'en';
+		const en = bilingualNoticeLocale(params.locale) === 'en';
 		const busy = await threadHasActiveChatResponse(admin, {
 			userId: job.user_id as string,
 			threadId,
@@ -522,7 +523,7 @@ export async function processNextQueuedChatJob(
 			return { processed: true, jobId, error: 'credits_exhausted' };
 		}
 
-		const locale = (params.locale as string) ?? 'it';
+		const locale = (params.locale as string) ?? 'en';
 		const webHubEnabled = hasWebHub(brand.plan);
 		const threadRow = await getThread(admin, threadId, brand.id, job.user_id as string);
 
@@ -695,7 +696,7 @@ export async function processNextQueuedChatJob(
 						threadId,
 						spec: kitSpec,
 						messages: kitMessages,
-						locale: locale === 'en' ? 'en' : 'it',
+						locale: bilingualNoticeLocale(locale),
 						mode: params.mode,
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model)?.family,
@@ -766,7 +767,7 @@ export async function processNextQueuedChatJob(
 			if (block) systemPrompt += `\n\n${block}`;
 		}
 		if (params.scheduled === true) {
-			systemPrompt += SCHEDULED_NOTE[locale === 'en' ? 'en' : 'it'];
+			systemPrompt += SCHEDULED_NOTE[bilingualNoticeLocale(locale)];
 		}
 		// Il brief dell'agente schedulato (vedi enqueueQueuedChatTurn): l'incarico vero sta qui nel
 		// system prompt, il thread mostra solo la riga corta che l'ha avviato.
@@ -804,7 +805,7 @@ export async function processNextQueuedChatJob(
 					admin,
 					current.id,
 					'abandoned',
-					locale === 'en' ? 'Closed by the user.' : "Chiuso dall'utente."
+					bilingualNoticeLocale(locale) === 'en' ? 'Closed by the user.' : "Chiuso dall'utente."
 				).catch(() => null);
 			}
 		}
@@ -1398,7 +1399,7 @@ export async function processNextQueuedChatJob(
 				const { sendPushToUser } = await import('$lib/server/web-push');
 				await sendPushToUser(admin, job.user_id as string, {
 					title: 'Anomalia',
-					body: locale === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere",
+					body: bilingualNoticeLocale(locale) === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere",
 					url: `/app/${brand.slug}/chat/${threadId}`,
 					tag: 'chat-ai-ready',
 					skipIfFocused: true

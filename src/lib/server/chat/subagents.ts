@@ -362,7 +362,7 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
     brandId,
     tools: available,
     model,
-    locale = 'it',
+    locale = 'en',
     userId = '',
     threadId,
     webHubEnabled = true,

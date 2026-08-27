@@ -5,6 +5,7 @@
  * a NEW job that picks up from persisted work.
  */
 import { CHAT_JOB_STATUS } from '$lib/chat-job-status';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -198,7 +199,7 @@ export async function enqueueDesignerContinuation(
 	const depth = Math.max(0, Math.trunc(opts.depth ?? 0));
 	if (depth >= DESIGNER_MAX_CONTINUATIONS) return null;
 
-	const locale = opts.locale === 'en' ? 'en' : 'it';
+	const locale = bilingualNoticeLocale(opts.locale);
 	const { data, error } = await supabase
 		.from('chat_jobs')
 		.insert({
@@ -266,7 +267,7 @@ export async function reapStaleDesignerJobs(
 		if (!isDesignerTool(job.tool_name)) continue;
 
 		const params = (job.input_params ?? {}) as Record<string, unknown>;
-		const locale = params.locale === 'en' ? 'en' : 'it';
+		const locale = bilingualNoticeLocale(params.locale);
 		const depth = Math.max(0, Math.trunc(Number(params.continuation_depth)) || 0);
 		const jobOrigin = typeof params.origin === 'string' && params.origin ? params.origin : origin;
 

@@ -33,7 +33,7 @@ export function createNotifyPlugin(deps: NotifyPluginDeps): ToolPlugin {
 		'Europe/Rome',
 		userId,
 		'',
-		locale ?? 'it',
+		locale ?? 'en',
 		threadId ?? undefined
 	) as ChatToolsRecord;
 

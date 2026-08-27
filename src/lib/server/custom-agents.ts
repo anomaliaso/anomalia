@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { createThread, getThread, setThreadAgent } from '$lib/server/chat/persistence';
 import { enqueueQueuedChatTurn, kickChatQueueWork, threadHasActiveChatResponse } from '$lib/server/chat/queue';
 import { resolveAgent } from '$lib/server/chat/agents';
@@ -492,8 +493,7 @@ export async function deleteCustomAgentSchedule(
 
 async function localeForUser(admin: SupabaseClient, userId: string): Promise<string> {
   const { data } = await admin.from('profiles').select('locale').eq('id', userId).maybeSingle();
-  const loc = String(data?.locale ?? '');
-  return loc.toLowerCase().startsWith('en') ? 'en' : 'it';
+  return bilingualNoticeLocale(data?.locale);
 }
 
 /**

@@ -27,7 +27,7 @@ export function createGroundingPlugin(deps: GroundingPluginDeps): ToolPlugin {
 		'Europe/Rome',
 		userId,
 		'',
-		locale ?? 'it',
+		locale ?? 'en',
 		threadId ?? undefined
 	) as ChatToolsRecord;
 

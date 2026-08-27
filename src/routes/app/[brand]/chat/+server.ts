@@ -35,6 +35,7 @@ import { isChatTier } from '$lib/chat-tiers';
 import { threadModelPreference } from '$lib/server/chat/model-preference';
 import { withBrandContext } from '$lib/server/ai-log';
 import { shouldUseKit, runKitTurn } from '$lib/agent/bridge/live';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { RequestHandler } from './$types';
 import {
   isJobCancelled,
@@ -58,7 +59,7 @@ export const GET: RequestHandler = async ({ url, params, locals: { supabase, saf
 };
 
 // POST: send a message — streams real-time AND saves server-side for background resilience
-export const POST: RequestHandler = async ({ request, params, locals: { supabase, safeGetSession }, platform }) => {
+export const POST: RequestHandler = async ({ request, params, locals: { supabase, safeGetSession, locale: uiLocale }, platform }) => {
   const { user } = await safeGetSession();
   if (!user) return new Response('Unauthorized', { status: 401 });
 
@@ -118,7 +119,8 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
     webHubEnabled,
     threadId,
     threadAgent,
-    threadCustomAgentId
+    threadCustomAgentId,
+    locale: uiLocale
   });
   if (handledAction) return handledAction;
 
@@ -128,10 +130,8 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 
   // Rolling chat windows (5h / week) — monthly credits still apply separately via tools / metering.
   {
-    const acceptLangEarly = request.headers.get('accept-language') ?? '';
-    const localeEarly = acceptLangEarly.includes('en') ? 'en' : 'it';
     const rate = await getChatRateUsage(supabase, brand.id, brand.plan);
-    if (!rate.ok) return chatRateLimitResponse(rate, localeEarly);
+    if (!rate.ok) return chatRateLimitResponse(rate, bilingualNoticeLocale(uiLocale));
     // E il tetto mensile del piano, che è un freno diverso dalla finestra rotante e qui non c'era.
     if (await chatCreditsBlocked(brand.id)) {
       return json({ error: 'credits_exhausted' }, { status: 402 });
@@ -155,9 +155,9 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   }
 
   return withBrandContext(brand.id, async () => {
-  // Detect locale from the Accept-Language header or default to 'it'
-  const acceptLang = request.headers.get('accept-language') ?? '';
-  const locale = acceptLang.includes('en') ? 'en' : 'it';
+  // Same locale as the page (`locals.locale` / pickLocale): default English, never Italian just
+  // because Accept-Language omitted "en" (en-IN, Hindi-only, empty, `*`).
+  const locale = uiLocale;
   const origin = new URL(request.url).origin;
 
   // Il budget di tempo del turno nasce più in basso (chatTurnDeadline), ma i tool si costruiscono
@@ -258,7 +258,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       threadId,
       spec: kitSpec,
       messages,
-      locale,
+      locale: bilingualNoticeLocale(locale),
       mode,
       tier: body.tier,
       modelFamily: modelPref?.family,
