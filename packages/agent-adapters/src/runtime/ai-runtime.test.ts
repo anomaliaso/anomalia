@@ -50,4 +50,27 @@ describe('buildTools — la traduzione ToolSpec[] → ToolSet che i motori condi
 		)({}, { toolCallId: 'call-9' });
 		expect(calls[0]?.id).toBe('call-9');
 	});
+
+	it('un risultato senza content non uccide il turno: content mancante → modello vede testo vuoto', async () => {
+		// Incidente reale (kit_turn_died, agente content): un plugin ha risposto senza `content`
+		// e `toModelContent` è morto su `.map` di undefined nel passaggio al prossimo step — il
+		// run restava `running` col battito fermo fino al reaper. Il confine qui, dove il
+		// ToolResult del plugin diventa messaggio per il modello.
+		const exec = async (): Promise<ToolResult> => ({}) as ToolResult;
+		const tools = buildTools([BURN_TOOL], exec, ctx);
+		const out = await (tools.burn.execute as (input: unknown) => Promise<ToolResult>)({});
+		const value = ((tools.burn as { toModelOutput?: (o: { output: ToolResult }) => unknown }).toModelOutput?.({ output: out }) as { value?: unknown })?.value;
+		expect(value).toEqual([]);
+	});
+
+	it('un output interamente undefined non deve nemmeno far compiere il modello', () => {
+		const toModelOutput = (toolsUnder()
+			.burn as { toModelOutput?: (o: unknown) => unknown }).toModelOutput;
+		expect(() => toModelOutput?.({ output: undefined as never })).not.toThrow();
+	});
 });
+
+function toolsUnder() {
+	// buildTools di nuovo: nessuno stato condiviso, il test guarda solo la funzione di conversione.
+	return buildTools([BURN_TOOL], noopExec, ctx);
+}
