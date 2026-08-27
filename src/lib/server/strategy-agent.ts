@@ -1,10 +1,7 @@
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
-import { DEEPSEEK_MODEL, deepseekAlive, noteDeepseekFailure } from '$lib/server/deepseek';
-import { geminiFlash } from '$lib/server/gemini';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
 import { harnessGenerateText } from '$lib/server/harness';
 import { z } from 'zod';
@@ -43,79 +40,17 @@ import {
 // Agentic loop for editorial plan revise/replan. Generator stays parallelVariants; the agent
 // decides when to read, search, brief, draft, verify, repair, and finish.
 
-export const STRATEGY_AGENT_MODEL = geminiFlash;
+export const STRATEGY_AGENT_MODEL = llmDefaultModel;
 
-// ── Which model runs the TEXT agents ──────────────────────────────────────────
-// The editorial-plan, GTM, week-planner, SEO and analytics-review agents are pure text reasoning
-// over brand context: read the studio, weigh the benchmark, draft a plan, verify it.
-//
-// Gemini 3.7 Flash runs them, DeepSeek V4 Flash is the fallback. DeepSeek is ~10x cheaper per
-// input token, but these are the flagship outputs and the loop's stop conditions (stepCountIs,
-// stall detection) were tuned against Gemini's tool-calling rhythm — the saving is not worth
-// paying for in plan quality. Il lavoro strutturato di sfondo NON passa più da DeepSeek: è tornato
-// tutto su Gemini Flash (vedi xiaomi.ts), quindi questo è rimasto l'unico posto dove DeepSeek fa
-// del ragionamento.
-//
-// Force either side with AGENT_PROVIDER=deepseek|gemini — no deploy, no code change. Whichever is
-// not primary is the fallback, used when the primary has no key and by withAgentFallback() when a
-// run dies before touching anything. The IMAGE agent stays on Gemini regardless: DeepSeek is not
-// multimodal, which is also why nothing here falls back the other way for vision work.
-//
-// DeepSeek is OpenAI-compatible, so this reuses @ai-sdk/openai (already a dependency) rather than
-// adding a provider package.
-const AGENT_PROVIDER = (env.AGENT_PROVIDER || 'gemini').toLowerCase();
+export type AgentModel = { model: LanguageModel; provider: 'llm'; modelId: string };
 
-export type AgentModel = { model: LanguageModel; provider: 'gemini' | 'deepseek'; modelId: string };
-
-const geminiAgentConfigured = (): boolean => !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
-// `deepseekAlive()`, non la sola presenza della chiave: una rete di salvataggio che parte solo
-// quando Gemini è già morto e poi fallisce anche lei non salva niente — aggiunge una chiamata
-// condannata e la stessa eccezione, un 402 più tardi.
-const deepseekAgentConfigured = (): boolean => deepseekAlive();
-
-// One cache slot per provider: both can be live at once now that one falls back to the other,
-// and a single slot would rebuild the client on every alternation.
-let cachedGeminiAgent: AgentModel | undefined;
-let cachedDeepseekAgent: AgentModel | undefined;
-
-function geminiAgent(): AgentModel {
-  const modelId = STRATEGY_AGENT_MODEL();
-  if (cachedGeminiAgent?.modelId === modelId) return cachedGeminiAgent;
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-  cachedGeminiAgent = { model: google(modelId), provider: 'gemini', modelId };
-  return cachedGeminiAgent;
-}
-
-function deepseekAgent(): AgentModel {
-  if (cachedDeepseekAgent?.modelId === DEEPSEEK_MODEL) return cachedDeepseekAgent;
-  const deepseek = createOpenAI({
-    baseURL: env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
-    apiKey: env.DEEPSEEK_API_KEY
-  });
-  // .chat() pins the chat-completions surface — DeepSeek does not implement the Responses API.
-  cachedDeepseekAgent = { model: deepseek.chat(DEEPSEEK_MODEL), provider: 'deepseek', modelId: DEEPSEEK_MODEL };
-  return cachedDeepseekAgent;
-}
-
-/**
- * The model the text agents run on, plus the ids ai_calls must be billed against — they travel
- * together on purpose: logging a Gemini model id for a DeepSeek call would price the run at ~10x
- * its real cost and quietly corrupt every credit figure downstream.
- * Memoised per model id, so an env bump applies without recycling the process.
- */
 export function agentModel(): AgentModel {
-  if (AGENT_PROVIDER === 'deepseek' && deepseekAgentConfigured()) return deepseekAgent();
-  if (geminiAgentConfigured()) return geminiAgent();
-  // No Gemini key: DeepSeek keeps the agents running rather than failing the job outright.
-  if (deepseekAgentConfigured()) return deepseekAgent();
-  return geminiAgent();
+  const modelId = STRATEGY_AGENT_MODEL();
+  return { model: llmLanguageModel(modelId), provider: 'llm', modelId };
 }
 
-/** The other provider, when it is configured — null when there is nothing to fall back to. */
 export function agentFallbackModel(): AgentModel | null {
-  const primary = agentModel();
-  if (primary.provider === 'gemini') return deepseekAgentConfigured() ? deepseekAgent() : null;
-  return geminiAgentConfigured() ? geminiAgent() : null;
+  return null;
 }
 
 /**
@@ -144,21 +79,13 @@ export async function withAgentFallback<T>(
   try {
     return await run(primary, markDirty);
   } catch (err) {
-    if (primary.provider === 'deepseek') noteDeepseekFailure(err);
     const fallback = agentFallbackModel();
     if (dirty || !fallback) throw err;
     console.warn(
       `[${label}] ${primary.provider} failed before any tool ran, retrying on ${fallback.provider}:`,
       err instanceof Error ? err.message : err
     );
-    try {
-      return await run(fallback, markDirty);
-    } catch (err2) {
-      // Un 401/402 qui spegne DeepSeek per il processo: la prossima volta `agentFallbackModel()`
-      // torna null e il run fallisce subito, invece di pagare un secondo tentativo condannato.
-      if (fallback.provider === 'deepseek') noteDeepseekFailure(err2);
-      throw err2;
-    }
+    return await run(fallback, markDirty);
   }
 }
 export const MAX_STRATEGY_STEPS = 80;
@@ -350,8 +277,6 @@ export async function loadFeasibilityContext(
     approvedRubrics: rubrics
   };
 }
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 
 function planSchema(allowedCadences: string[], withChanges = false) {
   return {

@@ -31,19 +31,22 @@ describe('motionAgentModel — il motion segue il provider attivo, non Google ca
 		expect(m.modelId).toBe('openai/gpt-5.6-sol');
 	});
 
-	it('MOTION_VIDEO_MODEL resta la scappatoia esplicita e vince sul provider', () => {
-		env.OPENROUTER_API_KEY = 'k';
+	it('MOTION_VIDEO_MODEL resta la scappatoia esplicita e vince sul provider del centralino', () => {
+		env.LLM_API_KEY = 'k';
 		env.CHAT_PROVIDER = 'openrouter';
+		env.OPENROUTER_API_KEY = 'k';
 		env.OPENROUTER_PRO_MODEL = 'openai/gpt-5.6-sol';
 		env.MOTION_VIDEO_MODEL = 'gemini-3.7-flash';
 		const m = motionAgentModel();
 		expect(m.modelId).toBe('gemini-3.7-flash');
-		expect(m.provider).toBe('gemini');
+		expect(m.provider).toBe('llm');
 	});
 
-	it('senza nessun provider dell’harness cade su Gemini, ma lo DICE', () => {
-		env.GEMINI_API_KEY = 'g';
+	it('senza nessun provider dell’harness cade sul centralino (llm), dichiarandolo', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 		const m = motionAgentModel();
-		expect(m.provider).toBe('gemini');
+		expect(m.provider).toBe('llm');
+		expect(m.modelId).toBe('google/gemini-2.5-flash');
 	});
 });

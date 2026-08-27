@@ -7,10 +7,14 @@
   const entries = [
     {
       date: 'August 27, 2026',
-      title: 'Tools work on every message, not just the first',
+      title: 'One pipe for text',
       items: [
+        'Text, structured JSON, embeddings, video/audio reviewers and Lyria music now go through one OpenAI-compatible gateway (LLM_BASE_URL + LLM_API_KEY). Images, video clips and voice stay on Kie; search engines stay themselves.',
+        'GEO Gemini probes use native web search on a Gemini model id; Bing answers from Bing snippets only.',
+        'Batch agent loops keep their dollar and time caps. Autopilot is queued for the worker (one-hour deadline); the in-app week planner still times out at 200 seconds.',
         'The homepage now shows the two ways to use Anomalia side by side — ready-to-go cloud or self-hosted on your own server — with mobile and desktop apps marked as coming soon.',
         'Sending a second message in a chat no longer makes every tool refuse with “turn closed by the system”: the agent keeps working for the whole conversation.',
+        'A chat that stalls no longer dies: the agent retries with a fresh session when the previous one fails to start, and abandoned runs are closed cleanly instead of hanging mid-flight.',
         'Self-hosting: the production build now reads your .env on start, the database is reachable on whatever port you set, and a fresh install boots instead of stopping on an empty ORIGIN.',
         'Self-hosting: usage and cost are recorded again on a fresh install — eight columns the app writes were missing from the database. Run the migrations once more to get them.',
         'Self-hosting: radar, post revisions, article translation and chat reasoning work on a fresh install — the tables and columns behind them were missing from the migrations.'

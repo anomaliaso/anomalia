@@ -5,7 +5,6 @@
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { GoogleGenAI } from '@google/genai';
-import { googleGenaiClient } from '$lib/server/gemini';
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -500,8 +499,9 @@ async function planClipScriptsFallback(
   );
 }
 
-function genaiClient() {
-  return googleGenaiClient();
+function genaiClient(): GoogleGenAI {
+  // Dummy: renderPostImage costruisce Google da solo sul ripiego pixel.
+  return null as unknown as GoogleGenAI;
 }
 
 /**

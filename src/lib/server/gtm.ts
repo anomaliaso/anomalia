@@ -609,49 +609,7 @@ export async function draftGtmRedirectWithBrief(
   return redirectGtmDualInner(ai, current, feedback, phaseIndex, profile, { ...opts, agentBrief });
 }
 
-async function invokeGtmStrategyAgent(
-  ai: GoogleGenAI,
-  profile: BrandProfile,
-  opts: GtmDualOpts,
-  mode: 'propose' | 'revise',
-  seedBrief: string,
-  current?: GtmPlan,
-  phaseIndex?: number | null
-): Promise<GtmPlan | null> {
-  const { gtmStrategyAgentEnabled, runGtmStrategyAgent } = await import('$lib/server/gtm-strategy-agent');
-  if (!gtmStrategyAgentEnabled() || !opts.supabase || !opts.brandId) return null;
-  const brief =
-    seedBrief ||
-    [
-      opts.objective ? `Business objective: ${opts.objective}` : '',
-      opts.zeroToOne ? 'Brand is at 0→1 — foundations first, proportionate growth claims.' : ''
-    ]
-      .filter(Boolean)
-      .join('\n');
-  const result = await runGtmStrategyAgent({
-    supabase: opts.supabase,
-    userId: opts.userId,
-    brandId: opts.brandId,
-    profile,
-    platforms: opts.platforms,
-    mode,
-    seedBrief: brief,
-    currentPlan: current,
-    phaseIndex: phaseIndex ?? undefined,
-    planOpts: opts,
-    timezone: opts.timezone,
-    verbose: opts.agentVerbose
-  });
-  return result.plan;
-}
-
 export async function proposeGtmDual(ai: GoogleGenAI, profile: BrandProfile, opts: GtmDualOpts): Promise<GtmPlan> {
-  try {
-    const agentPlan = await invokeGtmStrategyAgent(ai, profile, opts, 'propose', '', undefined, null);
-    if (agentPlan) return agentPlan;
-  } catch (e) {
-    console.warn('[GTM] strategy agent failed, falling back to legacy:', e instanceof Error ? e.message : e);
-  }
   return proposeGtmDualInner(ai, profile, opts);
 }
 
@@ -791,20 +749,6 @@ export async function redirectGtmDual(
   profile: BrandProfile,
   opts: GtmDualOpts
 ): Promise<GtmPlan> {
-  try {
-    const agentPlan = await invokeGtmStrategyAgent(
-      ai,
-      profile,
-      opts,
-      'revise',
-      feedback,
-      current,
-      phaseIndex
-    );
-    if (agentPlan) return agentPlan;
-  } catch (e) {
-    console.warn('[GTM] strategy agent revise failed, falling back to legacy:', e instanceof Error ? e.message : e);
-  }
   return redirectGtmDualInner(ai, current, feedback, phaseIndex, profile, opts);
 }
 

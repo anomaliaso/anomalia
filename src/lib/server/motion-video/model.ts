@@ -9,19 +9,18 @@
  *
  * Ora il modello esce dal provider attivo dell'harness, lo stesso che serve i turni di chat: un
  * posto solo decide su cosa gira il prodotto. `MOTION_VIDEO_MODEL` resta la scappatoia
- * esplicita, e senza nessun provider si cade su Gemini — dichiarandolo, perche` una riga di
+ * esplicita, e senza nessun provider si cade sul centralino (`llm`) — dichiarandolo, perche` una riga di
  * `ai_calls` che mente sul provider e` un conto che non torna.
  */
 import { env } from '$env/dynamic/private';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import { harnessSdkModel } from '$lib/agent/bridge/adapters';
-import { geminiFlash } from '$lib/server/gemini';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 
 export type MotionAgentModel = {
 	model: LanguageModel;
 	modelId: string;
-	provider: 'gemini' | 'kie' | 'openrouter' | 'opencode';
+	provider: 'gemini' | 'kie' | 'openrouter' | 'opencode' | 'llm';
 };
 
 /**
@@ -35,17 +34,13 @@ export type MotionAgentModel = {
  */
 const MOTION_TIER = 'pro' as const;
 
-function google(id: string): LanguageModel {
-	return createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY })(id);
-}
-
 export function motionAgentModel(): MotionAgentModel {
 	const forced = env.MOTION_VIDEO_MODEL?.trim();
-	if (forced) return { model: google(forced), modelId: forced, provider: 'gemini' };
+	if (forced) return { model: llmLanguageModel(forced), modelId: forced, provider: 'llm' };
 
 	const routed = harnessSdkModel(MOTION_TIER);
 	if (routed) return routed;
 
-	const id = geminiFlash();
-	return { model: google(id), modelId: id, provider: 'gemini' };
+	const id = llmDefaultModel();
+	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }

@@ -23,11 +23,9 @@
  * one. False here is the honest answer for the majority of rows, and it is the single thing that
  * keeps a design wall from filling up with competent snapshots.
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { env } from '$env/dynamic/private';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { llmConfigured, llmStructured } from '$lib/server/llm';
 import { SUPPORTED, type Locale } from '$lib/i18n/locale';
 // The vocabulary is shared with the pages that render it — see the header of `$lib/wall`.
 import { DESIGN_AXES, DESIGN_TAGS, type DesignAxis, type DesignTag } from '$lib/wall';
@@ -285,11 +283,10 @@ export async function judgeDesign(
   image: { bytes: Buffer; mime: string },
   post: { caption?: string | null; platform?: string | null; account?: string | null }
 ): Promise<DesignVerdict | null> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
+  const key = llmConfigured();
   if (!key) throw new Error('gemini_unconfigured');
   if (image.bytes.length > MAX_INLINE_BYTES) throw new Error('image_too_large');
 
-  const ai = googleGenaiClient();
   const context = [
     post.platform ? `PLATFORM: ${post.platform}` : '',
     post.account ? `ACCOUNT: ${post.account}` : '',
@@ -298,29 +295,20 @@ export async function judgeDesign(
     .filter(Boolean)
     .join('\n');
 
-  const res = await loggedGemini('wall.design_judge', () =>
-    ai.models.generateContent({
-      model: geminiFlash(),
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: PROMPT },
-            { text: context || 'No caption available.' },
-            { inlineData: { mimeType: image.mime, data: image.bytes.toString('base64') } }
-          ]
-        }
-      ],
-      config: {
-        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-        responseMimeType: 'application/json',
-        responseSchema: SCHEMA
-      }
-    })
-  );
+  let parsed: unknown;
+  try {
+    parsed = await llmStructured({
+      prompt: `${PROMPT}\n\n${context || 'No caption available.'}`,
+      schema: SCHEMA,
+      images: [{ mediaType: image.mime, data: image.bytes.toString('base64') }],
+      label: 'wall.design_judge'
+    });
+  } catch {
+    return null;
+  }
 
   try {
-    return parseVerdict(JSON.parse((res.text ?? '').trim()));
+    return parseVerdict(parsed);
   } catch {
     return null;
   }

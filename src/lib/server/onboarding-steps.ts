@@ -716,7 +716,7 @@ async function processResearch(
         platform: p.platform,
         metrics: p.metrics
       }));
-      const calendarHooks = await upcomingTimelyHooks(ai, {
+      const calendarHooks = await upcomingTimelyHooks({
         category: profile?.category,
         archetype: profile?.site_type,
         language: profile?.language

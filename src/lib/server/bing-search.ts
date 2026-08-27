@@ -1,6 +1,6 @@
 // Bing Web Search → grounded answer for GEO “Copilot-style” visibility probes.
 import { env } from '$env/dynamic/private';
-import { genaiClient, groundedGemini } from '$lib/server/research';
+import { llmText } from '$lib/server/llm';
 import { logAiCall } from '$lib/server/ai-log';
 
 export const bingConfigured = () => !!env.BING_SEARCH_API_KEY;
@@ -28,17 +28,16 @@ export async function bingGroundedAnswer(
       })
     );
     const context = pages.map((p, i) => `[${i + 1}] ${p.name}\n${p.url}\n${p.snippet}`).join('\n\n');
-    const ai = genaiClient();
     const prompt = `Answer using ONLY the Bing search results below. Recommend specific real brands/products by name when relevant.\n\nQuestion: ${query}\n\nResults:\n${context}`;
-    const g = await groundedGemini(
-      ai,
+    const g = await llmText({
       prompt,
-      'You answer like Bing Copilot: concise, cite brands by name, grounded in the provided results only.'
-    );
+      system: 'You answer like Bing Copilot: concise, cite brands by name, grounded in the provided results only.',
+      label: 'bingSearch.synth'
+    });
     logAiCall({
       label: 'bingSearch',
       provider: 'bing',
-      model: 'web-search+gemini',
+      model: 'web-search+llm',
       prompt: query,
       ms: Date.now() - t0,
       ok: !!g.text,
@@ -52,7 +51,7 @@ export async function bingGroundedAnswer(
     logAiCall({
       label: 'bingSearch',
       provider: 'bing',
-      model: 'web-search+gemini',
+      model: 'web-search+llm',
       prompt: query,
       ms: Date.now() - t0,
       ok: false,

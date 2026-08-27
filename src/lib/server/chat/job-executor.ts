@@ -48,8 +48,12 @@ export const EXECUTABLE_TOOL_JOBS = [
   'seo_plan',
   'seo_add_initiatives',
   'analytics_review',
-  'motion_video_qc'
+  'motion_video_qc',
+  'run_autopilot'
 ] as const;
+
+/** Job che il drain serverless di Vercel non deve reclamare: solo il worker process. */
+export const WORKER_ONLY_TOOL_JOBS = ['run_autopilot'] as const;
 
 export async function executeChatToolJob(
   supabase: SupabaseClient,
@@ -398,6 +402,33 @@ export async function executeChatToolJob(
         ...(result.review ? { review: result.review } : {}),
         ...(result.error ? { note: result.error } : {})
       };
+    }
+
+    case 'run_autopilot': {
+      const { data: brand } = await supabase
+        .from('brands')
+        .select(
+          'id, name, slug, plan, timezone, target_platforms, content_prefs, autopilot_failure_count, org_id, last_autopilot_run_at, activated_at, zernio_profile_id, blog_config'
+        )
+        .eq('id', brandId)
+        .maybeSingle();
+      if (!brand) return { error: 'Brand not found' };
+      await cancel.assertActive();
+      const { runAutopilotForBrand } = await import('$lib/server/scheduler');
+      const deadlineMs =
+        typeof params.deadline_ms === 'number' && params.deadline_ms > 0 ? params.deadline_ms : 3_600_000;
+      const res = await runAutopilotForBrand(supabase, brand, { deadlineMs });
+      await cancel.assertActive();
+      if (res.ran) {
+        const { reportToAgentThread } = await import('$lib/server/team-ignition');
+        await reportToAgentThread(supabase, brandId, {
+          job: 'autopilot',
+          postsCreated: res.postsCreated ?? 0,
+          emailed: res.emailed ?? false,
+          ...(res.planned ? { planned: true } : {})
+        });
+      }
+      return res;
     }
 
     default:

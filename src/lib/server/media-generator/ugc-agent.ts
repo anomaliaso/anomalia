@@ -32,19 +32,16 @@
  */
 import { tool, stepCountIs, hasToolCall } from 'ai';
 import { z } from 'zod';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { harnessGenerateText } from '$lib/server/harness';
 import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
+import { llmLanguageModel } from '$lib/server/llm';
 import { createAgentBase } from '$lib/server/agent-base';
 import { createBrandContextTools } from '$lib/server/chat/brand-context-tools';
 import { createMediaLibraryTools } from '$lib/server/chat/media-library-tools';
 import { geminiFast } from '$lib/server/chat/model';
 import type { UgcClipPlan } from '$lib/server/media-generator/ugc-batch';
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 
 /** Passi dell'orchestratore. Rendere dieci clip una per una ne consuma dieci: il tetto le contiene. */
 export const UGC_AGENT_MAX_STEPS = 40;
@@ -214,7 +211,7 @@ export async function runUgcOrchestrator(deps: UgcAgentDeps): Promise<UgcAgentOu
 		model: (() => {
 			const b = geminiFast();
 			const id = IMAGE_AGENT_MODEL();
-			return id === b.modelId ? b : { ...b, model: google(id), modelId: id };
+			return id === b.modelId ? b : { ...b, model: llmLanguageModel(id), modelId: id };
 		})(),
 		defaultAgent: 'ugc',
 		// I nomi di QUESTA superficie: senza, lo scope per hub taglia ogni scrittura.
@@ -421,11 +418,11 @@ export async function runUgcOrchestrator(deps: UgcAgentDeps): Promise<UgcAgentOu
 				agent: 'ugc_producer',
 				mode: String(plans.length),
 				model: IMAGE_AGENT_MODEL(),
-				provider: 'gemini',
+				provider: 'llm',
 				surface: 'batch'
 			},
 			{
-				model: google(IMAGE_AGENT_MODEL()),
+				model: llmLanguageModel(IMAGE_AGENT_MODEL()),
 				maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
 				system: ugcAgentSystemPrompt({
 					brandName: deps.brandName,

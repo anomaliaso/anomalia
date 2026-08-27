@@ -6,12 +6,11 @@
  * off-brand Life-Force drama from the prompt alone.
  */
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, hasToolCall } from 'ai';
 import { harnessGenerateText } from '$lib/server/harness';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
+import { llmLanguageModel } from '$lib/server/llm';
 import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
 import { readMediaForAgent } from '$lib/server/strategy-agent-reads';
 import {
@@ -34,8 +33,6 @@ import { UGC_CAPTURE_RULES } from '$lib/server/ugc';
 import { CONTRAST_DEVICE_IDS, disruptiveBriefSection, isContrastDeviceId } from '$lib/disruptive';
 import { trendingWallDigestSection } from '$lib/server/wall-digest';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 
 export const UGC_PLAN_MAX_STEPS = 8;
 
@@ -325,10 +322,10 @@ export async function planUgcClipsWithTools(opts: UgcPlanAgentOpts): Promise<Ugc
       agent: 'ugc_plan',
       mode: String(count),
       model: IMAGE_AGENT_MODEL(),
-      provider: 'gemini',
+      provider: 'llm',
       surface: 'batch'
     }, {
-      model: google(IMAGE_AGENT_MODEL()),
+      model: llmLanguageModel(IMAGE_AGENT_MODEL()),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system,
       prompt,
@@ -353,7 +350,7 @@ export async function planUgcClipsWithTools(opts: UgcPlanAgentOpts): Promise<Ugc
 
   logAiCall({
     label: 'ugc-plan-agent',
-    provider: 'gemini',
+    provider: 'llm',
     model: IMAGE_AGENT_MODEL(),
     ms: Date.now() - t0,
     ok,

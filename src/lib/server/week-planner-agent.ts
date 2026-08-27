@@ -1,5 +1,4 @@
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, type StopCondition } from 'ai';
 import { harnessGenerateText } from '$lib/server/harness';
 import { z } from 'zod';
@@ -103,7 +102,6 @@ export async function runWeekPlannerAgent(opts: WeekPlannerAgentOpts): Promise<W
 }
 
 async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<WeekPlannerAgentResult> {
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
   const usdBudget = await fetchUsdBudget(opts.brandId);
   const budget = createStrategyBudget({ drafts: MAX_WEEK_PLANNER_DRAFTS, repairs: MAX_WEEK_PLANNER_REPAIRS, usdRemaining: usdBudget });
 

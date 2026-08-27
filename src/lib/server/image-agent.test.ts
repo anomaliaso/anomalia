@@ -8,7 +8,12 @@ const { renderPostImage, uploadPostImage, generateText, logAiCall } = vi.hoisted
 }));
 
 vi.mock('$env/dynamic/private', () => ({
-  env: { GEMINI_API_KEY: 'test', IMAGE_AGENT_ENABLED: 'true' }
+  env: {
+    GEMINI_API_KEY: 'test',
+    LLM_API_KEY: 'test',
+    LLM_DEFAULT_MODEL: 'gemini-3.7-flash',
+    IMAGE_AGENT_ENABLED: 'true'
+  }
 }));
 
 vi.mock('ai', async () => {
@@ -77,7 +82,7 @@ import {
   STALL_STEP_THRESHOLD,
   estimatedRenderCostUsd
 } from './image-agent';
-import { geminiFlash } from './gemini';
+import { llmDefaultModel } from './llm';
 
 // Re-export fingerprint for tests — it's private; test via stall simulation instead.
 
@@ -95,8 +100,8 @@ const stubSupabase = {
 } as never;
 
 describe('image-agent model', () => {
-  it('uses geminiFlash() so a Flash bump or GEMINI_FLASH env override rolls this agent too', () => {
-    expect(IMAGE_AGENT_MODEL()).toBe(geminiFlash());
+  it('usa il default del centralino, così un cambio di LLM_DEFAULT_MODEL vale anche qui', () => {
+    expect(IMAGE_AGENT_MODEL()).toBe(llmDefaultModel());
   });
 });
 

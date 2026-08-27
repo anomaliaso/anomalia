@@ -9,22 +9,20 @@
  * — a total publish outage is worse than a rare miss. Overlapping ticks are serialized by
  * claiming `prepublish_checked_at` before the model call.
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { needMarkers } from '$lib/server/proof-discipline';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import { isImageUrl, isVideoUrl } from '$lib/content-formats';
-import { loggedGemini, withBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, genaiThinking, judgeThinkingLevel, googleGenaiClient } from '$lib/server/gemini';
+import { withBrandContext } from '$lib/server/ai-log';
 import { isUrlSafe } from '$lib/server/brand-analysis';
+import { llmConfigured, llmImagesFromInline, llmStructured } from '$lib/server/llm';
 import {
   prepublishHeldEmailHtml,
   prepublishHeldEmailSubject,
   prepublishHeldEmailText
 } from '$lib/server/email';
 
-const MODEL = geminiFlash;
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const MAX_GEMINI_IMAGES = 4;
@@ -235,36 +233,13 @@ export async function probeMediaUrl(url: string): Promise<MediaProbe> {
   }
 }
 
-function parseVerdictJson(text: string): { ok: boolean; reasons: string[] } | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const tryParse = (raw: string): { ok: boolean; reasons: string[] } | null => {
-    try {
-      const v = JSON.parse(raw) as { ok?: unknown; reasons?: unknown };
-      if (typeof v.ok !== 'boolean') return null;
-      const reasons = Array.isArray(v.reasons) ? v.reasons.map((r) => String(r).trim()).filter(Boolean) : [];
-      return { ok: v.ok, reasons };
-    } catch {
-      return null;
-    }
-  };
-  return tryParse(trimmed) ?? (() => {
-    const open = trimmed.indexOf('{');
-    const close = trimmed.lastIndexOf('}');
-    if (open < 0 || close <= open) return null;
-    return tryParse(trimmed.slice(open, close + 1));
-  })();
-}
-
 async function geminiJudge(input: {
   caption: string;
   contentType: string;
   imageParts: ImagePart[];
   mediaNotes: string[];
 }): Promise<{ ok: boolean; reasons: string[] } | { error: string }> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) return { error: 'gemini_unconfigured' };
-  const ai = googleGenaiClient();
+  if (!llmConfigured()) return { error: 'gemini_unconfigured' };
   const notes = input.mediaNotes.length ? `\nMEDIA NOTES:\n- ${input.mediaNotes.join('\n- ')}` : '';
   const prompt = `You are the LAST-MILE ship gate for a social post that is about to go live.
 Approve unless the post is BROKEN and must not be published.
@@ -289,28 +264,18 @@ ${notes}
 
 Return JSON { "ok": boolean, "reasons": string[] }. reasons empty when ok is true. English, one line each.`;
 
-  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
-  for (const p of input.imageParts) {
-    parts.push({ inlineData: p.inlineData });
-  }
   try {
-    const res = await loggedGemini('prepublish.check', () =>
-      ai.models.generateContent({
-        model: MODEL(),
-        contents: [{ role: 'user', parts }],
-        config: {
-          maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-          responseMimeType: 'application/json',
-          responseSchema: VERDICT_SCHEMA,
-          // Was thinking-off (budget 0), which 3.7 Flash cannot do: this check now reasons
-          // like every other judge. PREPUBLISH_THINKING_LEVEL turns it down to 'low' alone.
-          thinkingConfig: genaiThinking(judgeThinkingLevel(env.PREPUBLISH_THINKING_LEVEL))
-        }
-      })
-    );
-    const parsed = parseVerdictJson((res.text ?? '').trim());
-    if (!parsed) return { error: 'model_parse_failed' };
-    return parsed;
+    const parsed = await llmStructured<{ ok?: boolean; reasons?: string[] }>({
+      prompt,
+      schema: VERDICT_SCHEMA,
+      images: llmImagesFromInline(input.imageParts),
+      label: 'prepublish.check'
+    });
+    if (typeof parsed?.ok !== 'boolean') return { error: 'model_parse_failed' };
+    return {
+      ok: parsed.ok,
+      reasons: Array.isArray(parsed.reasons) ? parsed.reasons.map(String) : []
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[prepublish] gemini failed: ${msg}`);

@@ -8,14 +8,14 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, hasToolCall, type ModelMessage } from 'ai';
 import { harnessGenerateText } from '$lib/server/harness';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { extractSdkUsage, logAiCall, getBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, judgeThinkingLevel } from '$lib/server/gemini';
+import { judgeThinkingLevel } from '$lib/server/gemini';
+import { llmLanguageModel, llmVideoReviewerModel } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { exaGroundedAnswer } from '$lib/server/exa';
 import {
@@ -46,8 +46,7 @@ import {
   type ReviewCheckpoint
 } from '$lib/server/video-review-checkpoint';
 
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-const MODEL = geminiFlash;
+const MODEL = llmVideoReviewerModel;
 
 export const VIDEO_REVIEW_AGENT_MAX_STEPS = 8;
 export const VIDEO_REVIEW_AGENT_MAX_WEB = 2;
@@ -643,10 +642,10 @@ export async function reviewVideoWithAgent(input: VideoReviewAgentOpts): Promise
       agent: 'video_review',
       mode: opts.standard ?? 'organic',
       model: MODEL(),
-      provider: 'gemini',
+      provider: 'llm',
       surface: 'batch'
     }, {
-      model: google(MODEL()),
+      model: llmLanguageModel(MODEL()),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system,
       messages,
@@ -704,7 +703,7 @@ export async function reviewVideoWithAgent(input: VideoReviewAgentOpts): Promise
   } finally {
     logAiCall({
       label: 'video.review.agent',
-      provider: 'gemini',
+      provider: 'llm',
       model: MODEL(),
       ms: Date.now() - t0,
       ok: loopOk,

@@ -19,10 +19,8 @@
  * missing and whether the order held, and the arithmetic is ours. A model that also picks the
  * number tends to reconcile it with its own prose rather than with what it saw.
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { env } from '$env/dynamic/private';
-import { getBrandContext, loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, genaiThinking, googleGenaiClient } from '$lib/server/gemini';
+import { getBrandContext } from '$lib/server/ai-log';
+import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { fetchVideoBytes, prepareReviewMedia, type VideoReviewVerdict } from '$lib/server/video-review';
 import {
@@ -271,8 +269,7 @@ export async function reviewReferenceFidelity(opts: {
 	| { ok: true; fidelity: ReferenceFidelity; spec: MotionReferenceSpec }
 	| { ok: false; error: string }
 > {
-	const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-	if (!key) return { ok: false, error: 'gemini_unconfigured' };
+	if (!llmConfigured()) return { ok: false, error: 'gemini_unconfigured' };
 	const spec = opts.reference.spec;
 	const reachable = reachableBeats(spec);
 	// Nothing reachable was ever asked for, so nothing can be missing. The study already told the
@@ -291,56 +288,32 @@ export async function reviewReferenceFidelity(opts: {
 	if (!media) return { ok: false, error: 'media_extract_failed' };
 
 	try {
-// GIUDICE VIDEO — SEMPRE GOOGLE, MAI IL TRASPORTO kie.
-		// kie ignora `videoMetadata.fps`: a fps 1 e a fps 4 la risposta conta 388 token di prompt
-		// contro i 1627 di Google, cioè guarda ~1 fotogramma al secondo qualunque cosa gli si chieda.
-		// Un giudice che valuta easing e transizioni su un fotogramma al secondo non fallisce: emette
-		// verdetti sbagliati e sicuri di sé. Per questo il client è costruito con googleGenaiClient(),
-		// che non guarda GEMINI_TRANSPORT.
-		const ai = googleGenaiClient();
-		const parts: Array<Record<string, unknown>> = [
-			{
-				text: fidelityPrompt({
-					spec,
-					brandName: opts.brandName,
-					language: opts.language,
-					duration: media.duration,
-					source: opts.source
-				})
-			}
-		];
-		for (const f of media.frames) {
-			parts.push({ text: f.label });
-			parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
-		}
-		if (media.videoMp4) {
-			parts.push({ text: 'THE FINISHED CLIP (watch the beats in order):' });
-			parts.push({
-				inlineData: { mimeType: 'video/mp4', data: media.videoMp4.toString('base64') },
-				videoMetadata: { fps: 4 }
-			});
-		}
-
-		const res = await loggedGemini('motion.reference_fidelity', () =>
-			ai.models.generateContent({
-				model: geminiFlash(),
-				contents: [{ role: 'user', parts }],
-				config: {
-					maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-					responseMimeType: 'application/json',
-					responseSchema: FIDELITY_SCHEMA,
-					thinkingConfig: genaiThinking()
-				}
-			})
-		);
-		let raw: AnyRec | null = null;
-		try {
-			const parsed = JSON.parse((res.text ?? '').trim());
-			raw = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as AnyRec) : null;
-		} catch {
-			raw = null;
-		}
-		if (!raw) return { ok: false, error: 'model_parse_failed' };
+		// QC video sul centralino (`llmVideoReviewerModel`): kie ignorava `videoMetadata.fps: 4`.
+		const frameNote = media.frames.map((f, i) => `${i + 1}. ${f.label}`).join('\n');
+		const prompt = [
+			fidelityPrompt({
+				spec,
+				brandName: opts.brandName,
+				language: opts.language,
+				duration: media.duration,
+				source: opts.source
+			}),
+			frameNote ? `\nSTILLS (in order):\n${frameNote}` : '',
+			media.videoMp4 ? '\nTHE FINISHED CLIP is attached (watch the beats in order).' : ''
+		]
+			.filter(Boolean)
+			.join('');
+		const raw = (await llmStructured<AnyRec>({
+			prompt,
+			schema: FIDELITY_SCHEMA,
+			images: media.frames.map((f) => ({ mediaType: f.mimeType, data: f.data })),
+			file: media.videoMp4
+				? { mediaType: 'video/mp4', data: media.videoMp4.toString('base64') }
+				: undefined,
+			model: llmVideoReviewerModel(),
+			label: 'motion.reference_fidelity'
+		})) as AnyRec | null;
+		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'model_parse_failed' };
 		return {
 			ok: true,
 			spec,

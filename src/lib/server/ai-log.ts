@@ -138,7 +138,7 @@ export type AiCallLog = {
   //   'submitforbacklinks' a flat per-submission fee; 'sandbox' microVM seconds.
   //   'internal' is an agent EVENT, not a call: `cost_usd` stays null, so it can't touch credits or
   //   rate limits (both filter `cost_usd is not null`) and the Usage page excludes it by provider.
-  provider: 'gemini' | 'xiaomi' | 'kie' | 'openrouter' | 'opencode' | 'deepseek' | 'scrapecreators' | 'exa' | 'tavily' | 'dataforseo' | 'pagespeed' | 'ads' | 'submitforbacklinks' | 'sandbox' | 'internal';
+  provider: 'gemini' | 'xiaomi' | 'kie' | 'openrouter' | 'opencode' | 'llm' | 'deepseek' | 'scrapecreators' | 'exa' | 'tavily' | 'dataforseo' | 'pagespeed' | 'ads' | 'submitforbacklinks' | 'sandbox' | 'internal';
   model?: string;
   // Flat per-request price for non-token providers; when set it wins over the token rates.
   flatCostUsd?: number;

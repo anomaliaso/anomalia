@@ -12,8 +12,8 @@
 // Gemini resta ripiego senza chiave kie. Web search: Exa / DeepSeek tools, mai kie web_search.
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
 import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { env } from '$env/dynamic/private';
+import { isGoogleGeminiModel, llmConfigured, llmDefaultModel, llmLanguageModel, llmModelForPicker } from '$lib/server/llm';
 import type { LanguageModel } from 'ai';
 import { DEFAULT_CHAT_TIER, isChatTier, type ChatTier } from '$lib/chat-tiers';
 import {
@@ -49,7 +49,7 @@ export { DEEPSEEK_PRO_MODEL };
 
 export type ChatModelResolved = {
   model: LanguageModel;
-  provider: 'deepseek' | 'kie' | 'xiaomi' | 'gemini' | 'openrouter' | 'opencode';
+  provider: 'deepseek' | 'kie' | 'xiaomi' | 'gemini' | 'openrouter' | 'opencode' | 'llm';
   modelId: string;
   tier: ChatTier;
   /** Effort actually requested — logged so a slow turn can be explained after the fact. */
@@ -176,8 +176,7 @@ function geminiConfigured(): boolean {
  */
 export function compactionModel(): ChatModelResolved | null {
   // 'low': riassumere è un lavoro meccanico, non deve pagare il ragionamento della conversazione.
-  if (kieConfigured()) return withOutputCeiling(lunaFast('low', 'fast'));
-  if (geminiConfigured()) return geminiFast('low');
+  if (llmConfigured()) return geminiFast('low');
   return null;
 }
 
@@ -196,31 +195,20 @@ function geminiCallOptions(reasoning: ChatReasoning) {
 }
 
 /**
- * SEMPRE Google, mai il passthrough kie. Il trasporto kie (`GEMINI_TRANSPORT=kie`) esiste per il
- * lavoro di sfondo, che nessuno guarda mentre succede; in chat è inutilizzabile — misurato: ~80
- * secondi al primo token contro 5, e 2 delta di streaming invece di 20. Questa funzione non legge
- * `GEMINI_TRANSPORT` apposta: la chat non ha un interruttore da sbagliare.
- */
-function googleClient() {
-  return createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-}
-
-/**
- * Gemini Flash (id da `GEMINI_FLASH`, letto a ogni richiesta): il RIPIEGO che tiene in piedi chat e
- * compattazione quando manca la chiave kie, e lo scambio multimodale per un turno con immagini su un
- * modello che non le legge.
+ * Modello di default sul centralino (Gemini è un id `google/gemini-*`, non un secondo SDK).
  */
 export function geminiFast(
   reasoning: ChatReasoning = DEFAULT_REASONING.fast,
   tier: ChatTier = 'fast'
 ): ChatModelResolved {
+  const modelId = llmDefaultModel();
   return withOutputCeiling({
-    model: googleClient()(geminiFlash()),
-    provider: 'gemini',
-    modelId: geminiFlash(),
+    model: llmLanguageModel(modelId),
+    provider: 'llm',
+    modelId,
     tier,
     reasoning,
-    callOptions: geminiCallOptions(reasoning)
+    callOptions: {}
   });
 }
 
@@ -380,7 +368,7 @@ export function lunaFast(
  */
 function visionFallback(tier: ChatTier, reasoning: ChatReasoning): ChatModelResolved | null {
   try {
-    const m = { ...resolveLuna(reasoning, 'fast'), tier };
+    const m = geminiFast(reasoning, tier);
     return modelSeesImages(m) ? m : null;
   } catch {
     return null;
@@ -392,15 +380,11 @@ function visionFallback(tier: ChatTier, reasoning: ChatReasoning): ChatModelReso
  * openai-compatible lanciano `UnsupportedFunctionalityError` invece di degradare.
  */
 export function modelSeesVideo(m: ChatModelResolved): boolean {
-    // Resta solo Gemini: nessun livello preimpostato guarda più una clip allegata al turno, perché
-    // Luna, Grok e i GPT ricevono solo le immagini. Non lo si finge — chi non vede il video non deve
-    // riceverne la descrizione.
-  return m.provider === 'gemini';
+  return m.provider === 'llm' && isGoogleGeminiModel(m.modelId);
 }
 
 export function modelSeesImages(m: ChatModelResolved): boolean {
-  if (m.provider === 'gemini') return true;
-    // GPT 5.6 Luna / Terra / Sol, e Grok 4.6: kie è multimodale su entrambe le famiglie.
+  if (m.provider === 'llm' || m.provider === 'gemini') return true;
   if (m.provider === 'kie' && /gpt-5|grok/i.test(m.modelId)) return true;
   return false;
 }
@@ -523,7 +507,9 @@ export function resolveChatModel(
     tier === 'auto' ? (saved?.family ?? policy.family) : null;
 
   // Una famiglia scelta a mano è una scelta, non un default da correggere: niente scalata.
-  if (tier === 'auto' && !saved && kieConfigured() && isHeavyProductionAsk(opts.userText)) tier = 'pro';
+  // Il centralino ha sempre un modello "pro" secondo della lista: nessun gate sulla chiave
+  // legacy di kie, altrimenti un brand solo-gateway non scala mai su un incarico pesante.
+  if (tier === 'auto' && !saved && isHeavyProductionAsk(opts.userText)) tier = 'pro';
 
   const familyId = familyForTier(tier, agentFamily).id;
   const reasoningRaw =
@@ -534,7 +520,15 @@ export function resolveChatModel(
       : rawReasoning;
   const reasoning: ChatReasoning = coerceReasoning(reasoningRaw, tier, agentFamily);
 
-  const resolved = resolveTier(tier, reasoning, familyId);
+  const modelId = llmModelForPicker(tier);
+  const resolved: ChatModelResolved = {
+    model: llmLanguageModel(modelId),
+    provider: 'llm',
+    modelId,
+    tier,
+    reasoning,
+    callOptions: {}
+  };
   if (opts.vision && !modelSeesImages(resolved)) {
     const vision = visionFallback(resolved.tier, resolved.reasoning);
     if (vision) return withOutputCeiling(vision);

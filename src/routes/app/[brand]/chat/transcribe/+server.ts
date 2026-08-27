@@ -1,9 +1,7 @@
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { json } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
-import { loggedGemini, withBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { withBrandContext } from '$lib/server/ai-log';
+import { llmConfigured, llmText } from '$lib/server/llm';
 import { MAX_AUDIO_BYTES } from '$lib/speech-to-text';
 
 // Tetto condiviso, non budget: il lavoro vero di questa rotta sta in ~60s. Su Vercel ogni
@@ -65,8 +63,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
     .maybeSingle();
   if (!brand) return json({ error: 'Brand not found' }, { status: 404 });
 
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) return json({ error: 'Voice input is not configured.' }, { status: 503 });
+  if (!llmConfigured()) return json({ error: 'Voice input is not configured.' }, { status: 503 });
 
   let form: FormData;
   try {
@@ -87,27 +84,16 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   const bytes = Buffer.from(await file.arrayBuffer());
 
   try {
-    const ai = googleGenaiClient();
-    const res = await withBrandContext(brand.id, () =>
-      loggedGemini('chat.transcribe', () =>
-        ai.models.generateContent({
-          model: geminiFlash(),
-          config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS },
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { inlineData: { mimeType, data: bytes.toString('base64') } },
-                { text: PROMPT }
-              ]
-            }
-          ]
-        })
-      ),
+    const { text: raw } = await withBrandContext(brand.id, () =>
+      llmText({
+        prompt: PROMPT,
+        file: { mediaType: mimeType, data: bytes.toString('base64') },
+        label: 'chat.transcribe'
+      }),
       (brand.plan as string | null) ?? null
     );
 
-    const text = (res.text ?? '').trim().replace(/^["'`]+|["'`]+$/g, '').trim();
+    const text = (raw ?? '').trim().replace(/^["'`]+|["'`]+$/g, '').trim();
     // Better an empty box the user can retry than a hallucinated reply pasted into their prompt.
     return json({ text: REFUSALS.test(text) ? '' : text });
   } catch (e) {

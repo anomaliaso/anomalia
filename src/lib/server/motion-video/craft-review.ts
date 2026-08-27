@@ -7,13 +7,11 @@
  *
  * Scores are in-process only — `video_reviews.standard` is CHECK (organic, ads).
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { env } from '$env/dynamic/private';
 import { MOTION_CRAFT_SPECS } from '$lib/motion-video/craft';
 import { findStaticTails, type StasisViolation } from '$lib/motion-video/easing';
 import { detectWowMechanisms, type WowMechanisms } from '$lib/motion-video/transitions-cookbook';
-import { loggedGemini, getBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, genaiThinking, googleGenaiClient } from '$lib/server/gemini';
+import { getBrandContext } from '$lib/server/ai-log';
+import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { isVideoUrl } from '$lib/content-formats';
 import {
 	clampScore,
@@ -24,7 +22,6 @@ import {
 } from '$lib/server/video-review';
 import { reviewNeedsRewrite } from '$lib/server/video-review-apply';
 
-const MODEL = geminiFlash;
 const SOURCE_SNIPPET_CHARS = 8_000;
 
 export const MOTION_CRAFT_DIMENSIONS = ['craft', 'content', 'pleasant', 'transitions'] as const;
@@ -114,23 +111,6 @@ const CRAFT_SCHEMA = {
 
 function asBool(v: unknown): boolean {
 	return v === true || v === 'true' || v === 1;
-}
-
-function parseJsonObject(text: string): Record<string, unknown> | null {
-	const trimmed = text.trim();
-	if (!trimmed) return null;
-	try {
-		return JSON.parse(trimmed) as Record<string, unknown>;
-	} catch {
-		const open = trimmed.indexOf('{');
-		const close = trimmed.lastIndexOf('}');
-		if (open < 0 || close <= open) return null;
-		try {
-			return JSON.parse(trimmed.slice(open, close + 1)) as Record<string, unknown>;
-		} catch {
-			return null;
-		}
-	}
 }
 
 export function craftVerdictFromScores(
@@ -409,8 +389,7 @@ export async function reviewMotionCraft(opts: {
 	language?: string | null;
 	abortSignal?: AbortSignal;
 }): Promise<{ ok: true; review: MotionCraftReview } | { ok: false; error: string }> {
-	const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-	if (!key) return { ok: false, error: 'gemini_unconfigured' };
+	if (!llmConfigured()) return { ok: false, error: 'gemini_unconfigured' };
 	const target = opts.url?.trim();
 	if (!target || !/^https?:\/\//i.test(target)) return { ok: false, error: 'invalid_url' };
 
@@ -426,53 +405,35 @@ export async function reviewMotionCraft(opts: {
 	if (!media) return { ok: false, error: 'media_extract_failed' };
 
 	try {
-// GIUDICE VIDEO — SEMPRE GOOGLE, MAI IL TRASPORTO kie.
-		// kie ignora `videoMetadata.fps`: a fps 1 e a fps 4 la risposta conta 388 token di prompt
-		// contro i 1627 di Google, cioè guarda ~1 fotogramma al secondo qualunque cosa gli si chieda.
-		// Un giudice che valuta easing e transizioni su un fotogramma al secondo non fallisce: emette
-		// verdetti sbagliati e sicuri di sé. Per questo il client è costruito con googleGenaiClient(),
-		// che non guarda GEMINI_TRANSPORT.
-		const ai = googleGenaiClient();
+		// QC video sul centralino (`llmVideoReviewerModel`): kie ignorava `videoMetadata.fps: 4`.
 		const wow = opts.source?.trim() ? detectWowMechanisms(opts.source) : null;
 		const stasis = opts.source?.trim() ? findStaticTails(opts.source) : null;
-		const parts: Array<Record<string, unknown>> = [
-			{
-				text: buildCraftPrompt({
-					brandName: opts.brandName,
-					language: opts.language,
-					duration: media.duration,
-					hasVideo: !!media.videoMp4,
-					source: opts.source,
-					wow,
-					stasis
-				})
-			}
-		];
-		for (const f of media.frames) {
-			parts.push({ text: f.label });
-			parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
-		}
-		if (media.videoMp4) {
-			parts.push({ text: 'FULL CLIP (watch scene changes in order):' });
-			parts.push({
-				inlineData: { mimeType: 'video/mp4', data: media.videoMp4.toString('base64') },
-				videoMetadata: { fps: 4 }
-			});
-		}
-
-		const res = await loggedGemini('motion.craft_review', () =>
-			ai.models.generateContent({
-				model: MODEL(),
-				contents: [{ role: 'user', parts }],
-				config: {
-					maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-					responseMimeType: 'application/json',
-					responseSchema: CRAFT_SCHEMA,
-					thinkingConfig: genaiThinking()
-				}
-			})
-		);
-		const parsed = parseJsonObject((res.text ?? '').trim());
+		const frameNote = media.frames.map((f, i) => `${i + 1}. ${f.label}`).join('\n');
+		const prompt = [
+			buildCraftPrompt({
+				brandName: opts.brandName,
+				language: opts.language,
+				duration: media.duration,
+				hasVideo: !!media.videoMp4,
+				source: opts.source,
+				wow,
+				stasis
+			}),
+			frameNote ? `\nSTILLS (in order):\n${frameNote}` : '',
+			media.videoMp4 ? '\nFULL CLIP is attached (watch scene changes in order).' : ''
+		]
+			.filter(Boolean)
+			.join('');
+		const parsed = await llmStructured<Record<string, unknown>>({
+			prompt,
+			schema: CRAFT_SCHEMA,
+			images: media.frames.map((f) => ({ mediaType: f.mimeType, data: f.data })),
+			file: media.videoMp4
+				? { mediaType: 'video/mp4', data: media.videoMp4.toString('base64') }
+				: undefined,
+			model: llmVideoReviewerModel(),
+			label: 'motion.craft_review'
+		});
 		if (!parsed) return { ok: false, error: 'model_parse_failed' };
 		return { ok: true, review: finalizeCraftReview(parsed, media.duration, wow, stasis) };
 	} catch (e) {

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { satisfiesSchema } from './xiaomi';
 
-// DeepSeek returns valid JSON but does NOT enforce the schema (json_object mode). This guard is
-// what stops a partially-filled object from reaching a caller that assumes the contract held.
-describe('satisfiesSchema (DeepSeek fall-through guard)', () => {
+// Il secondario (MiMo via tool calling, Grok via kie) restituisce JSON valido ma NON impone lo
+// schema al modo Google. Questa guardia è ciò che impedisce a un oggetto parzialmente riempito di
+// arrivare a un chiamante che dà per buono il contratto — e se non regge, il ripiego va al gateway.
+describe('satisfiesSchema (guardia di conformità sul secondario)', () => {
   const schema = {
     type: 'object',
     properties: {
@@ -50,26 +51,25 @@ describe('satisfiesSchema (DeepSeek fall-through guard)', () => {
 });
 
 /**
- * IL LAVORO DI SFONDO VA SU GEMINI FLASH.
+ * IL LAVORO STRUTTURATO DI SFONDO VA SUL GATEWAY LLM (OpenAI-compatibile).
  *
- * Qui c'era la suite che difendeva la deviazione su DeepSeek: più economico a parità di lavoro, con
- * ripiego su Gemini quando falliva. Il ripiego funzionava troppo bene — con la chiave a saldo zero
- * ogni chiamata faceva un tentativo condannato, aspettava il 402 e rifaceva il lavoro su Gemini,
- * decine di volte l'ora per ore, senza che niente si rompesse in superficie.
+ * Qui c'era la suite che difendeva la deviazione su DeepSeek, poi quella che difendeva Gemini Flash;
+ * entrambe difendevano un TRASPORTO che oggi non esiste più. Il default di `aiStructured` non passa
+ * né da Google né da nessun SDK per-famiglia: va dritto a `llmStructured` sul gateway, e il pseudo
+ * provider 'gemini' è ormai solo il nome del ramo "gateway" dentro xiaomi.ts. Le varianti pin ne
+ * ereditano la rotta; forzare `provider: 'xiaomi' | 'kie'` resta possibile come SECONDARIO, con il
+ * gateway come rete di conformità allo schema.
  *
- * Poi è arrivata una versione che faceva `readFileSync` di xiaomi.ts e cercava i nomi delle funzioni
- * DeepSeek nel sorgente: difendeva l'ORTOGRAFIA, non il comportamento. Sarebbe passata identica con
- * il lavoro di sfondo dirottato su un provider a pagamento sotto qualunque altro nome — ed era
- * legata alla directory da cui gira vitest.
- *
- * Questi invece guardano dove finisce davvero la chiamata: su `structuredGemini`, e su nient'altro
- * che parli con la rete.
+ * Come prima, questi test guardano dove finisce davvero la chiamata — sulla doppia `llmStructured`
+ * mockata, oppure sulla fetch — e non l'ortografia del sorgente.
  */
 // vi.mock è issato in cima al file: i doppi vanno creati in vi.hoisted, o le factory girano prima
 // che le const esistano.
 const M = vi.hoisted(() => ({
   env: {} as Record<string, string | undefined>,
-  structuredGemini: vi.fn(async () => ({ plan: 'ok' })),
+  llmStructured: vi.fn(async (_opts: { label?: string }) => ({ plan: 'ok' })),
+  llmText: vi.fn(),
+  llmImagesFromInline: vi.fn(() => undefined),
   structuredKie: vi.fn(),
   textKie: vi.fn(),
   // Nessuno importa più deepseek.ts dal router. Il mock sta qui perché se qualcuno lo
@@ -79,7 +79,11 @@ const M = vi.hoisted(() => ({
 }));
 const env = M.env;
 vi.mock('$env/dynamic/private', () => ({ env: M.env }));
-vi.mock('$lib/server/research', () => ({ structuredGemini: M.structuredGemini }));
+vi.mock('$lib/server/llm', () => ({
+  llmStructured: M.llmStructured,
+  llmText: M.llmText,
+  llmImagesFromInline: M.llmImagesFromInline
+}));
 vi.mock('$lib/server/kie', () => ({ structuredKie: M.structuredKie, textKie: M.textKie }));
 vi.mock('$lib/server/deepseek', () => ({
   DEEPSEEK_MODEL: 'deepseek-v4-flash',
@@ -112,25 +116,42 @@ describe('routing del lavoro strutturato', () => {
     return aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GEMINI });
   }
 
-  it('manda il lavoro strutturato a Gemini, e a nessun altro provider', async () => {
+  it('manda il lavoro strutturato al gateway LLM, e a nessun altro endpoint', async () => {
     expect(await callBackgroundWork()).toEqual({ plan: 'ok' });
-    expect(M.structuredGemini).toHaveBeenCalledTimes(1);
+    expect(M.llmStructured).toHaveBeenCalledTimes(1);
+    expect(M.llmStructured.mock.calls[0][0]).toMatchObject({ label: 'return_plan' });
     expect(M.structuredKie).not.toHaveBeenCalled();
     // structuredXiaomi vive dentro xiaomi.ts e non è mockabile: la sua unica traccia è la fetch.
-    // Zero chiamate = nessun provider a pagamento è stato sfiorato, sotto QUALUNQUE nome.
+    // Zero chiamate = nessun endpoint a pagamento è stato sfiorato, sotto QUALUNQUE nome.
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('ci va anche con GTM_PROVIDER=xiaomi: il pin batte la variabile d\'ambiente', async () => {
     expect(await callBackgroundWork({ GTM_PROVIDER: 'xiaomi', XIAOMI_MIMO_API_KEY: 'k' })).toEqual({ plan: 'ok' });
-    expect(M.structuredGemini).toHaveBeenCalledTimes(1);
+    expect(M.llmStructured).toHaveBeenCalledTimes(1);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('forzare provider:"xiaomi" parla con MiMo, e se fallisce ripiega sul gateway', async () => {
+    fetchSpy.mockResolvedValue(new Response('boom', { status: 500 }));
+    const { aiStructured } = await import('./xiaomi');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', {
+      brandId: 'b',
+      provider: 'xiaomi'
+    });
+    // Il secondario parte davvero — la fetch è il fiato di structuredXiaomi...
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('api.xiaomimimo.com');
+    // ...e il ripiego non è più Gemini ma il gateway LLM.
+    expect(M.llmStructured).toHaveBeenCalledTimes(1);
+    expect(res).toEqual({ plan: 'ok' });
   });
 
   it('non tocca DeepSeek: né la chiave, né una chiamata', async () => {
     await callBackgroundWork({ DEEPSEEK_API_KEY: 'chiave-viva' });
     expect(M.deepseekAlive).not.toHaveBeenCalled();
-    expect(M.structuredGemini).toHaveBeenCalledTimes(1);
+    expect(M.llmStructured).toHaveBeenCalledTimes(1);
   });
 });
 

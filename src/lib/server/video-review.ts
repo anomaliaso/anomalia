@@ -14,15 +14,14 @@
  *   organic — scroll-stop, native authenticity, reveal before 60%, one soft CTA in the last 10%
  *   ads     — thumb-stop WHO it stops, proof, unmistakable offer, uniqueness, claims safety
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { loggedGemini, getBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, genaiThinking, googleGenaiClient } from '$lib/server/gemini';
+import { getBrandContext } from '$lib/server/ai-log';
+import { llmConfigured, llmVideoReviewerModel, llmStructured } from '$lib/server/llm';
 import { ensureFfmpegPath } from '$lib/server/ffmpeg-bin';
 import { UGC_ORGANIC_MAX_DURATION, UGC_AD_DURATION } from '$lib/server/video';
 import { isReviewableMediaUrl, isVideoUrl } from '$lib/content-formats';
@@ -31,7 +30,6 @@ import type { ReviewCheckpoint } from '$lib/server/video-review-checkpoint';
 import { gradeWithCoverage, type CoverageTier } from '$lib/server/coverage';
 import { HOOK_TACTIC_IDS, hookTaxonomyBrief } from '$lib/server/hook-tactics';
 
-const MODEL = geminiFlash;
 /** Binary cap before base64 — Gemini inline parts blow up ~4/3. */
 const MAX_INLINE_BYTES = 8 * 1024 * 1024;
 // Founder clips off a phone routinely land at 40–60MB, and the old 40MB cap silently rejected them:
@@ -636,23 +634,6 @@ export function finalizeVideoReview(
   };
 }
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  try {
-    return JSON.parse(trimmed) as Record<string, unknown>;
-  } catch {
-    const open = trimmed.indexOf('{');
-    const close = trimmed.lastIndexOf('}');
-    if (open < 0 || close <= open) return null;
-    try {
-      return JSON.parse(trimmed.slice(open, close + 1)) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }
-}
-
 function ffRun(bin: string, args: string[]): void {
   const r = spawnSync(bin, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (r.status !== 0) throw new Error(`ffmpeg failed: ${(r.stderr ?? '').slice(-300)}`);
@@ -1050,48 +1031,32 @@ async function reviewVideoDirect(
   opts: ReviewVideoOpts,
   media: ReviewMedia
 ): Promise<ReviewVideoResult> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) return { ok: false, error: 'gemini_unconfigured' };
+  if (!llmConfigured()) return { ok: false, error: 'gemini_unconfigured' };
   try {
-// GIUDICE VIDEO — SEMPRE GOOGLE, MAI IL TRASPORTO kie.
-    // kie ignora `videoMetadata.fps`: a fps 1 e a fps 4 la risposta conta 388 token di prompt
-    // contro i 1627 di Google, cioè guarda ~1 fotogramma al secondo qualunque cosa gli si chieda.
-    // Un giudice che valuta easing e transizioni su un fotogramma al secondo non fallisce: emette
-    // verdetti sbagliati e sicuri di sé. Per questo il client è costruito con googleGenaiClient(),
-    // che non guarda GEMINI_TRANSPORT.
-    const ai = googleGenaiClient();
-    const parts: Array<Record<string, unknown>> = [
-      { text: buildPrompt(opts, media.duration, !!media.videoMp4) }
-    ];
-    for (const f of media.frames) {
-      parts.push({ text: f.label });
-      parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
-    }
-    if (media.videoMp4) {
-      parts.push({ text: 'FULL CLIP (watch in order — hook stills above are the opening freeze-frames):' });
-      parts.push({
-        inlineData: { mimeType: 'video/mp4', data: media.videoMp4.toString('base64') },
-        videoMetadata: { fps: 4 }
-      });
-    } else if (media.audioMp3) {
-      parts.push({ text: 'SPOKEN AUDIO of the take:' });
-      parts.push({ inlineData: { mimeType: 'audio/mp3', data: media.audioMp3.toString('base64') } });
-    }
-
-    const res = await loggedGemini('video.review', () =>
-      ai.models.generateContent({
-        model: MODEL(),
-        contents: [{ role: 'user', parts }],
-        config: {
-          maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-          responseMimeType: 'application/json',
-          responseSchema: REVIEW_SCHEMA,
-          thinkingConfig: genaiThinking()
-        }
-      })
-    );
-    const parsed = parseJsonObject((res.text ?? '').trim());
-    if (!parsed) return { ok: false, error: 'model_parse_failed' };
+    // QC video sul centralino (`llmVideoReviewerModel`): kie ignorava `videoMetadata.fps: 4`
+    // e il giudice vedeva ~1 fotogramma al secondo. Qui il file va intero, con gli still.
+    const frameNote = media.frames.map((f, i) => `${i + 1}. ${f.label}`).join('\n');
+    const prompt = [
+      buildPrompt(opts, media.duration, !!media.videoMp4),
+      frameNote ? `\nSTILLS (in order):\n${frameNote}` : '',
+      media.videoMp4 ? '\nFULL CLIP is attached (watch in order — hook stills above are the opening freeze-frames).' : '',
+      !media.videoMp4 && media.audioMp3 ? '\nSPOKEN AUDIO of the take is attached.' : ''
+    ]
+      .filter(Boolean)
+      .join('');
+    const parsed = await llmStructured<Record<string, unknown>>({
+      prompt,
+      schema: REVIEW_SCHEMA,
+      images: media.frames.map((f) => ({ mediaType: f.mimeType, data: f.data })),
+      file: media.videoMp4
+        ? { mediaType: 'video/mp4', data: media.videoMp4.toString('base64') }
+        : media.audioMp3
+          ? { mediaType: 'audio/mp3', data: media.audioMp3.toString('base64') }
+          : undefined,
+      model: llmVideoReviewerModel(),
+      label: 'video.review'
+    });
+    if (!parsed || typeof parsed !== 'object') return { ok: false, error: 'model_parse_failed' };
     return {
       ok: true,
       review: attachIntendedScript(
@@ -1123,8 +1088,7 @@ export function shouldFetchAsVideo(url: string, kind?: 'video' | 'image' | 'caro
  * Prefers the agentic loop (web / ad library / brand winners) and falls back to a one-shot judge.
  */
 export async function reviewVideo(url: string, opts: ReviewVideoOpts): Promise<ReviewVideoResult> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) return { ok: false, error: 'gemini_unconfigured' };
+  if (!llmConfigured()) return { ok: false, error: 'gemini_unconfigured' };
   const target = url?.trim();
   if (!target || !/^https?:\/\//i.test(target)) return { ok: false, error: 'invalid_url' };
 

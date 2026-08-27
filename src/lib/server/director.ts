@@ -1,13 +1,11 @@
 import { KIE_GROK_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { googleGenaiClient } from '$lib/server/gemini';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { GoogleGenAI } from '@google/genai';
 import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, hasToolCall, type LanguageModel } from 'ai';
 import { harnessGenerateText } from '$lib/server/harness';
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
+import { llmConfigured, llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { groundedText } from './research';
 import {
   renderPreviewImages,
@@ -16,7 +14,6 @@ import {
   type PreviewPost
 } from './content-preview';
 import { extractSdkUsage, logAiCall, withBrandContext } from './ai-log';
-import { geminiFlash } from './gemini';
 import { KIE_GROK_NO_STORE, KIE_MODEL, kieFetch } from './kie';
 
 // ── The Director: an autonomous agent-in-the-loop over a finished batch ─────────────────────────
@@ -48,7 +45,7 @@ const BUDGETS: Record<string, number> = { search_web: 2, rewrite_caption: 3, rer
 
 const SYSTEM = `You are Anomalia's Director — the senior account director doing the FINAL review of a batch of social posts before they reach the client's approval queue. You see everything together: captions, rendered images, the brief. Judge the batch as a whole: factual claims, coherence between caption and image, batch-level monotony, tone risks, timeliness. Act ONLY where a change clearly improves the deliverable — a good batch needs zero interventions and an immediate finish. Never nitpick style the brand's voice already covers. You cannot publish; flag_for_user is how you escalate. Always end with finish().`;
 
-/** Grok 4.5 via kie when configured, else Gemini. Both see images; DeepSeek cannot. */
+/** Grok 4.5 via kie when configured, else the LLM gateway. Both see images; DeepSeek cannot. */
 function kieModel(): { model: LanguageModel; provider: 'kie'; modelId: string } | null {
   if (!env.KIE_API_KEY) return null;
   const kie = createOpenAI({
@@ -60,18 +57,17 @@ function kieModel(): { model: LanguageModel; provider: 'kie'; modelId: string } 
   return { model: kie.responses(KIE_MODEL), provider: 'kie', modelId: KIE_MODEL };
 }
 
-function geminiModel(): { model: LanguageModel; provider: 'gemini'; modelId: string } {
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-  const modelId = geminiFlash();
-  return { model: google(modelId), provider: 'gemini', modelId };
+function geminiModel(): { model: LanguageModel; provider: 'llm'; modelId: string } {
+  const modelId = llmDefaultModel();
+  return { model: llmLanguageModel(modelId), provider: 'llm', modelId };
 }
 
 // Rewrite one caption per the Director's instruction (single cheap call, register-aware).
-async function rewriteCaption(ai: GoogleGenAI, post: PreviewPost, instruction: string, language: string): Promise<string | null> {
+async function rewriteCaption(post: PreviewPost, instruction: string, language: string): Promise<string | null> {
   try {
     const { structured } = await import('./research');
     const parsed = await structured<{ caption?: string }>(
-      ai,
+      null as never,
       `Rewrite this ${post.platform} caption applying the review instruction EXACTLY, keeping the platform's register and length${language ? ` and the ${language} language` : ''}.\n${platformPlaybook([post.platform], {})}\nCURRENT CAPTION:\n${post.caption}\n\nINSTRUCTION: ${instruction}\n\nReturn JSON.`,
       { type: 'object', properties: { caption: { type: 'string' } }, required: ['caption'] },
       undefined,
@@ -98,7 +94,6 @@ export async function runDirector(opts: {
     let { model, provider, modelId } = kieModel() ?? geminiModel();
     try {
       if (!opts.posts.length) return { steps: [], summary: '(empty batch)' };
-      const ai = googleGenaiClient();
       const language = String(opts.profile?.language ?? '');
 
       // The batch, laid out for the model — plus each rendered image attached IN ORDER after the text.
@@ -136,7 +131,7 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
           execute: async ({ query }: { query: string }) => {
             const over = spend('search_web');
             if (over) return record('search_web', { query }, { error: over });
-            const g = await groundedText(ai, query, 'Answer concisely with verifiable facts and dates.');
+            const g = await groundedText(null as never, query, 'Answer concisely with verifiable facts and dates.');
             return record('search_web', { query }, {
               answer: g.text.slice(0, 1200),
               sources: g.citations.slice(0, 4).map((c) => c.uri)
@@ -153,7 +148,7 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
             if (over) return record('rewrite_caption', args, { error: over });
             const post = opts.posts[index];
             if (!post) return record('rewrite_caption', args, { error: 'bad index' });
-            const next = await rewriteCaption(ai, post, instruction, language);
+            const next = await rewriteCaption(post, instruction, language);
             if (next) post.caption = next;
             return record('rewrite_caption', args, next
               ? { ok: true, caption: next.slice(0, 300) }
@@ -248,8 +243,8 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
       try {
         res = await run(model, provider, modelId);
       } catch (kieErr) {
-        if (provider !== 'kie' || !(env.GEMINI_API_KEY || env.GOOGLE_API_KEY)) throw kieErr;
-        console.warn('[director] kie failed, retrying on Gemini:', kieErr);
+        if (provider !== 'kie' || !llmConfigured()) throw kieErr;
+        console.warn('[director] kie failed, retrying on llm:', kieErr);
         log.steps = [];
         log.summary = '';
         ({ model, provider, modelId } = geminiModel());
