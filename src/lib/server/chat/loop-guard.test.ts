@@ -192,7 +192,7 @@ describe('benchAwarePrepareStep — il tool in panchina sparisce dal tavolo, con
 		// Non può essere `system`: il provider Google rifiuta i system a metà conversazione.
 		// Resta una nota al modello — marcata, inglese, mai persistita come riga di chat.
 		expect(appended.role).toBe('user');
-		expect(appended.content).toContain('[SYSTEM NOTE]');
+		expect(appended.content).toContain('<system-reminder>');
 		expect(appended.content).toContain('create_motion_video');
 		expect(appended.content).toContain('Import not allowed');
 	});
@@ -228,7 +228,7 @@ describe('toolBenchNotice', () => {
 		const notice = toolBenchNotice('create_motion_video', erroreImportNonAmmesso);
 		expect(notice).toContain('create_motion_video');
 		expect(notice).toContain('Import not allowed');
-		expect(notice.startsWith('[SYSTEM NOTE]')).toBe(true);
+		expect(notice.startsWith('<system-reminder>')).toBe(true);
 		expect(notice).not.toMatch(/[àèéìòù]/);
 	});
 });
