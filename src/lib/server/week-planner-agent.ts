@@ -1,0 +1,517 @@
+import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { tool, stepCountIs, type StopCondition } from 'ai';
+import { harnessGenerateText } from '$lib/server/harness';
+import { z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { env } from '$env/dynamic/private';
+import { logAiCall, withBrandContext } from '$lib/server/ai-log';
+import { persistAgentRun } from '$lib/server/agent-runs';
+import { loadActivePlan } from '$lib/server/editorial-plan';
+import type { WeeklyStrategy, PostSeed } from '$lib/server/content-preview';
+import { draftWeekSeeds } from '$lib/server/content-preview';
+import {
+  checkRubricsAndBatchFeasibility,
+  loadBatchFeasibilityContext
+} from '$lib/server/rubrics-feasibility';
+import {
+  addStrategyStepCost,
+  createStrategyBudget,
+  consumeDraftBudget,
+  consumeRepairBudget,
+  fetchUsdBudget,
+  stallDetected,
+  stepFingerprint,
+  deadlineReached,
+  appendBudgetToSystem,
+  type StrategyBudget, agentModel, withAgentFallback } from '$lib/server/strategy-agent';
+import {
+  readBrandStudioForAgent,
+  readEditorialPlanForAgent,
+  readGtmForAgent,
+  readKnowledgeForAgent,
+  readLeadsForAgent,
+  readMediaForAgent,
+  readRubricsForAgent,
+  readStrategyReportForAgent,
+  readMediaReviewsForAgent
+} from '$lib/server/strategy-agent-reads';
+import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
+import { disruptiveBriefSection } from '$lib/disruptive';
+import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
+import { benchmarkDigest, type Benchmark } from '$lib/server/research';
+import type { ContentPrefs, PastWinner } from '$lib/server/content-preview';
+import type { Rubric } from '$lib/server/rubrics';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRec = Record<string, any>;
+type BrandProfile = AnyRec;
+
+export const MAX_WEEK_PLANNER_STEPS = 40;
+export const MAX_WEEK_PLANNER_DRAFTS = 4;
+export const MAX_WEEK_PLANNER_REPAIRS = 8;
+const ESTIMATED_DRAFT_USD = 0.06;
+
+export type WeekPlannerAgentOpts = {
+  supabase: SupabaseClient;
+  userId?: string;
+  brandId: string;
+  profile: BrandProfile;
+  platforms: string[];
+  count: number;
+  weekIndex?: number;
+  prefs?: ContentPrefs;
+  maxVideos?: number;
+  maxCarousels?: number;
+  topPosts?: PastWinner[];
+  strategyBrief?: string;
+  competitorThumbUrls?: string[];
+  marketBrief?: string;
+  calendarHooks?: string;
+  rubrics?: Rubric[];
+  timezone?: string;
+  verbose?: boolean;
+  // Wall-clock budget — see GtmStrategyAgentOpts.deadlineMs.
+  deadlineMs?: number;
+};
+
+export type WeekPlannerAgentResult = {
+  strategy: WeeklyStrategy;
+  notes: string;
+  costUsd: number;
+};
+
+/** Opt-out: WEEK_PLANNER_AGENT_ENABLED=false falls back to legacy planStrategy. Default ON. */
+export function weekPlannerAgentEnabled(): boolean {
+  return env.WEEK_PLANNER_AGENT_ENABLED !== 'false';
+}
+
+function seedFingerprint(seeds: PostSeed[] | null, budget: StrategyBudget): string {
+  return JSON.stringify({
+    n: seeds?.length ?? 0,
+    r0: seeds?.[0]?.rubric,
+    d: budget.draftsLeft
+  });
+}
+
+function normalizeSeeds(raw: unknown[]): PostSeed[] {
+  return (raw ?? []).map((s) => s as PostSeed);
+}
+
+export async function runWeekPlannerAgent(opts: WeekPlannerAgentOpts): Promise<WeekPlannerAgentResult> {
+  return withBrandContext(opts.brandId, () => runWeekPlannerAgentInner(opts));
+}
+
+async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<WeekPlannerAgentResult> {
+  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
+  const usdBudget = await fetchUsdBudget(opts.brandId);
+  const budget = createStrategyBudget({ drafts: MAX_WEEK_PLANNER_DRAFTS, repairs: MAX_WEEK_PLANNER_REPAIRS, usdRemaining: usdBudget });
+
+  const [editorialPlan, batchCtx, mediaReviews] = await Promise.all([
+    loadActivePlan(opts.supabase, opts.brandId),
+    loadBatchFeasibilityContext(opts.supabase, opts.brandId, {
+      expectedSeedCount: opts.count,
+      selectedPlatforms: opts.platforms,
+      weekIndex: opts.weekIndex,
+      rubrics: opts.rubrics
+    }),
+    readMediaReviewsForAgent(opts.supabase, opts.brandId)
+  ]);
+
+  if (opts.weekIndex != null && editorialPlan) {
+    batchCtx.weekMix = editorialPlan.weeks?.[opts.weekIndex]?.content_mix ?? batchCtx.weekMix;
+  }
+  if (!batchCtx.rubrics.length && opts.rubrics?.length) {
+    batchCtx.rubrics = opts.rubrics;
+  }
+
+  const { loadKnownSubreddits, knownSubredditsBlock } = await import('$lib/server/platform-hygiene');
+  const knownSubreddits = opts.platforms.some((p) => String(p).toLowerCase() === 'reddit')
+    ? await loadKnownSubreddits(opts.supabase, opts.brandId)
+    : [];
+
+  let working: WeeklyStrategy | null = null;
+  let finished: { strategy: WeeklyStrategy; notes: string } | null = null;
+  const stallFingerprints: string[] = [];
+  const stepLog: import('$lib/server/agent-runs').AgentStepLog[] = [];
+  let stepNum = 0;
+  const t0 = Date.now();
+
+  const rubricNames =
+    batchCtx.rubrics.length > 0
+      ? batchCtx.rubrics.map((r) => r.name).join(', ')
+      : 'none — free-form pillars allowed';
+
+  const system = `You are a week planner agent. Produce ${opts.count} post SEEDS for one editorial week.
+
+Workflow:
+1. read_* tools are FREE — start with read_rubrics, read_leads, read_editorial_plan, read_brand_studio, read_media, read_post_history, read_media_reviews as needed.
+2. draft_seeds (max ${MAX_WEEK_PLANNER_DRAFTS}/run) generates seeds from your brief.
+3. check_batch_feasibility before finish — repair_seeds or draft again if violations remain.
+4. When approved rubrics exist (${rubricNames}), every seed MUST carry rubric = exact series name and match the week's content_mix counts.
+5. finish with the final seeds array.
+
+Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}.
+Platforms: ${opts.platforms.join(', ')}.
+
+${disruptiveBriefSection()}
+Una settimana di sette post corretti è una settimana invisibile: fra i seed cercane uno costruito su una leva di contrasto, e se escono tutti prudenti e intercambiabili la settimana non è buona per quanto sia corretta. Chiama read_disruptive_ideas prima di inventarne uno nuovo: se il banco ne ha una che regge su questa settimana, girala e poi chiamaci sopra mark_idea_used, sennò resta "da fare" per sempre. E se pensando questa settimana te ne viene una nuova che passa i tre test, salvala con save_disruptive_idea anche se non entra in questi sette post — non perché ce ne voglia una, ma perché lì sopravvive.`;
+
+  const userPrompt = `Plan ${opts.count} post seeds for this week.
+
+EDITORIAL BRIEF (verify and enrich with read_* tools):
+${opts.strategyBrief ?? '(no brief — read editorial plan and GTM)'}
+${opts.marketBrief ? `\n${opts.marketBrief}` : ''}
+${mediaReviews.block ? `\n${mediaReviews.block}\nApply next_test to NEW visual seeds; do not copy kill/fix looks.` : ''}
+${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
+
+  const planPreviewOpts = {
+    platforms: opts.platforms,
+    prefs: opts.prefs,
+    maxVideos: opts.maxVideos,
+    maxCarousels: opts.maxCarousels,
+    topPosts: opts.topPosts,
+    strategyBrief: opts.strategyBrief,
+    competitorThumbUrls: opts.competitorThumbUrls,
+    marketBrief: opts.marketBrief,
+    calendarHooks: opts.calendarHooks,
+    rubrics: batchCtx.rubrics,
+    supabase: opts.supabase,
+    brandId: opts.brandId,
+    knownSubreddits
+  };
+
+  const tools = {
+    // Il banco idee del brand: si legge prima di inventare, ci si salva dentro l'idea laterale.
+    ...createDisruptiveIdeaTools({
+      supabase: opts.supabase,
+      brandId: opts.brandId,
+      surface: 'week-planner',
+      agent: 'publish'
+    }),
+    read_brand_studio: tool({
+      description: 'Brand kit, voice, products, people (free).',
+      inputSchema: z.object({}),
+      execute: async () => readBrandStudioForAgent(opts.supabase, opts.brandId)
+    }),
+    read_rubrics: tool({
+      description: 'Approved recurring content series — authoritative for seed rubric fields (free).',
+      inputSchema: z.object({ which: z.enum(['approved', 'proposed', 'both']).optional() }),
+      execute: async ({ which }) => readRubricsForAgent(opts.supabase, opts.brandId, which ?? 'approved')
+    }),
+    read_gtm: tool({
+      description: 'Active GTM plan and current phase (free).',
+      inputSchema: z.object({ which: z.enum(['active', 'proposed', 'both']).optional() }),
+      execute: async ({ which }) =>
+        readGtmForAgent(opts.supabase, opts.brandId, opts.timezone ?? 'Europe/Rome', which ?? 'active')
+    }),
+    read_editorial_plan: tool({
+      description: 'Active/proposed editorial plan with weekly content_mix (free).',
+      inputSchema: z.object({ which: z.enum(['active', 'proposed', 'both']).optional() }),
+      execute: async ({ which }) => readEditorialPlanForAgent(opts.supabase, opts.brandId, which ?? 'active')
+    }),
+    read_knowledge: tool({
+      description: 'Brand documents and notes (free).',
+      inputSchema: z.object({
+        kind: z.enum(['note', 'document', 'image']).optional(),
+        limit: z.number().int().min(1).max(40).optional()
+      }),
+      execute: async (input) => readKnowledgeForAgent(opts.supabase, opts.brandId, input)
+    }),
+    read_media: tool({
+      description: 'Brand media library for media_id assignment (free).',
+      inputSchema: z.object({
+        query: z.string().optional(),
+        kind: z.enum(['image', 'video']).optional(),
+        limit: z.number().int().min(1).max(40).optional()
+      }),
+      execute: async (input) => readMediaForAgent(opts.supabase, opts.brandId, input)
+    }),
+    read_media_reviews: tool({
+      description:
+        'Anomalia media-reviewer scores on recent posts (overall /10, verdict, judgment, next_test). Apply next_test to NEW visual seeds. Free.',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { reviews, weak, block } = await readMediaReviewsForAgent(opts.supabase, opts.brandId);
+        if (!reviews.length) return { reviews: [], weak: [], note: 'No media-review scores yet.' };
+        return { reviews, weak, block };
+      }
+    }),
+    read_post_history: tool({
+      description: 'Post performance digest (free).',
+      inputSchema: z.object({}),
+      execute: async () => {
+        // analyzePostHistory is SYNC and takes the rows — passing (supabase, brandId) silently
+        // produced an empty digest (Array.isArray(client) === false), so the agent always believed
+        // the brand had no history. Same shape as strategy-agent's read_post_history.
+        const { data: history } = await opts.supabase
+          .from('social_post_history')
+          .select('content, platform, metrics, published_at, media_type')
+          .eq('brand_id', opts.brandId)
+          .limit(100);
+        const insights = analyzePostHistory(
+          (history ?? []).map((h) => ({
+            content: h.content,
+            mediaType: h.media_type,
+            publishedAt: h.published_at,
+            metrics: h.metrics as AnyRec
+          }))
+        );
+        return { digest: historyInsightsDigest(insights) };
+      }
+    }),
+    read_competitors: tool({
+      description: 'Competitor benchmark digest (free).',
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data: strategy } = await opts.supabase
+          .from('brand_strategy')
+          .select('benchmark')
+          .eq('brand_id', opts.brandId)
+          .maybeSingle();
+        const benchmark = (strategy?.benchmark as Benchmark | null) ?? null;
+        return { digest: benchmark ? benchmarkDigest(benchmark) : 'No benchmark stored.' };
+      }
+    }),
+    read_strategy_report: tool({
+      description: 'Strategy research report summary (free).',
+      inputSchema: z.object({}),
+      execute: async () => readStrategyReportForAgent(opts.supabase, opts.brandId)
+    }),
+
+    read_leads: tool({
+      description:
+        'Online conversations with drafted replies — what the audience discusses about the product (free).',
+      inputSchema: z.object({
+        status: z.enum(['suggested', 'done', 'dismissed', 'all']).optional(),
+        limit: z.number().int().min(1).max(50).optional()
+      }),
+      execute: async ({ status, limit }) => readLeadsForAgent(opts.supabase, opts.brandId, { status, limit })
+    }),
+
+    check_batch_feasibility: tool({
+      description: 'Deterministic check: seed count, platforms, assets, rubrics vs week mix (free).',
+      inputSchema: z.object({ seeds: z.array(z.record(z.string(), z.unknown())) }),
+      execute: async ({ seeds }) => {
+        const normalized = normalizeSeeds(seeds);
+        const violations = checkRubricsAndBatchFeasibility(normalized, batchCtx);
+        if (normalized.length) {
+          working = {
+            theme: working?.theme ?? '',
+            rationale: working?.rationale ?? '',
+            doDont: working?.doDont ?? '',
+            seeds: normalized
+          };
+        }
+        lastViolations = violations;
+        return { ok: violations.length === 0, violations };
+      }
+    }),
+
+    draft_seeds: tool({
+      description: `Generate post seeds from your brief (max ${MAX_WEEK_PLANNER_DRAFTS}/run).`,
+      inputSchema: z.object({ brief: z.string() }),
+      execute: async ({ brief }) => {
+        const gate = consumeDraftBudget(budget);
+        if (!gate.ok) return { error: gate.error };
+        if (budget.usdRemaining < ESTIMATED_DRAFT_USD) return { error: 'USD budget too low for draft_seeds' };
+        const strategy = await draftWeekSeeds(opts.profile, planPreviewOpts, opts.count, brief);
+        working = strategy;
+        budget.usdSpent += ESTIMATED_DRAFT_USD;
+        budget.usdRemaining = Math.max(0, budget.usdRemaining - ESTIMATED_DRAFT_USD);
+        return {
+          ok: true,
+          theme: strategy.theme,
+          seed_count: strategy.seeds.length,
+          rubrics_used: strategy.seeds.map((s) => s.rubric).filter(Boolean)
+        };
+      }
+    }),
+
+    repair_seeds: tool({
+      description: `Patch seeds to fix feasibility violations (max ${MAX_WEEK_PLANNER_REPAIRS}/run).`,
+      inputSchema: z.object({
+        seeds: z.array(z.record(z.string(), z.unknown())),
+        reason: z.string()
+      }),
+      execute: async ({ seeds, reason }) => {
+        const gate = consumeRepairBudget(budget);
+        if (!gate.ok) return { error: gate.error };
+        const normalized = normalizeSeeds(seeds);
+        working = {
+          theme: working?.theme ?? '',
+          rationale: working?.rationale ?? '',
+          doDont: working?.doDont ?? '',
+          seeds: normalized
+        };
+        const violations = checkRubricsAndBatchFeasibility(normalized, batchCtx);
+        lastViolations = violations;
+        return { ok: violations.length === 0, reason, violations };
+      }
+    }),
+
+    finish: tool({
+      description: 'Complete with final weekly strategy.',
+      inputSchema: z.object({
+        theme: z.string().optional(),
+        rationale: z.string().optional(),
+        do_dont: z.string().optional(),
+        seeds: z.array(z.record(z.string(), z.unknown())).optional(),
+        notes: z.string()
+      }),
+      execute: async ({ theme, rationale, do_dont, seeds, notes }) => {
+        const finalSeeds = normalizeSeeds(
+          (seeds?.length ? seeds : null) ?? working?.seeds ?? []
+        );
+        const strategy: WeeklyStrategy = {
+          theme: theme ?? working?.theme ?? '',
+          rationale: rationale ?? working?.rationale ?? '',
+          doDont: do_dont ?? working?.doDont ?? '',
+          seeds: finalSeeds
+        };
+        if (!finalSeeds.length) return { error: 'No seeds to finish' };
+        const violations = checkRubricsAndBatchFeasibility(finalSeeds, batchCtx);
+        if (violations.length) {
+          if (finalSeeds.length) working = strategy;
+          lastViolations = violations;
+          return { error: 'Seeds still have feasibility violations', violations };
+        }
+        finished = { strategy, notes: notes.trim() };
+        return { ok: true };
+      }
+    })
+  };
+
+  const stallStop: StopCondition<typeof tools> = () => stallDetected(stallFingerprints, 4);
+  const loopT0 = Date.now();
+  const deadlineMs = opts.deadlineMs ?? 200_000;
+  let loopOk = true;
+  let loopError: string | undefined;
+  let lastViolations: string[] = [];
+
+  // Reassigned by withAgentFallback when the primary dies before any tool ran — the finally
+  // below must bill the model that actually served the loop, not the one we started with.
+  let loopModel = agentModel();
+
+  try {
+    await withAgentFallback('week-planner-agent', (chosen, markDirty) => {
+      loopModel = chosen;
+      return harnessGenerateText({
+        brandId: opts.brandId,
+        userId: opts.userId,
+        agent: 'week_planner',
+        mode: String(opts.weekIndex ?? 0),
+        model: loopModel.modelId,
+        provider: loopModel.provider,
+        surface: 'batch'
+      }, {
+        // Gemini 3.7 Flash by default, DeepSeek as fallback — see agentModel().
+        model: loopModel.model,
+        maxOutputTokens: maxOutputTokensFor(loopModel.provider),
+        system,
+        prompt: `${userPrompt}\n\nStart with read_rubrics and read_editorial_plan before drafting.`,
+        tools,
+        stopWhen: [
+          () => finished !== null,
+          stepCountIs(MAX_WEEK_PLANNER_STEPS),
+          stallStop,
+          () => deadlineReached(loopT0, deadlineMs)
+        ],
+        temperature: 0.35,
+        prepareStep: () => {
+          const remainingSec = Math.max(0, Math.round((deadlineMs - (Date.now() - loopT0)) / 1000));
+          const stepSystem = appendBudgetToSystem(system, budget, remainingSec);
+          if ((budget.usdRemaining <= 0 || remainingSec <= 30) && working) {
+            return { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem };
+          }
+          return { system: stepSystem };
+        },
+        onStepFinish: ({ usage, toolCalls, toolResults, text }) => {
+          addStrategyStepCost(budget, usage, loopModel);
+          stallFingerprints.push(
+            stepFingerprint(
+              seedFingerprint(working?.seeds ?? null, budget),
+              toolCalls?.map((tc) => ({ toolName: tc.toolName, input: 'input' in tc ? tc.input : undefined }))
+            )
+          );
+          stepNum += 1;
+          stepLog.push({
+            step: stepNum,
+            toolCalls: toolCalls?.map((tc) => ({ name: tc.toolName, input: 'input' in tc ? tc.input : undefined })),
+            toolResults: toolResults?.map((tr) => ({ name: tr.toolName, output: 'output' in tr ? tr.output : undefined })),
+            text: text?.trim() || undefined
+          });
+          if (opts.verbose) {
+            console.log('\n[week-planner-agent] step');
+            for (const tc of toolCalls ?? []) {
+              console.log(`  → ${tc.toolName}`, JSON.stringify('input' in tc ? tc.input : {}, null, 2).slice(0, 1200));
+            }
+            for (const tr of toolResults ?? []) {
+              console.log(`  ← ${tr.toolName}`, JSON.stringify('output' in tr ? tr.output : {}, null, 2).slice(0, 2000));
+            }
+            if (text?.trim()) console.log(`  · ${text.trim().slice(0, 300)}`);
+          }
+        }
+      }, { before: [() => { markDirty(); }] });
+    });
+
+    if (!finished && working?.seeds?.length) {
+      const violations = checkRubricsAndBatchFeasibility(working.seeds, batchCtx);
+      lastViolations = violations;
+      if (violations.length === 0) {
+        finished = { strategy: working, notes: 'Auto-closed: seeds passed feasibility.' };
+      }
+    }
+  } catch (e) {
+    loopOk = false;
+    loopError = e instanceof Error ? e.message : String(e);
+    throw e;
+  } finally {
+    logAiCall({
+      label: 'week-planner-agent',
+      provider: loopModel.provider,
+      model: loopModel.modelId,
+      ms: Date.now() - loopT0,
+      ok: loopOk,
+      error: loopError,
+      inputTokens: budget.tokensIn,
+      outputTokens: budget.tokensOut,
+      brandId: opts.brandId,
+      userId: opts.userId,
+      context: 'week-planner-agent'
+    });
+
+    const resolvedPreview =
+      finished ??
+      (working?.seeds?.length
+        ? { strategy: working, notes: 'Agent ended without finish; using last draft.' }
+        : null);
+    persistAgentRun({
+      brandId: opts.brandId,
+      userId: opts.userId,
+      agent: 'week_planner',
+      mode: `week_${opts.weekIndex ?? 'unknown'}`,
+      status: finished ? 'finished' : resolvedPreview ? 'fallback' : 'failed',
+      finishedOk: !!finished,
+      notes: resolvedPreview?.notes,
+      steps: stepLog.length ? stepLog : undefined,
+      violations: lastViolations.length ? lastViolations : undefined,
+      costUsdEstimate: budget.usdSpent
+    });
+  }
+
+  const resolved =
+    finished ??
+    (working?.seeds?.length
+      ? { strategy: working, notes: 'Agent ended without finish; using last draft.' }
+      : null);
+  if (!resolved) {
+    throw new Error('Week planner agent finished without seeds');
+  }
+
+  return {
+    strategy: resolved.strategy,
+    notes: resolved.notes,
+    costUsd: budget.usdSpent
+  };
+}

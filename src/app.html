@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="%lang%">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#c485fe" />
+    <!-- Self-hosted Inter (latin + latin-ext) via app.css @font-face — no fonts.googleapis.com
+         round-trips, no italic axis, no unused scripts (cyrillic/greek/…). Preload the latin
+         file so first paint of English/Italian body text isn't delayed by CSS discovery. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <!-- Google Ads: load after first interaction or 10s — never during the critical LCP window.
+         Lab tools (PSI) finish before this; real users who engage still get the conversion tag. -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      // Nessun tag fuori dalla produzione vera: localhost, LAN, *.local e i preview di Vercel non
+      // devono sporcare le conversioni di Google Ads. Stessa regola di isProdHost in $lib/analytics,
+      // ripetuta a mano perche app.html non puo importare moduli.
+      var __h = location.hostname.toLowerCase();
+      var __noTrack =
+        __h === 'localhost' ||
+        /\.(localhost|local|vercel\.app)$/.test(__h) ||
+        /^(0\.0\.0\.0|\[?::1\]?|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(__h);
+      function __loadGtag() {
+        if (__noTrack || window.__gtagLoaded) return;
+        window.__gtagLoaded = true;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=AW-740942237';
+        document.head.appendChild(s);
+        gtag('js', new Date());
+        gtag('config', 'AW-740942237');
+        ['scroll','pointerdown','keydown','touchstart'].forEach(function (e) {
+          window.removeEventListener(e, __loadGtag, { capture: true });
+        });
+      }
+      ['scroll','pointerdown','keydown','touchstart'].forEach(function (e) {
+        window.addEventListener(e, __loadGtag, { once: true, passive: true, capture: true });
+      });
+      window.addEventListener('load', function () { setTimeout(__loadGtag, 10000); }, { once: true });
+    </script>
+    <!-- Meta Pixel is loaded from JS (see $lib/analytics loadMetaPixel): deferred on marketing,
+         only after cookie consent on brand blogs. -->
+    <!-- Seline: page views (cookieless). Caricato da JS (see $lib/analytics loadSeline), non da un
+         tag qui: un tag fisso partiva anche su localhost, sui preview e per gli account interni. -->
+    %sveltekit.head%
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+</html>

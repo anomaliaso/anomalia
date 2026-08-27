@@ -1,0 +1,15 @@
+{
+  "name": "@anomalia/agent-contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./contracts": "./src/contracts.ts",
+    "./specs": "./src/specs.ts",
+    "./notice": "./src/notice.ts"
+  },
+  "dependencies": {
+    "@anomalia/agent-kit": "*",
+    "zod": "^4.4.3"
+  }
+}

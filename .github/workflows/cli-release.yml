@@ -1,0 +1,93 @@
+name: CLI Release
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.2.0)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: bun-darwin-arm64
+            name: macos-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+            name: macos-x64
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            name: linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            name: linux-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: cli
+        run: bun install
+
+      - name: Build binary
+        working-directory: cli
+        run: |
+          bun build --compile --minify --target ${{ matrix.target }} \
+            index.ts --outfile dist/anomalia-${{ matrix.name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anomalia-${{ matrix.name }}
+          path: cli/dist/anomalia-${{ matrix.name }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/cli-v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          for dir in dist/anomalia-*; do
+            cp "$dir/anomalia-"* release/
+          done
+          chmod +x release/anomalia-*
+          cp cli/README.md release/
+          cp -r cli/docs release/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update installer URL
+        run: |
+          echo "Release created! Users can install with:"
+          echo "  curl -sSL https://anomalia.so/install.sh | bash"
+          echo ""
+          echo "Or download directly from GitHub Releases."

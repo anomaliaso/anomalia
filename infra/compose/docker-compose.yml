@@ -1,0 +1,354 @@
+# Self-hosted Supabase stack for Anomalia — NOT the whole official supabase/supabase compose,
+# and not copied blind. Based on it (docker/docker-compose.yml, tag v1.26.08) with the services
+# this app actually needs, trimmed for something one person can read in one sitting:
+#
+#   INCLUDED  db (official supabase/postgres image — roles/extensions the others below assume),
+#             kong (API gateway: routes /auth, /rest, /storage, /realtime with one apikey scheme),
+#             auth (GoTrue), rest (PostgREST), storage (Storage API), realtime.
+#             meta + studio (Dashboard UI) — behind `--profile studio`, per "studio opzionale".
+#
+#   NOT INCLUDED, on purpose:
+#     - imgproxy          Storage's on-the-fly image transforms. This app renders and stores its
+#                          own images/video; nothing here calls Storage's transform API, so
+#                          ENABLE_IMAGE_TRANSFORMATION is left off instead of running a service
+#                          nothing uses.
+#     - supavisor         Connection pooler. A self-host can point every service straight at `db`;
+#                          add it back (see upstream compose) once you outgrow direct connections.
+#     - edge-runtime       Supabase Edge Functions. This app doesn't deploy any.
+#     - vector / logflare  The analytics/log-shipping stack. Optional observability, not core.
+#     - a Caddy/nginx TLS proxy. Put your own reverse proxy (or Vercel/Cloudflare) in front of
+#       `kong` in production; this compose is plain HTTP on localhost.
+#
+#   THE APP ITSELF builds via the `app` service below (infra/app/Dockerfile, adapter-node behind
+#   DEPLOY_TARGET=node). adapter-vercel stays the default adapter for the cloud deploy; the image
+#   exists so self-hosters don't have to run `npm run dev` to try the product.
+#
+# Usage:
+#   cp .env.example .env               # then fill every value marked "generate with"
+#   docker compose up -d               # db, kong, auth, rest, storage, realtime
+#   docker compose --profile studio up -d   # + the Dashboard UI at http://localhost:8000
+#   (from the repo root) DATABASE_URL=postgres://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres \
+#     npm run db:migrate && npm run db:seed
+#
+# See ../../docs/SELF_HOSTING.md for the full walkthrough.
+
+name: anomalia-selfhost
+
+services:
+  db:
+    container_name: anomalia-db
+    # Official Supabase Postgres image — vanilla postgres:16 does NOT have the roles
+    # (authenticator, supabase_auth_admin, supabase_storage_admin, …) or extensions
+    # (pgjwt, pg_graphql, …) that auth/rest/storage below assume exist. Do not swap this out.
+    image: supabase/postgres:17.6.1.136
+    restart: unless-stopped
+    volumes:
+      - ./volumes/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./volumes/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+      - ./volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:ro
+      # Volume NAMED, non bind mount: su macOS l'ownership di un bind VirtioFS fa fallire il
+      # check «wrong ownership» di Postgres (l'immagine supabase cabla PGDATA, quindi anche
+      # PGDATA-subdir non basta). Il dato vive nel disco della VM: persiste a down/up.
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-h', 'localhost']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - '${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}'
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+
+  kong:
+    container_name: anomalia-kong
+    image: kong/kong:3.9.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'kong', 'health']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - '${KONG_HTTP_PORT:-8000}:8000/tcp'
+    volumes:
+      - ./volumes/api/kong.yml:/home/kong/temp.yml:ro
+      - ./volumes/api/kong-entrypoint.sh:/home/kong/kong-entrypoint.sh:ro
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
+      # kong.yml usa le expression routes (`http.path == …`): il flavor traditional le rifiuta
+      # come campo sconosciuto e Kong non parte.
+      KONG_ROUTER_FLAVOR: expressions
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_DNS_NOT_FOUND_TTL: 1
+      KONG_DNS_VALID_TTL: 5
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_PROXY_ACCESS_LOG: /dev/stdout combined
+      SUPABASE_ANON_KEY: ${ANON_KEY:?set ANON_KEY in .env}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:?set SERVICE_ROLE_KEY in .env}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
+      ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
+      SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD in .env}
+    entrypoint: ['/bin/sh', '/home/kong/kong-entrypoint.sh']
+
+  auth:
+    container_name: anomalia-auth
+    image: supabase/gotrue:v2.189.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:9999/health']
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000/auth/v1}
+      GOTRUE_DB_DRIVER: postgres
+      # `search_path=auth` non è un dettaglio: senza, il migratore di GoTrue crea la sua
+      # schema_migrations in `public`, dove supabase_auth_admin non ha CREATE, e il servizio muore.
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}?search_path=auth
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:5173}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL:-http://localhost:8000/auth/v1}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS:-false}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-2500}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-}
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_EXTERNAL_PHONE_ENABLED: 'false'
+      GOTRUE_SMS_AUTOCONFIRM: 'false'
+
+  rest:
+    container_name: anomalia-rest
+    image: postgrest/postgrest:v14.12
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'postgrest', '--ready']
+      interval: 5s
+      timeout: 5s
+      retries: 6
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS:-public}
+      PGRST_DB_MAX_ROWS: ${PGRST_DB_MAX_ROWS:-1000}
+      PGRST_DB_EXTRA_SEARCH_PATH: ${PGRST_DB_EXTRA_SEARCH_PATH:-public}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
+      # L'healthcheck `postgrest --ready` interroga l'admin server: senza porta non parte.
+      PGRST_ADMIN_SERVER_PORT: 3001
+      # Il default "!4" dell'immagine fa rifiutare --ready («update your server-host config»).
+      PGRST_SERVER_HOST: '0.0.0.0'
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+
+  realtime:
+    # Name looks inconsistent but is correct — Realtime parses its tenant id from the subdomain.
+    container_name: realtime-dev.anomalia-realtime
+    image: supabase/realtime:v2.102.3
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl -sSfL --head -o /dev/null -H "Authorization: Bearer ${ANON_KEY}" http://localhost:4000/api/tenants/realtime-dev/health'
+        ]
+      timeout: 5s
+      interval: 30s
+      retries: 3
+      start_period: 10s
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: ${POSTGRES_PORT:-5432}
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: ${REALTIME_DB_ENC_KEY:-supabaserealtime}
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: '10000'
+      APP_NAME: realtime
+      SEED_SELF_HOST: 'true'
+      RUN_JANITOR: 'true'
+      DISABLE_HEALTHCHECK_LOGGING: 'true'
+
+  storage:
+    container_name: anomalia-storage
+    image: supabase/storage-api:v1.60.4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://storage:5000/status']
+      timeout: 5s
+      interval: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}
+      STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      REQUEST_ALLOW_X_FORWARDED_PATH: 'true'
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      GLOBAL_S3_BUCKET: stub
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: ${STORAGE_TENANT_ID:-stub}
+      REGION: stub
+      # No imgproxy in this compose — see the header. On-the-fly transforms stay off.
+      ENABLE_IMAGE_TRANSFORMATION: 'false'
+    volumes:
+      - ./volumes/storage:/var/lib/storage
+
+  # Dashboard UI — optional: `docker compose --profile studio up -d`. Everything above works
+  # without it; Studio just gives you a browser table/SQL editor instead of psql.
+  meta:
+    container_name: anomalia-meta
+    image: supabase/postgres-meta:v0.96.6
+    restart: unless-stopped
+    profiles: ['studio']
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: ${POSTGRES_PORT:-5432}
+      PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+  studio:
+    container_name: anomalia-studio
+    image: supabase/studio:2026.08.03-sha-022b374
+    restart: unless-stopped
+    profiles: ['studio']
+    depends_on:
+      - meta
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\""
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
+      start_period: 20s
+    environment:
+      HOSTNAME: '0.0.0.0'
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-Anomalia self-host}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-Default Project}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - '${STUDIO_PORT:-54323}:3000'
+
+  app:
+    container_name: anomalia-app
+    build:
+      context: ../..
+      dockerfile: infra/app/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      kong:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/']
+      timeout: 5s
+      interval: 10s
+      retries: 5
+      start_period: 20s
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    environment:
+      PUBLIC_SUPABASE_URL: ${PUBLIC_SUPABASE_URL:-http://kong:8000}
+      PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?set ANON_KEY in .env}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?set SERVICE_ROLE_KEY in .env}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:${APP_PORT:-3000}}
+      # Senza ORIGIN adapter-node deduce l'origine dagli header e assume **https**: ogni POST di
+      # form diventa "cross-site" (403, login incluso) e ogni richiesta interna del cron finisce
+      # sul gruppo _site (404). Vale anche come host dell'app per `reroute`: i blog dei brand su
+      # dominio proprio richiedono un reverse proxy davanti — vedi docs/SELF_HOSTING.md.
+      ORIGIN: ${PUBLIC_APP_URL:-http://localhost:${APP_PORT:-3000}}
+      APP_SECRET: ${APP_SECRET:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+
+  cron:
+    container_name: anomalia-cron
+    build:
+      context: ../../docker/cron
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_URL: http://app:3000
+      CRON_SECRET: ${CRON_SECRET:-}
+      ALLOW_INSECURE_CRON: ${ALLOW_INSECURE_CRON:-}
+
+# The SvelteKit app image IS the `app` service above now: adapter-vercel remains the default
+# adapter (cloud deploy unchanged), and DEPLOY_TARGET=node inside infra/app/Dockerfile selects
+# adapter-node for this image. Outside Docker, `npm run build:node && npm run start` does the same.
+# See docs/SELF_HOSTING.md.
+
+volumes:
+  db-data:

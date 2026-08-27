@@ -1,0 +1,738 @@
+import React from 'react';
+import {
+	AbsoluteFill,
+	Easing,
+	Img,
+	interpolate,
+	useCurrentFrame,
+	useVideoConfig,
+} from 'remotion';
+
+export const fps = 30;
+export const width = 1080;
+export const height = 1920;
+export const durationInFrames = 540;
+
+const EXPO = Easing.bezier(0.87, 0, 0.13, 1);
+const SETTLE = Easing.bezier(0.16, 1.18, 0.28, 1);
+const CLAMP = { extrapolateLeft: 'clamp' as const, extrapolateRight: 'clamp' as const };
+
+const C = {
+	ink: '#111111',
+	paper: '#ffffff',
+	mist: '#f9f9fb',
+	violet: '#c485fe',
+	accentWarm: '#ff5a1a',
+};
+
+const LOGO = 'https://www.anomalia.so/icon-512.png';
+const UI_OVERVIEW =
+	'https://kszazivzwievqixcnanp.supabase.co/storage/v1/object/public/media/bd58d38a-b6ce-4e17-a909-1a334f8bf09f/library/c40ae95c-db64-4798-b7f9-5a4739964275.png';
+const UI_CALENDAR =
+	'https://kszazivzwievqixcnanp.supabase.co/storage/v1/object/public/media/bd58d38a-b6ce-4e17-a909-1a334f8bf09f/library/372599f9-526e-4d51-8682-041b6fbb266e.png';
+const UI_PLAN =
+	'https://kszazivzwievqixcnanp.supabase.co/storage/v1/object/public/media/bd58d38a-b6ce-4e17-a909-1a334f8bf09f/library/8783b765-ca30-41c8-a2ee-f47be3c8c2ec.png';
+
+// Timings in frames (Total 540 frames = 18.0s @ 30fps)
+// B1: 0 - 92 (Hook)
+// B2: 82 - 172 (Old Way / Cards collapse)
+// B3: 162 - 270 (Overview UI)
+// B4: 256 - 364 (Calendar UI)
+// B5: 350 - 450 (Editorial Plan UI)
+// B6: 436 - 540 (CTA End Card)
+
+const LogoMark: React.FC<{ opacity: number; top?: number; left?: number }> = ({
+	opacity,
+	top = 52,
+	left = 48,
+}) => (
+	<Img
+		src={LOGO}
+		style={{
+			position: 'absolute',
+			top,
+			left,
+			width: 44,
+			height: 44,
+			opacity,
+			borderRadius: 10,
+			zIndex: 50,
+		}}
+	/>
+);
+
+// --- BEAT 1: HOOK ---
+// wow: FULL_CANVAS_SCALE — "You need five seconds." expands and pushes into the tension scene.
+const HookBeat: React.FC = () => {
+	const frame = useCurrentFrame();
+	const { fps: f } = useVideoConfig();
+
+	// Starting word opacity is initialized at 1 / starts immediately from frame 0 for first word
+	const drift = interpolate(frame, [0, 92], [10, -18], { easing: EXPO, ...CLAMP });
+	const blow = interpolate(frame, [72, 92], [1, 2.8], { easing: EXPO, ...CLAMP });
+	const blowFade = interpolate(frame, [78, 92], [1, 0], { easing: EXPO, ...CLAMP });
+	const line2Show = interpolate(frame, [1.1 * f, 1.7 * f], [0, 1], { easing: EXPO, ...CLAMP });
+	const line2Y = interpolate(frame, [1.1 * f, 1.7 * f], [36, 0], { easing: SETTLE, ...CLAMP });
+	const logoOp = interpolate(frame, [0, 10], [0.5, 0.95], { easing: EXPO, ...CLAMP });
+
+	const words = ["You", "don't", "need", "a", "marketing", "department."];
+
+	return (
+		<AbsoluteFill style={{ backgroundColor: C.ink, opacity: blowFade, overflow: 'hidden' }}>
+			<LogoMark opacity={logoOp} />
+			<div
+				style={{
+					position: 'absolute',
+					left: 72,
+					right: 72,
+					top: 620,
+					transform: 'translateY(' + drift + 'px) scale(' + blow + ')',
+					transformOrigin: '40% 65%',
+				}}
+			>
+				<div style={{ display: 'flex', flexWrap: 'wrap', maxWidth: 940 }}>
+					{words.map((w, i) => {
+						const delay = i * 4;
+						const rise = interpolate(frame - delay, [0, 12], [i === 0 ? 0 : 32, 0], {
+							easing: EXPO,
+							...CLAMP,
+						});
+						const show = interpolate(frame - delay, [0, 8], [i === 0 ? 1 : 0, 1], {
+							easing: EXPO,
+							...CLAMP,
+						});
+						return (
+							<span
+								key={w}
+								style={{
+									display: 'inline-block',
+									marginRight: 16,
+									opacity: show,
+									transform: 'translateY(' + rise + 'px)',
+									color: C.paper,
+									fontFamily: 'Inter, sans-serif',
+									fontSize: 64,
+									fontWeight: 300,
+									lineHeight: 1.2,
+									letterSpacing: -1.2,
+								}}
+							>
+								{w}
+							</span>
+						);
+					})}
+				</div>
+				<div
+					style={{
+						marginTop: 36,
+						opacity: line2Show,
+						transform: 'translateY(' + line2Y + 'px)',
+						fontFamily: 'Inter, sans-serif',
+						fontSize: 90,
+						fontWeight: 500,
+						color: C.violet,
+						letterSpacing: -1.6,
+						lineHeight: 1.08,
+					}}
+				>
+					You need five seconds.
+				</div>
+			</div>
+		</AbsoluteFill>
+	);
+};
+
+// --- BEAT 2: THE OLD WAY ---
+// wow: MATCH_CUT_DOT — The cards collapse into a violet dot that carries over to open the UI demo.
+const DECK = ['Q3 strategy', 'Social audit', 'Content calendar', 'Brand guidelines'];
+const SRC_X = 540;
+const SRC_Y = 1480;
+const DOT_R = 14;
+
+const OldWayBeat: React.FC = () => {
+	const frame = useCurrentFrame();
+	const drift = interpolate(frame, [0, 90], [12, -18], { easing: EXPO, ...CLAMP });
+	const collapse = interpolate(frame, [66, 90], [1600, DOT_R], { easing: EXPO, ...CLAMP });
+	const labelShow = interpolate(frame, [0, 14], [0, 1], { easing: EXPO, ...CLAMP });
+
+	return (
+		<AbsoluteFill
+			style={{
+				backgroundColor: C.mist,
+				clipPath: 'circle(' + collapse + 'px at ' + SRC_X + 'px ' + SRC_Y + 'px)',
+				overflow: 'hidden',
+			}}
+		>
+			<LogoMark opacity={0.9} />
+			<div
+				style={{
+					position: 'absolute',
+					left: 72,
+					top: 180,
+					opacity: labelShow,
+					color: C.ink,
+					fontFamily: 'Inter, sans-serif',
+					fontSize: 28,
+					fontWeight: 400,
+					letterSpacing: 0.4,
+				}}
+			>
+				the 45-slide deck
+			</div>
+			<div style={{ position: 'absolute', left: 110, top: 440, transform: 'translateY(' + drift + 'px)' }}>
+				{DECK.map((label, i) => {
+					const delay = i * 6;
+					const y = interpolate(frame - delay, [4, 22], [70, i * 22], { easing: EXPO, ...CLAMP });
+					const rot = interpolate(frame - delay, [4, 22], [6, i % 2 === 0 ? -3 : 4], {
+						easing: EXPO,
+						...CLAMP,
+					});
+					const sink = interpolate(frame, [52, 70], [0, 420 + i * 36], {
+						easing: EXPO,
+						...CLAMP,
+					});
+					const fade = interpolate(frame, [52, 70], [1, 0.1], { easing: EXPO, ...CLAMP });
+					const show = interpolate(frame - delay, [0, 8], [0, 1], { easing: EXPO, ...CLAMP });
+					return (
+						<div
+							key={label}
+							style={{
+								position: 'absolute',
+								width: 800,
+								height: 200,
+								borderRadius: 20,
+								backgroundColor: C.paper,
+								border: '1px solid rgba(17,17,17,0.08)',
+								boxShadow: '0 20px 48px rgba(17,17,17,0.09)',
+								padding: '34px 40px',
+								opacity: show * fade,
+								transform: 'translateY(' + (y + sink) + 'px) rotate(' + rot + 'deg)',
+							}}
+						>
+							<div
+								style={{
+									fontFamily: 'Inter, sans-serif',
+									fontSize: 20,
+									color: '#888',
+									fontWeight: 400,
+									marginBottom: 8,
+								}}
+							>
+								slide {i + 1} of 45
+							</div>
+							<div
+								style={{
+									fontFamily: 'Inter, sans-serif',
+									fontSize: 42,
+									fontWeight: 500,
+									color: C.ink,
+									letterSpacing: -0.5,
+								}}
+							>
+								{label}
+							</div>
+						</div>
+					);
+				})}
+			</div>
+			<div
+				style={{
+					position: 'absolute',
+					left: SRC_X - DOT_R,
+					top: SRC_Y - DOT_R,
+					width: DOT_R * 2,
+					height: DOT_R * 2,
+					borderRadius: '50%',
+					backgroundColor: C.violet,
+					opacity: interpolate(frame, [50, 66], [0, 1], { easing: EXPO, ...CLAMP }),
+				}}
+			/>
+		</AbsoluteFill>
+	);
+};
+
+// --- MOCKUP CONTAINER WITH 1.5X BLEED & DRIFT ---
+// Fixes letterboxing: Container width is 1620px (1.5x 1080), continuous kinetic drift & pan
+const MockupFrame: React.FC<{
+	src: string;
+	label: string;
+	len: number;
+	initialX?: number;
+	driftDeltaX?: number;
+	initialY?: number;
+	driftDeltaY?: number;
+	scaleStart?: number;
+	scaleEnd?: number;
+}> = ({
+	src,
+	label,
+	len,
+	initialX = -270,
+	driftDeltaX = -120,
+	initialY = 160,
+	driftDeltaY = -40,
+	scaleStart = 1.08,
+	scaleEnd = 1.16,
+}) => {
+	const frame = useCurrentFrame();
+	const driftX = interpolate(frame, [0, len], [initialX, initialX + driftDeltaX], {
+		easing: EXPO,
+		...CLAMP,
+	});
+	const driftY = interpolate(frame, [0, len], [initialY, initialY + driftDeltaY], {
+		easing: EXPO,
+		...CLAMP,
+	});
+	const scale = interpolate(frame, [0, len], [scaleStart, scaleEnd], {
+		easing: EXPO,
+		...CLAMP,
+	});
+	const scrim = interpolate(frame, [6, 18], [0, 1], { easing: EXPO, ...CLAMP });
+	const rise = interpolate(frame, [6, 18], [24, 0], { easing: EXPO, ...CLAMP });
+
+	return (
+		<AbsoluteFill style={{ backgroundColor: C.ink, overflow: 'hidden' }}>
+			{/* 1.5x width container (1620px) bleeding off screen */}
+			<div
+				style={{
+					position: 'absolute',
+					left: 0,
+					top: 0,
+					width: 1620,
+					height: 1280,
+					borderRadius: 24,
+					overflow: 'hidden',
+					boxShadow: '0 30px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08)',
+					transform: 'translate(' + driftX + 'px, ' + driftY + 'px) scale(' + scale + ')',
+					transformOrigin: '0% 0%',
+				}}
+			>
+				{/* Mac style titlebar on mockup */}
+				<div
+					style={{
+						height: 48,
+						backgroundColor: '#1e1e24',
+						display: 'flex',
+						alignItems: 'center',
+						paddingLeft: 18,
+						gap: 8,
+						borderBottom: '1px solid rgba(255,255,255,0.06)',
+					}}
+				>
+					<div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#ff5f56' }} />
+					<div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#ffbd2e' }} />
+					<div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#27c93f' }} />
+					<div
+						style={{
+							marginLeft: 24,
+							fontFamily: 'Inter, sans-serif',
+							fontSize: 13,
+							color: '#8e8e93',
+							fontWeight: 400,
+						}}
+					>
+						app.anomalia.so
+					</div>
+				</div>
+				<Img src={src} style={{ width: '100%', height: 'calc(100% - 48px)', objectFit: 'cover' }} />
+			</div>
+
+			{/* Top bar with logo */}
+			<div
+				style={{
+					position: 'absolute',
+					left: 0,
+					right: 0,
+					top: 0,
+					height: 120,
+					backgroundColor: 'rgba(17,17,17,0.72)',
+					backdropFilter: 'blur(12px)',
+					zIndex: 30,
+				}}
+			/>
+			<LogoMark opacity={0.95} />
+
+			{/* wow: SCRIM_PLATE — solid legible gradient band behind label */}
+			<div
+				style={{
+					position: 'absolute',
+					left: 0,
+					right: 0,
+					bottom: 0,
+					height: '32%',
+					opacity: scrim,
+					background:
+						'linear-gradient(180deg, rgba(17,17,17,0) 0%, rgba(17,17,17,0.85) 42%, rgba(17,17,17,0.98) 100%)',
+					zIndex: 30,
+				}}
+			/>
+			<div
+				style={{
+					position: 'absolute',
+					left: 64,
+					right: 64,
+					bottom: 110,
+					opacity: scrim,
+					transform: 'translateY(' + rise + 'px)',
+					color: C.paper,
+					fontFamily: 'Inter, sans-serif',
+					fontSize: 58,
+					fontWeight: 400,
+					letterSpacing: -0.8,
+					lineHeight: 1.1,
+					zIndex: 35,
+				}}
+			>
+				{label}
+			</div>
+		</AbsoluteFill>
+	);
+};
+
+// --- BEAT 3: OVERVIEW ---
+const OverviewBeat: React.FC<{ len: number }> = ({ len }) => {
+	const frame = useCurrentFrame();
+	// Iris reveal expanding from match cut dot
+	const iris = interpolate(frame, [0, 22], [DOT_R, 1600], { easing: EXPO, ...CLAMP });
+
+	return (
+		<AbsoluteFill
+			style={{
+				clipPath: 'circle(' + iris + 'px at ' + SRC_X + 'px 420px)',
+			}}
+		>
+			<MockupFrame
+				src={UI_OVERVIEW}
+				label="plans itself."
+				len={len}
+				initialX={-220}
+				driftDeltaX={-140}
+				initialY={180}
+				driftDeltaY={-30}
+			/>
+		</AbsoluteFill>
+	);
+};
+
+// --- BEAT 4: CALENDAR ---
+// wow: STAGGER_REVEAL — schedule day pills pop in sequentially
+const CalendarBeat: React.FC<{ len: number }> = ({ len }) => {
+	const frame = useCurrentFrame();
+	const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+	const driftY = interpolate(frame, [0, len], [10, -12], { easing: EXPO, ...CLAMP });
+
+	return (
+		<AbsoluteFill>
+			<MockupFrame
+				src={UI_CALENDAR}
+				label="the calendar fills itself."
+				len={len}
+				initialX={-400}
+				driftDeltaX={160}
+				initialY={220}
+				driftDeltaY={-45}
+			/>
+			<div
+				style={{
+					position: 'absolute',
+					left: 64,
+					top: 960,
+					transform: 'translateY(' + driftY + 'px)',
+					zIndex: 35,
+				}}
+			>
+				<div style={{ display: 'flex', gap: 12 }}>
+					{days.map((d, i) => {
+						const delay = i * 5;
+						const rise = interpolate(frame - delay, [8, 22], [36, 0], {
+							easing: EXPO,
+							...CLAMP,
+						});
+						const show = interpolate(frame - delay, [8, 16], [0, 1], {
+							easing: EXPO,
+							...CLAMP,
+						});
+						const settle = interpolate(frame - delay, [22, 30], [1.12, 1], {
+							easing: SETTLE,
+							...CLAMP,
+						});
+						return (
+							<div
+								key={d}
+								style={{
+									width: 140,
+									height: 84,
+									borderRadius: 14,
+									backgroundColor: i % 2 === 0 ? C.violet : C.paper,
+									opacity: show,
+									transform: 'translateY(' + rise + 'px) scale(' + settle + ')',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									fontFamily: 'Inter, sans-serif',
+									fontSize: 22,
+									fontWeight: 600,
+									color: C.ink,
+									boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+								}}
+							>
+								{d}
+							</div>
+						);
+					})}
+				</div>
+			</div>
+		</AbsoluteFill>
+	);
+};
+
+// --- BEAT 5: EDITORIAL PLAN ---
+const PlanBeat: React.FC<{ len: number }> = ({ len }) => {
+	const frame = useCurrentFrame();
+	const items = ['plans the week', 'writes the captions', 'designs the feed'];
+	const driftY = interpolate(frame, [0, len], [8, -10], { easing: EXPO, ...CLAMP });
+
+	return (
+		<AbsoluteFill>
+			<MockupFrame
+				src={UI_PLAN}
+				label="the week, already written."
+				len={len}
+				initialX={-180}
+				driftDeltaX={-150}
+				initialY={190}
+				driftDeltaY={-35}
+			/>
+			<div
+				style={{
+					position: 'absolute',
+					left: 64,
+					bottom: 240,
+					transform: 'translateY(' + driftY + 'px)',
+					zIndex: 35,
+				}}
+			>
+				{items.map((text, i) => {
+					const delay = i * 6;
+					const x = interpolate(frame - delay, [6, 20], [60, 0], { easing: EXPO, ...CLAMP });
+					const show = interpolate(frame - delay, [6, 16], [0, 1], { easing: EXPO, ...CLAMP });
+					return (
+						<div
+							key={text}
+							style={{
+								marginBottom: 12,
+								padding: '14px 24px',
+								borderRadius: 12,
+								backgroundColor: 'rgba(17,17,17,0.85)',
+								backdropFilter: 'blur(8px)',
+								border: '1px solid rgba(255,255,255,0.1)',
+								opacity: show,
+								transform: 'translateX(' + x + 'px)',
+								color: C.paper,
+								fontFamily: 'Inter, sans-serif',
+								fontSize: 30,
+								fontWeight: 400,
+								display: 'inline-block',
+								marginRight: 12,
+							}}
+						>
+							{text}
+						</div>
+					);
+				})}
+			</div>
+		</AbsoluteFill>
+	);
+};
+
+// --- BEAT 6: RESOLUTION / CTA END CARD ---
+// Fixed contrast: #111111 text on lavender background.
+// Fixed timing: Direct fluid scale transition with zero black void freeze!
+const CtaEndCard: React.FC<{ len: number }> = ({ len }) => {
+	const frame = useCurrentFrame();
+
+	// Smooth scale-in from the editorial beat cut
+	const scale = interpolate(frame, [0, 24], [1.35, 1], { easing: SETTLE, ...CLAMP });
+	const bgFade = interpolate(frame, [0, 16], [0.8, 1], { easing: EXPO, ...CLAMP });
+	const logoPop = interpolate(frame, [4, 26], [0.85, 1], { easing: SETTLE, ...CLAMP });
+	const textRise = interpolate(frame, [8, 28], [36, 0], { easing: SETTLE, ...CLAMP });
+	const textShow = interpolate(frame, [8, 22], [0, 1], { easing: EXPO, ...CLAMP });
+	const continuousDrift = interpolate(frame, [0, len], [0, -12], { easing: EXPO, ...CLAMP });
+
+	return (
+		<AbsoluteFill
+			style={{
+				backgroundColor: C.violet,
+				opacity: bgFade,
+				justifyContent: 'center',
+				alignItems: 'center',
+				overflow: 'hidden',
+			}}
+		>
+			<div
+				style={{
+					display: 'flex',
+					flexDirection: 'column',
+					alignItems: 'center',
+					transform: 'scale(' + scale + ') translateY(' + continuousDrift + 'px)',
+					transformOrigin: '50% 50%',
+				}}
+			>
+				<Img
+					src={LOGO}
+					style={{
+						width: 220,
+						height: 220,
+						borderRadius: 44,
+						transform: 'scale(' + logoPop + ')',
+						boxShadow: '0 24px 64px rgba(17,17,17,0.18)',
+						marginBottom: 56,
+					}}
+				/>
+				<div
+					style={{
+						opacity: textShow,
+						transform: 'translateY(' + textRise + 'px)',
+						textAlign: 'center',
+						padding: '0 64px',
+					}}
+				>
+					{/* Stark WCAG AAA contrast: #111111 ink on #c485fe */}
+					<div
+						style={{
+							fontFamily: 'Inter, sans-serif',
+							fontSize: 54,
+							fontWeight: 600,
+							color: C.ink,
+							letterSpacing: -1.2,
+							lineHeight: 1.15,
+							maxWidth: 820,
+						}}
+					>
+						One tap. Your whole marketing department.
+					</div>
+					<div
+						style={{
+							marginTop: 28,
+							fontFamily: 'Inter, sans-serif',
+							fontSize: 34,
+							fontWeight: 500,
+							color: 'rgba(17,17,17,0.72)',
+							letterSpacing: -0.4,
+						}}
+					>
+						anomalia.so
+					</div>
+				</div>
+			</div>
+		</AbsoluteFill>
+	);
+};
+
+// --- MAIN SCENE WRAPPER WITH SLIDE INERTIA & PARALLAX ---
+// wow: SLIDE_INERTIA — UI scenes push laterally with inertia and continuous movement through cuts
+export default function AnomaliaProductTrailer() {
+	const frame = useCurrentFrame();
+
+	// Timeline markers (in absolute frames)
+	// 0 - 92: Hook
+	// 82 - 172: Old Way
+	// 162 - 270: Overview UI
+	// 256 - 364: Calendar UI
+	// 350 - 450: Editorial Plan UI
+	// 436 - 540: CTA End Card
+
+	// Scene 1: Hook (0..92)
+	const s1Active = frame < 92;
+
+	// Scene 2: Old Way (82..172)
+	const s2Active = frame >= 82 && frame < 172;
+	const s2Local = frame - 82;
+
+	// Scene 3: Overview UI (162..270)
+	const s3Active = frame >= 162 && frame < 270;
+	const s3Local = frame - 162;
+	// Lateral push exit for Scene 3
+	const s3ExitX = interpolate(frame, [256, 270], [0, -width], { easing: EXPO, ...CLAMP });
+
+	// Scene 4: Calendar UI (256..364)
+	const s4Active = frame >= 256 && frame < 364;
+	const s4Local = frame - 256;
+	// Lateral push enter for Scene 4 (with inertia overshoot)
+	const s4EnterX = interpolate(frame, [256, 270], [width, -18], { easing: EXPO, ...CLAMP });
+	const s4SettleX = interpolate(frame, [270, 280], [0, 18], { easing: SETTLE, ...CLAMP });
+	const s4ExitX = interpolate(frame, [350, 364], [0, -width], { easing: EXPO, ...CLAMP });
+	const s4PosX = s4EnterX + s4SettleX + s4ExitX;
+
+	// Scene 5: Editorial Plan UI (350..450)
+	const s5Active = frame >= 350 && frame < 450;
+	const s5Local = frame - 350;
+	// Lateral push enter for Scene 5
+	const s5EnterX = interpolate(frame, [350, 364], [width, -18], { easing: EXPO, ...CLAMP });
+	const s5SettleX = interpolate(frame, [364, 374], [0, 18], { easing: SETTLE, ...CLAMP });
+	const s5ExitScale = interpolate(frame, [436, 450], [1, 0.88], { easing: EXPO, ...CLAMP });
+	const s5ExitFade = interpolate(frame, [436, 450], [1, 0], { easing: EXPO, ...CLAMP });
+	const s5PosX = s5EnterX + s5SettleX;
+
+	// Scene 6: CTA End Card (436..540) — Direct fluid scale reveal without black gap!
+	const s6Active = frame >= 436;
+	const s6Local = frame - 436;
+
+	return (
+		<AbsoluteFill style={{ backgroundColor: C.ink }}>
+			{/* Beat 1: Hook */}
+			{s1Active && <HookBeat />}
+
+			{/* Beat 2: Old Way */}
+			{s2Active && (
+				<AbsoluteFill style={{ zIndex: 5 }}>
+					<OldWayBeat />
+				</AbsoluteFill>
+			)}
+
+			{/* Beat 3: Overview UI */}
+			{s3Active && (
+				<AbsoluteFill
+					style={{
+						zIndex: 10,
+						transform: 'translateX(' + s3ExitX + 'px)',
+					}}
+				>
+					<OverviewBeat len={108} />
+				</AbsoluteFill>
+			)}
+
+			{/* Beat 4: Calendar UI */}
+			{s4Active && (
+				<AbsoluteFill
+					style={{
+						zIndex: 15,
+						transform: 'translateX(' + s4PosX + 'px)',
+					}}
+				>
+					<CalendarBeat len={108} />
+				</AbsoluteFill>
+			)}
+
+			{/* Beat 5: Editorial Plan UI */}
+			{s5Active && (
+				<AbsoluteFill
+					style={{
+						zIndex: 20,
+						transform: 'translateX(' + s5PosX + 'px) scale(' + s5ExitScale + ')',
+						opacity: s5ExitFade,
+					}}
+				>
+					<PlanBeat len={100} />
+				</AbsoluteFill>
+			)}
+
+			{/* Beat 6: Resolution CTA End Card */}
+			{s6Active && (
+				<AbsoluteFill style={{ zIndex: 25 }}>
+					<CtaEndCard len={104} />
+				</AbsoluteFill>
+			)}
+		</AbsoluteFill>
+	);
+}

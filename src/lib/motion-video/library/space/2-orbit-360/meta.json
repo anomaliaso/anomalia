@@ -1,0 +1,4 @@
+{
+  "intent": "Orbita a 360: la camera gira intorno alla nuvola e torna esattamente al punto di partenza — il fotogramma della giuntura è identico al primo, verificato in codice. Il giro è la prova che la profondità è vera e non una scala.",
+  "stills": [0, 8, 40, 90, 120, 165, 240, 299]
+}

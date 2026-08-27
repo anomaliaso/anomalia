@@ -1,0 +1,14 @@
+{
+  "name": "@anomalia/agent-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./service": "./src/service.ts",
+    "./store.svelte": "./src/store.svelte.ts"
+  },
+  "dependencies": {
+    "@anomalia/agent-kit": "*",
+    "@anomalia/agent-contracts": "*"
+  }
+}

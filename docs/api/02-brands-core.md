@@ -1,0 +1,361 @@
+# API — 02 · Brand core
+
+Endpoint per listare brand, leggere il dettaglio, analytics, calendario, bio e publishing.
+Errori comuni di auth: vedi [01-overview](01-overview.md).
+
+## `GET /api/v1/brands`
+
+Elenco di tutti i brand accessibili all'utente autenticato (per API key: limitato allo scope `brand_ids` della chiave), con il conteggio dei post in attesa di approvazione.
+
+**Query params**: nessuno
+
+**Response** `200` (array, vuoto `[]` se nessun brand):
+
+```json
+[
+  {
+    "id": "6f2c…",
+    "name": "Mio Brand",
+    "slug": "mio-brand",
+    "plan": "pro",
+    "status": "active",
+    "autopilot_enabled": true,
+    "autopilot_failure_count": 0,
+    "last_autopilot_run_at": "2026-08-12T08:30:00Z",
+    "timezone": "Europe/Rome",
+    "pendingCount": 3
+  }
+]
+```
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug`
+
+Dettaglio completo del brand: riga `brands` completa unita agli aggregati calcolati da `getBrandDetail` (conteggi, ultimi run autopilot, piano editoriale attivo, kit).
+
+**Response** `200`:
+
+```json
+{
+  "id": "6f2c…",
+  "org_id": "019e…",
+  "name": "Mio Brand",
+  "slug": "mio-brand",
+  "status": "active",
+  "plan": "pro",
+  "timezone": "Europe/Rome",
+  "target_platforms": ["instagram", "tiktok"],
+  "launched_at": "2026-05-01T00:00:00Z",
+  "content_prefs": { "…": "…" },
+  "setup_step": null,
+  "setup_completed_at": "2026-05-01T10:00:00Z",
+  "autopilot_enabled": true,
+  "autopilot_failure_count": 0,
+  "last_autopilot_run_at": "2026-08-12T08:30:00Z",
+  "zernio_profile_id": "zp_…",
+  "ads_settings": { "…": "…" },
+  "pendingCount": 3,
+  "runs": [
+    { "status": "success", "posts_created": 5, "created_at": "2026-08-12T08:30:00Z", "error": null }
+  ],
+  "plan": {
+    "id": "…",
+    "status": "active",
+    "cadence": "3/week",
+    "weeks": [ { "…": "contenuti generati da AI" } ]
+  },
+  "productCount": 4,
+  "accountCount": 2,
+  "scheduledCount": 6,
+  "publishedCount": 120,
+  "hasGtm": true,
+  "hasContentPlans": true,
+  "hasHistory": true,
+  "kit": { "about": "…", "brand_colors": ["#7c5cff", "#ffffff"] },
+  "logoUrl": "https://…/logo.png"
+}
+```
+
+Note: `plan` è `null` senza piano attivo; `kit` è `null` senza riga `brand_kit`; `runs` contiene al massimo gli ultimi 3 run; `content_prefs`, `ads_settings` e `plan.weeks` contengono dati dinamici.
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/analytics`
+
+Analytics del brand: conteggi per status, distribuzione per piattaforma, prossimi post programmati, ultimi log di pubblicazione, performance social aggregate e top post per engagement.
+
+**Response** `200`:
+
+```json
+{
+  "total": 129,
+  "scheduled": 6,
+  "pending": 3,
+  "failed": 1,
+  "platforms": [["instagram", 89], ["tiktok", 40]],
+  "upcomingPosts": [
+    { "id": "…", "platform": "instagram", "caption": "…", "scheduled_for": "2026-08-14T09:00:00Z", "slot": "2026-08-14" }
+  ],
+  "recentActivity": [
+    { "id": "…", "post_id": "…", "platform": "instagram", "status": "published", "caption": "…", "error": null, "created_at": "2026-08-12T09:01:00Z" }
+  ],
+  "socialPerformance": [
+    { "platform": "instagram", "posts": 34, "totals": { "views": 12000, "likes": 540, "comments": 60, "shares": 25 } }
+  ],
+  "topPosts": [
+    {
+      "id": "…",
+      "platform": "instagram",
+      "caption": "…",
+      "thumbnail_url": "https://…",
+      "url": "https://instagram.com/p/…",
+      "published_at": "2026-08-01T10:00:00Z",
+      "metrics": { "views": 4500, "likes": 220, "comments": 18, "shares": 9 }
+    }
+  ],
+  "products": 4,
+  "accounts": 2
+}
+```
+
+Note: `platforms` è un array di coppie `[piattaforma, numero post]`; `topPosts` max 6 post ordinati per score di engagement; `recentActivity` max 8 log.
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/analytics" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/calendar`
+
+Calendario editoriale del mese: post programmati (per `scheduled_for` o per `slot`, deduplicati, esclusi i `pending_user`) più le bozze pending (flag `isDraft`).
+
+**Query params**
+
+| Param | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `month` | string `YYYY-MM` | No | Mese da visualizzare; se assente o non valido usa il mese corrente |
+
+**Response** `200`:
+
+```json
+{
+  "posts": [
+    {
+      "id": "…",
+      "platform": "instagram",
+      "caption": "…",
+      "media_url": "https://…",
+      "scheduled_for": "2026-08-14T09:00:00Z",
+      "status": "scheduled",
+      "slot": "2026-08-14"
+    },
+    {
+      "id": "…",
+      "platform": "tiktok",
+      "caption": "…",
+      "media_url": null,
+      "scheduled_for": null,
+      "status": "pending_user",
+      "slot": null,
+      "isDraft": true
+    }
+  ],
+  "year": 2026,
+  "month": 8,
+  "monthLabel": "August 2026",
+  "prevYM": "2026-07",
+  "nextYM": "2026-09",
+  "timezone": "Europe/Rome"
+}
+```
+
+Note: `monthLabel` segue la lingua del brand (`content_prefs.language`, fallback inglese); `prevYM`/`nextYM` gestiscono il riporto d'anno. Max 100 post programmati + 50 bozze; i post bozza non hanno `scheduled_for`/`slot`.
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/calendar?month=2026-08" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/bio`
+
+Stato del "link in bio": URL corrente su `social_accounts.bio_url` dell'account attivo e link breve suggerito (quello con più click negli ultimi 7 giorni).
+
+**Query params**
+
+| Param | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `platform` | string | No | Filtra l'account su una piattaforma; se assente usa il primo account attivo |
+
+**Response** `200`:
+
+```json
+{
+  "bioUrl": "https://mio-brand.com/lp-offerta",
+  "suggested": {
+    "code": "Ab3xYz9q",
+    "url": "https://anomalia.so/l/Ab3xYz9q",
+    "clicks": 41,
+    "targetUrl": "https://mio-brand.com/pagina-prodotto"
+  }
+}
+```
+
+Note: `suggested` è `null` se nessun link ha ricevuto click nella settimana; `bioUrl` è `null` se nessun account attivo.
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/bio?platform=instagram" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `PUT /api/v1/brands/:slug/bio`
+
+Memorizza il link in bio sull'account attivo. Nota: l'applicazione effettiva sul profilo social è manuale (Zernio non espone le bio via API) — salva solo il valore.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `platform` | string | No | Seleziona l'account per piattaforma; se assente usa il primo account attivo |
+| `bio_url` | string | Sì | URL http(s) valido (max 500 char); stringa vuota `""` per svuotare la bio |
+
+**Response** `200`:
+
+```json
+{ "ok": true, "bioUrl": "https://mio-brand.com/lp-offerta" }
+```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"Invalid body"}` |
+| `400` | `{"error":"bio_url is required"}` |
+| `400` | `{"error":"bio_url is invalid"}` |
+| `400` | `{"error":"bio_url must be an http(s) URL or empty"}` |
+| `404` | `{"error":"No active social account"}` |
+| `500` | `{"error":"<messaggio errore DB>"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X PUT "https://anomalia.so/api/v1/brands/mio-brand/bio" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"instagram","bio_url":"https://mio-brand.com/lp-offerta"}'
+```
+
+---
+
+## `GET /api/v1/brands/:slug/publishing`
+
+Livello di pubblicazione corrente (`brands.content_prefs.publishing.mode`) e account attivi con flag `auto_publish`.
+
+**Response** `200`:
+
+```json
+{
+  "mode": "manual",
+  "accounts": [
+    { "id": "…", "platform": "instagram", "auto_publish": true },
+    { "id": "…", "platform": "tiktok", "auto_publish": false }
+  ]
+}
+```
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/publishing" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `PUT /api/v1/brands/:slug/publishing`
+
+Imposta il livello di pubblicazione: `manual` (solo account auto-publish immediati, il resto attende l'approvazione email), `auto_curated` (pubblica tutto tranne i post `needs_attention`), `auto_all` (pubblica tutto).
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `mode` | string | Sì | `manual` \| `auto_curated` \| `auto_all` |
+
+**Response** `200`:
+
+```json
+{ "ok": true, "mode": "auto_curated" }
+```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"Invalid JSON body"}` |
+| `400` | `{"error":"Invalid mode. Must be one of: manual, auto_curated, auto_all"}` |
+| `500` | `{"error":"<messaggio errore RPC>"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X PUT "https://anomalia.so/api/v1/brands/mio-brand/publishing" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"auto_curated"}'
+```
+
+---
+
+## `POST /api/v1/brands/:slug/tick`
+
+Esegue manualmente un tick dell'autopilot per il brand (spende crediti AI). Nessun body.
+
+**Response** `200` (inoltro della risposta del tick interno):
+
+```json
+{
+  "ok": true,
+  "considered": 1,
+  "processed": 1,
+  "skipped": 0,
+  "errors": [],
+  "reconciliation": { "checked": 0, "divergent": 0 }
+}
+```
+
+Note: `skipped > 0` indica brand non "due" per cadenza o run già in corso; `errors` è un array di `{ "brand": "<slug>", "reason": "…" }`.
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `402` | `{"error":"credits_exhausted"}` |
+| `503` | `{"error":"Autopilot tick is not configured: AUTOPILOT_SECRET (or CRON_SECRET) env var is missing."}` |
+| `500` | `{"error":"Tick failed: <testo risposta interna>"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/tick" -H "Authorization: Bearer $TOKEN"
+```

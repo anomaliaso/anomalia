@@ -1,0 +1,357 @@
+import { ADS_SELF_SERVE } from '$lib/ads-fee';
+
+/** Resolve a short label for a brand-app pathname (English path segments). */
+export function workbenchTabLabel(
+  pathname: string,
+  brandBase: string,
+  t: (key: string) => string
+): string {
+  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
+  let rest = pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+  if (!rest || rest === '/') return t('app.shell.tabHome');
+  rest = rest.replace(/^\//, '').split('?')[0];
+  const seg = rest.split('/')[0] ?? '';
+
+  const map: Record<string, string> = {
+    strategy: 'app.hub.strategy.label',
+    publish: 'app.hub.publish.label',
+    automations: 'app.hub.automations.label',
+    web: 'app.hub.web.label',
+    brand: 'app.hub.brand.label',
+    content: 'app.hub.publish.calendar',
+    calendar: 'app.hub.publish.calendar',
+    'manual-posting': 'app.hub.publish.manualPosting',
+    posts: 'app.post.title',
+    campaigns: 'app.hub.publish.campaigns',
+    analytics: 'app.hub.publish.analytics',
+    ads: 'app.hub.ads.label',
+    competitors: 'app.hub.publish.competitors',
+    studio: 'app.hub.brand.identity',
+    knowledge: 'app.hub.brand.knowledge',
+    voice: 'app.hub.brand.voice',
+    rubrics: 'app.hub.brand.rubrics',
+    ideas: 'app.hub.brand.ideas',
+    gtm: 'app.hub.strategy.strategy',
+    plan: 'app.hub.strategy.plan',
+    radar: 'app.hub.automations.radar',
+    leads: 'app.hub.automations.leads',
+    agents: 'app.hub.automations.custom',
+    seo: 'app.hub.web.seo',
+    'seo-geo': 'app.hub.web.seo',
+    geo: 'app.hub.web.geo',
+    citations: 'app.hub.web.geo',
+    keywords: 'app.hub.web.keywords',
+    backlinks: 'app.hub.web.backlinks',
+    site: 'app.hub.web.blog',
+    settings: 'app.nav.settings',
+    // Plans proposed by the chat (docs/24 §9) — a document, not the editorial plan above.
+    plans: 'chat.plan.tab',
+    designer: 'app.hub.designer.label',
+    'media-generator': 'app.hub.designer.mediaGenerator',
+    'ugc-creator': 'app.hub.designer.ugcCreator',
+    'motion-video': 'app.hub.designer.motionVideo',
+    media: 'app.hub.designer.mediaLibrary',
+    workbench: 'app.home.workbench.title',
+  };
+
+  // Ads hub pages would otherwise share one "Ads" tab label.
+  if (seg === 'ads' && rest.includes('/google')) return t('app.hub.ads.google');
+  if (seg === 'ads' && rest.includes('/social')) return t('app.hub.ads.social');
+  if (seg === 'ads' && rest.includes('/library')) return t('app.hub.ads.library');
+
+  const key = map[seg];
+  if (key) return t(key);
+  // Nested editors e.g. site/edit/…
+  if (seg === 'site' && rest.includes('/edit')) return t('app.hub.web.blog');
+  return seg ? seg.charAt(0).toUpperCase() + seg.slice(1) : t('app.shell.tabHome');
+}
+
+export function isWorkbenchPath(pathname: string, brandBase: string): boolean {
+  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
+  if (!pathname.startsWith(base)) return false;
+  if (pathname.includes('/chat/')) return false;
+  if (pathname.includes('/success')) return false;
+  if (pathname.includes('/activate')) return false;
+  if (pathname.includes('/proposal')) return false;
+  if (pathname.includes('/image-generator')) return false;
+  if (pathname.includes('/settings')) return false;
+  return true;
+}
+
+export type WorkbenchPageHub =
+  | 'strategy'
+  | 'publish'
+  | 'brand'
+  | 'automations'
+  | 'web'
+  | 'designer'
+  | 'ads';
+
+export type WorkbenchPageDef = {
+  hub: WorkbenchPageHub;
+  /** Path segment under /app/{slug}/ */
+  segment: string;
+  labelKey: string;
+  /** Requires the ads entitlement (Starter and up) — free/Go land on Settings › Ads instead. */
+  adsOnly?: boolean;
+};
+
+/** All openable workbench pages, grouped by hub (same as the sidebar macros). */
+export const WORKBENCH_PAGES: WorkbenchPageDef[] = [
+  { hub: 'brand', segment: 'brand', labelKey: 'app.hub.brand.label' },
+  { hub: 'brand', segment: 'knowledge', labelKey: 'app.hub.brand.knowledge' },
+  { hub: 'brand', segment: 'voice', labelKey: 'app.hub.brand.voice' },
+  { hub: 'brand', segment: 'rubrics', labelKey: 'app.hub.brand.rubrics' },
+  { hub: 'brand', segment: 'ideas', labelKey: 'app.hub.brand.ideas' },
+  { hub: 'strategy', segment: 'strategy', labelKey: 'app.hub.strategy.label' },
+  { hub: 'strategy', segment: 'gtm', labelKey: 'app.hub.strategy.strategy' },
+  { hub: 'strategy', segment: 'plan', labelKey: 'app.hub.strategy.plan' },
+  { hub: 'publish', segment: 'publish', labelKey: 'app.hub.publish.label' },
+  { hub: 'publish', segment: 'calendar', labelKey: 'app.hub.publish.calendar' },
+  { hub: 'publish', segment: 'manual-posting', labelKey: 'app.hub.publish.manualPosting' },
+  { hub: 'publish', segment: 'campaigns', labelKey: 'app.hub.publish.campaigns' },
+  { hub: 'publish', segment: 'analytics', labelKey: 'app.hub.publish.analytics' },
+  { hub: 'publish', segment: 'competitors', labelKey: 'app.hub.publish.competitors' },
+  // Paid lives in its own hub: channels + Meta Ad Library research.
+  { hub: 'ads', segment: 'ads/social', labelKey: 'app.hub.ads.social', adsOnly: true },
+  { hub: 'ads', segment: 'ads/google', labelKey: 'app.hub.ads.google', adsOnly: true },
+  { hub: 'ads', segment: 'ads/library', labelKey: 'app.hub.ads.library', adsOnly: true },
+  { hub: 'automations', segment: 'automations', labelKey: 'app.hub.automations.label' },
+  { hub: 'automations', segment: 'radar', labelKey: 'app.hub.automations.radar' },
+  { hub: 'automations', segment: 'leads', labelKey: 'app.hub.automations.leads' },
+  { hub: 'automations', segment: 'agents', labelKey: 'app.hub.automations.custom' },
+  // Web hub + Radar/Leads are free (match Go). Ads need Starter or above.
+  { hub: 'web', segment: 'web', labelKey: 'app.hub.web.label' },
+  { hub: 'web', segment: 'seo', labelKey: 'app.hub.web.seo' },
+  { hub: 'web', segment: 'geo', labelKey: 'app.hub.web.geo' },
+  { hub: 'web', segment: 'keywords', labelKey: 'app.hub.web.keywords' },
+  { hub: 'web', segment: 'backlinks', labelKey: 'app.hub.web.backlinks' },
+  { hub: 'web', segment: 'site', labelKey: 'app.hub.web.blog' }
+  // Il hub `designer` non è più elencato: le pagine restano su disco e raggiungibili per link.
+];
+
+export const WORKBENCH_HUBS: WorkbenchPageHub[] = ['brand', 'strategy', 'publish', 'web', 'ads', 'automations'];
+
+/**
+ * Sotto-pagine di ogni hub (sidebar). Le chiavi combaciano con `app.hub.{hub}.{key}`.
+ * `Partial` perché il hub `designer` non ha più una voce di nav: il tipo resta, la sua riga no.
+ */
+export const HUB_TABS: Partial<Record<WorkbenchPageHub, { key: string; path: string; adsOnly?: boolean }[]>> = {
+  brand: [
+    { key: 'overview', path: '/brand' },
+    { key: 'knowledge', path: '/knowledge' },
+    { key: 'voice', path: '/voice' },
+    { key: 'rubrics', path: '/rubrics' },
+    { key: 'ideas', path: '/ideas' },
+  ],
+  strategy: [
+    { key: 'overview', path: '/strategy' },
+    { key: 'strategy', path: '/gtm' },
+    { key: 'plan', path: '/plan' },
+  ],
+  publish: [
+    { key: 'overview', path: '/publish' },
+    { key: 'calendar', path: '/calendar' },
+    { key: 'manualPosting', path: '/manual-posting' },
+    { key: 'campaigns', path: '/campaigns' },
+    { key: 'analytics', path: '/analytics' },
+    { key: 'competitors', path: '/competitors' },
+  ],
+  // No 'overview' entry: the section is its channels + Meta Ad Library; /ads redirects to social.
+  ads: [
+    { key: 'social', path: '/ads/social', adsOnly: true },
+    { key: 'google', path: '/ads/google', adsOnly: true },
+    { key: 'library', path: '/ads/library', adsOnly: true },
+  ],
+  automations: [
+    { key: 'overview', path: '/automations' },
+    { key: 'radar', path: '/radar' },
+    { key: 'leads', path: '/leads' },
+    { key: 'custom', path: '/agents' },
+  ],
+  web: [
+    { key: 'overview', path: '/web' },
+    { key: 'seo', path: '/seo' },
+    { key: 'geo', path: '/geo' },
+    { key: 'keywords', path: '/keywords' },
+    { key: 'backlinks', path: '/backlinks' },
+    { key: 'blog', path: '/site' },
+  ],
+};
+
+export function workbenchPageHref(
+  brandSlug: string,
+  segment: string,
+  _webHubEnabled = true,
+  adsEnabled = false
+): string {
+  // Con ADS_SELF_SERVE spento le pagine ads mostrano un placeholder "prenota una call" per ogni
+  // piano: non rimbalzare gli utenti non paganti. Si atterra sulle impostazioni ads, che spiegano
+  // il requisito Pro e portano un bottone di upgrade ESPLICITO. Mai /upgrade da qui: apre una
+  // sessione Stripe su GET, e un click in sidebar è navigazione, non consenso a pagare. Mai
+  // /activate: tratta un brand già abbonato come "fatto" e rimbalza su /success.
+  if ((segment === 'ads' || segment.startsWith('ads/')) && !adsEnabled && ADS_SELF_SERVE) {
+    return `/app/${brandSlug}/settings/ads`;
+  }
+  return `/app/${brandSlug}/${segment}`;
+}
+
+// Nav "La squadra" (flag FEATURE_NAV_TEAM): da 20+ voci di primo livello a 5 sezioni. Questa è la
+// struttura PURA (path + chiavi i18n), così workbench-paths.test.ts cammina l'albero e garantisce
+// che OGNI destinazione della nav legacy (HUB_TABS) resti raggiungibile: cambia la gerarchia, non
+// l'inventario. Flag OFF = HUB_TABS qui sopra, byte-identico.
+
+export type NavTeamItem = {
+  /** Path sotto /app/{slug} (con lo slash iniziale, come HUB_TABS). */
+  path: string;
+  labelKey: string;
+  /** Altri path che tengono attiva la voce (rotte sorelle/legacy che atterrano qui). */
+  also?: string[];
+  /** Badge dinamico del layout (stessi contatori della nav legacy). */
+  badge?: 'content' | 'leads';
+  adsOnly?: boolean;
+};
+
+/**
+ * SPAZI — le destinazioni di prima classe. Calendario assorbe le approvazioni (/approvals e
+ * /content fanno già 308 su /calendar, la coda è il filtro ?status=). Libreria punta ai media; la
+ * knowledge resta una pagina sotto Strumenti.
+ */
+export const NAV_TEAM_SPACES: NavTeamItem[] = [
+  // Panoramica (/workbench): l'unica vista che RIASSUME le altre. È lettura, non lavoro, quindi
+  // apre la lista invece di stare fra le destinazioni dove si produce. L'etichetta è
+  // `app.home.workbench.title`, la STESSA della pillola in topbar e del titolo della modal.
+  { path: '/workbench', labelKey: 'app.home.workbench.title' },
+  {
+    path: '/calendar',
+    labelKey: 'app.hub.publish.calendar',
+    badge: 'content',
+    // Strategia e piano vivono nel chrome del calendario (stessa regola della nav legacy).
+    also: ['/content', '/approvals', '/strategy', '/gtm', '/plan', '/publish']
+  },
+  { path: '/media', labelKey: 'app.nav2.library', also: ['/designer'] },
+  // Il blog (/site) è la destinazione linkata anche oggi; /web è la landing del hub e
+  // oggi NON è linkata direttamente — resta solo nello stato attivo, come ora.
+  { path: '/site', labelKey: 'app.nav2.site', also: ['/web'] }
+];
+
+/**
+ * STRUMENTI — il gruppo richiudibile con tutte le pagine-strumento della nav legacy. L'ordine è per
+ * frequenza d'uso. Niente resta orfano: il test confronta questo elenco (più gli SPAZI) con ogni
+ * href di HUB_TABS.
+ * I banchi del Designer non sono qui: la sezione è fuori dalla nav e non deve tornare col flag.
+ */
+export const NAV_TEAM_TOOLS: NavTeamItem[] = [
+  { path: '/radar', labelKey: 'app.hub.automations.radar' },
+  { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
+  { path: '/analytics', labelKey: 'app.hub.publish.analytics' },
+  { path: '/seo', labelKey: 'app.hub.web.seo' },
+  { path: '/geo', labelKey: 'app.hub.web.geo' },
+  { path: '/keywords', labelKey: 'app.hub.web.keywords' },
+  { path: '/backlinks', labelKey: 'app.hub.web.backlinks' },
+  { path: '/competitors', labelKey: 'app.hub.publish.competitors' },
+  { path: '/campaigns', labelKey: 'app.hub.publish.campaigns' },
+  { path: '/manual-posting', labelKey: 'app.hub.publish.manualPosting' },
+  // Lo Studio del brand: nella legacy è l'unica voce del hub Brand (Settings › Identity).
+  { path: '/settings/brand', labelKey: 'app.hub.brand.identity' },
+  { path: '/knowledge', labelKey: 'app.hub.brand.knowledge' },
+  { path: '/agents', labelKey: 'app.hub.automations.custom' },
+  { path: '/ads/social', labelKey: 'app.hub.ads.social', adsOnly: true },
+  { path: '/ads/google', labelKey: 'app.hub.ads.google', adsOnly: true },
+  { path: '/ads/library', labelKey: 'app.hub.ads.library', adsOnly: true }
+];
+
+// Le pagine del brand non sono una destinazione su desktop: si aprono nella stessa modal delle
+// impostazioni (stato del client, URL fermo, corpo che ospita la +page.svelte vera). Il default è
+// `modal`; ogni eccezione qui sotto ha una ragione TECNICA, non di gusto.
+
+/** Rotte che restano PAGINA PIENA, col perché. Il criterio è uno solo: la modal non può ospitarle
+ * senza rompere qualcosa di verificabile. */
+export const BRAND_PAGE_ROUTES = [
+  '.', // la home del brand è la superficie SOTTO la modal: non può ospitare sé stessa
+  'activate', // checkout Stripe: esce dal sito
+  'success', // ritorno dal pagamento, con la sua chrome
+  'proposal', // superficie standalone, già esclusa dalla shell del brand
+  'chat/[thread]', // la chat È la superficie da cui si apre la modal (e rotta dinamica)
+  'posts/[id]/analytics', // i dettagli post hanno chrome dedicata fuori dalla shell
+  'posts/[id]/boost', //   (isPostDash nel +layout) e sono rotte dinamiche
+  'posts/[id]/campaign',
+  'posts/[id]/chat',
+  'posts/[id]/details',
+  'posts/[id]/edit',
+  'posts/[id]/preview',
+  'plans/[id]', // rotta dinamica senza href statico
+  'ads/[channel]/new', // rotta dinamica senza href statico
+  'site/edit/[id]', // editor articolo a tutta larghezza (isArticleEdit) + dinamica
+  'media-generator', // canvas full-bleed col composer pinnato (isMediaWorkbench)
+  'motion-video', //   idem
+  'ugc-creator', //   idem
+  'agent-lab' // banco di prova SOLO dev (404 in prod): mai nel rail, non ha senso nella modal
+] as const;
+
+/** Rotte del brand ospitate nella modal. */
+export const BRAND_MODAL_ROUTES = [
+  'agents',
+  'analytics',
+  'approvals',
+  'automations',
+  'backlinks',
+  'brand',
+  'calendar',
+  'campaigns',
+  'competitors',
+  'content',
+  'design-lab',
+  'designer',
+  'editorial',
+  'geo',
+  'gtm',
+  'ideas',
+  'keywords',
+  'knowledge',
+  'knowledge/memory/new',
+  'knowledge/new',
+  'leads',
+  'manual-posting',
+  'media',
+  'plan',
+  'publish',
+  'radar',
+  'rubrics',
+  'seo',
+  'site',
+  'site/new',
+  'strategy',
+  'studio',
+  'studio/brand',
+  'studio/competitors',
+  'studio/hashtags',
+  'studio/knowledge',
+  'studio/people',
+  'studio/platforms',
+  'studio/products',
+  'studio/voice-examples',
+  'voice',
+  'web',
+  // La metà bassa della vecchia Panoramica, ora pagina sua: la home è solo chat.
+  'workbench',
+  'ads/google',
+  'ads/library',
+  'ads/social'
+] as const;
+
+const MODAL_SET: ReadonlySet<string> = new Set(BRAND_MODAL_ROUTES);
+
+/**
+ * Il suffisso di rotta (relativo a `/app/<slug>/`) se quel path si apre nella modal, altrimenti
+ * null. Le impostazioni hanno la loro classificazione in `components/settings/platforms.ts`.
+ */
+export function brandModalTarget(pathname: string, brandBase: string): string | null {
+  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
+  const p = pathname.replace(/\/$/, '');
+  if (p === base) return null; // la home è la superficie, non un contenuto da ospitare
+  if (!p.startsWith(`${base}/`)) return null;
+  const rest = p.slice(base.length + 1);
+  if (!rest || rest.startsWith('settings')) return null; // i settings hanno il loro percorso
+  return MODAL_SET.has(rest) ? rest : null;
+}

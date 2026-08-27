@@ -1,0 +1,120 @@
+/* Material-style press: fast press-in, springy release + surface ripple.
+   Applied under any [data-material-press] root via event delegation.
+   Override --material-press-fill when the host surface is already --paper
+   (e.g. chat column → use --paper-2 so the wash stays visible). */
+
+[data-material-press] {
+  --material-press-fill: var(--paper);
+}
+
+[data-material-press] :is(
+  a[href],
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='menuitem']:not([data-disabled]),
+  [role='option']:not([aria-disabled='true']),
+  [data-sidebar='menu-button'],
+  [data-sidebar='menu-action'],
+  [data-sidebar='group-action'],
+  [data-sidebar='menu-sub-button'],
+  [data-sidebar='trigger'],
+  [data-sidebar='rail'],
+  [data-slot='dropdown-menu-item'],
+  [data-slot='dropdown-menu-checkbox-item'],
+  [data-slot='dropdown-menu-radio-item'],
+  [data-slot='dropdown-menu-sub-trigger'],
+  .sidebar-warn-btn
+) {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  isolation: isolate;
+  scale: 1;
+  transition:
+    scale 280ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Press-in: snappy accelerate into the finger */
+[data-material-press] .is-material-pressed {
+  scale: 0.965;
+  transition:
+    scale 90ms cubic-bezier(0.4, 0, 1, 1),
+    background-color 90ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 90ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 90ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Solid surface wash — skipped on filled CTAs that keep their own color */
+[data-material-press] .is-material-pressed:not(.ch-send):not([data-material-press-bg='keep']) {
+  background-color: var(--material-press-fill) !important;
+}
+
+[data-material-press] .material-ripple {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background: var(--material-press-fill);
+  opacity: 0;
+  transform: scale(0);
+  transition:
+    transform 450ms cubic-bezier(0, 0, 0.2, 1),
+    opacity 120ms linear;
+  z-index: 0;
+}
+
+[data-material-press] .material-ripple.material-ripple--expand {
+  opacity: 1;
+  transform: scale(1);
+}
+
+[data-material-press] .material-ripple.material-ripple--fade {
+  opacity: 0;
+  transition: opacity 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-material-press] .is-material-pressed > *:not(.material-ripple),
+[data-material-press]
+  :is(
+    a,
+    button,
+    [role='button'],
+    [role='menuitem'],
+    [role='option'],
+    [data-sidebar='menu-button'],
+    [data-slot='dropdown-menu-item']
+  )
+  > *:not(.material-ripple) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-material-press] :is(
+    a[href],
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']),
+    [role='menuitem']:not([data-disabled]),
+    [role='option']:not([aria-disabled='true']),
+    [data-sidebar='menu-button'],
+    [data-sidebar='menu-action'],
+    [data-sidebar='group-action'],
+    [data-sidebar='menu-sub-button'],
+    [data-sidebar='trigger'],
+    [data-sidebar='rail'],
+    [data-slot='dropdown-menu-item'],
+    [data-slot='dropdown-menu-checkbox-item'],
+    [data-slot='dropdown-menu-radio-item'],
+    [data-slot='dropdown-menu-sub-trigger'],
+    .sidebar-warn-btn
+  ),
+  [data-material-press] .is-material-pressed {
+    transition: none !important;
+    scale: 1 !important;
+  }
+
+  [data-material-press] .material-ripple {
+    display: none !important;
+  }
+}

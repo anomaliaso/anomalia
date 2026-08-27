@@ -1,0 +1,212 @@
+# Anomalia — AI Social Media Manager
+
+Website: https://anomalia.so
+Description: Anomalia plans, creates and posts your content across platforms. You approve, it handles the rest. An AI employee that runs your social media — not a tool you operate.
+
+## What is Anomalia
+
+Anomalia is an AI-powered social media manager that plans, creates, schedules and publishes content across all major social platforms. Drop your website URL, connect your accounts, and Anomalia handles everything: editorial strategy, caption writing, image generation, scheduling, and auto-publishing.
+
+Core principle: everything follows propose-approve. The AI never acts silently. Every strategic decision is presented as a proposal the user must explicitly approve.
+
+## Supported Platforms
+
+Instagram · TikTok · Facebook · LinkedIn (personal + Company Page) · X · Threads · YouTube
+
+## How It Works
+
+1. Drop your website URL → Anomalia reads brand, products, logo, colours automatically.
+2. Connect social accounts → Anomalia learns from past posts and voice.
+3. Anomalia studies market and competitors → proposes editorial plan + strategy.
+4. User approves → Anomalia runs on autopilot: researches, plans, writes, designs, schedules, publishes.
+5. User can intervene anytime: edit posts, change plan, give feedback, or let it run fully autonomous.
+
+## Key Features
+
+- AI-generated images and video clips
+- Captions tuned to brand voice and platform rules
+- Automated weekly content calendar
+- Go-to-market roadmap (90-day to 2-year horizons)
+- Auto-publishing at optimal times or approval queue
+- One-tap approval from app, email or WhatsApp
+- Per-platform performance analytics
+- Studio: brand kit, products, knowledge base, people, competitors
+- Multi-brand management (one account, many brands)
+- Calendar view with monthly grid
+- Brand Memory: AI learns your voice, preferences, corrections, and what works
+- Radar: monitors news, blogs, and industry conversations, turns them into ready-to-post drafts
+- SEO Growth Advisor: prioritised list of content initiatives to grow organic traffic
+- GEO Audit: check if AI assistants (ChatGPT, Perplexity, Google AI) recommend your brand
+
+## Pages
+
+### Homepage & Overview
+
+- [Homepage](https://anomalia.so/) — Anomalia plans, creates and posts your content across platforms. You approve, it handles the rest.
+- [Homepage (Italian)](https://anomalia.so/it) — Anomalia pianifica, crea e pubblica i tuoi contenuti. Tu approvi, il resto lo facciamo noi.
+- [Grow — Always-on AI social media manager](https://anomalia.so/grow) — Plans, writes, designs and publishes posts every week. No photoshoots, no agencies, no burned budgets.
+- [Changelog](https://anomalia.so/changelog) — All product updates, improvements and fixes.
+- [Insights](https://anomalia.so/insights) — Guides on AI social autopilot, GEO, SEO and organic growth.
+- [Insights (Italian)](https://anomalia.so/it/insights) — Guide su autopilot AI, GEO, SEO e growth organico.
+- [Cursor + Anomalia MCP](https://anomalia.so/cursor-mcp-motion-ads) — Short playbook: Anomalia MCP in Cursor, Cursor iOS agents, motion video, schedule socials, ads.
+- [Cursor + Anomalia MCP (Italian)](https://anomalia.so/it/cursor-mcp-motion-ads) — Playbook corto: MCP Anomalia in Cursor, app iOS Cursor, motion video, social e ads.
+
+### Pricing, FAQ & Use Cases
+
+- [Pricing](https://anomalia.so/pricing) — Per-brand pricing with free trial. Plans from Go (prepare & export) to Pro (full autopilot). See page for current EUR/USD prices.
+- [Pricing (Italian)](https://anomalia.so/it/pricing) — Prezzi per brand con prova gratuita. Piani da Go a Pro.
+- [FAQ — category questions for AI engines](https://anomalia.so/faq) — Answers buyers ask ChatGPT/Perplexity: best AI social media manager, Buffer/Hootsuite alternatives, AI vs agency, GEO/SEO.
+- [FAQ (Italian)](https://anomalia.so/it/faq) — Domande di categoria per i motori AI: miglior AI social media manager, alternative a Buffer/Hootsuite, AI vs agenzia.
+- [Use Cases](https://anomalia.so/usecases) — How Anomalia runs social media for creators, agencies, ecommerce, brands, SaaS, local businesses, coaches, real estate and events.
+- [Use Cases (Italian)](https://anomalia.so/it/usecases) — Come Anomalia gestisce i social media per creator, agenzie, ecommerce, brand, SaaS, local business, coach, immobiliare ed eventi.
+
+### Pain-Point & Feature Pages
+
+- [Social Media Burnout](https://anomalia.so/burnout) — Exhausted from creating content every day? Anomalia takes social media off your plate.
+- [Social Media Burnout (Italian)](https://anomalia.so/it/burnout) — Esausto da creare contenuti ogni giorno? Anomalia si occupa dei tuoi social media.
+- [Autopilot](https://anomalia.so/autopilot) — Set your social media to autopilot without looking robotic. On-brand, human-sounding content.
+- [Autopilot (Italian)](https://anomalia.so/it/autopilot) — Metti i social media in pilota automatico senza sembrare robotico.
+- [Scheduling](https://anomalia.so/scheduling) — Schedule a full week of social media content in minutes. Plans, creates and publishes automatically.
+- [Scheduling (Italian)](https://anomalia.so/it/scheduling) — Pianifica una settimana intera di contenuti in minuti.
+- [Engagement](https://anomalia.so/engagement) — Low engagement? Anomalia creates content your audience actually wants to engage with.
+- [Engagement (Italian)](https://anomalia.so/it/engagement) — Bassa interazione? Anomalia crea contenuti con cui il tuo pubblico vuole davvero interagire.
+- [Consistency](https://anomalia.so/consistency) — Post consistently without the stress. Keeps your social media active every single day.
+- [Consistency (Italian)](https://anomalia.so/it/consistency) — Pubblica con costanza senza stress.
+- [ROI](https://anomalia.so/roi) — Prove social media ROI without the guesswork. Tracks performance and creates content that drives results.
+- [ROI (Italian)](https://anomalia.so/it/roi) — Dimostra il ROI dei social media senza congetture.
+- [Automation](https://anomalia.so/automation) — Automate your entire social media workflow from zero to published.
+- [Automation (Italian)](https://anomalia.so/it/automation) — Automatizza l'intero workflow dei social media.
+- [Caption Writer](https://anomalia.so/caption-writer) — AI caption writer that learns your voice and generates on-brand captions for every platform.
+- [Caption Writer (Italian)](https://anomalia.so/it/caption-writer) — Scrittore di caption AI che impara la tua voce.
+- [Content Ideas](https://anomalia.so/content-ideas) — Never run out of content ideas. Generates fresh, on-brand posts every week.
+- [Content Ideas (Italian)](https://anomalia.so/it/content-ideas) — Non rimandere mai più a corto di idee per i contenuti.
+- [AI vs Human](https://anomalia.so/ai-vs-human) — Can AI replace a social media manager? Creates, schedules and publishes 24/7 at a fraction of the cost.
+- [AI vs Human (Italian)](https://anomalia.so/it/ai-vs-human) — L'AI può sostituire un social media manager?
+- [Posting Schedule](https://anomalia.so/posting-schedule) — Best times to post on social media. Anomalia schedules at optimal times for each platform automatically.
+- [Posting Schedule (Italian)](https://anomalia.so/it/posting-schedule) — I migliori momenti per pubblicare sui social media.
+- [Content Calendar](https://anomalia.so/content-calendar) — Content calendar filled automatically. Never stare at a blank calendar again.
+- [Content Calendar (Italian)](https://anomalia.so/it/content-calendar) — Calendario editoriale riempito automaticamente.
+- [Multiple Accounts](https://anomalia.so/multiple-accounts) — Managing multiple social accounts without losing your mind. One place, all platforms.
+- [Multiple Accounts (Italian)](https://anomalia.so/it/multiple-accounts) — Gestisci più account social da un unico posto.
+- [No Time](https://anomalia.so/no-time) — Too busy running your business for social media? Anomalia creates, plans and posts automatically.
+- [No Time (Italian)](https://anomalia.so/it/no-time) — Non hai tempo per i social media?
+- [Overwhelmed](https://anomalia.so/overwhelmed) — Social media feels overwhelming? Anomalia takes it off your plate.
+- [Overwhelmed (Italian)](https://anomalia.so/it/overwhelmed) — I social media ti sopraffanno?
+- [Not Working](https://anomalia.so/not-working) — Posting randomly with no strategy? Creates a data-driven editorial plan and posts consistently.
+- [Not Working (Italian)](https://anomalia.so/it/not-working) — Il tuo marketing social non funziona?
+- [No Results](https://anomalia.so/no-results) — Posting but getting no results? Creates a strategy-driven content plan that grows your business.
+- [No Results (Italian)](https://anomalia.so/it/no-results) — Pubblichi ma non ottieni risultati?
+- [Can't Afford](https://anomalia.so/cant-afford) — Can't afford a social media manager? AI does the same job for a fraction of the price.
+- [Can't Afford (Italian)](https://anomalia.so/it/cant-afford) — Non puoi permetterti un social media manager?
+
+### Strategy & Analytics
+
+- [Strategy](https://anomalia.so/strategy) — AI-built social media strategy tailored to your brand and market. You approve, it runs.
+- [Strategy (Italian)](https://anomalia.so/it/strategy) — Strategia social media costruita dall'AI, approvata da te.
+- [Analytics](https://anomalia.so/analytics) — Track performance across every platform. See what content works and create more of it.
+- [Analytics (Italian)](https://anomalia.so/it/analytics) — Monitora le performance su ogni piattaforma.
+
+### Free Tools
+
+- [GEO Audit Tool](https://anomalia.so/tools/geo-audit) — Free Generative Engine Optimization audit. Check if ChatGPT, Perplexity, and Google AI can find and cite your website. Get your AI Visibility Score in 30 seconds.
+- [GEO Audit Tool (Italian)](https://anomalia.so/it/tools/geo-audit) — Audit GEO gratuito per la visibilità AI.
+- [GEO Audit Tool (Spanish)](https://anomalia.so/es/tools/geo-audit) — Auditoría GEO gratuita para visibilidad en IA.
+- [GEO Audit Tool (French)](https://anomalia.so/fr/tools/geo-audit) — Audit GEO gratuit pour la visibilité IA.
+- [Best Time to Post](https://anomalia.so/tools/best-time-to-post) — Find the best time to post on Instagram, LinkedIn, TikTok, Facebook, and X. Personalized by region and timezone. Based on latest research data.
+- [Best Time to Post (Italian)](https://anomalia.so/it/tools/best-time-to-post) — Orari migliori per pubblicare, per piattaforma e regione.
+- [Social Media ROI Calculator](https://anomalia.so/tools/social-media-roi) — Calculate how much time and money you spend on social media management. See your potential savings with AI automation.
+- [Caption Length Checker](https://anomalia.so/tools/caption-length) — Check your social media caption length for Instagram, LinkedIn, TikTok, X, and Facebook. See character limits, preview truncation, and optimize your posts.
+- [llms.txt Generator](https://anomalia.so/tools/llms-txt-generator) — Generate an llms.txt file for your website. Help ChatGPT, Perplexity, and Google AI discover and cite your most important pages.
+- [llms.txt Validator](https://anomalia.so/tools/llms-txt-validator) — Validate your llms.txt file. Check if AI engines can properly read and index your site's most important pages.
+- [Sitemap Analyzer](https://anomalia.so/tools/sitemap-analyzer) — Free sitemap.xml analyzer for errors, missing metadata, and SEO issues.
+- Free tools are available in English, Italian (`/it/tools/...`), Spanish (`/es/tools/...`), and French (`/fr/tools/...`).
+
+### Documentation
+
+Every page below is also served as plain Markdown: append `.md` to its URL.
+Examples: https://anomalia.so/docs.md · https://anomalia.so/docs/api.md · https://anomalia.so/it/docs/radar.md
+
+- [Documentation Hub](https://anomalia.so/docs) — Guides, CLI reference, MCP, agent skill, and API docs for the AI social media manager.
+- [Documentation Hub (Italian)](https://anomalia.so/it/docs) — Guide, riferimento CLI, MCP, agent skill e documentazione API.
+- [Brand Memory](https://anomalia.so/docs/brand-memory) — How Anomalia learns your voice, preferences, and what works. Remembers tone, style, corrections, and competitive insights.
+- [Brand Memory (Italian)](https://anomalia.so/it/docs/brand-memory) — Come Anomalia impara la tua voce e le tue preferenze.
+- [Radar](https://anomalia.so/docs/radar) — Monitors news, blogs, and online conversations in your industry and turns them into ready-to-post drafts.
+- [Radar (Italian)](https://anomalia.so/it/docs/radar) — Monitora notizie, blog e conversazioni nel tuo settore.
+- [GTM & Strategy](https://anomalia.so/docs/gtm-strategy) — GTM roadmap with phased growth strategy, voice framework, and per-platform content rules.
+- [GTM & Strategy (Italian)](https://anomalia.so/it/docs/gtm-strategy) — Roadmap GTM con strategia di crescita per fasi.
+- [SEO Growth Advisor](https://anomalia.so/docs/seo-advisor) — Produces a prioritised list of content initiatives (blog posts, landing pages, tools) to grow organic search traffic.
+- [SEO Growth Advisor (Italian)](https://anomalia.so/it/docs/seo-advisor) — Lista priorizzata di iniziative di contenuto per crescere il traffico organico.
+- [GEO Audit](https://anomalia.so/docs/geo-audit) — Check if AI assistants (ChatGPT, Perplexity, Google AI) recommend your brand, and get ready-to-use fixes.
+- [GEO Audit (Italian)](https://anomalia.so/it/docs/geo-audit) — Controlla se le assistenti AI raccomandano il tuo brand.
+- [Brands](https://anomalia.so/docs/brands) — How brands work in Anomalia: setup, multi-brand management, Studio knowledge base, and per-brand subscriptions.
+- [Brands (Italian)](https://anomalia.so/it/docs/brands) — Come funzionano i brand in Anomalia.
+- [Wix Integration](https://anomalia.so/docs/wix) — Publish Anomalia's blog articles directly to your Wix blog on auto-pilot. Step-by-step setup guide.
+- [Wix Integration (Italian)](https://anomalia.so/it/docs/wix) — Pubblica gli articoli del blog direttamente sul tuo blog Wix.
+- [API Reference](https://anomalia.so/docs/api) — REST API reference. Authentication (JWT/API key), endpoints, error handling, and quick start examples.
+- [API — Strategy](https://anomalia.so/docs/api/strategy) — API endpoints for managing brand strategy.
+- [API — Analytics](https://anomalia.so/docs/api/analytics) — API endpoints for retrieving analytics data.
+- [API — Articles](https://anomalia.so/docs/api/articles) — API endpoints for managing articles.
+- [API — Brands](https://anomalia.so/docs/api/brands) — API endpoints for managing brands.
+- [API — Products](https://anomalia.so/docs/api/products) — API endpoints for managing products.
+- [API — Posts](https://anomalia.so/docs/api/posts) — API endpoints for managing posts.
+- [API — Studio](https://anomalia.so/docs/api/studio) — API endpoints for managing Studio knowledge base.
+- [API — Editorial Plan](https://anomalia.so/docs/api/editorial-plan) — API endpoints for managing editorial plans.
+
+- [CLI](https://anomalia.so/docs/cli) — Terminal CLI to manage brands, approve posts, and chat with AI.
+- [CLI (Italian)](https://anomalia.so/it/docs/cli) — CLI da terminale per brand, approvazioni e chat AI.
+- [MCP](https://anomalia.so/docs/mcp) — Model Context Protocol for Cursor/Claude. OAuth only.
+- [MCP (Italian)](https://anomalia.so/it/docs/mcp) — Model Context Protocol per Cursor/Claude. Solo OAuth.
+- [Agent skill](https://anomalia.so/docs/agents) — Publishable skill: prefer MCP tools, CLI fallback.
+- [Agent skill (Italian)](https://anomalia.so/it/docs/agents) — Skill pubblicabile: preferisci MCP, fallback CLI.
+
+### CLI, MCP & Agent skill
+
+- [CLI docs](https://anomalia.so/docs/cli) — Install and use the Anomalia CLI from the terminal.
+- [CLI docs (Italian)](https://anomalia.so/it/docs/cli) — Installa e usa la CLI Anomalia dal terminale.
+- [CLI Installation](https://anomalia.so/install.sh) — Install the Anomalia CLI: `curl -sSL https://anomalia.so/install.sh | bash`
+- [MCP](https://anomalia.so/docs/mcp) — Connect Cursor/Claude via Model Context Protocol (stdio or https://mcp.anomalia.so/mcp). OAuth only — no static API tokens.
+- [MCP (Italian)](https://anomalia.so/it/docs/mcp) — Collega Cursor/Claude via Model Context Protocol. Solo OAuth.
+- [Agent skill](https://anomalia.so/docs/agents) — Install the Anomalia skill (`npx skills add andreabuttarelli/anomalia-cli --skill anomalia`). Prefer MCP tools; fall back to the CLI.
+- [Agent skill (Italian)](https://anomalia.so/it/docs/agents) — Installa lo skill Anomalia. Preferisci MCP; fallback sulla CLI.
+- [anomalia-cli (GitHub)](https://github.com/andreabuttarelli/anomalia-cli) — CLI, MCP server, and publishable agent skill (AGPL-3.0).
+
+### Legal
+
+- [Privacy Policy](https://anomalia.so/privacy) — How Anomalia collects, uses and protects your personal data.
+- [Privacy Policy (Italian)](https://anomalia.so/it/privacy) — Come Anomalia raccoglie, utilizza e protegge i tuoi dati personali.
+- [Terms of Service](https://anomalia.so/terms) — The terms that govern your use of Anomalia.
+- [Terms of Service (Italian)](https://anomalia.so/it/terms) — I termini che disciplinano l'uso di Anomalia.
+- [Cookie Policy](https://anomalia.so/cookies) — How Anomalia uses cookies and similar technologies.
+- [Cookie Policy (Italian)](https://anomalia.so/it/cookies) — Come Anomalia utilizza i cookie e tecnologie simili.
+
+## Pricing Summary
+
+Per-brand billing. Free trial on paid plans. Cancel anytime.
+
+Current public plans (see https://anomalia.so/pricing for live EUR/USD amounts):
+
+| Plan | Role |
+|------|------|
+| Go | Prepare & export — you publish |
+| Starter | Autopilot for one brand getting consistent |
+| Pro | Full autonomous manager — more posts, leads, radar |
+
+Category FAQ (best AI social media manager, alternatives to Buffer/Hootsuite, AI vs agency): https://anomalia.so/faq
+Full pricing details: https://anomalia.so/pricing
+
+## Use Cases
+
+Creators · Agencies · Ecommerce · Brands · SaaS · Local business · Coaches · Real estate · Events
+
+Full breakdown with specific benefits per segment: https://anomalia.so/usecases
+
+## Languages
+
+English · Italian
+
+All public pages are available in both languages. English pages are at the root path (e.g. `/pricing`), Italian pages are prefixed with `/it/` (e.g. `/it/pricing`).
+
+## Contact
+
+Website: https://anomalia.so
+Privacy: privacy@anomalia.so

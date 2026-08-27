@@ -1,0 +1,409 @@
+/**
+ * Chat message cells — user stays bubbled; assistant is free-flowing full-width
+ * within the chat column. Horizontal scroll for wide markdown (tables, pre, URLs).
+ * Imported by ChatColumn, thread page, ChatLiveStatus.
+ *
+ * UNICA fonte della tipografia dei messaggi (base + markdown renderizzato da
+ * chat-markdown.ts). Prima viveva duplicata negli <style> scoped delle due
+ * superfici: nella thread page era scritta senza :global() e quindi il compilatore
+ * la scartava come "unused" (heading serif a grandezza UA, liste senza rientro),
+ * e ChatLiveStatus non ne aveva affatto. Qui vale per tutti e tre i consumatori.
+ *
+ * Plain global CSS (not Svelte-scoped) — do NOT use :global() here.
+ */
+
+/* ---------------- Il turno dell'agente: gutter + bolla ----------------
+   Il volto vive in una colonna sua a sinistra del turno, non nel flusso: così TUTTO
+   quello che il turno produce (bolla, chip, card, righe di servizio) resta allineato
+   sotto lo stesso margine, e l'avatar non fa saltare la prima riga di testo.
+   `position: absolute` e non un flex-row perché i figli del turno sono decine e
+   alcuni si centrano da soli (`align-self: center`): una riga in più li spezzerebbe.
+   Il volto però non si ancora al turno ma alla sua prima bolla (`.chat-turn-line`). */
+.chat-turn {
+  --chat-gutter: 38px;
+  position: relative;
+}
+
+/* La riga di UNA bolla di testo. Ci vive quello che appartiene alla risposta parlata e non
+   al turno intero: il volto (sulla prima bolla) e la riga delle azioni (sull'ultima).
+   Prima erano figli diretti di `.chat-turn`, quindi si incollavano in cima e in coda a
+   TUTTO: un turno che comincia col ragionamento o con una chip mostrava l'avatar accanto
+   al vuoto, e uno che finisce con una fonte o una card aveva le azioni appese a quella
+   riga invece che alla frase. L'ordine cronologico del turno non cambia: cambia solo a
+   cosa i due si agganciano. */
+.chat-turn-line {
+  position: relative;
+  /* Il gutter vive QUI, non su `.chat-turn`. Con il padding sul turno, tutto ciò che si
+     centra da solo (`align-self: center`: chip dei tool, fonti, riga dell'obiettivo, DM,
+     eventi di routine) si centrava dentro la scatola già rientrata di 38px — cioè 19px
+     a destra del centro vero della chat. Da fuori si legge come "quel label non è
+     centrato", ed è esattamente così: era centrato rispetto alla cosa sbagliata.
+     Spostandolo sulla riga della bolla, le bolle restano rientrate e gli eventi di
+     sistema si centrano sulla colonna intera, che è la loro. */
+  padding-left: var(--chat-gutter);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.chat-turn-face {
+  position: absolute;
+  /* Dentro il gutter che la riga stessa tiene libero a sinistra: `left: 0` cade sul bordo
+     esterno del padding, quindi il volto occupa quello spazio senza uscire dalla colonna. */
+  left: 0;
+  /* Allineato alla PRIMA riga di testo della bolla (padding 12px + mezza riga), non al
+     bordo superiore: è lì che l'occhio cerca chi parla. */
+  top: 2px;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* Cappello di misura per ciò che NON è la bolla: senza limite sulla colonna, su 1920px
+   una griglia di anteprime o una card larga si stirerebbe per tutto lo schermo. Sta qui,
+   PRIMA di `.chat-msg-cell`, così la misura più stretta della bolla (sotto) vince a parità
+   di specificità. Le card che hanno già un limite proprio (team 460, artefatto 560…) lo
+   tengono: questo è solo il tetto. */
+.chat-turn > * {
+  max-width: min(100%, 780px);
+}
+
+/* ECCEZIONE: il turno VIVO non è un blocco di contenuto, è il CONTENITORE di un turno intero
+   (bolle, chip, ragionamento, avatar). Preso dal cappello qui sopra si fermava a 780px mentre
+   il turno stava a 1332, e tutto quello che dentro si centra da solo si centrava su quella
+   scatola: misurato a 1600px, la riga "N actions taken" stava a 634 durante lo streaming e a
+   910 — il centro vero della chat — appena il turno finiva. Cioè il label si spostava di 276px
+   da solo, alla fine della risposta, ed è esattamente il difetto segnalato ("centrato rispetto
+   alla width max delle bolle, non alla pagina").
+   Il cappello quindi scende di un livello, sui FIGLI del turno vivo, e resta scritto prima di
+   `.chat-msg-cell` con la stessa specificità (0,1,0) — così la misura di lettura della bolla,
+   più stretta, continua a vincere per ordine di sorgente, esattamente come sopra. */
+.chat-turn > .live-status {
+  max-width: none;
+}
+.live-status > * {
+  max-width: min(100%, 780px);
+}
+
+/* E il gutter, per ciò che nel turno vivo è ancora figlio diretto di `.live-status` invece che
+   di `.chat-turn-line`. Le bolle non sono più qui dentro: da quando ChatLiveStatus le disegna
+   nella stessa `.chat-turn-line` del turno finito, il rientro glielo dà quella — una regola sola
+   per i due stati, invece di due che si devono somigliare. Il ragionamento resta figlio diretto,
+   e il rientro va solo a lui: chip e fonti restano non rientrate, che è ciò che le tiene
+   centrate sulla pagina. */
+.live-status > .reasoning-block {
+  margin-left: var(--chat-gutter);
+}
+
+/* Risposta dell'agente — bolla, come nel mockup: fondo tenue, niente bordo, angolo
+   in alto a sinistra smussato verso l'avatar. */
+.chat-msg-cell {
+  align-self: flex-start;
+  width: fit-content;
+  /* Misura di lettura: il limite vive QUI, sulla bolla, non più sulla colonna (che ora va a
+     piena larghezza). 75ch ≈ 90 caratteri reali con Inter — il tetto della fascia comoda:
+     più stretto (il mockup sta a 46ch) e una risposta con tabelle diventa un nastro altissimo. */
+  max-width: min(75ch, 100%);
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 16px;
+  border-top-left-radius: 6px;
+  background: var(--paper-3);
+  color: var(--ink);
+  font-size: 13.5px;
+  /* I paragrafi del markdown sono righe + <br>, quindi tutto il ritmo verticale
+     del corpo vive nel line-height: 1.6 (era 1.55). */
+  line-height: 1.6;
+  /* Il body globale traccia a -0.05em (valore da display, eredità Space Grotesk):
+     a 13.5–15px Inter diventa un muro. Qui si riapre appena sopra lo zero. */
+  letter-spacing: 0.01em;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Niente margine fra due bolle consecutive: il ritmo verticale lo dà il `gap` del turno
+   (12px, come nel mockup) — sommarci 10px faceva respirare il doppio proprio le risposte
+   che il modello spezza in più blocchi. */
+
+/* User bubble — filled chip, right-aligned by the parent wrap.
+   Stessa base tipografica dell'assistant (size/tracking), solo il chrome cambia. */
+.chat-msg-cell-user {
+  box-sizing: border-box;
+  width: fit-content;
+  /* Stessa misura della bolla dell'agente: senza cappello sulla colonna, un messaggio
+     lungo dell'utente si stirerebbe per tutto lo schermo. */
+  max-width: min(75ch, 100%);
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-solid) 55%, transparent);
+  border-radius: 16px;
+  border-bottom-right-radius: 5px;
+  /* --accent-solid e non --accent: il bianco sull'accento pieno stava a 2,58:1 (app.css). */
+  background: var(--accent-solid);
+  color: #fff;
+  font-size: 13.5px;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  cursor: default;
+  user-select: text;
+}
+
+/* Desktop only: a notch larger — the owner reads long replies here; mobile (15px sotto) è già a posto. */
+@media (min-width: 768px) {
+  .chat-msg-cell,
+  .chat-msg-cell-user {
+    font-size: 14.5px;
+  }
+}
+
+/* ---------------- Markdown dentro i messaggi ---------------- */
+
+/* app.css veste h1/h2 come display (serif/--heading-weight/-0.04em): dentro un
+   messaggio i titoli restano corpo testo — famiglia ereditata, scala contenuta. */
+.chat-msg h1,
+.chat-msg h2,
+.chat-msg h3,
+.chat-msg h4 {
+  font-family: inherit;
+  margin: 14px 0 6px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.chat-msg h1 { font-size: 1.25em; }
+.chat-msg h2 { font-size: 1.15em; }
+.chat-msg h3 { font-size: 1.05em; }
+.chat-msg h4 { font-size: 1em; }
+
+/* Il reset di Tailwind azzera list-style su ul/ol: senza queste due righe una lista in chat
+   arriva senza pallini ne' numeri e si legge come testo mal formattato, non come elenco. */
+.chat-msg ul {
+  margin: 6px 0;
+  padding-left: 20px;
+  list-style: disc outside;
+}
+
+.chat-msg ol {
+  margin: 6px 0;
+  padding-left: 22px;
+  list-style: decimal outside;
+}
+
+.chat-msg ul ul {
+  list-style: circle outside;
+}
+
+.chat-msg li { margin: 3px 0; }
+
+.chat-msg strong { font-weight: 650; }
+
+.chat-msg a {
+  /* Sul fondo della bolla l'accento puro non passa AA in chiaro: variante leggibile. */
+  color: var(--accent-ink);
+  text-decoration: underline;
+}
+
+/* Post cards are wrapped in a button that opens the lightbox — not a markdown link. */
+.chat-msg .post-preview-link,
+.chat-msg .post-preview-link * {
+  color: inherit;
+  text-decoration: none;
+}
+
+.chat-msg code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  letter-spacing: 0;
+  background: var(--paper-2);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.chat-msg pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.chat-msg blockquote {
+  margin: 8px 0;
+  padding: 4px 0 4px 12px;
+  border-left: 3px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.chat-msg hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 12px 0;
+}
+
+.chat-msg table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.chat-msg th,
+.chat-msg td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.chat-msg th {
+  background: var(--paper-2);
+  font-weight: 650;
+}
+
+.chat-msg tr:last-child td { border-bottom: none; }
+/* Zebra su token, non rgba(0,0,0): visibile anche su tema scuro. */
+.chat-msg tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+/* Badge colore (chat-markdown.ts decorateColorCodes) — feedback di copia. */
+.chat-msg .chat-color-badge {
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.chat-msg .chat-color-badge:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
+}
+.chat-msg .chat-color-badge:active {
+  transform: scale(0.97);
+}
+.chat-msg .chat-color-badge[data-copied='1'] {
+  border-color: color-mix(in srgb, #16a34a 45%, transparent) !important;
+  background: color-mix(in srgb, #16a34a 12%, transparent) !important;
+}
+
+/* Wide markdown blocks scroll inside the cell. */
+.chat-msg-cell .md-table-wrap,
+.chat-msg-cell pre {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-msg-cell .md-table-wrap {
+  margin: 10px 0;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+
+.chat-msg-cell pre {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--paper);
+}
+
+/* Dentro la bolla il fondo non è più `--paper`: `--paper-2` (il fondo di codice, `th` e
+   filetti fuori dalla bolla) su `--paper-3` è invisibile in chiaro. Si scende di un
+   gradino — `--paper` per le superfici, `--line-2` per i filetti — e il contrasto
+   funziona in entrambi i temi senza una seconda palette. */
+.chat-msg-cell code,
+.chat-msg-cell th {
+  background: var(--paper);
+}
+
+.chat-msg-cell pre code {
+  background: none;
+}
+
+.chat-msg-cell th,
+.chat-msg-cell td {
+  border-bottom-color: var(--line-2);
+  /* La bolla spezza le parole (`word-break: break-word`, serve per gli URL): in una tabella
+     stretta diventava "Forma/to", "Owne/r". Nelle celle si torna a capo solo fra parole —
+     se poi la tabella non ci sta comunque, scorre dentro `.md-table-wrap`. */
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.chat-msg-cell blockquote {
+  border-left-color: var(--line-2);
+}
+
+.chat-msg-cell hr {
+  border-top-color: var(--line-2);
+}
+
+.chat-msg-cell img,
+.chat-msg-cell .md-img img {
+  border-color: var(--line-2);
+}
+
+/* Markdown images from the AI — keep compact in the thread; click to zoom. */
+.chat-msg-cell .md-img,
+.chat-msg .md-img {
+  margin: 10px 0;
+  max-width: 220px;
+  width: fit-content;
+}
+
+.chat-msg-cell img,
+.chat-msg img,
+img.chat-zoomable {
+  display: block;
+  max-width: min(220px, 100%);
+  max-height: min(180px, 32dvh);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  -webkit-tap-highlight-color: transparent;
+}
+
+img.chat-zoomable {
+  cursor: zoom-in;
+}
+
+@media (max-width: 767px) {
+  /* Su mobile l'avatar a sinistra della bolla AI costa 38px di gutter su uno
+     schermo già stretto. Si toglie il volto e il rientro: le bolle partono dal
+     bordo della colonna, come i messaggi utente sul lato opposto. */
+  .chat-turn {
+    --chat-gutter: 0;
+  }
+
+  .chat-turn-face {
+    display: none;
+  }
+
+  /* L'angolo smussato verso l'avatar non ha più un volto a cui puntare. */
+  .chat-msg-cell {
+    border-top-left-radius: 16px;
+  }
+
+  .chat-msg-cell,
+  .chat-msg-cell-user {
+    font-size: 15px;
+  }
+
+  .chat-msg-cell .md-img,
+  .chat-msg .md-img {
+    max-width: 180px;
+  }
+
+  .chat-msg-cell img,
+  .chat-msg img,
+  img.chat-zoomable {
+    max-width: min(180px, 100%);
+    max-height: min(140px, 28dvh);
+  }
+}

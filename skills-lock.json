@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "anomalia": {
+      "source": "andreabuttarelli/anomalia-cli",
+      "sourceType": "github",
+      "skillPath": "skills/anomalia/SKILL.md",
+      "computedHash": "344d850749e5dce157c886effa52e1d2691516d8ce3ee4f0d33bf38d6fd6edf6"
+    },
+    "composio": {
+      "source": "ComposioHQ/composio",
+      "sourceType": "github",
+      "skillPath": "skills/composio/SKILL.md",
+      "computedHash": "7a41fbd11708e8e18acff2873e945c42f40c9bd290a19251ae0a24b8d9e3ec54"
+    }
+  }
+}

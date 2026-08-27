@@ -1,0 +1,90 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# sveltekit / vite build
+.svelte-kit/
+build/
+dist/
+.vercel/
+.output/
+
+# test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# local seedboard / generated media packs (use Cloud Agent artifacts or storage)
+artifacts/
+
+# supabase local
+supabase/.branches/
+supabase/.temp/
+
+# os / editor
+.DS_Store
+
+# Scratch output dei giri manuali (video e still di prova): pesa decine di MB.
+tmp/
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.vercel
+
+# Claude Code local config
+.claude/
+!.claude/skills/
+!.claude/skills/**
+
+# Sentry Config File
+.env.sentry-build-plugin
+
+# Worker bundle (esbuild output)
+build-worker/
+
+# Screenshot dei check nel browser (scripts/*-check.mjs): artefatti locali, mai in repo.
+scripts/.shots/
+
+# Libreria di animazioni: i video e i fotogrammi si CUOCIONO (`npm run bake:motion-library`), non si
+# versionano — 46 MB di binari rigenerabili. Il sorgente sì: è quello che l'agente copia.
+# Conseguenza da tenere presente: su un clone fresco `preview.mp4` non c'è, quindi un test che ne
+# pretende l'esistenza va legato alla cottura, non al checkout.
+src/lib/motion-video/library/**/preview.mp4
+src/lib/motion-video/library/**/stills/
+
+# Export di sessioni AI (conversazioni, dossier) lasciati in root: appunti, mai da versionare.
+session-ses_*.md
+/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.txt
+
+# Output degli script strategy-runs/*.mjs|.ts (run.json/run.md di prova): locali, rigenerabili.
+strategy-runs/
+
+# Cartella comparsa per un path letterale "undefined" in uno script (bug, non feature): mai screenshot qui.
+undefined/
+
+# Asset esterni (ads, trailer) con contenuti pesanti/non di codice: vivono fuori dal repo pubblico.
+/ads-assets/
+/trailer/
+
+# Rapporti della valutazione degli agenti (`npm run eval`): trascrizioni VERE di turni su brand
+# di prova, system prompt interi e output dei tool. Locali, mai in repo.
+eval-results/
+
+# Log di coordinamento fra agenti e appunti di lavoro: nomi, decisioni, incidenti interni.
+AGENT-CHAT-*.md
+*-senti-non-mi-sta-piacendo*.txt
+
+# Config locali degli strumenti agente: contengono endpoint e progetti vendor interni.
+CLAUDE.md
+/opencode.json
+/mimocode.jsonc
+/mcp.json
+/.mcp.json
+.mimocode/

@@ -1,0 +1,142 @@
+{
+  "posts/1-carousel-pullback": {
+    "renders": true,
+    "at": "2026-08-22T20:21:29.005Z",
+    "sourceHash": "ab6c3bd774800ae9",
+    "kb": 1867,
+    "stills": 5
+  },
+  "posts/2-media-wall": {
+    "renders": true,
+    "at": "2026-08-22T20:22:07.022Z",
+    "sourceHash": "1964498fe5abf771",
+    "kb": 6571,
+    "stills": 5
+  },
+  "posts/3-stack-flat": {
+    "renders": true,
+    "at": "2026-08-22T20:22:44.746Z",
+    "sourceHash": "a91ba521889cbbcb",
+    "kb": 2727,
+    "stills": 4
+  },
+  "posts/4-coverflow": {
+    "renders": true,
+    "at": "2026-08-22T20:23:12.480Z",
+    "sourceHash": "754ad16a1edd06d6",
+    "kb": 2802,
+    "stills": 4
+  },
+  "posts/5-rolodex": {
+    "renders": true,
+    "at": "2026-08-22T20:23:40.945Z",
+    "sourceHash": "88af0ce8ee672b5a",
+    "kb": 2861,
+    "stills": 4
+  },
+  "posts/6-triptych": {
+    "renders": true,
+    "at": "2026-08-22T20:24:07.013Z",
+    "sourceHash": "acc609f9e80f0caa",
+    "kb": 2284,
+    "stills": 4
+  },
+  "posts/7-corridor": {
+    "renders": true,
+    "at": "2026-08-22T20:24:35.181Z",
+    "sourceHash": "db10dc4c9e85ca5d",
+    "kb": 2567,
+    "stills": 4
+  },
+  "space/1-flythrough": {
+    "renders": true,
+    "at": "2026-08-24T10:19:23.334Z",
+    "sourceHash": "c2a38aec6e9352ab",
+    "kb": 651,
+    "stills": 7
+  },
+  "space/2-orbit-360": {
+    "renders": true,
+    "at": "2026-08-24T10:20:00.014Z",
+    "sourceHash": "92568188c9ab2f77",
+    "kb": 1928,
+    "stills": 8
+  },
+  "space/3-pullback-dive": {
+    "renders": true,
+    "at": "2026-08-24T10:20:31.172Z",
+    "sourceHash": "e3d9fd6fa0e02471",
+    "kb": 1170,
+    "stills": 7
+  },
+  "space/4-nested-zoom": {
+    "renders": true,
+    "at": "2026-08-24T10:23:30.810Z",
+    "sourceHash": "802395d9530b13ec",
+    "kb": 772,
+    "stills": 7
+  },
+  "text/1-typing": {
+    "renders": true,
+    "at": "2026-08-22T20:25:03.280Z",
+    "sourceHash": "a81a39c3440d205c",
+    "kb": 462,
+    "stills": 4
+  },
+  "text/2-word-by-word": {
+    "renders": true,
+    "at": "2026-08-22T20:25:24.802Z",
+    "sourceHash": "11181663a51c6ea7",
+    "kb": 807,
+    "stills": 4
+  },
+  "text/3-line-mask-rise": {
+    "renders": true,
+    "at": "2026-08-22T20:25:50.274Z",
+    "sourceHash": "580e4be91ca97394",
+    "kb": 597,
+    "stills": 5
+  },
+  "text/4-accent-snap": {
+    "renders": true,
+    "at": "2026-08-22T20:26:13.237Z",
+    "sourceHash": "0d676a96c14ca383",
+    "kb": 459,
+    "stills": 5
+  },
+  "transitions/1-slide-up": {
+    "renders": true,
+    "at": "2026-08-22T20:26:27.045Z",
+    "sourceHash": "699aa3f258bf4786",
+    "kb": 296,
+    "stills": 2
+  },
+  "transitions/2-slide-left": {
+    "renders": true,
+    "at": "2026-08-22T20:26:40.865Z",
+    "sourceHash": "38ef371b4d7c0678",
+    "kb": 285,
+    "stills": 2
+  },
+  "transitions/3-slide-right": {
+    "renders": true,
+    "at": "2026-08-22T20:26:54.764Z",
+    "sourceHash": "c4fa8b74808a9191",
+    "kb": 287,
+    "stills": 2
+  },
+  "transitions/4-word-zoom-fill": {
+    "renders": true,
+    "at": "2026-08-22T20:27:18.673Z",
+    "sourceHash": "d466d172fb44c5a4",
+    "kb": 380,
+    "stills": 5
+  },
+  "transitions/5-shrink-to-dot": {
+    "renders": true,
+    "at": "2026-08-22T20:27:42.214Z",
+    "sourceHash": "8c83cfcde8d5e87a",
+    "kb": 274,
+    "stills": 5
+  }
+}

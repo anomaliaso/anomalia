@@ -1,0 +1,227 @@
+/* ============================================================
+   Tailwind v4 + shadcn-svelte — DASHBOARD ONLY.
+   Imported solely from the /app layout so Tailwind's preflight
+   and utilities never touch the hand-rolled marketing pages.
+
+   The shadcn design tokens are prefixed `--sh-*` so they never
+   collide with the brand tokens in app.css (both define `--accent`).
+   The brand tokens (--paper/--ink/--accent/--line) already flip
+   with [data-theme="dark"], so the mapped shadcn tokens inherit
+   dark mode for free — only literal values (destructive) need an
+   explicit dark override.
+   ============================================================ */
+
+/* `important` is required: app.css ships an un-layered global reset
+   `* { margin:0; padding:0 }`. Per CSS cascade-layer rules, un-layered styles always
+   beat layered ones, so Tailwind's layered utilities (p-*, gap-*, m-*) would otherwise
+   be killed by that reset. Marking utilities !important fixes it — and since this file
+   is imported ONLY under /app, the !important stays scoped to the dashboard. */
+@import 'tailwindcss' important;
+@import 'tw-animate-css';
+
+/* Hook shadcn's `dark:` variant onto our existing data-theme attribute
+   instead of the default `.dark` class. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --sh-background: var(--paper);
+  --sh-foreground: var(--ink);
+  --sh-card: var(--paper-2);
+  --sh-card-foreground: var(--ink);
+  --sh-popover: var(--paper-2);
+  --sh-popover-foreground: var(--ink);
+  --sh-primary: var(--accent);
+  --sh-primary-foreground: #fff;
+  --sh-secondary: var(--paper-3);
+  --sh-secondary-foreground: var(--ink);
+  --sh-muted: var(--paper-2);
+  --sh-muted-foreground: var(--ink-soft);
+  --sh-accent: var(--paper-3); /* shadcn's subtle hover bg, NOT the brand pink */
+  --sh-accent-foreground: var(--ink);
+  --sh-destructive: #c0392b;
+  --sh-destructive-foreground: #fff;
+  --sh-border: var(--line);
+  --sh-input: var(--line);
+  --sh-ring: var(--accent);
+  --radius: 0.75rem;
+  /* App shell sidebar — light tint toward brand accent-2 (see --sidebar-bg in app.css). */
+  --sh-sidebar: var(--sidebar-bg);
+  --sh-sidebar-foreground: var(--ink);
+  --sh-sidebar-primary: var(--accent);
+  --sh-sidebar-primary-foreground: #fff;
+  /* Soft hover wash (not a solid dark fill). */
+  --sh-sidebar-accent: color-mix(in srgb, var(--accent) 10%, transparent);
+  --sh-sidebar-accent-foreground: var(--ink);
+  --sh-sidebar-border: var(--sidebar-line, var(--line));
+  --sh-sidebar-ring: var(--accent);
+}
+
+[data-theme='dark'] {
+  --sh-destructive: #f87171;
+  --sh-sidebar-accent: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+@theme inline {
+  --color-background: var(--sh-background);
+  --color-foreground: var(--sh-foreground);
+  --color-card: var(--sh-card);
+  --color-card-foreground: var(--sh-card-foreground);
+  --color-popover: var(--sh-popover);
+  --color-popover-foreground: var(--sh-popover-foreground);
+  --color-primary: var(--sh-primary);
+  --color-primary-foreground: var(--sh-primary-foreground);
+  --color-secondary: var(--sh-secondary);
+  --color-secondary-foreground: var(--sh-secondary-foreground);
+  --color-muted: var(--sh-muted);
+  --color-muted-foreground: var(--sh-muted-foreground);
+  --color-accent: var(--sh-accent);
+  --color-accent-foreground: var(--sh-accent-foreground);
+  --color-destructive: var(--sh-destructive);
+  --color-destructive-foreground: var(--sh-destructive-foreground);
+  --color-border: var(--sh-border);
+  --color-input: var(--sh-input);
+  --color-ring: var(--sh-ring);
+
+  --color-sidebar: var(--sh-sidebar);
+  --color-sidebar-foreground: var(--sh-sidebar-foreground);
+  --color-sidebar-primary: var(--sh-sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sh-sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sh-sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sh-sidebar-accent-foreground);
+  --color-sidebar-border: var(--sh-sidebar-border);
+  --color-sidebar-ring: var(--sh-sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--sans);
+  --font-serif: var(--serif);
+}
+
+@layer base {
+  * {
+    border-color: var(--sh-border);
+  }
+}
+
+/* ── Sidebar first-render fix ──────────────────────────────────────
+   On client-side navigation the sidebar cookie may not match the SSR
+   default, causing a visible width animation. The provider sets
+   data-no-transition on mount; we kill all transitions inside it for
+   that single frame so the layout snaps instantly. ─────────────── */
+[data-slot="sidebar-wrapper"][data-no-transition] [data-slot="sidebar-gap"],
+[data-slot="sidebar-wrapper"][data-no-transition] [data-slot="sidebar-container"] {
+  transition: none !important;
+}
+
+/* ---------- Docs typography (.docs-prose) ---------- */
+.docs-prose h1 {
+  @apply font-serif text-[clamp(28px,5vw,38px)] leading-[1.12] mb-3;
+  font-weight: var(--heading-weight);
+  letter-spacing: var(--heading-tracking);
+}
+.docs-prose .docs-lead {
+  @apply text-[17px] text-muted-foreground leading-relaxed mb-8;
+}
+.docs-prose h2 {
+  @apply font-serif text-xl mt-10 mb-3 pt-4 border-t border-transparent;
+  font-weight: var(--heading-weight);
+  letter-spacing: var(--heading-tracking);
+}
+.docs-prose h2:first-of-type {
+  @apply border-t-0 pt-0 mt-0;
+}
+.docs-prose h3 {
+  @apply text-base font-semibold mt-7 mb-2;
+}
+.docs-prose p {
+  @apply text-[15.5px] leading-[1.7] text-muted-foreground mb-4;
+}
+.docs-prose ul,
+.docs-prose ol {
+  @apply text-[15.5px] leading-[1.7] text-muted-foreground mb-4 pl-6;
+}
+.docs-prose li {
+  @apply mb-1.5;
+}
+.docs-prose a {
+  @apply text-primary no-underline hover:underline;
+}
+.docs-prose strong {
+  @apply font-semibold text-foreground;
+}
+.docs-prose hr {
+  @apply border-0 border-t border-transparent my-9;
+}
+.docs-prose code {
+  @apply font-mono text-[13px] bg-muted border border-border rounded-md px-1.5 py-0.5;
+}
+.docs-prose pre {
+  @apply bg-muted border border-border rounded-xl px-5 py-4 overflow-x-auto mb-4;
+}
+.docs-prose pre code {
+  @apply bg-transparent border-0 p-0 text-[13px];
+}
+.docs-prose table {
+  @apply w-full border-collapse mb-4 text-[14.5px];
+}
+.docs-prose th,
+.docs-prose td {
+  @apply text-left py-2.5 px-3 border-b border-border;
+}
+.docs-prose th {
+  @apply font-semibold text-muted-foreground text-xs uppercase tracking-wider;
+}
+.docs-prose .docs-note {
+  @apply bg-primary/5 border border-primary/15 rounded-[10px] px-[18px] py-3.5 text-[14.5px] text-muted-foreground mb-4 leading-relaxed;
+}
+.docs-prose .docs-note strong {
+  @apply text-primary;
+}
+.docs-prose .docs-steps {
+  @apply mb-4;
+  counter-reset: step;
+}
+.docs-prose .docs-step {
+  @apply relative pl-10 mb-6;
+}
+.docs-prose .docs-step::before {
+  counter-increment: step;
+  content: counter(step);
+  @apply absolute left-0 top-0 w-7 h-7 rounded-full bg-primary/10 text-primary text-[13px] font-bold flex items-center justify-center;
+}
+.docs-prose .docs-step h3 {
+  @apply mt-0.5;
+}
+.docs-prose .docs-breadcrumb {
+  @apply text-[13px] text-muted-foreground mb-5;
+}
+.docs-prose .docs-breadcrumb a {
+  @apply text-primary no-underline hover:underline;
+}
+.docs-prose .docs-breadcrumb span {
+  @apply mx-1.5 opacity-40;
+}
+.docs-prose .docs-pager {
+  @apply flex gap-4 mt-14 pt-6 border-t border-border;
+}
+.docs-prose .docs-pager a {
+  @apply flex-1 p-3.5 px-4 border border-border rounded-[10px] no-underline hover:border-primary hover:bg-primary/[0.04] transition-colors;
+}
+.docs-prose .docs-pager-label {
+  @apply text-xs text-muted-foreground mb-1;
+}
+.docs-prose .docs-pager-title {
+  @apply text-sm font-semibold text-foreground;
+}
+.docs-prose .docs-pager a.next {
+  @apply text-right;
+}
+.docs-prose .docs-pager a.next:only-child {
+  @apply ml-auto max-w-[calc(50%-0.5rem)];
+}
+.docs-prose .docs-pager a.prev:only-child {
+  @apply max-w-[calc(50%-0.5rem)];
+}

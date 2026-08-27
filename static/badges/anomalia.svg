@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="168" height="36" viewBox="0 0 168 36" role="img" aria-label="Made with Anomalia">
+  <title>Made with Anomalia</title>
+  <rect x="0.5" y="0.5" width="167" height="35" rx="18" fill="#ffffff" stroke="#e5e5e5"/>
+  <rect x="6" y="5" width="26" height="26" rx="8" fill="#111111"/>
+  <text x="19" y="22.5" text-anchor="middle" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="9" font-weight="700" letter-spacing="-0.4">0?1</text>
+  <text x="42" y="15" fill="#888888" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="9">Made with</text>
+  <text x="42" y="27" fill="#111111" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="12" font-weight="700">Anomalia</text>
+</svg>

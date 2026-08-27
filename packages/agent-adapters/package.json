@@ -1,0 +1,31 @@
+{
+  "name": "@anomalia/agent-adapters",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./brand-fs": "./src/brand-fs.ts",
+    "./brand-fs-emulator": "./src/brand-fs-emulator.ts",
+    "./checkpoint-emulator": "./src/checkpoint-emulator.ts",
+    "./checkpoint-storage": "./src/checkpoint-storage.ts",
+    "./graphical-bootstrap": "./src/graphical-bootstrap.ts",
+    "./memory-emulator": "./src/memory-emulator.ts",
+    "./memory-postgres": "./src/memory-postgres.ts",
+    "./sandbox-emulator": "./src/sandbox-emulator.ts",
+    "./vercel-sandbox": "./src/vercel-sandbox.ts",
+    "./runtime/ai-runtime": "./src/runtime/ai-runtime.ts",
+    "./runtime/harness-runtime": "./src/runtime/harness-runtime.ts",
+    "./runtime/models": "./src/runtime/models.ts"
+  },
+  "dependencies": {
+    "@anomalia/agent-kit": "*",
+    "@supabase/supabase-js": "^2.46.1",
+    "ai": "^6.0.207",
+    "@ai-sdk/openai": "^3.0.72",
+    "@ai-sdk/harness": "^1.0.86",
+    "@ai-sdk/harness-claude-code": "^1.0.89",
+    "@ai-sdk/harness-pi": "^1.0.88",
+    "@ai-sdk/sandbox-just-bash": "^1.0.86",
+    "@ai-sdk/sandbox-vercel": "^1.0.86"
+  }
+}

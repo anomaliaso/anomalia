@@ -1,0 +1,1011 @@
+{
+  "common": {
+    "eyebrow": "Free Tool",
+    "navCta": "Get Started",
+    "urlPlaceholder": "https://yourwebsite.com",
+    "errors": {
+      "generic": "Something went wrong",
+      "network": "Network error — please try again."
+    },
+    "cta": {
+      "tryFree": "Try Anomalia Free"
+    },
+    "severity": {
+      "high": "high",
+      "medium": "medium",
+      "low": "low"
+    },
+    "missing": "Missing",
+    "truncated": "...(truncated)",
+    "fixLabel": "Fix:",
+    "kw": {
+      "keyword": "Keyword",
+      "volume": "Volume",
+      "difficulty": "Difficulty",
+      "cpc": "CPC",
+      "you": "You",
+      "them": "Them"
+    }
+  },
+  "geo-audit": {
+    "meta": {
+      "title": "Free GEO Audit Tool — Check Your AI Visibility Score | Anomalia",
+      "description": "Free Generative Engine Optimization audit. Check if ChatGPT, Perplexity, and Google AI can find and cite your website. Get your AI Visibility Score in 30 seconds.",
+      "ogTitle": "Free GEO Audit Tool — Check Your AI Visibility Score",
+      "ogDescription": "Check if ChatGPT, Perplexity, and Google AI can find and cite your website. Free, instant, no signup.",
+      "twitterTitle": "Free GEO Audit Tool — Check Your AI Visibility Score",
+      "twitterDescription": "Check if ChatGPT, Perplexity, and Google AI can find and cite your website. Free, instant, no signup.",
+      "schemaName": "GEO Audit Tool",
+      "schemaDescription": "Free Generative Engine Optimization audit. Check if AI engines can find and cite your website."
+    },
+    "hero": {
+      "title": "GEO Audit Tool",
+      "subhead": "Can ChatGPT, Perplexity, and Google AI find and cite your website?",
+      "subheadLine2": "Paste your URL and get your AI Visibility Score in 30 seconds."
+    },
+    "form": {
+      "submit": "Run Audit",
+      "loading": "Scanning..."
+    },
+    "score": {
+      "excellent": "Excellent",
+      "good": "Good",
+      "needsWork": "Needs Work",
+      "critical": "Critical",
+      "forUrl": "AI Visibility Score for {url}",
+      "loadedIn": "Page loaded in {ms}ms"
+    },
+    "issues": {
+      "title": "Issues Found ({count})"
+    },
+    "crawlers": {
+      "title": "AI Crawler Access",
+      "desc": "These bots feed ChatGPT, Perplexity, Google AI, and more. If blocked, your site is invisible to AI."
+    },
+    "content": {
+      "title": "Content Quality",
+      "titleLabel": "Title",
+      "titleLength": "Title Length",
+      "metaDescription": "Meta Description",
+      "h1": "H1 Tags",
+      "wordCount": "Word Count",
+      "textRatio": "Text/HTML Ratio",
+      "imagesAlt": "Images with Alt",
+      "internalLinks": "Internal Links",
+      "qaBlocks": "FAQ/Q&A Blocks",
+      "htmlLang": "HTML Lang",
+      "chars": "{count} chars",
+      "percent": "{value}%",
+      "imagesRatio": "{shown}/{total}"
+    },
+    "structuredData": {
+      "title": "Structured Data (JSON-LD)",
+      "empty": "No structured data found. Add JSON-LD schema to help AI engines understand your content."
+    },
+    "technical": {
+      "title": "Technical SEO",
+      "titleTag": "Title Tag",
+      "metaDescription": "Meta Description",
+      "canonical": "Canonical URL",
+      "ogTitle": "OG Title",
+      "llmsTxt": "llms.txt",
+      "sitemap": "Sitemap ({count} URLs)"
+    },
+    "cta": {
+      "title": "Want to fix all these issues automatically?",
+      "body": "Anomalia's AI generates optimized content, structured data, and llms.txt files for your brand — automatically."
+    },
+    "offer": {
+      "title": "Offer layer",
+      "desc": "This site sells. These are the fields an assistant ranks products on, and without them an agent can talk about you but cannot send you a buyer.",
+      "product": "Product data",
+      "offer": "Offer block",
+      "rating": "Reviews / rating",
+      "missingCore": "Fields missing from the Offer:",
+      "missingAction": "An agent cannot act, missing:",
+      "complete": "Offer layer complete.",
+      "detectedBy": "Detected by:",
+      "signals": {
+        "offer-schema": "Published Offer",
+        "og-type-product": "og:type product",
+        "ecommerce-platform": "Ecommerce platform",
+        "product-schema": "Product schema",
+        "cart-link": "Cart link",
+        "add-to-cart-copy": "Buy button"
+      }
+    },
+    "layers": {
+      "title": "Where AI engines get their information",
+      "desc": "From three layers, not one. A technical audit reads one and a half of them, and it is worth knowing which.",
+      "crawled": {
+        "title": "Crawled data",
+        "body": "Your indexed pages and what everyone else writes about you. They decide which category a model files you under, and who it compares you against."
+      },
+      "feeds": {
+        "title": "Feeds and APIs",
+        "body": "What you publish as structured data: prices, availability, attributes. It decides how you are compared when someone asks for a recommendation. No free audit sees this, because it lives in your feed rather than on your page."
+      },
+      "live": {
+        "title": "Live site data",
+        "body": "Real price, stock, reviews, checkout. They decide whether an agent can act on a buyer's behalf, or merely describe you."
+      }
+    },
+    "limit": {
+      "title": "This audit tells you whether you can be cited, not whether you are",
+      "body": "Those are two different questions with two different answers. A site can pass every check on this page and never appear in a ChatGPT answer, because access is a precondition and not a cause. The only way to know whether you are cited is to ask the engines, repeatedly, and count the answers that name you.",
+      "weights": "In the citability model we run inside Anomalia, this technical audit carries 10% of the weight. The rest is extractability (25%), evidence density (25%), entity clarity (20%) and third-party corroboration (20%)."
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "geo-vs-seo": {
+        "q": "What is GEO, and how is it different from SEO?",
+        "a": "SEO optimises for a position in a list of links; GEO optimises for being named inside a generated answer. The unit of measurement changes: not average position, but the share of answers your brand appears in. A site can rank first on Google and never be cited by ChatGPT."
+      },
+      "proves-citation": {
+        "q": "Does this audit prove that ChatGPT cites me?",
+        "a": "No. It checks that AI crawlers can read you, that structured data is present, and that the page is intelligible to a machine — the preconditions. Whether you are actually cited is a different measurement, one that requires querying the engines repeatedly and counting."
+      },
+      "where-ai-reads": {
+        "q": "Where do AI engines get their information?",
+        "a": "From three layers: crawled pages, the feeds and structured APIs you publish, and live site data. The three can contradict each other — a price in the feed that differs from the page — and contradiction is one of the fastest ways to stop being recommended."
+      },
+      "product-offer": {
+        "q": "Does my ecommerce site need Product and Offer data?",
+        "a": "Yes, and it is the most expensive gap this audit finds. Without a Product block containing an Offer that states price, currency and availability, an assistant can describe the brand and cannot rank a single item. Add an identifier (sku, gtin) and the product URL and it can also send you a buyer."
+      },
+      "llms-txt": {
+        "q": "Is llms.txt actually worth doing?",
+        "a": "It is an emerging standard, not a requirement: no engine has declared it a ranking factor. It costs ten minutes and hands engines a curated map of the pages that matter, so we recommend it — but it carries little weight, and if you could fix only one thing it would not be this."
+      },
+      "what-moves-citation": {
+        "q": "What actually moves citation?",
+        "a": "The one controlled study in this space (Princeton, KDD 2024) measured the visibility lift of individual tactics in generative engines: direct quotations roughly +41%, statistics +33%, fluency +29%, citing sources +27%, while keyword stuffing did nothing at all. Engines have moved since; the ordering — evidence density beats keyword tactics — has held in every replication."
+      }
+    }
+  },
+  "sitemap-analyzer": {
+    "meta": {
+      "title": "Free Sitemap Analyzer — Check Your Sitemap for Issues | Anomalia",
+      "description": "Free sitemap analyzer. Check your sitemap.xml for errors, missing URLs, invalid dates, and SEO issues. Instant results, no signup required.",
+      "ogTitle": "Free Sitemap Analyzer — Check Your Sitemap for Issues",
+      "ogDescription": "Analyze your sitemap.xml for errors, missing metadata, and SEO issues. Free, instant, no signup.",
+      "twitterTitle": "Free Sitemap Analyzer — Check Your Sitemap for Issues",
+      "twitterDescription": "Analyze your sitemap.xml for errors, missing metadata, and SEO issues. Free, instant, no signup.",
+      "schemaName": "Sitemap Analyzer",
+      "schemaDescription": "Free sitemap analyzer. Check your sitemap.xml for errors, missing URLs, and SEO issues."
+    },
+    "hero": {
+      "title": "Sitemap Analyzer",
+      "subhead": "Check your sitemap.xml for errors, missing metadata, and SEO issues.",
+      "subheadLine2": "Get a full report in seconds — free, no signup."
+    },
+    "form": {
+      "submit": "Analyze Sitemap",
+      "loading": "Analyzing..."
+    },
+    "status": {
+      "issuesFound": "Issues Found",
+      "warnings": "Warnings",
+      "healthy": "Healthy",
+      "urlsFound": "{count} URLs found",
+      "indexDetail": "Sitemap index with {count} child sitemaps",
+      "size": "{size} KB",
+      "errorsWarnings": "{errors} errors · {warnings} warnings"
+    },
+    "issues": {
+      "title": "Issues ({count})"
+    },
+    "stats": {
+      "title": "Sitemap Statistics",
+      "totalUrls": "Total URLs",
+      "withLastmod": "With lastmod",
+      "withChangefreq": "With changefreq",
+      "withPriority": "With priority",
+      "avgPriority": "Avg priority",
+      "withImages": "With images"
+    },
+    "dateRange": {
+      "title": "Last Modified Range",
+      "oldest": "Oldest",
+      "newest": "Newest"
+    },
+    "changefreq": {
+      "title": "Change Frequency Distribution"
+    },
+    "structure": {
+      "title": "URL Structure",
+      "desc": "Top sections by number of URLs in the sitemap."
+    },
+    "urls": {
+      "title": "URLs in Sitemap ({shown})",
+      "titleOf": "URLs in Sitemap ({shown} of {total})",
+      "showLess": "Show less",
+      "showAll": "Show all {count}",
+      "colUrl": "URL",
+      "colLastmod": "Last Modified",
+      "colFreq": "Freq",
+      "colPriority": "Priority"
+    },
+    "cta": {
+      "title": "Want Anomalia to manage your sitemap and SEO automatically?",
+      "body": "Anomalia generates sitemaps, structured data, and optimized content for your brand — all on autopilot."
+    }
+  },
+  "social-media-roi": {
+    "meta": {
+      "title": "Free Social Media ROI Calculator — See How Much You Save | Anomalia",
+      "description": "Calculate how much time and money you spend on social media management. See your potential savings with AI automation. Free, instant.",
+      "ogTitle": "Free Social Media ROI Calculator",
+      "ogDescription": "Calculate how much time and money you spend on social media. See your savings with AI automation.",
+      "twitterTitle": "Free Social Media ROI Calculator",
+      "twitterDescription": "Calculate how much time and money you spend on social media. See your savings with AI automation."
+    },
+    "hero": {
+      "title": "Social Media ROI Calculator",
+      "subhead": "How much time and money does your team spend on social media?",
+      "subheadLine2": "See how much you could save with AI automation."
+    },
+    "inputs": {
+      "title": "Your Current Setup",
+      "hours": "Hours per week on social media",
+      "hoursValue": "{count}h",
+      "rate": "Hourly cost of your time (€)",
+      "rateValue": "€{value}",
+      "posts": "Posts per week",
+      "team": "Team members involved"
+    },
+    "results": {
+      "title": "Your Savings with Anomalia",
+      "monthlyCost": "Monthly cost today",
+      "plan": "Anomalia plan",
+      "planValue": "{plan} — €{price}/mo",
+      "saveMonthly": "You save monthly",
+      "hoursSaved": "Hours saved monthly",
+      "hoursValue": "{count}h",
+      "roi": "ROI",
+      "roiValue": "{value}%",
+      "yearly": "Yearly savings",
+      "cta": "Start Saving — Try Anomalia Free"
+    }
+  },
+  "llms-txt-generator": {
+    "meta": {
+      "title": "Free llms.txt Generator — Help AI Engines Find Your Site | Anomalia",
+      "description": "Generate an llms.txt file for your website. Help ChatGPT, Perplexity, and Google AI discover and cite your most important pages. Free, instant.",
+      "ogTitle": "Free llms.txt Generator",
+      "ogDescription": "Generate an llms.txt file to help AI engines discover and cite your website. Free.",
+      "twitterTitle": "Free llms.txt Generator",
+      "twitterDescription": "Generate an llms.txt file to help AI engines discover and cite your website. Free."
+    },
+    "hero": {
+      "title": "llms.txt Generator",
+      "subhead": "Generate an llms.txt file to help AI engines like ChatGPT, Perplexity, and Google AI discover and cite your most important pages."
+    },
+    "form": {
+      "submit": "Generate llms.txt",
+      "loading": "Generating..."
+    },
+    "result": {
+      "title": "Your llms.txt",
+      "copy": "Copy",
+      "download": "Download",
+      "pagesFound": "Pages found"
+    },
+    "info": {
+      "whatTitle": "What is llms.txt?",
+      "whatBody": "An llms.txt file is a markdown file at your site's root that tells AI engines which pages are most important. It's like robots.txt, but for ChatGPT, Perplexity, and Google AI.",
+      "howTitle": "How to use it",
+      "howBody": "Upload the file to your website root so it's accessible at yourdomain.com/llms.txt. AI crawlers will read it to understand your site structure.",
+      "whyTitle": "Why it matters",
+      "whyBody": "Sites with llms.txt are more likely to be cited in AI-generated answers. It's a simple signal that you care about AI visibility."
+    },
+    "cta": {
+      "title": "Want Anomalia to manage your AI visibility automatically?",
+      "body": "Anomalia generates and maintains llms.txt, structured data, and SEO-optimized content for your brand — all on autopilot."
+    }
+  },
+  "llms-txt-validator": {
+    "meta": {
+      "title": "Free llms.txt Validator — Check Your AI Readiness | Anomalia",
+      "description": "Validate your llms.txt file. Check if AI engines can properly read and index your site's most important pages. Free, instant.",
+      "ogTitle": "Free llms.txt Validator",
+      "ogDescription": "Validate your llms.txt file and check if AI engines can read it. Free.",
+      "twitterTitle": "Free llms.txt Validator",
+      "twitterDescription": "Validate your llms.txt file and check if AI engines can read it. Free."
+    },
+    "hero": {
+      "title": "llms.txt Validator",
+      "subhead": "Check if your website has a valid llms.txt file that AI engines can read and understand."
+    },
+    "form": {
+      "submit": "Validate",
+      "loading": "Checking..."
+    },
+    "status": {
+      "validTitle": "Valid llms.txt",
+      "validBody": "Your llms.txt is well-formed and readable by AI engines.",
+      "issuesTitle": "llms.txt Found (with issues)",
+      "issuesBody": "Your llms.txt exists but has issues that may prevent AI engines from reading it.",
+      "missingTitle": "No llms.txt Found",
+      "missingBody": "No llms.txt file was found at your site root."
+    },
+    "issues": {
+      "title": "Issues ({count})"
+    },
+    "suggestions": {
+      "title": "Suggestions"
+    },
+    "preview": {
+      "title": "Content Preview"
+    },
+    "cta": {
+      "title": "Don't have an llms.txt? Generate one in 30 seconds.",
+      "button": "Generate llms.txt Free"
+    }
+  },
+  "caption-length": {
+    "meta": {
+      "title": "Free Caption Length Checker — Instagram, LinkedIn, TikTok | Anomalia",
+      "description": "Check your social media caption length for Instagram, LinkedIn, TikTok, X, and Facebook. See character limits, preview truncation, and optimize your posts. Free.",
+      "ogTitle": "Free Caption Length Checker",
+      "ogDescription": "Check your caption length for every social platform. Free.",
+      "twitterTitle": "Free Caption Length Checker",
+      "twitterDescription": "Check your caption length for every social platform. Free."
+    },
+    "hero": {
+      "title": "Caption Length Checker",
+      "subhead": "Check your caption length for Instagram, LinkedIn, TikTok, X, and Facebook.",
+      "subheadLine2": "See preview truncation and optimize before you post."
+    },
+    "input": {
+      "placeholder": "Paste or write your caption here...",
+      "ariaLabel": "Caption input",
+      "seeMore": "\"See more\" after {count} chars"
+    },
+    "stats": {
+      "title": "Stats",
+      "characters": "Characters",
+      "words": "Words",
+      "emojis": "Emojis",
+      "hashtags": "Hashtags",
+      "mentions": "Mentions"
+    },
+    "preview": {
+      "title": "Preview",
+      "brand": "your_brand",
+      "justNow": "Just now",
+      "more": "... more",
+      "placeholder": "Your caption will appear here..."
+    },
+    "tips": {
+      "title": "Tips for {platform}",
+      "instagram": [
+        "First 125 chars are visible — lead with your hook",
+        "Use 3-5 relevant hashtags (not 30)",
+        "Add line breaks for readability"
+      ],
+      "linkedin": [
+        "First 140 chars matter most — start with a bold statement",
+        "Use short paragraphs (1-2 sentences each)",
+        "End with a question to drive comments"
+      ],
+      "twitter": [
+        "Tweets under 100 chars get 17% more engagement",
+        "Threads: first tweet is the hook",
+        "Use 1-2 hashtags max"
+      ],
+      "tiktok": [
+        "First 100 chars are visible — hook immediately",
+        "Keep it casual and conversational",
+        "Include trending keywords for SEO"
+      ],
+      "facebook": [
+        "Longer posts get more reach on Facebook",
+        "Questions drive 10x more comments",
+        "Use emojis to break up text walls"
+      ]
+    },
+    "cta": {
+      "title": "Generate optimized captions automatically",
+      "body": "Anomalia's AI writes platform-perfect captions for every social network — in your brand voice."
+    }
+  },
+  "best-time-to-post": {
+    "meta": {
+      "title": "Best Time to Post — Instagram, LinkedIn, TikTok | Free Tool",
+      "description": "Find the best time to post on Instagram, LinkedIn, TikTok, Facebook, and X. Personalized by region and timezone. Based on latest research data. Free.",
+      "ogTitle": "Best Time to Post — Free Tool",
+      "ogDescription": "Find the best posting times for every social platform, personalized by region.",
+      "twitterTitle": "Best Time to Post — Free Tool",
+      "twitterDescription": "Find the best posting times for every social platform, personalized by region."
+    },
+    "hero": {
+      "title": "Best Time to Post",
+      "subhead": "Find the optimal posting times for every social platform.",
+      "subheadLine2": "Personalized by region and timezone."
+    },
+    "controls": {
+      "platform": "Platform",
+      "region": "Region",
+      "timezone": "Timezone: {tz}"
+    },
+    "platforms": {
+      "instagram": "Instagram",
+      "linkedin": "LinkedIn",
+      "tiktok": "TikTok",
+      "facebook": "Facebook",
+      "twitter": "X / Twitter"
+    },
+    "regions": {
+      "europe": "Europe",
+      "us": "United States",
+      "uk": "United Kingdom",
+      "latam": "Latin America",
+      "asia": "Asia"
+    },
+    "days": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    },
+    "heatmap": {
+      "low": "Low",
+      "high": "High",
+      "cellTitle": "{day} {time}: Score {score}/10"
+    },
+    "slots": {
+      "title": "Top Posting Times for {platform} in {region}",
+      "score": "{score}/10"
+    },
+    "cta": {
+      "title": "Schedule posts at the perfect time, automatically",
+      "body": "Anomalia's AI picks the optimal posting time for each platform and audience — then publishes for you."
+    }
+  },
+  "keyword-research": {
+    "meta": {
+      "title": "Free Keyword Research Tool — Find Keywords Worth Attacking | Anomalia",
+      "description": "Free keyword research opportunities tool. Paste a website or niche and get keywords with volume, difficulty, and what to do next. 5 free results, no signup.",
+      "ogTitle": "Free Keyword Research Tool — Find Keywords Worth Attacking",
+      "ogDescription": "Paste a website or niche. Get attackable keywords with search volume, difficulty, and a clear next step.",
+      "twitterTitle": "Free Keyword Research Tool — Find Keywords Worth Attacking",
+      "twitterDescription": "Paste a website or niche. Get attackable keywords with search volume, difficulty, and a clear next step.",
+      "schemaName": "Keyword Research Tool",
+      "schemaDescription": "Free keyword research opportunities tool with search volume and difficulty."
+    },
+    "hero": {
+      "title": "Keyword Research Opportunities",
+      "subhead": "Which keywords can you actually attack?",
+      "subheadLine2": "Paste a website or niche — get volume, difficulty, and what to do next."
+    },
+    "form": {
+      "placeholder": "https://yoursite.com or niche keyword",
+      "submit": "Find opportunities",
+      "loading": "Researching…",
+      "hint": "Uses AI research + search volume data. Free preview shows 5 keywords."
+    },
+    "results": {
+      "title": "Your keyword opportunities",
+      "showing": "Showing {shown} of {total} opportunities"
+    },
+    "metrics": {
+      "volume": "Monthly volume",
+      "difficulty": "Difficulty",
+      "intent": "Intent",
+      "action": "What to do"
+    },
+    "opp": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "intent": {
+      "informational": "Informational",
+      "commercial": "Commercial",
+      "transactional": "Transactional",
+      "navigational": "Navigational"
+    },
+    "cta": {
+      "title": "See the full keyword list",
+      "body": "{n} more opportunities are unlocked after you sign in — plus bi-weekly refresh for your brand.",
+      "button": "Sign in to see full list",
+      "titleFull": "Want this on autopilot for your brand?",
+      "bodyFull": "Anomalia refreshes keyword opportunities every two weeks and turns them into content."
+    }
+  },
+  "meta-tags": {
+    "meta": {
+      "title": "Free Meta Tag Checker & SERP Preview | Anomalia",
+      "description": "Check any page’s title, description, canonical and Open Graph tags — and see exactly how the result looks on Google."
+    },
+    "hero": {
+      "title": "Meta tag checker",
+      "subhead": "See your page the way Google renders it, and catch the tags that are missing, truncated or quietly telling engines to stay away."
+    },
+    "form": {
+      "url": "https://yoursite.com/page",
+      "submit": "Check tags",
+      "loading": "Checking…",
+      "hint": "Any public page. Nothing is stored."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Every tag checks out. Nothing to fix here.",
+    "previewLabel": "Google preview",
+    "upsell": "Anomalia writes and publishes on-brand content every week — with the metadata handled for you."
+  },
+  "schema-validator": {
+    "meta": {
+      "title": "Free Schema Markup Validator (JSON-LD) | Anomalia",
+      "description": "Validate the structured data on any page. Find broken JSON-LD, list every schema type, and see what rich results you qualify for."
+    },
+    "hero": {
+      "title": "Schema markup validator",
+      "subhead": "Malformed JSON-LD is ignored silently — the markup is on the page but earns you nothing. This tells you which blocks actually parse."
+    },
+    "form": {
+      "url": "https://yoursite.com/page",
+      "submit": "Validate",
+      "loading": "Validating…",
+      "hint": "Checks JSON-LD and microdata."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Structured data is valid and complete.",
+    "stats": {
+      "blocks": "JSON-LD blocks",
+      "valid": "Valid",
+      "types": "Schema types"
+    },
+    "upsell": "Anomalia keeps your site and blog structured for search and AI engines, automatically."
+  },
+  "robots-tester": {
+    "meta": {
+      "title": "Free robots.txt Tester (incl. AI Crawlers) | Anomalia",
+      "description": "Test whether Google and the AI crawlers — GPTBot, ClaudeBot, PerplexityBot — can reach any URL on your site."
+    },
+    "hero": {
+      "title": "robots.txt tester",
+      "subhead": "Most sites block AI crawlers by accident, then wonder why they never appear in AI answers. Test any path against every crawler at once."
+    },
+    "form": {
+      "url": "https://yoursite.com",
+      "path": "/blog/your-post (optional)",
+      "submit": "Test",
+      "loading": "Testing…",
+      "hint": "Leave the path empty to test the homepage."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Your robots.txt looks healthy.",
+    "allowed": "Allowed",
+    "blocked": "Blocked",
+    "sitemaps": "Declared sitemaps",
+    "viewRaw": "View raw robots.txt",
+    "upsell": "Anomalia tracks how visible you are to search and AI engines, week after week."
+  },
+  "redirect-checker": {
+    "meta": {
+      "title": "Free Redirect Chain & Canonical Checker | Anomalia",
+      "description": "Trace every redirect hop, spot 302s that should be 301s, find loops, and check the canonical tag on the destination page."
+    },
+    "hero": {
+      "title": "Redirect checker",
+      "subhead": "Every extra hop costs latency and leaks a little ranking strength. See the whole chain, hop by hop, with the status codes."
+    },
+    "form": {
+      "url": "https://yoursite.com/old-page",
+      "submit": "Trace",
+      "loading": "Tracing…",
+      "hint": "Follows up to 8 hops."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Clean chain, correct canonical.",
+    "finalUrl": "Final URL",
+    "canonical": "Canonical",
+    "upsell": "Anomalia keeps your content and its links working while you run the business."
+  },
+  "heading-audit": {
+    "meta": {
+      "title": "Free Heading Structure & Alt Text Audit | Anomalia",
+      "description": "Audit any page’s H1–H6 outline, image alt coverage, internal linking and word count in one pass."
+    },
+    "hero": {
+      "title": "Heading & content audit",
+      "subhead": "The outline crawlers and screen readers actually see — plus the images with no alt text and the pages too thin to rank."
+    },
+    "form": {
+      "url": "https://yoursite.com/page",
+      "submit": "Audit page",
+      "loading": "Auditing…",
+      "hint": "One page per run."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Structure, alt text and linking all look right.",
+    "stats": {
+      "words": "Words",
+      "headings": "Headings",
+      "images": "Images",
+      "noAlt": "without alt",
+      "internalLinks": "Internal links"
+    },
+    "outline": "Heading outline",
+    "noHeadings": "No headings found on this page.",
+    "missingAltTitle": "Images without alt text",
+    "upsell": "Anomalia writes structured, on-brand content for you every week — headings and alt text included."
+  },
+  "broken-links": {
+    "meta": {
+      "title": "Free Broken Link Checker | Anomalia",
+      "description": "Find dead links on any page. Checks internal and external links and reports the exact status code for each."
+    },
+    "hero": {
+      "title": "Broken link checker",
+      "subhead": "Broken internal links waste crawl budget and strand visitors. Broken external ones make a page read as abandoned."
+    },
+    "form": {
+      "url": "https://yoursite.com/page",
+      "submit": "Check links",
+      "loading": "Checking…",
+      "hint": "Checks the first 40 links on the page."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Every link on this page resolves.",
+    "stats": {
+      "found": "Links found",
+      "checked": "Checked",
+      "broken": "Broken"
+    },
+    "external": "External",
+    "internal": "Internal",
+    "upsell": "Anomalia publishes and maintains your content so links stay alive."
+  },
+  "keyword-difficulty": {
+    "meta": {
+      "title": "Free Keyword Difficulty Checker | Anomalia",
+      "description": "Real search volume, difficulty and CPC for up to 10 keywords at once. Live Google data, no account needed."
+    },
+    "hero": {
+      "title": "Keyword difficulty checker",
+      "subhead": "Real volumes and difficulty scores from live Google data — not AI guesses. Paste up to ten keywords at once."
+    },
+    "form": {
+      "keywords": "running shoes, best trail shoes, …",
+      "submit": "Check",
+      "loading": "Checking…",
+      "hint": "Comma or line separated. Up to 10 keywords."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "",
+    "notFound": "No data for:",
+    "upsell": "Anomalia turns the keywords worth winning into a publishing plan that runs itself."
+  },
+  "traffic-estimator": {
+    "meta": {
+      "title": "Free Website Traffic Estimator | Anomalia",
+      "description": "Estimate any domain’s monthly organic traffic, keyword count and top-10 rankings from live Google data."
+    },
+    "hero": {
+      "title": "Traffic estimator",
+      "subhead": "How much organic traffic a domain actually pulls, what it ranks for, and what that traffic would cost to buy."
+    },
+    "form": {
+      "url": "competitor.com",
+      "submit": "Estimate",
+      "loading": "Estimating…",
+      "hint": "Works on any domain — yours or a competitor’s."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "",
+    "stats": {
+      "traffic": "Est. monthly visits",
+      "keywords": "Ranking keywords",
+      "top10": "In top 10",
+      "top3": "in top 3",
+      "value": "Traffic value / mo"
+    },
+    "topKeywords": "Top keywords driving that traffic",
+    "upsell": "Anomalia builds the content that closes the gap between you and that number."
+  },
+  "long-tail": {
+    "meta": {
+      "title": "Free Long-Tail Keyword Generator | Anomalia",
+      "description": "Expand any seed keyword into long-tail variants with real search volume and difficulty, sorted easiest first."
+    },
+    "hero": {
+      "title": "Long-tail keyword generator",
+      "subhead": "The point of long-tail is winnable demand. These come back sorted by how easy they are to rank for, not by vanity volume."
+    },
+    "form": {
+      "keyword": "your seed keyword",
+      "submit": "Generate",
+      "loading": "Generating…",
+      "hint": "One seed keyword. Real volumes, no invented demand."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "",
+    "locked": "{count} more variants are waiting behind a free account.",
+    "upsell": "Anomalia picks the winnable keywords and publishes against them every week."
+  },
+  "competitor-gap": {
+    "meta": {
+      "title": "Free Competitor Keyword Gap Tool | Anomalia",
+      "description": "Find the keywords a competitor ranks for and you don’t. Live Google data, no account needed."
+    },
+    "hero": {
+      "title": "Competitor keyword gap",
+      "subhead": "The highest-intent keyword list there is: someone in your market has already proven this demand converts, and they are getting it instead of you."
+    },
+    "form": {
+      "url": "yoursite.com",
+      "competitor": "competitor.com",
+      "submit": "Find the gap",
+      "loading": "Analysing…",
+      "hint": "Two domains in the same market work best."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "",
+    "stats": {
+      "gap": "Gap keywords",
+      "missing": "You rank for none of these"
+    },
+    "locked": "{count} more gap keywords are waiting behind a free account.",
+    "upsell": "Anomalia turns that gap into a weekly publishing plan and executes it."
+  },
+  "rank-checker": {
+    "meta": {
+      "title": "Free Google Rank Checker | Anomalia",
+      "description": "Check where any domain ranks for any keyword on live Google results, with the full top 10 it competes against."
+    },
+    "hero": {
+      "title": "Google rank checker",
+      "subhead": "A live SERP, not a cached estimate — your position, and the ten results you are actually up against."
+    },
+    "form": {
+      "keyword": "your keyword",
+      "url": "yoursite.com",
+      "submit": "Check rank",
+      "loading": "Checking…",
+      "hint": "Live Google results."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "",
+    "ranked": "for “{keyword}”",
+    "notRanked": "Not in the top 20 for “{keyword}”.",
+    "aiOverview": "Google shows an AI Overview for this query — the answer box above the results.",
+    "top10": "Who you’re up against",
+    "upsell": "Anomalia publishes weekly against the keywords you want to own."
+  },
+  "ai-visibility": {
+    "meta": {
+      "title": "Free AI Overview Visibility Checker | Anomalia",
+      "description": "See whether Google’s AI Overview cites your site — and which competitors it cites instead."
+    },
+    "hero": {
+      "title": "AI Overview visibility",
+      "subhead": "Ranking #1 means less when an AI answer sits above you. Check whether Google’s AI Overview cites you, or someone else."
+    },
+    "form": {
+      "url": "yoursite.com",
+      "keywords": "keyword one, keyword two",
+      "submit": "Check visibility",
+      "loading": "Checking…",
+      "hint": "Up to 3 keywords per run."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "",
+    "stats": {
+      "withOverview": "Queries with AI Overview",
+      "cited": "Times you’re cited"
+    },
+    "cited": "Cited",
+    "notCited": "Not cited",
+    "noOverview": "No AI Overview",
+    "organic": "Organic",
+    "competing": "Cited instead of you",
+    "upsell": "Anomalia tracks your visibility across search and AI engines, and publishes to close the gap."
+  },
+  "backlink-checker": {
+    "meta": {
+      "title": "Free Backlink Checker | Anomalia",
+      "description": "Check any domain’s backlink profile: referring domains, authority rank, spam score and follow split."
+    },
+    "hero": {
+      "title": "Backlink checker",
+      "subhead": "Referring domains — not raw link count — are what move rankings. Here is the profile, and the parts of it worth worrying about."
+    },
+    "form": {
+      "url": "yoursite.com",
+      "submit": "Check backlinks",
+      "loading": "Checking…",
+      "hint": "Any domain. Live data."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Healthy backlink profile.",
+    "stats": {
+      "referringDomains": "Referring domains",
+      "backlinks": "Total backlinks",
+      "rank": "Domain rating",
+      "spam": "Spam score"
+    },
+    "followSplit": "Follow / nofollow split",
+    "topTlds": "Top linking TLDs",
+    "upsell": "Anomalia earns links the durable way — by publishing content people actually cite."
+  },
+  "index": {
+    "meta": {
+      "title": "Free SEO & Social Tools | Anomalia",
+      "description": "Free tools for SEO, AI visibility and social — keyword research, rank checking, site audits and more. No account needed."
+    },
+    "hero": {
+      "title": "Free tools",
+      "subhead": "No signup, no credit card. Real data, run straight from your browser."
+    },
+    "groups": {
+      "seo": "SEO & search",
+      "ai": "AI visibility",
+      "technical": "Technical audit",
+      "social": "Social"
+    }
+  },
+  "page-speed": {
+    "meta": {
+      "title": "Free Core Web Vitals & Page Speed Test | Anomalia",
+      "description": "Measure any page against Google’s Core Web Vitals — real-user data plus a lab test, with the fixes that would save the most time."
+    },
+    "hero": {
+      "title": "Core Web Vitals test",
+      "subhead": "Real Chrome-user data first, because that is what Google actually ranks on — with the lab test underneath it for the detail."
+    },
+    "form": {
+      "url": "https://yoursite.com/page",
+      "submit": "Measure",
+      "loading": "Measuring…",
+      "hint": "Takes 10–30 seconds. Mobile results."
+    },
+    "issuesTitle": "What to fix",
+    "allClear": "Core Web Vitals all pass.",
+    "labScore": "Performance",
+    "fieldTitle": "Real users (last 28 days)",
+    "fieldDesc": "From the Chrome UX Report — what people on real devices and networks actually experienced. This is the data Google ranks on.",
+    "labTitle": "Lab test",
+    "labDesc": "One simulated load from Google’s machine. Useful for diagnosis, but not what your visitors experience.",
+    "oppTitle": "Biggest time savings",
+    "upsell": "Anomalia keeps your site and content working — so speed work is not undone by the next publish."
+  },
+  "conversation-gap": {
+    "meta": {
+      "title": "Free Conversation Gap Tool — Missed Demand Around What You Sell | Anomalia",
+      "description": "Estimate how much relevant conversation you’re missing around what you already sell. Paste your site — get a monthly demand range and gap score. Free, no signup for the main number.",
+      "ogTitle": "Free Conversation Gap Tool — Missed Demand Around What You Sell",
+      "ogDescription": "Paste your website. Get a monthly conversation-demand range and a score vs your publishing cadence. Free main number, no signup.",
+      "schemaName": "Conversation Gap Tool",
+      "schemaDescription": "Estimate missed conversation demand around what your site already sells."
+    },
+    "hero": {
+      "title": "How much conversation are you missing?",
+      "subhead": "Paste your site. We size the unbranded demand around what you already sell — and compare it to how often you post."
+    },
+    "form": {
+      "url": "https://yoursite.com",
+      "postsPerWeek": "Posts / week (optional)",
+      "submit": "Estimate gap",
+      "loading": "Sizing demand…",
+      "hint": "Main number is free. Topic list unlocks after you start with Anomalia. Optional posts/week improves the gap score (default: 1×/week)."
+    },
+    "results": {
+      "forBrand": "Around {brand}",
+      "rangeLabel": "Estimated relevant conversations / month",
+      "gapScore": "Gap score",
+      "gapScoreHint": "0 = cadence covers demand · 100 = large unmet demand",
+      "confidence": "Confidence",
+      "confidenceHint": "Based on volume coverage and live signals",
+      "cadence": "Publishing cadence",
+      "cadenceAssumed": "Assumed (you can override above)",
+      "cadenceGiven": "From your input"
+    },
+    "confidence": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "limits": {
+      "title": "What this does not tell you",
+      "demandOnly": "It sizes demand only — not conversion rates.",
+      "noConversion": "It does not predict algorithm reach or whether your voice wins those threads.",
+      "noReach": "Brand searches are excluded: brand demand isn’t net-new opportunity."
+    },
+    "method": {
+      "title": "How we estimate this"
+    },
+    "cta": {
+      "title": "See the topics and threads behind the number",
+      "body": "{n} conversation topics are unlocked when you start with Anomalia — then Radar finds live threads and the autopilot posts on those angles.",
+      "button": "Unlock with Anomalia",
+      "titleFull": "Want Anomalia to join those conversations?",
+      "bodyFull": "Radar finds live threads; the autopilot turns the same demand into a week of posts to approve."
+    }
+  },
+  "agent-team": {
+    "meta": {
+      "title": "Free AI Agent Team Builder — Talk to an Agent That Maps Your Processes | Anomalia",
+      "description": "Paste your website and talk. An agent reads it, maps the work you repeat every week, asks what the site cannot say, and proposes the team of AI agents to hire — one card at a time. Free, no signup."
+    },
+    "hero": {
+      "title": "Which AI agents should your business hire?",
+      "subhead": "Paste your site and have the conversation. An agent reads it, tells you what it thinks you do all week, asks the two or three things a website cannot show — and then puts the team on the table, one agent at a time."
+    },
+    "form": {
+      "url": "https://yoursite.com",
+      "submit": "Start",
+      "hint": "It reads your homepage and the pages that say how you run. No signup — 15 messages a day."
+    },
+    "intro": {
+      "body": "Most agent advice stops at the idea. This starts from your site — the cart, the booking widget, the contact form, the help centre, the careers page — and then asks you about the half a website never shows.",
+      "b1": "It gives itself a goal in front of you, and cannot call the job done while a line of it is open.",
+      "b2": "Only agents that stand on a process it actually saw, or on something you told it.",
+      "b3": "Where an agent already exists in our library, you get the link to start from it."
+    },
+    "firstMessage": "Read my site and tell me what work it looks like we repeat every week.",
+    "thinking": "Reading your site…",
+    "goal": {
+      "title": "Its goal",
+      "agents": "agents on the table",
+      "hours": "a week"
+    },
+    "chips": {
+      "read": "read",
+      "read_page": "opening another page",
+      "search_agent_library": "searching the agent library",
+      "propose_agent": "writing an agent",
+      "set_goal": "setting its goal",
+      "update_goal": "ticking off the goal",
+      "close_goal": "closing the goal"
+    },
+    "composer": {
+      "placeholder": "Answer, or ask for something else…",
+      "send": "Send",
+      "sending": "…"
+    },
+    "agent": {
+      "because": "Why here:",
+      "cadence": "Runs",
+      "inputs": "Needs",
+      "outputs": "Leaves behind",
+      "integrations": "Tools",
+      "handoff": "Hands off to",
+      "hours": "Time saved",
+      "impact": "impact",
+      "effort": "setup",
+      "firstTask": "First task:",
+      "library": "Already in the Agent Library"
+    },
+    "upsell": "Anomalia runs the marketing half of this team for real: recurring agents that publish, watch your field and read the numbers every week — on a schedule, and each one confirmed by you before it starts.",
+    "signals": {
+      "ecommerce": "Online store",
+      "booking": "Appointments",
+      "lead_form": "Enquiry forms",
+      "support": "Customer support",
+      "blog": "Blog / editorial",
+      "newsletter": "Email list",
+      "pricing": "Published pricing",
+      "careers": "Hiring",
+      "saas": "Product accounts",
+      "social": "Social accounts",
+      "local": "Local presence",
+      "analytics": "Analytics installed",
+      "multilingual": "Multiple languages"
+    },
+    "departments": {
+      "marketing": "Marketing",
+      "content": "Content",
+      "sales": "Sales",
+      "support": "Support",
+      "ops": "Operations",
+      "data": "Data",
+      "product": "Product",
+      "people": "People"
+    }
+  }
+}

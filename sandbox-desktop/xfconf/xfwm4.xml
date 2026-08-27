@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="Yaru-dark"/>
+    <property name="title_font" type="string" value="Ubuntu Bold 11"/>
+    <property name="button_layout" type="string" value="O|HMC"/>
+    <property name="use_compositing" type="bool" value="false"/>
+    <property name="click_to_focus" type="bool" value="true"/>
+    <property name="focus_new_windows" type="bool" value="true"/>
+  </property>
+</channel>

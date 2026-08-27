@@ -1,0 +1,31 @@
+-- 0015 video guardrail: the AI planner respects per-plan video caps (invisible to user).
+-- NOTE: 0014 (brand_usage) already added the storage and counters this guardrail reads/writes
+-- (posts_count / videos_count). This migration adds NO schema — it documents the pure
+-- business-logic guardrail that lives in application code, so the change is reviewable in one
+-- place alongside the rest of the schema history.
+--
+-- Feature: per generation the planner may use AT MOST `maxVideos` video-format posts, where a
+-- video format is detected as format ~* '(video|reel|short)'. Any excess the model returns is
+-- hard-clamped down to a single strong image (format -> 'post', media -> 'image'). The brand
+-- still gets a full plan, just fewer (expensive) clips than the model wanted.
+--
+-- Why: a real video clip (Seedance Lite, ~$2.5, 8-15s) costs ~25x an image ($0.09), so a
+-- video-heavy brand could blow the margin. The cap is internal and never surfaced in pricing.
+--
+-- Video caps per plan (see src/lib/server/plans.ts VIDEO_CAPS / videoCap()):
+--   Starter: 2 videos/month
+--   Pro:     5 videos/month
+--   Scale:   8 videos/month
+--
+-- Wiring:
+--   (1) content-preview.ts planPosts(maxVideos): prompt instructs <= maxVideos video posts.
+--   (2) content-preview.ts generatePreview(opts.maxVideos): hard-clamps excess to image.
+--   (3) content/generate/+server.ts: maxVideos = min(remaining().videos, posts being made),
+--       where remaining().videos = videoCap(plan) - videos used this month (brand_usage,
+--       anchored to the brand's wall-clock timezone). Consumed at PLAN time, not publish time
+--       (failed posts still consumed an attempted planner call), matching the posts quota.
+--   (4) onboarding/preview/+server.ts: maxVideos = 1 — the free wow-preview stays cheap,
+--       independent of the brand's actual plan cap.
+--
+-- Scope note: the guardrail only constrains the planner's AI output. A user manually editing a
+-- post's format to a reel later is out of scope by design (no UI surfaces video limits).

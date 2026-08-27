@@ -1,0 +1,13 @@
+{
+  "name": "@anomalia/agent-kit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./interfaces": "./src/interfaces.ts",
+    "./registry": "./src/registry.ts",
+    "./testkit": "./src/testkit.ts"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@anomalia/agent-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./executor": "./src/executor.ts",
+    "./turn": "./src/turn.ts",
+    "./run-store": "./src/run-store.ts",
+    "./computer": "./src/computer.ts",
+    "./memory-context": "./src/memory-context.ts",
+    "./tools/builtin": "./src/tools/builtin.ts"
+  },
+  "dependencies": {
+    "@anomalia/agent-kit": "*",
+    "@anomalia/agent-contracts": "*",
+    "@anomalia/agent-adapters": "*",
+    "@supabase/supabase-js": "^2.46.1"
+  }
+}

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="188" height="56" viewBox="0 0 188 56" role="img" aria-label="Featured on EasyDoFollow" font-family="Urbanist, system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title>Featured on EasyDoFollow</title>
+  <!-- capsule -->
+  <rect x="1" y="1" width="186" height="54" rx="14" fill="#21211D" stroke="#FCF6E3" stroke-width="2"/>
+  <!-- icon tile -->
+  <rect x="12" y="11" width="34" height="34" rx="10" fill="#2F6BFF" stroke="#FCF6E3" stroke-width="2"/>
+  <!-- Link2 (chain) glyph -->
+  <g transform="translate(19 18) scale(0.8333333)" fill="none" stroke="#FCF6E3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 17H7A5 5 0 0 1 7 7h2"/>
+    <path d="M15 7h2a5 5 0 1 1 0 10h-2"/>
+    <line x1="8" y1="12" x2="16" y2="12"/>
+  </g>
+  <!-- text -->
+  <text x="57" y="25" fill="#B8B3A3" font-size="9" font-weight="600" letter-spacing="1.4">FEATURED ON</text>
+  <text x="56.5" y="43" fill="#FCF6E3" font-size="17" font-weight="700" letter-spacing="-0.2">EasyDoFollow</text>
+</svg>

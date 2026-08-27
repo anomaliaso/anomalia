@@ -1,0 +1,4 @@
+{
+  "intent": "Un muro di media a mattoni che scorre in continuo e chiude il ciclo: l'ultimo fotogramma è identico al primo, quindi si può montare in loop. `TILT` a -12 lo rende obliquo.",
+  "stills": [12, 30, 70, 140, 220]
+}
