@@ -571,6 +571,28 @@ describe('la squadra: message_agent è montato per OGNI mestiere', () => {
 		expect(prompt.text).toContain('message_agent');
 		expect(prompt.text).not.toContain('You cannot write to them from here');
 	});
+
+	it('porta REPLY LANGUAGE — senza, un messaggio inglese sul kit diventa italiano (amazon.in)', async () => {
+		const seen: string[] = [];
+		const prompt = { text: '' };
+		toolCatalogModel(seen, prompt);
+		const { db } = fakeDb();
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-lang',
+			spec: specById('content')!,
+			messages: [{ role: 'user', content: 'Give me content ideas for my brand Royal rasoy' }],
+			locale: 'en'
+		});
+		await res.text();
+		expect(prompt.text).toContain('REPLY LANGUAGE — ABSOLUTE RULE');
+		expect(prompt.text).toContain("language of the user's latest message");
+		expect(prompt.text).toContain('an English message gets an English reply');
+		expect(prompt.text).not.toMatch(/^Sei /m);
+	});
 });
 
 describe("runKitTurn — il tempo finisce, il lavoro no", () => {

@@ -45,6 +45,7 @@ import { broadcastToBrand } from '$lib/server/realtime';
 import { specById } from '../specs';
 import type { AgentSpec } from '../contracts';
 import { createApplyTool, buildSystemPrompt } from '../executor';
+import { chatReplyLanguageBlock } from '$lib/i18n/locale';
 import { honestNotice } from '../turn';
 import { loadMemoryContext } from '../memory-context';
 import { closeTurnVerdict, MAX_VERDICT_LAPS } from './verdict';
@@ -674,8 +675,13 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		// non importa `$lib`). Il blocco si genera dall'UNICA fonte (`AGENTS`) e promette
 		// `message_agent` perché il kit lo monta davvero: negarlo qui sarebbe la bugia opposta.
 		const peer = resolveAgent(spec.id);
+		// Kit turns never hit the classic `buildSystemPrompt` (chat/system-prompt.ts), which is
+		// where REPLY LANGUAGE lives after the amazon.in incident. Without this block here, an
+		// English message still gets an Italian reply: the kit preamble used to be Italian and
+		// nothing told the model to follow the user.
 		let system =
 			buildSystemPrompt(spec, { memoryMd, fileIndex: filesIndexFor(spec.id) }) +
+			`\n\n${chatReplyLanguageBlock(locale)}` +
 			(peer ? `\n\n${teamBlock(peer)}` : '') +
 			`\n\n${modeBlock(mode)}`;
 		// In ASK l'obiettivo si mette in pausa: non ci sono i tool per farlo avanzare, quindi
