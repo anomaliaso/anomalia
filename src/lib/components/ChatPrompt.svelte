@@ -81,6 +81,9 @@
     value = $bindable(''),
     placeholder = '',
     loading = false,
+    /** Vero fra l'invio e la nascita del thread: la sessione non esiste ancora e `loading`
+     * e` falso — senza questo stato il bottone resta muto e l'utente crede di non aver inviato. */
+    sending = false,
     remoteBusy = false,
     brandSlug = '',
     /** Chiave sessionStorage per far sopravvivere il testo non inviato a un refresh. Vuota = off. */
@@ -115,6 +118,7 @@
     value?: string;
     placeholder?: string;
     loading?: boolean;
+    sending?: boolean;
     /**
      * Il turno vive sul SERVER anche quando questa scheda non ne tiene lo stream: dopo un
      * reload, su un altro dispositivo, o a SSE caduta. `loading` li` e` falso, ma fermarlo deve
@@ -240,7 +244,7 @@
   let recTimer: ReturnType<typeof setInterval> | null = null;
 
   const canSend = $derived(!!value.trim() || hasAttachments);
-  const showMic = $derived(sttSupported && !!brandSlug && !canSend && !loading);
+  const showMic = $derived(sttSupported && !!brandSlug && !canSend && !loading && !sending);
 
   /**
    * Un menu aperto si chiude toccando fuori. `pointerdown` e non `click`: si chiude appena il
@@ -1355,6 +1359,12 @@
           title={$_('chat.voice.stop')}
         >
           <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+        </button>
+      {:else if sending}
+        <button type="button" class="ch-send ch-busy" disabled aria-label={$_('chat.send')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 3a9 9 0 1 0 9 9" />
+          </svg>
         </button>
       {:else if showMic}
         <button
