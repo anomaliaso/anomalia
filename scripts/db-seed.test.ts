@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ensureDemoUser, ensureOrg, ensureBrand, ensurePrivileges } from './db-seed.mjs';
+import { ensureDemoUser, ensureOrg, ensureBrand, ensurePrivileges, ensureSeedMemberships } from './db-seed.mjs';
 
 describe('ensureDemoUser', () => {
   it('returns the id from a successful admin create', async () => {
@@ -113,5 +113,19 @@ describe('ensurePrivileges', () => {
     expect(tables.some((s) => s.includes('to anon'))).toBe(true);
     expect(tables.some((s) => s.includes('to authenticated'))).toBe(true);
     expect(executed.some((s) => s.startsWith('grant execute on all functions'))).toBe(true);
+  });
+});
+
+describe('ensureSeedMemberships', () => {
+  it('inserts profile + org + brand memberships idempotently', async () => {
+    const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    await ensureSeedMemberships(client, 'u1', 'demo@example.com', 'org1', 'brand1');
+    expect(client.query).toHaveBeenCalledTimes(3);
+    expect(client.query.mock.calls[0][0]).toContain('insert into profiles');
+    expect(client.query.mock.calls[0][0]).toContain('on conflict (id) do update');
+    expect(client.query.mock.calls[1][0]).toContain('insert into org_members');
+    expect(client.query.mock.calls[1][0]).toContain('on conflict do nothing');
+    expect(client.query.mock.calls[2][0]).toContain('insert into brand_members');
+    expect(client.query.mock.calls[2][0]).toContain('on conflict do nothing');
   });
 });
