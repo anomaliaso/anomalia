@@ -9,6 +9,7 @@
       date: 'August 27, 2026',
       title: 'Tools work on every message, not just the first',
       items: [
+        'Agents now write minimal replies by rule, not by taste: every sentence must carry a fact — no greetings, no transitions, no filler.',
         'Sending your first message now shows a spinner right away: no more silent gap while the conversation is being created.',
         'The homepage now shows the two ways to use Anomalia side by side — ready-to-go cloud or self-hosted on your own server — with mobile and desktop apps marked as coming soon.',
         'Sending a second message in a chat no longer makes every tool refuse with “turn closed by the system”: the agent keeps working for the whole conversation.',

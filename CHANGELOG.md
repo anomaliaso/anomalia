@@ -2,6 +2,20 @@
 
 ## 2026-08-27
 
+### La direttiva del minimo entra nel contratto di consegna
+
+La task chiedeva «scrivi pochissimo, diretto al punto, il più minimo possibile». Il contratto
+di consegna (`reply-contract.ts`) diceva già la forma ma lasciava il minimo come gusto:
+"keep it to the sentences that carry a fact" è una descrizione, non una regola operativa.
+
+Ora c'è `MINIMAL BY DEFAULT`: le meno parole che portano i fatti, con i riempitivi classici
+NOMINATI (no greeting, no "Great news!", no transizioni, aggettivi senza fatto) e la prova di
+forza operativa — ogni frase deve guadagnarsi il posto: se tagliandola non sparisce nessun
+fatto, si taglia. Il posto è il blocco unico letto da testa omni e specialisti; il test
+esistente che separa «trasmettere meno» da «lavorare meno» (75 passi) resta pinnato e verde.
+
+## 2026-08-27
+
 ### Il primo invio in chat restava muto mentre nasceva il thread
 
 Sulla home del brand ("Assumi un agente") il primo messaggio deve nascere un
