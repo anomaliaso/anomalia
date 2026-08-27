@@ -2,6 +2,30 @@
 
 ## 2026-08-27
 
+### Il setup del brand si fa con l'Analyst e ci si atterra dentro
+
+Il thread di setup creato a fine onboarding era con l'agente omni (agent=null,
+"Anomalia") e il messaggio pre-scritto chiedeva un incarico vago ("studia il
+brand, dimmi come va la SEO"). Gli utenti non lo vedevano: il wizard li
+ributtava sulla dashboard, o sulla scelta dell'agente, e la chat di setup restava
+orfana — in produzione aprivano una sessione NUOVA senza sapere che ne esisteva
+una già impostata.
+
+Fix:
+- il thread di setup parla con l'**Analyst** (`chat_threads.agent='analyst'`),
+  che è il mestiere giusto per instradare l'utente e comporre la squadra. Il
+  brief (lato server) smette di chiamare in prima i tool che sono dei mestieri:
+  l'**analisi SEO/GEO** si **delega al Web Specialist** e la **produzione di
+  contenuti** si **delega al Content Creator**, entrambe via `message_agent`.
+  L'Analyst dirige e compone, non produce e non audita.
+- il messaggio pre-scritto è esplicito sull'incarico di setup: analizza il
+  brand, fai l'analisi SEO e AI-visibility del sito, imposta strategia GTM e
+  piano editoriale, dimmi cosa automatizzeresti e chiedi cosa tenere.
+- dopo la fine del wizard l'utente atterra **dentro il thread di setup**
+  (`/app/{slug}/chat/{thread}`) invece che su `/app/{slug}`: sia la `finish`
+  dell'action sia la scelta dell'agente (AgentPick) aprono il thread già
+  creato, che porta il nome e la bandiera Analyst in sidebar.
+
 ### Il primo invio in chat restava muto mentre nasceva il thread
 
 Sulla home del brand ("Assumi un agente") il primo messaggio deve nascere un

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   ONBOARDING_CHAT_SURFACE,
+  ONBOARDING_SETUP_AGENT,
   buildOnboardingSetupBrief,
   onboardingBriefSection,
   onboardingSeedMessage,
@@ -128,6 +129,27 @@ describe('buildOnboardingSetupBrief', () => {
     expect(buildOnboardingSetupBrief({ ...base, locale: 'it', plan: null })).toContain('Italian');
     expect(buildOnboardingSetupBrief({ ...base, locale: 'fr', plan: null })).toContain('French');
   });
+
+  // ── L'Analyst delega: non ha i tool dei mestieri a cui chiede il lavoro ───────────────────────
+  // Il thread di setup ora parla con l'Analyst (agent='analyst'), il cui set NON contiene i tool
+  // di produzione (generate_content / produce_week), il kit (update_brand_kit, generate_person,
+  // add_memory, save_social_handles) né l'audit SEO/GEO (run_seo_geo_audit: è del Web Specialist).
+  // Quindi il brief DEVE chiedere il lavoro ai colleghi via message_agent, mai chiamarlo in prima.
+
+  it('l\'analisi SEO/GEO si DELEGA al Web Specialist via message_agent, non si esegue in prima', () => {
+    const brief = buildOnboardingSetupBrief({ ...base, plan: null });
+    expect(brief).toContain('message_agent');
+    expect(brief).toContain('Web Specialist');
+    // Il nome del tool è il modo per delegare, non per chiamarlo: l'audit resta del Web.
+    expect(brief).not.toMatch(/call\s+run_seo_geo_audit/i);
+    expect(brief).toContain('run_seo_geo_audit');
+  });
+
+  it('la produzione di contenuti passerà al Content Creator, l\'Analyst non li produce in prima', () => {
+    const brief = buildOnboardingSetupBrief({ ...base, plan: null });
+    expect(brief).toContain('Content Creator');
+    expect(brief).toContain('message_agent');
+  });
 });
 
 // ── il brief arriva al modello solo sul thread di setup ────────────────────────────────────────
@@ -164,11 +186,15 @@ describe('onboardingBriefSection', () => {
 // ── il messaggio pre-scritto ───────────────────────────────────────────────────────────────────
 
 describe('onboardingSeedMessage', () => {
-  it('contiene il sito, la richiesta, e la lingua in cui rispondere (nome + codice)', () => {
+  it('dice il sito, l\'incarico di setup esplicito, e la lingua in cui rispondere (nome + codice)', () => {
     const m = onboardingSeedMessage('it', { website: 'https://acme.com', brandName: 'Acme' });
     expect(m).toContain('https://acme.com');
-    expect(m).toContain('social profiles');
+    // L'incarico è esplicito: setup del progetto, non una richiesta vaga.
+    expect(m).toContain('Set up');
+    expect(m).toContain('analyse');
     expect(m).toContain('SEO');
+    expect(m).toContain('GTM');
+    expect(m).toContain('editorial plan');
     expect(m).toContain('reply in Italian (it)');
   });
 
@@ -188,7 +214,7 @@ describe('onboardingSeedMessage', () => {
 
   it("NON duplica il brief operativo: niente nomi di tool nel messaggio dell'utente", () => {
     const m = onboardingSeedMessage('it', { website: 'https://acme.com', brandName: 'Acme' });
-    for (const tool of ['set_goal', 'propose_app_connection', 'run_seo_geo_audit', 'offer_upgrade'])
+    for (const tool of ['set_goal', 'propose_app_connection', 'run_seo_geo_audit', 'offer_upgrade', 'message_agent'])
       expect(m).not.toContain(tool);
   });
 });
@@ -259,6 +285,9 @@ describe('seedOnboardingChat', () => {
     const thread = db.inserts.chat_threads?.[0];
     expect(thread?.surface).toBe(ONBOARDING_CHAT_SURFACE);
     expect(thread?.surface_key).toBe('b1');
+    // Il thread di setup parla con l'Analyst, non con l'agente omni (Anomalia): il suo mestiere è
+    // instradare e comporre la squadra, e SEO/GEO li delega al Web Specialist via message_agent.
+    expect(thread?.agent).toBe(ONBOARDING_SETUP_AGENT);
 
     // (1) la riga esiste già alla fine del seed — nessuna finestra con il thread vuoto.
     const msg = (db.inserts.chat_messages?.[0] as unknown as Row[])?.[0];
