@@ -7,11 +7,10 @@
  * risponde con un SUO turno accodato — i SUOI tool via `pickTools`, il SUO prompt — e l'utente
  * vede la conversazione arrivare nella sidebar, in sola lettura.
  *
- * ASYNC PER COSTRUZIONE. Il tool non aspetta mai: torna subito con l'id del thread. `await:true`
- * non blocca — dice al giro di ritorno di reinfilare un riassunto della risposta nel thread di
- * partenza come riga user, che la mid-turn-mailbox assorbe a un confine di step se il turno
- * dell'iniziatore gira ancora. Se il turno finisce prima, l'onestà sta nell'hint: "di' che hai
- * scritto e che risponderà nel vostro thread", mai un ciclo di attesa.
+ * ASYNC PER COSTRUZIONE. Il tool non aspetta mai: torna subito con l'id del thread. La risposta
+ * del collega resta nel thread DM (sola lettura per l'utente). L'interazione nella chat con
+ * l'utente è la chip "N messaggi con X" — MAI un riassunto 📩 versato qui. `await:true` è un
+ * no-op conservato nello schema: non aspettare, non incollare la risposta.
  *
  * PERIMETRO: orchestratore soltanto (mai i sotto-agenti — chi parla è uno solo, vedi
  * NEVER_FOR_SUBAGENTS), ma i turni schedulati SÌ: lo Stratega che di notte scrive al Produttore è
@@ -211,7 +210,7 @@ export function createAgentDmTools(opts: {
       description: [
         'Send a message to ANOTHER agent of this brand, in a persistent private thread between the two of you (one thread per pair, reused forever — your shared memory). The other agent replies there with their own tools and context; the user can read the thread but not write in it.',
         'Use it to delegate a piece of work to a colleague, report a blocker, or coordinate — when you want THEM to act with THEIR tools, not just an opinion (for a one-shot opinion use ask_to_*).',
-        'ASYNC, never blocking: the tool returns immediately. With await:true, a short summary of their reply is dropped back into THIS conversation as soon as it lands — it may arrive at a later step of this turn. If it has not arrived by your final message, say so honestly ("ho scritto a X, risponderà nel nostro thread") and finish — NEVER stall or loop waiting for it. With await:false (default), the reply simply stays in your private thread.',
+        'ASYNC, never blocking: the tool returns immediately. The other agent replies in YOUR private thread; the user sees a compact chip ("N messages with X") and can open that thread read-only. NEVER wait in a loop, NEVER write their answer yourself, NEVER paste their reply into THIS conversation. With await:false (default) the reply simply stays in the private thread.',
         'The send is ALREADY delivered and ALREADY visible to the user as a compact chip in this chat. Do NOT repeat or paraphrase the message content in your reply — at most one operational line ("Ho scritto a X, ti aggiorno quando risponde"), or nothing if the context does not call for it.',
         `ONE recipient by default. \`to\` also takes a LIST — the same message to several agents in one action — but only when the USER asked for it: then pass because_user_asked. Deciding on your own to tell everyone is not coordination, it is noise the user pays for.`,
         `Max ${DM_SENDS_PER_TURN} RECIPIENTS per turn, counted across all your calls (a list of 3 spends the whole budget). Do not repeat the same message to the same agent.`
@@ -233,7 +232,7 @@ export function createAgentDmTools(opts: {
         await: z
           .boolean()
           .optional()
-          .describe('true = drop a summary of their reply back into this conversation when it lands (default false)'),
+          .describe('ignored — their reply stays in the private thread; the user opens it from the chip. Do not wait.'),
         because_user_asked: z
           .string()
           .max(300)
@@ -371,8 +370,7 @@ export function createAgentDmTools(opts: {
               from_speaker: initiator.key,
               // Niente `brief` nei params: il blocco DM lo monta il RUNNER dal marker del thread
               // (dmBrief in $lib/chat-dm), così vale per qualunque turno su questo thread.
-              tier: 'auto',
-              ...(awaitReply === true ? { reply_to_thread: threadId } : {})
+              tier: 'auto'
             }
           });
           if (jobError) {
@@ -407,7 +405,7 @@ export function createAgentDmTools(opts: {
           await: awaitReply === true,
           hint:
             awaitReply === true
-              ? 'Delivered — the user already sees this send as a chip in this chat: do NOT repeat the message content. Their reply summary will appear in THIS conversation as a "📩 …" message, possibly at a later step. If it has not arrived by your final message, say you wrote to them and that they will answer in your private thread — do not wait in a loop.'
+              ? 'Delivered — the user already sees this send as a chip in this chat: do NOT repeat the message content. Their reply stays in your private thread (the chip opens it). Say you wrote to them if you need to — do not wait in a loop, and do not paste their answer here.'
               : `Delivered — the user already sees this send as a chip in this chat: do NOT repeat the message content. At most one short line ("Ho scritto a ${names}, ti aggiorno quando risponde"), or nothing. Do not block this turn on it.`
         };
       }

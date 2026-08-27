@@ -12,6 +12,7 @@
   import { formatChatDuration } from '$lib/chat-duration';
   import ChatThought from '$lib/components/ChatThought.svelte';
   import ChatExpressionStickers from '$lib/components/ChatExpressionStickers.svelte';
+  import ChatDmChip from '$lib/components/ChatDmChip.svelte';
   import ChatMediaCard from '$lib/components/ChatMediaCard.svelte';
   import { mediaFromToolCall } from '$lib/chat-media';
   import '$lib/styles/chat-messages.css';
@@ -26,6 +27,7 @@
     // workbenches, AgentComputerPanel) keep the single legacy block up top via `streamReasoning`.
     streamReasoningSegments = [] as ChatReasoningSegment[],
     compact = false,
+    brandSlug = '',
     // The agent's own face, following the turn: thinking while it reasons, writing once
     // the text starts landing.
     face = DEFAULT_CHAT_AGENT_AVATAR.face as string,
@@ -38,6 +40,7 @@
     streamReasoningSegments?: ChatReasoningSegment[];
     /** Tighter layout for the home chat column. */
     compact?: boolean;
+    brandSlug?: string;
     face?: string;
     color?: string;
   } = $props();
@@ -139,6 +142,7 @@
              `SET_EXPRESSION` e poi trovarsela sostituita da uno sticker. Un turno non deve
              cambiare forma fra lo streaming e la riapertura. -->
         <ChatExpressionStickers calls={block.calls} />
+        <ChatDmChip calls={block.calls} {brandSlug} />
         {#each block.calls as tc, ti (`${tc.toolCallId ?? 'md'}-${bi}-${ti}`)}
           {@const shown = mediaFromToolCall(tc)}
           {#if shown}

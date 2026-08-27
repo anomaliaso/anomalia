@@ -6,11 +6,12 @@
     fallbackAvatarColor,
     fallbackAvatarFace
   } from '$lib/agent-avatars';
+  import { dmSendsFromCall } from '$lib/chat-dm';
 
   /**
    * La riga "N messaggi con X" sotto un turno che ha usato `message_agent`: un link compatto al
    * thread privato fra i due agenti (che è in sola lettura per l'utente). Tutto viene dalle
-   * tool-call salvate — l'output del tool porta `dm_thread_id`, `to` e `to_name` — quindi la riga
+   * tool-call — `dmSends` hoisted in persistenza, o l'output srotolato dal kit — quindi la riga
    * si ridisegna identica in streaming e alla riapertura, senza query sue.
    *
    * È un EVENTO DI SISTEMA, non contenuto del turno: niente box/bordo/sfondo e centrata nella
@@ -20,6 +21,7 @@
   type DmCall = {
     toolName: string;
     output?: unknown;
+    dmSends?: unknown;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
   };
@@ -31,18 +33,11 @@
     const byThread = new Map<string, { name: string; to: string; n: number }>();
     for (const tc of calls) {
       if (tc.toolName !== 'message_agent') continue;
-      const out = tc.output as
-        | { dm_thread_id?: unknown; to?: unknown; to_name?: unknown }
-        | null
-        | undefined;
-      if (!out || typeof out !== 'object' || typeof out.dm_thread_id !== 'string') continue;
-      const g = byThread.get(out.dm_thread_id) ?? {
-        name: typeof out.to_name === 'string' ? out.to_name : 'Agent',
-        to: typeof out.to === 'string' ? out.to : '',
-        n: 0
-      };
-      g.n += 1;
-      byThread.set(out.dm_thread_id, g);
+      for (const send of dmSendsFromCall(tc)) {
+        const g = byThread.get(send.threadId) ?? { name: send.name, to: send.to, n: 0 };
+        g.n += 1;
+        byThread.set(send.threadId, g);
+      }
     }
     return [...byThread.entries()];
   });
