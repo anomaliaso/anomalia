@@ -1,5 +1,5 @@
 import {sequence} from '@sveltejs/kit/hooks';
-import { json, text } from '@sveltejs/kit';
+import { json, redirect, text } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
@@ -9,6 +9,7 @@ import { withBrandContext } from '$lib/server/ai-log';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { captureReferralCookie } from '$lib/server/referrals';
 import { isCsrfForbidden } from '$lib/server/csrf';
+import { marketingShellTarget } from '$lib/server/marketing-shell';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -121,6 +122,23 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
   // brand blogs stay clean; their Powered-by badge already links to anomalia.so/?ref=….
   if (!isBlogRoute) {
     captureReferralCookie(event.cookies, event.url.searchParams.get('ref'));
+  }
+
+  // Self-host: HIDE_MARKETING=1 manda il pitch (homepage, pricing, /start, …) in /app.
+  // Prima di reindirizzare, lo stesso safety net della load della homepage: un bounce
+  // OAuth/magic-link sul Site URL con ?code= non deve finire in /app e perdere il code.
+  const marketingDest = marketingShellTarget(event.route.id);
+  if (marketingDest) {
+    if (event.url.searchParams.has('code') || event.url.searchParams.has('error_description')) {
+      throw redirect(303, `/auth/callback${event.url.search}`);
+    }
+    // /it → /app terrebbe la lingua solo su QUESTA richiesta (il prefisso sta nel path).
+    // La cookie è ciò che /app leggerà al giro dopo, stessa forma del language toggle.
+    const loc = event.locals.locale;
+    if (loc && loc !== 'en' && !event.cookies.get('locale')) {
+      event.cookies.set('locale', loc, { path: '/', maxAge: 31536000, sameSite: 'lax' });
+    }
+    throw redirect(303, marketingDest);
   }
 
   const doResolve = () =>
