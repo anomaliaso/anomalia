@@ -10,7 +10,7 @@
  * DATABASE_URL is required and NEVER defaults to Anomalia's own database — this script is meant
  * to run against a self-hoster's own Postgres.
  *
- *   DATABASE_URL=postgres://... node scripts/db-migrate.mjs
+ *   DATABASE_URL=postgres://... node --env-file-if-exists=.env scripts/db-migrate.mjs
  *   npm run db:migrate
  *
  * ponytail: no ORM, no query builder — the migrations are already plain .sql files, `pg`'s simple
