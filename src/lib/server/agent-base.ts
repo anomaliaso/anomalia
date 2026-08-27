@@ -116,6 +116,9 @@ export async function createAgentBase(opts: AgentBaseOpts): Promise<AgentBase> {
 				defaultAgent,
 				hubToolKeys: surfaceWriteKeys,
 				remainingMs: opts.remainingMs,
+				// Inline, non accodate: la guardia di `finish` legge i verdetti ON BANDA — una verifica
+				// che rientrasse come nuovo turno arriverebbe dopo che il giro si è già chiuso.
+				mode: 'inline',
 				onRun: (info) => {
 					if (REVIEW_ROLES.includes(info.role)) {
 						reviews.push({ role: info.role, verdict: info.verdict, error: info.error });

@@ -22,11 +22,13 @@
  * 2. NIENTE SCRITTURE DI STRAFORO: lo scope read-only è per prefisso su sole letture, e sopra passa
  *    comunque il filtro di modalità e di piano. Un sotto-agente non può fare ciò che l'orchestratore
  *    non poteva già fare.
- * 3. NIENTE BUCHI NERI DI BUDGET: tetto di run per turno, di step per run, e il tempo che resta al
- *    turno — la delega eredita l'abortSignal e non gli sopravvive.
+ * 3. NIENTE BUCHI NERI DI BUDGET: tetto di dispatch per turno, di step per run. In chat la delega
+ *    NON vive più dentro il turno (mode `queued`): accoda un job `subagent_run`, torna subito, e
+ *    il risultato rientra come nuovo turno — come motion_write. Le superfici kit che leggono i
+ *    verdetti in banda restano `inline`, dove la delega eredita l'abortSignal e non gli sopravvive.
  * 4. NESSUN AGENTE MUTO VERSO L'UTENTE: chi parla con la persona è uno solo.
  */
-import { generateText, stepCountIs, tool, type ToolExecutionOptions } from 'ai';
+import { streamText, stepCountIs, tool, type ToolExecutionOptions } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AGENT_IDS, AGENTS, type AgentId } from '$lib/server/chat/agents';
@@ -37,12 +39,23 @@ import { createSandboxTools, type SandboxSession } from '$lib/server/chat/sandbo
 import { chatSubAgentMaxTurns, SUB_AGENT_STEP_CEILING } from '$lib/server/chat/turn-limits';
 import { isSandboxConfigured, type SandboxNetworkMode } from '$lib/server/sandbox';
 import { createRecorder, saveAgentSession } from '$lib/server/agent-sessions';
+import { startLongToolJob } from '$lib/server/chat/tools/shared';
+import { createJobPartialMirror } from '$lib/server/chat/job-partial-mirror';
+import {
+  applyChatStreamEvent,
+  emptyStreamState,
+  toolsForMirror,
+  type ChatStreamState
+} from '$lib/chat-stream-events';
 
 export const SUBAGENT_ROLES = ['research', 'execute', 'verify', 'sandbox', 'compose'] as const;
 export type SubagentRole = (typeof SUBAGENT_ROLES)[number];
 
 /** I tre tool che questo file aggiunge alla chat. Vivono in SHARED_TOOL_KEYS: li ha ogni agente. */
-export const SUBAGENT_TOOL_KEYS = ['delegate_task', 'run_task_pipeline', 'run_parallel_tasks'] as const;
+export const SUBAGENT_TOOL_KEYS = ['delegate_task', 'run_task_pipeline', 'run_parallel_tasks', 'check_subagent'] as const;
+
+/** Il tool_name della riga `chat_jobs` che porta una run di sub-agent fuori dal turno. */
+export const SUBAGENT_JOB_TOOL = 'subagent_run';
 
 /** Quante deleghe può fare un turno. Sopra questo, l'orchestratore finisce il lavoro da solo. */
 export const MAX_SUBAGENT_RUNS = 50;
@@ -299,7 +312,7 @@ const ROLE_LABEL: Record<SubagentRole, string> = {
   compose: 'Composizione'
 };
 
-export type SubagentFactoryOpts = {
+export type SubagentRunCtx = {
   supabase: SupabaseClient;
   brandId: string;
   /** Tool dell'orchestratore DOPO modalità e piano, PRIMA della restrizione per hub. */
@@ -316,14 +329,38 @@ export type SubagentFactoryOpts = {
      * toolKeys dell'hub», giusto in chat e sbagliato dove i tool si chiamano in un altro modo.
      */
   hubToolKeys?: string[];
-  /** Quanto tempo resta al turno: un sotto-agente non deve mai essere l'ultimo a saperlo. */
+  /** Quanto tempo resta alla run: un sotto-agente non deve mai essere l'ultimo a saperlo. */
   remainingMs?: () => number;
-    /**
-     * Chiamata alla fine di OGNI run, riuscita o meno: serve a chi deve sapere non quante deleghe ci
-     * sono state ma DI CHE TIPO — la guardia che pretende una review prima di chiudere non può fidarsi
-     * di ciò che l'agente racconta, deve vedere che una run di verifica è girata e con che verdetto.
-     */
+  /**
+   * Chiamata alla fine di OGNI run, riuscita o meno: serve a chi deve sapere non quante deleghe ci
+   * sono state ma DI CHE TIPO — la guardia che pretende una review prima di chiudere non può fidarsi
+   * di ciò che l'agente racconta, deve vedere che una run di verifica è girata e con che verdetto.
+   */
   onRun?: (info: { role: SubagentRole; agent: AgentId | null; verdict?: string; error?: string }) => void;
+  /**
+   * Il partial in tempo reale (stessa forma dell'SSE di chat, piegata dal reducer condiviso):
+   * chiamata a ogni delta, con throttle a cura del destinatario. `force` = un evento che l'utente
+   * deve vedere SUBITO (una tool call che si apre o chiude). Nel turno in coda è il mirror che
+   * riscrive `chat_jobs.partial`; nella run sincrona non c'è.
+   */
+  onProgress?: (state: ChatStreamState, force?: boolean) => void;
+};
+
+export type SubagentFactoryOpts = SubagentRunCtx & {
+  /**
+   * `queued` (default in chat): i tool di delega accodano un job `subagent_run` e tornano SUBITO —
+   * il risultato rientra come nuovo turno. `inline`: la run gira dentro il tool call come prima,
+   * per le superfici kit la cui guardia di `finish` legge i verdetti in banda (agent-base).
+   */
+  mode?: 'inline' | 'queued';
+  /**
+   * Solo `inline`: anche una run dentro il turno lascia una riga `chat_jobs` con il partial vivo
+   * (specchio, non coda) — è ciò che fa comparire il lavoro tra i processi in background e lo
+   * rende leggibile a `check_subagent`. La durabilità la dà il turno kit che la ospita.
+   */
+  mirror?: boolean;
+  /** Dove il rientro del job deve ripartire (il kick della coda ne ha bisogno). */
+  origin?: string;
 };
 
 type RunResult = {
@@ -359,7 +396,41 @@ type RunResult = {
 export const MIN_SUBAGENT_RUN_MS = 20_000;
 const MIN_RUN_MS = MIN_SUBAGENT_RUN_MS;
 
-export function createSubagentTools(opts: SubagentFactoryOpts) {
+/**
+ * La cache che attraversa le run di una stessa factory: il brand e i prompt di sistema per hub si
+ * costruiscono una volta per turno (o per job), non per delega.
+ */
+export type SubagentSharedCache = {
+  brandRow: Record<string, unknown> | null;
+  systemCache: Map<string, string>;
+  volatile: Promise<string> | null;
+};
+
+const newSharedCache = (): SubagentSharedCache => ({ brandRow: null, systemCache: new Map(), volatile: null });
+
+/**
+ * IL MOTORE DI UNA RUN, indipendente da chi la chiama.
+ *
+ * Una volta la run viveva solo dentro la closure dei tre tool di delega: chi non era uno di quei
+ * tool non poteva eseguire un sotto-agente. Il lavoro async ne ha bisogno altrove — il worker che
+ * esegue il job `subagent_run` — quindi il motore è qui, e la closure diventa uno dei chiamanti.
+ */
+export async function runSubagentRun(
+  ctx: SubagentRunCtx,
+  args: {
+    role: SubagentRole;
+    agent: AgentId | null;
+    title: string;
+    brief: string;
+    context?: string;
+    successCriteria?: string;
+    maxSteps?: number;
+    network?: SandboxNetworkMode;
+    brandData?: boolean;
+    abortSignal?: AbortSignal;
+    shared?: SubagentSharedCache;
+  }
+): Promise<RunResult> {
   const {
     supabase,
     brandId,
@@ -369,26 +440,52 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
     userId = '',
     threadId,
     webHubEnabled = true,
-    defaultAgent = null,
     hubToolKeys,
     remainingMs,
-    onRun
-  } = opts;
+    onRun,
+    onProgress
+  } = ctx;
+  const { role, agent, title, brief, context, successCriteria, abortSignal } = args;
+  const shared = args.shared ?? newSharedCache();
+  const base: RunResult = { role, agent, title, report: '', steps: 0, tools_used: [] };
 
-    /**
-     * Letto a ogni run, non alla costruzione: in una superficie che mette i propri tool e questi nello
-     * STESSO oggetto (la pagina Motion) il set si riempie subito dopo, e leggerlo qui darebbe una
-     * mappa vuota con ogni delega che torna «nessun tool disponibile».
-     */
-  const availableNames = () => Object.keys(available);
-  let runsUsed = 0;
+  if (abortSignal?.aborted) return { ...base, error: 'Chat stopped' };
 
-  /** Il brand e i prompt di sistema per hub si costruiscono una volta per turno, non per delega. */
-  let brandRow: Record<string, unknown> | null = null;
-  const systemCache = new Map<string, string>();
+  const names = subagentToolNames(role, agent, Object.keys(available), hubToolKeys);
+  const scoped = pickByName(available, names);
+  if (!Object.keys(scoped).length) {
+    return {
+      ...base,
+      error: `No tools available for a ${role} sub-agent in this chat mode — do this work yourself or switch mode.`
+    };
+  }
+  if (role === 'sandbox' && !isSandboxConfigured()) {
+    return {
+      ...base,
+      error:
+        'The sandbox is not configured on this deployment, so there is no VM to run code in. Do the work with the normal tools, or tell the user this needs the sandbox enabled.'
+    };
+  }
+  // Modalità ask / plan: le scritture sono già state tolte a monte. Un esecutore con solo tool di
+  // lettura brucerebbe una run per tornare a dire che non poteva fare niente.
+  if (role === 'execute' && !names.some((n) => !isReadOnlyToolName(n))) {
+    return {
+      ...base,
+      error:
+        'This chat mode has no write tools, so an execution sub-agent has nothing to execute. Use role="research", or tell the user to switch to Agent mode.'
+    };
+  }
+
+  const left = remainingMs?.();
+  if (typeof left === 'number' && left < MIN_RUN_MS) {
+    return {
+      ...base,
+      error: 'Not enough time left in this turn to run a sub-agent. Report what is done and what still needs another turn.'
+    };
+  }
 
   async function loadBrand() {
-    if (brandRow) return brandRow;
+    if (shared.brandRow) return shared.brandRow;
     const { data } = await supabase
       .from('brands')
       .select(
@@ -396,13 +493,13 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
       )
       .eq('id', brandId)
       .maybeSingle();
-    brandRow = (data as Record<string, unknown> | null) ?? null;
-    return brandRow;
+    shared.brandRow = (data as Record<string, unknown> | null) ?? null;
+    return shared.brandRow;
   }
 
-  async function hubSystem(agent: AgentId | null): Promise<string> {
+  async function hubSystem(): Promise<string> {
     const key = agent ?? '_none';
-    const cached = systemCache.get(key);
+    const cached = shared.systemCache.get(key);
     if (cached) return cached;
     const brand = await loadBrand();
     if (!brand) return '';
@@ -414,81 +511,20 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
       threadId,
       userId
     });
-    systemCache.set(key, built);
+    shared.systemCache.set(key, built);
     return built;
   }
 
-  let volatileCache: Promise<string> | null = null;
   function turnVolatile(): Promise<string> {
-    if (!volatileCache) {
-      volatileCache = loadBrand()
+    if (!shared.volatile) {
+      shared.volatile = loadBrand()
         .then((brand) => (brand ? buildTurnVolatileBlock(supabase, brand, locale) : ''))
         .catch(() => '');
     }
-    return volatileCache;
+    return shared.volatile;
   }
 
-  function budgetError(): { error: string; budget_used: number } | null {
-    if (runsUsed >= MAX_SUBAGENT_RUNS) {
-      return {
-        error: `Sub-agent budget spent for this turn (max ${MAX_SUBAGENT_RUNS} runs). Finish the work yourself with your own tools, or tell the user what is left.`,
-        budget_used: runsUsed
-      };
-    }
-    return null;
-  }
-
-  async function runSubagent(args: {
-    role: SubagentRole;
-    agent: AgentId | null;
-    title: string;
-    brief: string;
-    context?: string;
-    successCriteria?: string;
-    maxSteps?: number;
-    network?: SandboxNetworkMode;
-    brandData?: boolean;
-    abortSignal?: AbortSignal;
-  }): Promise<RunResult> {
-    const { role, agent, title, brief, context, successCriteria, abortSignal } = args;
-    const base: RunResult = { role, agent, title, report: '', steps: 0, tools_used: [] };
-
-    if (abortSignal?.aborted) return { ...base, error: 'Chat stopped' };
-
-    const names = subagentToolNames(role, agent, availableNames(), hubToolKeys);
-    const scoped = pickByName(available, names);
-    if (!Object.keys(scoped).length) {
-      return {
-        ...base,
-        error: `No tools available for a ${role} sub-agent in this chat mode — do this work yourself or switch mode.`
-      };
-    }
-    if (role === 'sandbox' && !isSandboxConfigured()) {
-      return {
-        ...base,
-        error:
-          'The sandbox is not configured on this deployment, so there is no VM to run code in. Do the work with the normal tools, or tell the user this needs the sandbox enabled.'
-      };
-    }
-    // Modalità ask / plan: le scritture sono già state tolte a monte. Un esecutore con solo tool di
-    // lettura brucerebbe una run per tornare a dire che non poteva fare niente.
-    if (role === 'execute' && !names.some((n) => !isReadOnlyToolName(n))) {
-      return {
-        ...base,
-        error:
-          'This chat mode has no write tools, so an execution sub-agent has nothing to execute. Use role="research", or tell the user to switch to Agent mode.'
-      };
-    }
-
-    const left = remainingMs?.();
-    if (typeof left === 'number' && left < MIN_RUN_MS) {
-      return {
-        ...base,
-        error: 'Not enough time left in this turn to run a sub-agent. Report what is done and what still needs another turn.'
-      };
-    }
-
-    const system = `${await hubSystem(agent)}
+  const system = `${await hubSystem()}
 
 ## SUB-AGENT RUN — ${ROLE_LABEL[role]}
 ${ROLE_CONTRACT[role]}
@@ -496,181 +532,531 @@ ${ROLE_CONTRACT[role]}
 Everything above is brand context. It is NOT a task list: the only task is the brief below.
 You are not talking to the user and no one is reading you live — your final message IS the return value.`;
 
-    const prompt = wrapTurnContext(
-      await turnVolatile(),
-      [
-        `TASK: ${title}`,
-        `BRIEF:\n${brief.trim()}`,
-        context?.trim() ? `CONTEXT FROM THE ORCHESTRATOR:\n${context.trim()}` : '',
-        successCriteria?.trim() ? `DONE WHEN:\n${successCriteria.trim()}` : ''
-      ]
-        .filter(Boolean)
-        .join('\n\n')
-    );
+  const prompt = wrapTurnContext(
+    await turnVolatile(),
+    [
+      `TASK: ${title}`,
+      `BRIEF:\n${brief.trim()}`,
+      context?.trim() ? `CONTEXT FROM THE ORCHESTRATOR:\n${context.trim()}` : '',
+      successCriteria?.trim() ? `DONE WHEN:\n${successCriteria.trim()}` : ''
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  );
 
-    const steps = chatSubAgentMaxTurns(role, args.maxSteps);
-    const t0 = Date.now();
-    runsUsed++;
+  const steps = chatSubAgentMaxTurns(role, args.maxSteps);
+  const t0 = Date.now();
 
-      // La VM vive quanto la run: si apre pigra al primo tool che la tocca e si chiude nel finally,
-      // anche quando il modello esplode a metà. Il recorder è la scatola nera della run, per tutti i
-      // ruoli — anche un `research` a mani vuote ha un percorso che spiega perché.
-    const recorder = createRecorder();
-    recorder.event('start', { role, agent, title, brief, context, success_criteria: successCriteria, max_steps: steps });
+    // La VM vive quanto la run: si apre pigra al primo tool che la tocca e si chiude nel finally,
+    // anche quando il modello esplode a metà. Il recorder è la scatola nera della run, per tutti i
+    // ruoli — anche un `research` a mani vuote ha un percorso che spiega perché.
+  const recorder = createRecorder();
+  recorder.event('start', { role, agent, title, brief, context, success_criteria: successCriteria, max_steps: steps });
 
-    let sandboxSession: SandboxSession | null = null;
-    if (role === 'sandbox') {
-      sandboxSession = createSandboxTools({
-        supabase,
-        brandId,
-        userId,
-        threadId,
-        // La macchina è quella dell'agente che ha delegato, non una VM del brand a parte: il
-        // delegato lavora sullo schermo che l'utente sta guardando.
-        agentId: agent ?? undefined,
-        mode: args.network ?? 'compute',
-        brandData: args.brandData,
-        webHubEnabled,
-        remainingMs,
-        onLog: (line) => {
-          console.log(`[Subagent sandbox] brand=${brandId} ${line}`);
-          recorder.event('log', { line });
-        },
-        record: recorder.event
-      });
-      Object.assign(scoped, sandboxSession.tools);
-    }
+  let sandboxSession: SandboxSession | null = null;
+  if (role === 'sandbox') {
+    sandboxSession = createSandboxTools({
+      supabase,
+      brandId,
+      userId,
+      threadId,
+      // La macchina è quella dell'agente che ha delegato, non una VM del brand a parte: il
+      // delegato lavora sullo schermo che l'utente sta guardando.
+      agentId: agent ?? undefined,
+      mode: args.network ?? 'compute',
+      brandData: args.brandData,
+      webHubEnabled,
+      remainingMs,
+      onLog: (line) => {
+        console.log(`[Subagent sandbox] brand=${brandId} ${line}`);
+        recorder.event('log', { line });
+      },
+      record: recorder.event
+    });
+    Object.assign(scoped, sandboxSession.tools);
+  }
 
-    try {
-      const result = await generateText({
-        model: model.model,
-        system,
-        prompt,
-        tools: scoped as Parameters<typeof generateText>[0]['tools'],
-        stopWhen: [stepCountIs(steps)],
-        temperature: role === 'verify' ? 0.1 : 0.4,
-        abortSignal,
-        ...model.callOptions
-      });
+  // Il partial in tempo reale: la run NON è più un buco nero. Gli stessi eventi che piega il
+  // browser, piegati qui e girati a chi riscrive `chat_jobs.partial` — flush immediato sui tool
+  // (aprire una call è ciò che l'utente deve vedere SUBITO), throttle sul testo, a cura di chi
+  // riceve. Nella run senza spettatori il callback non c'è e il costo è zero.
+  const state = emptyStreamState();
+  let lastFlush = 0;
+  const PARTIAL_MS = 300;
+  const flushProgress = (force = false) => {
+    if (!onProgress) return;
+    const now = Date.now();
+    if (!force && now - lastFlush < PARTIAL_MS) return;
+    lastFlush = now;
+    onProgress(state, force);
+  };
 
-      const used = new Set<string>();
-      for (const s of result.steps ?? []) {
-        for (const c of s.toolCalls ?? []) used.add(c.toolName);
-        // Il giro del modello, non solo quello della VM: quale tool ha chiamato, con che input, e
-        // cosa gli è tornato. È la metà che mancava per capire perché un sotto-agente ha deviato.
-        for (const r of s.toolResults ?? []) {
-          recorder.event('tool_call', {
-            tool: (r as { toolName?: string }).toolName,
-            input: (r as { input?: unknown }).input,
-            output: (r as { output?: unknown }).output
+  try {
+    const result = streamText({
+      model: model.model,
+      system,
+      prompt,
+      tools: scoped as Parameters<typeof streamText>[0]['tools'],
+      stopWhen: [stepCountIs(steps)],
+      temperature: role === 'verify' ? 0.1 : 0.4,
+      abortSignal,
+      ...model.callOptions
+    });
+
+    for await (const part of result.fullStream) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p = part as any;
+      switch (p.type) {
+        case 'text-delta':
+          applyChatStreamEvent(state, { type: 'text-delta', delta: p.text ?? p.delta });
+          flushProgress();
+          break;
+        case 'tool-call':
+          applyChatStreamEvent(state, {
+            type: 'tool-input-available',
+            toolCallId: p.toolCallId,
+            toolName: p.toolName,
+            input: p.input
           });
-        }
-        if (s.text?.trim()) recorder.event('assistant_text', { text: s.text });
+          flushProgress(true);
+          break;
+        case 'tool-result':
+          applyChatStreamEvent(state, {
+            type: 'tool-output-available',
+            toolCallId: p.toolCallId,
+            output: p.output
+          });
+          flushProgress(true);
+          break;
+        case 'tool-error':
+          applyChatStreamEvent(state, {
+            type: 'tool-output-error',
+            toolCallId: p.toolCallId,
+            errorText: String(p.error ?? 'tool error')
+          });
+          flushProgress(true);
+          break;
+        case 'reasoning-delta':
+          applyChatStreamEvent(state, { type: 'reasoning-delta', delta: p.text ?? p.delta });
+          flushProgress();
+          break;
+        case 'error':
+          state.failed = true;
+          flushProgress(true);
+          break;
+        default:
+          break;
       }
-      const { report, truncated } = clampReport(result.text ?? '');
+    }
+    flushProgress(true);
 
-      logAiCall({
-        label: 'chat_subagent',
-        provider: model.provider,
-        model: model.modelId,
-        ms: Date.now() - t0,
-        ok: true,
-        ...extractSdkUsage(result.totalUsage),
-        // Il sotto-agente condivide il client kie del turno che lo ha chiamato: takeKieUsage
-        // azzera il contatore, quindi si porta via la sua fetta e il padre logga il resto.
-        ...takeKieUsage(model),
-        brandId,
-        userId,
-        threadId,
-        context: `subagent:${role}:${agent ?? 'none'}`
-      });
+    const finalText = await result.text;
+    const finalSteps = await result.steps;
+    const totalUsage = await result.totalUsage;
 
-      const out: RunResult = {
-        ...base,
-        report:
-          report ||
-          'The sub-agent ended without a written report — treat its work as unverified and check the state yourself.',
-        steps: result.steps?.length ?? 0,
-        tools_used: [...used],
-        tools_available: names.length
-      };
-      if (truncated) out.truncated = true;
-      if (role === 'verify') out.verdict = parseVerdict(report);
-      onRun?.({ role, agent, verdict: out.verdict });
-      if (sandboxSession) out.sandbox = sandboxSession.stats();
-
-      recorder.event('report', { report: out.report, steps: out.steps, tools_used: out.tools_used });
-        // ATTESO, non `void`: senza l'id la traccia esiste e non è raggiungibile. Costa un insert su un
-        // giro durato decine di secondi; `.catch` perché l'osservabilità non può far fallire un lavoro
-        // riuscito.
-      const traceId = await saveAgentSession({
-        brandId,
-        userId,
-        threadId,
-        agent: agent ?? 'none',
-        mode: role,
-        surface: 'chat_subagent',
-        status: 'ok',
-        model: model.modelId,
-        provider: model.provider,
-        systemPrompt: system,
-        transcript: out.report,
-        recorder,
-        // L'unico momento in cui il set esiste: qui. Chi rileggerà `runs/<id>.md` non potrà più.
-        secrets: sandboxSession?.secrets()
-      }).catch(() => null);
-      if (traceId) {
-        out.trace = `runs/${traceId}.md`;
-          // La riga che rimanda alla traccia si aggiunge SOLO quando il rapporto non torna: metterla
-          // sempre inviterebbe a rileggere anche i giri andati bene, cioè a rovesciare nel padre i
-          // token che il sotto-agente serviva a risparmiare. Il campo `trace` c'è comunque.
-        if (out.verdict && out.verdict !== 'pass') {
-          out.report += `\n\nTraccia completa di questo giro: read_file("${out.trace}") — o grep("${out.trace}", "error").`;
-        }
+    const used = new Set<string>();
+    for (const s of finalSteps ?? []) {
+      for (const c of s.toolCalls ?? []) used.add(c.toolName);
+      // Il giro del modello, non solo quello della VM: quale tool ha chiamato, con che input, e
+      // cosa gli è tornato. È la metà che mancava per capire perché un sotto-agente ha deviato.
+      for (const r of s.toolResults ?? []) {
+        recorder.event('tool_call', {
+          tool: (r as { toolName?: string }).toolName,
+          input: (r as { input?: unknown }).input,
+          output: (r as { output?: unknown }).output
+        });
       }
-      return out;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      logAiCall({
-        label: 'chat_subagent',
-        provider: model.provider,
-        model: model.modelId,
-        ms: Date.now() - t0,
-        ok: false,
-        error: msg,
-        brandId,
-        userId,
-        threadId,
-        context: `subagent:${role}:${agent ?? 'none'}`
-      });
+      if (s.text?.trim()) recorder.event('assistant_text', { text: s.text });
+    }
+    const { report, truncated } = clampReport(finalText ?? '');
 
-        // Una run che esplode è quella di cui non si sa niente, ed è la situazione in cui la traccia
-        // serve di più: il riepilogo, qui, non arriva nemmeno.
-      recorder.event('error', { message: msg });
-      const traceId = await saveAgentSession({
-        brandId,
-        userId,
-        threadId,
-        agent: agent ?? 'none',
-        mode: role,
-        surface: 'chat_subagent',
-        status: abortSignal?.aborted ? 'cancelled' : 'error',
-        model: model.modelId,
-        provider: model.provider,
-        systemPrompt: system,
-        transcript: '',
-        error: msg,
-        recorder,
-        secrets: sandboxSession?.secrets()
-      }).catch(() => null);
-      onRun?.({ role, agent, error: msg });
-      return { ...base, error: msg, ...(traceId ? { trace: `runs/${traceId}.md` } : {}) };
-    } finally {
-      // La sandbox si chiude comunque; se ha lasciato uno stato interessante, è già negli eventi.
-      await sandboxSession?.close();
+    logAiCall({
+      label: 'chat_subagent',
+      provider: model.provider,
+      model: model.modelId,
+      ms: Date.now() - t0,
+      ok: true,
+      ...extractSdkUsage(totalUsage),
+      // Il sotto-agente condivide il client kie del turno che lo ha chiamato: takeKieUsage
+      // azzera il contatore, quindi si porta via la sua fetta e il padre logga il resto.
+      ...takeKieUsage(model),
+      brandId,
+      userId,
+      threadId,
+      context: `subagent:${role}:${agent ?? 'none'}`
+    });
+
+    const out: RunResult = {
+      ...base,
+      report:
+        report ||
+        'The sub-agent ended without a written report — treat its work as unverified and check the state yourself.',
+      steps: finalSteps?.length ?? 0,
+      tools_used: [...used],
+      tools_available: names.length
+    };
+    if (truncated) out.truncated = true;
+    if (role === 'verify') out.verdict = parseVerdict(report);
+    onRun?.({ role, agent, verdict: out.verdict });
+    if (sandboxSession) out.sandbox = sandboxSession.stats();
+
+    recorder.event('report', { report: out.report, steps: out.steps, tools_used: out.tools_used });
+      // ATTESO, non `void`: senza l'id la traccia esiste e non è raggiungibile. Costa un insert su un
+      // giro durato decine di secondi; `.catch` perché l'osservabilità non può far fallire un lavoro
+      // riuscito.
+    const traceId = await saveAgentSession({
+      brandId,
+      userId,
+      threadId,
+      agent: agent ?? 'none',
+      mode: role,
+      surface: 'chat_subagent',
+      status: 'ok',
+      model: model.modelId,
+      provider: model.provider,
+      systemPrompt: system,
+      transcript: out.report,
+      recorder,
+      // L'unico momento in cui il set esiste: qui. Chi rileggerà `runs/<id>.md` non potrà più.
+      secrets: sandboxSession?.secrets()
+    }).catch(() => null);
+    if (traceId) {
+      out.trace = `runs/${traceId}.md`;
+        // La riga che rimanda alla traccia si aggiunge SOLO quando il rapporto non torna: metterla
+        // sempre inviterebbe a rileggere anche i giri andati bene, cioè a rovesciare nel padre i
+        // token che il sotto-agente serviva a risparmiare. Il campo `trace` c'è comunque.
+      if (out.verdict && out.verdict !== 'pass') {
+        out.report += `\n\nTraccia completa di questo giro: read_file("${out.trace}") — o grep("${out.trace}", "error").`;
+      }
+    }
+    return out;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logAiCall({
+      label: 'chat_subagent',
+      provider: model.provider,
+      model: model.modelId,
+      ms: Date.now() - t0,
+      ok: false,
+      error: msg,
+      brandId,
+      userId,
+      threadId,
+      context: `subagent:${role}:${agent ?? 'none'}`
+    });
+
+      // Una run che esplode è quella di cui non si sa niente, ed è la situazione in cui la traccia
+      // serve di più: il riepilogo, qui, non arriva nemmeno.
+    recorder.event('error', { message: msg });
+    const traceId = await saveAgentSession({
+      brandId,
+      userId,
+      threadId,
+      agent: agent ?? 'none',
+      mode: role,
+      surface: 'chat_subagent',
+      status: abortSignal?.aborted ? 'cancelled' : 'error',
+      model: model.modelId,
+      provider: model.provider,
+      systemPrompt: system,
+      transcript: '',
+      error: msg,
+      recorder,
+      secrets: sandboxSession?.secrets()
+    }).catch(() => null);
+    onRun?.({ role, agent, error: msg });
+    return { ...base, error: msg, ...(traceId ? { trace: `runs/${traceId}.md` } : {}) };
+  } finally {
+    // La sandbox si chiude comunque; se ha lasciato uno stato interessante, è già negli eventi.
+    await sandboxSession?.close();
+  }
+}
+
+/**
+ * La pipeline RESEARCH → EXECUTION → VERIFICATION, fuori dai tool: la usa il mode inline e il
+ * worker che esegue il job accodato. `budget.spend` conta le run che la pipeline consuma.
+ */
+export async function runTaskPipelinePhases(
+  ctx: SubagentRunCtx,
+  input: {
+    objective: string;
+    agent?: AgentId;
+    research_brief?: string;
+    execute_brief?: string;
+    verify_brief?: string;
+    context?: string;
+    skip_research?: boolean;
+    repair?: boolean;
+  },
+  budget: { left: () => number; spend: (n: number) => void },
+  shared: SubagentSharedCache = newSharedCache()
+): Promise<AnyRecShape> {
+  const agent = input.agent ?? ctx.defaultAgent ?? null;
+  const phases: RunResult[] = [];
+  const wantsRepair = input.repair !== false;
+
+  const need = (input.skip_research ? 0 : 1) + 2;
+  if (budget.left() < need) {
+    return {
+      error: `Not enough sub-agent budget for a full pipeline (needs ${need}, ${budget.left()} left). Use delegate_task for the single phase that matters, or finish it yourself.`,
+      runs_left: budget.left()
+    };
+  }
+
+  let research: RunResult | null = null;
+  if (!input.skip_research) {
+    budget.spend(1);
+    research = await runSubagentRun(ctx, {
+      role: 'research',
+      agent,
+      shared,
+      title: `Ricerca — ${input.objective.slice(0, 80)}`,
+      brief:
+        input.research_brief?.trim() ||
+        `Establish everything needed to do this well, from the real data:\n${input.objective}`,
+      context: input.context
+    });
+    phases.push(research);
+    if (research.error) return { phases, error: research.error, runs_left: budget.left() };
+  }
+
+  const researchBlock = research?.report ? `RESEARCH REPORT:\n${research.report}` : '';
+  const sharedContext = [input.context?.trim(), researchBlock].filter(Boolean).join('\n\n');
+
+  budget.spend(1);
+  const exec = await runSubagentRun(ctx, {
+    role: 'execute',
+    agent,
+    shared,
+    title: `Esecuzione — ${input.objective.slice(0, 80)}`,
+    brief: input.execute_brief?.trim() || `Do the work required by this objective, end to end:\n${input.objective}`,
+    context: sharedContext,
+    successCriteria: input.objective
+  });
+  phases.push(exec);
+  if (exec.error) return { phases, error: exec.error, runs_left: budget.left() };
+
+  budget.spend(1);
+  let verify = await runSubagentRun(ctx, {
+    role: 'verify',
+    agent,
+    shared,
+    title: `Verifica — ${input.objective.slice(0, 80)}`,
+    brief:
+      input.verify_brief?.trim() ||
+      `Check against the real current state whether this objective is met:\n${input.objective}`,
+    context: `EXECUTION REPORT (claims to verify — do not trust, re-read):\n${exec.report}${sharedContext ? `\n\n${sharedContext}` : ''}`
+  });
+  phases.push(verify);
+
+  let repaired = false;
+  if (
+    wantsRepair &&
+    !verify.error &&
+    (verify.verdict === 'fail' || verify.verdict === 'partial') &&
+    budget.left() >= 2
+  ) {
+    repaired = true;
+    budget.spend(1);
+    const fix = await runSubagentRun(ctx, {
+      role: 'execute',
+      agent,
+      shared,
+      title: `Riparazione — ${input.objective.slice(0, 80)}`,
+      brief: `Fix ONLY the defects listed by the verifier. Do not redo what already passed, do not add new work.`,
+      context: `OBJECTIVE:\n${input.objective}\n\nVERIFICATION REPORT:\n${verify.report}\n\nPREVIOUS EXECUTION REPORT:\n${exec.report}`
+    });
+    phases.push(fix);
+    if (!fix.error) {
+      budget.spend(1);
+      verify = await runSubagentRun(ctx, {
+        role: 'verify',
+        agent,
+        shared,
+        title: `Ri-verifica — ${input.objective.slice(0, 80)}`,
+        brief: `Re-check the objective against the real state after the repair round:\n${input.objective}`,
+        context: `REPAIR REPORT (claims to verify — do not trust, re-read):\n${fix.report}`
+      });
+      phases.push(verify);
     }
   }
 
+  return {
+    objective: input.objective,
+    agent,
+    verdict: verify.verdict ?? 'unknown',
+    repaired,
+    phases,
+    runs_left: budget.left(),
+    instruction:
+      verify.verdict === 'pass'
+        ? 'Verified. Tell the user what changed, concretely — do not re-run the same work.'
+        : 'NOT verified. Say plainly to the user what is done, what is not, and what you propose next. Never report unverified work as finished.'
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRecShape = Record<string, any>;
+
+/** Il fan-out `run_parallel_tasks`: N worker sullo stesso ruolo, 4 lane. Usato da inline e worker. */
+export async function runParallelTasks(
+  ctx: SubagentRunCtx,
+  input: {
+    role: 'compose' | 'research';
+    shared_context: string;
+    tasks: Array<{ title: string; brief: string }>;
+    agent?: AgentId;
+    max_steps?: number;
+  }
+): Promise<AnyRecShape> {
+  const agent = input.agent ?? ctx.defaultAgent ?? null;
+
+  // Il tetto di concorrenza non è il budget: è quante chiamate al modello vogliamo in volo
+  // insieme. Oltre, si guadagna poco wall-clock e si prende un rate limit a metà lavoro.
+  const LANES = 4;
+  const results: RunResult[] = new Array(input.tasks.length);
+  let next = 0;
+  const lane = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= input.tasks.length) return;
+      const task = input.tasks[i];
+      results[i] = await runSubagentRun(ctx, {
+        role: input.role,
+        agent,
+        title: task.title,
+        brief: task.brief,
+        context: `SHARED CONTEXT — the whole this piece belongs to. Do not contradict it, do not redefine what it fixes:\n${input.shared_context.trim()}\n\nYou are piece ${i + 1} of ${input.tasks.length}. The others are being built right now by other agents; you cannot see them.`,
+        maxSteps: input.max_steps
+      });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LANES, input.tasks.length) }, lane));
+
+  const failed = results.filter((r) => r?.error).length;
+  return {
+    role: input.role,
+    agent,
+    tasks: results,
+    failed,
+    instruction:
+      input.role === 'compose'
+        ? failed
+          ? `${failed} of ${results.length} pieces failed. Build the missing ones yourself before assembling — never assemble a whole with a hole in it and call it done.`
+          : 'Every piece came back in its report. Assemble them yourself now, reconcile the ASSUMPTIONS and NEEDS sections, and write the result with your source tools — the workers wrote nothing.'
+        : 'Read the reports together: what one worker could not establish another may have. Then act.'
+  };
+}
+
+/**
+ * La lettura del job di un sub-agent, condivisa dal tool `check_subagent`: status, il testo vivo
+ * (la coda di quello che sta facendo), le tool call con il loro stato, e il risultato quando c'è.
+ */
+export async function checkSubagentJob(
+  supabase: SupabaseClient,
+  userId: string,
+  jobId: string
+): Promise<AnyRecShape> {
+  const { data: job } = await supabase
+    .from('chat_jobs')
+    .select('id, tool_name, status, partial, result, error, created_at, completed_at')
+    .eq('id', jobId)
+    .eq('user_id', userId || '')
+    .maybeSingle();
+  if (!job) return { error: 'No such sub-agent job (or it is not yours).' };
+  const partial = (job.partial ?? {}) as { text?: string; tools?: Array<{ toolName: string; status?: string }> };
+  const out: AnyRecShape = {
+    job_id: job.id,
+    status: job.status,
+    progress: String(partial.text ?? '').slice(-1200),
+    tools: (partial.tools ?? []).map((t) => `${t.toolName}:${t.status ?? 'running'}`)
+  };
+  if (job.error) out.error = job.error;
+  if (job.status === 'done' && job.result) out.result = job.result;
+  out.note = 'The finished report is delivered as a new message anyway. Do not poll this in a loop.';
+  return out;
+}
+
+export function createSubagentTools(opts: SubagentFactoryOpts) {
+  const { mode = 'queued', origin = '', mirror = false, ...ctx } = opts;
+  const shared = newSharedCache();
+
+  /** Letto a ogni run, non alla costruzione: in una superficie che mette i propri tool e questi
+   * nello STESSO oggetto (la pagina Motion) il set si riempie subito dopo la costruzione. */
+  const availableNames = () => Object.keys(ctx.tools);
+  let runsUsed = 0;
+
+  // Il budget conta ora DISPACCI, non run: ogni delega accodata è una riga chat_jobs che un
+  // worker esegue fuori dal turno. Il tetto resta ciò che ferma un orchestratore che accumula
+  // lavoro senza produrre nulla.
+  function budgetError(): { error: string; budget_used: number } | null {
+    if (runsUsed >= MAX_SUBAGENT_RUNS) {
+      return {
+        error: `Sub-agent dispatch budget spent for this turn (max ${MAX_SUBAGENT_RUNS}). Finish the work yourself with your own tools, or tell the user what is left.`,
+        budget_used: runsUsed
+      };
+    }
+    return null;
+  }
+
+  /** La run inline (superfici kit): stesso motore, cache condivisa, budget del chiamante.
+   * Con `mirror` la run lascia una riga `chat_jobs` con il partial vivo — osservabilità, non
+   * coda: la durabilità la dà il turno kit che la ospita (run con heartbeat e resume). */
+  function runMirrored<T>(
+    kind: 'single' | 'pipeline' | 'parallel',
+    row: { role?: string; agent?: AgentId | null; title: string },
+    run: (onProgress: SubagentRunCtx['onProgress']) => Promise<T>
+  ): Promise<T> {
+    if (!mirror) return run(undefined);
+
+    const created = ctx.supabase
+      .from('chat_jobs')
+      .insert({
+        brand_id: ctx.brandId,
+        user_id: ctx.userId || '',
+        tool_name: SUBAGENT_JOB_TOOL,
+        input_params: { kind, role: row.role ?? null, agent: row.agent ?? null, title: row.title, mirrored: true },
+        status: 'running',
+        thread_id: ctx.threadId ?? null,
+        partial: { text: '', tools: [], reasoning: '', at: Date.now() }
+      })
+      .select('id')
+      .maybeSingle();
+
+    return (async () => {
+      // La riga è un extra di osservabilità: se l'insert non passa, la run inline resta integra.
+      const { data: job } = await created;
+      if (!job) return run(undefined);
+
+      const jobMirror = createJobPartialMirror(ctx.supabase, (job as { id: string }).id);
+      const stopHeartbeat = jobMirror.startHeartbeat();
+      try {
+        const res = await run((s, f) => jobMirror.push(s, f));
+        const ok = !(res as { error?: string }).error;
+        await ctx.supabase
+          .from('chat_jobs')
+          .update({
+            status: ok ? 'done' : 'failed',
+            ...(ok ? { result: res } : {}),
+            ...(!(res as { error?: string }).error ? {} : { error: String((res as { error?: string }).error).slice(0, 2000) }),
+            partial: null,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', (job as { id: string }).id);
+        return res;
+      } finally {
+        await jobMirror.flushLatest();
+        stopHeartbeat();
+      }
+    })();
+  }
+
+  /** La run inline di UN sub-agent (delegate_task). */
+  function runInline(args: Parameters<typeof runSubagentRun>[1]): Promise<RunResult> {
+    return runMirrored<RunResult>('single', { role: args.role, agent: args.agent, title: args.title }, (onProgress) =>
+      runSubagentRun({ ...ctx, onProgress }, { ...args, shared })
+    );
+  }
   const agentEnum = z.enum(AGENT_IDS as unknown as [AgentId, ...AgentId[]]);
 
   return {
@@ -680,7 +1066,10 @@ You are not talking to the user and no one is reading you live — your final me
         'Use it as your default for any step of a long job: role="research" (read-only fact gathering), role="execute" (does the work with the hub tools), role="verify" (read-only check of what was actually done), role="sandbox" (a real Linux VM: writes and runs code, a terminal, the brand data as files, and a real browser when you pass network="research").',
         'The brief must be self-contained: the sub-agent does not see this conversation, only the brand context and what you write here.',
         'It cannot talk to the user, cannot delegate further, and research/verify cannot write anything.',
-        `Budget: ${MAX_SUBAGENT_RUNS} sub-agent runs per turn, shared with run_task_pipeline.`
+        mode === 'queued'
+          ? 'The run happens OUTSIDE this turn as a background job: you get a job_id back and the report arrives as a NEW message. Its live progress (what it is doing, which tools it is calling) is visible to the user and readable with check_subagent.'
+          : 'It runs inside this turn and returns the report directly.',
+        `Budget: ${MAX_SUBAGENT_RUNS} sub-agent dispatches per turn, shared with run_task_pipeline and run_parallel_tasks.`
       ].join(' '),
       inputSchema: z.object({
         role: z
@@ -733,9 +1122,41 @@ You are not talking to the user and no one is reading you live — your final me
       ) => {
         const blocked = budgetError();
         if (blocked) return blocked;
-        const res = await runSubagent({
+        const agent = input.agent ?? ctx.defaultAgent ?? null;
+        if (mode === 'queued') {
+          runsUsed++;
+          return startLongToolJob(
+            ctx.supabase,
+            ctx.brandId,
+            ctx.userId || '',
+            SUBAGENT_JOB_TOOL,
+            {
+              kind: 'single',
+              role: input.role,
+              agent,
+              title: input.title,
+              brief: input.brief,
+              context: input.context,
+              success_criteria: input.success_criteria,
+              max_steps: input.max_steps,
+              network: input.network,
+              brand_data: input.brand_data,
+              subagent: {
+                locale: ctx.locale ?? 'en',
+                webHubEnabled: ctx.webHubEnabled ?? true,
+                defaultAgent: ctx.defaultAgent ?? null
+              }
+            },
+            ctx.threadId,
+            toolOpts?.abortSignal,
+            origin,
+            ctx.locale ?? 'en'
+          );
+        }
+        runsUsed++;
+        const res = await runInline({
           role: input.role,
-          agent: input.agent ?? defaultAgent,
+          agent,
           title: input.title,
           brief: input.brief,
           context: input.context,
@@ -754,7 +1175,10 @@ You are not talking to the user and no one is reading you live — your final me
         'Run a whole job as RESEARCH → EXECUTION → VERIFICATION in one call: three sub-agents, each with a clean context, each fed the previous one’s report.',
         'This is the default shape for anything long or multi-step (produce a week, fix the SEO of a section, prepare a launch, clean up a backlog): it separates finding out, doing, and checking, instead of doing all three in your own context.',
         'When the verification comes back fail/partial you may ask for one repair round (repair=true): the executor gets the defects and the verifier re-checks.',
-        `Each phase spends one sub-agent run from the turn budget of ${MAX_SUBAGENT_RUNS}.`
+        mode === 'queued'
+          ? 'The whole pipeline runs OUTSIDE this turn as ONE background job: you get a job_id back and the verdict with the phase reports arrives as a NEW message. Live progress is visible to the user and readable with check_subagent.'
+          : 'It runs inside this turn and returns the verdict with the phase reports.',
+        `One dispatch from the turn budget of ${MAX_SUBAGENT_RUNS} (the phases run inside the pipeline).`
       ].join(' '),
       inputSchema: z.object({
         objective: z.string().min(10).max(2000).describe('The whole job in the user’s terms — what must be true at the end.'),
@@ -779,104 +1203,40 @@ You are not talking to the user and no one is reading you live — your final me
         },
         toolOpts: ToolExecutionOptions
       ) => {
-        const agent = input.agent ?? defaultAgent;
-        const abortSignal = toolOpts?.abortSignal;
-        const phases: RunResult[] = [];
-        const wantsRepair = input.repair !== false;
-
-        const need = (input.skip_research ? 0 : 1) + 2;
-        if (runsUsed + need > MAX_SUBAGENT_RUNS) {
-          return {
-            error: `Not enough sub-agent budget left for a full pipeline (needs ${need}, ${Math.max(0, MAX_SUBAGENT_RUNS - runsUsed)} left). Use delegate_task for the single phase that matters, or finish it yourself.`,
-            runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed)
-          };
+        const blocked = budgetError();
+        if (blocked) return blocked;
+        if (mode === 'queued') {
+          runsUsed++;
+          return startLongToolJob(
+            ctx.supabase,
+            ctx.brandId,
+            ctx.userId || '',
+            SUBAGENT_JOB_TOOL,
+            {
+              kind: 'pipeline',
+              ...input,
+              agent: input.agent ?? ctx.defaultAgent ?? null,
+              subagent: {
+                locale: ctx.locale ?? 'en',
+                webHubEnabled: ctx.webHubEnabled ?? true,
+                defaultAgent: ctx.defaultAgent ?? null
+              }
+            },
+            ctx.threadId,
+            toolOpts?.abortSignal,
+            origin,
+            ctx.locale ?? 'en'
+          );
         }
-
-        let research: RunResult | null = null;
-        if (!input.skip_research) {
-          research = await runSubagent({
-            role: 'research',
-            agent,
-            title: `Ricerca — ${input.objective.slice(0, 80)}`,
-            brief:
-              input.research_brief?.trim() ||
-              `Establish everything needed to do this well, from the real data:\n${input.objective}`,
-            context: input.context,
-            abortSignal
-          });
-          phases.push(research);
-          if (research.error) return { phases, error: research.error, runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed) };
-        }
-
-        const researchBlock = research?.report ? `RESEARCH REPORT:\n${research.report}` : '';
-        const sharedContext = [input.context?.trim(), researchBlock].filter(Boolean).join('\n\n');
-
-        const exec = await runSubagent({
-          role: 'execute',
-          agent,
-          title: `Esecuzione — ${input.objective.slice(0, 80)}`,
-          brief: input.execute_brief?.trim() || `Do the work required by this objective, end to end:\n${input.objective}`,
-          context: sharedContext,
-          successCriteria: input.objective,
-          abortSignal
-        });
-        phases.push(exec);
-        if (exec.error) return { phases, error: exec.error, runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed) };
-
-        let verify = await runSubagent({
-          role: 'verify',
-          agent,
-          title: `Verifica — ${input.objective.slice(0, 80)}`,
-          brief:
-            input.verify_brief?.trim() ||
-            `Check against the real current state whether this objective is met:\n${input.objective}`,
-          context: `EXECUTION REPORT (claims to verify — do not trust, re-read):\n${exec.report}${sharedContext ? `\n\n${sharedContext}` : ''}`,
-          abortSignal
-        });
-        phases.push(verify);
-
-        let repaired = false;
-        if (
-          wantsRepair &&
-          !verify.error &&
-          (verify.verdict === 'fail' || verify.verdict === 'partial') &&
-          runsUsed + 2 <= MAX_SUBAGENT_RUNS
-        ) {
-          repaired = true;
-          const fix = await runSubagent({
-            role: 'execute',
-            agent,
-            title: `Riparazione — ${input.objective.slice(0, 80)}`,
-            brief: `Fix ONLY the defects listed by the verifier. Do not redo what already passed, do not add new work.`,
-            context: `OBJECTIVE:\n${input.objective}\n\nVERIFICATION REPORT:\n${verify.report}\n\nPREVIOUS EXECUTION REPORT:\n${exec.report}`,
-            abortSignal
-          });
-          phases.push(fix);
-          if (!fix.error) {
-            verify = await runSubagent({
-              role: 'verify',
-              agent,
-              title: `Ri-verifica — ${input.objective.slice(0, 80)}`,
-              brief: `Re-check the objective against the real state after the repair round:\n${input.objective}`,
-              context: `REPAIR REPORT (claims to verify — do not trust, re-read):\n${fix.report}`,
-              abortSignal
-            });
-            phases.push(verify);
-          }
-        }
-
-        return {
-          objective: input.objective,
-          agent,
-          verdict: verify.verdict ?? 'unknown',
-          repaired,
-          phases,
-          runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed),
-          instruction:
-            verify.verdict === 'pass'
-              ? 'Verified. Tell the user what changed, concretely — do not re-run the same work.'
-              : 'NOT verified. Say plainly to the user what is done, what is not, and what you propose next. Never report unverified work as finished.'
-        };
+        const res = await runMirrored<AnyRecShape>(
+          'pipeline',
+          { agent: input.agent ?? ctx.defaultAgent ?? null, title: `Pipeline — ${input.objective.slice(0, 80)}` },
+          (onProgress) => runTaskPipelinePhases({ ...ctx, onProgress }, input, {
+            left: () => Math.max(0, MAX_SUBAGENT_RUNS - runsUsed),
+            spend: (n) => (runsUsed += n)
+          }, shared)
+        );
+        return { ...res, runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed) };
       }
     }),
 
@@ -925,7 +1285,8 @@ You are not talking to the user and no one is reading you live — your final me
         },
         toolOpts: ToolExecutionOptions
       ) => {
-        const agent = input.agent ?? defaultAgent;
+        const blocked = budgetError();
+        if (blocked) return blocked;
         const left = Math.max(0, MAX_SUBAGENT_RUNS - runsUsed);
         if (input.tasks.length > left) {
           return {
@@ -933,46 +1294,54 @@ You are not talking to the user and no one is reading you live — your final me
             runs_left: left
           };
         }
-
-          // Il tetto di concorrenza non è il budget: è quante chiamate al modello vogliamo in volo
-          // insieme. Oltre, si guadagna poco wall-clock e si prende un rate limit a metà lavoro — che
-          // qui costa doppio, perché i pezzi già pronti non servono a niente senza gli altri.
-        const LANES = 4;
-        const results: RunResult[] = new Array(input.tasks.length);
-        let next = 0;
-        const lane = async () => {
-          for (;;) {
-            const i = next++;
-            if (i >= input.tasks.length) return;
-            const task = input.tasks[i];
-            results[i] = await runSubagent({
-              role: input.role,
-              agent,
-              title: task.title,
-              brief: task.brief,
-              context: `SHARED CONTEXT — the whole this piece belongs to. Do not contradict it, do not redefine what it fixes:\n${input.shared_context.trim()}\n\nYou are piece ${i + 1} of ${input.tasks.length}. The others are being built right now by other agents; you cannot see them.`,
-              maxSteps: input.max_steps,
-              abortSignal: toolOpts?.abortSignal
-            });
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(LANES, input.tasks.length) }, lane));
-
-        const failed = results.filter((r) => r?.error).length;
-        return {
-          role: input.role,
-          agent,
-          tasks: results,
-          failed,
-          runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed),
-          instruction:
-            input.role === 'compose'
-              ? failed
-                ? `${failed} of ${results.length} pieces failed. Build the missing ones yourself before assembling — never assemble a whole with a hole in it and call it done.`
-                : 'Every piece came back in its report. Assemble them yourself now, reconcile the ASSUMPTIONS and NEEDS sections, and write the result with your source tools — the workers wrote nothing.'
-              : 'Read the reports together: what one worker could not establish another may have. Then act.'
-        };
+        if (mode === 'queued') {
+          runsUsed += input.tasks.length;
+          return startLongToolJob(
+            ctx.supabase,
+            ctx.brandId,
+            ctx.userId || '',
+            SUBAGENT_JOB_TOOL,
+            {
+              kind: 'parallel',
+              ...input,
+              agent: input.agent ?? ctx.defaultAgent ?? null,
+              subagent: {
+                locale: ctx.locale ?? 'en',
+                webHubEnabled: ctx.webHubEnabled ?? true,
+                defaultAgent: ctx.defaultAgent ?? null
+              }
+            },
+            ctx.threadId,
+            toolOpts?.abortSignal,
+            origin,
+            ctx.locale ?? 'en'
+          );
+        }
+        runsUsed += input.tasks.length;
+        const res = await runMirrored<AnyRecShape>(
+          'parallel',
+          { role: input.role, agent: input.agent ?? ctx.defaultAgent ?? null, title: `${input.tasks.length} pezzi — ${input.role}` },
+          (onProgress) => runParallelTasks({ ...ctx, onProgress }, input)
+        );
+        return { ...res, runs_left: Math.max(0, MAX_SUBAGENT_RUNS - runsUsed) };
       }
+    }),
+
+    /**
+     * La lettura del partial da parte dell'AI, stessa parità che motion_write ha con motion_check.
+     * Il turno che ha accodato vede l'ID, e il rientro porta il risultato da solo: questo tool è
+     * per chi vuole UNA lettura dello stato mentre la run gira, non un loop di polling.
+     */
+    check_subagent: tool({
+      description: [
+        'Read the live progress of ONE background sub-agent job (delegate_task / run_task_pipeline / run_parallel_tasks).',
+        'Returns its status, what it is doing right now (live text), the tools it has called, and — when finished — its report.',
+        'Do NOT poll it in a loop: the finished result is delivered to you as a new message anyway. Use this once, only if you genuinely need to know where the work stands right now.'
+      ].join(' '),
+      inputSchema: z.object({
+        job_id: z.string().describe('The job_id the dispatch returned.')
+      }),
+      execute: async (input: { job_id: string }) => checkSubagentJob(ctx.supabase, ctx.userId || '', input.job_id)
     })
   };
 }

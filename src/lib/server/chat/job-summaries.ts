@@ -126,6 +126,37 @@ export function buildToolJobSummary(toolName: string, result: AnyRec, locale: st
         : `✅ **Verifica motion video completata**\n\n${lines.filter(Boolean).join('\n')}`;
     }
 
+    case 'subagent_run': {
+      // La run di un sub-agent (delegate_task / pipeline / parallel) rientra col RAPPORTO, non con
+      // un JSON: è quello che l'orchestratore del turno di rientro deve leggere per agire.
+      const en2 = en;
+      const kind = String(result.kind ?? 'single');
+      if (kind === 'pipeline') {
+        const verdict = String(result.verdict ?? 'unknown');
+        const phases = (result.phases ?? []) as AnyRec[];
+        const list = phases
+          .map((p) => `- [${p.role}] ${p.title}: ${p.error ? `ERROR — ${p.error}` : String(p.report ?? '').slice(0, 400)}`)
+          .join('\n');
+        return en2
+          ? `✅ **Sub-agent pipeline finished** — verdict: **${verdict}**${result.repaired ? ' (one repair round ran)' : ''}\n${list}`
+          : `✅ **Pipeline di sub-agent finita** — verdetto: **${verdict}**${result.repaired ? ' (girato un giro di riparazione)' : ''}\n${list}`;
+      }
+      if (kind === 'parallel') {
+        const tasks = (result.tasks ?? []) as AnyRec[];
+        const list = tasks
+          .map((t) => `- ${t.title}: ${t.error ? `ERROR — ${t.error}` : String(t.report ?? '').slice(0, 400)}`)
+          .join('\n');
+        return en2
+          ? `✅ **Parallel sub-agents finished** (${result.failed ?? 0} of ${tasks.length} failed)\n${list}`
+          : `✅ **Sub-agent in parallelo finiti** (${result.failed ?? 0} su ${tasks.length} falliti)\n${list}`;
+      }
+      const report = String(result.report ?? '');
+      const verdictBit = result.verdict ? ` — verdict: **${result.verdict}**` : '';
+      return en2
+        ? `✅ **Sub-agent "${result.title ?? ''}" finished** (${result.role ?? ''})${verdictBit}\n\n${report}`
+        : `✅ **Sub-agent "${result.title ?? ''}" finito** (${result.role ?? ''})${verdictBit}\n\n${report}`;
+    }
+
     default:
       return en
         ? `✅ ${toolName} complete: ${JSON.stringify(result)}`
