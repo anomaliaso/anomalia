@@ -27,6 +27,48 @@ const SEED_BRAND_WEBSITE = process.env.SEED_BRAND_WEBSITE || 'https://example.co
 const SEED_BRAND_PLAN = process.env.SEED_BRAND_PLAN || 'pro';
 const SEED_BRAND_STATUS = process.env.SEED_BRAND_STATUS || 'active';
 
+/**
+ * Self-host privilege repair — the one failure mode of a docker-stack install that migration
+ * files cannot fix on their own. The platform grants `anon`/`authenticated`/`service_role`
+ * automatically; a hand-rolled stack (or a DB restored without its ACLs) owns every table with
+ * an admin role and NO grants for the API roles, and then PostgREST answers 42501 to everything:
+ * the waitlist RPC fails open to "locked", brands read empty ("Brand not found"), ai_calls
+ * logging dies. All of it looks like app bugs; none of it is.
+ *
+ * Idempotent by nature: re-granting is a no-op on a healthy instance, so the seed stays safe to
+ * re-run. Defaults are patched too, so tables created by LATER migrations inherit the ACLs.
+ *
+ *   npm run db:seed   # against DATABASE_URL
+ */
+export async function ensurePrivileges(client) {
+  const statements = [
+    'grant usage on schema public to anon, authenticated, service_role',
+    'grant select on all tables in schema public to anon',
+    'grant select, insert, update, delete on all tables in schema public to authenticated',
+    'grant all on all tables in schema public to service_role',
+    'grant execute on all functions in schema public to anon, authenticated, service_role',
+    'alter default privileges in schema public grant select on tables to anon',
+    'alter default privileges in schema public grant select, insert, update, delete on tables to authenticated, service_role',
+    'alter default privileges in schema public grant usage on sequences to authenticated, service_role',
+    'alter default privileges in schema public grant execute on functions to anon, authenticated, service_role'
+  ];
+  const failed = [];
+  for (const sql of statements) {
+    try {
+      await client.query(sql);
+    } catch (e) {
+      // Non-fatal per statement: some managed setups restrict certain ALTER DEFAULT PRIVILEGES
+      // to specific owners, and a healthy instance does not need any of this to work anyway.
+      failed.push(`${sql} -> ${e.message}`);
+    }
+  }
+  if (failed.length) {
+    console.warn('privilege repair partially applied:\n  ' + failed.join('\n  '));
+  } else {
+    console.log('api-role privileges verified (anon / authenticated / service_role).');
+  }
+}
+
 /** Create the demo user via GoTrue admin, or return the existing one by email (idempotent). */
 export async function ensureDemoUser(gotrueUrl, serviceKey, email, password, fetchImpl = fetch) {
   const headers = {
@@ -107,6 +149,7 @@ async function main() {
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {
+    await ensurePrivileges(client);
     const orgId = await ensureOrg(client, user.id, SEED_ORG_NAME);
     const brandId = await ensureBrand(client, orgId, SEED_BRAND_SLUG, SEED_BRAND_NAME, SEED_BRAND_WEBSITE);
     console.log(`org ${orgId} / brand ${SEED_BRAND_SLUG} (${brandId}) ready.`);
