@@ -12,6 +12,7 @@
         'After onboarding, you now land inside the setup conversation instead of back on the dashboard — the chat that gets your brand ready is the one you meet, not one you never knew existed.',
         'That setup conversation is now with the Analyst, the agent that analyses the numbers and directs the team; it studies your brand, plans the go-to-market strategy and the editorial plan, and asks what else you want automated.',
         'The SEO and AI-visibility analysis is handed to the Web specialist, and content production to the Content creator, instead of being done vaguely in one place — so each job is done by the right agent.',
+        'The agent panel now remembers how you left it — open or closed — separately for each agent, so returning to a chat restores your view.',
         'AI and UGC video renders now get their shot brief written by a director-grade agent (the same advanced model tier as motion videos), with the old template brief kept as a safety net.',
         'Agents now write minimal replies by rule, not by taste: every sentence must carry a fact — no greetings, no transitions, no filler.',
         'Sending your first message now shows a spinner right away: no more silent gap while the conversation is being created.',

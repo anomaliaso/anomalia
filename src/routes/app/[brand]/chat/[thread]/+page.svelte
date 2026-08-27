@@ -43,6 +43,7 @@
   import { streamParts, backgroundJobLabel, type ChatPostPreview } from '$lib/chat-parts';
   import { handleChatColorBadgeClick, chatZoomableImageSrc } from '$lib/chat-markdown';
   import { IsMobile } from '$lib/hooks/is-mobile.svelte';
+  import { readAgentPanelPref, writeAgentPanelPref } from '$lib/chat-agent-panel-pref';
   import { snapshotWorkbench } from '$lib/workbench-context';
   import type { ChatMode } from '$lib/chat-modes';
   import { coerceChatTier, type ChatTier } from '$lib/chat-tiers';
@@ -358,8 +359,19 @@
   });
 
   // Il computer dell'agente: colonna affiancata sopra ~1100px, Sheet sotto.
+  // La preferenza segue l'AGENTE (custom prima dello specialista): riaprendo una chat dalla
+  // sidebar, il pannello torna com'era stato lasciato — aperto o chiuso.
   let agentPanelOpen = $state(false);
   const panelNarrow = new IsMobile(1100);
+
+  // Atterraggio (e cambio thread): il pannello torna com'era per l'agente di QUESTA chat.
+  $effect(() => {
+    agentPanelOpen = readAgentPanelPref(data.brandSlug, data.thread.custom_agent_id ?? data.thread.agent);
+  });
+  // Ogni cambio dopo — toggle in topbar, X del pannello — resta la preferenza.
+  $effect(() => {
+    writeAgentPanelPref(data.brandSlug, data.thread.custom_agent_id ?? data.thread.agent, agentPanelOpen);
+  });
 
   const panelLastReport = $derived(assistantReportOf(messages));
   const panelWork = $derived(assistantWorkOf(messages));

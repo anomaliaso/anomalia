@@ -28,6 +28,19 @@ Fix:
   (`/app/{slug}/chat/{thread}`) invece che su `/app/{slug}`: sia la `finish`
   dell'action sia la scelta dell'agente (AgentPick) aprono il thread già
   creato, che porta il nome e la bandiera Analyst in sidebar.
+### Il pannello agente non si ricordava come lo avevi lasciato
+
+`agentPanelOpen` era uno `$state(false)` locale alla pagina del thread: ogni navigazione lo
+riportava chiuso. Chi teneva il pannello aperto su un agente e tornava nella chat dalla
+sidebar lo ritrovava chiuso, e viceversa.
+
+La preferenza ora segue l'AGENTE (`custom_agent_id ?? agent`) e vive in localStorage
+(`anomalia:chat-agent-panel:<brand>:<agent>`, stesso pattern delle bozze di chat): atterrando
+su un thread il pannello torna com'era stato lasciato per l'agente di quella chat, e ogni
+cambio — toggle in topbar o X del pannello — la riscrive. Chiuso = chiave assente: il default
+è già chiuso. Lettura a un `$effect` di atterraggio (ri-allineato quando cambia il thread),
+scrittura a un `$effect` idempotente: entrambi passano da `chat-agent-panel-pref.ts`, mai
+dallo storage diretto.
 
 ### La resa dei video generativi/UGC passa al secondo agente con tier pro
 
