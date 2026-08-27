@@ -892,6 +892,7 @@ export async function processNextQueuedChatJob(
 				threadId,
 				webHubEnabled,
 				defaultAgent: agentId,
+				origin,
 				remainingMs: () => queueDeadline?.remainingMs() ?? Number.POSITIVE_INFINITY
 			});
 			// Stessa macchina del turno interattivo: un lavoro in coda ne ha bisogno più di uno
@@ -1479,7 +1480,8 @@ export async function processNextPendingToolJob(
 					candidate.user_id as string,
 					toolName,
 					(candidate.input_params ?? {}) as Record<string, unknown>,
-					cancel
+					cancel,
+					{ id: jobId, thread_id: (candidate.thread_id as string | null) ?? null }
 				)
 			);
 			await cancel.assertActive();

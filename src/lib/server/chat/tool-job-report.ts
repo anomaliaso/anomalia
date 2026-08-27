@@ -60,7 +60,10 @@ export function toolJobReportMessage(
 			? `🛠️ The background job "${toolName}" stopped without doing the work: ${why}.${result.action ? ` Required action: ${result.action}.` : ''} Explain it to the user in one line and take that action; do not silently retry.`
 			: `🛠️ Il lavoro in background "${toolName}" si è fermato senza fare il lavoro: ${why}.${action} Spiegalo all'utente in una riga e fai quell'azione; non ritentare da solo.`;
 	}
-	const body = buildToolJobSummary(toolName, result, locale).slice(0, 1200);
+	// Il rapporto di un sub-agent è il LAVORO, non un riassunto: il turno di rientro deve poter
+	// leggere cosa è stato fatto (e, per le pipeline, il verdetto con le fasi). Tetto più alto
+	// degli altri tool — il resto resta leggibile con check_subagent(job_id).
+	const body = buildToolJobSummary(toolName, result, locale).slice(0, toolName === 'subagent_run' ? 6000 : 1200);
 	return en
 		? `🛠️ The background job "${toolName}" is done. Result:\n${body}\n\nReport it to the user and carry on with what comes next.`
 		: `🛠️ Il lavoro in background "${toolName}" è finito. Esito:\n${body}\n\nRiferiscilo all'utente e prosegui con quello che viene dopo.`;

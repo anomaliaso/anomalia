@@ -2,6 +2,50 @@
 
 ## 2026-08-27
 
+### I sub-agent sono processi async come motion_write
+
+Prima la delega girava DENTRO il tool call del turno (`generateText` inline): la scheda che
+chiudeva uccideva il lavoro a metà, il muro di Vercel pure, e nessuno — utente né AI — sapeva
+cosa il sub-agent stesse facendo mentre girava. Il partial esisteva solo a turno finito.
+
+Ora in chat i tre tool di delega (`delegate_task`, `run_task_pipeline`, `run_parallel_tasks`)
+accodano una riga `chat_jobs` con `tool_name: 'subagent_run'` e tornano subito, come
+`motion_write`. Il worker (nuovo `subagent-jobs.ts`, eseguito dal drain dei tool job esistente
+con la sua allowlist) reclama la riga, monta il set di tool del brand FUORI dal turno
+(perimetro derivato da ruolo e hub, non dal chiamante che quando il job gira può non esserci
+più), e esegue con `streamText`: il partial — stessa forma dell'SSE di chat, piegata dal
+reducer condiviso — finisce sulla riga con flush immediato sulle tool call e throttle a 300ms
+sul testo, più un flush finale dopo la run. Il risultato rientra nel thread come nuovo turno
+(tool-job-report, tetto a 6000 caratteri per il rapporto), `check_subagent` legge lo stato
+vivo come `motion_check` fa per il motion. Il reaper generico ora copre `subagent_run`.
+
+Decisioni prese e scartate:
+- *Pipeline spezzata per fase*: scartata — la pipeline gira come UN job con le fasi in sequenza
+  dentro il worker (ricerca → esecuzione → verifica si passano i rapporti in memoria, come
+  prima). Full async riguarda il confine turno/lavoro, non la coerenza interna della pipeline.
+- *Bridge kit in coda*: scartata — il worker non può rimontare il set di tool del kit (nomi veri
+  del kit, plugin, applyTool col battito): un job accodato da un turno kit sarebbe partito col
+  perimetro sbagliato. E il run kit è GIÀ durabile (heartbeat, resume, checkpoint): la chiusura
+  della scheda non uccide il lavoro. Quindi il bridge gira `inline` ma con riga `chat_jobs`
+  SPECCHIO (`mirror: true`): partial vivo sulla riga, chip «background tasks» e
+  `check_subagent` funzionano identico; `agent-base` (i motori con la guard di `finish` che
+  legge i verdetti in banda) resta inline senza specchio.
+- *Budget*: `MAX_SUBAGENT_RUNS` conta ora dispatch, non run; il tetto di step per ruolo e i
+  muri (`chatTurnDeadline` + abort a `CHAT_MAX_DURATION_MS`) vivono nel worker.
+- Il perimetro dei tool del sub-agent resta NON negoziabile: `subagentToolNames` dal set pieno
+  del brand filtrato per hub, mai di più di quanto l'orchestratore poteva fare.
+
+Lo specchio del partial vive in un modulo solo (`job-partial-mirror.ts`) per i due mondi:
+flush immediato sulle tool call, throttle 300ms sul testo, e battito a 10s che riscrive lo
+stato DI ADESSO — `classifyChatJob` legge `partial.at` come segno di vita, e un modello che
+pensa in silenzio per minuti non deve sembrare morto al reaper.
+
+Ambiente locale: per la verifica browser il `.env` locale puntava al Supabase hosted (brand
+`demo` 404, RLS Unauthorized su agent_kit_runs/chat_jobs): override con `.env.local` su
+127.0.0.1:8000 (URL, anon key e service key dello stack docker). Da solo non basta: il
+`SUPABASE_SERVICE_ROLE_KEY` hosted contro il DB locale rende il client admin anonimo — tutti
+i percorsi "solo service-role" diventano Unauthorized.
+
 ### Il setup del brand si fa con l'Analyst e ci si atterra dentro
 
 Il thread di setup creato a fine onboarding era con l'agente omni (agent=null,
