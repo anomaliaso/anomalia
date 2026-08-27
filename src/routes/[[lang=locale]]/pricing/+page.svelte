@@ -25,7 +25,7 @@
   const startHref = $derived(marketingStartHref({ loggedIn, waitlistActive }));
   const lp = $derived((p: string) => localePath(p, (($locale as Locale) ?? 'en')));
 
-  let cycle = $state<'month' | 'year'>('year');
+  let cycle = $state<'month' | 'year'>('month');
   // Default from geo (eurozone → EUR, else USD); URL ?currency= overrides for shareable links.
   let currency = $state<Currency>(
     untrack(() => {
@@ -35,7 +35,8 @@
     })
   );
 
-  // Il Free si racconta con la sua dotazione di crediti, non più con un "valore API" in euro.
+  // La pill del Free parla di self-host (Apache 2.0); freePillValues resta solo per l'FAQ,
+  // che continua a raccontare la dotazione di crediti.
   const freePillValues = $derived({ credits: FREE_CREDITS.toLocaleString($locale ?? 'en') });
 
   function faqAnswer(key: string): string {
@@ -104,11 +105,8 @@
 
       <div class="free-pill">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" /></svg>
-        {$_('pricing.freePill', { values: freePillValues })}
+        {$_('pricing.freePill')}
       </div>
-      <p class="credits-docs-link">
-        <a href={lp('/docs/credits')}>{$_('pricing.creditsDocsLink')}</a>
-      </p>
 
       <div class="price-toggles">
         <div class="bill-toggle" role="group" aria-label={$_('pricing.toggle.cycleAria')}>
@@ -137,6 +135,9 @@
       <p class="perbrand-note">
         {$_('pricing.note.pre')}
         <b>{$_('pricing.note.stripe')}</b>.
+      </p>
+      <p class="credits-docs-link">
+        <a href={lp('/docs/credits')}>{$_('pricing.creditsDocsLink')}</a>
       </p>
     </div>
   </section>
@@ -235,7 +236,7 @@
     height: 14px;
   }
   .credits-docs-link {
-    margin: -6px auto 22px;
+    margin: 18px auto 0;
     font-size: 13px;
     color: var(--ink-soft);
   }
