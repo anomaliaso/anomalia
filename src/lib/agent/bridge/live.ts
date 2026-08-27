@@ -165,8 +165,6 @@ export interface RunKitTurnInput {
 	 * questo la scalata NON scatta MAI e ogni specialista che non sia motion cade sul default).
 	 */
 	escalationText?: string;
-	/** Il turno porta immagini: serve a scegliere un modello che le vede. */
-	vision?: boolean;
 	/**
 	 * Riprese automatiche già fatte su QUESTA catena — lo stesso contatore del motore classico
 	 * (`chat_jobs.input_params.continuation_depth`), che è anche dove vive fra un turno e l'altro:

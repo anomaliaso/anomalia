@@ -1,0 +1,106 @@
+diff --git a/node_modules/@ai-sdk/harness-pi/dist/index.js b/node_modules/@ai-sdk/harness-pi/dist/index.js
+index 258bb62..69002a1 100644
+--- a/node_modules/@ai-sdk/harness-pi/dist/index.js
++++ b/node_modules/@ai-sdk/harness-pi/dist/index.js
+@@ -967,16 +967,60 @@ function extractUserText(prompt) {
+   }
+   const parts = [];
+   for (const part of content) {
+-    if (part.type !== "text") {
+-      throw new HarnessCapabilityUnsupportedError({
+-        message: `pi: only text user-message parts are supported; got '${part.type}'.`,
+-        harnessId: HARNESS_ID
+-      });
++    if (part.type === "text") {
++      parts.push(part.text);
+     }
+-    parts.push(part.text);
+   }
+   return parts.join("\n\n");
+ }
++const MAX_USER_IMAGES = 8;
++async function toImageContent(image, mediaType) {
++  if (typeof image === "string") {
++    if (image.startsWith("data:")) {
++      const comma = image.indexOf(",");
++      if (comma < 0) return null;
++      const header = image.slice(5, comma);
++      return {
++        type: "image",
++        data: image.slice(comma + 1),
++        mimeType: mediaType || header.split(";")[0] || "image/png"
++      };
++    }
++    if (!/^https?:\/\//i.test(image)) return null;
++    const res = await fetch(image, { signal: AbortSignal.timeout(15e3) });
++    if (!res.ok) return null;
++    const buf = await res.arrayBuffer();
++    return {
++      type: "image",
++      data: Buffer.from(buf).toString("base64"),
++      mimeType: mediaType || res.headers.get("content-type")?.split(";")[0] || "image/png"
++    };
++  }
++  if (image instanceof Uint8Array) {
++    return {
++      type: "image",
++      data: Buffer.from(image).toString("base64"),
++      mimeType: mediaType || "image/png"
++    };
++  }
++  if (image instanceof URL) {
++    return toImageContent(image.toString(), mediaType);
++  }
++  return null;
++}
++async function extractUserImages(prompt) {
++  if (typeof prompt === "string") return [];
++  const { content } = prompt;
++  if (typeof content === "string") return [];
++  const images = [];
++  for (const part of content) {
++    if (images.length >= MAX_USER_IMAGES) break;
++    if (part.type !== "image") continue;
++    const img = await toImageContent(part.image, part.mediaType);
++    if (img) images.push(img);
++  }
++  return images;
++}
+ function serializeToolOutput(output) {
+   if (typeof output === "string") {
+     return output;
+@@ -2407,6 +2451,7 @@ async function createPiSession(input) {
+     if (stopped) {
+       throw new Error("Pi session has been stopped.");
+     }
++    const userImages = turnOpts.images?.length ? turnOpts.images : void 0;
+     const userTools = turnOpts.tools;
+     currentEmit = turnOpts.emit;
+     const turnAbortController = new AbortController();
+@@ -2483,7 +2528,7 @@ async function createPiSession(input) {
+           }
+         });
+         try {
+-          await session.prompt(turnOpts.text);
++          await session.prompt(turnOpts.text, userImages ? { images: userImages } : void 0);
+           if (terminalError) {
+             if (suspending && isAbortError(terminalError)) return;
+             currentEmit?.({ type: "error", error: new Error(terminalError) });
+@@ -2593,6 +2638,7 @@ async function createPiSession(input) {
+       }
+       return runTurn({
+         text: extractUserText(promptOpts.prompt),
++        images: await extractUserImages(promptOpts.prompt),
+         tools: promptOpts.tools ?? [],
+         instructions: promptOpts.instructions,
+         emit: promptOpts.emit,
+@@ -3079,6 +3125,8 @@ var pi = createPi();
+ export {
+   VERSION,
+   createPi,
++  extractUserText,
++  extractUserImages,
+   pi
+ };
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file

@@ -7,6 +7,14 @@
   const entries = [
     {
       date: 'August 27, 2026',
+      title: 'Attached images reach the chat agent',
+      items: [
+        'Attaching a photo to a chat no longer fails the turn: the agent now sees the image natively and can work with it.',
+        'The chat model keeps its native vision — a model you pick by hand stays exactly the one you picked.'
+      ]
+    },
+    {
+      date: 'August 27, 2026',
       title: 'Tools work on every message, not just the first',
       items: [
         'Sending your first message now shows a spinner right away: no more silent gap while the conversation is being created.',

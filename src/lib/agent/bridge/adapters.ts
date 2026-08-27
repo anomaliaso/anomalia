@@ -285,6 +285,10 @@ export function harnessSessionSettings(sessionKey?: string): { extensionFactorie
 }
 
 export function ensureKieAgentDir(): string | undefined {
+	// L'LLM di chat è vision-native: il manifest lo dichiara, o pi omette le immagini
+	// («image omitted: model does not support images») e il modello risponde di non averle viste.
+	const visionModels = (ids: Array<{ id: string }>) =>
+		ids.map((m) => ({ ...m, input: ['text', 'image'] }));
 	const providers: Record<string, unknown> = {};
 	for (const name of ['kie', 'openrouter', 'opencode'] as HarnessProviderName[]) {
 		const key = providerApiKey(name);
@@ -293,7 +297,7 @@ export function ensureKieAgentDir(): string | undefined {
 			baseUrl: process.env[`${name.toUpperCase()}_BASE_URL`] ?? providerBaseUrl(name),
 			api: 'openai-completions',
 			apiKey: key,
-			models: name === 'kie' ? [{ id: KIE_LUNA_MODEL }] : providerModels(name)
+			models: name === 'kie' ? visionModels([{ id: KIE_LUNA_MODEL }]) : visionModels(providerModels(name))
 		};
 	}
 	if (!Object.keys(providers).length) return undefined;
