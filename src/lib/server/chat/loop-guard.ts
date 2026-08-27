@@ -150,7 +150,9 @@ const BENCH_DETAIL_MAX_CHARS = 300;
  */
 export function toolBenchNotice(toolName: string, detail: string): string {
 	const why = detail.slice(0, BENCH_DETAIL_MAX_CHARS);
-	return `[SYSTEM NOTE] The tool "${toolName}" has been removed for the rest of this turn: it failed ${TOOL_BENCH_FAILURES} times with the same arguments (${why}). Do not try it again — take a different route, or tell the user honestly what is missing.`;
+	// Tag `<system-reminder>`: la convenzione di fatto (Claude Code e simili) per le note del
+	// backend dentro messaggi di ruolo user che NON vengono dall'utente.
+	return `<system-reminder>This is an automated backend note, NOT from the user. The tool "${toolName}" has been removed for the rest of this turn: it failed ${TOOL_BENCH_FAILURES} times with the same arguments (${why}). Do not try it again — take a different route, or tell the user honestly what is missing.</system-reminder>`;
 }
 
 type PrepareStepPatch<M> = { messages?: M[]; activeTools?: string[] } & Record<string, unknown>;

@@ -1131,7 +1131,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					detail: `run ${run.id} · agente ${spec.id}`
 				}).catch((e) => console.error('[AGENT_KIT] report fallito', e));
 				if (brandSandbox) {
-				// Nota al MODELLO, mai all'utente: inglese, marcata [SYSTEM NOTE], TRANSITORIA —
+				// Nota al MODELLO, mai all'utente: inglese, tag <system-reminder> (la convenzione di fatto:
+				// Claude Code e simili), TRANSITORIA —
 				// vive solo nella request del turno di retry e non finisce mai né in chat né nel DB.
 				// Le alternative peggio:
 				// - `role: 'system'` a metà conversazione → Google la rifiuta
@@ -1139,18 +1140,13 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				// - appenderla al system del turno di retry → cambia il primo blocco del prompt e
 				//   invalida la cache dell'intero prefisso proprio sul giro che rilegge più storia.
 				// Una user-role transitoria e marcata paga solo i token della nota.
-				const corrective = `[SYSTEM NOTE] Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.`;
+				const corrective = `<system-reminder>This is an automated backend note, NOT from the user. Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.</system-reminder>`;
 				try {
 					const retryTurn = await startHarnessTurn({
 						runId: `${run.id}-retry`,
 						model: modelRef ?? undefined,
 						system,
 						messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
-						tools: toolSet,
-						stopWhen: [isStepCount(TURN_MAX_STEPS)],
-						sandboxSession: brandSandbox?.session,
-						sessionKey: threadId
-					});
 						tools: toolSet,
 						stopWhen: [isStepCount(TURN_MAX_STEPS)],
 						sandboxSession: brandSandbox?.session,
