@@ -200,12 +200,13 @@ describe('message_agent — invio, await, budget', () => {
 		expect(ok.success).toBe(true);
 	});
 
-	it('await:true chiede il riassunto di ritorno nel thread di partenza', async () => {
+	it('await:true non versa più la risposta nel thread con l\'utente', async () => {
 		const { supabase, jobs } = fakeDb();
 		const tools = createAgentDmTools(toolOpts(supabase));
 		const out = await exec(tools, { to: 'content', message: 'Dammi lo stato', await: true });
 		expect(out.success).toBe(true);
-		expect((jobs[0].input_params as Record<string, unknown>).reply_to_thread).toBe('main-thread');
+		expect((jobs[0].input_params as Record<string, unknown>).reply_to_thread).toBeUndefined();
+		expect(String(out.hint ?? '')).not.toContain('📩');
 	});
 
 	it('idempotenza del thread: due messaggi allo stesso agente = stesso dm_thread_id', async () => {

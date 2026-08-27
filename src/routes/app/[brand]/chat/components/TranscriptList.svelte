@@ -7,7 +7,7 @@
   import { dayDividers, firstUnreadIndex } from '$lib/chat-day-groups';
   import { renderMd, escapeChatText } from '$lib/chat-markdown';
   import { stripAttachedDocsForDisplay } from '$lib/chat-documents';
-  import { dmAgents, dmNames } from '$lib/chat-dm';
+  import { dmAgents, dmNames, isDmReplyBackMessage } from '$lib/chat-dm';
   import { roomMemberAvatar, roomMemberKeys, roomMemberName, threadIdentity } from '$lib/thread-identity';
   import { chatThreads } from '$lib/stores/chat';
   import type { ChatStreamState, StreamToolCallState } from '$lib/chat-stream-events';
@@ -172,6 +172,9 @@
 {/if}
 
 {#each messages as msg, i (i)}
+  {#if msg.role === 'user' && isDmReplyBackMessage(msg.content)}
+    <!-- La risposta di un DM non sta in questa chat: vive nel thread privato (chip). -->
+  {:else}
   {#if i === compactionCutIndex}
     <button
       type="button"
@@ -231,7 +234,7 @@
         {speakerLabel}
         {speakerAvatar}
         {artifactsByCall}
-        followingUserTexts={messages.slice(i + 1).filter((m) => m.role === 'user').map((m) => m.content)}
+        followingUserTexts={messages.slice(i + 1).filter((m) => m.role === 'user' && !isDmReplyBackMessage(m.content)).map((m) => m.content)}
         oncopy={oncopy}
         onredo={onredo}
         onfeedback={onfeedback}
@@ -239,6 +242,7 @@
         onpreview={onzoompost}
       />
     </div>
+  {/if}
   {/if}
 {/each}
 
@@ -264,6 +268,7 @@
       streamBuf={orphanState.text}
       streamToolCalls={orphanState.tools}
       streamReasoning={orphanState.reasoning}
+      {brandSlug}
       face={liveWho.face}
       color={liveWho.color}
     />
@@ -277,6 +282,7 @@
       {streamToolCalls}
       {streamReasoning}
       {streamReasoningSegments}
+      {brandSlug}
       face={liveWho.face}
       color={liveWho.color}
     />

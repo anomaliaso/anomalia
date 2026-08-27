@@ -8,6 +8,7 @@ import { normalizeDeviceLoginPayload } from '$lib/chat-device-login';
 import { normalizeTeamPayload } from '$lib/chat-team';
 import { normalizeMediaPayload } from '$lib/chat-media';
 import { normalizeRoutineEvent } from '$lib/chat-routine-event';
+import { dmSendsFromOutput } from '$lib/chat-dm';
 import { CHAT_HISTORY_LIMIT } from '$lib/chat-context';
 import {
   attachmentParts,
@@ -427,6 +428,11 @@ export function assistantContentFromSteps(steps: any[], fallbackText?: string): 
     ) {
       const routineEvent = normalizeRoutineEvent(outputByCallId.get(tc.toolCallId));
       if (routineEvent) part.routineEvent = routineEvent;
+    }
+    if (tc.toolName === 'message_agent') {
+      // Come le altre card: la compattazione butta gli output, e ChatDmChip deve sopravvivere.
+      const dmSends = dmSendsFromOutput(outputByCallId.get(tc.toolCallId));
+      if (dmSends.length) part.dmSends = dmSends;
     }
     if (tc.toolName === 'propose_open_tab') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

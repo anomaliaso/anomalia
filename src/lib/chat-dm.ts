@@ -62,13 +62,99 @@ export function dmBrief(meName: string, otherName: string, locale: string): stri
 }
 
 /**
- * Il messaggio che riporta la risposta di un DM nel contesto dell'iniziatore (await:true). È una
- * riga USER nel thread di partenza: se il turno gira ancora la assorbe la mailbox a un confine di
- * step, altrimenti diventa un turno normale appena il drain la pesca.
+ * Vecchia riga USER che versava la risposta del DM nel thread con l'utente. Non si scrive più:
+ * l'interazione è la chip "N messaggi con X". Resta il detector, perché i thread già salvati
+ * non devono farla rivedere.
  */
 export function dmReplyBackMessage(fromName: string, text: string, locale: string): string {
   const summary = text.trim().slice(0, 800);
   return locale === 'en'
     ? `📩 Reply from ${fromName} (private agent chat): ${summary}`
     : `📩 Risposta di ${fromName} (chat privata tra agenti): ${summary}`;
+}
+
+export function isDmReplyBackMessage(text: unknown): boolean {
+  if (typeof text !== 'string' || !text.startsWith('📩 ')) return false;
+  return (
+    text.includes('(chat privata tra agenti):') || text.includes('(private agent chat):')
+  );
+}
+
+/** Un invio `message_agent` visibile come chip: thread privato + nome del destinatario. */
+export type DmSend = { threadId: string; to: string; name: string };
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const t = text.trim();
+  if (!t.startsWith('{') && !t.startsWith('[')) return null;
+  try {
+    const v = JSON.parse(t) as unknown;
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function recordFromContentParts(parts: unknown[]): Record<string, unknown> | null {
+  for (const part of parts) {
+    if (!part || typeof part !== 'object') continue;
+    const p = part as Record<string, unknown>;
+    if (typeof p.text === 'string' && (p.type === 'text' || p.type === undefined)) {
+      const parsed = parseJsonObject(p.text);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
+}
+
+/**
+ * L'output di `message_agent` dopo il kit: oggetto piano, wrapper SDK `{type,value}`, o
+ * `ToolResult` `{ content: [{ type:'text', text: JSON }] }`. Senza srotolare, ChatDmChip non
+ * vede `dm_thread_id` e la chip sparisce.
+ */
+function unwrapDmRecord(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw === 'string') return parseJsonObject(raw);
+  if (!raw || typeof raw !== 'object') return null;
+  if (Array.isArray(raw)) return recordFromContentParts(raw);
+  const rec = raw as Record<string, unknown>;
+  if ('type' in rec && 'value' in rec && rec.value !== undefined) {
+    const inner = unwrapDmRecord(rec.value);
+    if (inner) return inner;
+  }
+  if (Array.isArray(rec.content)) {
+    const fromParts = recordFromContentParts(rec.content);
+    if (fromParts) return fromParts;
+  }
+  return rec;
+}
+
+function sendFrom(raw: unknown): DmSend | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const threadId = typeof r.dm_thread_id === 'string' ? r.dm_thread_id : typeof r.threadId === 'string' ? r.threadId : '';
+  if (!threadId) return null;
+  return {
+    threadId,
+    to: typeof r.to === 'string' ? r.to : '',
+    name: typeof r.to_name === 'string' && r.to_name ? r.to_name : typeof r.name === 'string' && r.name ? r.name : 'Agent'
+  };
+}
+
+/** Gli invii da una tool-call: campo hoisted `dmSends` (compattazione) o output srotolato. */
+export function dmSendsFromCall(call: { output?: unknown; dmSends?: unknown }): DmSend[] {
+  if (Array.isArray(call.dmSends)) {
+    const hoisted = call.dmSends.map(sendFrom).filter((s): s is DmSend => !!s);
+    if (hoisted.length) return hoisted;
+  }
+  return dmSendsFromOutput(call.output);
+}
+
+export function dmSendsFromOutput(raw: unknown): DmSend[] {
+  const rec = unwrapDmRecord(raw);
+  if (!rec) return [];
+  if (Array.isArray(rec.sends)) {
+    const list = rec.sends.map(sendFrom).filter((s): s is DmSend => !!s);
+    if (list.length) return list;
+  }
+  const one = sendFrom(rec);
+  return one ? [one] : [];
 }
