@@ -143,12 +143,14 @@ export function createChatLoopGuard(threshold: number = CHAT_LOOP_THRESHOLD): Ch
 
 const BENCH_DETAIL_MAX_CHARS = 300;
 
-export function toolBenchNotice(toolName: string, detail: string, locale: string): string {
+/**
+ * Nota per il MODELLO, mai visibile come messaggio utente: benché sia testo che entra
+ * nell'history, va sempre in inglese — è una direttiva all'AI, non una battuta. Il modello poi
+ * risponde nella lingua dell'utente (REPLY LANGUAGE).
+ */
+export function toolBenchNotice(toolName: string, detail: string): string {
 	const why = detail.slice(0, BENCH_DETAIL_MAX_CHARS);
-	if (bilingualNoticeLocale(locale) === 'en') {
-		return `The tool "${toolName}" has been removed for the rest of this turn: it failed ${TOOL_BENCH_FAILURES} times with the same arguments (${why}). Do not try it again — take a different route, or tell the user honestly what is missing.`;
-	}
-	return `Lo strumento "${toolName}" è stato tolto dal tavolo per il resto di questo turno: ha fallito ${TOOL_BENCH_FAILURES} volte con gli stessi argomenti (${why}). Non riprovarlo — cambia strada, oppure di' onestamente all'utente cosa manca.`;
+	return `[SYSTEM NOTE] The tool "${toolName}" has been removed for the rest of this turn: it failed ${TOOL_BENCH_FAILURES} times with the same arguments (${why}). Do not try it again — take a different route, or tell the user honestly what is missing.`;
 }
 
 type PrepareStepPatch<M> = { messages?: M[]; activeTools?: string[] } & Record<string, unknown>;
@@ -156,7 +158,6 @@ type PrepareStepPatch<M> = { messages?: M[]; activeTools?: string[] } & Record<s
 export function benchAwarePrepareStep<M>(
 	guard: ChatLoopGuard,
 	toolNames: string[],
-	locale: string,
 	inner?: (args: { messages?: M[] }) => Promise<PrepareStepPatch<M> | undefined> | PrepareStepPatch<M> | undefined
 ): (args: { messages?: M[] }) => Promise<PrepareStepPatch<M>> {
 	const announced = new Set<string>();
@@ -171,8 +172,10 @@ export function benchAwarePrepareStep<M>(
 		for (const b of fresh) announced.add(b.toolName);
 		const messages = base.messages ?? args.messages;
 		if (!messages) return out;
-		const notice = fresh.map((b) => toolBenchNotice(b.toolName, b.detail, locale)).join('\n');
-		return { ...out, messages: [...messages, { role: 'user', content: notice } as M] };
+		const notice = fresh.map((b) => toolBenchNotice(b.toolName, b.detail)).join('\n');
+		// `role: 'system'`: la nota va al modello e non deve comparire in chat né farsi passare
+		// per l'utente — stesso patto del correttivo retry di live.ts.
+		return { ...out, messages: [...messages, { role: 'system', content: notice } as M] };
 	};
 }
 

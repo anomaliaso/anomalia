@@ -1,4 +1,5 @@
 import { swallow } from '$lib/server/swallow';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GoogleGenAI } from '@google/genai';
 import { fetchPage } from './brand-analysis';
@@ -828,7 +829,9 @@ Write questions the way a real person phrases them (never the bare brand name). 
   );
   const rows: AnyRec[] = [];
   for (const p of (out.prompts ?? []).slice(0, 7)) {
-    if (p?.prompt?.trim()) rows.push({ brand_id: brandId, prompt: p.prompt.trim(), lang: p.lang === 'en' ? 'en' : 'it' });
+    // Il modello è vincolato a it|en dallo schema, ma non fidarsi: la stessa normalizzazione di
+    // tutto il prodotto — italiano solo se davvero it*, inglese per ogni altra cosa.
+    if (p?.prompt?.trim()) rows.push({ brand_id: brandId, prompt: p.prompt.trim(), lang: bilingualNoticeLocale(p.lang) === 'it' ? 'it' : 'en' });
   }
   if (!rows.length) return 0;
   const { error } = await admin.from('brand_geo_prompts').upsert(rows, { onConflict: 'brand_id,prompt', ignoreDuplicates: true });

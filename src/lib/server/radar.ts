@@ -24,6 +24,7 @@ import { activeGtmBrief } from './gtm';
 import { loadActivePlan, currentWeekIndex, selectFeaturableProducts } from './editorial-plan';
 import { runDirector } from './director';
 import { sendEmail } from './email';
+import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { brandContacts } from './scheduler';
 import { generateBlogFromNews } from './blog-generate';
 import { hasProRadarLeads, isRadarKindAllowed, leadEngagePlatforms, radarSourceLimit, type RadarPlatformKey, RADAR_PLATFORM_KEYS } from './plans';
@@ -1632,7 +1633,9 @@ async function sendRadarDigest(admin: SupabaseClient, brand: AnyRec, posts: Dige
     // One digest per recipient (owner + collaborators), each in their own language.
     // Emails first; Web Push after (never fails the digest).
     for (const contact of contacts) {
-      const it = (contact.locale ?? 'it').startsWith('it');
+      // Contatto senza locale → inglese, come tutte le notice: il vecchio `?? 'it'` mandava
+      // un digest italiano a chi non lo aveva mai scelto.
+      const it = bilingualNoticeLocale(contact.locale) === 'it';
 
       const total = posts.length + comments.length + articles.length;
       const subject = it ? `📡 Radar · ${brand.name}: ${total} ${total === 1 ? 'opportunità' : 'opportunità'} di oggi` : `📡 Radar · ${brand.name}: ${total} opportunit${total === 1 ? 'y' : 'ies'} today`;

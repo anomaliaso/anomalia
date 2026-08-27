@@ -149,6 +149,7 @@ async function runClaimedDesignerJob(
 					// La slice di continuazione scrive nello stesso thread della prima: senza,
 					// `publish_artifact` smetterebbe di funzionare a metà lavoro.
 					threadId: typeof params.threadId === 'string' ? params.threadId : null,
+					locale,
 					abortSignal: abort.signal,
 					deadline,
 					onSaved: (id) => {

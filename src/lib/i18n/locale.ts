@@ -29,8 +29,12 @@ export function localeLanguageName(locale: string | undefined | null): string {
  * Notices, job reports and rate-limit copy that only ship English/Italian.
  * Anything that is not Italian — empty, `en-IN`, Hindi-only, Spanish, `*` — is English.
  * Never the other way around: missing `en` in Accept-Language used to collapse to Italian.
+ *
+ * Takes `unknown` on purpose: queued jobs persist params as jsonb, so `params.locale`
+ * reaches us untyped, and coercing at every call site re-invites the exact bug this
+ * branch fixed (amazon.in, 27/8/2026).
  */
-export function bilingualNoticeLocale(locale: string | undefined | null): 'en' | 'it' {
+export function bilingualNoticeLocale(locale: unknown): 'en' | 'it' {
   return typeof locale === 'string' && locale.toLowerCase().startsWith('it') ? 'it' : 'en';
 }
 

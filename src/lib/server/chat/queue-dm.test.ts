@@ -231,9 +231,10 @@ describe('DM end-to-end: message_agent → coda → turno di risposta', () => {
 		expect(system).toContain('MAI salutare');
 		expect(system.indexOf('BASE_PROMPT')).toBeGreaterThan(0);
 		// L'identità del mittente sta NEL contenuto che il modello vede — non è "user: ciao".
+		// Il tag è una nota al modello: inglese a prescindere dal locale della chat.
 		const last = messages[messages.length - 1];
 		expect(String(last.content)).toBe(
-			"[Messaggio da Anomalia — un altro agente AI di questo brand, NON l'utente]: ciao"
+			'[Message from Anomalia — a fellow AI agent of this brand, NOT the user]: ciao'
 		);
 		// La risposta è firmata col membro che parla.
 		expect(savedAssistant[0]?.opts?.speaker).toBe('content');
@@ -283,7 +284,7 @@ describe('DM end-to-end: message_agent → coda → turno di risposta', () => {
 		const { system, messages } = harnessCalls[0];
 		expect(system.startsWith('## CHAT PRIVATA TRA AGENTI')).toBe(true);
 		// Chi parla è dedotto: il membro che NON ha firmato l'ultimo messaggio user.
-		expect(String(messages[messages.length - 1].content)).toContain('[Messaggio da Anomalia');
+		expect(String(messages[messages.length - 1].content)).toContain('[Message from Anomalia');
 		expect(savedAssistant[0]?.opts?.speaker).toBe('content');
 	});
 });

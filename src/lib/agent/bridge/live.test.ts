@@ -821,7 +821,8 @@ describe('runKitTurn — doppio resume su una waiting_input (due dispositivi ris
 		expect(res.status).toBe(409);
 		const body = await res.json();
 		expect(body.error).toBe('resume_conflict');
-		expect(body.message).toMatch(/già risposto/);
+		// Payload API, non chat: in inglese, anche per una chat italiana.
+		expect(body.message).toBe('Someone else already replied in this conversation.');
 		// La riga non è stata toccata dal perdente: resta come l'ha lasciata chi ha vinto la corsa.
 		expect(rows[0].state).toBe('waiting_input');
 	});
