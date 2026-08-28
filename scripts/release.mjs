@@ -67,5 +67,8 @@ console.log(`  src/lib/content/changelog/${today}-<slug>.ts    (pubblico, ingles
 console.log('');
 console.log('Scrivi le note, poi:');
 console.log(`  git commit -am "release v${next}"`);
-console.log(`  git tag v${next}`);
-console.log(`  git push && git push --tags`);
+console.log('');
+console.log('Il merge su main fa il resto: il workflow Release confronta la versione');
+console.log(`con i tag v*, crea v${next} se manca e pubblica la GitHub Release con`);
+console.log('le note dai changelog. In locale la stessa fonte:');
+console.log('  node scripts/release-notes.mjs <ultimo-tag> HEAD');
