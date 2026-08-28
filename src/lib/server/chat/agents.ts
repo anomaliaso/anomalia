@@ -92,6 +92,10 @@ export const SHARED_TOOL_KEYS = [
   // Gli occhi della squadra: l'ultimo report di ogni collega (diari surface='team') e i DM dove la
   // palla sta a chi. Read-only, una query — il team si coordina solo se vede il lavoro altrui.
   'team_activity',
+  // La memoria è del BRAND, non di un mestiere: la nozione che deve sopravvivere al turno la
+  // scrive chi l'ha imparata (task #8, PROACTIVE BY DEFAULT). remove_memory resta dei mestieri
+  // che la curano: cancellare la memoria condivisa non è un gesto trasversale.
+  'add_memory',
   // Aprire una chat di gruppo è trasversale come il DM: qualunque mestiere può metterne insieme
   // due o tre quando la conversazione ne ha bisogno. Costa una insert e nessun turno — la stanza
   // parla quando ci scrive l'utente.
