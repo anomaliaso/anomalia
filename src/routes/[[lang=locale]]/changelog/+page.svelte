@@ -4,7 +4,7 @@
   import SiteNav from '$lib/components/SiteNav.svelte';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
 
-  import entries from '$lib/content/changelog/legacy';
+  import { changelogEntries as entries } from '$lib/content/changelog';
 
   const isIt = $derived(($locale ?? 'en').startsWith('it'));
 </script>

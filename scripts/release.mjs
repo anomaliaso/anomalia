@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * Bump the human version and open its CHANGELOG section.
+ * Bump the human version.
  *
  *   npm run release -- patch    0.2.0 → 0.2.1   fix, nessun cambiamento di comportamento atteso
  *   npm run release -- minor    0.2.0 → 0.3.0   funzionalità nuova, retrocompatibile
  *   npm run release -- major    0.2.0 → 1.0.0   rottura o cambio di prodotto
  *
- * What it does: rewrites `package.json` and inserts a dated `## vX.Y.Z` heading at the top of
- * CHANGELOG.md. That's all.
+ * What it does: rewrites the version in `package.json`. That's all — the notes
+ * live in their own files (changelog/YYYY-MM-DD-<slug>.md, e quello pubblico in
+ * src/lib/content/changelog/), che una release non ha motivo di toccare in massa.
  *
  * What it deliberately does NOT do: commit, tag, or push. Those are decisions with consequences
  * outside this repo, and a release script that performs them by surprise is how a half-finished
@@ -22,7 +23,6 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pkgPath = join(root, 'package.json');
-const changelogPath = join(root, 'CHANGELOG.md');
 
 const KINDS = new Set(['major', 'minor', 'patch']);
 const kind = (process.argv[2] ?? '').trim();
@@ -54,25 +54,16 @@ pkg.version = next;
 writeFileSync(pkgPath, `${JSON.stringify(pkg, null, indent)}\n`);
 
 const today = new Date().toISOString().slice(0, 10);
-const heading = `## v${next} — ${today}`;
 
-let changelog = readFileSync(changelogPath, 'utf8');
-if (changelog.includes(heading)) {
-  console.error(`CHANGELOG.md ha già una sezione ${heading} — niente da fare.`);
-  process.exit(1);
-}
-
-// Insert right after the top-level title so the newest release is always first.
-const titleEnd = changelog.indexOf('\n', changelog.indexOf('# Changelog'));
-changelog =
-  changelog.slice(0, titleEnd + 1) +
-  `\n${heading}\n\n- _(scrivi qui cosa cambia per chi usa il prodotto)_\n` +
-  changelog.slice(titleEnd + 1);
-writeFileSync(changelogPath, changelog);
+pkg.version = next;
+writeFileSync(pkgPath, `${JSON.stringify(pkg, null, indent)}\n`);
 
 console.log(`${current} → ${next}`);
 console.log(`  package.json  aggiornato`);
-console.log(`  CHANGELOG.md  nuova sezione "${heading}"`);
+console.log('');
+console.log('Le note di release sono un file a entry, uno per cambiamento:');
+console.log(`  changelog/${today}-<slug>.md                    (interno: perché, prima/dopo, decisioni)`);
+console.log(`  src/lib/content/changelog/${today}-<slug>.ts    (pubblico, inglese, se visibile agli utenti)`);
 console.log('');
 console.log('Scrivi le note, poi:');
 console.log(`  git commit -am "release v${next}"`);

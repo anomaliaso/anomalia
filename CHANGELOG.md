@@ -1,5 +1,9 @@
 # Changelog
 
+> **Frozen.** Le nuove entry vivono in `changelog/YYYY-MM-DD-<slug>.md` — convenzione in
+> `changelog/README.md`. Questo file è l'archivio storico: non si aggiunge più nulla, e
+> chi lo modifica in coda crea conflitti con tutte le PR aperte.
+
 ## 2026-08-28
 
 ### `bun run dev` non uccide più la porta di nessuno
