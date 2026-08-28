@@ -45,6 +45,44 @@ export async function chatFacts(admin: SupabaseClient, brandId: string): Promise
 
 export type PlanFacts = { editorialPlans: number; newsSources: number };
 
+/**
+ * Gli specialisti che hanno davvero contattato l'utente: thread di squadra (`surface='team'`)
+ * con almeno un messaggio assistente FIRMATO (`chat_messages.name`). La firma distingue il primo
+ * contatto dal seed statico del diario, che non ha mittente.
+ */
+export async function teamContactFacts(admin: SupabaseClient, brandId: string): Promise<{ agents: string[] }> {
+  const { data: threads } = await admin
+    .from('chat_threads')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('surface', 'team');
+  const threadIds = (threads ?? []).map((t) => t.id);
+  if (!threadIds.length) return { agents: [] };
+  const { data: messages } = await admin
+    .from('chat_messages')
+    .select('name')
+    .in('thread_id', threadIds)
+    .eq('role', 'assistant')
+    .not('name', 'is', null);
+  return { agents: [...new Set((messages ?? []).map((m) => String(m.name)))] };
+}
+
+export async function waitForTeamContact(
+  admin: SupabaseClient,
+  brandId: string,
+  deadlineMs: number,
+  pollIntervalMs = 15_000
+): Promise<{ agents: string[] }> {
+  const deadline = Date.now() + deadlineMs;
+  let contacts = { agents: [] as string[] };
+  while (Date.now() < deadline) {
+    contacts = await teamContactFacts(admin, brandId);
+    if (contacts.agents.length >= 2) return contacts;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+  return contacts;
+}
+
 export async function planFacts(admin: SupabaseClient, brandId: string): Promise<PlanFacts> {
   const [{ count: editorialPlans }, { count: newsSources }] = await Promise.all([
     admin.from('editorial_plans').select('id', { count: 'exact', head: true }).eq('brand_id', brandId),

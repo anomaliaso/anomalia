@@ -6,7 +6,7 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { geminiFast } from '$lib/server/chat/model';
 import { Browser } from './ux/browser';
 import { createEvalUser, deleteEvalUser } from './ux/user';
-import { brandForUser, planFacts, waitForAssistantReply } from './ux/facts';
+import { brandForUser, planFacts, waitForAssistantReply, waitForTeamContact } from './ux/facts';
 import { walkOnboarding } from './ux/walk';
 import { RUBRIC, grade, parseJudgment } from './ux/grader';
 import { writeReport, type FlowFact, type JudgeUsage } from './ux/report';
@@ -143,6 +143,9 @@ async function main(): Promise<number> {
     const { replied, facts: chat } = await waitForAssistantReply(admin, brand.id, REPLY_WAIT_MS);
     log(`[chat] replied=${replied} assistant=${chat.assistantMessages} latency=${chat.firstAssistantLatencyMs}ms`);
 
+    const team = await waitForTeamContact(admin, brand.id, REPLY_WAIT_MS);
+    log(`[team] contatti firmati: ${team.agents.join(', ') || 'nessuno'}`);
+
     const chatUrl = (await browser.run('get', 'url')).trim();
     await browser.captureEvidence('02-chat');
     const pick = await readText(join(evidenceDir, '01-pick.a11y.txt'));
@@ -160,6 +163,15 @@ async function main(): Promise<number> {
           : `nessuna risposta entro ${REPLY_WAIT_MS / 1000}s`
       },
       {
+        id: 'team-of-agents-contact',
+        ok: team.agents.length >= 2,
+        gate: true,
+        detail:
+          team.agents.length >= 2
+            ? `contattano l'utente: ${team.agents.join(', ')}`
+            : `solo ${team.agents.length} specialista ha contattato l'utente (${team.agents.join(', ') || 'nessuno'}) — il team non si presenta`
+      },
+      {
         id: 'editorial-plan',
         ok: plans.editorialPlans > 0,
         gate: false,
@@ -168,7 +180,7 @@ async function main(): Promise<number> {
       { id: 'news-sources', ok: plans.newsSources > 0, gate: false, detail: `${plans.newsSources} fonti radar attive` }
     ];
 
-    const judged = await judge(brand.slug, pick ?? '', chatSnap ?? '', { chat, plans });
+    const judged = await judge(brand.slug, pick ?? '', chatSnap ?? '', { chat, plans, team });
     const judgment = parseJudgment(judged.text);
     if (!judgment) {
       log(`[judge] output non parsabile: ${judged.text.slice(0, 400)}`);
