@@ -348,7 +348,7 @@ export function createSandboxTools(opts: SandboxToolsOptions): SandboxSession {
       }),
       execute: async (
         input: { cmd: string; args?: string[]; cwd?: string; timeout_ms?: number },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         const blocked = budget('cmd');
         if (blocked) return blocked;
@@ -399,7 +399,7 @@ export function createSandboxTools(opts: SandboxToolsOptions): SandboxSession {
         path: z.string().min(1).max(200).describe('Relative path, e.g. "work/analysis.py"'),
         content: z.string().max(400_000).describe('Full file content')
       }),
-      execute: async (input: { path: string; content: string }, toolOpts: ToolExecutionOptions) => {
+      execute: async (input: { path: string; content: string }, toolOpts: ToolExecutionOptions<unknown>) => {
         const bad = rejectPath(input.path);
         if (bad) return { error: bad };
         try {
@@ -419,7 +419,7 @@ export function createSandboxTools(opts: SandboxToolsOptions): SandboxSession {
         path: z.string().min(1).max(200).describe('Relative path'),
         max_chars: z.number().min(200).max(40_000).optional().describe('Truncate after this many characters (default 12000)')
       }),
-      execute: async (input: { path: string; max_chars?: number }, toolOpts: ToolExecutionOptions) => {
+      execute: async (input: { path: string; max_chars?: number }, toolOpts: ToolExecutionOptions<unknown>) => {
         const p = (input.path ?? '').trim();
         // Era un controllo in linea, più debole di `rejectPath`: `.github.env` ci passava.
         const bad = rejectReadPath(p);
@@ -458,7 +458,7 @@ export function createSandboxTools(opts: SandboxToolsOptions): SandboxSession {
       }),
       execute: async (
         input: { url: string; wait_for?: string; screenshot?: string; full_page?: boolean; max_chars?: number },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         if (mode !== 'research') {
           return { error: 'This sandbox has no internet access (compute profile). Browsing is only available to a research run.' };
@@ -536,7 +536,7 @@ export function createSandboxTools(opts: SandboxToolsOptions): SandboxSession {
       }),
       execute: async (
         input: { path: string; title: string; kind: 'artifact' | 'image' | 'document'; description?: string },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         const blocked = budget('save');
         if (blocked) return blocked;

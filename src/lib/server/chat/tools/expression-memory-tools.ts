@@ -66,7 +66,7 @@ export function expressionMemoryTools(ctx: ChatToolCtx) {
       }),
       execute: async (
         { category, include_session }: { category?: string; include_session?: boolean },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         const { loadMemoryEntries, recordMemoryUsage } = await import('$lib/server/brand-memory');
         const cat = category
@@ -129,7 +129,7 @@ export function expressionMemoryTools(ctx: ChatToolCtx) {
           category,
           scope
         }: { key: string; value: string; category: string; scope?: 'session' | 'project' | 'mine' },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         const { writeMemory } = await import('$lib/server/brand-memory');
         // A skill is a standing procedure — session scope would throw it away with the thread.
@@ -164,7 +164,7 @@ export function expressionMemoryTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         entry_id: z.string().describe('The memory entry ID to remove')
       }),
-      execute: async ({ entry_id }: { entry_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ entry_id }: { entry_id: string }, opts: ToolExecutionOptions<unknown>) => {
         // Un id `builtin:` non è una riga: è una skill di prodotto (default-skills.ts). Senza
         // questa guardia il delete passerebbe un non-uuid alla colonna id e verrebbe giù un
         // errore Postgres invece di una risposta.
