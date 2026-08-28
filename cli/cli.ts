@@ -28,10 +28,12 @@ Documentazione completa: cli/README.md
 
 program
   .command('login')
-  .description('Accedi a Anomalia (apre il browser)')
-  .action(async () => {
+  .description('Accedi a Anomalia (default: apre il browser)')
+  .option('--email <email>', 'email per login non interattivo (richiede --password)')
+  .option('--password <password>', 'password per login non interattivo (richiede --email)')
+  .action(async (options) => {
     const { cmdLogin } = await import('./commands/login.ts');
-    await cmdLogin();
+    await cmdLogin(options);
   });
 
 program

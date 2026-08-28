@@ -10,6 +10,7 @@
       title: 'One repository for everything Anomalia',
       items: [
         'The CLI, the MCP server and the agent skills now live in this repository — releases, installs and updates all come from here.',
+        'Logging in from scripts and CI no longer needs a browser: `anomalia login --email … --password …` stores the same session the browser flow does.',
       ],
     },
     {

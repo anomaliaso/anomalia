@@ -63,6 +63,25 @@ export async function requireSession(): Promise<StoredSession> {
   return s;
 }
 
+// Email + password against the same Supabase project the app uses — no browser,
+// no consent page. For scripts and CI; the browser flow stays the default because
+// it is the only one that supports SSO providers and never puts a password on argv.
+export async function passwordLogin(email: string, password: string): Promise<StoredSession> {
+  const sb = anonClient();
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error || !data.session) {
+    throw new Error(error?.message ?? 'Credenziali non valide');
+  }
+  const stored: StoredSession = {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+    expires_at: data.session.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
+    user: { id: data.session.user.id, email: data.session.user.email! }
+  };
+  saveSession(stored);
+  return stored;
+}
+
 export function saveSession(s: StoredSession) {
   mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(SESSION_FILE, JSON.stringify(s, null, 2));
