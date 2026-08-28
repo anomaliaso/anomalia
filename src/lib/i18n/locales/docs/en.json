@@ -1232,7 +1232,7 @@
     "s18": "Pick a transport: local stdio is simplest on your machine; remote HTTP is for cloud hosts.",
     "s19": "Option A — Local stdio",
     "s20": "Best for Cursor and other local agents.",
-    "s21": "Install Bun and clone the anomalia-cli repo (or install the CLI binary so anomalia-mcp is on your PATH).",
+    "s21": "Install Bun and clone the anomalia repo (or install the CLI binary so anomalia-mcp is on your PATH).",
     "s22": "Authenticate once:",
     "s23": "Add to Cursor MCP config (absolute path required when using Bun):",
     "s24": "If the binary is on PATH after install:",

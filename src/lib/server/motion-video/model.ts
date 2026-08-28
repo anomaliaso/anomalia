@@ -14,8 +14,7 @@
  */
 import { env } from '$env/dynamic/private';
 import type { LanguageModel } from 'ai';
-import { harnessSdkModel } from '$lib/agent/bridge/adapters';
-import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
+import { craftAgentModel } from '$lib/server/craft-model';
 
 export type MotionAgentModel = {
 	model: LanguageModel;
@@ -32,15 +31,8 @@ export type MotionAgentModel = {
  * composizione Remotion e` la cosa piu` difficile che il prodotto chiede a un modello, e la chat
  * puo` restare sul veloce mentre questo no.
  */
-const MOTION_TIER = 'pro' as const;
-
 export function motionAgentModel(): MotionAgentModel {
-	const forced = env.MOTION_VIDEO_MODEL?.trim();
-	if (forced) return { model: llmLanguageModel(forced), modelId: forced, provider: 'llm' };
-
-	const routed = harnessSdkModel(MOTION_TIER);
-	if (routed) return routed;
-
-	const id = llmDefaultModel();
-	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
+	// La fabbrica è condivisa (craft-model.ts): stessa misura delle rese UGC, un posto solo
+	// che decide su cosa gira una resa. Il fallback sul centralino resta dichiarato.
+	return craftAgentModel({ envModel: env.MOTION_VIDEO_MODEL });
 }

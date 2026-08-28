@@ -75,7 +75,7 @@
         </a>
         <a
           class="foot-social-link"
-          href="https://github.com/andreabuttarelli/anomalia-cli"
+          href="https://github.com/anomaliaso/anomalia"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="GitHub"

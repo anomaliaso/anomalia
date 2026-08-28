@@ -49,7 +49,8 @@ export const EXECUTABLE_TOOL_JOBS = [
   'seo_add_initiatives',
   'analytics_review',
   'motion_video_qc',
-  'run_autopilot'
+  'run_autopilot',
+  'subagent_run'
 ] as const;
 
 /** Job che il drain serverless di Vercel non deve reclamare: solo il worker process. */
@@ -61,7 +62,9 @@ export async function executeChatToolJob(
   userId: string,
   toolName: string,
   params: AnyRec,
-  cancel: JobCancellation
+  cancel: JobCancellation,
+  /** La riga reclamata: serve a chi esegue il job e non vive nei params (thread, id per il mirror). */
+  job?: { id?: string; thread_id?: string | null }
 ): Promise<AnyRec> {
   if (WEB_JOB_TOOLS.has(toolName)) {
     const locked = await assertWebHubPaid(supabase, brandId);
@@ -429,6 +432,15 @@ export async function executeChatToolJob(
         });
       }
       return res;
+    }
+
+    case 'subagent_run': {
+      // La run di un sub-agent accodata da delegate_task / run_task_pipeline / run_parallel_tasks.
+      // Il mirror del partial e la deadline sono di subagent-jobs.ts; il rientro del risultato lo
+      // fa il drain che ci chiama, con lo stesso meccanismo degli altri tool lunghi.
+      const { runSubagentJob } = await import('$lib/server/chat/subagent-jobs');
+      if (!job?.id) return { error: 'subagent_run without a job row' };
+      return runSubagentJob(supabase, { id: job.id, brand_id: brandId, user_id: userId, thread_id: job.thread_id }, params, cancel);
     }
 
     default:

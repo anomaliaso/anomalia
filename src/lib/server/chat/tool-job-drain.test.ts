@@ -130,7 +130,8 @@ describe('processNextPendingToolJob', () => {
 			'user-1',
 			'produce_week',
 			{ week: 0 },
-			expect.anything()
+			expect.anything(),
+			{ id: 'job-1', thread_id: 'thread-1' }
 		);
 		expect(table[0].status).toBe('done');
 		expect(table[0].result).toEqual({ ok: true, video_url: 'https://cdn/clip.mp4' });

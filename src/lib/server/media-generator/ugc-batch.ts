@@ -711,23 +711,37 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
       ].slice(0, 4);
       // Il brief si serializza DOPO aver reso i frame: le REFERENCES devono dire cosa è
       // ogni immagine allegata, e prima di renderle non si sa quante sono.
-      const briefFor = (references: string[]) =>
-        formatUgcShotBrief(
-          buildUgcShotBrief({
-            seconds: clipSeconds,
-            hook: plan.script.hook,
-            hookVisual: plan.hookVisual ?? undefined,
-            format: plan.format ?? null,
-            platform,
-            product: productName,
-            setting: plan.setting,
-            person: hasPerson
-              ? plan.model?.name || 'reference person'
-              : undefined,
-            desire: 'less chaos / get the work done / look competent'
-          }),
-          { script: spoken, product: productName, references }
-        );
+      // La RESA passa dal secondo agente (tier pro, ugc-craft.ts): il deterministico è la
+      // base e la rete — il crafter lo riscrive come farebbe un regista, o lo si ritrova.
+      const briefFor = async (references: string[]) => {
+        const base = buildUgcShotBrief({
+          seconds: clipSeconds,
+          hook: plan.script.hook,
+          hookVisual: plan.hookVisual ?? undefined,
+          format: plan.format ?? null,
+          platform,
+          product: productName,
+          setting: plan.setting,
+          person: hasPerson
+            ? plan.model?.name || 'reference person'
+            : undefined,
+          desire: 'less chaos / get the work done / look competent'
+        });
+        const { craftUgcShotBrief } = await import('$lib/server/media-generator/ugc-craft');
+        return craftUgcShotBrief({
+          baseBrief: formatUgcShotBrief(base, { script: spoken, product: productName, references }),
+          script: spoken,
+          product: productName,
+          references,
+          platform,
+          seconds: clipSeconds,
+          hook: plan.script.hook,
+          hookVisual: plan.hookVisual ?? undefined,
+          setting: plan.setting,
+          person: hasPerson ? plan.model?.name || 'reference person' : undefined,
+          format: plan.format ?? null
+        });
+      };
 
       const { renderVideo, isKnownVideoModel } = await import('$lib/server/video');
       // UGC Creator defaults to Seedance 2.5. Remake from a selected grid video
@@ -909,7 +923,7 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
             )
           ]
         : [];
-      const shotBrief = briefFor(referenceLines);
+      const shotBrief = await briefFor(referenceLines);
       const remakeBrief = remakeMode
         ? `${shotBrief}\n\nREMAKE:\n@Video1 is the selected clip to remake — keep identity, framing energy and UGC feel; apply the user brief changes; speak the new line exactly.`
         : shotBrief;

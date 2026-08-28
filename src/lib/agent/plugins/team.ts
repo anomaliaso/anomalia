@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
 import { createAgentDmTools } from '$lib/server/chat/agent-dm-tools';
+import { createAgentSessionTools } from '$lib/server/chat/agent-session-tools';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
 
 export interface TeamPluginDeps {
@@ -38,11 +39,25 @@ export function createTeamPlugin(deps: TeamPluginDeps): ToolPlugin {
 		locale: deps.locale ?? 'en'
 	}) as unknown as ChatToolsRecord;
 
+	const session = createAgentSessionTools({
+		supabase: deps.supabase,
+		brandId: deps.brandId,
+		userId: deps.userId,
+		threadId: deps.threadId ?? undefined,
+		origin: deps.origin ?? '',
+		locale: deps.locale ?? 'en'
+	}) as unknown as ChatToolsRecord;
+
 	const tools: ToolSpec[] = [
 		{
 			name: 'message_agent',
 			description: String(dm.message_agent?.description ?? ''),
 			inputSchema: jsonSchemaOf(dm.message_agent)
+		},
+		{
+			name: 'open_session_with_user',
+			description: String(session.open_session_with_user?.description ?? ''),
+			inputSchema: jsonSchemaOf(session.open_session_with_user)
 		}
 	];
 
@@ -50,6 +65,9 @@ export function createTeamPlugin(deps: TeamPluginDeps): ToolPlugin {
 		name: 'team',
 		tools,
 		async execute(call: ToolCall, ctx: AdapterContext): Promise<ToolResult> {
+			if (call.name === 'open_session_with_user') {
+				return execChatTool(session.open_session_with_user, call.name, call.args, ctx.runId, ctx.signal);
+			}
 			if (call.name !== 'message_agent') {
 				return { content: [{ type: 'text', text: `team plugin: unknown tool '${call.name}'` }], isError: true };
 			}

@@ -1,6 +1,185 @@
 # Changelog
 
+> **Frozen.** Le nuove entry vivono in `changelog/YYYY-MM-DD-<slug>.md` — convenzione in
+> `changelog/README.md`. Questo file è l'archivio storico: non si aggiunge più nulla, e
+> chi lo modifica in coda crea conflitti con tutte le PR aperte.
+
+## 2026-08-28
+
+### `bun run dev` non uccide più la porta di nessuno
+
+Ogni agente che lavorava con `bun run dev` partiva uccidendo chiunque stesse
+già sulla 5173: due agenti in parallelo nei test e2e si facevano la guerra,
+e chi stava lavorando perdeva il server a metà sessione. Ora `bun run dev` è
+solo `vite dev` — la porta se la prende libera, e se è occupata bumpa sulla
+successiva invece di sparare al vicino. Il kill della 5173 vive in un comando
+suo, `bun run dev:5173`, che dopo il kill lega con `--strictPort`: o prende
+esattamente la 5173 (CLI e doc la presumono) o fallisce rumorosamente, senza
+spostarsi in silenzio su un'altra porta. Un test (`scripts/dev-scripts.test.ts`)
+impedisce che il kill torni dentro `dev`.
+
 ## 2026-08-27
+
+### Ogni agente può aprire una sessione utente, e la delega si distingue in due modi
+
+Il DM fra agenti (`message_agent`) è il posto giusto per coordinarsi ma non per
+fare il lavoro che riguarda la persona: chi lo riceve è in un thread privato che
+l'utente legge ma in cui non scrive. Un collega che si vedeva chiedere una
+scelta, un'approvazione o una domanda del brand non poteva portare quella
+conversazione all'utente — restava nel DM, e il lavoro moriva lì.
+
+Fix: nuovo tool `open_session_with_user`. Chi lo chiama — il collega che ha
+ricevuto il lavoro — apre il SUO thread utente (il diario `surface='team'`, la
+stessa faccia in sidebar dei report di squadra), ci scrive la riga di apertura e
+fa partire il suo turno lì dentro, in continuazione: il delegante riceve nel DM
+la conferma con l'id del thread e l'utente trova la sessione dello specialista in
+sidebar. Il tool è trasversale (SHARED) come il DM e come il DM mai ai
+sotto-agenti — chi parla con la persona è uno solo.
+
+Insieme, il blocco di orchestrazione distingue con chiarezza i DUE modi di
+delegare: i **sotto-agenti** (sub-agents) sono copie dell'agente corrente e
+servono a dividere in macro-task un goal complesso che farebbe lui stesso; gli
+**altri agenti** (via `message_agent` → `open_session_with_user`) ricevono il
+lavoro in cui LORO sono più esperti, e aprono la loro sessione utente per
+lavorarlo. Prima la differenza non era detta: l'orchestratore usava
+`run_parallel_tasks` anche per la SEO/GEO del Web, e il mestiere giusto non
+arrivava mai al collega. Il brief del DM ora dice al destinatario che, se il
+lavoro ha bisogno dell'utente, può aprire la propria sessione.
+### I sub-agent sono processi async come motion_write
+
+Prima la delega girava DENTRO il tool call del turno (`generateText` inline): la scheda che
+chiudeva uccideva il lavoro a metà, il muro di Vercel pure, e nessuno — utente né AI — sapeva
+cosa il sub-agent stesse facendo mentre girava. Il partial esisteva solo a turno finito.
+
+Ora in chat i tre tool di delega (`delegate_task`, `run_task_pipeline`, `run_parallel_tasks`)
+accodano una riga `chat_jobs` con `tool_name: 'subagent_run'` e tornano subito, come
+`motion_write`. Il worker (nuovo `subagent-jobs.ts`, eseguito dal drain dei tool job esistente
+con la sua allowlist) reclama la riga, monta il set di tool del brand FUORI dal turno
+(perimetro derivato da ruolo e hub, non dal chiamante che quando il job gira può non esserci
+più), e esegue con `streamText`: il partial — stessa forma dell'SSE di chat, piegata dal
+reducer condiviso — finisce sulla riga con flush immediato sulle tool call e throttle a 300ms
+sul testo, più un flush finale dopo la run. Il risultato rientra nel thread come nuovo turno
+(tool-job-report, tetto a 6000 caratteri per il rapporto), `check_subagent` legge lo stato
+vivo come `motion_check` fa per il motion. Il reaper generico ora copre `subagent_run`.
+
+Decisioni prese e scartate:
+- *Pipeline spezzata per fase*: scartata — la pipeline gira come UN job con le fasi in sequenza
+  dentro il worker (ricerca → esecuzione → verifica si passano i rapporti in memoria, come
+  prima). Full async riguarda il confine turno/lavoro, non la coerenza interna della pipeline.
+- *Bridge kit in coda*: scartata — il worker non può rimontare il set di tool del kit (nomi veri
+  del kit, plugin, applyTool col battito): un job accodato da un turno kit sarebbe partito col
+  perimetro sbagliato. E il run kit è GIÀ durabile (heartbeat, resume, checkpoint): la chiusura
+  della scheda non uccide il lavoro. Quindi il bridge gira `inline` ma con riga `chat_jobs`
+  SPECCHIO (`mirror: true`): partial vivo sulla riga, chip «background tasks» e
+  `check_subagent` funzionano identico; `agent-base` (i motori con la guard di `finish` che
+  legge i verdetti in banda) resta inline senza specchio.
+- *Budget*: `MAX_SUBAGENT_RUNS` conta ora dispatch, non run; il tetto di step per ruolo e i
+  muri (`chatTurnDeadline` + abort a `CHAT_MAX_DURATION_MS`) vivono nel worker.
+- Il perimetro dei tool del sub-agent resta NON negoziabile: `subagentToolNames` dal set pieno
+  del brand filtrato per hub, mai di più di quanto l'orchestratore poteva fare.
+
+Lo specchio del partial vive in un modulo solo (`job-partial-mirror.ts`) per i due mondi:
+flush immediato sulle tool call, throttle 300ms sul testo, e battito a 10s che riscrive lo
+stato DI ADESSO — `classifyChatJob` legge `partial.at` come segno di vita, e un modello che
+pensa in silenzio per minuti non deve sembrare morto al reaper.
+
+Ambiente locale: per la verifica browser il `.env` locale puntava al Supabase hosted (brand
+`demo` 404, RLS Unauthorized su agent_kit_runs/chat_jobs): override con `.env.local` su
+127.0.0.1:8000 (URL, anon key e service key dello stack docker). Da solo non basta: il
+`SUPABASE_SERVICE_ROLE_KEY` hosted contro il DB locale rende il client admin anonimo — tutti
+i percorsi "solo service-role" diventano Unauthorized.
+
+### Il setup del brand si fa con l'Analyst e ci si atterra dentro
+
+Il thread di setup creato a fine onboarding era con l'agente omni (agent=null,
+"Anomalia") e il messaggio pre-scritto chiedeva un incarico vago ("studia il
+brand, dimmi come va la SEO"). Gli utenti non lo vedevano: il wizard li
+ributtava sulla dashboard, o sulla scelta dell'agente, e la chat di setup restava
+orfana — in produzione aprivano una sessione NUOVA senza sapere che ne esisteva
+una già impostata.
+
+Fix:
+- il thread di setup parla con l'**Analyst** (`chat_threads.agent='analyst'`),
+  che è il mestiere giusto per instradare l'utente e comporre la squadra. Il
+  brief (lato server) smette di chiamare in prima i tool che sono dei mestieri:
+  l'**analisi SEO/GEO** si **delega al Web Specialist** e la **produzione di
+  contenuti** (e il **piano editoriale** quando manca) si **delega al Content
+  Creator**, via `message_agent`. L'Analyst dirige e compone, non produce e non
+  audita — ma **salva i social di persona** (`save_social_handles`, insieme a
+  `sync_social_history`): l'identità social è un suo mestiere, non un'altra
+  delega. La strategia (GTM) resta sua.
+- il messaggio pre-scritto è esplicito sull'incarico di setup: analizza il
+  brand, fai l'analisi SEO e AI-visibility del sito, imposta strategia GTM e
+  piano editoriale, dimmi cosa automatizzeresti e chiedi cosa tenere.
+- dopo la fine del wizard l'utente atterra **dentro il thread di setup**
+  (`/app/{slug}/chat/{thread}`) invece che su `/app/{slug}`: sia la `finish`
+  dell'action sia la scelta dell'agente (AgentPick) aprono il thread già
+  creato, che porta il nome e la bandiera Analyst in sidebar.
+### Il pannello agente non si ricordava come lo avevi lasciato
+
+`agentPanelOpen` era uno `$state(false)` locale alla pagina del thread: ogni navigazione lo
+riportava chiuso. Chi teneva il pannello aperto su un agente e tornava nella chat dalla
+sidebar lo ritrovava chiuso, e viceversa.
+
+La preferenza ora segue l'AGENTE (`custom_agent_id ?? agent`) e vive in localStorage
+(`anomalia:chat-agent-panel:<brand>:<agent>`, stesso pattern delle bozze di chat): atterrando
+su un thread il pannello torna com'era stato lasciato per l'agente di quella chat, e ogni
+cambio — toggle in topbar o X del pannello — la riscrive. Chiuso = chiave assente: il default
+è già chiuso. Lettura a un `$effect` di atterraggio (ri-allineato quando cambia il thread),
+scrittura a un `$effect` idempotente: entrambi passano da `chat-agent-panel-pref.ts`, mai
+dallo storage diretto.
+
+### La resa dei video generativi/UGC passa al secondo agente con tier pro
+
+Come per il motion (`motion_write` accoda, la resa gira su un agente con modello avanzato),
+la resa dei video generativi AI e UGC aveva lo stesso buco: lo shot brief per il generatore
+veniva composto da template deterministici (`buildUgcShotBrief` + `formatUgcShotBrief`) e il
+piano dal planner flash. Nessun file decideva il tier di questo mestiere: tutti i call site
+usavano `IMAGE_AGENT_MODEL()` o il modello del turno.
+
+Ora:
+- `craft-model.ts` — la fabbrica condivisa del modello di resa (tier pro del provider attivo,
+  scappatoia esplicita in env, fallback dichiarato su Gemini). `motion-video/model.ts` la usa
+  ed è la stessa cosa che ora usa l'UGC; `UGC_VIDEO_MODEL` è la scappatoia del mestiere.
+- `media-generator/ugc-craft.ts` — il secondo agente: prende il brief deterministico (la rete,
+  con le RULE del generatore) e lo riscrive come farebbe un regista. Output senza le RULE, o
+  modello a terra, o muto → si torna al deterministico: mai un render senza brief.
+- `ugc-batch.ts` — `briefFor` passa dal crafter prima del render: batch UGC e ads remix
+  ereditano gratis. Il planner resta sul flash: è il PIANO, non la resa.
+
+Test: tier del modello (pro del provider, override env, fabbrica condivisa col motion), il
+prompt del crafter porta tutti i contesti e il divieto di toccare le RULE, e i tre percorsi
+(successo, modello a terra, output muto) con il deterministico come rete.
+
+
+### La direttiva del minimo entra nel contratto di consegna
+
+La task chiedeva «scrivi pochissimo, diretto al punto, il più minimo possibile». Il contratto
+di consegna (`reply-contract.ts`) diceva già la forma ma lasciava il minimo come gusto:
+"keep it to the sentences that carry a fact" è una descrizione, non una regola operativa.
+
+Ora c'è `MINIMAL BY DEFAULT`: le meno parole che portano i fatti, con i riempitivi classici
+NOMINATI (no greeting, no "Great news!", no transizioni, aggettivi senza fatto) e la prova di
+forza operativa — ogni frase deve guadagnarsi il posto: se tagliandola non sparisce nessun
+fatto, si taglia. Il posto è il blocco unico letto da testa omni e specialisti; il test
+esistente che separa «trasmettere meno» da «lavorare meno» (75 passi) resta pinnato e verde.
+
+### Il primo invio in chat restava muto mentre nasceva il thread
+
+Sulla home del brand ("Assumi un agente") il primo messaggio deve nascere un
+thread via `createThread`: finché non esiste, la sessione non c'è e `loading`
+resta falso. In quel lasso (1-2s in produzione) la textarea si svuotava, il
+bottone diventava microfono, e l'unico segno di vita — la progress bar di
+navigazione — partiva solo dopo. L'utente credeva di non aver inviato nulla.
+
+Fix: ChatColumn tiene uno stato `sending` vero dall'invio fino a che
+`primeChatSession` non prende il turno (o fino al fallimento di
+`createThread`, dove il testo torna nel composer com'era già), e lo passa a
+ChatPrompt: niente microfono mentre l'invio è in volo, e la rotella
+(`ch-busy`, lo stesso pattern della trascrizione) al posto del piano.
+Verificato nel browser sullo stack locale con la latenza di creazione
+strozzata a 1.2s: la rotella riempie il gap su desktop e su viewport stretto,
+il doppio click non manda doppioni.
 
 ### Homepage: la scelta cloud / self-host prima della FAQ
 

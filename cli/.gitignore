@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-npm/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+api/_bundle.js
+api/mcp.js
+api/oauth-protected-resource.js
+api/_mcp.bundle.js
+api/_oauth.bundle.js
+api/_bundle.cjs
+api/_bundle.cjs.map
+api/*.cjs

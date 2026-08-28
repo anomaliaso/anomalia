@@ -1232,7 +1232,7 @@
     "s18": "Choisissez un transport : stdio local est le plus simple sur votre machine ; HTTP distant pour les hôtes cloud.",
     "s19": "Option A — Stdio local",
     "s20": "Idéal pour Cursor et les autres agents locaux.",
-    "s21": "Installez Bun et clonez le repo anomalia-cli (ou installez le binaire CLI pour avoir anomalia-mcp dans le PATH).",
+    "s21": "Installez Bun et clonez le repo anomalia (ou installez le binaire CLI pour avoir anomalia-mcp dans le PATH).",
     "s22": "Authentifiez-vous une fois :",
     "s23": "Ajoutez à la config MCP de Cursor (chemin absolu requis avec Bun) :",
     "s24": "Si le binaire est dans le PATH après l'installation :",

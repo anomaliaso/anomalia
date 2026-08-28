@@ -38,8 +38,8 @@ tmp/
 !.vscode/extensions.json
 .vercel
 
-# Claude Code local config
-.claude/
+# Claude Code local config (skills travel with the repo)
+.claude/*
 !.claude/skills/
 !.claude/skills/**
 
@@ -82,7 +82,6 @@ AGENT-CHAT-*.md
 *-senti-non-mi-sta-piacendo*.txt
 
 # Config locali degli strumenti agente: contengono endpoint e progetti vendor interni.
-CLAUDE.md
 /opencode.json
 /mimocode.jsonc
 /mcp.json

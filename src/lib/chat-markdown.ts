@@ -118,6 +118,8 @@ export function renderMd(text: string): string {
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/__(.*?)__/g, '<strong>$1</strong>')
+      // After __…__ so bold wins; word guards keep foo_bar_baz intact.
+      .replace(/(?<![\w])_(\S(?:[^_]*?\S)?)_(?![\w])/g, '<em>$1</em>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/~~(.*?)~~/g, '<del>$1</del>')
       // Images before links — same []() shape, leading !

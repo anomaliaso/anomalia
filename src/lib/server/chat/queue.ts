@@ -892,6 +892,7 @@ export async function processNextQueuedChatJob(
 				threadId,
 				webHubEnabled,
 				defaultAgent: agentId,
+				origin,
 				remainingMs: () => queueDeadline?.remainingMs() ?? Number.POSITIVE_INFINITY
 			});
 			// Stessa macchina del turno interattivo: un lavoro in coda ne ha bisogno più di uno
@@ -1379,6 +1380,21 @@ export async function processNextQueuedChatJob(
 				.eq('id', jobId)
 				.in('status', ['pending', 'running', 'failed']);
 
+			// Il team si presenta: chiuso il primo turno di setup, gli specialisti del piano
+			// contattano l'utente nei loro thread. Import dinamico: il modulo accoda turni qui.
+			if (threadRow?.surface === 'onboarding') {
+				const { igniteOnboardingTeam } = await import('$lib/server/onboarding-team');
+				await igniteOnboardingTeam(admin, {
+					brandId: brand.id,
+					userId: job.user_id as string,
+					brandName: String(brand.name ?? ''),
+					website: (brand.website as string | null) ?? null,
+					plan: (brand.plan as string | null) ?? null,
+					locale,
+					origin
+				});
+			}
+
 			try {
 				const { sendPushToUser } = await import('$lib/server/web-push');
 				await sendPushToUser(admin, job.user_id as string, {
@@ -1488,7 +1504,8 @@ export async function processNextPendingToolJob(
 					candidate.user_id as string,
 					toolName,
 					(candidate.input_params ?? {}) as Record<string, unknown>,
-					cancel
+					cancel,
+					{ id: jobId, thread_id: (candidate.thread_id as string | null) ?? null }
 				)
 			);
 			await cancel.assertActive();
