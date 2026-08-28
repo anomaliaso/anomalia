@@ -1,0 +1,20 @@
+{
+  "name": "anomalia",
+  "interface": {
+    "displayName": "Anomalia"
+  },
+  "plugins": [
+    {
+      "name": "anomalia",
+      "source": {
+        "source": "local",
+        "path": "./plugins/anomalia"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

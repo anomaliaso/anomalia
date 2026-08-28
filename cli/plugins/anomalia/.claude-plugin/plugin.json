@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "anomalia",
+  "displayName": "Anomalia",
+  "version": "1.0.0",
+  "description": "Operate Anomalia (social media AI autopilot) via MCP or CLI: brands, posts, plans, studio, SEO/GEO, and blog.",
+  "author": {
+    "name": "Andrea Buttarelli",
+    "email": "andreabuttarelli.design@gmail.com",
+    "url": "https://github.com/andreabuttarelli"
+  },
+  "homepage": "https://anomalia.so",
+  "repository": "https://github.com/andreabuttarelli/anomalia-cli",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "social-media",
+    "content",
+    "mcp",
+    "seo",
+    "geo",
+    "anomalia",
+    "autopilot"
+  ]
+}

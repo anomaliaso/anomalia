@@ -1,0 +1,40 @@
+{
+  "name": "anomalia",
+  "version": "1.0.0",
+  "description": "Operate Anomalia (social media AI autopilot) via MCP or CLI: brands, posts, plans, studio, SEO/GEO, and blog.",
+  "author": {
+    "name": "Andrea Buttarelli",
+    "email": "andreabuttarelli.design@gmail.com",
+    "url": "https://github.com/andreabuttarelli"
+  },
+  "homepage": "https://anomalia.so",
+  "repository": "https://github.com/andreabuttarelli/anomalia-cli",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "social-media",
+    "content",
+    "mcp",
+    "seo",
+    "geo",
+    "anomalia",
+    "autopilot"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Anomalia",
+    "shortDescription": "Social media AI autopilot — MCP + skill",
+    "longDescription": "Drive Anomalia from Codex or ChatGPT: approve and edit social posts, run editorial plans, SEO/GEO audits, and blog workflows. Prefer the bundled MCP tools when connected; otherwise use the anomalia CLI after OAuth login.",
+    "developerName": "Andrea Buttarelli",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://anomalia.so",
+    "privacyPolicyURL": "https://www.anomalia.so/privacy",
+    "termsOfServiceURL": "https://www.anomalia.so/terms",
+    "defaultPrompt": [
+      "List my Anomalia brands and show pending posts for the first one.",
+      "Approve all pending posts for brand <slug>.",
+      "Run an SEO audit for brand <slug> and summarize the top issues."
+    ]
+  }
+}
