@@ -186,6 +186,9 @@ const NEVER_FOR_SUBAGENTS = new Set<string>([
   // Il DM fra agenti, per la stessa ragione ma peggio: un worker delegato che apre canali privati
   // accoda turni interi a nome di qualcun altro — chi parla (anche fra agenti) è uno solo.
   'message_agent',
+  // Stessa regola, ancora più netta: una sessione con l'utente è un posto dove parla una persona,
+  // e un delegato tre livelli sotto non ha titolo per aprirne una né per parlarci.
+  'open_session_with_user',
   // Stessa regola: una stanza è un posto dove l'utente parla con degli agenti, e un delegato tre
   // livelli sotto non ha titolo per aprirne una — men che meno per metterci dentro chi vuole.
   'create_group_chat'

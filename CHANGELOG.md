@@ -2,6 +2,31 @@
 
 ## 2026-08-27
 
+### Ogni agente può aprire una sessione utente, e la delega si distingue in due modi
+
+Il DM fra agenti (`message_agent`) è il posto giusto per coordinarsi ma non per
+fare il lavoro che riguarda la persona: chi lo riceve è in un thread privato che
+l'utente legge ma in cui non scrive. Un collega che si vedeva chiedere una
+scelta, un'approvazione o una domanda del brand non poteva portare quella
+conversazione all'utente — restava nel DM, e il lavoro moriva lì.
+
+Fix: nuovo tool `open_session_with_user`. Chi lo chiama — il collega che ha
+ricevuto il lavoro — apre il SUO thread utente (il diario `surface='team'`, la
+stessa faccia in sidebar dei report di squadra), ci scrive la riga di apertura e
+fa partire il suo turno lì dentro, in continuazione: il delegante riceve nel DM
+la conferma con l'id del thread e l'utente trova la sessione dello specialista in
+sidebar. Il tool è trasversale (SHARED) come il DM e come il DM mai ai
+sotto-agenti — chi parla con la persona è uno solo.
+
+Insieme, il blocco di orchestrazione distingue con chiarezza i DUE modi di
+delegare: i **sotto-agenti** (sub-agents) sono copie dell'agente corrente e
+servono a dividere in macro-task un goal complesso che farebbe lui stesso; gli
+**altri agenti** (via `message_agent` → `open_session_with_user`) ricevono il
+lavoro in cui LORO sono più esperti, e aprono la loro sessione utente per
+lavorarlo. Prima la differenza non era detta: l'orchestratore usava
+`run_parallel_tasks` anche per la SEO/GEO del Web, e il mestiere giusto non
+arrivava mai al collega. Il brief del DM ora dice al destinatario che, se il
+lavoro ha bisogno dell'utente, può aprire la propria sessione.
 ### I sub-agent sono processi async come motion_write
 
 Prima la delega girava DENTRO il tool call del turno (`generateText` inline): la scheda che

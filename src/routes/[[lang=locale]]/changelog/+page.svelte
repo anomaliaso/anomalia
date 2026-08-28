@@ -9,6 +9,8 @@
       date: 'August 27, 2026',
       title: 'Your project setup is a conversation with the Analyst',
       items: [
+        'When an agent hands work to a teammate and that work needs a decision or an answer from you, the teammate now opens their own conversation with you — instead of the exchange staying hidden between the two agents.',
+        'Handing work over is now clearer: an agent splits its own big goals into parallel helper agents, while a task that belongs to another specialist goes to that specialist — who works with you in their own conversation.',
         'Sub-agent work is now visible while it runs: delegations show up as background tasks with live progress, and the agent can check how each one is doing mid-flight.',
         'After onboarding, you now land inside the setup conversation instead of back on the dashboard — the chat that gets your brand ready is the one you meet, not one you never knew existed.',
         'That setup conversation is now with the Analyst, the agent that analyses the numbers and directs the team; it studies your brand, plans the go-to-market strategy and the editorial plan, and asks what else you want automated.',
