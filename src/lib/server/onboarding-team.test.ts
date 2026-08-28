@@ -55,6 +55,9 @@ describe('igniteOnboardingTeam', () => {
 		expect(web!.input_params.speaker).toBe('web');
 		expect(web!.input_params.brief).toContain('TEAM CONTACT TURN');
 		expect(web!.input_params.brief).toContain('run_seo_geo_audit');
+		// Il testo di ripresa è solo-per-il-modello ma NON può essere vuoto: il provider rifiuta
+		// una conversazione che non apre con un turno user.
+		expect(String(web!.input_params.user_message).length).toBeGreaterThan(20);
 
 		const msgs = kit.tables.get('chat_messages')!;
 		const openers = msgs.filter((m) => m.name);

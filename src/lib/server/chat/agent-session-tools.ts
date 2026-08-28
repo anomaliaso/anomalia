@@ -77,7 +77,9 @@ export function createAgentSessionTools(opts: {
           brandId,
           userId: opened.userId,
           threadId: opened.threadId,
-          userMessage: '',
+          // Il testo di ripresa va SOLO al modello (replay: mai salvato, mai mostrato): il
+          // provider non accetta una conversazione che non apre con un turno user.
+          userMessage: 'Your opening line to the user is already in front of them. Continue the work you just announced, in your own voice.',
           locale,
           origin,
           agent: me.agent,

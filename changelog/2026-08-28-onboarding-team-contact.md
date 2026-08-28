@@ -27,6 +27,12 @@ garanzia.
   azione) + turno di continuazione accodato con agente forzato e brief server-side. Nel thread di
   squadra l'utente non ha scritto nulla: una riga `user` mai scritta da lui sarebbe un falso nel
   transcript. L'incarico operativo sta nel `brief` (system prompt, mai nel thread).
+- **Il turno di continuazione porta SEMPRE un testo solo-per-il-modello** (`user_message` non
+  vuoto, mai salvato né mostrato). Scoperto in verifica end-to-end: con `user_message` vuoto il
+  job moriva due volte — prima col gate `Missing user_message`, poi (una volta superato il gate)
+  col prompt vuoto, perché il provider rifiuta una conversazione che non apre con un turno user e
+  `dropLeadingAssistant` mangia l'apertura firmata. La stessa correzione ha risanato
+  `open_session_with_user`, che portava lo stesso difetto dalla nascita.
 - **Idempotenza sul contatto, non sul thread.** Il thread è get-or-create (indice 0199); il contatto
   salta se esiste un job in volo sul thread o una firma dell'agente (`name`) tra i messaggi. I seed
   statici del diario (`igniteBrandTeam`) non hanno firma e non bloccano il primo contatto vero.

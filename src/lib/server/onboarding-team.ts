@@ -118,6 +118,14 @@ async function teamThreadContacted(admin: SupabaseClient, threadId: string, agen
 	return !!(jobs?.length || msgs?.length);
 }
 
+/**
+ * Il testo di ripresa del turno di contatto: va SOLO al modello (continuation + user_message_saved
+ * non lo salvano e non lo mostrano mai) — Gemini rifiuta una conversazione che non apre con un
+ * turno user, quindi il prefill non può essere la riga di apertura firmata.
+ */
+const CONTACT_REPLAY_PROMPT =
+	'Your opening line to the user is already in front of them. The server-side brief above is your task: start now, in your own voice, at most 4 short lines.';
+
 export async function igniteOnboardingTeam(
 	admin: SupabaseClient,
 	opts: {
@@ -151,7 +159,7 @@ export async function igniteOnboardingTeam(
 				brandId: opts.brandId,
 				userId: thread.userId,
 				threadId: thread.threadId,
-				userMessage: '',
+				userMessage: CONTACT_REPLAY_PROMPT,
 				locale: bilingualNoticeLocale(opts.locale),
 				origin: opts.origin,
 				agent,
