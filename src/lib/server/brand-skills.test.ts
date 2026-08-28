@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { brandSkills } from './brand-skills';
+import { brandSkills, skillsForAgent } from './brand-skills';
+
+const WRITING = ['humanizer', 'stop-slop'];
 
 describe('brandSkills', () => {
 	it('porta esattamente humanizer e stop-slop, entrambi MIT', () => {
@@ -41,10 +43,38 @@ describe('brandSkills', () => {
 			}
 		}
 	});
+});
 
-	it('startHarnessTurn cucina le skill di brand dentro HarnessAgent, sempre', () => {
+describe('skillsForAgent — ogni agente ha le sue skill', () => {
+	it('i prose-writer (content, ugc, web, analyst, auto) ricevono le due skill di scrittura', async () => {
+		for (const agentId of ['content', 'ugc', 'web', 'analyst', 'auto']) {
+			const names = (await skillsForAgent(agentId)).map((s) => s.name).sort();
+			expect(names, agentId).toEqual(WRITING);
+		}
+	});
+
+	it('il Motion riceve anche la skill Remotion presa dal repo', async () => {
+		const names = (await skillsForAgent('motion')).map((s) => s.name).sort();
+		expect(names).toEqual([...WRITING, 'remotion-best-practices'].sort());
+		const remotion = (await skillsForAgent('motion')).find((s) => s.name === 'remotion-best-practices');
+		expect(remotion?.content).toContain('Remotion');
+	});
+
+	it('senza agente noto non lascia il turno a mani vuote: cadono le skill di scrittura', async () => {
+		for (const agentId of [undefined, null, 'chimera']) {
+			const names = (await skillsForAgent(agentId as string | undefined)).map((s) => s.name).sort();
+			expect(names).toEqual(WRITING);
+		}
+	});
+
+	it('startHarnessTurn cucina le skill PER AGENTE dentro HarnessAgent', () => {
 		const src = readFileSync('src/lib/agent/bridge/adapters.ts', 'utf8');
-		expect(src).toMatch(/\[\.\.\.brandSkills, \.\.\.\(await loadHarnessSkills\(skillSelection\)\)\]/);
+		expect(src).toMatch(/skillsForAgent\(opts\.agentId\)/);
 		expect(src).toMatch(/skills\.length > 0 \? \{ skills \} : \{\}/);
+	});
+
+	it('il bridge porta l’identità dell’agente fino a startHarnessTurn', () => {
+		const src = readFileSync('src/lib/agent/bridge/live.ts', 'utf8');
+		expect(src).toMatch(/agentId:\s*spec\.id/);
 	});
 });

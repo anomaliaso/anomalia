@@ -737,6 +737,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		const startTurnOnce = (fresh: boolean) => {
 			const startedTurn = startHarnessTurn({
 			runId: run.id,
+			agentId: spec.id,
 			model: modelRef,
 			system,
 				historyMd: savedResume

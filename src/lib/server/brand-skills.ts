@@ -11,7 +11,8 @@ import STOP_SLOP from '$lib/agent-docs/skills/stop-slop/SKILL.md?raw';
 import STOP_SLOP_PHRASES from '$lib/agent-docs/skills/stop-slop/references/phrases.md?raw';
 import STOP_SLOP_STRUCTURES from '$lib/agent-docs/skills/stop-slop/references/structures.md?raw';
 import STOP_SLOP_EXAMPLES from '$lib/agent-docs/skills/stop-slop/references/examples.md?raw';
-import { parseSkillFrontmatter, type HarnessRepoSkill } from './harness-skills';
+import { loadHarnessSkills, parseSkillFrontmatter, type HarnessRepoSkill } from './harness-skills';
+import type { TeamAgentId } from '$lib/agent-owners';
 
 function toSkill(markdown: string, files?: HarnessRepoSkill['files']): HarnessRepoSkill {
 	const { attrs, body } = parseSkillFrontmatter(markdown);
@@ -32,3 +33,28 @@ const stopSlop = toSkill(STOP_SLOP, [
 ]);
 
 export const brandSkills: HarnessRepoSkill[] = [humanizer, stopSlop];
+
+const WRITING_SKILLS = brandSkills.map((s) => s.name);
+
+/**
+ * IL MAZZO DI SKILL DI OGNI AGENTE DEL TEAM — il posto dove "motion sa Remotion, gli altri no"
+ * diventa una riga. I nomi valgono per entrambe le sorgenti: le skill di brand (sopra) o quelle
+ * del repo (`.agents/skills`); un nome che non esiste da nessuna parte non dà errore, cade.
+ * Agenti sconosciuti (il default è il caso normale finché il chiamante non porta l'identità)
+ * ricevono le skill di scrittura: ogni agente del team scrive, e nessuno deve suonare un bot.
+ */
+const SKILLS_BY_AGENT: Record<TeamAgentId, string[]> = {
+	content: WRITING_SKILLS,
+	ugc: WRITING_SKILLS,
+	web: WRITING_SKILLS,
+	analyst: WRITING_SKILLS,
+	auto: WRITING_SKILLS,
+	motion: [...WRITING_SKILLS, 'remotion-best-practices']
+};
+
+export async function skillsForAgent(agentId?: string | null): Promise<HarnessRepoSkill[]> {
+	const names = SKILLS_BY_AGENT[agentId as TeamAgentId] ?? WRITING_SKILLS;
+	const brand = brandSkills.filter((skill) => names.includes(skill.name));
+	const repo = await loadHarnessSkills(names.filter((name) => !brandSkills.some((skill) => skill.name === name)));
+	return [...brand, ...repo];
+}
