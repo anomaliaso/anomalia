@@ -13,6 +13,7 @@ export type RunMeta = {
   runId: string;
   appUrl: string;
   judgeModel: string;
+  agentKit: 'on' | 'off';
   startedAt: string;
   finishedAt: string;
   durationMs: number;
@@ -48,7 +49,7 @@ export function renderMarkdown(report: RunReport): string {
   lines.push(`# Eval UX — ${meta.runId}`);
   lines.push('');
   lines.push(
-    `Esito: **${grade.allPass ? 'PASS' : 'FAIL'}** · ${grade.passCount}/${grade.criteria.length} criteri · app ${meta.appUrl} · giudice ${meta.judgeModel}`
+    `Esito: **${grade.allPass ? 'PASS' : 'FAIL'}** · ${grade.passCount}/${grade.criteria.length} criteri · app ${meta.appUrl} · giudice ${meta.judgeModel} · kit ${meta.agentKit}`
   );
   lines.push('');
   if (grade.summary) {

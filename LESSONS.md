@@ -16,6 +16,9 @@ Dopo il `npm ci` la suite parte ma cade su 40+ test con `SUPABASE_SERVICE_ROLE_K
 ### `@anomalia/*` si risolve dal `node_modules` del checkout principale
 Un eval o un test lanciato da un worktree misura un ibrido: `$lib` punta alla copia del worktree, i pacchetti interni vengono dal checkout madre. Se hai toccato `packages/`, il worktree non lo vede. Per un confronto pulito: worktree di verifica con `node_modules` symlinkato a quello fresco.
 
+### Il worktree DENTRO la repo dir: la pagina è viva ma non risponde (403 su `entry.js`)
+Un worktree creato dentro la cartella della repo (`anomalia/anomalia-wt/<slug>`) risolve `@sveltejs/kit` dal `node_modules` del checkout padre: vite lo serve via `/@fs/...` **fuori dalla root del worktree** e risponde 403 — il bundle client non parte, la hydratazione non arriva, e ogni click "riuscito" dell'automazione browser non cambia nulla (SSR morto senza errori in console). Segnale: `performance.getEntriesByType('resource')` mostra `entry.js` con `responseStatus: 403`, i click vanno a un DOM senza handler. Mossa: il worktree sta **fuori** dalla repo (`../anomalia-wt/<slug>`, come da docs/e2e-testing.md §1) con `npm ci` proprio.
+
 ### Verifica il `workdir` prima di ogni Edit
 Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagliato tocca dev. È successo: `live.ts` modificato nel checkout principale per un secondo, poi `git checkout --` e riapplicato nel posto giusto. Il tool Edit non ti proteggere — proteggiti tu: guarda il percorso del file che stai per toccare, sempre.
 
@@ -49,6 +52,12 @@ Un `vite dev` di un altro worktree risponde 404 a tutto e resta lì in ascolto; 
 
 ### Il profilo del browser di test conserva sessioni e localStorage
 `agent-browser` riutilizza cookie e localStorage tra le run: un test "guest" parte loggato, e l'onboarding di un utente nuovo legge `localStorage['anomalia:first-agent:<altro-brand>']` dell'utente prima — fetch di thread altrui (404 rumorosi ma disordini nella diagnosi). Mossa: `cookies clear` **e** `storage local clear` prima di ogni persona nuova; verificate sempre chi siete (`location.href`, sidebar) prima del primo click.
+
+### `agent-browser` è un daemon: path relativi e storage Puliti col suo contesto
+Il CLI parla con un daemon che gira col **suo** cwd: una screenshot con path relativo muore con `No such file or directory` anche se la cartella esiste nel caller. E `storage local clear` alza `Uncaught` se non c'è una pagina aperta. Mossa: path **assoluti** per le evidenze, e per partire puliti: open → `cookies clear` → `storage local clear` → reopen.
+
+### La prima risposta non è il turno finito: la finestra del poll parte dalla fine del turno
+Il turno di setup dell'onboarding consegna la prima risposta in ~20s e continua a lavorare per **minuti** (tool, memoria); il contatto del team nasce alla chiusura del job, non alla prima bolla. L'eval:ux misurava il contatto con la finestra della prima risposta: scaduta pochi secondi prima dei thread, riportava `team-of-agents-contact: ❌` per un contatto avvenuto (thread e firme in DB). Segnale: report FAIL ma le righe in DB dicono il contrario, con timestamp pochi secondi dopo la scadenza del poll. Mossa: aspettare la CONDIZIONE con la finestra giusta — poll del team separato (TEAM_WAIT_MS) dal poll della prima risposta.
 
 ### I rimount (`{#key}`) rendono stale i ref dell'automazione browser
 Un click su un ref catturato prima del re-render non arriva a nessuno: il carosello dell'onboarding sembrava bloccato prima del pick — era il bottone rimontato ad ogni slide. Mossa: snapshot fresco e selettori stabili (`.wide-btn`), click lenti; un "blocco" va riprodotto con click lenti e selelettori nuovi prima di chiamarlo bug. Il falso positivo costa un'ora, la prudenza tre secondi.
