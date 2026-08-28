@@ -20,6 +20,11 @@ export async function walkOnboarding(
 ): Promise<WalkResult> {
   const steps: string[] = [];
 
+  // Il profilo del browser sopravvive tra le run: una sessione aperta manda /login in redirect
+  // e la walk parte nel posto sbagliato (LESSONS, *Il profilo del browser conserva sessioni*).
+  await browser.run('cookies', 'clear');
+  await browser.run('storage', 'local', 'clear');
+
   await browser.open(`${appUrl}/login`);
   await browser.run('fill', 'input[name="email"]', creds.email);
   await browser.run('fill', 'input[name="password"]', creds.password);
