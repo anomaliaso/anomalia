@@ -46,6 +46,7 @@ import { HarnessRuntime } from '@anomalia/agent-adapters/runtime/harness-runtime
 import { HARNESS_SETUPS, stickySessionExtension } from '@anomalia/agent-adapters/runtime/harness-runtime';
 import { HarnessAgent } from '@ai-sdk/harness/agent';
 import { loadHarnessSkills, parseHarnessSkillSelection } from '$lib/server/harness-skills';
+import { brandSkills } from '$lib/server/brand-skills';
 import { createJustBashSandbox } from '@ai-sdk/sandbox-just-bash';
 import { createVercelSandbox } from '@ai-sdk/sandbox-vercel';
 import type { StreamTextResult, ToolSet } from 'ai';
@@ -358,7 +359,7 @@ export async function startHarnessTurn(opts: {
 	const agentDir = opts.agentDir ?? ensureKieAgentDir();
 	const setup = knownSetup ?? (agentDir ? HARNESS_SETUPS.custom : HARNESS_SETUPS.pi);
 	const skillSelection = parseHarnessSkillSelection(env.HARNESS_SKILLS);
-	const skills = await loadHarnessSkills(skillSelection);
+	const skills = [...brandSkills, ...(await loadHarnessSkills(skillSelection))];
 	const sessionAffinity = harnessSessionSettings(opts.sessionKey);
 	const agent = new HarnessAgent({
 		harness: setup.harness(opts.model.id || undefined, agentDir, sessionAffinity),
