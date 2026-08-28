@@ -56,10 +56,10 @@ npm install -g anomalia-cli
 anomalia login
 ```
 
-**Homebrew**
+**Homebrew** — formula lives in the [`anomaliaso/homebrew-tap`](https://github.com/anomaliaso/homebrew-tap) repository:
 
 ```bash
-brew tap andreabuttarelli/anomalia-cli https://github.com/andreabuttarelli/anomalia-cli
+brew tap anomaliaso/tap https://github.com/anomaliaso/homebrew-tap
 brew install anomalia
 anomalia login
 ```
@@ -67,7 +67,7 @@ anomalia login
 **Installer (standalone binary)** — macOS arm64/x64 and Linux arm64/x64, no Node/Bun required:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/scripts/install.sh | bash
 anomalia login
 ```
 
@@ -106,7 +106,7 @@ Full command dump: [`llms.txt`](llms.txt) · more docs: [`docs/`](docs/)
 Requires [Bun](https://bun.sh).
 
 ```bash
-git clone https://github.com/andreabuttarelli/anomalia-cli.git
+git clone https://github.com/anomaliaso/anomalia.git
 cd anomalia-cli
 bun install
 bun run cli.ts --help
@@ -162,7 +162,7 @@ using the custom-scheme OAuth callback — use **stdio** above, update Cursor (l
 Publishable [Agent Skill](https://agentskills.io) for Cursor, Claude, skills.sh, and friends:
 
 ```bash
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia
+npx skills add anomaliaso/anomalia --skill anomalia
 # or
 bash scripts/install-skill.sh --project
 ```
@@ -177,11 +177,11 @@ Same skill + remote MCP, packaged for plugin install and directory submit:
 
 ```bash
 # Claude Code
-/plugin marketplace add andreabuttarelli/anomalia-cli
+/plugin marketplace add anomaliaso/anomalia
 /plugin install anomalia@anomalia
 
 # Codex
-codex plugin marketplace add andreabuttarelli/anomalia-cli
+codex plugin marketplace add anomaliaso/anomalia
 ```
 
 Submit checklist (Claude community directory + OpenAI Plugins Directory): **[`docs/plugins.md`](docs/plugins.md)**.

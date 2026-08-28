@@ -32,10 +32,11 @@ describe('plugin skill mirror', () => {
   });
 
   test('plugin manifests exist', () => {
+    const MONO_ROOT = join(ROOT, '..');
     expect(existsSync(join(ROOT, 'plugins/anomalia/.claude-plugin/plugin.json'))).toBe(true);
     expect(existsSync(join(ROOT, 'plugins/anomalia/.codex-plugin/plugin.json'))).toBe(true);
     expect(existsSync(join(ROOT, 'plugins/anomalia/.mcp.json'))).toBe(true);
-    expect(existsSync(join(ROOT, '.claude-plugin/marketplace.json'))).toBe(true);
-    expect(existsSync(join(ROOT, '.agents/plugins/marketplace.json'))).toBe(true);
+    expect(existsSync(join(MONO_ROOT, '.claude-plugin/marketplace.json'))).toBe(true);
+    expect(existsSync(join(MONO_ROOT, '.agents/plugins/marketplace.json'))).toBe(true);
   });
 });

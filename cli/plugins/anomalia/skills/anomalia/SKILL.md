@@ -13,7 +13,7 @@ metadata:
   author: andreabuttarelli
   version: "1.0.0"
   homepage: https://anomalia.so
-  repository: https://github.com/andreabuttarelli/anomalia-cli
+  repository: https://github.com/anomaliaso/anomalia
   mcp: https://mcp.anomalia.so/mcp
 ---
 
@@ -65,18 +65,18 @@ Setup details: [references/mcp.md](references/mcp.md).
 ## Install this skill
 
 ```bash
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia
+npx skills add anomaliaso/anomalia --skill anomalia
 ```
 
 Or install the marketplace plugin (skill + remote MCP):
 
 ```bash
 # Claude Code
-/plugin marketplace add andreabuttarelli/anomalia-cli
+/plugin marketplace add anomaliaso/anomalia
 /plugin install anomalia@anomalia
 
 # Codex
-codex plugin marketplace add andreabuttarelli/anomalia-cli
+codex plugin marketplace add anomaliaso/anomalia
 ```
 
 Or copy this folder into `.cursor/skills/anomalia/` / `~/.claude/skills/anomalia/`.  

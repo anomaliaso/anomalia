@@ -10,8 +10,8 @@ Repo marketplaces (self-host / team install):
 
 | Agent | Marketplace file | Add / install |
 |-------|------------------|---------------|
-| Claude Code | [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) | `/plugin marketplace add andreabuttarelli/anomalia-cli` then `/plugin install anomalia@anomalia` |
-| Codex / ChatGPT | [`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json) | `codex plugin marketplace add andreabuttarelli/anomalia-cli` |
+| Claude Code | [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) | `/plugin marketplace add anomaliaso/anomalia` then `/plugin install anomalia@anomalia` |
+| Codex / ChatGPT | [`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json) | `codex plugin marketplace add anomaliaso/anomalia` |
 
 Local test (Claude):
 

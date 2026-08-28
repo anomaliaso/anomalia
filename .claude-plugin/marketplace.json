@@ -12,7 +12,7 @@
   "plugins": [
     {
       "name": "anomalia",
-      "source": "./plugins/anomalia",
+      "source": "./cli/plugins/anomalia",
       "description": "Operate Anomalia via MCP or CLI: brands, posts, plans, studio, SEO/GEO, and blog.",
       "version": "1.0.0",
       "author": {
@@ -21,7 +21,7 @@
         "url": "https://github.com/andreabuttarelli"
       },
       "homepage": "https://anomalia.so",
-      "repository": "https://github.com/andreabuttarelli/anomalia-cli",
+      "repository": "https://github.com/anomaliaso/anomalia",
       "license": "AGPL-3.0-or-later",
       "keywords": [
         "social-media",

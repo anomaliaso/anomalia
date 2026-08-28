@@ -71,7 +71,7 @@ The host must send OAuth Bearer. If it cannot yet, use [mcp-remote](https://www.
 ### From source (dev)
 
 ```bash
-git clone https://github.com/andreabuttarelli/anomalia-cli.git
+git clone https://github.com/anomaliaso/anomalia.git
 cd anomalia-cli
 bun install
 bun run mcp          # stdio
@@ -111,9 +111,10 @@ Ids from list tools accept short unambiguous prefixes (same rule as the CLI).
 | 404 on `/health` | Wrong deploy root / path | Expect `/health` and `/mcp` on the MCP host |
 | Tools missing | MCP not connected in host | Check Cursor MCP panel; restart host |
 | Auth works in CLI but not MCP | Different machine / no session file | Run `login` in the MCP process environment |
+| `Not an https or loopback URI: cursor://anysphere.cursor-mcp/oauth/callback` | Cursor DCR uses a custom-scheme callback; Anomalia OAuth only allows https/loopback | Use **stdio** MCP, update Cursor (localhost `:8787` callback), or pass Bearer; see [docs/mcp.md](../../../docs/mcp.md#cursor--remote-http-oauth) |
 
 ## 6. More
 
 - Full tool list: [tools.md](tools.md)
 - CLI fallback: [cli.md](cli.md)
-- Product: https://anomalia.so · Repo: https://github.com/andreabuttarelli/anomalia-cli
+- Product: https://anomalia.so · Repo: https://github.com/anomaliaso/anomalia

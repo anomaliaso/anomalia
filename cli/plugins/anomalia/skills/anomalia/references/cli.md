@@ -5,14 +5,14 @@ Use when MCP is not connected. Same OAuth session as MCP (`~/.config/anomalia/se
 ## Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/scripts/install.sh | bash
 anomalia login
 ```
 
 From source (Bun):
 
 ```bash
-git clone https://github.com/andreabuttarelli/anomalia-cli.git
+git clone https://github.com/anomaliaso/anomalia.git
 cd anomalia-cli && bun install
 bun run cli.ts --help
 ```
@@ -38,5 +38,5 @@ anomalia web <slug> generate --topic "..."
 anomalia ai <slug> --message "..." --pipe
 ```
 
-Full dump: repo root [`llms.txt`](https://github.com/andreabuttarelli/anomalia-cli/blob/main/llms.txt).
+Full dump: repo root [`llms.txt`](https://github.com/anomaliaso/anomalia/blob/main/cli/llms.txt).
 Tool mapping: [tools.md](tools.md).

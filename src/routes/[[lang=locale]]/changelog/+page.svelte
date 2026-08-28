@@ -6,6 +6,13 @@
 
   const entries = [
     {
+      date: 'August 28, 2026',
+      title: 'One repository for everything Anomalia',
+      items: [
+        'The CLI, the MCP server and the agent skills now live in this repository — releases, installs and updates all come from here.',
+      ],
+    },
+    {
       date: 'August 27, 2026',
       title: 'Your project setup is a conversation with the Analyst',
       items: [

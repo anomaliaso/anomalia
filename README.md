@@ -23,7 +23,7 @@ stack yourself.
 
 - Weekly editorial plan, then on-brand posts, carousels, and video
 - Calendar and one-tap approve — from the app, email, or
-  [CLI / MCP](https://github.com/andreabuttarelli/anomalia-cli)
+  [CLI / MCP](cli/)
 - Studio: brand kit, products, people, competitors, and voice
 - Radar: news and conversations turned into drafts and lead replies
 - Blog, SEO, and GEO — rank on Google and get cited by AI assistants
@@ -36,7 +36,7 @@ stack yourself.
 - TypeScript and SvelteKit
 - Supabase (Postgres, Auth, Storage)
 - Node.js 22 and Docker Compose
-- MCP server and CLI in [anomalia-cli](https://github.com/andreabuttarelli/anomalia-cli)
+- MCP server and CLI in [`cli/`](cli/) — installable binary, npm, Homebrew
 
 ## Quick start
 

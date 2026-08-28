@@ -6,8 +6,8 @@ Package: [`skills/anomalia/`](./anomalia/) — follows [agentskills.io](https://
 Canonical for `npx skills` / skills.sh. The Claude/Codex plugin mirrors the same tree at [`plugins/anomalia/skills/anomalia/`](../plugins/anomalia/skills/anomalia/) — run `bash scripts/sync-plugin-skill.sh` after skill edits.
 
 ```bash
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia -g   # global
+npx skills add anomaliaso/anomalia --skill anomalia
+npx skills add anomaliaso/anomalia --skill anomalia -g   # global
 ```
 
 Appears on directories that index public GitHub skills (e.g. skills.sh) via install telemetry — no separate submission.
@@ -26,11 +26,11 @@ Full submit checklist: [`docs/plugins.md`](../docs/plugins.md).
 
 ```bash
 # Claude Code — add this repo as a marketplace, then install
-/plugin marketplace add andreabuttarelli/anomalia-cli
+/plugin marketplace add anomaliaso/anomalia
 /plugin install anomalia@anomalia
 
 # Codex — add marketplace from the repo
-codex plugin marketplace add andreabuttarelli/anomalia-cli
+codex plugin marketplace add anomaliaso/anomalia
 ```
 
 Public directory submit forms:

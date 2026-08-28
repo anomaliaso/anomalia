@@ -68,7 +68,7 @@ export async function cmdUpdate() {
 
   console.log('  Download in corso…');
 
-  const url = `https://github.com/andreabuttarelli/anomalia-cli/releases/latest/download/anomalia-${platformName}`;
+  const url = `https://github.com/anomaliaso/anomalia/releases/latest/download/anomalia-${platformName}`;
   const binPath = selfPath;
 
   try {
@@ -76,7 +76,7 @@ export async function cmdUpdate() {
     if (!res.ok) {
       if (res.status === 404) {
         console.error(`  ✗ Release non trovata per ${platformName}`);
-        console.log(`  Scarica manualmente da: https://github.com/andreabuttarelli/anomalia-cli/releases`);
+        console.log(`  Scarica manualmente da: https://github.com/anomaliaso/anomalia/releases`);
       } else {
         console.error(`  ✗ Errore download: ${res.status}`);
       }
@@ -93,7 +93,7 @@ export async function cmdUpdate() {
   } catch (e) {
     console.error(`  ✗ Errore: ${String(e)}`);
     console.log(`\n  Aggiorna manualmente:`);
-    console.log(`  curl -sSL https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/scripts/install.sh | bash\n`);
+    console.log(`  curl -sSL https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/scripts/install.sh | bash\n`);
     process.exit(1);
   }
 }

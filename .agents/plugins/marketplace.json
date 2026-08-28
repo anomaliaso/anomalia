@@ -8,7 +8,7 @@
       "name": "anomalia",
       "source": {
         "source": "local",
-        "path": "./plugins/anomalia"
+        "path": "./cli/plugins/anomalia"
       },
       "policy": {
         "installation": "AVAILABLE",

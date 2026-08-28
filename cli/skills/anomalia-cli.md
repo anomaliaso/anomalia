@@ -4,7 +4,7 @@ Flat copy for Claude Code / multi-tool installers.
 **Canonical publishable skill:** [`anomalia/SKILL.md`](./anomalia/SKILL.md) (Agent Skills / skills.sh).
 
 ```bash
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia
+npx skills add anomaliaso/anomalia --skill anomalia
 bash scripts/install-skill.sh --project
 ```
 
@@ -43,7 +43,7 @@ Details: [anomalia/references/mcp.md](./anomalia/references/mcp.md) · [tools.md
 ## CLI fallback
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/scripts/install.sh | bash
 anomalia login
 anomalia brands
 anomalia content <slug> --status pending_user

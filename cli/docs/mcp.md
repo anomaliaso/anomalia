@@ -106,7 +106,7 @@ Full map: [`skills/anomalia/references/tools.md`](../skills/anomalia/references/
 Publishable Agent Skill (agentskills.io):
 
 ```bash
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia
+npx skills add anomaliaso/anomalia --skill anomalia
 ```
 
 Sources: [`skills/anomalia/`](../skills/anomalia/) (`SKILL.md` + `references/`).  

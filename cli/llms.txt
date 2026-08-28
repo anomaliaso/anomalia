@@ -5,7 +5,7 @@ CLI for managing Anomalia social media AI autopilot brands from the terminal.
 ## Installation
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/scripts/install.sh | bash
 ```
 
 ## Commands

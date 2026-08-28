@@ -64,5 +64,5 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `get_keywords` / `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
 | `list_articles` / `generate_article` / `optimize_article` | `anomalia web <slug> …` |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
-| `get_ads` / `ads_action` | (ads via MCP / product UI) |
+| `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
 | `chat` | `anomalia ai <slug> --message "…" --pipe` |

@@ -32,7 +32,7 @@ warn()    { echo -e "${YELLOW}⚠${NC} $1"; }
 
 read_skill_content() {
   # Try to download from GitHub, fallback to embedded
-  local url="https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/skills/anomalia-cli.md"
+  local url="https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/skills/anomalia-cli.md"
   local content
   content=$(curl -sSL "$url" 2>/dev/null) || true
 
@@ -80,7 +80,7 @@ SKILL_EOF
 install_cursor_skill() {
   local dest_dir="$1"
   local label="$2"
-  local base="https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/skills/anomalia"
+  local base="https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/skills/anomalia"
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local local_skill=""
@@ -136,7 +136,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --project   Install in current project (all tools)"
       echo ""
       echo "Publishable skill (skills.sh / npx skills):"
-      echo "  npx skills add andreabuttarelli/anomalia-cli --skill anomalia"
+      echo "  npx skills add anomaliaso/anomalia --skill anomalia"
       echo ""
       echo "Supported tools:"
       echo "  Claude Code, Cursor, GitHub Copilot, Windsurf, Cline,"
@@ -262,7 +262,7 @@ AIDER_EOF
 
   # llms.txt (universal standard)
   if [[ ! -f "llms.txt" ]]; then
-    curl -sSL "https://raw.githubusercontent.com/andreabuttarelli/anomalia-cli/main/llms.txt" -o "llms.txt" 2>/dev/null && \
+    curl -sSL "https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/llms.txt" -o "llms.txt" 2>/dev/null && \
       success "llms.txt creato" || true
   else
     info "llms.txt già esistente"
@@ -294,6 +294,6 @@ echo "  Ora puoi dire alla tua AI:"
 echo -e "  ${BOLD}\"Usa Anomalia MCP (o la CLI) per elencare i brand\"${NC}"
 echo ""
 echo "  Cursor Agent Skill: skills/anomalia/SKILL.md"
-echo "  Directory install:  npx skills add andreabuttarelli/anomalia-cli --skill anomalia"
-echo "  Docs MCP: https://github.com/andreabuttarelli/anomalia-cli/blob/main/docs/mcp.md"
+echo "  Directory install:  npx skills add anomaliaso/anomalia --skill anomalia"
+echo "  Docs MCP: https://github.com/anomaliaso/anomalia/blob/main/cli/docs/mcp.md"
 echo ""
