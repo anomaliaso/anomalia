@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { dmAgents } from '$lib/chat-dm';
 
 export type BrandRef = { id: string; slug: string; name: string };
 
@@ -44,6 +45,81 @@ export async function chatFacts(admin: SupabaseClient, brandId: string): Promise
 }
 
 export type PlanFacts = { editorialPlans: number; newsSources: number };
+
+/**
+ * Gli specialisti che hanno davvero contattato l'utente: thread di squadra (`surface='team'`)
+ * con almeno un messaggio assistente FIRMATO (`chat_messages.name`). La firma distingue il primo
+ * contatto dal seed statico del diario, che non ha mittente.
+ */
+export async function teamContactFacts(admin: SupabaseClient, brandId: string): Promise<{ agents: string[] }> {
+  const { data: threads } = await admin
+    .from('chat_threads')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq('surface', 'team');
+  const threadIds = (threads ?? []).map((t) => t.id);
+  if (!threadIds.length) return { agents: [] };
+  const { data: messages } = await admin
+    .from('chat_messages')
+    .select('name')
+    .in('thread_id', threadIds)
+    .eq('role', 'assistant')
+    .not('name', 'is', null);
+  return { agents: [...new Set((messages ?? []).map((m) => String(m.name)))] };
+}
+
+/**
+ * La delega tra agenti misurata sui fatti: i DM agente-agente (marcatore `room_agents.dm`)
+ * che hanno almeno un messaggio. Nessun DM = nessuno ha mai delegato nulla a un collega.
+ */
+export async function delegationFacts(admin: SupabaseClient, brandId: string): Promise<{ dmThreads: number; dmMessages: number }> {
+  const { data: threads } = await admin
+    .from('chat_threads')
+    .select('id, room_agents')
+    .eq('brand_id', brandId)
+    .not('room_agents', 'is', null);
+  const dmIds = (threads ?? [])
+    .filter((t) => dmAgents((t.room_agents as Record<string, unknown> | null) ?? null))
+    .map((t) => String(t.id));
+  if (!dmIds.length) return { dmThreads: 0, dmMessages: 0 };
+  const { count } = await admin
+    .from('chat_messages')
+    .select('id', { count: 'exact', head: true })
+    .in('thread_id', dmIds);
+  return { dmThreads: dmIds.length, dmMessages: count ?? 0 };
+}
+
+export async function waitForDelegation(
+  admin: SupabaseClient,
+  brandId: string,
+  deadlineMs: number,
+  pollIntervalMs = 15_000
+): Promise<{ dmThreads: number; dmMessages: number }> {
+  const deadline = Date.now() + deadlineMs;
+  let facts = { dmThreads: 0, dmMessages: 0 };
+  while (Date.now() < deadline) {
+    facts = await delegationFacts(admin, brandId);
+    if (facts.dmThreads > 0) return facts;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+  return facts;
+}
+
+export async function waitForTeamContact(
+  admin: SupabaseClient,
+  brandId: string,
+  deadlineMs: number,
+  pollIntervalMs = 15_000
+): Promise<{ agents: string[] }> {
+  const deadline = Date.now() + deadlineMs;
+  let contacts = { agents: [] as string[] };
+  while (Date.now() < deadline) {
+    contacts = await teamContactFacts(admin, brandId);
+    if (contacts.agents.length >= 2) return contacts;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+  return contacts;
+}
 
 export async function planFacts(admin: SupabaseClient, brandId: string): Promise<PlanFacts> {
   const [{ count: editorialPlans }, { count: newsSources }] = await Promise.all([

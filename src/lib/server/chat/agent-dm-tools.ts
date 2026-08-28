@@ -212,7 +212,7 @@ export function createAgentDmTools(opts: {
         'Use it to delegate a piece of work to a colleague, report a blocker, or coordinate — when you want THEM to act with THEIR tools, not just an opinion (for a one-shot opinion use ask_to_*).',
         'ASYNC, never blocking: the tool returns immediately. The other agent replies in YOUR private thread; the user sees a compact chip ("N messages with X") and can open that thread read-only. NEVER wait in a loop, NEVER write their answer yourself, NEVER paste their reply into THIS conversation. With await:false (default) the reply simply stays in the private thread.',
         'The send is ALREADY delivered and ALREADY visible to the user as a compact chip in this chat. Do NOT repeat or paraphrase the message content in your reply — at most one operational line ("Ho scritto a X, ti aggiorno quando risponde"), or nothing if the context does not call for it.',
-        `ONE recipient by default. \`to\` also takes a LIST — the same message to several agents in one action — but only when the USER asked for it: then pass because_user_asked. Deciding on your own to tell everyone is not coordination, it is noise the user pays for.`,
+        `ONE recipient by default. \`to\` also takes a LIST — the same message to several agents in one action — but only when the USER asked for it (pass because_user_asked) OR the thread has an open goal you are working: coordinating the specialists that goal needs is your call then. Deciding on your own to tell everyone outside a goal is not coordination, it is noise the user pays for.`,
         `Max ${DM_SENDS_PER_TURN} RECIPIENTS per turn, counted across all your calls (a list of 3 spends the whole budget). Do not repeat the same message to the same agent.`
       ].join('\n'),
       inputSchema: z.object({
@@ -238,7 +238,7 @@ export function createAgentDmTools(opts: {
           .max(300)
           .optional()
           .describe(
-            'Required when `to` is a list of more than one: what the user actually asked that calls for several agents ("chiedi a tutti", "senti Motion e Web"). Never write it to unlock a fan-out you decided yourself.'
+            'Required when `to` is a list of more than one and no open goal covers the fan-out: what the user actually asked that calls for several agents ("chiedi a tutti", "senti Motion e Web"). Never write it to unlock a fan-out you decided yourself.'
           )
       }),
       execute: async ({
@@ -273,19 +273,27 @@ export function createAgentDmTools(opts: {
         if (!recipients.length) return { error: 'No recipient — `to` is empty.' };
 
         /**
-         * IL FAN-OUT È UNA COSA CHE CHIEDE L'UTENTE, NON UNA CHE DECIDE L'AGENTE.
+         * IL FAN-OUT È UNA COSA CHE CHIEDE L'UTENTE — O UN OBIETTIVO APERTO CHE LO ESIGE.
          *
          * Non è una regola di costo — quella è il budget qui sotto, che conta i destinatari uno
          * per uno. È una regola sociale: un agente che di sua iniziativa avvisa tutta la squadra
          * riempie tre thread e paga tre turni per una cosa che era di un mestiere solo. Il campo
          * obbligatorio serve a questo: chi non sa dire cosa ha detto l'utente non stava
          * eseguendo una richiesta, si stava allargando da solo.
+         *
+         * L'eccezione è l'obiettivo (task #8): chi ha un goal aperto sta eseguendo un mandato
+         * che l'utente HA dato, e coordinare gli specialisti che servono a quel mandato è
+         * orchestrare, non allargarsi. Senza goal, la regola sta.
          */
         if (recipients.length > 1 && !becauseUserAsked?.trim()) {
-          return {
-            error: 'fan_out_needs_the_user',
-            hint: `Writing to several agents at once is something the USER asks for, not something you decide: one recipient is the default, ${recipients.length} is a fan-out. Pick the ONE agent whose craft this is and write to them. If the user really did ask for several, call this again with because_user_asked saying what they asked for.`
-          };
+            const { loadOpenGoal } = await import('./goal');
+            const goal = await loadOpenGoal(supabase, threadId);
+            if (!goal) {
+                return {
+                    error: 'fan_out_needs_the_user',
+                    hint: `Writing to several agents at once is something the USER asks for, not something you decide: one recipient is the default, ${recipients.length} is a fan-out. Pick the ONE agent whose craft this is and write to them. If the user really did ask for several, call this again with because_user_asked saying what they asked for. With an open goal on this thread, coordinating the specialists it needs is allowed without it.`
+                };
+            }
         }
 
         // Il budget si conta in DESTINATARI, non in chiamate: un fan-out a tre accoda tre turni
