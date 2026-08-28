@@ -11,6 +11,9 @@ import STOP_SLOP from '$lib/agent-docs/skills/stop-slop/SKILL.md?raw';
 import STOP_SLOP_PHRASES from '$lib/agent-docs/skills/stop-slop/references/phrases.md?raw';
 import STOP_SLOP_STRUCTURES from '$lib/agent-docs/skills/stop-slop/references/structures.md?raw';
 import STOP_SLOP_EXAMPLES from '$lib/agent-docs/skills/stop-slop/references/examples.md?raw';
+import SEO_AUDIT from '$lib/agent-docs/skills/seo-audit/SKILL.md?raw';
+import SEO_AI_WRITING from '$lib/agent-docs/skills/seo-audit/references/ai-writing-detection.md?raw';
+import SEO_INTERNATIONAL from '$lib/agent-docs/skills/seo-audit/references/international-seo.md?raw';
 import { loadHarnessSkills, parseSkillFrontmatter, type HarnessRepoSkill } from './harness-skills';
 import type { TeamAgentId } from '$lib/agent-owners';
 
@@ -32,9 +35,14 @@ const stopSlop = toSkill(STOP_SLOP, [
 	{ path: 'references/examples.md', content: STOP_SLOP_EXAMPLES.trim() }
 ]);
 
-export const brandSkills: HarnessRepoSkill[] = [humanizer, stopSlop];
+const seoAudit = toSkill(SEO_AUDIT, [
+	{ path: 'references/ai-writing-detection.md', content: SEO_AI_WRITING.trim() },
+	{ path: 'references/international-seo.md', content: SEO_INTERNATIONAL.trim() }
+]);
 
-const WRITING_SKILLS = brandSkills.map((s) => s.name);
+export const brandSkills: HarnessRepoSkill[] = [humanizer, stopSlop, seoAudit];
+
+const WRITING_SKILLS = ['humanizer', 'stop-slop'];
 
 /**
  * IL MAZZO DI SKILL DI OGNI AGENTE DEL TEAM — il posto dove "motion sa Remotion, gli altri no"
@@ -46,7 +54,7 @@ const WRITING_SKILLS = brandSkills.map((s) => s.name);
 const SKILLS_BY_AGENT: Record<TeamAgentId, string[]> = {
 	content: WRITING_SKILLS,
 	ugc: WRITING_SKILLS,
-	web: WRITING_SKILLS,
+	web: [...WRITING_SKILLS, 'seo-audit'],
 	analyst: WRITING_SKILLS,
 	auto: WRITING_SKILLS,
 	motion: [...WRITING_SKILLS, 'remotion-best-practices']
