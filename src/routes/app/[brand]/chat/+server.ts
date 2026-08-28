@@ -264,7 +264,6 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       modelFamily: modelPref?.family,
       reasoning: body.reasoning,
       escalationText,
-      vision: refUrls.length > 0,
       // `origin` serve al bridge per risvegliare la coda a fine turno (kickChatQueueWork):
       // senza, un follow-up accodato su un thread kit resta fermo fino al cron (2 minuti) e poi
       // viene risposto dal motore CLASSICO invece che dallo specialista.

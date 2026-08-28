@@ -185,7 +185,7 @@ export function compactionModel(): ChatModelResolved | null {
  * Gemini 3.x asks for a LEVEL, not a token budget: `thinkingBudget` is the 2.5-era parameter that
  * `thinkingLevel` replaced, and sending both in one request is a 400. `geminiThinkingLevel` also
  * absorbs the other tiers' vocabularies ('off', 'max', 'xhigh'), which reach this file through the
- * vision swap and the legacy fallback — 3.7 Flash has no off switch, so its floor is 'low'.
+ * legacy fallback — 3.7 Flash has no off switch, so its floor is 'low'.
  */
 function geminiCallOptions(reasoning: ChatReasoning) {
   return {
@@ -371,23 +371,6 @@ export function lunaFast(
 }
 
 /**
- * Scambio multimodale per l'unica scelta ancora solo-testo: DeepSeek V4 Pro rifiuta le parti
- * immagine. Tiene l'etichetta di tier dell'utente, così UI e `ai_calls` dicono ancora cosa ha scelto.
- *
- * Va sul modello Fast del momento, non su Gemini per nome, e il controllo esplicito qui sotto
- * impedisce che un ripiego di solo testo prenda il posto senza dirlo: è così che un turno con uno
- * screenshot diventa una risposta inventata su un'immagine mai vista.
- */
-function visionFallback(tier: ChatTier, reasoning: ChatReasoning): ChatModelResolved | null {
-  try {
-    const m = { ...resolveLuna(reasoning, 'fast'), tier };
-    return modelSeesImages(m) ? m : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Guardare una clip è una capacità più stretta che vedere un fotogramma: i provider
  * openai-compatible lanciano `UnsupportedFunctionalityError` invece di degradare.
  */
@@ -442,7 +425,7 @@ function resolveGrok(reasoning: ChatReasoning, tier: ChatTier): ChatModelResolve
 }
 
 /**
- * Quale modello un tier risolve, prima del check vision.
+ * Quale modello un tier risolve.
  * `family` viene dal catalogo + policy agente (solo su Auto ha effetto diverso dal default tier).
  */
 function resolveTier(
@@ -506,7 +489,7 @@ export function isHeavyProductionAsk(text: string | null | undefined): boolean {
 export function resolveChatModel(
   rawTier?: unknown,
   rawReasoning?: unknown,
-  opts: { vision?: boolean; userText?: string; agentId?: string | null; model?: unknown } = {}
+  opts: { userText?: string; agentId?: string | null; model?: unknown } = {}
 ): ChatModelResolved {
   const envDefault = (env.CHAT_TIER ?? 'fast').toLowerCase();
   let tier: ChatTier = isChatTier(rawTier)
@@ -535,9 +518,5 @@ export function resolveChatModel(
   const reasoning: ChatReasoning = coerceReasoning(reasoningRaw, tier, agentFamily);
 
   const resolved = resolveTier(tier, reasoning, familyId);
-  if (opts.vision && !modelSeesImages(resolved)) {
-    const vision = visionFallback(resolved.tier, resolved.reasoning);
-    if (vision) return withOutputCeiling(vision);
-  }
   return withOutputCeiling(resolved);
 }
