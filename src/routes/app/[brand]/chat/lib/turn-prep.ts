@@ -257,7 +257,6 @@ The user attached ${turnDocuments.length} file(s) converted to markdown for THIS
       })()
     : '';
   const chatModel = resolveChatModel(body.tier, body.reasoning, {
-    vision: refUrls.length > 0,
     userText: escalationText,
     // Su Auto: motion → Grok, altri specialisti / generalista → Luna (catalogo + AgentSpec.model).
     agentId,
@@ -274,6 +273,7 @@ The user attached ${turnDocuments.length} file(s) converted to markdown for THIS
     threadId,
     webHubEnabled,
     defaultAgent: agentId,
+    origin,
     remainingMs: () => deadlineRef.current?.remainingMs() ?? Number.POSITIVE_INFINITY
   });
   // La macchina in mano a chi parla, non solo al sotto-agente `sandbox`: due comandi al volo non

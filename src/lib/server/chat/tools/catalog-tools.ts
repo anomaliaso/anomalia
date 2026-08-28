@@ -285,9 +285,9 @@ export function catalogTools(ctx: ChatToolCtx) {
         description: z.string().optional(),
         attributes: z.record(z.string(), z.unknown()).optional().describe('Additional attributes (e.g. personality traits, expertise). MERGED into the existing attributes — pass only the keys to change.'),
         consent: z
-          .literal(true)
+          .boolean()
           .optional()
-          .describe('Only pass this when the USER has just stated, in their own words, that they have this person\'s consent. Never infer it.'),
+          .describe('true ONLY when the USER has just stated, in their own words, that they have this person\'s consent. Never infer it. False or omitted changes nothing.'),
         remove: z.boolean().optional().describe('true to delete this person and their photos')
       }),
       execute: async ({ person_id, consent, remove, ...patch }: AnyRec, opts: ToolExecutionOptions) => {

@@ -54,12 +54,15 @@ in [Testing](./README.md#testing) in the README.
 
 ## Conventions
 
-**Two changelogs, same commit.** Anything a user can notice updates both:
+**Two changelogs, same commit.** Anything a user can notice updates both — and both are
+**one file per entry**, so two PRs in parallel never touch the same changelog file:
 
-1. `CHANGELOG.md` — for whoever works on the code. Why the thing existed, what was there before,
-   what was decided and what was discarded.
-2. `src/routes/[[lang=locale]]/changelog/+page.svelte` — the **public** changelog, English only,
-   one short release-note line per feature. It names no file, function, table or internal tool:
+1. `changelog/YYYY-MM-DD-<slug>.md` — for whoever works on the code. Why the thing existed, what
+   was there before, what was decided and what was discarded. Convention: `changelog/README.md`.
+   `CHANGELOG.md` is a frozen archive — nothing new goes there.
+2. `src/lib/content/changelog/YYYY-MM-DD-<slug>.ts` — the **public** changelog, English only,
+   one short release-note line per feature (`ChangelogEntry` export; loader in
+   `src/lib/content/changelog/index.ts`). It names no file, function, table or internal tool:
    it says what changes for someone using the product. A command a user actually types (`/goal`)
    is fine; `decideGoalContinuation` is not.
 
@@ -94,6 +97,5 @@ SECURITY, the public changelog, package READMEs — is English.
 4. In the PR body, say what you ran and what you did not. "I didn't run the e2e suite" is a fine
    sentence; a silent gap is not.
 
-Not everything belongs here: the `anomalia` CLI lives in its own repo
-([anomalia-cli](https://github.com/andreabuttarelli/anomalia-cli), AGPL-3.0). Changes to the CLI
-go there; changes to the endpoints it calls go here.
+The `anomalia` CLI, its MCP server and the publishable agent skills live in [`cli/`](cli/) of this
+same repository (AGPL-3.0, released from `cli-v*` tags). CLI changes are PRs here like any other.

@@ -147,8 +147,8 @@ describe('resolveChatModel', () => {
     }
   });
 
-  it('reads images on Fast without swapping provider', () => {
-    const fast = resolveChatModel('fast', undefined, { vision: true });
+  it('reads images on Fast natively', () => {
+    const fast = resolveChatModel('fast');
     expect(fast.provider).toBe('kie');
     expect(fast.modelId).toBe('gpt-5-6-luna');
     expect(modelSeesImages(fast)).toBe(true);
@@ -164,11 +164,11 @@ describe('resolveChatModel', () => {
     expect(modelSeesVideo(resolveChatModel('fast'))).toBe(true);
   });
 
-  it('swaps the text-only DeepSeek Pro pick to Luna on an image turn, keeping the tier', () => {
-    const m = resolveChatModel('deepseek-pro', undefined, { vision: true });
-    expect(m.provider).toBe('kie');
-    expect(modelSeesImages(m)).toBe(true);
-    expect(m.tier).toBe('deepseek-pro');
+  it('keeps the text-only DeepSeek Pro pick on an image turn — the swap is gone', () => {
+    const m = resolveChatModel('deepseek-pro');
+    expect(m.provider).toBe('deepseek');
+    expect(m.modelId).toBe('deepseek-v4-pro');
+    expect(modelSeesImages(m)).toBe(false);
   });
 
   it('keeps Pro on grok-4-6 even when KIE_MODEL is still grok-4-5', () => {
@@ -178,7 +178,7 @@ describe('resolveChatModel', () => {
   });
 
   it('does not swap Pro to Gemini when images are attached', () => {
-    const pro = resolveChatModel('pro', undefined, { vision: true });
+    const pro = resolveChatModel('pro');
     expect(pro.provider).toBe('kie');
     expect(pro.modelId).toBe('grok-4-6');
     expect(modelSeesImages(pro)).toBe(true);

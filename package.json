@@ -7,7 +7,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "lsof -ti tcp:5173 | xargs kill -9 2>/dev/null; vite dev",
+    "dev": "vite dev",
+    "dev:5173": "lsof -ti tcp:5173 | xargs kill -9 2>/dev/null; vite dev --strictPort",
     "dev:stable": "NO_HMR=1 vite dev",
     "dev:vercel": "vercel dev --listen 5173",
     "build": "node scripts/typecheck-runtime.mjs && vite build",
@@ -27,8 +28,10 @@
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
     "db:seed": "node --env-file-if-exists=.env scripts/db-seed.mjs",
     "tool-e2e": "vite-node --config scripts/vite-node.config.ts scripts/tool-e2e/run.ts",
+    "eval:ux": "vite-node --config scripts/vite-node.config.ts scripts/eval/ux.ts",
     "oss:export": "node scripts/export-oss.mjs",
-    "test:durability": "npm run eval:durability"
+    "test:durability": "npm run eval:durability",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.0",
@@ -45,6 +48,7 @@
     "@types/turndown": "^5.0.6",
     "@types/web-push": "^3.6.4",
     "esbuild": "^0.25.12",
+    "patch-package": "^8.0.1",
     "svelte": "^5.2.7",
     "svelte-check": "^4.1.0",
     "tailwindcss": "^4.3.1",

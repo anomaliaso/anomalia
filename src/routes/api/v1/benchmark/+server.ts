@@ -10,7 +10,8 @@ import {
   pairedByBrand,
   summarizeSamples
 } from '$lib/server/benchmark';
-import { loadHumanSignalPairs, loadSamples, releaseTag } from '$lib/server/benchmark-store';
+import { loadHumanSignalPairs, loadSamples } from '$lib/server/benchmark-store';
+import { releaseTag } from '$lib/server/release-tag';
 
 // Tetto condiviso, non budget: il lavoro vero di questa rotta sta in ~60s. Su Vercel ogni
 // valore distinto di `maxDuration` fa emettere ad adapter-vercel una funzione serverless

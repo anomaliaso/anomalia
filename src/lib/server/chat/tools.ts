@@ -16,6 +16,7 @@ import { createOnboardingTools } from '$lib/server/chat/onboarding-tools';
 import { createConnectTools } from '$lib/server/chat/connect-tools';
 import { createAgentTeamTools } from '$lib/server/chat/agent-team-tools';
 import { createAgentDmTools } from '$lib/server/chat/agent-dm-tools';
+import { createAgentSessionTools } from '$lib/server/chat/agent-session-tools';
 import { createTeamActivityTools } from '$lib/server/chat/team-activity-tools';
 import { createBrandContextTools } from '$lib/server/chat/brand-context-tools';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
@@ -136,6 +137,9 @@ export function createChatTools(
     // DM fra agenti (message_agent): thread privato persistente per coppia, il destinatario
     // risponde con un turno SUO in coda. Mai per i sotto-agenti; i turni schedulati sì.
     ...createAgentDmTools({ supabase, brandId, userId, threadId, origin, locale }),
+    // User session (open_session_with_user): un agente apre il SUO thread utente e ci lavora,
+    // quando il lavoro delegato ha bisogno della persona. Trasversale, come il DM.
+    ...createAgentSessionTools({ supabase, brandId, userId, threadId, origin, locale }),
     // Gli occhi della squadra: ultimo report di ogni collega + DM in attesa. Senza questa lettura
     // «fai parte di un team» è una frase nel prompt: qui diventa un fatto che si può controllare.
     ...createTeamActivityTools({ supabase, brandId, userId, locale, memoryAgent }),

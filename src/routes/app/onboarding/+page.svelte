@@ -237,11 +237,15 @@ import EntryInput from './components/EntryInput.svelte';
   }
 
   let setupSlug = $state('');
+  // Il thread di setup creato dal seed: il pick agente ci deve atterrare dentro, non crearne uno
+  // nuovo. `result.location` è `/app/{slug}/chat/{thread}` (o `/app/{slug}` se il seed è fallito).
+  let setupThreadPath = $state('');
   let brandCustomAgents = $state<Array<{ id: string; name: string; face: string; color: string }>>([]);
   let introStep = $state(0);
 
-  function enterIntro(slug: string) {
+  function enterIntro(slug: string, threadPath = '') {
     setupSlug = slug;
+    setupThreadPath = threadPath;
     introStep = 0;
     phase = 'intro';
     track('onboarding_intro_start', { slug });
@@ -369,11 +373,13 @@ import EntryInput from './components/EntryInput.svelte';
       if (result.type === 'redirect') {
         await new Promise((r) => setTimeout(r, 900));
         // `result.location` è `/app/{slug}/chat/{thread}` o `/app/{slug}`: lo slug è il secondo
-        // segmento in entrambi i casi.
-        const slug = result.location.split('/')[2] ?? '';
+        // segmento in entrambi i casi, e se c'è un thread è il quarto (dopo `/app/{slug}/chat`).
+        const parts = result.location.split('/').filter(Boolean);
+        const slug = parts[1] ?? '';
+        const threadPath = parts[2] === 'chat' && parts[3] ? parts.slice(0, 4).join('/').replace(/^\/?/, '/') : '';
         if (slug) {
           flow.stop();
-          enterIntro(slug);
+          enterIntro(slug, threadPath);
           return;
         }
         await goto(result.location);
@@ -610,7 +616,7 @@ import EntryInput from './components/EntryInput.svelte';
       {:else if phase === 'intro'}
         <IntroCarousel bind:introStep onenterpick={() => (phase = 'pick')} />
       {:else if phase === 'pick'}
-        <AgentPick slug={setupSlug} customs={brandCustomAgents} onback={pickBack} />
+        <AgentPick slug={setupSlug} customs={brandCustomAgents} setupThreadPath={setupThreadPath} onback={pickBack} />
       {:else}
         <AnalysisScreen {progress} />
       {/if}

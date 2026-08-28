@@ -5,6 +5,7 @@ import {
 	AGENTS,
 	SHARED_TOOL_KEYS,
 	WORK_ETHIC_BLOCK,
+	ORCHESTRATION_BLOCK,
 	pickTools,
 	buildAgentHead,
 	teamBlock,
@@ -15,7 +16,7 @@ import { SPECIALISTS } from '$lib/agent/specs';
 import { modeSystemBlock } from '$lib/chat-modes';
 import { MOTION_CRAFT_SPECS } from '$lib/motion-video/craft';
 import { createChatTools } from './tools';
-import { SUBAGENT_TOOL_KEYS, createSubagentTools } from './subagents';
+import { SUBAGENT_TOOL_KEYS, subagentToolNames, createSubagentTools } from './subagents';
 import { SANDBOX_TOOL_KEYS, createSandboxTools } from './sandbox-tools';
 import { BUILTIN_AGENT_AVATARS } from '$lib/agent-avatars';
 import { AGENT_META, normalizeAgentId } from '$lib/agent-icons';
@@ -112,6 +113,17 @@ describe('agent registry', () => {
 			AGENTS[id].toolKeys.filter((k) => !(k in CHAT)).map((k) => `${id}: ${k}`)
 		);
 		expect(inert).toEqual([]);
+	});
+
+	// Il thread di setup parla con l'Analyst e il brief si aspetta CHE SIA LUI a salvare i social
+	// (save_social_handles) e a direzionare la strategia: se il tool non gli arrivasse, il brief
+	// prometterebbe un lavoro che il modello non può fare.
+	it('l\'Analyst ha i tool del setup che il brief gli affida', () => {
+		const analyst = mountedFor('analyst');
+		expect(analyst).toContain('save_social_handles');
+		expect(analyst).toContain('sync_social_history');
+		expect(analyst).toContain('generate_strategy');
+		expect(analyst).toContain('update_gtm_plan');
 	});
 
 	it('the maker agents got the tools their pages are built on', () => {
@@ -299,6 +311,16 @@ describe('i cinque specialisti', () => {
 		}
 	});
 
+	it('ognuno può aprire una sessione utente con open_session_with_user, tranne i sotto-agenti', () => {
+		for (const id of AGENT_IDS) {
+			expect(mountedFor(id), `${id}`).toContain('open_session_with_user');
+		}
+		// Chi parla con la persona è uno solo: un sub-agente non apre sessioni utente.
+		expect(subagentToolNames('execute', 'web', ['open_session_with_user', 'read_posts'])).not.toContain(
+			'open_session_with_user'
+		);
+	});
+
 	it('il Content Creator ha ereditato i tre mestieri che si sono fusi', () => {
 		// publish + brand + media: scrivere un post, tenerne la voce, produrne la grafica.
 		const content = mountedFor('content');
@@ -377,6 +399,17 @@ describe('il contratto di lavoro è nel prompt di ogni specialista', () => {
 			expect(head, id).toContain('75 tool steps');
 			expect(head, id).toContain('9 automatic continuations');
 		}
+	});
+
+	it('la delega distingue sotto-agenti (copia di me) da colleghi (mestiere altrui)', () => {
+		// I sotto-agenti sono COPIE del main agent che dividono il SUO goal; i colleghi sono gli altri
+		// mestieri. Questa distinzione è il punto: senza, l'orchestratore usa run_parallel_tasks anche
+		// per l'audit del Web, e il lavoro giusto non arriva mai al collega.
+		expect(ORCHESTRATION_BLOCK).toContain('SUB-AGENTS are copies of YOU');
+		expect(ORCHESTRATION_BLOCK).toContain('COLLEAGUES (message_agent)');
+		expect(ORCHESTRATION_BLOCK).toContain('open_session_with_user');
+		expect(ORCHESTRATION_BLOCK).toMatch(/message_agent \+ open_session_with_user = THEIR craft/);
+		expect(ORCHESTRATION_BLOCK).toContain('message_agent');
 	});
 
 	it('ogni mestiere dice cosa vuol dire READY per sé', () => {
@@ -527,6 +560,9 @@ describe('la squadra si descrive da sé', () => {
 			expect(teamBlock(id, { canMessage: false })).not.toContain('message_agent');
 			expect(teamBlock(id, { canMessage: false })).toContain(AGENTS[id].labels.en);
 			expect(teamBlock(id)).toContain('message_agent');
+			// open_session_with_user è il partner del DM: stesso gate "può parlare coi colleghi".
+			expect(teamBlock(id, { canMessage: false })).not.toContain('open_session_with_user');
+			expect(teamBlock(id)).toContain('open_session_with_user');
 		}
 	});
 

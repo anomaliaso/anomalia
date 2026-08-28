@@ -387,6 +387,33 @@ async function failChatJob(
 		.eq('last_job_id', jobId);
 }
 
+// Il team si presenta: chiuso il primo turno di setup, gli specialisti del piano contattano
+// l'utente nei loro thread. È il punto di completamento CONDIVISO dai due motori: il ramo kit
+// chiude il job e tornava prima di questo blocco, e il team non salutava mai nessuno (PR #32
+// morta sul motore che in produzione gira davvero). Import dinamico: il modulo accoda turni qui.
+async function igniteTeamAfterSetupTurn(
+	admin: SupabaseClient,
+	opts: {
+		brand: { id: string; name?: unknown; website?: unknown; plan?: unknown };
+		userId: string;
+		threadRow: { surface?: string | null } | null | undefined;
+		locale: string;
+		origin: string;
+	}
+): Promise<void> {
+	if (opts.threadRow?.surface !== 'onboarding') return;
+	const { igniteOnboardingTeam } = await import('$lib/server/onboarding-team');
+	await igniteOnboardingTeam(admin, {
+		brandId: opts.brand.id,
+		userId: opts.userId,
+		brandName: String(opts.brand.name ?? ''),
+		website: (opts.brand.website as string | null) ?? null,
+		plan: (opts.brand.plan as string | null) ?? null,
+		locale: opts.locale,
+		origin: opts.origin
+	});
+}
+
 /**
  * Claim the oldest pending queued chat_response that has no sibling still running
  * on the same thread, then generate + persist the assistant reply.
@@ -737,9 +764,16 @@ export async function processNextQueuedChatJob(
 							partial: null,
 							completed_at: new Date().toISOString()
 						})
-						.eq('id', jobId)
-						.in('status', ['pending', 'running']);
-					return { processed: true, jobId };
+					.eq('id', jobId)
+					.in('status', ['pending', 'running']);
+				await igniteTeamAfterSetupTurn(admin, {
+					brand,
+					userId: job.user_id as string,
+					threadRow,
+					locale,
+					origin
+				});
+				return { processed: true, jobId };
 				}).finally(stopHeartbeat);
 			}
 		}
@@ -892,6 +926,7 @@ export async function processNextQueuedChatJob(
 				threadId,
 				webHubEnabled,
 				defaultAgent: agentId,
+				origin,
 				remainingMs: () => queueDeadline?.remainingMs() ?? Number.POSITIVE_INFINITY
 			});
 			// Stessa macchina del turno interattivo: un lavoro in coda ne ha bisogno più di uno
@@ -1379,6 +1414,14 @@ export async function processNextQueuedChatJob(
 				.eq('id', jobId)
 				.in('status', ['pending', 'running', 'failed']);
 
+			await igniteTeamAfterSetupTurn(admin, {
+				brand,
+				userId: job.user_id as string,
+				threadRow,
+				locale,
+				origin
+			});
+
 			try {
 				const { sendPushToUser } = await import('$lib/server/web-push');
 				await sendPushToUser(admin, job.user_id as string, {
@@ -1479,7 +1522,8 @@ export async function processNextPendingToolJob(
 					candidate.user_id as string,
 					toolName,
 					(candidate.input_params ?? {}) as Record<string, unknown>,
-					cancel
+					cancel,
+					{ id: jobId, thread_id: (candidate.thread_id as string | null) ?? null }
 				)
 			);
 			await cancel.assertActive();

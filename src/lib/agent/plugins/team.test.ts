@@ -45,6 +45,14 @@ describe('il plugin squadra espone message_agent al kit', () => {
 		expect(spec!.description).toContain('ANOTHER agent');
 	});
 
+	it('il plugin squadra espone anche open_session_with_user al kit', () => {
+		const spec = plugin().tools.find((t) => t.name === 'open_session_with_user');
+		expect(spec).toBeDefined();
+		const props = (spec!.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
+		expect(Object.keys(props).sort()).toEqual(['message']);
+		expect(spec!.description).toContain('WITH THE USER');
+	});
+
 	it('i rifiuti deliberati del DM arrivano intatti al kit', async () => {
 		const res = await plugin().execute(
 			{ name: 'message_agent', args: { to: 'anomalia', message: 'ciao' } },

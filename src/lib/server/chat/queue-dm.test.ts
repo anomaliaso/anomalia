@@ -14,6 +14,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
+// Il percorso sotto test è quello classico del queue: il kit si spegne qui, non nel .env
+// locale — altrimenti la suite passa sul laptop di chi lo ha spento e muore su chi lo ha acceso.
+vi.mock('$env/dynamic/private', () => ({ env: { AGENT_KIT: 'off' } }));
+
 // ── Il confine mockato: modello, prompt base, tool pesanti. Il resto è codice vero. ────────────
 const harnessCalls: Array<{ system: string; messages: Array<{ role: string; content: unknown }> }> = [];
 vi.mock('$lib/server/harness', () => ({
@@ -124,6 +128,95 @@ vi.mock('./persistence', () => ({
 
 const { createAgentDmTools } = await import('./agent-dm-tools');
 const { processNextQueuedChatJob } = await import('./queue');
+
+/**
+ * LE RIPRESE PORTANO SEMPRE UN TESTO PER IL MODELLO (task #38, primo contatto del team).
+ *
+ * Il primo contatto seminato dal server e `open_session_with_user` accodano un turno di
+ * continuazione: la storia finisce sulla riga di apertura firmata, e il provider rifiuta una
+ * conversazione che non apre con un turno user — quindi il replay NON può puntare su un
+ * prefill assistant. Il suo `user_message` è un testo SOLO PER IL MODELLO (mai salvato, mai
+ * mostrato): vuoto, il job è corrotto e muore.
+ */
+describe('riprese: user_message è solo-per-il-modello, mai vuoto', () => {
+	const teamThread = {
+		id: 'team-web',
+		brand_id: 'brand-1',
+		user_id: 'user-1',
+		agent: 'web',
+		custom_agent_id: null,
+		surface: 'team',
+		surface_key: 'web',
+		title: 'Web Specialist'
+	};
+
+	const contactJob = (inputParams: Record<string, unknown>) => ({
+		id: 'job-contact-1',
+		created_at: new Date().toISOString(),
+		brand_id: 'brand-1',
+		user_id: 'user-1',
+		thread_id: 'team-web',
+		tool_name: 'chat_response',
+		status: 'pending',
+		input_params: inputParams
+	});
+
+	const baseParams = {
+		user_message: '',
+		locale: 'it',
+		origin: '',
+		queued: true,
+		tier: 'auto',
+		agent: 'web',
+		speaker: 'web',
+		continuation: true,
+		user_message_saved: true,
+		brief: '## TEAM CONTACT TURN (server-side brief)'
+	};
+
+	it('un user_message vuoto è un job corrotto anche in replay: muore prima di chiamare il modello', async () => {
+		db = makeDb({
+			brands: [brandRow],
+			chat_threads: [teamThread],
+			chat_messages: [
+				{ thread_id: 'team-web', role: 'assistant', content: "I'm your Web Specialist.", name: 'web' }
+			],
+			chat_jobs: [contactJob(baseParams)]
+		});
+
+		const res = await processNextQueuedChatJob(db.client as never, '');
+		expect(res.error).toBe('missing user_message');
+		expect(harnessCalls.length).toBe(0);
+	});
+
+	it('con il testo di ripresa il turno GIRA: arriva al modello e NON finisce nel thread', async () => {
+		db = makeDb({
+			brands: [brandRow],
+			chat_threads: [teamThread],
+			chat_messages: [
+				{ thread_id: 'team-web', role: 'assistant', content: "I'm your Web Specialist.", name: 'web' }
+			],
+			chat_jobs: [
+				contactJob({ ...baseParams, user_message: 'Your opening line is in front of the user. Start now.' })
+			]
+		});
+
+		const res = await processNextQueuedChatJob(db.client as never, '');
+		expect(res.processed).toBe(true);
+		expect(harnessCalls.length).toBe(1);
+
+		const { system, messages } = harnessCalls[0];
+		expect(system).toContain('TEAM CONTACT TURN');
+		// Il testo di ripresa chiude il prompt come turno user (il provider non accetta di
+		// APRIRE con un assistant: l'apertura firmata non può fare da prefill).
+		expect(String(messages[messages.length - 1].content)).toBe(
+			'Your opening line is in front of the user. Start now.'
+		);
+		// Il testo di ripresa NON è stato salvato nel thread.
+		const saved = db.tables.chat_messages.filter((m) => m.thread_id === 'team-web');
+		expect(saved).toHaveLength(1);
+	});
+});
 
 // ── Database finto: come queue-credits.test, più insert e contains (marker jsonb). ─────────────
 function makeDb(seed: Record<string, Row[]>) {

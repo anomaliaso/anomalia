@@ -10,10 +10,12 @@
   let {
     slug = '',
     customs = [],
+    setupThreadPath = '',
     onback
   }: {
     slug?: string;
     customs?: Array<{ id: string; name: string; face: string; color: string }>;
+    setupThreadPath?: string;
     onback: () => void;
   } = $props();
 
@@ -46,7 +48,8 @@
     pickIndex = (pickIndex + delta + pickOptions.length) % pickOptions.length;
   }
 
-  /** `/chat/new?agent=` non crea nessuna riga: il thread nasce al primo messaggio. */
+  /** Se il seed ha creato il thread di setup ci si atterra DENTRO (con l'Analyst), non si apre
+   * una chat nuova: la scelta dell'agente resta come preferenza per le chat future. */
   function startChat() {
     if (!slug || !pickCurrent) return;
     track('onboarding_agent_picked', { agent: pickCurrent.key });
@@ -59,6 +62,10 @@
       } catch {
         /* quota / private mode: si perde la memoria, non la chat */
       }
+    }
+    if (setupThreadPath) {
+      void goto(setupThreadPath);
+      return;
     }
     void goto(`/app/${slug}/chat/new?agent=${encodeURIComponent(pickCurrent.key)}`);
   }

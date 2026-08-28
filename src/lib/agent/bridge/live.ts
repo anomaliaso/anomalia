@@ -165,8 +165,6 @@ export interface RunKitTurnInput {
 	 * questo la scalata NON scatta MAI e ogni specialista che non sia motion cade sul default).
 	 */
 	escalationText?: string;
-	/** Il turno porta immagini: serve a scegliere un modello che le vede. */
-	vision?: boolean;
 	/**
 	 * Riprese automatiche già fatte su QUESTA catena — lo stesso contatore del motore classico
 	 * (`chat_jobs.input_params.continuation_depth`), che è anche dove vive fra un turno e l'altro:
@@ -446,7 +444,13 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						// Il perimetro di scrittura degli `execute` sono i nomi VERO del kit, non quelli
 						// dell'hub di chat (qui si chiama content_create_post, là create_post).
 						hubToolKeys: kitHubKeys,
-						remainingMs: deadline.remainingMs
+						remainingMs: deadline.remainingMs,
+						// `inline` + specchio: la run gira nel turno (i verdetti in banda restano leggibili)
+						// ma lascia la riga `chat_jobs` con il partial vivo — è ciò che fa comparire il
+						// lavoro tra i processi in background e lo rende leggibile a `check_subagent`.
+						// La durabilità la dà il run kit, che ha già heartbeat e resume.
+						mode: 'inline',
+						mirror: true
 					})
 				})
 			: null;
@@ -733,6 +737,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		const startTurnOnce = (fresh: boolean) => {
 			const startedTurn = startHarnessTurn({
 			runId: run.id,
+			agentId: spec.id,
 			model: modelRef,
 			system,
 				historyMd: savedResume
