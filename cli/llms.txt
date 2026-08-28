@@ -123,7 +123,7 @@ Note: `--id` accepts the short prefix printed in the tables.
 
 ## Auth
 
-Run `anomalia login` once to authenticate via browser, or non-interactively with `anomalia login --email you@example.com --password …`. Session is saved in `~/.config/anomalia/session.json`.
+Run `anomalia login` once to authenticate via browser, or non-interactively with `anomalia login --email you@example.com --password …` (or `--password-stdin` to keep the password out of shell history and `ps`). Session is saved in `~/.config/anomalia/session.json`.
 
 ## MCP
 

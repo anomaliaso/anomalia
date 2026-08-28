@@ -153,7 +153,7 @@ using the custom-scheme OAuth callback — use **stdio** above, update Cursor (l
 `http://localhost:8787/callback`), or see [`docs/mcp.md`](docs/mcp.md#cursor--remote-http-oauth).
 
 - Local stdio: `login` tool or existing `anomalia login` → `~/.config/anomalia/session.json`
-  (script/CI alternative: `anomalia login --email tu@email --password …`, no browser)
+  (script/CI alternative: `anomalia login --email tu@email --password …` or `--password-stdin`, no browser)
 - Remote HTTP: `Authorization: Bearer <access_token>` (401 without it is expected)
 
 ---

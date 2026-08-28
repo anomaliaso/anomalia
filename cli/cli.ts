@@ -29,8 +29,9 @@ Documentazione completa: cli/README.md
 program
   .command('login')
   .description('Accedi a Anomalia (default: apre il browser)')
-  .option('--email <email>', 'email per login non interattivo (richiede --password)')
+  .option('--email <email>', 'email per login non interattivo (richiede --password o --password-stdin)')
   .option('--password <password>', 'password per login non interattivo (richiede --email)')
+  .option('--password-stdin', 'legge la password da stdin, fuori da history e process list')
   .action(async (options) => {
     const { cmdLogin } = await import('./commands/login.ts');
     await cmdLogin(options);
