@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-28
+
+### `bun run dev` non uccide più la porta di nessuno
+
+Ogni agente che lavorava con `bun run dev` partiva uccidendo chiunque stesse
+già sulla 5173: due agenti in parallelo nei test e2e si facevano la guerra,
+e chi stava lavorando perdeva il server a metà sessione. Ora `bun run dev` è
+solo `vite dev` — la porta se la prende libera, e se è occupata bumpa sulla
+successiva invece di sparare al vicino. Il kill della 5173 vive in un comando
+suo, `bun run dev:5173`, che dopo il kill lega con `--strictPort`: o prende
+esattamente la 5173 (CLI e doc la presumono) o fallisce rumorosamente, senza
+spostarsi in silenzio su un'altra porta. Un test (`scripts/dev-scripts.test.ts`)
+impedisce che il kill torni dentro `dev`.
+
 ## 2026-08-27
 
 ### Ogni agente può aprire una sessione utente, e la delega si distingue in due modi
