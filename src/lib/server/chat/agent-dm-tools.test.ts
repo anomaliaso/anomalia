@@ -18,6 +18,9 @@ vi.mock('./unread', () => ({ markThreadRead }));
 const kickChatQueueWork = vi.fn(async () => undefined);
 const threadHasActiveChatResponse = vi.fn(async () => false);
 vi.mock('./queue', () => ({ kickChatQueueWork, threadHasActiveChatResponse }));
+// Il goal è mockato, non il database: il test decide se il thread ha un obiettivo aperto.
+const loadOpenGoal = vi.fn(async () => null);
+vi.mock('./goal', () => ({ loadOpenGoal }));
 
 const { createAgentDmTools, getOrCreateDmThread, DM_SENDS_PER_TURN } = await import('./agent-dm-tools');
 const { ROOM_MAX_MEMBERS } = await import('./room');
@@ -124,6 +127,7 @@ const exec = (tools: any, input: Record<string, unknown>) => tools.message_agent
 beforeEach(() => {
 	saveMessages.mockClear();
 	kickChatQueueWork.mockClear();
+	loadOpenGoal.mockResolvedValue(null);
 	getThread.mockResolvedValue({ id: 'main-thread', agent: 'analyst', custom_agent_id: null });
 });
 
@@ -354,8 +358,16 @@ describe('message_agent — fan-out esplicito', () => {
 		expect(jobs.length).toBe(2);
 	});
 
-	it('un destinatario solo tiene la forma di sempre: la chip in chat non impara niente', async () => {
-		const { supabase } = fakeDb();
+	it('con un obiettivo aperto il fan-out senza perché è orchestrazione, non rumore', async () => {
+		const { supabase, jobs } = fakeDb();
+		loadOpenGoal.mockResolvedValue({ id: 'g1', status: 'open', description: 'prepara il lancio' });
+		const tools = createAgentDmTools(toolOpts(supabase));
+		const out = await exec(tools, { to: ['content', 'motion'], message: 'il lancio serve a entrambi: parti' });
+		expect(out.success).toBe(true);
+		expect(jobs.length).toBe(2);
+	});
+
+	it('un destinatario solo tiene la forma di sempre: la chip in chat non impara niente', async () => {		const { supabase } = fakeDb();
 		const tools = createAgentDmTools(toolOpts(supabase));
 		const out = await exec(tools, { to: 'content', message: 'ciao' });
 		// I tre campi che ChatDmChip legge (e che stanno nelle tool-call già salvate).

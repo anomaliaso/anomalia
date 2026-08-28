@@ -42,6 +42,18 @@ export async function walkOnboarding(
   return { steps, chatUrl: null };
 }
 
+/**
+ * La domanda cross-craft della prova di delega: due mestieri diversi in una frase, nessuna
+ * istruzione esplicita di delegare. Il fatto misurato dopo è se i DM agente-agente nascono.
+ */
+const CROSS_CRAFT_ASK =
+  'Do the SEO audit of my site and give me two post ideas for the launch, in your language.';
+
+export async function sendCrossCraftAsk(browser: Browser): Promise<void> {
+  await browser.run('fill', 'textarea.ch-input', CROSS_CRAFT_ASK);
+  await browser.run('click', 'button.ch-send');
+}
+
 const INTRO_SLIDES_MAX = 6;
 const INTRO_STEP_MS = 1_500;
 const PICK_TIMEOUT_MS = 60_000;

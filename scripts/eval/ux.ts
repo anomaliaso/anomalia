@@ -6,8 +6,8 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { geminiFast } from '$lib/server/chat/model';
 import { Browser } from './ux/browser';
 import { createEvalUser, deleteEvalUser } from './ux/user';
-import { brandForUser, planFacts, waitForAssistantReply, waitForTeamContact } from './ux/facts';
-import { walkOnboarding } from './ux/walk';
+import { brandForUser, planFacts, waitForAssistantReply, waitForTeamContact, waitForDelegation } from './ux/facts';
+import { walkOnboarding, sendCrossCraftAsk } from './ux/walk';
 import { RUBRIC, grade, parseJudgment } from './ux/grader';
 import { writeReport, type FlowFact, type JudgeUsage } from './ux/report';
 
@@ -146,6 +146,14 @@ async function main(): Promise<number> {
     const team = await waitForTeamContact(admin, brand.id, REPLY_WAIT_MS);
     log(`[team] contatti firmati: ${team.agents.join(', ') || 'nessuno'}`);
 
+    // Prova di delega: una domanda cross-craft (audit + idee post). Il fatto misurato è se
+    // nascono DM agente-agente — la forma osservabile della delega a un collega.
+    await sendCrossCraftAsk(browser);
+    log('[walk] domanda cross-craft inviata');
+    const delegation = await waitForDelegation(admin, brand.id, REPLY_WAIT_MS);
+    log(`[delegation] dmThreads=${delegation.dmThreads} dmMessages=${delegation.dmMessages}`);
+    await browser.captureEvidence('03-delegation');
+
     const chatUrl = (await browser.run('get', 'url')).trim();
     await browser.captureEvidence('02-chat');
     const pick = await readText(join(evidenceDir, '01-pick.a11y.txt'));
@@ -172,6 +180,15 @@ async function main(): Promise<number> {
             : `solo ${team.agents.length} specialista ha contattato l'utente (${team.agents.join(', ') || 'nessuno'}) — il team non si presenta`
       },
       {
+        id: 'delegation-fact',
+        ok: delegation.dmThreads > 0,
+        gate: false,
+        detail:
+          delegation.dmThreads > 0
+            ? `${delegation.dmThreads} DM fra agenti, ${delegation.dmMessages} messaggi dopo la richiesta cross-craft`
+            : 'nessun DM fra agenti dopo la richiesta cross-craft: il lavoro cross-craft non è stato delegato'
+      },
+      {
         id: 'editorial-plan',
         ok: plans.editorialPlans > 0,
         gate: false,
@@ -180,7 +197,7 @@ async function main(): Promise<number> {
       { id: 'news-sources', ok: plans.newsSources > 0, gate: false, detail: `${plans.newsSources} fonti radar attive` }
     ];
 
-    const judged = await judge(brand.slug, pick ?? '', chatSnap ?? '', { chat, plans, team });
+    const judged = await judge(brand.slug, pick ?? '', chatSnap ?? '', { chat, plans, team, delegation });
     const judgment = parseJudgment(judged.text);
     if (!judgment) {
       log(`[judge] output non parsabile: ${judged.text.slice(0, 400)}`);
@@ -201,7 +218,14 @@ async function main(): Promise<number> {
       flowFacts,
       grade: g,
       judgeUsage: judged.judgeUsage,
-      evidenceFiles: ['evidence/01-pick.png', 'evidence/02-chat.png', 'evidence/01-pick.a11y.txt', 'evidence/02-chat.a11y.txt']
+      evidenceFiles: [
+        'evidence/01-pick.png',
+        'evidence/02-chat.png',
+        'evidence/03-delegation.png',
+        'evidence/01-pick.a11y.txt',
+        'evidence/02-chat.a11y.txt',
+        'evidence/03-delegation.a11y.txt'
+      ]
     });
     log(`[report] ${report}`);
 
