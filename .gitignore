@@ -82,7 +82,6 @@ AGENT-CHAT-*.md
 *-senti-non-mi-sta-piacendo*.txt
 
 # Config locali degli strumenti agente: contengono endpoint e progetti vendor interni.
-CLAUDE.md
 /opencode.json
 /mimocode.jsonc
 /mcp.json
