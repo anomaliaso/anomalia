@@ -18,6 +18,12 @@ vi.mock('./subagents', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   runSubagentRun: (...args: unknown[]) => runSubagentRun(...args)
 }));
+// CI non ha chiavi provider e il toolset vero trascina mezzo registry: il worker qui deve
+// testare mirror e passthrough, il motore è runSubagentRun mockato e il set è vuoto.
+vi.mock('$lib/server/chat/model', () => ({
+  resolveChatModel: () => ({ provider: 'test', modelId: 'test-model', model: {}, callOptions: {} })
+}));
+vi.mock('$lib/server/chat/tools', () => ({ createChatTools: () => ({}) }));
 
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 
