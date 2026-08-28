@@ -20,7 +20,13 @@ const HEALTH_TIMEOUT_MS = 90_000;
 const CHAT_SNAPSHOT_CHARS = 8_000;
 const PICK_SNAPSHOT_CHARS = 4_000;
 
-const runId = `ux-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
+// Il ramo che il run misura va DECISO qui, non ereditato dal .env del momento: due run con lo
+// stesso codice e .env diversi non sono paragonabili. `AGENT_KIT=on npm run eval:ux` misura il
+// ramo kit (quello che in produzione gira davvero) — la variante che ha trovato il difetto
+// dell'onboarding-team mai contattato (task #47).
+const AGENT_KIT: 'on' | 'off' = process.env.AGENT_KIT === 'on' ? 'on' : 'off';
+
+const runId = `ux${AGENT_KIT === 'on' ? '-kit' : ''}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
 const runDir = join(RESULTS_ROOT, runId);
 const evidenceDir = join(runDir, 'evidence');
 mkdirSync(evidenceDir, { recursive: true });
@@ -44,7 +50,7 @@ function startViteServer(): Promise<() => Promise<void>> {
   return new Promise((resolve, reject) => {
     const logFd = openSync(join(runDir, 'server.log'), 'a');
     const child = spawn('npx', ['vite', 'dev', '--port', String(VITE_PORT), '--strictPort'], {
-      env: { ...process.env, NO_HMR: '1' },
+      env: { ...process.env, NO_HMR: '1', AGENT_KIT },
       detached: true,
       stdio: ['ignore', logFd, logFd]
     });
@@ -211,6 +217,7 @@ async function main(): Promise<number> {
         runId,
         appUrl: APP_URL,
         judgeModel: judged.modelId,
+        agentKit: AGENT_KIT,
         startedAt: new Date(stamp).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - stamp

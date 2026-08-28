@@ -7,6 +7,7 @@ const report: RunReport = {
     runId: 'ux-test',
     appUrl: 'http://localhost:4180',
     judgeModel: 'gemini-flash',
+    agentKit: 'off',
     startedAt: '2026-08-28T09:00:00.000Z',
     finishedAt: '2026-08-28T09:04:00.000Z',
     durationMs: 240_000
@@ -31,6 +32,7 @@ describe('renderMarkdown', () => {
     expect(md).toContain('# Eval UX — ux-test');
     expect(md).toContain('**FAIL**');
     expect(md).toContain('2/4 criteri');
+    expect(md).toContain('kit off');
   });
 
   it('distinguishes gate facts from info facts', () => {
