@@ -123,12 +123,14 @@ describe('fail-closed', () => {
 });
 
 describe('costo', () => {
-  // Guardrail contro un regex catastrofico aggiunto in futuro: misurato 48 ms su 1 MB.
-  it('sta sotto i 200 ms su 1 MB', () => {
+  // Guardrail contro un regex catastrofico aggiunto in futuro: misurato 48 ms su 1 MB,
+  // ~300 ms con la suite in parallelo. Un regex esplosivo brucia in secondi: la soglia
+  // sta sopra il rumore e sotto il disastro.
+  it('sta sotto 1 s su 1 MB', () => {
     const big = ('riga di traccia con un po di testo e un uuid 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\n').repeat(11000);
     const t0 = Date.now();
     redactSecrets(big, KNOWN);
-    expect(Date.now() - t0).toBeLessThan(200);
+    expect(Date.now() - t0).toBeLessThan(1000);
   });
 });
 
