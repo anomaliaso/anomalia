@@ -14,6 +14,10 @@ import { writeReport, type FlowFact, type JudgeUsage } from './ux/report';
 const APP_URL = process.env.EVAL_UX_APP_URL ?? 'http://localhost:4180';
 const VITE_PORT = Number(APP_URL.split(':').pop() ?? 4180);
 const REPLY_WAIT_MS = Number(process.env.EVAL_UX_WAIT_MS ?? 240_000);
+// Il contatto del team nasce quando il TURNO di setup chiude, non quando la prima risposta
+// arriva: il turno continua a lavorare per minuti dopo (tool, memoria) e la finestra della
+// prima risposta scadde troppo presto. Il poll del team ha la sua finestra, più larga.
+const TEAM_WAIT_MS = Number(process.env.EVAL_UX_TEAM_WAIT_MS ?? 420_000);
 const RESULTS_ROOT = process.env.EVAL_UX_RESULTS_DIR ?? 'eval-results';
 const BRAND_POLL_MS = 60_000;
 const HEALTH_TIMEOUT_MS = 90_000;
@@ -151,7 +155,7 @@ async function main(): Promise<number> {
     const { replied, facts: chat } = await waitForAssistantReply(admin, brand.id, REPLY_WAIT_MS);
     log(`[chat] replied=${replied} assistant=${chat.assistantMessages} latency=${chat.firstAssistantLatencyMs}ms`);
 
-    const team = await waitForTeamContact(admin, brand.id, REPLY_WAIT_MS);
+    const team = await waitForTeamContact(admin, brand.id, TEAM_WAIT_MS);
     log(`[team] contatti firmati: ${team.agents.join(', ') || 'nessuno'}`);
 
     // Prova di delega: una domanda cross-craft (audit + idee post). Il fatto misurato è se
