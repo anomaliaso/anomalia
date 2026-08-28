@@ -11,6 +11,9 @@ import STOP_SLOP from '$lib/agent-docs/skills/stop-slop/SKILL.md?raw';
 import STOP_SLOP_PHRASES from '$lib/agent-docs/skills/stop-slop/references/phrases.md?raw';
 import STOP_SLOP_STRUCTURES from '$lib/agent-docs/skills/stop-slop/references/structures.md?raw';
 import STOP_SLOP_EXAMPLES from '$lib/agent-docs/skills/stop-slop/references/examples.md?raw';
+import SEO_AUDIT from '$lib/agent-docs/skills/seo-audit/SKILL.md?raw';
+import SEO_AI_WRITING from '$lib/agent-docs/skills/seo-audit/references/ai-writing-detection.md?raw';
+import SEO_INTERNATIONAL from '$lib/agent-docs/skills/seo-audit/references/international-seo.md?raw';
 import SOCIAL from '$lib/agent-docs/skills/social/SKILL.md?raw';
 import SOCIAL_CAROUSELS from '$lib/agent-docs/skills/social/references/carousel-frameworks.md?raw';
 import SOCIAL_LISTENING from '$lib/agent-docs/skills/social/references/listening.md?raw';
@@ -41,6 +44,11 @@ const stopSlop = toSkill(STOP_SLOP, [
 	{ path: 'references/examples.md', content: STOP_SLOP_EXAMPLES.trim() }
 ]);
 
+const seoAudit = toSkill(SEO_AUDIT, [
+	{ path: 'references/ai-writing-detection.md', content: SEO_AI_WRITING.trim() },
+	{ path: 'references/international-seo.md', content: SEO_INTERNATIONAL.trim() }
+]);
+
 const social = toSkill(SOCIAL, [
 	{ path: 'references/carousel-frameworks.md', content: SOCIAL_CAROUSELS.trim() },
 	{ path: 'references/listening.md', content: SOCIAL_LISTENING.trim() },
@@ -52,7 +60,7 @@ const social = toSkill(SOCIAL, [
 	{ path: 'references/short-form-video.md', content: SOCIAL_SHORT_FORM.trim() }
 ]);
 
-export const brandSkills: HarnessRepoSkill[] = [humanizer, stopSlop, social];
+export const brandSkills: HarnessRepoSkill[] = [humanizer, stopSlop, social, seoAudit];
 
 const WRITING_SKILLS = ['humanizer', 'stop-slop'];
 
@@ -66,7 +74,7 @@ const WRITING_SKILLS = ['humanizer', 'stop-slop'];
 const SKILLS_BY_AGENT: Record<TeamAgentId, string[]> = {
 	content: [...WRITING_SKILLS, 'social'],
 	ugc: [...WRITING_SKILLS, 'social'],
-	web: WRITING_SKILLS,
+	web: [...WRITING_SKILLS, 'seo-audit'],
 	analyst: WRITING_SKILLS,
 	auto: WRITING_SKILLS,
 	motion: [...WRITING_SKILLS, 'social', 'remotion-best-practices']
