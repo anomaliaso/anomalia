@@ -38,8 +38,8 @@ tmp/
 !.vscode/extensions.json
 .vercel
 
-# Claude Code local config
-.claude/
+# Claude Code local config (skills travel with the repo)
+.claude/*
 !.claude/skills/
 !.claude/skills/**
 
