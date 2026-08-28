@@ -166,9 +166,9 @@ Examples: https://anomalia.so/docs.md · https://anomalia.so/docs/api.md · http
 - [CLI Installation](https://anomalia.so/install.sh) — Install the Anomalia CLI: `curl -sSL https://anomalia.so/install.sh | bash`
 - [MCP](https://anomalia.so/docs/mcp) — Connect Cursor/Claude via Model Context Protocol (stdio or https://mcp.anomalia.so/mcp). OAuth only — no static API tokens.
 - [MCP (Italian)](https://anomalia.so/it/docs/mcp) — Collega Cursor/Claude via Model Context Protocol. Solo OAuth.
-- [Agent skill](https://anomalia.so/docs/agents) — Install the Anomalia skill (`npx skills add andreabuttarelli/anomalia-cli --skill anomalia`). Prefer MCP tools; fall back to the CLI.
+- [Agent skill](https://anomalia.so/docs/agents) — Install the Anomalia skill (`npx skills add anomaliaso/anomalia --skill anomalia`). Prefer MCP tools; fall back to the CLI.
 - [Agent skill (Italian)](https://anomalia.so/it/docs/agents) — Installa lo skill Anomalia. Preferisci MCP; fallback sulla CLI.
-- [anomalia-cli (GitHub)](https://github.com/andreabuttarelli/anomalia-cli) — CLI, MCP server, and publishable agent skill (AGPL-3.0).
+- [CLI + MCP source](https://github.com/anomaliaso/anomalia/tree/main/cli) — CLI, MCP server, and publishable agent skill (AGPL-3.0).
 
 ### Legal
 

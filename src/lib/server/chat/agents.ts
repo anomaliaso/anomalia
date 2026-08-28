@@ -86,6 +86,9 @@ export const SHARED_TOOL_KEYS = [
   'set_scheduled_agent_enabled',
   // Mai ai sotto-agenti: sta anche in NEVER_FOR_SUBAGENTS, per la regola del "chi parla è uno solo".
   'message_agent',
+  // Un agente apre IL SUO thread utente (surface='team') per lavorarci con la persona, quando il
+  // lavoro delegato la richiede. Trasversale come il DM, e come il DM mai ai sotto-agenti.
+  'open_session_with_user',
   // Gli occhi della squadra: l'ultimo report di ogni collega (diari surface='team') e i DM dove la
   // palla sta a chi. Read-only, una query — il team si coordina solo se vede il lavoro altrui.
   'team_activity',
@@ -156,9 +159,12 @@ TRIAGE, first thing every turn, two lines of thought and no tool: is this ask TR
 3. CLOSE ONLY AGAINST A DEFINITION OF DONE. State the done-criteria BEFORE working (set_goal when the job is big — its description carries the rules). Before your final message check them one by one: anything that touched real state gets a read-back or a verify delegation, not your memory of having done it. An unmet criterion has to be named, with why. You have 75 tool steps per turn plus up to 9 automatic continuations — stopping at step 8 with work left is the defect; spending 60 steps to finish is efficiency.
 Ambition is not burning credits: CAPACITY & LIMITS stays authoritative, warn before large batches, never retry through credits_exhausted — and a TRIVIAL ask never becomes a tool tour.`;
 
-export const ORCHESTRATION_BLOCK = `ORCHESTRATION — YOU ARE A LEAD, NOT ONLY A WORKER (delegate_task, run_task_pipeline):
+export const ORCHESTRATION_BLOCK = `ORCHESTRATION — TWO DIFFERENT WAYS TO HAND OFF WORK, NEVER CONFUSE THEM:
+- SUB-AGENTS are copies of YOU (same craft, same tools) that split ONE of your own complex goals into macro-tasks, run them in separate clean contexts inside this turn, and hand back a written report. Use them for work YOU would do yourself — your own trade, your own division of the goal. They never talk to the user; you stay the only voice.
+- COLLEAGUES (message_agent) are the other specialists of this brand, each with a DIFFERENT craft. Hand to them the work YOUR trade does not own — the audit is the Web's, posts/calendar are the Content's, motion is the Motion's, UGC is the UGC's, analytics/strategy/numbers are yours. When that handed-off work needs the person — a decision, an approval, a question only they can answer, a result to hand over — the colleague opens their OWN USER SESSION (open_session_with_user) and works there; you tell the user one line where to find them. You never do another craft's work "as a favour": hand it over, or say which colleague has it.
+- THE RULE IN ONE LINE: sub-agents = YOUR goal split into macro-tasks (your craft); message_agent + open_session_with_user = THEIR craft, their expert work, their own user session. If you are deciding between them, ask which side of that line the task falls on.
 - You can dispatch SUB-AGENTS that really run: their own tool loop, their own clean context, inside this turn, returning a written report.
-- DEFAULT for any job that is long or multi-step (produce a week, fix a section of the blog, prepare a launch, clean a backlog, audit + repair): call run_task_pipeline once. It splits the job into RESEARCH (read-only facts) → EXECUTION (the actual work) → VERIFICATION (read-only check of the real state), feeds each report to the next, and can run one repair round.
+- DEFAULT for any job of YOUR OWN CRAFT that is long or multi-step (produce a week, fix a section of the blog, prepare a launch, clean a backlog, audit + repair with your own tools): call run_task_pipeline once. It splits the job into RESEARCH (read-only facts) → EXECUTION (the actual work) → VERIFICATION (read-only check of the real state), feeds each report to the next, and can run one repair round. If the job is a DIFFERENT craft's work, this does not apply — that goes to the colleague (see the rule above), not to a sub-agent.
 - Use delegate_task for a single phase: role="research" when you need facts before deciding, role="execute" to hand off a well-defined chunk, role="verify" to have someone else check work that is already done. For independent chunks that do NOT need each other's output — five beats of one video, ten posts, eight pages to audit — call run_parallel_tasks once with all of them: it runs them at the same time and hands you back every report. Never fan out by calling delegate_task N times.
 - THE MACHINE IS ALREADY IN YOUR HANDS, not only a sub-agent's: sandbox_exec runs a command in a real Linux VM with Node and Python and the brand's own data on disk as files (history.csv with the metrics in columns); sandbox_write_file and sandbox_read_file put files in and take them out; sandbox_save_output keeps one past the VM (kind="artifact" delivers it in chat). Reach for them the moment an answer has to be COMPUTED instead of estimated — counting, cross-referencing an export, converting a file, checking that something compiles. Two commands do NOT deserve a delegation.
 - role="sandbox" is for the one thing that mount cannot do: network="research", a real Chromium that reads pages JavaScript builds. Your own shell is network="compute" — no internet — because "the brand's data on disk" plus "the open web" is the pair we keep apart on purpose. Digging through a site that a plain fetch returns empty is what the delegation is for.
@@ -269,6 +275,7 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'read_posts',
       'analyze_post_people',
       'sync_social_history',
+      'save_social_handles',
       'run_analytics_review',
       'review_video',
       'show_media',
@@ -515,7 +522,7 @@ export function teamBlock(agentId: AgentId, opts: { canMessage?: boolean } = {})
   const reach =
     opts.canMessage === false
       ? 'You cannot write to them from here: when the work is theirs, say so in one line and name them.'
-      : 'To reach one: message_agent puts your message in the private thread the two of you keep forever, and they answer there later with their OWN identity and their OWN tools. It is ASYNCHRONOUS — never wait in a loop, and NEVER write their answer yourself. ONE colleague at a time; write to several only if the user asked you to.';
+      : 'To reach one: message_agent puts your message in the private thread the two of you keep forever, and they answer there later with their OWN identity and their OWN tools. It is ASYNCHRONOUS — never wait in a loop, and NEVER write their answer yourself. ONE colleague at a time; write to several only if the user asked you to. If the work they hand back needs a real answer from the user — a decision, an approval, a question only they can answer — they open THEIR OWN USER SESSION with open_session_with_user (your thread is private, the user cannot write there), and you tell the user one line where to find them. When YOU get such a task and it needs the person, do the same: open your own user session instead of doing the user-facing work in a private thread.';
   const coordinate =
     opts.canMessage === false
       ? ''

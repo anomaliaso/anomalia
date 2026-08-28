@@ -13,7 +13,7 @@ metadata:
   author: andreabuttarelli
   version: "1.0.0"
   homepage: https://anomalia.so
-  repository: https://github.com/andreabuttarelli/anomalia-cli
+  repository: https://github.com/anomaliaso/anomalia
   mcp: https://mcp.anomalia.so/mcp
 ---
 
@@ -65,7 +65,7 @@ Setup details: [references/mcp.md](references/mcp.md).
 ## Install this skill
 
 ```bash
-npx skills add andreabuttarelli/anomalia-cli --skill anomalia
+npx skills add anomaliaso/anomalia --skill anomalia
 ```
 
 Or copy `skills/anomalia/` into `.cursor/skills/anomalia/` / `~/.claude/skills/anomalia/`.

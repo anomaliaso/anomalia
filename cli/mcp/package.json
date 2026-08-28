@@ -1,0 +1,9 @@
+{
+  "name": "anomalia-mcp-http",
+  "private": true,
+  "type": "module",
+  "description": "Vercel Root Directory is this folder (mcp/). Handlers are prebundled under api/.",
+  "engines": {
+    "node": ">=20"
+  }
+}

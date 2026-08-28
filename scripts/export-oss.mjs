@@ -22,6 +22,8 @@ export const EXCLUSION_RULES = [
   "docs/archive/",
   "scripts/eval/",
   "scripts/chat-live/",
+  // La CLI ha la sua distribuzione (releases, npm, Homebrew): l'export resta la build aperta dell'app.
+  "cli/",
   "src/lib/server/billing/anomalia-provider.ts",
   "src/lib/server/billing/anomalia-provider.test.ts",
   "src/lib/server/billing/index.test.ts",

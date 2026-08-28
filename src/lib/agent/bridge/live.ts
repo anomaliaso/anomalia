@@ -444,7 +444,13 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						// Il perimetro di scrittura degli `execute` sono i nomi VERO del kit, non quelli
 						// dell'hub di chat (qui si chiama content_create_post, là create_post).
 						hubToolKeys: kitHubKeys,
-						remainingMs: deadline.remainingMs
+						remainingMs: deadline.remainingMs,
+						// `inline` + specchio: la run gira nel turno (i verdetti in banda restano leggibili)
+						// ma lascia la riga `chat_jobs` con il partial vivo — è ciò che fa comparire il
+						// lavoro tra i processi in background e lo rende leggibile a `check_subagent`.
+						// La durabilità la dà il run kit, che ha già heartbeat e resume.
+						mode: 'inline',
+						mirror: true
 					})
 				})
 			: null;

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, mcp-session-id, Last-Event-ID, mcp-protocol-version"
+        },
+        {
+          "key": "Access-Control-Expose-Headers",
+          "value": "mcp-session-id, mcp-protocol-version"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "api/mcp.js": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "api/_bundle.js"
+    },
+    "api/oauth-protected-resource.js": {
+      "maxDuration": 30,
+      "includeFiles": "api/_bundle.js"
+    },
+    "api/health.js": { "maxDuration": 10 }
+  },
+  "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/health", "destination": "/api/health" },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/oauth-protected-resource"
+    },
+    { "source": "/", "destination": "/api/health" }
+  ]
+}
