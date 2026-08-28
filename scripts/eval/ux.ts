@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { openSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { generateText } from 'ai';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { geminiFast } from '$lib/server/chat/model';
@@ -28,7 +28,9 @@ const AGENT_KIT: 'on' | 'off' = process.env.AGENT_KIT === 'on' ? 'on' : 'off';
 
 const runId = `ux${AGENT_KIT === 'on' ? '-kit' : ''}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
 const runDir = join(RESULTS_ROOT, runId);
-const evidenceDir = join(runDir, 'evidence');
+// Il daemon agent-browser risolve i path relativi col SUO cwd: le evidenze devono essere
+// assolute o la screenshot muore con "No such file or directory".
+const evidenceDir = resolve(join(runDir, 'evidence'));
 mkdirSync(evidenceDir, { recursive: true });
 
 const transcriptLines: string[] = [];
