@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { sentrySvelteKit } from "@sentry/sveltekit";
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';

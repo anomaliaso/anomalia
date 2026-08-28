@@ -216,7 +216,8 @@ describe('processNextPendingToolJob', () => {
 			'user-1',
 			'run_autopilot',
 			{ week: 0 },
-			expect.anything()
+			expect.anything(),
+			expect.objectContaining({ id: expect.any(String) })
 		);
 		expect(table[0].status).toBe('done');
 	});

@@ -651,7 +651,7 @@ export async function processNextQueuedChatJob(
 							typeof params.reasoning === 'string' ? params.reasoning : undefined,
 							{ userText: params.scheduled === true ? undefined : userMessageContent, agentId }
 						).modelId;
-						await maybeCompactThread(admin, {
+await maybeCompactThread(admin, {
 							threadId,
 							brandId: brand.id,
 							userId: job.user_id as string,
@@ -749,7 +749,7 @@ export async function processNextQueuedChatJob(
 			userId: job.user_id as string,
 			memoryAgent: memoryAgentKey
 		});
-		const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '');
+const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '');
 		if (dmPair && dmSpeaker && dmOtherName) {
 			// IN TESTA, non in coda: la cornice che governa il turno si legge per prima. In coda ha
 			// già perso una volta — il paragrafo finale non batteva l'intero prompt di brand.
@@ -865,7 +865,7 @@ export async function processNextQueuedChatJob(
 		// è il ponte, così una delega non parte con pochi secondi rimasti.
 		let queueDeadline: { remainingMs: () => number } | null = null;
 		return await withBrandContext(brand.id, async () => {
-			const chatModel = resolveChatModel(
+const chatModel = resolveChatModel(
 				// 'auto' e non undefined: il fallback su env.CHAT_TIER è per la chat interattiva senza
 				// preferenze, non per un seed di onboarding o uno schedule (vedi enqueueQueuedChatTurn).
 				typeof params.tier === 'string' ? params.tier : 'auto',
@@ -882,7 +882,7 @@ export async function processNextQueuedChatJob(
 			);
 			// Stessa delega del turno interattivo: un lavoro lungo si spezza in ricerca →
 			// esecuzione → verifica anche quando gira in coda, senza nessuno che guarda.
-			customTools = withSubagentTools(customTools, {
+customTools = withSubagentTools(customTools, {
 				supabase: admin,
 				brandId: brand.id,
 				tools: allTools,
@@ -897,7 +897,7 @@ export async function processNextQueuedChatJob(
 			});
 			// Stessa macchina del turno interattivo: un lavoro in coda ne ha bisogno più di uno
 			// davanti a qualcuno, perché nessuno può fargli da terminale al posto suo.
-			const sandboxMount = withSandboxTools(customTools, {
+const sandboxMount = withSandboxTools(customTools, {
 				supabase: admin,
 				brandId: brand.id,
 				userId: job.user_id as string,
@@ -920,7 +920,7 @@ export async function processNextQueuedChatJob(
 			// visibile SUBITO, non al primo tick del drain. Chi non la scrive la fa scrivere qui.
 			// Il patto con quei chiamanti è il confronto qui sotto: stessa identica stringa in
 			// `chat_messages.content` e in `input_params.user_message`, o si duplica.
-			let history = await loadHistory(admin, brand.id, job.user_id as string, threadId);
+let history = await loadHistory(admin, brand.id, job.user_id as string, threadId);
 			const tail = history[history.length - 1];
 			// Un DM è SEMPRE già salvato: message_agent scrive la riga (firmata col mittente) al
 			// momento dell'invio, così l'utente la vede subito — risalvarla qui la duplicherebbe
@@ -958,7 +958,7 @@ export async function processNextQueuedChatJob(
 				if (last?.role !== 'user') return hist;
 				return [...hist.slice(0, -1), { ...last, content: modelUserContent }];
 			})();
-			const turnVolatile = await turnVolatileP;
+const turnVolatile = await turnVolatileP;
 			if (turnVolatile) {
 				const idx = messages.findLastIndex((m) => m.role === 'user');
 				if (idx >= 0) messages[idx] = wrapTurnMessage(turnVolatile, messages[idx]);
@@ -996,7 +996,7 @@ export async function processNextQueuedChatJob(
 
 			let genFailed = false;
 			let genError: unknown = null;
-			const result = await harnessGenerateText({
+const result = await harnessGenerateText({
 				brandId: brand.id,
 				userId: job.user_id as string,
 				threadId,
@@ -1407,12 +1407,11 @@ export async function processNextQueuedChatJob(
 			} catch {
 				/* best-effort */
 			}
-
 			return { processed: true, jobId };
 		});
 	} catch (e) {
 		const errorMsg = e instanceof Error ? e.message : String(e);
-		console.error(`[Chat Queue] Failed job=${jobId}`, errorMsg);
+		console.error(`[Chat Queue] Failed job=${jobId}`, errorMsg, e instanceof Error ? e.stack : e);
 		await failChatJob(admin, jobId, errorMsg, params);
 		return { processed: true, jobId, error: errorMsg };
 	}

@@ -28,7 +28,14 @@ vi.mock('./system-prompt', () => ({
 	wrapTurnMessage: (_block: string, message: unknown) => message
 }));
 vi.mock('./tools', () => ({ createChatTools: () => ({}) }));
-vi.mock('./subagents', () => ({ withSubagentTools: (t: unknown) => t }));
+vi.mock('./subagents', async (orig) => {
+	const actual = await orig<typeof import('./subagents')>();
+	return {
+		SUBAGENT_TOOL_KEYS: actual.SUBAGENT_TOOL_KEYS,
+		withSubagentTools: (t: unknown) => t,
+		createSubagentTools: () => ({})
+	};
+});
 vi.mock('./sandbox-tools', () => ({
 	withSandboxTools: (t: unknown) => ({ tools: t, close: async () => undefined })
 }));
@@ -42,7 +49,13 @@ vi.mock('$lib/server/chat/artifacts', () => ({
 	formatArtifactsForPrompt: () => ''
 }));
 vi.mock('./compaction', () => ({ maybeCompactThread: vi.fn(async () => undefined) }));
-vi.mock('$lib/server/brand-memory', () => ({ extractMemoryFromChat: vi.fn(async () => undefined) }));
+vi.mock('$lib/server/brand-memory', async (orig) => {
+	const actual = await orig<typeof import('$lib/server/brand-memory')>();
+	return {
+		...actual,
+		extractMemoryFromChat: vi.fn(async () => undefined)
+	};
+});
 vi.mock('$lib/server/ai-log', async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
 	logAiCall: () => undefined,
@@ -56,19 +69,23 @@ vi.mock('./rate-limits', () => ({
 	getChatRateUsage: vi.fn(async () => ({ ok: true })),
 	chatCreditsBlocked: vi.fn(async () => false)
 }));
-vi.mock('./goal', () => ({
-	closeGoal: vi.fn(async () => null),
-	goalBriefing: () => '',
-	goalNudge: () => '',
-	goalTurnNotice: () => '',
-	goalWorthyRequest: () => false,
-	loadOpenGoal: vi.fn(async () => null),
-	setThreadGoal: vi.fn(async () => null),
-	settleGoalForTurn: vi.fn(async () => null),
-	succeededToolNames: vi.fn(() => []),
-	refusedToolNames: vi.fn(() => []),
-	trackGoalSettlement: () => undefined
-}));
+vi.mock('./goal', async (orig) => {
+	const actual = await orig<typeof import('./goal')>();
+	return {
+		...actual,
+		closeGoal: vi.fn(async () => null),
+		goalBriefing: () => '',
+		goalNudge: () => '',
+		goalTurnNotice: () => '',
+		goalWorthyRequest: () => false,
+		loadOpenGoal: vi.fn(async () => null),
+		setThreadGoal: vi.fn(async () => null),
+		settleGoalForTurn: vi.fn(async () => null),
+		succeededToolNames: vi.fn(() => []),
+		refusedToolNames: vi.fn(() => []),
+		trackGoalSettlement: () => undefined
+	};
+});
 vi.mock('./mid-turn-mailbox', () => ({
 	createMidTurnMailbox: () => ({ prepareStep: async () => ({}), absorbedCount: () => 0 })
 }));
@@ -122,6 +139,7 @@ vi.mock('./persistence', () => ({
 		text ? [{ type: 'text', text }] : []
 }));
 
+const { env } = await import('$env/dynamic/private');
 const { createAgentDmTools } = await import('./agent-dm-tools');
 const { processNextQueuedChatJob } = await import('./queue');
 
@@ -240,6 +258,7 @@ function makeDb(seed: Record<string, Row[]>) {
 				}),
 				api),
 			not: () => api,
+			or: () => api,
 			order: () => api,
 			limit: () => api,
 			select: () => api,
@@ -281,6 +300,9 @@ function makeDb(seed: Record<string, Row[]>) {
 const brandRow = { id: 'brand-1', name: 'brand-di-prova', slug: 'abd', plan: 'pro', status: 'active' };
 
 beforeEach(() => {
+	// Questo suite copre il motore classico in coda: il bridge kit (sessioni pi-live) non è mockato
+	// e il ramo kit del drain resterebbe appeso alla prima sessione.
+	env.AGENT_KIT = 'off';
 	harnessCalls.length = 0;
 	savedAssistant.length = 0;
 });
