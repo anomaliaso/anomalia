@@ -1,0 +1,54 @@
+# Tags and cuts a GitHub Release when the version changed. The human decision is
+# the bump (npm run release) inside the dev→main PR; merging to main is the only
+# automation trigger. No matching v* tag for package.json's version → no release,
+# so the many pushes that are not releases pass through untouched. cli-v* tags
+# keep using cli-release.yml — the v* match here never collides with them.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Skip when the version is already tagged
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION è già taggato: merge senza release."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect release notes
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          LAST=$(git tag -l 'v*' --sort=-creatordate | head -1)
+          node scripts/release-notes.mjs "$LAST" HEAD > notes.md
+
+      - name: Create tag and GitHub Release
+        if: steps.version.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARGS=(--target "$GITHUB_SHA" --title "v$VERSION")
+          if [ -s notes.md ]; then
+            ARGS+=(--notes-file notes.md)
+          else
+            ARGS+=(--generate-notes)
+          fi
+          gh release create "v$VERSION" "${ARGS[@]}"

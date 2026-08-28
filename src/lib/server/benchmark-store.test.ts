@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CONTENT_SCORER_VERSION } from './content-quality';
 import { parseRelease } from '$lib/release';
-import { releaseTag, repetitionPeers, sampleRowFor, SAMPLED_STATUSES, type PostRow } from './benchmark-store';
+import { releaseTag } from './release-tag';
+import { repetitionPeers, sampleRowFor, SAMPLED_STATUSES, type PostRow } from './benchmark-store';
 
 const post = (over: Partial<PostRow> = {}): PostRow => ({
   id: 'p1',
