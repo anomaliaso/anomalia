@@ -94,6 +94,5 @@ SECURITY, the public changelog, package READMEs — is English.
 4. In the PR body, say what you ran and what you did not. "I didn't run the e2e suite" is a fine
    sentence; a silent gap is not.
 
-Not everything belongs here: the `anomalia` CLI lives in its own repo
-([anomalia-cli](https://github.com/andreabuttarelli/anomalia-cli), AGPL-3.0). Changes to the CLI
-go there; changes to the endpoints it calls go here.
+The `anomalia` CLI, its MCP server and the publishable agent skills live in [`cli/`](cli/) of this
+same repository (AGPL-3.0, released from `cli-v*` tags). CLI changes are PRs here like any other.

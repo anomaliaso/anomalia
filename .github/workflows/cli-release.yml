@@ -1,93 +1,120 @@
+# Builds the standalone CLI binaries + npm package from cli/, attaches GitHub
+# Release assets, updates the Homebrew formula and publishes to npm.
 name: CLI Release
 
 on:
   push:
-    tags:
-      - 'cli-v*'
+    tags: ['cli-v*']
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version (e.g. 0.2.0)'
-        required: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            target: bun-darwin-arm64
-            name: macos-arm64
-          - os: macos-latest
-            target: bun-darwin-x64
-            name: macos-x64
-          - os: ubuntu-latest
-            target: bun-linux-x64
-            name: linux-x64
-          - os: ubuntu-latest
-            target: bun-linux-arm64
-            name: linux-arm64
-
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/cli-v') }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Install dependencies
-        working-directory: cli
-        run: bun install
-
-      - name: Build binary
+      - name: Install, check, test
         working-directory: cli
         run: |
-          bun build --compile --minify --target ${{ matrix.target }} \
-            index.ts --outfile dist/anomalia-${{ matrix.name }}
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: anomalia-${{ matrix.name }}
-          path: cli/dist/anomalia-${{ matrix.name }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/cli-v')
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: Prepare release files
+      - name: Sync package version from tag
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        working-directory: cli
         run: |
-          mkdir -p release
-          for dir in dist/anomalia-*; do
-            cp "$dir/anomalia-"* release/
-          done
-          chmod +x release/anomalia-*
-          cp cli/README.md release/
-          cp -r cli/docs release/
+          TAG="${GITHUB_REF_NAME#cli-v}"
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$TAG"
+          sed -i.bak "s/\.version('[^']*')/.version('${TAG}')/" cli.ts && rm cli.ts.bak
 
-      - name: Create release
+      - name: Build binaries + npm package
+        working-directory: cli
+        run: |
+          bun run build:all
+          bun run build:npm
+
+      - name: Checksums
+        working-directory: cli/dist
+        run: sha256sum anomalia-* > SHA256SUMS.txt
+
+      - name: Update Homebrew formula
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        working-directory: cli
+        run: |
+          chmod +x scripts/update-homebrew-formula.sh
+          scripts/update-homebrew-formula.sh "${GITHUB_REF_NAME#cli-v}"
+
+      - name: Publish binaries to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/cli-v')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*
+          files: |
+            cli/dist/anomalia-*
+            cli/dist/SHA256SUMS.txt
           generate_release_notes: true
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update installer URL
+      - name: Commit Homebrew formula bump to main
+        if: startsWith(github.ref, 'refs/tags/cli-v')
         run: |
-          echo "Release created! Users can install with:"
-          echo "  curl -sSL https://anomalia.so/install.sh | bash"
-          echo ""
-          echo "Or download directly from GitHub Releases."
+          cp cli/Formula/anomalia.rb /tmp/anomalia.rb
+          git fetch origin main
+          git checkout -B cli-formula-bump origin/main
+          cp /tmp/anomalia.rb cli/Formula/anomalia.rb
+          if git diff --quiet cli/Formula/anomalia.rb; then
+            echo "Formula unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cli/Formula/anomalia.rb
+          git commit -m "chore: bump Homebrew formula to ${GITHUB_REF_NAME}"
+          git push origin cli-formula-bump:main
+
+      - name: Push formula to Homebrew tap
+        if: startsWith(github.ref, 'refs/tags/cli-v') && env.TAP_TOKEN != ''
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          git clone https://x-access-token:${TAP_TOKEN}@github.com/anomaliaso/homebrew-tap.git tap
+          mkdir -p tap/Formula
+          cp cli/Formula/anomalia.rb tap/Formula/anomalia.rb
+          cd tap
+          if git diff --quiet; then
+            echo "Tap unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/anomalia.rb
+          git commit -m "anomalia ${GITHUB_REF_NAME#cli-v}"
+          git push
+
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        working-directory: cli/dist-npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Upload build artifacts (manual runs)
+        if: github.ref != 'refs/tags/cli-v'
+        uses: actions/upload-artifact@v4
+        with:
+          name: anomalia-dist
+          path: |
+            cli/dist/anomalia-*
+            cli/dist/SHA256SUMS.txt

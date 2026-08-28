@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "anomalia": {
+      "type": "http",
+      "url": "https://mcp.anomalia.so/mcp"
+    }
+  }
+}
