@@ -52,6 +52,24 @@ describe('escapeChatText / renderMd', () => {
   });
 });
 
+describe('renderMd emphasis', () => {
+  it('renders `_…_` in italic — the server notice must not show raw underscores', () => {
+    const html = renderMd('_La ripresa in background non è partita: dimmi di riprovare._');
+    expect(html).toContain('<em>La ripresa in background non è partita: dimmi di riprovare.</em>');
+    expect(html).not.toContain('_');
+  });
+
+  it('leaves snake_case alone', () => {
+    expect(renderMd('foo_bar_baz')).toBe('foo_bar_baz<br>');
+  });
+
+  it('keeps `__…__` bold, not italic', () => {
+    const html = renderMd('__bold__');
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).not.toContain('<em>');
+  });
+});
+
 describe('renderMd images', () => {
   const OURS = `${new URL(PUBLIC_SUPABASE_URL).origin}/storage/v1/object/public/media/u/a.png`;
 
