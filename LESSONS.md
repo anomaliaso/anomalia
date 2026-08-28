@@ -33,6 +33,38 @@ Il mock scritto nell'era della PR non dichiara gli export nuovi di dev (`createS
 ### Il test della PR può aspettare il vecchio contratto
 `toHaveBeenCalledWith` con 6 argomenti contro un executor passato a 7 (dev ha aggiunto la riga `job`): fallisce nel merge senza che nessuno abbia toccato il file. Mossa: nel riesame di un merge, fai girare PRIMA i test dei file in conflitto — sono gli unici che fanno da spec su entrambi i lati.
 
+## Testare la piattaforma nel browser: worker locale ed ambiente
+
+### Il worker locale è un build vecchio che compete per la stessa coda
+La stack Docker porta un'app pronta (`anomalia-app`, immagine `anomalia-selfhost-app`) che prosciuga `chat_jobs` dallo stesso DB del dev server: il cron chiama `app:3000`, non la tua porta. Con l'immagine più vecchia del checkout, il codice nuovo **non gira mai** (il team contact post-onboarding non parte) e i due reaper si contendono i turni: `chat turn died mid-flight (heartbeat lost)` su turni vivi, `Failed to load url credits.ts` da moduli che nel checkout esistono. Segnale: `chat_jobs` failed con errori che il codice attuale non può produrre. Mossa: identificare chi prosciuga la coda prima di giudicare il flusso — `docker logs anomalia-app`, data dell'immagine (`docker images`) contro `git log -1` — e fermare o ricostruire il container stantio (ricordarsi di riaccenderlo).
+
+### Le env del repo puntano all'hosted; la stack locale porta le sue chiavi in kong.yml
+Il `.env` del repo punta a un progetto Supabase hosted, mentre la compose gira da un altro checkout con le chiavi veramente valide dentro `anomalia-kong:/usr/local/kong/kong.yml`. Il seed (`scripts/db-seed.mjs`) pretende `DATABASE_URL` e fallisce con parse error leggendo `.env` a mano (contiene valori con `<...>`). Mossa: overlay env a parte — `PUBLIC_SUPABASE_URL=http://localhost:8000`, chiavi estratte da kong.yml, `DATABASE_URL` dalla compose — e avviare il dev con quello; mai puntare all'hosted "per comodità".
+
+### La porta 5173 può appartenere al vite di un altro worktree
+Un `vite dev` di un altro worktree risponde 404 a tutto e resta lì in ascolto; il CLI ci si punta da solo. Mossa: `lsof -nP -iTCP:5173 -sTCP:LISTEN` e `ps` sul PID prima di `npm run dev`; se occupata, porta esplicita (`npm run dev -- --port 5175`).
+
+### Il profilo del browser di test conserva sessioni e localStorage
+`agent-browser` riutilizza cookie e localStorage tra le run: un test "guest" parte loggato, e l'onboarding di un utente nuovo legge `localStorage['anomalia:first-agent:<altro-brand>']` dell'utente prima — fetch di thread altrui (404 rumorosi ma disordini nella diagnosi). Mossa: `cookies clear` **e** `storage local clear` prima di ogni persona nuova; verificate sempre chi siete (`location.href`, sidebar) prima del primo click.
+
+### I rimount (`{#key}`) rendono stale i ref dell'automazione browser
+Un click su un ref catturato prima del re-render non arriva a nessuno: il carosello dell'onboarding sembrava bloccato prima del pick — era il bottone rimontato ad ogni slide. Mossa: snapshot fresco e selettori stabili (`.wide-btn`), click lenti; un "blocco" va riprodotto con click lenti e selelettori nuovi prima di chiamarlo bug. Il falso positivo costa un'ora, la prudenza tre secondi.
+
+### Un cookie di sessione malformato abbatte il dev server
+Una curl con `sb-<host>-auth-token` corrotto produce `Invalid Base64-URL character` non gestito nella recovery della sessione e il processo muore (`curl` → 000, niente più risposte). È un finding prodotto, non rumore: la recovery non tollera input corrotto. Mossa: quando curl dà 000, guardare il log del server prima di incolpare la rete; e la richiesta che ha ucciso il server diventa un test.
+
+### Il `.env` locale può mascherare la migration che stai verificando
+La chat girava «bene» ma fuori dal percorso in esame: `CHAT_PROVIDER=openrouter` nel `.env` del worktree costringeva `activeProvider()` sull'harness openrouter, e il gateway (il cuore della PR) non vedeva un solo turno. Segnale: le righe `ai_calls` dicono `openrouter` quando ti aspetti `llm`. Mossa: prima di dire "funziona/non funziona", guarda quale provider il resolver effettivamente prende col `.env` locale — commenta le chiavi legacy (`CHAT_PROVIDER`, `KIE_API_KEY`, …) e riavvia. Lo stesso `.env` ha mostrato il rovescio: `LLM_DEFAULT_MODEL` su un modello solo-testo passava la probe `ai:text` di `/api/status` e moriva su un turno agentico con tool (`Stream ended without finish_reason`) — chiuso con la riga d'errore onesta e job `done`, mai un hang. La probe di stato non è un turno.
+
+### L'attesa nel browser si misura sulla riga di database, non sul muro
+Il secondo messaggio in chat sembrava morto a 120s: l'agente delega a un sub-agent (feature nuova) e il turno dura 2,5 minuti — il job era `done` alle 13:54, il test aveva mollato alle 13:53. Mossa: nel verificatore aspetta la riga `chat_jobs.status='done'` / `ai_calls` (poll sul DB via `docker exec psql`), non un timeout UI; e prima di chiamare "fallito" guarda `chat_jobs` e `agent_kit_runs` — raccontano il turno meglio dello schermo.
+
+### Un 4xx che sembra un bug è spesso il contratto
+GET su `/videos/review` risponde 400 (endpoint POST-only), POST senza url risponde 400 `missing_url`, transcribe senza file 400 con messaggio esplicito: non difetti, degradeos giusti. E i `run_autopilot` che restano `pending` per 20 minuti in locale non sono un blocco: è il gating worker-only che funziona — il drain serverless li salta per costruzione. Mossa: leggi la route prima di aprire un finding; un 4xx pulito con messaggio nominale è prova di robustezza, non guasto.
+
+### Build e dev server lungi dal tool di shell
+`npm run build` di questo repo dura ~4 minuti: lancialo in `nohup … &` e sondalo col log, il timeout del tool di shell uccide il processo (e lascia esbuild a metà: la dev server dopo parte con `write EPIPE`). La dev server del worktree ha la sua porta (`--port 5185 --strictPort`) — il 5173 è di chiunque arrivi prima. E il comando che LA VA A PROVARE con `curl` in blocco va in timeout e trascina via il process group: lancia il server staccato (`disown`), verifica con un comando successivo.
+
 ## Codice
 
 ### Markdown venduto: file veri + `?raw`, non template literal
@@ -63,17 +95,3 @@ Motion prende `remotion-best-practices` perché è l'unico che scrive sorgente R
 
 ### La continuazione senza testo per il modello muore due volte
 Una ripresa accodata con `user_message` vuoto è morta due volte prima di chiamare il modello: prima col gate `Missing user_message`, poi — superato il gate — col prompt vuoto, perché il provider rifiuta una conversazione che non apre con un turno `user` e `dropLeadingAssistant` mangia l'apertura firmata. Il segnale: `chat_jobs.status='failed'` con errori diversi per lo stesso job. La mossa: una continuazione porta SEMPRE un testo solo-per-il-modello (mai salvato, mai mostrato), come `enqueueTurnContinuation`; `open_session_with_user` era nata rotta così ed è sopravvissuta mesi perché la coda è buio per i test unitari — è la verifica nel browser che l'ha vista.
-
-## Verifica nel browser
-
-### Il `.env` locale può mascherare la migration che stai verificando
-La chat girava «bene» ma fuori dal percorso in esame: `CHAT_PROVIDER=openrouter` nel `.env` del worktree costringeva `activeProvider()` sull'harness openrouter, e il gateway (il cuore della PR) non vedeva un solo turno. Segnale: le righe `ai_calls` dicono `openrouter` quando ti aspetti `llm`. Mossa: prima di dire "funziona/non funziona", guarda quale provider il resolver effettivamente prende col `.env` locale — commenta le chiavi legacy (`CHAT_PROVIDER`, `KIE_API_KEY`, …) e riavvia. Lo stesso `.env` ha mostrato il rovescio: `LLM_DEFAULT_MODEL` su un modello solo-testo passava la probe `ai:text` di `/api/status` e moriva su un turno agentico con tool (`Stream ended without finish_reason`) — chiuso con la riga d'errore onesta e job `done`, mai un hang. La probe di stato non è un turno.
-
-### L'attesa nel browser si misura sulla riga di database, non sul muro
-Il secondo messaggio in chat sembrava morto a 120s: l'agente delega a un sub-agent (feature nuova) e il turno dura 2,5 minuti — il job era `done` alle 13:54, il test aveva mollato alle 13:53. Mossa: nel verificatore aspetta la riga `chat_jobs.status='done'` / `ai_calls` (poll sul DB via `docker exec psql`), non un timeout UI; e prima di chiamare "fallito" guarda `chat_jobs` e `agent_kit_runs` — raccontano il turno meglio dello schermo.
-
-### Un 4xx che sembra un bug è spesso il contratto
-GET su `/videos/review` risponde 400 (endpoint POST-only), POST senza url risponde 400 `missing_url`, transcribe senza file 400 con messaggio esplicito: non difetti, degradeos giusti. E i `run_autopilot` che restano `pending` per 20 minuti in locale non sono un blocco: è il gating worker-only che funziona — il drain serverless li salta per costruzione. Mossa: leggi la route prima di aprire un finding; un 4xx pulito con messaggio nominale è prova di robustezza, non guasto.
-
-### Build e dev server lungi dal tool di shell
-`npm run build` di questo repo dura ~4 minuti: lancialo in `nohup … &` e sondalo col log, il timeout del tool di shell uccide il processo (e lascia esbuild a metà: la dev server dopo parte con `write EPIPE`). La dev server del worktree ha la sua porta (`--port 5185 --strictPort`) — il 5173 è di chiunque arrivi prima. E il comando che LA VA A PROVARE con `curl` in blocco va in timeout e trascina via il process group: lancia il server staccato (`disown`), verifica con un comando successivo.
