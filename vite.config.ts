@@ -30,6 +30,14 @@ const nodeModulesReal = (() => {
  */
 const hmr = process.env.NO_HMR === '1' || process.env.NO_HMR === 'true' ? false : undefined;
 
+/**
+ * Timeout per-test a 120s: test I/O-bound (turni kit completi, 40s+ da soli e oltre il minuto
+ * con la macchina satura) su 509 file in parallelo sforano il default di 5s in modo non
+ * deterministico col carico. Un hang vero brucia in minuti, quindi la soglia resta un rilevatore.
+ * Dettagli e lezione in LESSONS.md ("Il numero di file rossi che cambia tra run è un timeout").
+ */
+const TEST_TIMEOUT_MS = 120_000;
+
 export default defineConfig({
   server: { hmr, fs: { allow: ['..', ...(nodeModulesReal ? [nodeModulesReal] : [])] } },
   plugins: [sentrySvelteKit({
@@ -69,6 +77,7 @@ export default defineConfig({
     noExternal: ['simple-icons']
   },
   test: {
+    testTimeout: TEST_TIMEOUT_MS,
     include: [
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',

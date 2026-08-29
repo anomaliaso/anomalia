@@ -14,6 +14,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
+// Il percorso sotto test è quello classico del queue: il kit si spegne qui, non nel .env
+// locale — altrimenti la suite passa sul laptop di chi lo ha spento e muore su chi lo ha acceso.
+vi.mock('$env/dynamic/private', () => ({ env: { AGENT_KIT: 'off' } }));
+
 // ── Il confine mockato: modello, prompt base, tool pesanti. Il resto è codice vero. ────────────
 const harnessCalls: Array<{ system: string; messages: Array<{ role: string; content: unknown }> }> = [];
 vi.mock('$lib/server/harness', () => ({
@@ -28,6 +32,10 @@ vi.mock('./system-prompt', () => ({
 	wrapTurnMessage: (_block: string, message: unknown) => message
 }));
 vi.mock('./tools', () => ({ createChatTools: () => ({}) }));
+vi.mock('$env/dynamic/private', async (importOriginal) => {
+	const original = (await importOriginal()) as { env: Record<string, string> };
+	return { ...original, env: { ...original.env, AGENT_KIT: 'off' } };
+});
 vi.mock('./subagents', async (orig) => {
 	const actual = await orig<typeof import('./subagents')>();
 	return {

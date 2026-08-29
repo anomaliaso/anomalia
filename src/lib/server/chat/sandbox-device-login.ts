@@ -141,7 +141,7 @@ export function createSandboxDeviceLoginTool(deps: DeviceLoginDeps) {
       }),
       execute: async (
         input: { provider: 'github'; action?: 'start' | 'check'; scopes?: string },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         const action = input.action ?? 'start';
         const clientId = deps.clientId !== undefined ? deps.clientId : env.GITHUB_DEVICE_CLIENT_ID || null;
@@ -160,7 +160,7 @@ export function createSandboxDeviceLoginTool(deps: DeviceLoginDeps) {
         if (action === 'start') {
           const scopes = input.scopes?.trim() || 'repo';
           const res = await githubPost(fetchImpl, GITHUB_DEVICE_CODE_URL, { client_id: clientId, scope: scopes }).catch(
-            (e: unknown) => ({ error: e instanceof Error ? e.message : String(e) })
+            (e: unknown): Record<string, unknown> => ({ error: e instanceof Error ? e.message : String(e) })
           );
           if (typeof res.error === 'string' || typeof res.device_code !== 'string' || typeof res.user_code !== 'string') {
             record('sandbox_device_login', { action, status: 'start_failed' }, { ok: false });
@@ -212,7 +212,7 @@ export function createSandboxDeviceLoginTool(deps: DeviceLoginDeps) {
             client_id: clientId,
             device_code: state.device_code,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-          }).catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
+          }).catch((e: unknown): Record<string, unknown> => ({ error: e instanceof Error ? e.message : String(e) }));
 
           if (typeof res.access_token === 'string' && res.access_token) {
             // IL TOKEN SI FERMA QUI: file nella run della VM, mai nel valore di ritorno, mai nei log.

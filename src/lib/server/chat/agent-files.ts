@@ -538,13 +538,13 @@ function resultIsError(raw: unknown): boolean {
 export function gateOnFileRead<T extends Record<string, unknown>>(tools: T): T {
   const out: Record<string, unknown> = { ...tools };
   for (const [name, path] of Object.entries(REQUIRED_READS)) {
-    const t = out[name] as { execute?: (i: unknown, o: ToolExecutionOptions) => unknown } | undefined;
+    const t = out[name] as { execute?: (i: unknown, o: ToolExecutionOptions<unknown>) => unknown } | undefined;
     if (!t?.execute) continue;
     if (!AGENT_FILES[path]) continue; // fail-open: il file non esiste, si passa
     const inner = t.execute.bind(t);
     out[name] = {
       ...t,
-      execute: async (input: unknown, opts: ToolExecutionOptions) => {
+      execute: async (input: unknown, opts: ToolExecutionOptions<unknown>) => {
         const f = AGENT_FILES[path];
         if (f?.only && !f.only(input)) return inner(input, opts);
         if (!hasReadFile(opts?.messages, path)) {

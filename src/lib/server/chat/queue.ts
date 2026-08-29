@@ -387,6 +387,33 @@ async function failChatJob(
 		.eq('last_job_id', jobId);
 }
 
+// Il team si presenta: chiuso il primo turno di setup, gli specialisti del piano contattano
+// l'utente nei loro thread. È il punto di completamento CONDIVISO dai due motori: il ramo kit
+// chiude il job e tornava prima di questo blocco, e il team non salutava mai nessuno (PR #32
+// morta sul motore che in produzione gira davvero). Import dinamico: il modulo accoda turni qui.
+async function igniteTeamAfterSetupTurn(
+	admin: SupabaseClient,
+	opts: {
+		brand: { id: string; name?: unknown; website?: unknown; plan?: unknown };
+		userId: string;
+		threadRow: { surface?: string | null } | null | undefined;
+		locale: string;
+		origin: string;
+	}
+): Promise<void> {
+	if (opts.threadRow?.surface !== 'onboarding') return;
+	const { igniteOnboardingTeam } = await import('$lib/server/onboarding-team');
+	await igniteOnboardingTeam(admin, {
+		brandId: opts.brand.id,
+		userId: opts.userId,
+		brandName: String(opts.brand.name ?? ''),
+		website: (opts.brand.website as string | null) ?? null,
+		plan: (opts.brand.plan as string | null) ?? null,
+		locale: opts.locale,
+		origin: opts.origin
+	});
+}
+
 /**
  * Claim the oldest pending queued chat_response that has no sibling still running
  * on the same thread, then generate + persist the assistant reply.
@@ -737,9 +764,16 @@ await maybeCompactThread(admin, {
 							partial: null,
 							completed_at: new Date().toISOString()
 						})
-						.eq('id', jobId)
-						.in('status', ['pending', 'running']);
-					return { processed: true, jobId };
+					.eq('id', jobId)
+					.in('status', ['pending', 'running']);
+				await igniteTeamAfterSetupTurn(admin, {
+					brand,
+					userId: job.user_id as string,
+					threadRow,
+					locale,
+					origin
+				});
+				return { processed: true, jobId };
 				}).finally(stopHeartbeat);
 			}
 		}
@@ -1380,20 +1414,13 @@ const result = await harnessGenerateText({
 				.eq('id', jobId)
 				.in('status', ['pending', 'running', 'failed']);
 
-			// Il team si presenta: chiuso il primo turno di setup, gli specialisti del piano
-			// contattano l'utente nei loro thread. Import dinamico: il modulo accoda turni qui.
-			if (threadRow?.surface === 'onboarding') {
-				const { igniteOnboardingTeam } = await import('$lib/server/onboarding-team');
-				await igniteOnboardingTeam(admin, {
-					brandId: brand.id,
-					userId: job.user_id as string,
-					brandName: String(brand.name ?? ''),
-					website: (brand.website as string | null) ?? null,
-					plan: (brand.plan as string | null) ?? null,
-					locale,
-					origin
-				});
-			}
+			await igniteTeamAfterSetupTurn(admin, {
+				brand,
+				userId: job.user_id as string,
+				threadRow,
+				locale,
+				origin
+			});
 
 			try {
 				const { sendPushToUser } = await import('$lib/server/web-push');

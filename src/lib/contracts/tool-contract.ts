@@ -57,7 +57,7 @@ export const defineContract =
  */
 export function toolFromContract<In extends z.ZodType, Out extends Record<string, unknown>>(
   contract: ToolContract<In, Out>,
-  execute: (input: z.infer<In>, opts: ToolExecutionOptions) => Promise<Out | ToolFailure>
+  execute: (input: z.infer<In>, opts: ToolExecutionOptions<unknown>) => Promise<Out | ToolFailure>
 ): Tool<z.infer<In>, Out | ToolFailure> {
   // Il cast e' confinato qui: la garanzia sul tipo di risposta e' gia' imposta dalla firma
   // di QUESTA funzione (execute deve produrre Out | ToolFailure); gli overload di tool()

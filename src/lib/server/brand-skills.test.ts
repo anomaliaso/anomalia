@@ -5,8 +5,8 @@ import { brandSkills, skillsForAgent } from './brand-skills';
 const WRITING = ['humanizer', 'stop-slop'];
 
 describe('brandSkills', () => {
-	it('porta esattamente humanizer e stop-slop, entrambi MIT', () => {
-		expect(brandSkills.map((s) => s.name).sort()).toEqual(['humanizer', 'stop-slop']);
+	it('porta esattamente humanizer, stop-slop, social e seo-audit, tutti MIT', () => {
+		expect(brandSkills.map((s) => s.name).sort()).toEqual(['humanizer', 'seo-audit', 'social', 'stop-slop']);
 	});
 
 	it('ogni skill ha descrizione e contenuto pieni', () => {
@@ -34,6 +34,32 @@ describe('brandSkills', () => {
 		}
 	});
 
+	it('seo-audit porta i riferimenti come file allegati alla skill', () => {
+		const seoAudit = brandSkills.find((s) => s.name === 'seo-audit');
+		const paths = (seoAudit?.files ?? []).map((f) => f.path);
+		expect(paths).toContain('references/ai-writing-detection.md');
+		expect(paths).toContain('references/international-seo.md');
+		for (const file of seoAudit?.files ?? []) {
+			expect(file.content.trim().length).toBeGreaterThan(200);
+		}
+	});
+
+	it('social porta gli otto riferimenti di piattaforma come file allegati', () => {
+		const social = brandSkills.find((s) => s.name === 'social');
+		const paths = (social?.files ?? []).map((f) => f.path);
+		expect(paths).toContain('references/platforms.md');
+		expect(paths).toContain('references/platform-limits.md');
+		expect(paths).toContain('references/post-templates.md');
+		expect(paths).toContain('references/carousel-frameworks.md');
+		expect(paths).toContain('references/listening.md');
+		expect(paths).toContain('references/listening-sources-template.md');
+		expect(paths).toContain('references/reverse-engineering.md');
+		expect(paths).toContain('references/short-form-video.md');
+		for (const file of social?.files ?? []) {
+			expect(file.content.trim().length).toBeGreaterThan(200);
+		}
+	});
+
 	it('nessuna skill supera il tetto di 64KB che il loader impone ai file', () => {
 		const MAX_TEXT_BYTES = 64 * 1024;
 		for (const skill of brandSkills) {
@@ -46,16 +72,34 @@ describe('brandSkills', () => {
 });
 
 describe('skillsForAgent — ogni agente ha le sue skill', () => {
-	it('i prose-writer (content, ugc, web, analyst, auto) ricevono le due skill di scrittura', async () => {
-		for (const agentId of ['content', 'ugc', 'web', 'analyst', 'auto']) {
+	it('i pros-writer (analyst, auto) ricevono solo le due skill di scrittura', async () => {
+		for (const agentId of ['analyst', 'auto']) {
 			const names = (await skillsForAgent(agentId)).map((s) => s.name).sort();
 			expect(names, agentId).toEqual(WRITING);
 		}
 	});
 
-	it('il Motion riceve anche la skill Remotion presa dal repo', async () => {
+	it('content e ugc ricevono anche la skill social (formati, hook, limiti per piattaforma)', async () => {
+		for (const agentId of ['content', 'ugc']) {
+			const names = (await skillsForAgent(agentId)).map((s) => s.name).sort();
+			expect(names, agentId).toEqual([...WRITING, 'social'].sort());
+		}
+		const social = (await skillsForAgent('content')).find((s) => s.name === 'social');
+		expect(social?.content).toContain('LinkedIn');
+		expect((social?.files ?? []).map((f) => f.path)).toContain('references/platform-limits.md');
+	});
+
+	it('il Web Specialist riceve anche seo-audit (possiede i job seo e geo)', async () => {
+		const names = (await skillsForAgent('web')).map((s) => s.name).sort();
+		expect(names).toEqual([...WRITING, 'seo-audit'].sort());
+		const seoAudit = (await skillsForAgent('web')).find((s) => s.name === 'seo-audit');
+		expect(seoAudit?.content).toContain('Priority');
+		expect((seoAudit?.files ?? []).map((f) => f.path)).toContain('references/international-seo.md');
+	});
+
+	it('il Motion riceve la skill social e la skill Remotion presa dal repo', async () => {
 		const names = (await skillsForAgent('motion')).map((s) => s.name).sort();
-		expect(names).toEqual([...WRITING, 'remotion-best-practices'].sort());
+		expect(names).toEqual([...WRITING, 'social', 'remotion-best-practices'].sort());
 		const remotion = (await skillsForAgent('motion')).find((s) => s.name === 'remotion-best-practices');
 		expect(remotion?.content).toContain('Remotion');
 	});

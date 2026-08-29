@@ -206,7 +206,9 @@ describe('session steward on the harness', () => {
 				read_brand_studio: { execute: async () => ({}) },
 				search_web: { execute: async () => ({}) }
 			},
-			prepareStep: () => ({ system: 'base\n[budget] 1' })
+			prepareStep: (args?: { stepNumber?: number }): Record<string, unknown> => ({
+				system: 'base\n[budget] 1'
+			})
 		});
 		const prepared = instrumented.prepareStep({});
 		expect(prepared.system).toContain('base\n[budget] 1');
@@ -223,7 +225,7 @@ describe('session steward on the harness', () => {
 		const instrumented = attachHarness(session, {
 			system: 'PRODUCT FIDELITY — keep this',
 			messages: [{ role: 'user', content: 'go' }],
-			prepareStep: () => original,
+			prepareStep: (args?: { stepNumber?: number }): Record<string, unknown> => original,
 			onStepFinish: () => {}
 		});
 		expect(instrumented.prepareStep({})).toBe(original);
@@ -263,7 +265,7 @@ describe('i tool bloccati spariscono dal tavolo (activeTools)', () => {
 				read_brand_kit: { execute: async () => ({}) },
 				finish: { execute: async () => ({}) }
 			},
-			prepareStep: () => ({})
+			prepareStep: (args?: { stepNumber?: number }): Record<string, unknown> => ({})
 		});
 		const prepared = instrumented.prepareStep({ stepNumber: 3 });
 		expect(prepared.activeTools).toEqual(['read_brand_kit', 'finish']);
@@ -280,7 +282,7 @@ describe('i tool bloccati spariscono dal tavolo (activeTools)', () => {
 				search_web: { execute: async () => ({}) },
 				finish: { execute: async () => ({}) }
 			},
-			prepareStep: () => ({})
+			prepareStep: (args?: { stepNumber?: number }): Record<string, unknown> => ({})
 		});
 		const before = instrumented.prepareStep({ stepNumber: 1 });
 		expect(before.activeTools).toEqual(['read_brand_studio', 'finish']);
@@ -300,7 +302,7 @@ describe('i tool bloccati spariscono dal tavolo (activeTools)', () => {
 				publish_post: { execute: async () => ({}) },
 				finish: { execute: async () => ({}) }
 			},
-			prepareStep: () => ({ activeTools: ['publish_post'] })
+			prepareStep: (args?: { stepNumber?: number }): Record<string, unknown> => ({ activeTools: ['publish_post'] })
 		});
 		const prepared = instrumented.prepareStep({ stepNumber: 3 });
 		expect(prepared.activeTools).toEqual(['publish_post']);
@@ -312,7 +314,7 @@ describe('i tool bloccati spariscono dal tavolo (activeTools)', () => {
 			system: 'base',
 			tools: { read_brand_kit: { execute: async () => ({}) } },
 			messages: [{ role: 'user', content: 'ciao' }],
-			prepareStep: () => ({})
+			prepareStep: (args?: { stepNumber?: number }): Record<string, unknown> => ({})
 		});
 		const prepared = instrumented.prepareStep({ stepNumber: 1 });
 		expect(prepared.activeTools).toBeUndefined();

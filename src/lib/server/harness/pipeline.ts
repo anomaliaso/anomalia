@@ -28,12 +28,20 @@ export type ToolPipeline = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyTool = { execute?: (...args: any[]) => any; [k: string]: unknown };
 
+type WrappedTool<T> = T extends { execute: (...args: never[]) => unknown }
+	? Omit<T, 'execute'> & { execute: (input: unknown, opts: unknown) => Promise<unknown> }
+	: T;
+
+export type WrappedTools<T> = T extends undefined
+	? T
+	: { [K in keyof T]: WrappedTool<T[K]> };
+
 export function wrapTools<T extends Record<string, unknown> | undefined>(
 	session: HarnessSession,
 	tools: T,
 	pipeline?: ToolPipeline
-): T {
-	if (!tools) return tools;
+): WrappedTools<T> {
+	if (!tools) return tools as WrappedTools<T>;
 	const out: Record<string, unknown> = {};
 	for (const [name, raw] of Object.entries(tools)) {
 		const tool = raw as AnyTool | undefined;
@@ -76,5 +84,5 @@ export function wrapTools<T extends Record<string, unknown> | undefined>(
 			}
 		};
 	}
-	return out as T;
+	return out as WrappedTools<T>;
 }
