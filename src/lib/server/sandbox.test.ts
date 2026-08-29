@@ -345,18 +345,17 @@ describe('una VM terminated non è riprendibile in volo', () => {
   });
 });
 
-describe('release() non spegne la macchina — decisione, non dimenticanza', () => {
+describe('release() spegne la macchina solo quando è l’ultimo holder', () => {
   /**
-   * I docs di Vercel dicono l'opposto («Call sandbox.stop() when done rather than waiting for
-   * timeout») e la mediana di un turno è 40,6 s contro un lease che dura sempre fino a 900 s: la
-   * differenza è reale e si paga. Ma la sandbox è del BRAND e la condividono turni che vivono in
-   * processi diversi: chi finisce prima staccherebbe la corrente all'altro, e non esiste un
-   * refcount fuori processo che sappia dire «sono l'ultimo». Finché non esiste, non si spegne.
+   * Le docs di Vercel dicono «Call sandbox.stop() when done» e la mediana di un turno è 40,6 s
+   * contro un lease fino a 900 s: la differenza si paga. Ma la VM è condivisa: uno `stop()` diretto
+   * spegnerebbe la macchina sotto un altro turno o sotto chi guarda il desktop. La decisione sta in
+   * `releaseHolder` (sandbox-leases.ts), che conta gli holder vivi e ferma solo l'ultima uscita.
    *
-   * Questo test rifiuta l'imitazione: il giorno in cui qualcuno «ottimizza» aggiungendo uno
-   * `stop()`, fallisce qui invece che in produzione, su un comando di un altro turno.
+   * Questo test rifiuta l'imitazione: uno `stop()` inline qui torna a pagare lease interi per
+   * turni brevi E a spegnere la VM sotto gli altri — fallisce qui, non in produzione.
    */
-  it('nessuno `.stop()` nel codice di sandbox.ts', async () => {
+  it('nessuno `.stop()` diretto nel codice di sandbox.ts', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('./sandbox.ts', import.meta.url), 'utf8');
     // Solo il CODICE: nei commenti la citazione dei docs contiene `sandbox.stop()` apposta.
@@ -367,10 +366,10 @@ describe('release() non spegne la macchina — decisione, non dimenticanza', () 
     expect(code).not.toMatch(/\.stop\s*\(/);
   });
 
-  it('e la ragione è scritta accanto, o fra sei mesi sembra una svista da correggere', async () => {
+  it('e la mano alla contabilità c’è: la release passa la VM a chi conta gli holder', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('./sandbox.ts', import.meta.url), 'utf8');
-    expect(src).toContain('Call sandbox.stop() when done rather than waiting for timeout');
-    expect(src).toContain('refcount');
+    expect(src).toContain('releaseHolder(holderId');
+    expect(src).toContain("from './sandbox-leases'");
   });
 });

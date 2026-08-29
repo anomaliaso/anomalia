@@ -18,6 +18,7 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { env } from '$env/dynamic/private';
+import { acquireHolder, releaseHolder } from './sandbox-leases';
 import { DESKTOP_PORT, DISPLAY, X_SOCKET } from '@anomalia/agent-adapters/graphical-bootstrap';
 
 /** `research` è l'UNICO profilo con internet aperto: `compute` e `agent` vedono solo i registry. */
@@ -132,7 +133,7 @@ export const SANDBOX_MAX_LEASE_MS = 15 * 60_000;
 
 /** Retention degli snapshot. Qui e non inline, perché `sandboxConfigDrift` deve confrontarli. */
 export const SNAPSHOT_EXPIRATION_MS = 7 * 24 * 60 * 60_000;
-export const KEEP_LAST_SNAPSHOTS = { count: 2 } as const;
+export const KEEP_LAST_SNAPSHOTS = { count: 1 } as const;
 
 export function isSandboxConfigured(): boolean {
   if (env.SANDBOX_DISABLED === '1') return false;
@@ -380,17 +381,16 @@ export type SandboxHandle = {
   read(path: string): Promise<string>;
   readBuffer(path: string): Promise<Buffer>;
   /**
-   * Chiude la RUN, non la macchina — e **non è una dimenticanza**.
+   * Chiude il ciclo di vita del chiamante: via la directory della run e via l'holder.
    *
-   * I docs dicono l'opposto (*«Call sandbox.stop() when done rather than waiting for timeout»*) e
-   * il conto è reale: mediana di un turno 40,6 s contro un lease fino a 900 s. Ma quella VM è del
-   * BRAND e due turni girano in due PROCESSI diversi: chi finisce prima staccherebbe la corrente
-   * all'altro. Il risveglio automatico di v2 non copre il caso — `withResume` riprende solo su un
-   * 410/422 di richiesta, non su un comando già in volo, che vede uno stream troncato.
+   * NON chiama `sandbox.stop()` direttamente: la VM è condivisa e un altro holder — un turno
+   * simultaneo, chi guarda il desktop — può essere ancora vivo. È `releaseHolder` a decidere:
+   * cancellata la riga di questo chiamante, se era l'ultima la macchina si spegne; altrimenti
+   * resta accesa per chi la usa. Gli holder scadono da soli (vedi `sandbox-leases.ts`), quindi un
+   * processo serverless morto a metà turno non la tiene accesa per sempre.
    *
-   * Spegnere diventa lecito il giorno in cui esiste un refcount fuori processo (contatore per nome
-   * in Postgres/Redis, `stop()` a zero). Finché non c'è, la spegne il suo `timeout`.
-   * `sandbox.test.ts` fa fallire un `.stop()` aggiunto qui.
+   * Il lease di `SANDBOX_MAX_LEASE_MS` resta la rete di sicurezza: se lo stop o la contabilità
+   * falliscono, la macchina muore comunque alla scadenza.
    */
   release(): Promise<void>;
 };
@@ -672,6 +672,16 @@ export async function openBrandSandbox(opts: {
 
   const root = runRootFor(opts.runId);
 
+  // L'holder di QUESTO chiamante. Chiave per run: riaperture della stessa run rinfrescano la riga
+  // invece di accumularne. La release dell'handle la cancella e, se era l'ultima, spegne la VM.
+  const holderId = await acquireHolder({
+    name,
+    brandId: opts.brandId,
+    key: `turn:${opts.runId}`,
+    kind: 'turn',
+    ttlMs: SANDBOX_MAX_LEASE_MS
+  });
+
   const handle: SandboxHandle = {
     name,
     mode: opts.mode,
@@ -725,6 +735,7 @@ export async function openBrandSandbox(opts: {
     async release() {
       // Lo snapshot deve contenere Chromium e i pacchetti, non il workspace di un brand.
       await handle.run('rm', ['-rf', root]).catch(swallow('handle.run failed'));
+      if (holderId) await releaseHolder(holderId, sandbox as unknown as { stop: () => Promise<unknown> });
     }
   };
 

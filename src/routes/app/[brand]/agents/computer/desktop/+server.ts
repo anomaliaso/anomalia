@@ -18,6 +18,7 @@ import { ensureGraphicalMode, ensureRemoteDesktop } from '$lib/agent/adapters/gr
 import { createVercelSandboxProvider, graphicalBootstrapDeps, sandboxPortUrl } from '$lib/agent/bridge/adapters';
 import { desktopPassword, desktopUrl, publishComputerRunning } from '$lib/server/agent-desktop';
 import { SANDBOX_MAX_LEASE_MS } from '$lib/server/sandbox';
+import { holdDesktop } from '$lib/server/sandbox-leases';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { env } from '$env/dynamic/private';
 import type { AdapterContext } from '$lib/agent/kit/types';
@@ -49,6 +50,9 @@ export const POST: RequestHandler = async ({ params, url, locals: { supabase, sa
 	// con i 5 minuti di default la macchina gli muore sotto senza dire niente. La pagina ripassa
 	// di qui a intervalli per tenerla viva (`update` alza la scadenza anche a sessione in corso).
 	const ref = await sandbox.provision({ brandId: brand.id, agentId, timeoutMs: SANDBOX_MAX_LEASE_MS }, ctx);
+	// Chi guarda è un holder: finché il pannello ripassa di qui, la VM resta accesa anche se nessun
+	// turno è in corso. Il TTL scade da solo quando il tab muore.
+	await holdDesktop(ref.name, brand.id, agentId);
 	// Lo stato lo scrive il service role: `agent_computers` è in sola lettura per i membri (0217),
 	// e senza questa riga il pannello continuerebbe a dire «dorme» col desktop acceso davanti.
 	await publishComputerRunning(createAdminClient(), brand.id, ref.name, agentId);

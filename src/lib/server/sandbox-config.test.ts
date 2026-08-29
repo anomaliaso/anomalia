@@ -107,7 +107,7 @@ describe('openBrandSandbox riallinea la VM che esisteva già', () => {
   beforeEach(() => getOrCreate.mockReset());
 
   it('chiama `update` quando la configurazione della VM non è quella che abbiamo chiesto', async () => {
-    const sb = fakeSandbox({ timeout: 120_000, snapshotExpiration: WEEK, keepLastSnapshots: { count: 2 } });
+    const sb = fakeSandbox({ timeout: 120_000, snapshotExpiration: WEEK, keepLastSnapshots: { count: 1 } });
     getOrCreate.mockResolvedValue(sb);
     const { openBrandSandbox } = await import('./sandbox');
 
@@ -118,7 +118,7 @@ describe('openBrandSandbox riallinea la VM che esisteva già', () => {
   });
 
   it('e NON lo chiama su una VM appena creata, che i parametri li ha già ricevuti', async () => {
-    const sb = fakeSandbox({ timeout: 600_000, snapshotExpiration: WEEK, keepLastSnapshots: { count: 2 } });
+    const sb = fakeSandbox({ timeout: 600_000, snapshotExpiration: WEEK, keepLastSnapshots: { count: 1 } });
     getOrCreate.mockResolvedValue(sb);
     const { openBrandSandbox } = await import('./sandbox');
 
