@@ -10,6 +10,9 @@ Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot
 ### Il worktree nuovo ha bisogno anche del `.env`
 Dopo il `npm ci` la suite parte ma cade su 40+ test con `SUPABASE_SERVICE_ROLE_KEY not configured`: Vitest carica l'env dal `.env` del worktree, che non c'è. Segnale: errori di env mancante in un worktree fresco, deterministici, su file che passano nel checkout principale. Mossa: `cp ../anomalia/.env .` alla creazione del worktree, accanto al `npm ci`.
 
+### **Il `.env` copiato può puntare al progetto hosted: il 404 sembrerà un bug di permessi**
+worktree con `.env` copiato ma `PUBLIC_SUPABASE_URL` sul progetto remoto: il login va, il brand locale esiste, ma `/app/<brand>` rende 404 "Brand not found" e la diagnosi scarta su RLS. In più una chiave segnaposto (`LLM_API_KEY` con dentro una frase italiana) passa i check di configurazione e muore 401 alla prima chiamata. Mossa: prima di sospettare RLS, `grep PUBLIC_SUPABASE_URL .env` (deve essere `http://localhost:8000`) e guarda gli `ai_calls`: le righe ok=false con 401 valgono più di ogni grep sul codice.
+
 ### Un test che sceglie un ramo in base all'env locale non è un test
 `queue-dm.test` girava o no il ramo kit secondo `AGENT_KIT` del `.env` locale: sul laptop di chi lo ha spento passava, su chi lo ha acceso il turno andava nel kit e `harnessCalls` restava vuoto (`expected +0 to be 1`). Segnale: un test che fallisce solo su un'altra macchina, senza cambiamento di codice. Mossa: chi fissa `$env/dynamic/private` nel test (`vi.mock('$env/dynamic/private', () => ({ env: { AGENT_KIT: 'off' } }))`), come già fa `queue-kit-heartbeat.test` — la scelta del ramo è parte del test, non del computer che lo esegue.
 
@@ -24,6 +27,9 @@ Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagli
 
 ### Un test verde sul checkout principale può essere rosso nel worktree: il `.env` locale entra nei test
 `$env/dynamic/private` in vitest porta dentro il `.env` DELLA MACCHINA. Il checkout principale può passare per cache Vite stantia (env congelata prima di una variabile), il worktree con cache fresca fallisce — v. `queue-dm.test`: con `AGENT_KIT=on` locale il turno scappava nel ramo kit e il mock di `./subagents` moriva su `createSubagentTools`. Segnale: stesso codice, esito opposto fra checkout e worktree, e nessuna differenza nel diff. Mossa: il test che prova un percorso specifico fissa le variabili che gli servono spente (`vi.mock('$env/dynamic/private')` con override), non conta sul `.env` di chi lo lancia.
+
+### **Una patch cambiata in un PR non si propaga ai worktree impilati con `npx patch-package`**
+patch-package non aggiorna uno stato già patchato: dopo un merge/rebase che tocca `patches/`, i worktree impilati falliscono sui test del parser (es. pi-stream) anche se su dev passano, e patch-package muore con "cannot apply". Mossa: dopo ogni merge che cambia `patches/`, `npm ci` + `npx patch-package` in OGNI worktree impilato — il reinstall del solo pacchetto basta se sei sicuro del lockfile.
 
 ## Test: distinguere il tuo difetto dal rumore
 
@@ -85,6 +91,9 @@ Il secondo messaggio in chat sembrava morto a 120s: l'agente delega a un sub-age
 
 ### Un 4xx che sembra un bug è spesso il contratto
 GET su `/videos/review` risponde 400 (endpoint POST-only), POST senza url risponde 400 `missing_url`, transcribe senza file 400 con messaggio esplicito: non difetti, degradeos giusti. E i `run_autopilot` che restano `pending` per 20 minuti in locale non sono un blocco: è il gating worker-only che funziona — il drain serverless li salta per costruzione. Mossa: leggi la route prima di aprire un finding; un 4xx pulito con messaggio nominale è prova di robustezza, non guasto.
+
+### **Il marcatore che matcha la bolla dell'utente è un falso positivo**
+aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio CHE HAI INVIATO TU: nel gate di oggi ha mascherato un 401 reale (nessuna risposta mai arrivata, "verde" lo stesso). Mossa: contare le occorrenze (≥ 2) oppure aspettare il selettore della bolla dell'assistente, non il body intero.
 
 ### Build e dev server lungi dal tool di shell
 `npm run build` di questo repo dura ~4 minuti: lancialo in `nohup … &` e sondalo col log, il timeout del tool di shell uccide il processo (e lascia esbuild a metà: la dev server dopo parte con `write EPIPE`). La dev server del worktree ha la sua porta (`--port 5185 --strictPort`) — il 5173 è di chiunque arrivi prima. E il comando che LA VA A PROVARE con `curl` in blocco va in timeout e trascina via il process group: lancia il server staccato (`disown`), verifica con un comando successivo.
