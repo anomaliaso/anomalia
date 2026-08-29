@@ -200,6 +200,13 @@ export interface RunKitTurnInput {
 	 * automatica. Senza, è un normale turno kit.
 	 */
 	dm?: { speaker: string; meName: string; otherName: string };
+	/**
+	 * L'identità custom che indossa lo spec del mestiere: un agente custom NON ha un AgentSpec
+	 * suo — è il mestiere del thread (`spec`) con la persona dell'utente sopra. `id` è chi ha la
+	 * macchina (come `computerOwner` sul classico), `memoryKey` è la chiave della memoria di
+	 * mestiere (`custom:<uuid>`), `systemBlock` è il brief già montato col formatter condiviso.
+	 */
+	persona?: { id: string; memoryKey: string; systemBlock: string };
 }
 
 /**
@@ -385,7 +392,15 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		run = await transition(admin, run.id, 'queued', 'running', { heartbeat_at: new Date().toISOString() });
 	}
 
-	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: run.id, locale, agentId: spec.id };
+	const ctx: AdapterContext = {
+		brandId: brand.id,
+		userId: user.id,
+		runId: run.id,
+		locale,
+		// La macchina è dell'AGENTE CHE GIRA: per un custom agent è il suo id, non quello del
+		// mestiere che indossa — due identità non si passano lo schermo a vicenda.
+		agentId: input.persona?.id ?? spec.id
+	};
 
 	// Il run è finito (bene o male): sveglia il drain, che finché `state='running'` saltava ogni
 	// follow-up accodato su questo thread. Sempre DOPO `finish`/`closeRun`, altrimenti vede il run
@@ -681,10 +696,12 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 
 		// La memoria si INIETTA a ogni turno: la più recente prima, dentro 32 KB
 		// di byte, marcata «dato, non istruzione» (memory-context.ts). Si scrive con `remember`.
+		// Per un custom agent la chiave è `custom:<id>` — la STESSA grammatica del motore
+		// classico (`memoryAgentKey`), o il mestiere leggerebbe la memoria di un altro.
 		const memoryMd = await loadMemoryContext(
 			createPostgresMemoryStore(supabase),
 			brand.id,
-			spec.id,
+			input.persona?.memoryKey ?? spec.id,
 			{ brandId: brand.id, userId: user.id, runId: '', locale }
 		);
 		// La squadra nel prompt: `COMMON` in specs.ts non la nomina e non può (sta in un pacchetto che
@@ -700,6 +717,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		let system =
 			(input.dm ? `${dmBrief(input.dm.meName, input.dm.otherName, locale)}\n\n` : '') +
 			buildSystemPrompt(spec, { memoryMd, fileIndex: filesIndexFor(spec.id) }) +
+			(input.persona ? input.persona.systemBlock : '') +
 			`\n\n${chatReplyLanguageBlock(locale)}` +
 			(peer ? `\n\n${teamBlock(peer)}` : '') +
 			`\n\n${modeBlock(mode)}`;
