@@ -15,7 +15,7 @@ import { withSandboxTools } from '$lib/server/chat/sandbox-tools';
 import { computerOwner } from '$lib/agent-computer';
 import { stripUnattendedTools } from '$lib/server/chat/unattended';
 import { withStrategistTools } from '$lib/server/chat/strategist-tools';
-import { customAgentSystemBlock, getCustomAgentPersona } from '$lib/server/custom-agent-persona';
+import { customAgentSystemBlock, getCustomAgentPersona, kitPersonaOverlay } from '$lib/server/custom-agent-persona';
 import { agentStickerColor } from '$lib/chat-expression';
 import {
 	saveMessages,
@@ -643,6 +643,9 @@ export async function processNextQueuedChatJob(
 					? dmSpeaker.slice('custom:'.length)
 					: threadRow?.custom_agent_id;
 		const memoryAgentKey = personaId ? `custom:${personaId}` : agentId;
+		// Il persona si risolve UNA volta: entra nel system prompt del classico E nel turno kit
+		// (blocco, memoria `custom:<id>`, preferenza di modello).
+		const persona = personaId ? await getCustomAgentPersona(admin, brand.id, personaId) : null;
 		// ── IL TURNO KIT, DAL DRAIN ────────────────────────────────────────────────────────────
 		// Il drain non sapeva far girare uno specialista: qualunque job accodato su un thread kit
 		// finiva nel motore CLASSICO qui sotto, cioè rispondeva un agente diverso da quello con cui
@@ -660,16 +663,20 @@ export async function processNextQueuedChatJob(
 		// L'agente è lo STESSO `agentId` del percorso classico (thread + `params.agent`): una sola
 		// risoluzione, o i due motori risponderebbero con agenti diversi allo stesso job.
 		//
-		// FUORI dal kit restano stanze e agenti custom: sono meccaniche del motore classico che
-		// vivono QUI dentro (la voce successiva della stanza, il persona nel system prompt) e che
-		// il bridge non conosce. Mandarcele dentro non è «uno specialista al posto di un altro»,
-		// è perdere la catena delle voci e il persona. I DM ci stanno: il contesto del DM (chi
-		// parla, il blocco in testa al prompt) entra nel turno kit come `dm`.
+		// FUORI dal kit restano le stanze (la catena delle voci è meccanica del runner classico)
+		// e i turni SCHEDULATI dell'agente custom (routine e brief: un incarico che nessuno
+		// guarda, di proprietà del ticket successivo). Un agente custom VIVO ci sta: lo spec è
+		// il mestiere del thread, la persona entra nel turno kit come overlay (blocco, memoria,
+		// modello). I DM ci stanno: il contesto del DM entra come `dm`.
 		//
 		// Il flag si guarda PRIMA dell'import: `shouldUseKit` resta l'autorità sulla condizione, ma
 		// tirare dentro il bridge (executor, sandbox, plugin) a ogni turno accodato si paga anche a
 		// kit spento.
-		if (env.AGENT_KIT === 'on' && !personaId && parseRoomAgents(threadRow?.room_agents).length < 2) {
+		if (
+			env.AGENT_KIT === 'on' &&
+			(params.scheduled !== true || !personaId) &&
+			parseRoomAgents(threadRow?.room_agents).length < 2
+		) {
 			const { shouldUseKit, runKitTurn } = await import('$lib/agent/bridge/live');
 			const kitSpec = shouldUseKit(env, agentId);
 			if (kitSpec) {
@@ -752,7 +759,7 @@ await maybeCompactThread(admin, {
 						locale: bilingualNoticeLocale(locale),
 						mode: params.mode,
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
-						modelFamily: turnModelFamily(threadRow?.model)?.family,
+						modelFamily: turnModelFamily(threadRow?.model, persona?.model)?.family,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
 						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
 						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
@@ -767,6 +774,11 @@ await maybeCompactThread(admin, {
 										otherName: dmOtherName
 									}
 								: undefined,
+						// L'overlay della persona: chi è (macchina), dove legge la memoria, cosa vuole
+						// l'utente. Il blocco lo monta il formatter condiviso, col locale del kit.
+						persona: persona
+							? kitPersonaOverlay(persona, bilingualNoticeLocale(locale))
+							: undefined,
 						origin,
 						budgetMs,
 						continuationDepth: Math.max(0, Math.trunc(Number(params.continuation_depth)) || 0),
@@ -832,7 +844,6 @@ const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '
 			// già perso una volta — il paragrafo finale non batteva l'intero prompt di brand.
 			systemPrompt = `${dmBrief(dmMemberNames[dmSpeaker] ?? dmSpeaker, dmOtherName, locale)}\n\n${systemPrompt}`;
 		}
-		const persona = personaId ? await getCustomAgentPersona(admin, brand.id, personaId) : null;
 		if (persona) systemPrompt += customAgentSystemBlock(persona, locale);
 		// Anche un turno in coda deve sapere cosa ha già consegnato in questo thread, o un incarico
 		// ricorrente ripubblica lo stesso report ogni settimana con un nome diverso.
