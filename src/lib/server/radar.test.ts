@@ -450,6 +450,16 @@ describe('selectTopComments (il cap è "gli N migliori", non "i primi N")', () =
 });
 
 describe('radarDigestHtml (la mail porta la merce: testo pronto + link diretto)', () => {
+  it('con radarUrl porta il link di disiscrizione nel corpo, non solo negli header', () => {
+    const html = radarDigestHtml(false, 'https://app.example.com', [], [], [], 'https://app.example.com/app/acme/radar');
+    expect(html).toContain('https://app.example.com/app/acme/radar');
+    expect(html.toLowerCase()).toContain('unsubscribe');
+  });
+
+  it('senza radarUrl nessun footer: il corpo resta come prima', () => {
+    const html = radarDigestHtml(false, 'https://app.example.com', [], [], []);
+    expect(html).not.toContain('unsubscribe');
+  });
   it('carries the ready-to-paste comment, the direct thread link and the DM', () => {
     const html = radarDigestHtml(true, 'https://app.example.com', [], [{
       title: 'Best organic olive oil?',

@@ -7562,7 +7562,11 @@
         },
         "notePre": "We use the content and public post history you provide to generate posts with AI. We do",
         "noteStrong": "not",
-        "notePost": "sell your personal data, and we do not use your content to train third-party AI models for purposes unrelated to providing you the service."
+        "notePost": "sell your personal data, and we do not use your content to train third-party AI models for purposes unrelated to providing you the service.",
+        "row7": {
+          "purpose": "Business contact research (radar/leads): reading third-party public content on social platforms to propose conversations to join and contact drafts",
+          "basis": "Legitimate interest — Art. 6(1)(f)"
+        }
       },
       "s4": {
         "heading": "4. AI-generated content",
@@ -7587,7 +7591,7 @@
         "stripe": "Subscription billing and payment processing",
         "google": "AI text and image generation",
         "kie": "AI image / video generation",
-        "scrapecreators": "Collecting public post history from connected accounts",
+        "scrapecreators": "Real-time reading of public content (posts and profiles) from social platforms for the news and leads radar, and collection of the public history of connected accounts",
         "resend": "Sending transactional and notification emails",
         "metaProvider": "Meta (Instagram, Facebook) & TikTok",
         "meta": "Publishing posts to your connected accounts",
@@ -7618,7 +7622,8 @@
       },
       "s9": {
         "heading": "9. How long we keep your data",
-        "body": "We keep your personal data for as long as your account is active and as needed to provide the service. After you close your account we delete or anonymise your data within a reasonable period, except where we must keep it longer to comply with legal obligations (for example, invoices for tax purposes) or to resolve disputes."
+        "body": "We keep your personal data for as long as your account is active and as needed to provide the service. After you close your account we delete or anonymise your data within a reasonable period, except where we must keep it longer to comply with legal obligations (for example, invoices for tax purposes) or to resolve disputes.",
+        "body2": " Third-party content found by the radar has its own retention: the post summary is deleted after 14 days, unconverted leads after 90 days, comment outcomes after 12 months. Anyone who does not want to be contacted again can say so in a reply to the message they received, or through the customer who contacted them: their profile is excluded from all future suggestions, for every brand."
       },
       "s10": {
         "heading": "10. Your rights",
@@ -7760,7 +7765,8 @@
       "s13": {
         "heading": "13. Third-party services",
         "body": "The Service relies on third-party providers (for hosting, AI, analytics, payments, email and social platforms). We are not responsible for those providers’ services, and your use of connected platforms is also governed by their own terms.",
-        "body2": "Some features drive a real browser on your behalf — for example capturing screenshots of your own product after signing in with demo credentials you save. You may only save credentials for a service you own or are authorised to automate, and that authorisation is your responsibility. We will not use them to sign in to third-party platforms such as Instagram, Facebook, LinkedIn or TikTok: automated sign-in and automated posting generally breach those platforms’ terms and can get an account restricted, so the Service refuses it. Publishing happens only through the official APIs of the accounts you connect, after you approve the content."
+        "body2": "Some features drive a real browser on your behalf — for example capturing screenshots of your own product after signing in with demo credentials you save. You may only save credentials for a service you own or are authorised to automate, and that authorisation is your responsibility. We will not use them to sign in to third-party platforms such as Instagram, Facebook, LinkedIn or TikTok: automated sign-in and automated posting generally breach those platforms’ terms and can get an account restricted, so the Service refuses it. Publishing happens only through the official APIs of the accounts you connect, after you approve the content.",
+        "body3": " Some features (radar/leads) read third-party public content on social platforms to suggest conversations worth joining, with draft comments and messages. The user is the only sender: the Service never messages third parties automatically — every draft requires the user’s review and manual sending from their own account. The user is therefore the data controller of the contacts they send and is responsible for the message content, for complying with the terms of the platform they post on, and for honoring people’s requests not to be contacted again. The Service minimizes the data of the people it finds (a summary and the post link, no copy of the text) and excludes them from all future suggestions when they ask not to be contacted."
       },
       "s14": {
         "heading": "14. Availability & changes",
@@ -9525,14 +9531,14 @@
     "tier": {
       "label": "Model",
       "custom": "Custom",
-    "modelFamily": {
-      "luna": "Luna",
-      "grok": "Grok 4.6",
-      "gemini-flash": "Gemini Flash",
-      "deepseek-pro": "DeepSeek V4 Pro",
-      "gpt-terra": "GPT 5.6 Terra",
-      "gpt-sol": "GPT 5.6 Sol"
-    },
+      "modelFamily": {
+        "luna": "Luna",
+        "grok": "Grok 4.6",
+        "gemini-flash": "Gemini Flash",
+        "deepseek-pro": "DeepSeek V4 Pro",
+        "gpt-terra": "GPT 5.6 Terra",
+        "gpt-sol": "GPT 5.6 Sol"
+      },
       "auto": "Auto",
       "fast": "Fast",
       "pro": "Pro",

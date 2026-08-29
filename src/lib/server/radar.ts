@@ -1537,7 +1537,8 @@ export function radarDigestHtml(
   appBase: string,
   posts: DigestPostRow[],
   comments: DigestCommentRow[],
-  articles: DigestArticleRow[]
+  articles: DigestArticleRow[],
+  radarUrl = ''
 ): string {
   const postBlocks = posts.map((r) => `
     <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:0 0 14px;">
@@ -1574,6 +1575,7 @@ export function radarDigestHtml(
     ${posts.length ? `<p style="color:#555;margin:14px 0 10px;"><b>${it ? 'Post pronti (approva con un click)' : 'Posts ready (one-click approve)'}</b></p>${postBlocks}` : ''}
     ${articles.length ? `<p style="color:#555;margin:14px 0 10px;"><b>${it ? 'Articoli blog pronti da rivedere' : 'Blog articles ready to review'}</b></p>${articleBlocks}` : ''}
     ${comments.length ? `<p style="color:#555;margin:14px 0 10px;"><b>${it ? 'Conversazioni dove dire la tua — commento pronto da incollare (pubblichi tu, mai in automatico)' : 'Conversations worth joining — comment ready to paste (you post it, never automated)'}</b></p>${commentBlocks}` : ''}
+    ${radarUrl ? `<p style="color:#999;font-size:12px;margin:20px 0 0;">${it ? 'Non vuoi più il Radar? <a href="' + radarUrl + '">Disiscriviti qui</a>.' : 'No more Radar? <a href="' + radarUrl + '">Unsubscribe here</a>.'}</p>` : ''}
   </div>`;
 }
 
@@ -1596,7 +1598,7 @@ async function sendRadarDigest(admin: SupabaseClient, brand: AnyRec, posts: Dige
       await sendEmail({
         to: contact.email,
         subject,
-        html: radarDigestHtml(it, appBase, posts, comments, articles),
+        html: radarDigestHtml(it, appBase, posts, comments, articles, radarUrl),
         text: [
           ...posts.map((r) => `${r.title}\n${r.sourceUrl}\n${r.caption}`),
           ...articles.map((a) => `${a.title} (draft)\n${appBase}/blog-preview/${a.articleId}`),
