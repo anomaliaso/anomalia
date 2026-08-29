@@ -92,6 +92,7 @@ import { hydrateChatDocuments } from '$lib/server/hydrate-chat-documents';
 import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { carryImagesToContinuation } from '$lib/agent/bridge/provider-refs';
 
 export function kickChatQueueWork(origin: string): Promise<void> {
 	const headers: Record<string, string> = {};
@@ -709,15 +710,27 @@ await maybeCompactThread(admin, {
 							plan: brand.plan
 						});
 					})().catch((e) => console.warn('[Chat Queue] compattazione kit saltata:', e));
-					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId);
+					// LLM di chat vision-native: la storia ricaricata per il kit porta le parti
+					// immagine, o un rilancio su un thread con allegati riparte cieco.
+					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId, undefined, 'images');
 					const tail = hist[hist.length - 1];
 					// Un DM è SEMPRE già salvato: message_agent scrive la riga (firmata col mittente) al
 					// momento dell'invio — risalvarla qui la duplicherebbe senza firma.
+					// Il confronto legge anche il content a PARTI (storia col media attivo): il testo
+					// è il primo pezzo, non l'array intero.
+					const tailText =
+						typeof tail?.content === 'string'
+							? tail.content
+							: Array.isArray(tail?.content)
+								? (tail.content as Array<{ type?: string; text?: string }>)
+										.filter((p) => p?.type === 'text')
+										.map((p) => p.text ?? '')
+										.join('\n')
+								: '';
 					const alreadySaved =
 						isDm ||
 						replay ||
-						(tail?.role === 'user' &&
-							(typeof tail.content === 'string' ? tail.content : '') === userMessageContent);
+						(tail?.role === 'user' && tailText === userMessageContent);
 					if (!alreadySaved) {
 						await saveMessages(
 							admin,
@@ -735,7 +748,13 @@ await maybeCompactThread(admin, {
 					// un DM, l'identità del mittente DENTRO il contenuto — sostituisce l'ultima riga
 					// user invece di duplicarla, stesso gesto del percorso classico.
 					const kitMessages: ModelMessage[] = replay
-						? [...hist, { role: 'user', content: modelUserContent } as ModelMessage]
+						? [
+								...hist,
+								// La continuazione è un messaggio UTENTE per l'harness, che collassa la catena
+								// all'ultimo turno: senza le immagini del turno che si continua, l'agente
+								// riparte cieco e smentisce di averle mai viste.
+								carryImagesToContinuation(hist, modelUserContent) as ModelMessage
+							]
 						: (turnDocuments.length || dmTaggedContent) && hist[hist.length - 1]?.role === 'user'
 							? [...hist.slice(0, -1), { role: 'user', content: modelUserContent } as ModelMessage]
 							: hist;

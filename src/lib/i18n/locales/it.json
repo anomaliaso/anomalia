@@ -9287,7 +9287,8 @@
       "importFailed": "Importazione non riuscita",
       "remove": "Rimuovi",
       "videoTooLarge": "Video troppo grande (max 18MB).",
-      "uploadFailed": "Upload fallito."
+      "uploadFailed": "Upload fallito.",
+      "processing": "Elaboro l'immagine…"
     },
     "commands": {
       "label": "Commands",

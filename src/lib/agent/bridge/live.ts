@@ -208,19 +208,9 @@ export interface RunKitTurnInput {
  * risposta precedente: il provider Responses li ritraduce in `item_reference`, che kie
  * rifiuta con un 422 («unknown item type "item_reference"») — successo davvero alle 13:06
  * del 23/8, turno morto. La storia riparte pulita: il contenuto resta, i riferimenti no.
+ * (Vedi provider-refs.ts per il perché delle parti immagine.)
  */
-function stripProviderRefs<T>(value: T): T {
-	if (Array.isArray(value)) return value.map(stripProviderRefs) as T;
-	if (value && typeof value === 'object') {
-		const out: Record<string, unknown> = {};
-		for (const [k, v] of Object.entries(value)) {
-			if (k === 'providerOptions' || k === 'providerMetadata') continue;
-			out[k] = stripProviderRefs(v);
-		}
-		return out as T;
-	}
-	return value;
-}
+import { stripProviderRefs, carryImagesToContinuation } from './provider-refs';
 
 /** L'ultima tool call del turno, su tutti gli step — decide come si chiude il run. */
 type StepLike = { toolCalls?: ReadonlyArray<{ toolName: string; input?: unknown }> };
@@ -956,7 +946,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							...input,
 							messages: [
 								...messages,
-								{ role: 'user', content: repeatedReplyContinuation(locale) } as ModelMessage
+								carryImagesToContinuation(messages, repeatedReplyContinuation(locale)) as ModelMessage
 							],
 							verdictLaps: laps + 1
 						});
@@ -1133,7 +1123,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 								messages: [
 									...messages,
 									...turnMessages,
-									{ role: 'user', content: verdict.continuation } as ModelMessage
+									carryImagesToContinuation(messages, verdict.continuation) as ModelMessage
 								],
 								verdictLaps: laps + 1
 							});

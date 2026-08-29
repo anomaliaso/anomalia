@@ -38,7 +38,10 @@ async function canvasJpeg(
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return null;
 	ctx.drawImage(bitmap, 0, 0, width, height);
-	return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', quality));
+	return withStallTimeout(
+		new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)),
+		'canvas.toBlob'
+	);
 }
 
 async function bitmapToJpegBlob(
@@ -78,9 +81,27 @@ export async function fileLooksLikeHeic(file: File): Promise<boolean> {
 	return sniffHeifBrand(head) === 'heic';
 }
 
+/**
+ * I browser API di decode/encode (createImageBitmap, canvas.toBlob, FileReader) sono promesse
+ * resolve-only: se il callback non arriva mai, la catena resta appesa e l'allegato sparisce in
+ * silenzio — nessun errore, nessuna strip, e il turno parte cieco. Il tetto di stall trasforma
+ * ogni appendersi in un rifiuto che la UI mostra.
+ */
+export const CONVERT_STALL_TIMEOUT_MS = 15_000;
+
+export function withStallTimeout<T>(p: Promise<T>, what: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(new Error(`convert_stalled: ${what}`)), CONVERT_STALL_TIMEOUT_MS);
+		p.then(
+			(v) => { clearTimeout(timer); resolve(v); },
+			(e) => { clearTimeout(timer); reject(e); }
+		);
+	});
+}
+
 async function decodeToBitmap(file: File): Promise<ImageBitmap> {
 	try {
-		return await createImageBitmap(file);
+		return await withStallTimeout(createImageBitmap(file), 'createImageBitmap');
 	} catch (err) {
 		if (!(await fileLooksLikeHeic(file))) throw err;
 		const jpeg = await convertHeicOnServer(file);
@@ -166,12 +187,15 @@ export async function prepareYoutubeThumbnailFile(
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result ?? ''));
-		reader.onerror = () => reject(reader.error);
-		reader.readAsDataURL(blob);
-	});
+	return withStallTimeout(
+		new Promise<string>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => resolve(String(reader.result ?? ''));
+			reader.onerror = () => reject(reader.error);
+			reader.readAsDataURL(blob);
+		}),
+		'FileReader.readAsDataURL'
+	);
 }
 
 /** Downscale an image file to a JPEG data URL (chat, media generator, motion, post refs). */

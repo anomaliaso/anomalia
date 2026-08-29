@@ -167,6 +167,9 @@
   let rootEl = $state<HTMLFormElement>();
   let uploads = $state<string[]>([]);
   let uploadError = $state('');
+  // Downscale in corso: l'invio con un allegato ancora in elaborazione lo lascia a terra
+  // (il payload nasce senza l'immagine e il turno parte cieco). Conta i file in volo.
+  let attaching = $state(0);
   let docs = $state<Array<ChatDocument & { converting?: boolean; error?: string }>>([]);
   let picks = $state<ChatAttachmentPick[]>([]);
   let pendingCommand = $state<string | undefined>(undefined);
@@ -244,6 +247,7 @@
   let recTimer: ReturnType<typeof setInterval> | null = null;
 
   const canSend = $derived(!!value.trim() || hasAttachments);
+  const attachReady = $derived(attaching === 0);
   const showMic = $derived(sttSupported && !!brandSlug && !canSend && !loading && !sending);
 
   /**
@@ -485,7 +489,9 @@
     const text = value.trim();
     micError = '';
     // While a reply is generating, submit still works — the parent queues the message.
-    if ((!text && !hasAttachments) || convertingDocs) return;
+    // Un allegato ancora in elaborazione NON parte col messaggio: blocchiamo l'invio
+    // anziché consegnare un turno cieco (la strip mostra il chip "in elaborazione").
+    if ((!text && !hasAttachments) || convertingDocs || !attachReady) return;
     const attachments = buildAttachmentsPayload(uploads, picks);
     const command = pendingCommand;
     // The same thumbs the strip is showing — the chat puts them straight on the sent bubble
@@ -565,6 +571,7 @@
     input.value = '';
     menu = 'none';
     for (const f of files.slice(0, MAX_UPLOADS - uploads.length)) {
+      attaching += 1;
       try {
         // A clip goes to Storage and travels as a URL; an image still rides inline as a data URL.
         uploads = [
@@ -576,6 +583,8 @@
           (err as Error)?.message === 'video_too_large'
             ? $_('chat.attach.videoTooLarge')
             : $_('chat.attach.uploadFailed');
+      } finally {
+        attaching -= 1;
       }
     }
   }
@@ -794,9 +803,15 @@
   {#if micError}
     <p class="ch-ref-err" role="status" aria-live="polite">{micError}</p>
   {/if}
-  {#if strip.length || docs.length}
+  {#if strip.length || docs.length || attaching > 0}
     <div class="ch-refs">
-      {#each strip as item (item.key)}
+      {#each Array(attaching) as pend, pi (pi)}
+        <div class="ch-ref ch-ref-busy" title={$_('chat.attach.processing')} aria-label={$_('chat.attach.processing')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 3a9 9 0 1 0 9 9" />
+          </svg>
+        </div>
+      {/each}      {#each strip as item (item.key)}
         <div
           class="ch-ref"
           class:ch-ref-video={/\.(mp4|mov|webm)(\?|$)/i.test(item.url)}
@@ -1384,7 +1399,7 @@
         <button
           type="submit"
           class="ch-send"
-          disabled={!canSend || convertingDocs}
+          disabled={!canSend || convertingDocs || !attachReady}
           aria-label={$_('chat.send')}
         >
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
@@ -1512,6 +1527,23 @@
     background-size: cover;
     background-position: center;
     border: 1px solid var(--line);
+  }
+  /* Il downscale sta girando: il chip esiste, l'immagine non c'è ancora. */
+  .ch-ref-busy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+  }
+  .ch-ref-busy svg {
+    width: 18px;
+    height: 18px;
+    animation: ch-ref-spin 0.9s linear infinite;
+  }
+  @keyframes ch-ref-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   /* A clip has no poster frame — show a film glyph instead of an empty tile. */
   .ch-ref-video {
