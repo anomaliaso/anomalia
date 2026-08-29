@@ -58,9 +58,14 @@ describe('nav team (FEATURE_NAV_TEAM)', () => {
         { key: 'keywords', path: '/keywords' },
         { key: 'backlinks', path: '/backlinks' },
         { key: 'blog', path: '/site' }
+      ],
+      designer: [
+        { key: 'overview', path: '/designer' },
+        { key: 'mediaGenerator', path: '/media-generator' },
+        { key: 'ugcCreator', path: '/ugc-creator' },
+        { key: 'motionVideo', path: '/motion-video' },
+        { key: 'mediaLibrary', path: '/media' }
       ]
-      // Niente `designer`: la sezione è uscita dalla nav (2026-08-22). Le pagine restano su
-      // disco — le classifica page-modal-tiers.test.ts, non questo pin.
     });
   });
 
@@ -94,7 +99,7 @@ describe('nav team (FEATURE_NAV_TEAM)', () => {
     const spaces = NAV_TEAM_SPACES.map((t) => t.path);
     const tools = NAV_TEAM_TOOLS.map((t) => t.path);
     expect(spaces.filter((p) => tools.includes(p))).toEqual([]);
-    expect(WORKBENCH_HUBS.length).toBe(6);
+    expect(WORKBENCH_HUBS.length).toBe(7);
   });
 
   /**

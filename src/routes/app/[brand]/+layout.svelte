@@ -16,6 +16,7 @@
   import FolderOpen from '@lucide/svelte/icons/folder-open';
   import Wrench from '@lucide/svelte/icons/wrench';
   import SettingsIcon from '@lucide/svelte/icons/settings';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
   import { setCredits, refreshCredits } from '$lib/stores/credits';
   import WarningCenter from '$lib/components/WarningCenter.svelte';
   import ChatColumn from '$lib/components/ChatColumn.svelte';
@@ -376,8 +377,18 @@
       badge: 'leads' as const,
       also: [`${base}/automations`, `${base}/radar`, `${base}/leads`, `${base}/agents`],
     },
-    // Designer: fuori dalla nav per scelta. Le sue pagine restano vive e raggiungibili dai link
-    // della chat, da `propose_open_tab` e da ⌘K.
+    {
+      href: `${base}/designer`,
+      key: 'designer' as WorkbenchPageHub,
+      icon: Sparkles,
+      also: [
+        `${base}/designer`,
+        `${base}/media-generator`,
+        `${base}/ugc-creator`,
+        `${base}/motion-video`,
+        `${base}/media`,
+      ],
+    },
   ]);
 
   function isSubActive(href: string) {

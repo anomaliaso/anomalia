@@ -217,8 +217,8 @@
       }
     }
     // Solo le rotte che la nav conosce e quelle che si aprono in overlay. Le pagine a schermo
-    // pieno NON si cercano: se una sezione esce dalla nav (come Designer) le sue pagine escono
-    // anche da qui — è voluto, la palette non è un archivio di tutto ciò che esiste su disco.
+    // pieno NON si cercano: se una sezione esce dalla nav le sue pagine escono anche da qui —
+    // è voluto, la palette non è un archivio di tutto ciò che esiste su disco.
     for (const route of BRAND_MODAL_ROUTES) {
       const href = `${base}/${route}`;
       if (seen.has(href)) continue;
