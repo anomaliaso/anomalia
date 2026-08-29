@@ -87,7 +87,6 @@ export default defineConfig({
     // Il grafo di import dei moduli server pesa diversi secondi da freddo (strategy-agent,
     // queue, ugc): sotto carico il default di 5s molla a metà setup e un file passa e fallisce
     // a seconda della parallelismo. 30s valutano la LOGICA, non la macchina.
-    testTimeout: 30_000,
     hookTimeout: 30_000
   }
 });
