@@ -67,8 +67,9 @@
   const adsEnabled = $derived(hasAds(data.brand?.plan));
   const path = $derived($page.url.pathname);
   const isPostDash = $derived(/\/posts\/[^/]+\/[^/]+\/?$/.test(path));
+  const isArticleEdit = $derived(path.includes('/site/edit'));
   const isFullWidth = $derived(
-    path.includes('/success') || path.endsWith('/activate') || isPostDash
+    path.includes('/success') || path.endsWith('/activate') || isPostDash || isArticleEdit
   );
   const isSettings = $derived(path.includes('/settings'));
   const isBrandRoot = $derived(path === base || path === `${base}/`);
@@ -89,8 +90,6 @@
   const isMediaWorkbench = $derived(
     /\/(media-generator|ugc-creator|motion-video)\/?$/.test(path)
   );
-  const isArticleEdit = $derived(path.includes('/site/edit'));
-
   // Navigazione ottimistica: shimmer al clic, non alla fine della load. Include i cambi di
   // brand — col solo `base` la pagina del brand vecchio resterebbe visibile per tutta la load.
   const navToPath = $derived(navigating.to?.url.pathname ?? null);

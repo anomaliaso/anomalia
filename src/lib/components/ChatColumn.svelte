@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { openPageModal } from '$lib/components/PageModal.svelte';
+  import { postPreviewHref } from '$lib/page-modal-navigation';
   import {
     chatThreadId,
     chatPrefill,
@@ -1742,7 +1743,7 @@
   <ChatImageLightbox
     src={zoomPost.media_urls?.length ? zoomPost.media_urls : (zoomPost.media_url ?? '')}
     caption={zoomPost.caption}
-    calendarHref={`/app/${brandSlug}/calendar?post=${zoomPost.post_id}`}
+    calendarHref={postPreviewHref(`/app/${brandSlug}`, zoomPost.post_id)}
     onclose={() => (zoomPost = null)}
   />
 {/if}
