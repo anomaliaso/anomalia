@@ -162,6 +162,7 @@
   let fileEl = $state<HTMLInputElement>();
   let docEl = $state<HTMLInputElement>();
   let importEl = $state<HTMLInputElement>();
+  let hydrated = $state(false);
   let importStatus = $state<string | null>(null);
   let convertStatus = $state<string | null>(null);
   let rootEl = $state<HTMLFormElement>();
@@ -256,6 +257,7 @@
    * così i bottoni dentro il menu tengono il loro handler.
    */
   onMount(() => {
+    hydrated = true;
     const onPointerDown = (e: Event) => {
       if (menu === 'none' && !slashOpen) return;
       const target = e.target as HTMLElement | null;
@@ -1305,24 +1307,26 @@
         </div>
       {/if}
 
-      {#if brandSlug}
-        <input
-          bind:this={fileEl}
-          type="file"
-          accept={`${RASTER_IMAGE_ACCEPT},${CHAT_VIDEO_ACCEPT}`}
-          multiple
-          hidden
-          onchange={onPickFiles}
-        />
-        <input
-          bind:this={docEl}
-          type="file"
-          accept={CHAT_DOCUMENT_ACCEPT}
-          multiple
-          hidden
-          onchange={onPickDocs}
-        />
-        <input bind:this={importEl} type="file" accept={RASTER_IMAGE_ACCEPT} multiple hidden onchange={onImportFiles} />
+      {#if hydrated}
+        {#if brandSlug}
+          <input
+            bind:this={fileEl}
+            type="file"
+            accept={`${RASTER_IMAGE_ACCEPT},${CHAT_VIDEO_ACCEPT}`}
+            multiple
+            hidden
+            onchange={onPickFiles}
+          />
+          <input
+            bind:this={docEl}
+            type="file"
+            accept={CHAT_DOCUMENT_ACCEPT}
+            multiple
+            hidden
+            onchange={onPickDocs}
+          />
+          <input bind:this={importEl} type="file" accept={RASTER_IMAGE_ACCEPT} multiple hidden onchange={onImportFiles} />
+        {/if}
       {/if}
       {#if convertStatus}
         <span class="ch-hint" role="status" aria-live="polite">{convertStatus}</span>
@@ -1533,7 +1537,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--muted);
+    color: var(--ink-soft);
   }
   .ch-ref-busy svg {
     width: 18px;

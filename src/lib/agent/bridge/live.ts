@@ -99,6 +99,7 @@ import {
 	graphicalBootstrapDeps,
 	openBrandHarnessSession,
 	dropLiveHarnessSession,
+	hasLiveHarnessSession,
 	resolveHarnessModelRef,
 	startHarnessTurn
 } from './adapters';
@@ -395,6 +396,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 	try {
 		const modelRef = resolveHarnessModelRef({ family: input.modelFamily, tier: input.tier });
 		if (!modelRef) throw new Error('harness_model_missing: nessun modello configurato per il provider attivo');
+		console.log(
+			`[AGENT_KIT] run ${run.id} start — agente=${spec.id}, modello=${modelRef.label} (${modelRef.provider}), thread=${threadId}`
+		);
 
 		// La computer del brand: `shell` accende/ripristina la VM da solo (ensureComputer) e ogni
 		// uso riprogramma il sonno; il cron sweep la spegne dopo 10' di quiete col checkpoint su
@@ -804,9 +808,17 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		 * con sessione fresca: il riuso e` un'ottimizzazione, la risposta dell'utente no.
 		 */
 		let turn: Awaited<ReturnType<typeof startTurnOnce>>;
+		// Lo stato PRIMA del tentativo: un avvio riuscito popola la cache, e il retry deve
+		// decidere se c'era qualcosa da riusare alla partenza, non se una sessione esiste adesso.
+		const hadReusableSession = hasLiveHarnessSession(threadId);
 		try {
 			turn = await startTurnOnce(false);
 		} catch (firstStartError) {
+			// Il retry è per la sessione RIUSATA che non parte. Su un thread NUOVO non c'è nulla
+			// di riusato: `startTurnOnce(false)` ha già creato una sessione fresca, e ritentare
+			// ne crea una seconda identica — due avvii a freddo, due minuti, e un log che accusa
+			// una «sessione riusata» mai esistita. Senza cache il retry non salva niente.
+			if (!hadReusableSession) throw firstStartError;
 			await dropLiveHarnessSession(threadId).catch(() => undefined);
 			try {
 				turn = await startTurnOnce(true);
@@ -1245,18 +1257,22 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			}
 			}
 			try {
+				const usage = extractSdkUsage(await result.totalUsage);
 				logAiCall({
 					label: 'chat',
 					provider: modelRef.provider,
 					model: modelRef.id,
 					ms: Date.now() - turnT0,
 					ok: true,
-					...extractSdkUsage(await result.totalUsage),
+					...usage,
 					brandId: brand.id,
 					userId: user.id,
 					threadId,
 					context: 'agent_kit'
 				});
+				console.log(
+					`[AGENT_KIT] run ${run.id} done — ${Math.round((Date.now() - turnT0) / 1000)}s, modello=${modelRef.label}, ${usage.inputTokens ?? '?'} in / ${usage.outputTokens ?? '?'} out`
+				);
 			} catch (e) {
 				console.error(`[AGENT_KIT] run ${run.id} usage log error`, e);
 			}

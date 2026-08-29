@@ -7,6 +7,7 @@ const ctx: AdapterContext = { brandId: 'b1', userId: 'u1', runId: 'r1', locale: 
 const spec: ToolSpec = {
 	name: 'publish_post',
 	description: 'publish',
+	consequential: true,
 	inputSchema: { type: 'object', properties: {} }
 };
 
@@ -95,6 +96,7 @@ describe('HarnessRuntime', () => {
 		expect(events.some((e) => e.type === 'text' && e.text === 'ciao')).toBe(true);
 		const call = events.find((e) => e.type === 'tool_call');
 		expect(call && call.type === 'tool_call' && call.call.name).toBe('publish_post');
+		expect(call && call.type === 'tool_call' && call.call.id).toBe('t1');
 		const done = events.at(-1);
 		expect(done).toMatchObject({ type: 'done', reason: 'completed' });
 		expect(seen.sessionId).toBe('r1');

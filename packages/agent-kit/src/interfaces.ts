@@ -11,6 +11,7 @@ import type {
 	AdapterDescriptor,
 	CommandRequest,
 	EffectStatus,
+	EffectClaim,
 	FileEntry,
 	MemoryCapabilities,
 	MemoryEntry,
@@ -32,12 +33,23 @@ import type {
  * contratto: l'executor non sa dove viva la riga, la superficie gliela passa come implementazione.
  */
 export interface EffectsLedger {
-	/** Registra `intended` PRIMA di eseguire. Se esiste già la chiave, la restituisce senza toccare. */
-	intend(record: { brandId: string; runId: string; toolName: string; key: string; request: unknown }): Promise<ToolEffect>;
-	/** Risolve dopo l'esecuzione: completed (con result) o failed. */
-	resolve(id: string, status: 'completed' | 'failed', result: unknown): Promise<void>;
-	/** Legge per chiave: la riga esistente, o null. */
-	find(brandId: string, key: string): Promise<ToolEffect | null>;
+	/**
+	 * Claim atomico per (brand, invocationId). L'identità è indipendente da run, lease, fence e
+	 * attempt; il payload serve solo a rilevare un riuso errato. Solo `claimed` autorizza l'esecuzione.
+	 */
+	claim(record: {
+		brandId: string;
+		/** Il run che detiene il claim, usato per audit e riconciliazione. */
+		runId: string;
+		/** L'identità persistita della singola chiamata, non derivata da `request`. */
+		invocationId: string;
+		toolName: string;
+		request: unknown;
+		/** Chiave della versione precedente, usata solo per righe legacy dello stesso run. */
+		legacyKey?: string;
+	}): Promise<EffectClaim>;
+	/** Risolve solo un claim ancora `intended`; un worker riconciliato non può sovrascriverlo. */
+	resolve(id: string, status: 'completed' | 'failed', result: unknown): Promise<boolean>;
 	/** Attira gli `intended` orfani di un run morto verso `ambiguous` — il ripiego che non duplica. */
 	reconcileRun(runId: string): Promise<number>;
 }

@@ -6,6 +6,7 @@ import { EDITOR_POST_COLS, requireZernioCancellation } from '$lib/server/post-ed
 import { createSingleContent, CAROUSEL_PLATFORMS, carouselMaxPerBatch, attachBrandMoodImages, generateStandaloneImage, regeneratePost, loadBrandMoodImageUrls, type ContentPrefs } from '$lib/server/content-preview';
 import { remaining, addUsage, monthKey } from '$lib/server/usage';
 import { gateToolCall } from '$lib/server/chat/tool-policy';
+import { VIDEO_BRIEF_MAX_CHARS } from '$lib/video-models';
 import { GRAPHIC_ASSET_MINT_HINT, STANDALONE_IMAGE_HINT, isVideoPostRow } from '$lib/server/media-origin';
 import { env } from '$env/dynamic/private';
 import { loadActivePlan, currentWeekIndex } from '$lib/server/editorial-plan';
@@ -40,15 +41,19 @@ export function createContentTools(ctx: ChatToolCtx) {
           ),
         video_prompt: z
           .string()
+          .max(VIDEO_BRIEF_MAX_CHARS)
           .optional()
           .describe(
-            'Video only. YOUR creative brief for THIS clip (camera, motion, energy, setting, genre). When set it REPLACES hardcoded UGC/cinematic motion templates — always prefer writing this over relying on ugc:true. Example: "Slow push-in on the product on a walnut desk, soft window light, no person, ambient room tone only." Keep under ~1200 chars. Do not ask for on-screen text (captions are burned on afterwards).'
+            'Video only. YOUR creative brief for THIS clip (camera, motion, energy, setting, genre). When set it REPLACES hardcoded UGC/cinematic motion templates — always prefer writing this over relying on ugc:true. Example: "Slow push-in on the product on a walnut desk, soft window light, no person, ambient room tone only." Keep under ' +
+              VIDEO_BRIEF_MAX_CHARS +
+              ' chars. Do not ask for on-screen text (captions are burned on afterwards).'
           ),
         instructions: z
           .string()
+          .max(600)
           .optional()
           .describe(
-            'Video only. Extra delivery direction (tone, accent, what never to do). Overrides Settings → Video instructions when set. Soft steer alongside video_prompt.'
+            'Video only. Extra delivery direction (tone, accent, what never to do), at most 600 chars. Overrides Settings → Video instructions when set. Soft steer alongside video_prompt.'
           ),
         video_model: z
           .enum([
