@@ -9398,7 +9398,8 @@
       "importFailed": "Import failed",
       "remove": "Remove",
       "videoTooLarge": "Video too large (max 18MB).",
-      "uploadFailed": "Upload failed."
+      "uploadFailed": "Upload failed.",
+      "processing": "Processing image…"
     },
     "commands": {
       "label": "Commands",

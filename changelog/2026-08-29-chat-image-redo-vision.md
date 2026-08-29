@@ -37,3 +37,16 @@ Il contratto dell'harness è esplicito («adapters must emit `finish-step` befor
 unico valore onesto nell'enum) prima del `finish` terminale e prima dell'emissione
 d'errore — no-op quando lo step è già chiuso. Verificato coi tre scenari del loop
 (errore dopo toolcall, socket cut, turno sano) e dalla suite bridge (118 verdi).
+
+## Rilanci e composer (stessa catena, stessa giornata)
+
+- I RILANCI del kit (verdetto, anti-ripetizione) e le CONTINUAZIONI accodate ricostruiscono il
+  turno con l'ultimo messaggio utente testuale: l'harness collassa la catena su quello, le
+  immagini di un turno precedente non arrivano, e l'agente smentisce («l'immagine non mi è mai
+  arrivata») dopo averla vista. Il messaggio di continuazione ora porta con sé le parti immagine
+  (`carryImagesToContinuation`); il drain carica la storia col media attivo.
+- Il COMPOSER può inviare con il downscale ancora in volo (nessun indicatore, payload senza
+  l'immagine): chip "in elaborazione" nella strip, invio bloccato finché l'allegato non è pronto.
+- Il decode/encode browser (createImageBitmap, canvas.toBlob, FileReader) è resolve-only: se il
+  callback non arriva, l'allegato sparisce in silenzio. Tetto di stall (15s) che rifiuta e mostra
+  l'errore — nessuna perdita silenziosa è più possibile.

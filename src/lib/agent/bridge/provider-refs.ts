@@ -22,3 +22,23 @@ export function stripProviderRefs<T>(value: T): T {
 	}
 	return value;
 }
+
+/**
+ * IL RILANCIO (verdetto, anti-ripetizione) appende un messaggio utente testuale a una catena
+ * in cui le immagini stanno su un turno PRECEDENTE: l'harness collassa i messaggi all'ULTIMO
+ * turno utente, così le immagini non arrivano e l'agente smentisce («l'immagine non mi è mai
+ * arrivata») dopo averla vista. Il messaggio di continuazione porta con sé le parti immagine
+ * dell'ultimo turno utente che le ha.
+ */
+export function carryImagesToContinuation(messages: unknown[], prompt: string): unknown {
+	const images: unknown[] = [];
+	for (const m of messages) {
+		const rec = m as { role?: string; content?: unknown };
+		if (rec?.role !== 'user' || !Array.isArray(rec.content)) continue;
+		for (const part of rec.content as Array<{ type?: string }>) {
+			if (part?.type === 'image') images.push(part);
+		}
+	}
+	if (!images.length) return { role: 'user', content: prompt };
+	return { role: 'user', content: [{ type: 'text', text: prompt }, ...images] };
+}
