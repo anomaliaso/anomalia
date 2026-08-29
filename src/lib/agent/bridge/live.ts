@@ -43,7 +43,7 @@ import { assistantContentFromPartial, type ChatPartialSnapshot } from '$lib/serv
 import { createQueryTool, type QueryToolDeps } from '$lib/server/chat/query-tool';
 import { CHAT_USER_ERROR } from '$lib/server/chat/report-error';
 import { enqueueTurnContinuation, kickChatQueueWork } from '$lib/server/chat/queue';
-import { applyChatStreamEvent, emptyStreamState, readSseEvents, toolsForMirror } from '$lib/chat-stream-events';
+import { applyChatStreamEvent, closeDanglingToolCalls, emptyStreamState, readSseEvents, toolsForMirror } from '$lib/chat-stream-events';
 import { isChatMode, modeBlock, toolsForMode, type ChatMode } from '$lib/chat-modes';
 import { broadcastToBrand } from '$lib/server/realtime';
 import { specById } from '../specs';
@@ -1301,6 +1301,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				const decoder = new TextDecoder();
 				let sseBuf = '';
 				let lastWrite = 0;
+				/** Lo stream è finito per cosa sua (finish/error), non per un client andato via. */
+				let sawTerminal = false;
 				/** Un evento di ciclo di vita di una tool call: si scrive comunque, vedi PARTIAL_FLUSH_EVENTS. */
 				let mustWrite = false;
 				/** La scrittura in volo: una alla volta, e MAI attesa dal ciclo di lettura (v1). */
@@ -1345,6 +1347,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							const at = { text: state.text.length, reasoning: state.reasoning.length };
 							applyChatStreamEvent(state, evt);
 							signOfLife();
+							if (String((evt as { type?: unknown }).type ?? '') === 'finish' || state.failed) sawTerminal = true;
 							if (PARTIAL_FLUSH_EVENTS.has(String((evt as { type?: unknown }).type ?? ''))) mustWrite = true;
 							const raw = JSON.stringify(evt);
 							void broadcastToBrand(brand.id, {
@@ -1381,6 +1384,13 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							});
 						}
 					}
+				// STREAM FINITO, CHIP ANCORA APERTA = BUGIA NEL PARTIAL (27/8: `delegate_task` in
+					// loading perenne — la sessione morta a metà tool non riemette il risultato e la
+					// chip sopravviveva nel mirror per tutto il turno). Se lo stream è terminato per
+					// cosa sua, ogni chip rimasta aperta non riceverà più nulla: diventa un errore
+					// dichiarato. Se invece il client è solo andato via, il mirror si ghiaccia com'era:
+					// le chip aperte possono essere legittime, il turno continua senza di noi.
+					if (sawTerminal && closeDanglingToolCalls(state)) mustWrite = true;
 					// L'ULTIMA scrittura è INCONDIZIONATA e ATTESA (stesso motivo di chat/+server.ts:
 					// un client che pollasse in questo preciso istante deve trovare il testo intero,
 					// non quello di un attimo fa) — un turno più corto della soglia non avrebbe MAI
