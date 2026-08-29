@@ -266,6 +266,10 @@ vi.mock('./adapters', async (importOriginal) => {
 			name: 'brand-vm',
 			handle: { release: vi.fn(async () => {}) }
 		}),
+		// La cache di produzione è `moduleLiveSessions` (adapters.ts); il mock la colma con
+		// `bakedToolsBySession` (una sessione esiste ⇔ il thread ha già cotto i suoi tool), e il
+		// retry «fresco» decide UNA volta se c'è qualcosa da riusare.
+		hasLiveHarnessSession: (key?: string | null) => (key ? bakedToolsBySession.has(key) : false),
 		startHarnessTurn: async (opts: {
 			system: string;
 			messages: unknown;
@@ -934,6 +938,37 @@ describe('runKitTurn — la sessione avvelenata non uccide il secondo turno', ()
 		} finally {
 			vi.unstubAllEnvs();
 		}
+	});
+
+	it('un THREAD NUOVO paga UNA partenza, non due: niente da riusare, niente secondo avvio a freddo', async () => {
+		// Incidente reale (26/8): primo messaggio di un thread nuovo, sessione già fredda ma
+		// lenta — il timeout di partenza scattava, e il retry faceva UNA SECONDA creazione
+		// identica. Due avvii a freddo = due minuti, e il log diceva «sessione riusata» quando
+		// non c'era nulla di riusato. Il riuso è un'ottimizzazione: senza sessione in
+		// cache il retry non ha niente da salvare, e se il primo avvio non parte il turno lo
+		// dice una volta.
+		vi.stubEnv('HARNESS_START_TIMEOUT_MS', '250');
+		try {
+			scriptTurns({ hang: true }, { texts: ['nuovo '], calls: [replyCall('arrivo')] });
+			const { db } = fakeDb();
+			await expect(
+				runKitTurn({
+					supabase: fakeSupabase,
+					admin: db,
+					brand: { id: 'b1' },
+					user: { id: 'u1' },
+					threadId: 't-fresh',
+					spec,
+					messages: [{ role: 'user', content: 'ciao' }],
+					locale: 'it'
+				})
+			).rejects.toThrow();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+		const optsForThread = harnessTurnOpts.filter((o) => o.sessionKey === 't-fresh');
+		expect(optsForThread).toHaveLength(1);
+		expect(optsForThread[0]?.freshSession).toBeUndefined();
 	});
 });
 
