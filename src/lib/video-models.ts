@@ -1,10 +1,12 @@
 /** Shared video-model ids safe for client + server (no $env). */
 
+export const GROK_IMAGINE_VIDEO_MODEL = 'grok-imagine-video-1-5-preview';
+
 export const SEEDANCE_25_MODEL = 'bytedance/seedance-2-5';
 
 /** Models a brand (or the media-generator UI) can pick. Ids are the I2V form. */
 export const VIDEO_MODEL_CHOICES = [
-  { id: 'grok-imagine-video-1-5-preview', label: 'Grok Imagine' },
+  { id: GROK_IMAGINE_VIDEO_MODEL, label: 'Grok Imagine' },
   { id: SEEDANCE_25_MODEL, label: 'Seedance 2.5' },
   { id: 'bytedance/seedance-2', label: 'Seedance 2' },
   { id: 'bytedance/seedance-2-fast', label: 'Seedance 2 Fast' },

@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { getThread, loadHistoryForUI } from '$lib/server/chat/persistence';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { listThreadArtifacts } from '$lib/server/chat/artifacts';
 import { chatJobFreshSince, reapStaleChatJobs } from '$lib/server/chat/job-cancel';
 import { loadLastReads } from '$lib/server/chat/unread';
@@ -225,6 +226,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
   return {
     thread,
     agentPanel,
+    agentDesktopEnabled: agentDesktopEnabled(),
     messages,
     artifacts,
     brandSlug: brand.slug,

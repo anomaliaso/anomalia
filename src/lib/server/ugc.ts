@@ -19,10 +19,10 @@ import {
 } from '$lib/ugc-formats';
 
 /**
- * First-frame identity (People refs + product refs + QC) needs the same Pro path as normal stills:
- * the candid look is enforced in the PROMPT, not by downgrading the model.
+ * First-frame identity (People refs + product refs + QC) follows the product default: Nano Banana
+ * 2 Lite. The candid look is enforced in the PROMPT — it never depended on the model tier.
  */
-export const UGC_COVER_MODEL = 'gemini-3-pro-image-preview';
+export const UGC_COVER_MODEL = 'gemini-3.1-flash-lite-image';
 
 /** Replaces the brand's visual_style for UGC frames. See the module note for why it is a swap. */
 export const UGC_VISUAL_STYLE = `PHOTOGRAPHY: ultra-realistic iPhone front-camera selfie. Handheld, held at arm's length, framing slightly off-centre, chest-up with headroom above the hair.

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { acquireHolder, releaseHolder } from './sandbox-leases';
+import { acquireHolder, HOLDER_CONFLICT_TARGET, releaseHolder } from './sandbox-leases';
 
 type Row = {
   id: string;
@@ -13,15 +13,17 @@ type Row = {
 function fakeDb() {
   const rows: Row[] = [];
   const stop = vi.fn(async () => {});
+  const upsertConflicts: string[] = [];
   let seq = 0;
 
   const builder = (table: string) => {
     if (table !== 'sandbox_holders') throw new Error(`unexpected table ${table}`);
     const state: { mode: 'upsert' | 'delete' | 'count'; row?: Partial<Row>; id?: string; name?: string; since?: string } = { mode: 'count' };
     const chain = {
-      upsert(row: Partial<Row>) {
+      upsert(row: Partial<Row>, opts?: { onConflict?: string }) {
         state.mode = 'upsert';
         state.row = row;
+        if (opts?.onConflict) upsertConflicts.push(opts.onConflict);
         return chain;
       },
       delete() {
@@ -74,10 +76,34 @@ function fakeDb() {
     return chain;
   };
 
-  return { db: { from: builder } as never, rows, stop };
+  return { db: { from: builder } as never, rows, stop, upsertConflicts };
 }
 
 const BASE = { name: 'anomalia-vm-g5', brandId: 'b1', kind: 'turn' as const };
+
+describe('HOLDER_CONFLICT_TARGET', () => {
+  /**
+   * Un onConflict che non coincide con l'unique index non dà errori vistosi: ogni upsert
+   * fallisce, acquireHolder torna null, la contabilità tace e le VM restano accese. Il test
+   * confronta la costante col SQL della migration — le due metà devono viaggiare insieme.
+   */
+  it('coincide con l’unique index scritto nella migration', async () => {
+    const { readFileSync } = await import('node:fs');
+    const migration = readFileSync(
+      new URL('../../../supabase/migrations/20260829120000_sandbox_holders.sql', import.meta.url),
+      'utf8'
+    );
+    expect(migration).toMatch(new RegExp(`unique index[^;]*on public.sandbox_holders \\(${HOLDER_CONFLICT_TARGET.replace(',', ', ')}\\)`));
+    expect(migration).toContain('enable row level security');
+  });
+
+  it('ogni upsert lo dichiara', async () => {
+    const f = fakeDb();
+    await acquireHolder({ ...BASE, key: 'turn:r1', ttlMs: 60_000, db: f.db });
+    await acquireHolder({ ...BASE, key: 'desktop:ag1', kind: 'desktop', ttlMs: 60_000, db: f.db });
+    expect(f.upsertConflicts).toEqual([HOLDER_CONFLICT_TARGET, HOLDER_CONFLICT_TARGET]);
+  });
+});
 
 describe('acquireHolder', () => {
   it('una seconda acquire con la stessa chiave rinfresca, non duplica', async () => {

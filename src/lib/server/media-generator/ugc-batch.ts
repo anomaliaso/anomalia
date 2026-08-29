@@ -50,7 +50,7 @@ import {
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { aiStructured } from '$lib/server/xiaomi';
 import { trendingWallDigestSection } from '$lib/server/wall-digest';
-import { isSeedanceFamily, SEEDANCE_25_MODEL } from '$lib/video-models';
+import { GROK_IMAGINE_VIDEO_MODEL, isSeedanceFamily, SEEDANCE_25_MODEL } from '$lib/video-models';
 import {
   DESIGNER_SLICE_RESERVE_MS,
   truncatedDesignerNotice
@@ -737,16 +737,13 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
       };
 
       const { renderVideo, isKnownVideoModel } = await import('$lib/server/video');
-      // UGC Creator defaults to Seedance 2.5. Remake from a selected grid video
-      // requires Seedance (Kie reference_video_urls) — Grok Imagine cannot take video refs.
+      // UGC Creator defaults to Grok Imagine (480p). Remake from a selected grid video and
+      // reference audio require Seedance (Kie reference_video_urls) — Grok cannot take them.
       let lockedModel =
         opts.videoModel && isKnownVideoModel(opts.videoModel)
           ? opts.videoModel
-          : SEEDANCE_25_MODEL;
-      if (
-        (remakeMode || materials.refAudios.length || materials.firstFrame) &&
-        !isSeedanceFamily(lockedModel)
-      ) {
+          : GROK_IMAGINE_VIDEO_MODEL;
+      if ((remakeMode || materials.refAudios.length) && !isSeedanceFamily(lockedModel)) {
         lockedModel = SEEDANCE_25_MODEL;
       }
       const refForClip =

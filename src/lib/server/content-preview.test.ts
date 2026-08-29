@@ -497,14 +497,14 @@ describe('aspectRatioFor', () => {
 });
 
 describe('buildImageRequest (image model tier)', () => {
-  const PRO = 'gemini-3-pro-image-preview';
+  const LITE = 'gemini-3.1-flash-lite-image';
   const img = { inlineData: { mimeType: 'image/png', data: 'x' } };
 
-  it('pays for Pro only when something must be REPRODUCED', () => {
-    expect(buildImageRequest('p', { personImages: [img] }).model).toBe(PRO);
-    expect(buildImageRequest('p', { referenceImages: [img] }).model).toBe(PRO);
-    expect(buildImageRequest('p', { userRefImages: [img] }).model).toBe(PRO);
-    expect(buildImageRequest('p', { baseImage: img }).model).toBe(PRO);
+  it('default render model is Nano Banana 2 Lite, also with reproduction refs', () => {
+    expect(buildImageRequest('p', { personImages: [img] }).model).toBe(LITE);
+    expect(buildImageRequest('p', { referenceImages: [img] }).model).toBe(LITE);
+    expect(buildImageRequest('p', { userRefImages: [img] }).model).toBe(LITE);
+    expect(buildImageRequest('p', { baseImage: img }).model).toBe(LITE);
   });
 
   it('drops to the half-price tier with no reproduction refs — mood and logo do not count', () => {

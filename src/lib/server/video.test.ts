@@ -8,6 +8,7 @@ import {
   clampVideoAspectRatio,
   videoModelCaps,
   videoDurationOptions,
+  ugcDurationCap,
   suggestVideoDuration,
   resolveVideoDuration,
   resolveVideoModel,
@@ -282,6 +283,16 @@ describe('clampVideoDuration (model-aware)', () => {
   it('the product floor is above Seedance/Grok provider floors, deliberately', () => {
     expect(MIN_DURATION).toBeGreaterThan(videoModelCaps('bytedance/seedance-2-5').minDuration);
     expect(MIN_DURATION).toBeGreaterThan(videoModelCaps('grok-imagine-video-1-5-preview').minDuration);
+  });
+});
+
+describe('ugcDurationCap', () => {
+  it('the ad flag never picks a model: 22s only on Seedance 2.5, organic ceiling elsewhere', () => {
+    expect(ugcDurationCap('bytedance/seedance-2-5', { ugc: true, ugcAd: true })).toBe(22);
+    expect(ugcDurationCap('grok-imagine-video-1-5-preview', { ugc: true, ugcAd: true })).toBe(15);
+    expect(ugcDurationCap(null, { ugc: true, ugcAd: true })).toBe(15);
+    expect(ugcDurationCap('bytedance/seedance-2-5', { ugc: true })).toBe(15);
+    expect(ugcDurationCap('grok-imagine-video-1-5-preview', { ugc: false, ugcAd: true })).toBeNull();
   });
 });
 
