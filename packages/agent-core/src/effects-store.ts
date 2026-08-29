@@ -1,19 +1,19 @@
-/**
- * IL LEDGER SU POSTGRES. L'unico punto che scrive `agent_kit_effects`: `intend` prima di eseguire,
- * `resolve` dopo, `reconcileRun` quando un segmento muore. Il resto (decidere congelare) sta in
- * `effects.ts`, la logica pura.
- */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { EffectsLedger, ToolEffect } from '@anomalia/agent-kit';
+import type { EffectClaim, EffectsLedger, ToolEffect } from '@anomalia/agent-kit';
+import { legacyEffectKey, sameEffectPayload } from './effects';
 
 const TABLE = 'agent_kit_effects';
+const UNIQUE_VIOLATION = '23505';
+const INTENDED_STATUS: ToolEffect['status'] = 'intended';
+const FAILED_STATUS: ToolEffect['status'] = 'failed';
 
 type Row = {
 	id: string;
 	brand_id: string;
 	run_id: string | null;
 	tool_name: string;
-	idempotency_key: string;
+	invocation_id: string | null;
+	idempotency_key: string | null;
 	status: ToolEffect['status'];
 	request?: unknown;
 	result?: unknown;
@@ -27,7 +27,7 @@ function toEffect(r: Row): ToolEffect {
 		brandId: r.brand_id,
 		runId: r.run_id ?? null,
 		toolName: r.tool_name,
-		idempotencyKey: r.idempotency_key,
+		invocationId: r.invocation_id ?? null,
 		status: r.status,
 		request: r.request,
 		result: r.result,
@@ -36,82 +36,144 @@ function toEffect(r: Row): ToolEffect {
 	};
 }
 
-/**
- * Chiave deterministica dell'effetto: brand + tool + args canonicalizzati. NON contiene il run_id:
- * l'idempotenza deve riconoscere la stessa intenzione attraverso un resume (che riparte da zero) e
- * un takeover. Due args che coincidono in fondo = stessa intenzione = stesso effetto.
- */
-export function effectKey(toolName: string, args: Record<string, unknown>): string {
-	const canonical = stableSerialize(args);
-	const bytes = new TextEncoder().encode(`${toolName}\n${canonical}`);
-	// FNV-1a 64-bit, esadecimale — niente crypto asincrona: il key è un indice, non un segreto.
-	let hash = 0x811c9dc5;
-	for (const b of bytes) {
-		hash ^= b;
-		hash = Math.imul(hash, 0x01000193);
-	}
-	return `${toolName}:${(hash >>> 0).toString(36)}:${canonical.length}`;
+function uniqueViolation(error: { code?: string; message?: string }): boolean {
+	return error.code === UNIQUE_VIOLATION || /duplicate key|unique constraint/i.test(error.message ?? '');
 }
 
-function stableSerialize(value: unknown): string {
-	if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
-	if (value && typeof value === 'object') {
-		return `{${Object.keys(value)
-			.sort()
-			.map((k) => `${JSON.stringify(k)}:${stableSerialize((value as Record<string, unknown>)[k])}`)
-			.join(',')}}`;
+function samePayload(effect: ToolEffect, record: { toolName: string; request: unknown }): boolean {
+	return effect.toolName === record.toolName && sameEffectPayload(effect.request, record.request);
+}
+
+async function findInvocation(
+	db: SupabaseClient,
+	brandId: string,
+	invocationId: string
+): Promise<ToolEffect | null> {
+	const { data, error } = await db
+		.from(TABLE)
+		.select()
+		.eq('brand_id', brandId)
+		.eq('invocation_id', invocationId)
+		.maybeSingle();
+	if (error) {
+		throw new Error(`effects: lettura claim fallita — ${error.message}`);
 	}
-	return JSON.stringify(value);
+	return data ? toEffect(data as Row) : null;
 }
 
 export function createEffectsLedger(db: SupabaseClient): EffectsLedger {
 	return {
-		async intend(record): Promise<ToolEffect> {
+		async claim(record): Promise<EffectClaim> {
+			if (record.legacyKey) {
+				const { data, error } = await db
+					.from(TABLE)
+					.select()
+					.eq('brand_id', record.brandId)
+					.eq('idempotency_key', record.legacyKey)
+					.is('invocation_id', null)
+					.maybeSingle();
+				if (error) {
+					throw new Error(`effects: lettura legacy fallita — ${error.message}`);
+				}
+				if (data) {
+					const effect = toEffect(data as Row);
+					if (effect.runId === record.runId) {
+						if (!samePayload(effect, record)) {
+							return { kind: 'mismatch', effect };
+						}
+						if (effect.status !== FAILED_STATUS) {
+							return { kind: 'existing', effect };
+						}
+					}
+				}
+			}
+
 			const { data, error } = await db
 				.from(TABLE)
 				.insert({
 					brand_id: record.brandId,
 					run_id: record.runId,
 					tool_name: record.toolName,
-					idempotency_key: record.key,
-					status: 'intended',
+					invocation_id: record.invocationId,
+					idempotency_key: null,
+					status: INTENDED_STATUS,
 					request: record.request
 				})
 				.select()
-				.single();
-			if (error) throw new Error(`effects: intend fallito — ${error.message}`);
-			return toEffect(data as Row);
-		},
+				.maybeSingle();
+			if (!error && data) {
+				return { kind: 'claimed', effect: toEffect(data as Row) };
+		}
+		if (error && !uniqueViolation(error)) {
+			throw new Error(`effects: claim fallito — ${error.message}`);
+		}
 
-		async resolve(id, status, result): Promise<void> {
-			const { error } = await db
+			const existing = await findInvocation(db, record.brandId, record.invocationId);
+			if (!existing) {
+				throw new Error('effects: claim concorrente senza riga proprietaria');
+			}
+			if (!samePayload(existing, record)) {
+				return { kind: 'mismatch', effect: existing };
+			}
+			if (existing.status !== FAILED_STATUS) {
+				return { kind: 'existing', effect: existing };
+			}
+
+			const retried = await db
 				.from(TABLE)
-				.update({ status, result, updated_at: new Date().toISOString() })
-				.eq('id', id);
-			if (error) throw new Error(`effects: resolve fallito — ${error.message}`);
+				.update({
+					run_id: record.runId,
+					status: INTENDED_STATUS,
+					result: null,
+					updated_at: new Date().toISOString()
+				})
+				.eq('id', existing.id)
+				.eq('status', 'failed')
+				.select()
+				.maybeSingle();
+			if (retried.error) {
+				throw new Error(`effects: retry fallito — ${retried.error.message}`);
+			}
+			if (retried.data) {
+				return { kind: 'claimed', effect: toEffect(retried.data as Row) };
+			}
+
+			const current = await findInvocation(db, record.brandId, record.invocationId);
+			if (!current) {
+				throw new Error('effects: retry concorrente senza riga proprietaria');
+			}
+			return samePayload(current, record)
+				? { kind: 'existing', effect: current }
+				: { kind: 'mismatch', effect: current };
 		},
 
-		async find(brandId, key): Promise<ToolEffect | null> {
+		async resolve(id, status, result): Promise<boolean> {
 			const { data, error } = await db
 				.from(TABLE)
-				.select()
-				.eq('brand_id', brandId)
-				.eq('idempotency_key', key)
+				.update({ status, result, updated_at: new Date().toISOString() })
+				.eq('id', id)
+				.eq('status', 'intended')
+				.select('id')
 				.maybeSingle();
-			if (error) throw new Error(`effects: find fallito — ${error.message}`);
-			return data ? toEffect(data as Row) : null;
+			if (error) {
+				throw new Error(`effects: resolve fallito — ${error.message}`);
+			}
+			return !!data;
 		},
 
 		async reconcileRun(runId): Promise<number> {
-			// Solo le righe ancora `intended`: un `completed` è un esito vero, non va toccato.
 			const { data, error } = await db
 				.from(TABLE)
 				.update({ status: 'ambiguous', updated_at: new Date().toISOString() })
 				.eq('run_id', runId)
 				.eq('status', 'intended')
 				.select('id');
-			if (error) throw new Error(`effects: reconcile fallito — ${error.message}`);
+			if (error) {
+				throw new Error(`effects: reconcile fallito — ${error.message}`);
+			}
 			return data?.length ?? 0;
 		}
 	};
 }
+
+export const effectKey = legacyEffectKey;

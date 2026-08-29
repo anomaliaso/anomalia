@@ -19,6 +19,9 @@ import type {
 } from './index';
 import type { BrandFs, MemoryStore, SandboxProvider, ToolPlugin } from './index';
 
+const INTENDED_STATUS: ToolEffect['status'] = 'intended';
+const FAILED_STATUS: ToolEffect['status'] = 'failed';
+
 export function fakeContext(overrides: Partial<AdapterContext> = {}): AdapterContext {
 	return {
 		brandId: 'brand-test',
@@ -137,9 +140,8 @@ export function fakePlugin(name: string, reply: ToolResult): ToolPlugin {
 }
 
 /**
- * IL LEDGER IN MEMORIA per i test del gate: `intend`/`resolve`/`find`/`reconcileRun` su una mappa
- * per (brand, chiave). Così il gate dell'executor si verifica col suo comportamento vero — decidere
- * se rieseguire o congelare — senza montare un database.
+ * IL LEDGER IN MEMORIA per i test del gate: claim/resolve/reconcileRun su una mappa per
+ * (brand, invocationId). Così il gate dell'executor si verifica senza montare un database.
  */
 export function createMemoryEffectsLedger(seed: { [key: string]: unknown } = {}): EffectsLedger & { rows: ToolEffect[] } {
 	const rows: ToolEffect[] = [];
@@ -150,7 +152,7 @@ export function createMemoryEffectsLedger(seed: { [key: string]: unknown } = {})
 			brandId: 'brand-test',
 			runId: 'run-test',
 			toolName: 'content_schedule',
-			idempotencyKey: 'seed',
+			invocationId: 'seed',
 			status: status as ToolEffect['status'],
 			request: request as unknown,
 			result: null,
@@ -161,34 +163,44 @@ export function createMemoryEffectsLedger(seed: { [key: string]: unknown } = {})
 
 	return {
 		rows,
-		async intend(record) {
-			const existing = rows.find((r) => r.brandId === record.brandId && r.idempotencyKey === record.key);
-			if (existing) return existing;
+		async claim(record) {
+			const existing = rows.find((r) => r.brandId === record.brandId && r.invocationId === record.invocationId);
+			if (existing) {
+				if (existing.toolName !== record.toolName || stableSerialize(existing.request) !== stableSerialize(record.request)) {
+					return { kind: 'mismatch', effect: existing };
+				}
+				if (existing.status === FAILED_STATUS) {
+					existing.runId = record.runId;
+					existing.status = 'intended';
+					existing.result = null;
+					return { kind: 'claimed', effect: existing };
+				}
+				return { kind: 'existing', effect: existing };
+			}
 			const effect: ToolEffect = {
 				id: `e-${rows.length + 1}`,
 				brandId: record.brandId,
 				runId: record.runId,
 				toolName: record.toolName,
-				idempotencyKey: record.key,
-				status: 'intended',
+				invocationId: record.invocationId,
+				status: INTENDED_STATUS,
 				request: record.request,
 				result: null,
 				createdAt: '2026-08-29T00:00:00.000Z',
 				updatedAt: '2026-08-29T00:00:00.000Z'
 			};
 			rows.push(effect);
-			return effect;
+			return { kind: 'claimed', effect };
 		},
 		async resolve(id, status, result) {
 			const effect = rows.find((r) => r.id === id);
-			if (effect) {
+			if (effect?.status === INTENDED_STATUS) {
 				effect.status = status;
 				effect.result = result;
 				effect.updatedAt = '2026-08-29T00:00:00.000Z';
+				return true;
 			}
-		},
-		async find(brandId, key) {
-			return rows.find((r) => r.brandId === brandId && r.idempotencyKey === key) ?? null;
+			return false;
 		},
 		async reconcileRun(runId) {
 			let n = 0;
@@ -201,4 +213,17 @@ export function createMemoryEffectsLedger(seed: { [key: string]: unknown } = {})
 			return n;
 		}
 	};
+}
+
+function stableSerialize(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map(stableSerialize).join(',')}]`;
+	}
+	if (value && typeof value === 'object') {
+		return `{${Object.keys(value)
+			.sort()
+			.map((key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key])}`)
+			.join(',')}}`;
+	}
+	return JSON.stringify(value);
 }

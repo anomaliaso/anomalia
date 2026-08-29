@@ -100,7 +100,11 @@ function toRunEvent(part: StreamPart): RunEvent | null {
 			return {
 				type: 'tool_call',
 				id: part.toolCallId ?? '',
-				call: { name: part.toolName ?? '', args: (part.input ?? {}) as Record<string, unknown> }
+				call: {
+					name: part.toolName ?? '',
+					args: (part.input ?? {}) as Record<string, unknown>,
+					...(part.toolCallId ? { id: part.toolCallId } : {})
+				}
 			};
 		case 'tool-result':
 			return {

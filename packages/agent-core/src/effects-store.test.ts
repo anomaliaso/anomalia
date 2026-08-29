@@ -4,152 +4,195 @@ import { createEffectsLedger, effectKey } from './effects-store';
 
 type Row = Record<string, unknown>;
 
-/** Il finto client parla con una tabella in memoria, applicando i filtri `eq` per davvero. */
 function fakeDb(seed: Row[] = []) {
-	const rows: Row[] = seed.map((r) => ({ ...r }));
+	const rows: Row[] = seed.map((row) => ({ ...row }));
 
 	function from(_table: string) {
 		let op: 'select' | 'insert' | 'update' = 'select';
 		let payload: Row | undefined;
-		const eqFilters: Array<[string, unknown]> = [];
-		let insertId = `e-${rows.length + 1}`;
+		const filters: Array<[string, unknown]> = [];
+		const nullFilters: Array<[string, unknown]> = [];
 
-		function apply(): { data: Row[] | null; error: { message: string } | null } {
-			let matched = rows;
-			for (const [col, val] of eqFilters) matched = matched.filter((r) => r[col] === val);
+		function apply(): { data: Row[] | null; error: { code?: string; message: string } | null } {
+			let matched = rows.filter((row) => filters.every(([column, value]) => row[column] === value));
+			matched = matched.filter((row) => nullFilters.every(([column, value]) => (row[column] ?? null) === value));
 			if (op === 'insert' && payload) {
+				if (
+					payload.invocation_id != null &&
+					rows.some((row) => row.brand_id === payload?.brand_id && row.invocation_id === payload?.invocation_id)
+				) {
+					return { data: null, error: { code: '23505', message: 'duplicate key' } };
+				}
 				const row: Row = {
-					...payload,
-					id: insertId,
+					id: `e-${rows.length + 1}`,
 					created_at: '2026-08-29T00:00:00.000Z',
-					updated_at: '2026-08-01T00:00:00.000Z'
+					updated_at: '2026-08-29T00:00:00.000Z',
+					...payload
 				};
 				rows.push(row);
 				return { data: [row], error: null };
 			}
 			if (op === 'update' && payload) {
-				for (const r of matched) Object.assign(r, payload);
+				for (const row of matched) Object.assign(row, payload);
 				return { data: matched, error: null };
 			}
 			return { data: matched, error: null };
 		}
 
-		const b: Record<string, unknown> = {
-			insert(p: Row) {
+		const builder: Record<string, unknown> = {
+			insert(value: Row) {
 				op = 'insert';
-				payload = p;
-				return b;
+				payload = value;
+				return builder;
 			},
-			update(p: Row) {
+			update(value: Row) {
 				op = 'update';
-				payload = p;
-				return b;
+				payload = value;
+				return builder;
 			},
-			select(_cols?: string) {
-				return b;
+			select() {
+				return builder;
 			},
-			eq(col: string, val: unknown) {
-				eqFilters.push([col, val]);
-				return b;
+			eq(column: string, value: unknown) {
+				filters.push([column, value]);
+				return builder;
 			},
-			single() {
-				const { data, error } = apply();
-				if (error) return Promise.resolve({ data: null, error });
-				if (!data || data.length !== 1) return Promise.resolve({ data: null, error: { message: 'not exactly one row' } });
-				return Promise.resolve({ data: data[0], error: null });
+			is(column: string, value: unknown) {
+				nullFilters.push([column, value]);
+				return builder;
 			},
 			maybeSingle() {
-				const { data, error } = apply();
-				return Promise.resolve({ data: data?.[0] ?? null, error });
+				const result = apply();
+				return Promise.resolve({ data: result.data?.[0] ?? null, error: result.error });
 			},
-			then(resolve: (v: unknown) => void, reject?: (e: unknown) => void) {
+			then(resolve: (value: unknown) => void, reject?: (error: unknown) => void) {
 				return Promise.resolve(apply()).then(resolve, reject);
 			}
 		};
-		return b;
+		return builder;
 	}
 
 	return { db: { from } as unknown as SupabaseClient, rows };
 }
+
+const RECORD = {
+	brandId: 'b1',
+	runId: 'r1',
+	invocationId: 'call-1',
+	toolName: 'content_schedule',
+	request: { post_id: 'p1' }
+};
 
 const ROW = (over: Row = {}): Row => ({
 	id: 'e-1',
 	brand_id: 'b1',
 	run_id: 'r1',
 	tool_name: 'content_schedule',
-	idempotency_key: 'k1',
+	invocation_id: 'call-1',
+	idempotency_key: null,
 	status: 'intended',
+	request: { post_id: 'p1' },
+	result: null,
 	created_at: '2026-08-29T00:00:00.000Z',
 	updated_at: '2026-08-29T00:00:00.000Z',
 	...over
 });
 
-describe('createEffectsLedger — intend', () => {
-	it('registra intended col request e mappa la riga nel ToolEffect', async () => {
+describe('createEffectsLedger — claim', () => {
+	it('registra l’identità stabile e il payload prima dell’esecuzione', async () => {
+		const { db } = fakeDb();
+		const claim = await createEffectsLedger(db).claim(RECORD);
+
+		expect(claim.kind).toBe('claimed');
+		expect(claim.effect.invocationId).toBe('call-1');
+		expect(claim.effect.request).toEqual({ post_id: 'p1' });
+	});
+
+	it('due claim concorrenti della stessa identità ne autorizzano uno solo', async () => {
 		const { db } = fakeDb();
 		const ledger = createEffectsLedger(db);
-		const effect = await ledger.intend({ brandId: 'b1', runId: 'r1', toolName: 'content_schedule', key: 'k1', request: { post_id: 'p1' } });
-		expect(effect.status).toBe('intended');
-		expect(effect.brandId).toBe('b1');
-		expect(effect.runId).toBe('r1');
-		expect(effect.idempotencyKey).toBe('k1');
-		expect(effect.request).toEqual({ post_id: 'p1' });
-	});
-});
+		const claims = await Promise.all([ledger.claim(RECORD), ledger.claim({ ...RECORD, runId: 'r2' })]);
 
-describe('createEffectsLedger — find', () => {
-	it('la stessa chiave di brand torna la riga esistente', async () => {
-		const { db } = fakeDb([ROW({ idempotency_key: 'k1', status: 'completed', result: { ok: true } })]);
-		const effect = await createEffectsLedger(db).find('b1', 'k1');
-		expect(effect?.status).toBe('completed');
-		expect(effect?.result).toEqual({ ok: true });
+		expect(claims.filter((claim) => claim.kind === 'claimed')).toHaveLength(1);
+		expect(claims.filter((claim) => claim.kind === 'existing')).toHaveLength(1);
 	});
 
-	it('una chiave diversa torna null', async () => {
-		const { db } = fakeDb([ROW({ idempotency_key: 'k1' })]);
-		const effect = await createEffectsLedger(db).find('b1', 'k2');
-		expect(effect).toBeNull();
+	it('due identità nuove con args identici hanno due righe', async () => {
+		const { db, rows } = fakeDb();
+		const ledger = createEffectsLedger(db);
+		await ledger.claim(RECORD);
+		await ledger.claim({ ...RECORD, invocationId: 'call-2', runId: 'r2' });
+
+		expect(rows).toHaveLength(2);
 	});
 
-	it('un altro brand non condivide la chiave (lo scoping è per brand)', async () => {
-		const { db } = fakeDb([ROW({ brand_id: 'b1', idempotency_key: 'k1' })]);
-		const effect = await createEffectsLedger(db).find('b2', 'k1');
-		expect(effect).toBeNull();
-	});
-});
+	it('la stessa identità con payload diverso è un mismatch', async () => {
+		const { db } = fakeDb();
+		const ledger = createEffectsLedger(db);
+		await ledger.claim(RECORD);
 
-describe('createEffectsLedger — resolve', () => {
-	it('sposta intended → completed col result', async () => {
-		const { db, rows } = fakeDb([ROW({ idempotency_key: 'k1', status: 'intended' })]);
-		await createEffectsLedger(db).resolve('e-1', 'completed', { post_id: 'p1' });
-		expect(rows[0].status).toBe('completed');
-		expect(rows[0].result).toEqual({ post_id: 'p1' });
+		const claim = await ledger.claim({ ...RECORD, request: { post_id: 'p2' } });
+
+		expect(claim.kind).toBe('mismatch');
 	});
 
-	it('sposta intended → failed in caso di errore', async () => {
-		const { db, rows } = fakeDb([ROW({ idempotency_key: 'k1', status: 'intended' })]);
-		await createEffectsLedger(db).resolve('e-1', 'failed', { message: 'net' });
-		expect(rows[0].status).toBe('failed');
-	});
-});
-
-describe('createEffectsLedger — reconcileRun', () => {
-	it('tira verso ambiguous solo gli intended del run, mai i completed', async () => {
+	it('il resume di un run legacy continua a riconoscere la riga congelata', async () => {
 		const { db, rows } = fakeDb([
-			ROW({ id: 'e-1', run_id: 'r1', status: 'intended' }),
-			ROW({ id: 'e-2', run_id: 'r1', status: 'completed' }),
-			ROW({ id: 'e-3', run_id: 'r2', status: 'intended' })
+			ROW({ invocation_id: null, idempotency_key: effectKey(RECORD.toolName, RECORD.request), status: 'completed' })
 		]);
-		const n = await createEffectsLedger(db).reconcileRun('r1');
-		expect(n).toBe(1);
-		expect(rows.find((r) => r.id === 'e-1')?.status).toBe('ambiguous');
-		expect(rows.find((r) => r.id === 'e-2')?.status).toBe('completed');
-		expect(rows.find((r) => r.id === 'e-3')?.status).toBe('intended');
+		const ledger = createEffectsLedger(db);
+
+		const claim = await ledger.claim({ ...RECORD, invocationId: 'call-new', legacyKey: effectKey(RECORD.toolName, RECORD.request) });
+
+		expect(claim.kind).toBe('existing');
+		expect(rows).toHaveLength(1);
+	});
+
+	it('una riga legacy di un run diverso non blocca una nuova identità', async () => {
+		const { db, rows } = fakeDb([
+			ROW({
+				run_id: 'run-old',
+				invocation_id: null,
+				idempotency_key: effectKey(RECORD.toolName, RECORD.request),
+				status: 'completed'
+			})
+		]);
+		const ledger = createEffectsLedger(db);
+
+		const claim = await ledger.claim({ ...RECORD, runId: 'run-new', invocationId: 'call-new', legacyKey: effectKey(RECORD.toolName, RECORD.request) });
+
+		expect(claim.kind).toBe('claimed');
+		expect(rows).toHaveLength(2);
 	});
 });
 
-describe('effectKey — solo il contratto del key non cambia', () => {
-	it('produce una chiave che contiene il nome del tool', () => {
+describe('createEffectsLedger — lifecycle', () => {
+	it('un worker tardivo non sovrascrive ambiguous', async () => {
+		const { db, rows } = fakeDb();
+		const ledger = createEffectsLedger(db);
+		const claim = await ledger.claim(RECORD);
+
+		await ledger.reconcileRun(RECORD.runId);
+		const resolved = await ledger.resolve(claim.effect.id, 'completed', { ok: true });
+
+		expect(resolved).toBe(false);
+		expect(rows[0].status).toBe('ambiguous');
+	});
+
+	it('un failed può essere reclamato di nuovo dalla stessa identità', async () => {
+		const { db } = fakeDb();
+		const ledger = createEffectsLedger(db);
+		const first = await ledger.claim(RECORD);
+		await ledger.resolve(first.effect.id, 'failed', { message: 'network' });
+
+		const retry = await ledger.claim({ ...RECORD, runId: 'r2' });
+
+		expect(retry.kind).toBe('claimed');
+	});
+});
+
+describe('effectKey — compatibilità legacy', () => {
+	it('conserva la forma della vecchia chiave per le righe esistenti', () => {
 		expect(effectKey('content_schedule', { post_id: 'p1' })).toContain('content_schedule');
 	});
 });

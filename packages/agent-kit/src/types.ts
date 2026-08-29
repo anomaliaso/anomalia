@@ -80,13 +80,20 @@ export interface ToolResult {
 /** Lo stato di un effetto collaterale nel ledger — la macchina a stati di `agent_kit_effects`. */
 export type EffectStatus = 'intended' | 'completed' | 'failed' | 'ambiguous' | 'reconciled';
 
-/** Una riga del ledger degli effetti: chi, cosa, con quale chiave, in che stato. */
+/** Risultato atomico del claim: solo `claimed` può eseguire il payload. */
+export type EffectClaim =
+	| { kind: 'claimed'; effect: ToolEffect }
+	| { kind: 'existing'; effect: ToolEffect }
+	| { kind: 'mismatch'; effect: ToolEffect };
+
+/** Una riga del ledger: identità della chiamata e payload sono dati distinti. */
 export interface ToolEffect {
 	id: string;
 	brandId: string;
 	runId: string | null;
 	toolName: string;
-	idempotencyKey: string;
+	/** SDK `toolCallId`, persistito nella storia e stabile tra resume e takeover. */
+	invocationId: string | null;
 	status: EffectStatus;
 	request?: unknown;
 	result?: unknown;
@@ -97,7 +104,7 @@ export interface ToolEffect {
 export interface ToolCall {
 	name: string;
 	args: Record<string, unknown>;
-	/** Id della chiamata sul filo (SDK `toolCallId`). Ancora un artefatto alla chip giusta. */
+	/** Identità della chiamata sul filo (SDK `toolCallId`), non derivata dagli argomenti. */
 	id?: string;
 }
 
@@ -110,6 +117,7 @@ export interface RunTokenUsage {
 export type RunEvent =
 	| { type: 'text'; text: string }
 	| { type: 'reasoning'; text: string }
+	/** `id` è il `toolCallId` persistito e rigiocato dai runtime durante resume e takeover. */
 	| { type: 'tool_call'; call: ToolCall; id: string }
 	| { type: 'tool_result'; id: string; result: ToolResult }
 	| { type: 'done'; reason: RunStopReason; usage?: RunTokenUsage }
