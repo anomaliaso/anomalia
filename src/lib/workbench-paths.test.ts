@@ -53,10 +53,8 @@ describe('nav team (FEATURE_NAV_TEAM)', () => {
       ],
       web: [
         { key: 'overview', path: '/web' },
-        { key: 'seo', path: '/seo' },
-        { key: 'geo', path: '/geo' },
-        { key: 'keywords', path: '/keywords' },
-        { key: 'backlinks', path: '/backlinks' },
+        // kill seo/geo 2026-08-29: seo/geo/keywords/backlinks fuori dalla nav,
+        // rotte e dati intatti (revert = decommentare in workbench-paths.ts).
         { key: 'blog', path: '/site' }
       ]
       // Niente `designer`: la sezione è uscita dalla nav (2026-08-22). Le pagine restano su

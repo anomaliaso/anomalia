@@ -70,9 +70,9 @@
     { key: 'plan', done: setup.hasEditorialPlan, href: `${base}/plan` },
     { key: 'social', done: setup.socialAccounts > 0, href: `${base}/settings/connected-accounts` },
     { key: 'blog', done: setup.blogEnabled, href: `${base}/site` },
-    { key: 'radar', done: setup.radarEnabled, href: `${base}/radar` },
-    { key: 'seo', done: setup.hasGeoAudit, href: `${base}/seo` },
-    { key: 'gsc', done: setup.gscConnected, href: `${base}/settings/search-console` }
+    { key: 'radar', done: setup.radarEnabled, href: `${base}/radar` }
+    // { key: 'seo', done: setup.hasGeoAudit, href: `${base}/seo` }, // kill seo/geo 2026-08-29
+    // { key: 'gsc', done: setup.gscConnected, href: `${base}/settings/search-console` } // kill seo/geo 2026-08-29
   ]);
 
   const doneCount = $derived(setupSteps.filter((s) => s.done).length);
@@ -443,6 +443,7 @@
         </div>
         <span class="gauge-label">{$_('app.home.overview.setupGauge')}</span>
       </div>
+      <!-- kill seo/geo 2026-08-29: gauge senza link, le pagine sono fuori nav
       <a class="gauge" href={`${base}/seo`}>
         <div class="gauge-ring" style={`--v:${Math.round(seoGauge)}`} aria-hidden="true">
           <span>
@@ -469,6 +470,7 @@
         </div>
         <span class="gauge-label">{$_('app.home.overview.geoGauge')}</span>
       </a>
+      -->
     </div>
 
     {#if reviewTotal > 0}
@@ -712,6 +714,7 @@
       <a class="ov-link" href={`${base}/web`}>{$_('app.home.overview.openWeb')} →</a>
     </div>
     <div class="metric-grid metric-grid-wide">
+      <!-- kill seo/geo 2026-08-29: card senza link, le pagine sono fuori nav
       <a class="metric-card has-viz" href={`${base}/seo`}>
         <div class="metric-top">
           <div class="mini-ring" style={`--v:${Math.round(seoGauge)}`} aria-hidden="true">
@@ -776,6 +779,7 @@
           </div>
         </div>
       </a>
+      kill seo/geo end -->
       <a
         class="metric-card"
         class:accent={auto.radarReview > 0}

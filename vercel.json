@@ -74,42 +74,43 @@
       "path": "/api/v1/radar/recap",
       "schedule": "0 9 * * *"
     },
-    {
-      "path": "/api/v1/geo/tick",
-      "schedule": "0 7 * * 1"
-    },
-    {
-      "path": "/api/v1/geo/reprobe/tick",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/v1/gsc/tick",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/v1/seo/ranks/tick",
-      "schedule": "0 6 * * 0"
-    },
-    {
-      "path": "/api/v1/seo/crawl/tick",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/v1/backlinks/external/tick",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/v1/seo/keywords/tick",
-      "schedule": "0 9 * * 1"
-    },
-    {
-      "path": "/api/v1/seo/review/tick",
-      "schedule": "0 10 * * 1"
-    },
-    {
-      "path": "/api/v1/seo/links/tick",
-      "schedule": "0 11 * * 2"
-    },
+    // SEO/GEO spente (kill 2026-08-29, audit budget): decommentare per riattivare.
+    // {
+    //   "path": "/api/v1/geo/tick",
+    //   "schedule": "0 7 * * 1"
+    // },
+    // {
+    //   "path": "/api/v1/geo/reprobe/tick",
+    //   "schedule": "0 8 * * *"
+    // },
+    // {
+    //   "path": "/api/v1/gsc/tick",
+    //   "schedule": "0 6 * * *"
+    // },
+    // {
+    //   "path": "/api/v1/seo/ranks/tick",
+    //   "schedule": "0 6 * * 0"
+    // },
+    // {
+    //   "path": "/api/v1/seo/crawl/tick",
+    //   "schedule": "0 12 * * *"
+    // },
+    // {
+    //   "path": "/api/v1/backlinks/external/tick",
+    //   "schedule": "0 */6 * * *"
+    // },
+    // {
+    //   "path": "/api/v1/seo/keywords/tick",
+    //   "schedule": "0 9 * * 1"
+    // },
+    // {
+    //   "path": "/api/v1/seo/review/tick",
+    //   "schedule": "0 10 * * 1"
+    // },
+    // {
+    //   "path": "/api/v1/seo/links/tick",
+    //   "schedule": "0 11 * * 2"
+    // },
     {
       "path": "/api/v1/market-references/tick",
       "schedule": "30 10 * * 1"

@@ -44,8 +44,8 @@
     { key: 'plan', done: hasEditorialPlan, href: `/app/${brandSlug}/plan` },
     { key: 'blog', done: blogEnabled, href: `/app/${brandSlug}/site` },
     { key: 'radar', done: radarEnabled, href: `/app/${brandSlug}/radar` },
-    { key: 'seo', done: hasGeoAudit, href: `/app/${brandSlug}/seo` },
-    { key: 'gsc', done: gscConnected, href: `/app/${brandSlug}/settings/search-console` }
+    // { key: 'seo', done: hasGeoAudit, href: `/app/${brandSlug}/seo` }, // kill seo/geo 2026-08-29
+    // { key: 'gsc', done: gscConnected, href: `/app/${brandSlug}/settings/search-console` } // kill seo/geo 2026-08-29
   ]);
 
   const doneCount = $derived(items.filter((i) => i.done).length);

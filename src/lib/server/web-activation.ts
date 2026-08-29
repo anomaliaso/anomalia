@@ -45,7 +45,8 @@ export async function getWebActivationStatus(
   const gscConnected = (gscCount ?? 0) > 0;
   const hasGeoAudit = (geoCount ?? 0) >= 1;
 
-  const order: WebActivationStepKey[] = ['website', 'gsc', 'geo'];
+  // const order: WebActivationStepKey[] = ['website', 'gsc', 'geo']; // kill seo/geo 2026-08-29
+  const order: WebActivationStepKey[] = ['website', 'gsc'];
   const done = { website: hasWebsite, gsc: gscConnected, geo: hasGeoAudit };
   const nextSteps = order.filter((k) => !done[k]).map((k) => STEP_LABELS[k]);
 
@@ -68,7 +69,7 @@ export async function firstSteps(
       label: STEP_LABELS.gsc,
       done: status.gscConnected,
       href: `${base}/settings/search-console`
-    },
-    { key: 'geo', label: STEP_LABELS.geo, done: status.hasGeoAudit, href: `${base}/geo` }
+    }
+    // { key: 'geo', label: STEP_LABELS.geo, done: status.hasGeoAudit, href: `${base}/geo` } // kill seo/geo 2026-08-29
   ];
 }

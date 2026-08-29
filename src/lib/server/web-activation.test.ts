@@ -53,10 +53,12 @@ describe('getWebActivationStatus', () => {
     expect(status.hasWebsite).toBe(false);
     expect(status.gscConnected).toBe(false);
     expect(status.hasGeoAudit).toBe(false);
-    expect(status.nextSteps).toHaveLength(3);
+    // kill seo/geo 2026-08-29: due passi, non più tre.
+    expect(status.nextSteps).toHaveLength(2);
     expect(status.nextSteps[0]).toMatch(/website/i);
     expect(status.nextSteps[1]).toMatch(/search console/i);
-    expect(status.nextSteps[2]).toMatch(/geo audit/i);
+    // kill seo/geo 2026-08-29: il passo "GEO audit" non è più parte del funnel.
+    expect(status.nextSteps[2]).toBeUndefined();
   });
 
   it('treats a missing brand row as no website', async () => {
@@ -80,14 +82,14 @@ describe('firstSteps', () => {
       brand_geo_audits: { count: 0 }
     });
     const steps = await firstSteps(admin, 'brand-1');
-    expect(steps.map((s) => s.key as WebActivationStepKey)).toEqual(['website', 'gsc', 'geo']);
+    // kill seo/geo 2026-08-29: il passo "GEO audit" non è più parte del funnel.
+    expect(steps.map((s) => s.key as WebActivationStepKey)).toEqual(['website', 'gsc']);
     expect(steps[0]).toMatchObject({ key: 'website', done: true, href: '/app/acme/site' });
     expect(steps[1]).toMatchObject({
       key: 'gsc',
       done: false,
       href: '/app/acme/settings/search-console'
     });
-    expect(steps[2]).toMatchObject({ key: 'geo', done: false, href: '/app/acme/geo' });
   });
 
   it('falls back to the brand id as slug when the brand row is missing', async () => {
@@ -100,6 +102,5 @@ describe('firstSteps', () => {
     expect(steps[0].href).toBe('/app/brand-1/site');
     expect(steps[0].done).toBe(false);
     expect(steps[1].done).toBe(true);
-    expect(steps[2].done).toBe(true);
   });
 });

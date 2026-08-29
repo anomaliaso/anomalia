@@ -122,10 +122,10 @@ export const WORKBENCH_PAGES: WorkbenchPageDef[] = [
   { hub: 'automations', segment: 'agents', labelKey: 'app.hub.automations.custom' },
   // Web hub + Radar/Leads are free (match Go). Ads need Starter or above.
   { hub: 'web', segment: 'web', labelKey: 'app.hub.web.label' },
-  { hub: 'web', segment: 'seo', labelKey: 'app.hub.web.seo' },
-  { hub: 'web', segment: 'geo', labelKey: 'app.hub.web.geo' },
-  { hub: 'web', segment: 'keywords', labelKey: 'app.hub.web.keywords' },
-  { hub: 'web', segment: 'backlinks', labelKey: 'app.hub.web.backlinks' },
+  // { hub: 'web', segment: 'seo', labelKey: 'app.hub.web.seo' }, // kill seo/geo 2026-08-29
+  // { hub: 'web', segment: 'geo', labelKey: 'app.hub.web.geo' }, // kill seo/geo 2026-08-29
+  // { hub: 'web', segment: 'keywords', labelKey: 'app.hub.web.keywords' }, // kill seo/geo 2026-08-29
+  // { hub: 'web', segment: 'backlinks', labelKey: 'app.hub.web.backlinks' }, // kill seo/geo 2026-08-29
   { hub: 'web', segment: 'site', labelKey: 'app.hub.web.blog' }
   // Il hub `designer` non è più elencato: le pagine restano su disco e raggiungibili per link.
 ];
@@ -171,11 +171,12 @@ export const HUB_TABS: Partial<Record<WorkbenchPageHub, { key: string; path: str
   ],
   web: [
     { key: 'overview', path: '/web' },
-    { key: 'seo', path: '/seo' },
-    { key: 'geo', path: '/geo' },
-    { key: 'keywords', path: '/keywords' },
-    { key: 'backlinks', path: '/backlinks' },
-    { key: 'blog', path: '/site' },
+    // { key: 'seo', path: '/seo' }, // kill seo/geo 2026-08-29
+    // { key: 'geo', path: '/geo' }, // kill seo/geo 2026-08-29
+    // { key: 'keywords', path: '/keywords' }, // kill seo/geo 2026-08-29
+    // { key: 'backlinks', path: '/backlinks' }, // kill seo/geo 2026-08-29
+    { key: 'blog', path: '/site' }
+    // SEO/GEO spente (kill 2026-08-29): voci nav rimosse, pagine e dati restano su disco.
   ],
 };
 
@@ -245,10 +246,10 @@ export const NAV_TEAM_TOOLS: NavTeamItem[] = [
   { path: '/radar', labelKey: 'app.hub.automations.radar' },
   { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
   { path: '/analytics', labelKey: 'app.hub.publish.analytics' },
-  { path: '/seo', labelKey: 'app.hub.web.seo' },
-  { path: '/geo', labelKey: 'app.hub.web.geo' },
-  { path: '/keywords', labelKey: 'app.hub.web.keywords' },
-  { path: '/backlinks', labelKey: 'app.hub.web.backlinks' },
+  // { path: '/seo', labelKey: 'app.hub.web.seo' }, // kill seo/geo 2026-08-29
+  // { path: '/geo', labelKey: 'app.hub.web.geo' }, // kill seo/geo 2026-08-29
+  // { path: '/keywords', labelKey: 'app.hub.web.keywords' }, // kill seo/geo 2026-08-29
+  // { path: '/backlinks', labelKey: 'app.hub.web.backlinks' }, // kill seo/geo 2026-08-29
   { path: '/competitors', labelKey: 'app.hub.publish.competitors' },
   { path: '/campaigns', labelKey: 'app.hub.publish.campaigns' },
   { path: '/manual-posting', labelKey: 'app.hub.publish.manualPosting' },
