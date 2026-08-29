@@ -83,6 +83,14 @@ describe('which model runs the text agents', () => {
     expect(() => agentModel()).toThrow(/LLM_API_KEY/);
   });
 
+  it('AGENT_PROVIDER is gone: forcing deepseek changes nothing, there is one pipe', async () => {
+    const { agentModel } = await load({ AGENT_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'd-key' });
+    const m = agentModel();
+    expect(m.provider).toBe('llm');
+    expect(m.modelId).toBe('z-ai/glm-5.3-flash');
+  });
+
+
   it('has no fallback model anymore, whoever is configured', async () => {
     const full = await load({ GEMINI_API_KEY: 'g-key', DEEPSEEK_API_KEY: 'd-key' });
     expect(full.agentFallbackModel()).toBeNull();

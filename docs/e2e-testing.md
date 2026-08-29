@@ -180,20 +180,28 @@ invia dalla home, che ne crea uno nuovo con l'agente di default.
 
 Non dormire a caso: **aspetta la condizione**, non un numero di secondi
 (LESSONS, *Il sonno fisso prima dell'asserzione è la race in nuce*). Metti un
-marcatore univoco nel messaggio e interroga il testo di pagina:
+marcatore univoco nel messaggio e interroga il testo di pagina.
+
+Attenzione: il marker compare anche nella bolla dell'utente, quindi un semplice
+`document.body.innerText.includes(marker)` matcha il messaggio CHE HAI INVIATO
+TU ed è un falso positivo — nel gate del 28/8 ha mascherato un 401 reale
+(LESSONS, *Il marcatore che matcha la bolla dell'utente è un falso positivo*).
+Conta le occorrenze (≥ 2: la tua bolla + la risposta) oppure aspetta il
+selettore della bolla dell'assistente:
 
 ```js
 const marker = 'OK-' + Date.now();
 await page.locator('textarea.ch-input').fill('Rispondi solo con ' + marker);
 await page.locator('button.ch-send[type="submit"]').click();
 
-await page.waitForFunction((m) => document.body.innerText.includes(m), marker,
-  { timeout: 120_000 });
+const occurrences = (m) => document.body.innerText.split(m).length - 1;
+await page.waitForFunction(occurrences, marker, { timeout: 120_000 });
 
-// La risposta deve essere PERSISTENTE, non solo streammata:
+// La risposta deve essere PERSISTENTE, non solo streammata (e anche dopo il
+// reload la tua bolla matcha: conta di nuovo, non fare includes):
 await page.reload();
 await page.waitForLoadState('networkidle');
-if (!await page.evaluate((m) => document.body.innerText.includes(m), marker)) {
+if (await page.evaluate(occurrences, marker) < 2) {
   throw new Error('risposta non persistita dopo reload');
 }
 ```

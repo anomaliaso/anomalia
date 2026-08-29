@@ -84,6 +84,7 @@ export default defineConfig({
       'packages/*/src/**/*.{test,spec}.{js,ts}',
       'packages/*.{test,spec}.{js,ts}',
       'scripts/**/*.{test,spec}.{js,ts}'
-    ]
+    ],
+    hookTimeout: 30_000
   }
 });

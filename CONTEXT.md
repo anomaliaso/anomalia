@@ -36,6 +36,10 @@ _Avoid_: agent chat, journal (journal is the role, not the object).
 The private thread between exactly two main agents. Coordination only: the work that concerns the user happens in a team thread. The user can read it but not write in it.
 _Avoid_: private thread, private chat, room.
 
+**Private thread**:
+A thread where the user talks with exactly one main agent, away from the team.
+_Avoid_: DM, direct message, one-to-one chat.
+
 **Room (group chat)**:
 A thread where several agents and the user talk in turns. Behind a flag; not the default surface.
 
