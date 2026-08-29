@@ -129,6 +129,43 @@ async function setStatus(
   return { saved: true };
 }
 
+// "Non contattare mai più": soppressione globale (ogni brand dell'istanza) per l'autore del lead,
+// poi il lead esce dalla coda come gli altri ignorati. Senza handle noto niente da sopprimere:
+// resta comunque un dismiss.
+async function suppressLead(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  params: { brand: string },
+  request: Request
+) {
+  const brand = await brandBySlug(supabase, params.brand);
+  if (!brand) return fail(404, { error: 'Brand not found' });
+  const fd = await request.formData();
+  const id = String(fd.get('id') ?? '');
+  if (!id) return fail(400, { error: 'Missing id' });
+  const { createAdminClient } = await import('$lib/server/supabase-admin');
+  const admin = createAdminClient();
+  const { data: lead } = await admin
+    .from('brand_news_items')
+    .select('url, dm_target, author_handle, author_platform')
+    .eq('id', id)
+    .eq('brand_id', brand.id)
+    .maybeSingle();
+  const handle = lead?.author_handle || lead?.dm_target;
+  if (lead && handle) {
+    const { suppressAuthor, platformOf } = await import('$lib/server/lead-contact');
+    await suppressAuthor(admin, {
+      platform: lead.author_platform ?? platformOf(String(lead.url ?? '')),
+      handle: String(handle),
+      source: 'manual',
+      reason: 'marked by the brand in /leads'
+    });
+  }
+  const { error } = await admin.from('brand_news_items').update({ status: 'dismissed' }).eq('id', id).eq('brand_id', brand.id);
+  if (error) return fail(500, { error: error.message });
+  return { saved: true };
+}
+
 // AI rewrite — re-drafts the comment/DM incorporating user feedback, using stored context.
 async function rewriteSuggestion(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,5 +288,6 @@ export const actions: Actions = {
   markDone: ({ request, params, locals: { supabase } }) => setStatus(supabase, params as { brand: string }, request, 'done'),
   dismiss: ({ request, params, locals: { supabase } }) => setStatus(supabase, params as { brand: string }, request, 'dismissed'),
   restore: ({ request, params, locals: { supabase } }) => setStatus(supabase, params as { brand: string }, request, 'suggested'),
+  suppress: ({ request, params, locals: { supabase } }) => suppressLead(supabase, params as { brand: string }, request),
   rewrite: ({ request, params, locals: { supabase } }) => rewriteSuggestion(supabase, params as { brand: string }, request)
 };

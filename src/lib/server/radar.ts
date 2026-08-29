@@ -29,6 +29,7 @@ import { brandContacts } from './scheduler';
 import { generateBlogFromNews } from './blog-generate';
 import { hasProRadarLeads, isRadarKindAllowed, leadEngagePlatforms, radarSourceLimit, type RadarPlatformKey, RADAR_PLATFORM_KEYS } from './plans';
 import { ALT_CAPTION_PLATFORMS, ensureShortNetworkCuts } from '$lib/platform-limits';
+import { contactGate, dmWithOptOut, gateVerdict, platformOf, suppressAuthor } from './lead-contact';
 // Re-exported: Settings → Radar imports the type from here, next to the functions that use it.
 export type { RadarPlatformKey } from './plans';
 import { INTENT_RANK, normalizeIntent, type LeadIntent } from '$lib/leads-intent';
@@ -1161,10 +1162,11 @@ export async function radarEngage(
       let postBody = '';
       let topComments = '';
       let author = '';
-      const isThreads = it.url.includes('threads.net');
-      const isX = it.url.includes('x.com') || it.url.includes('twitter.com');
-      const isLinkedIn = it.url.includes('linkedin.com');
-      const isReddit = !isThreads && !isX && !isLinkedIn;
+      const platform = platformOf(it.url);
+      const isLinkedIn = platform === 'linkedin';
+      const isThreads = platform === 'threads';
+      const isX = platform === 'x';
+      const isReddit = platform === 'reddit';
       try {
         if (isLinkedIn) {
           // The search already returned the post's full text in `snippet` — no comment API for
@@ -1193,6 +1195,17 @@ export async function radarEngage(
         }
       } catch (e) {
         console.warn('[radar] thread fetch failed:', e instanceof Error ? e.message.slice(0, 120) : e);
+      }
+
+      // One gate before anything gets drafted: whoever opted out, and whoever already got their
+      // one touch — across every brand on the instance, not just this one.
+      if (author) {
+        const gate = await contactGate(admin, platform, author).catch((error) => { swallow('lead contact gate', error); return null; });
+        const verdict = gate ? gateVerdict(gate) : 'ok';
+        if (verdict !== 'ok') {
+          await admin.from('brand_news_items').update({ status: 'skipped', skip_reason: `engage: ${verdict} — ${author}` }).eq('id', it.id);
+          continue;
+        }
       }
 
       // Reddit-only fallback, and ONLY when the primary came back empty. This block used to run
@@ -1248,7 +1261,14 @@ export async function radarEngage(
       }
       const dm = String(draft?.dm ?? '').trim();
       const dmProfileUrl = dm ? authorProfileUrl(it.url, author) : '';
-      await admin.from('brand_news_items').update({ status: 'suggested', suggestion: comment, dm_draft: dm || null, dm_target: author || null }).eq('id', it.id);
+      await admin.from('brand_news_items').update({
+        status: 'suggested',
+        suggestion: comment,
+        dm_draft: dm ? dmWithOptOut(dm) : null,
+        dm_target: author || null,
+        author_handle: author || null,
+        author_platform: author ? platform : null
+      }).eq('id', it.id);
       out.push({ title: it.title, url: it.url, sourceName: it.sourceName, comment, dm, dmTarget: author, dmProfileUrl });
     } catch (e) {
       console.error('[radar] engage failed for item:', e instanceof Error ? e.message : e);

@@ -418,6 +418,10 @@
           <input type="hidden" name="id" value={selectedLead.id} />
           <button class="btn ghost sm" type="submit" disabled={busy}>{$_('app.leads.dismiss')}</button>
         </form>
+        <form method="POST" action="?/suppress" use:enhance={withBusy}>
+          <input type="hidden" name="id" value={selectedLead.id} />
+          <button class="btn ghost sm" type="submit" disabled={busy}>{$_('app.leads.dontContact')}</button>
+        </form>
       {:else}
         <form method="POST" action="?/restore" use:enhance={withBusy}>
           <input type="hidden" name="id" value={selectedLead.id} />
