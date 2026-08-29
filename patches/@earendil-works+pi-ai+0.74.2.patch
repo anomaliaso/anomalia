@@ -1,19 +1,21 @@
 diff --git a/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js b/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js
-index 4f2e1d5..e451ae9 100644
+index 4f2e1d5..8f81d10 100644
 --- a/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js
 +++ b/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js
-@@ -305,7 +305,10 @@ export const streamOpenAICompletions = (model, context, options) => {
+@@ -305,9 +305,12 @@ export const streamOpenAICompletions = (model, context, options) => {
              if (output.stopReason === "error") {
                  throw new Error(output.errorMessage || "Provider returned an error stop reason");
              }
 -            if (!hasFinishReason) {
-+            if (!hasFinishReason && compat.supportsFinishReason === false) {
-+                output.stopReason = output.content.some((block) => block.type === "toolCall") ? "toolUse" : "stop";
-+            }
-+            if (!hasFinishReason && compat.supportsFinishReason !== false) {
++            if (!hasFinishReason && output.content.length === 0 && compat.supportsFinishReason !== false) {
                  throw new Error("Stream ended without finish_reason");
              }
++            if (!hasFinishReason) {
++                output.stopReason = output.content.some((block) => block.type === "toolCall") ? "toolUse" : "stop";
++            }
              stream.push({ type: "done", reason: output.stopReason, message: output });
+             stream.end();
+         }
 @@ -888,6 +891,7 @@ function detectCompat(model) {
          supportsDeveloperRole: !isNonStandard,
          supportsReasoningEffort: !isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway,
@@ -31,7 +33,7 @@ index 4f2e1d5..e451ae9 100644
          requiresToolResultName: model.compat.requiresToolResultName ?? detected.requiresToolResultName,
          requiresAssistantAfterToolResult: model.compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
 diff --git a/node_modules/@earendil-works/pi-ai/dist/types.d.ts b/node_modules/@earendil-works/pi-ai/dist/types.d.ts
-index 4527475..90288bd 100644
+index 4527475..7cd1c1f 100644
 --- a/node_modules/@earendil-works/pi-ai/dist/types.d.ts
 +++ b/node_modules/@earendil-works/pi-ai/dist/types.d.ts
 @@ -313,6 +313,8 @@ export interface OpenAICompletionsCompat {
