@@ -122,6 +122,9 @@
   <p class="text-base text-foreground/80 mb-3.5">
     {$_('legal.terms.s13.body2')}
   </p>
+  <p class="text-base text-foreground/80 mb-3.5">
+    {$_('legal.terms.s13.body3')}
+  </p>
 
   <h2 class="font-[family-name:var(--serif)] text-xl mt-11 mb-3 pt-2" style="font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking)">{$_('legal.terms.s14.heading')}</h2>
   <p class="text-base text-foreground/80 mb-3.5">

@@ -6061,6 +6061,7 @@
       "openAndDm": "Abrir perfil y DM →",
       "dismiss": "Ignorar",
       "restore": "Restaurar",
+      "dontContact": "No contactar nunca más",
       "empty": "Aún no hay leads aquí.",
       "rewrite": "Reescribir",
       "feedbackPh": "e.g. shorter, more casual, mention our product…",
@@ -6076,6 +6077,7 @@
       "searchPh": "Busca contenido, comentario o DM…",
       "markDone": "Hecho",
       "postLabel": "Publicación original",
+      "postGist": "Lo que pide la persona (resumen IA — la publicación original está en el enlace)",
       "openPost": "Abrir",
       "relevanceLabel": "Relevancia según la IA",
       "close": "Cerrar",
@@ -7561,7 +7563,11 @@
         },
         "notePre": "Usamos el contenido y el historial de publicaciones públicas que usted proporciona para generar publicaciones con IA. Nosotros lo hacemos",
         "noteStrong": "not",
-        "notePost": "vendemos sus datos personales y no utilizamos su contenido para entrenar modelos de IA de terceros con fines no relacionados con la prestación del servicio."
+        "notePost": "vendemos sus datos personales y no utilizamos su contenido para entrenar modelos de IA de terceros con fines no relacionados con la prestación del servicio.",
+        "row7": {
+          "purpose": "Búsqueda de contactos comerciales (radar/leads): lectura de contenido público de terceros en redes sociales para proponer conversaciones y borradores de contacto",
+          "basis": "Interés legítimo — art. 6, ap. 1, letra f)"
+        }
       },
       "s4": {
         "heading": "4. AI-generated content",
@@ -7586,7 +7592,7 @@
         "stripe": "Facturación de suscripciones y procesamiento de pagos",
         "google": "Generación de texto e imagen con IA",
         "kie": "Generación de imagen/video con IA",
-        "scrapecreators": "Collecting public post history from connected accounts",
+        "scrapecreators": "Lectura en tiempo real de contenido público (publicaciones y perfiles) de plataformas sociales para el radar de noticias y leads, y recopilación del historial público de las cuentas conectadas",
         "resend": "Envío de emails transaccionales y de notificación",
         "metaProvider": "Meta (Instagram, Facebook) & TikTok",
         "meta": "Publicación en tus cuentas conectadas",
@@ -7617,7 +7623,8 @@
       },
       "s9": {
         "heading": "9. Cuánto tiempo conservamos tus datos",
-        "body": "Conservamos sus datos personales mientras su cuenta esté activa y según sea necesario para brindar el servicio. Después de cerrar su cuenta, eliminamos o anonimizamos sus datos dentro de un período razonable, excepto cuando debemos conservarlos por más tiempo para cumplir con obligaciones legales (por ejemplo, facturas a efectos fiscales) o para resolver disputas."
+        "body": "Conservamos sus datos personales mientras su cuenta esté activa y según sea necesario para brindar el servicio. Después de cerrar su cuenta, eliminamos o anonimizamos sus datos dentro de un período razonable, excepto cuando debemos conservarlos por más tiempo para cumplir con obligaciones legales (por ejemplo, facturas a efectos fiscales) o para resolver disputas.",
+        "body2": " El contenido de terceros encontrado por el radar tiene una retención propia: el resumen de la publicación se elimina a los 14 días, los leads no convertidos a los 90 días y los resultados de comentarios a los 12 meses. Quien no desee ser contactado de nuevo puede indicarlo respondiendo al mensaje recibido o a través del cliente que lo contactó: su perfil queda excluido de todas las propuestas futuras, para todas las marcas."
       },
       "s10": {
         "heading": "10. Tus derechos",
@@ -7759,7 +7766,8 @@
       "s13": {
         "heading": "13. Third-party services",
         "body": "El Servicio depende de proveedores externos (para alojamiento, inteligencia artificial, análisis, pagos, correo electrónico y plataformas sociales). No somos responsables de los servicios de esos proveedores y su uso de las plataformas conectadas también se rige por sus propios términos.",
-        "body2": "Algunas funciones controlan un navegador real en tu nombre — por ejemplo, la captura de pantallas de tu propio producto tras iniciar sesión con credenciales de demostración que guardes. Solo puedes guardar credenciales de un servicio del que seas titular o que estés autorizado a automatizar, y esa autorización es tu responsabilidad. No las usaremos para iniciar sesión en plataformas de terceros como Instagram, Facebook, LinkedIn o TikTok: el inicio de sesión y la publicación automatizados infringen por lo general los términos de esas plataformas y pueden acarrear restricciones de la cuenta, por lo que el Servicio lo rechaza. La publicación se realiza únicamente a través de las API oficiales de las cuentas que conectes, previa aprobación del contenido."
+        "body2": "Algunas funciones controlan un navegador real en tu nombre — por ejemplo, la captura de pantallas de tu propio producto tras iniciar sesión con credenciales de demostración que guardes. Solo puedes guardar credenciales de un servicio del que seas titular o que estés autorizado a automatizar, y esa autorización es tu responsabilidad. No las usaremos para iniciar sesión en plataformas de terceros como Instagram, Facebook, LinkedIn o TikTok: el inicio de sesión y la publicación automatizados infringen por lo general los términos de esas plataformas y pueden acarrear restricciones de la cuenta, por lo que el Servicio lo rechaza. La publicación se realiza únicamente a través de las API oficiales de las cuentas que conectes, previa aprobación del contenido.",
+        "body3": " Algunas funciones (radar/leads) leen contenido público de terceros en redes sociales para sugerir conversaciones a las que participar, con borradores de comentarios y mensajes. El usuario es el único remitente: el Servicio nunca envía mensajes a terceros automáticamente — cada borrador requiere la revisión y el envío manual por parte del usuario con su propia cuenta. El usuario es, por tanto, responsable del tratamiento de los contactos que envía y responde del contenido del mensaje, del cumplimiento de los términos de la plataforma donde lo publica y de atender las solicitudes de las personas de no ser contactadas. El Servicio minimiza los datos de las personas encontradas (resumen y enlace a la publicación, sin copia del texto) y las excluye de todas las propuestas futuras cuando lo solicitan."
       },
       "s14": {
         "heading": "14. Availability & changes",
@@ -9429,14 +9437,14 @@
     "tier": {
       "label": "Modelo",
       "custom": "Personalizado",
-    "modelFamily": {
-      "luna": "Luna",
-      "grok": "Grok 4.6",
-      "gemini-flash": "Gemini Flash",
-      "deepseek-pro": "DeepSeek V4 Pro",
-      "gpt-terra": "GPT 5.6 Terra",
-      "gpt-sol": "GPT 5.6 Sol"
-    },
+      "modelFamily": {
+        "luna": "Luna",
+        "grok": "Grok 4.6",
+        "gemini-flash": "Gemini Flash",
+        "deepseek-pro": "DeepSeek V4 Pro",
+        "gpt-terra": "GPT 5.6 Terra",
+        "gpt-sol": "GPT 5.6 Sol"
+      },
       "auto": "Auto",
       "fast": "Fast",
       "pro": "Pro",

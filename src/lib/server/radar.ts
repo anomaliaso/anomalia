@@ -29,6 +29,7 @@ import { brandContacts } from './scheduler';
 import { generateBlogFromNews } from './blog-generate';
 import { hasProRadarLeads, isRadarKindAllowed, leadEngagePlatforms, radarSourceLimit, type RadarPlatformKey, RADAR_PLATFORM_KEYS } from './plans';
 import { ALT_CAPTION_PLATFORMS, ensureShortNetworkCuts } from '$lib/platform-limits';
+import { contactGate, dmWithOptOut, gateVerdict, platformOf, suppressAuthor } from './lead-contact';
 // Re-exported: Settings → Radar imports the type from here, next to the functions that use it.
 export type { RadarPlatformKey } from './plans';
 import { INTENT_RANK, normalizeIntent, type LeadIntent } from '$lib/leads-intent';
@@ -264,8 +265,7 @@ async function fetchFeed(source: { kind: string; value: string; lang?: string | 
 // A good comment lands on a thread that's RISING right now. Reddit's unauthenticated JSON API is
 // gone (403), but the RSS endpoints still serve: /r/{sub}/rising/.rss for the timing signal and
 // {permalink}/.rss for a thread's body + comments. READ-ONLY by design: Anomalia never posts or
-// comments; it only drafts a suggestion for the human. ponytail: on a 429 the catch returns [] —
-// if reddit tightens further, the upgrade path is the official OAuth API (read scope).
+// comments; it only drafts a suggestion for the human. ponytail: on a 429 the catch returns [].
 const ENGAGE_MAX_AGE_HOURS = 12;
 // Threads / X / LinkedIn are a different clock. Their search endpoints rank by relevance, not
 // recency (Threads has no date filter at all), and a post there stays live for days instead of
@@ -314,57 +314,10 @@ async function fetchRedditText(url: string): Promise<string | null> {
   }
 }
 
-// Read-only OAuth (script app, client_credentials): Reddit fingerprints and 429s non-browser
-// clients on the anonymous endpoints, and the OFFICIAL API is also the TOS-clean way to read.
-// Token cached ~50min. Missing env → null (subreddit sources are skipped with a warn, everything
-// else keeps working). Setup: create a "script" app on reddit.com/prefs/apps and set
-// REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET.
-let redditToken: { token: string; exp: number } | null = null;
-async function redditAccessToken(): Promise<string | null> {
-  const id = env.REDDIT_CLIENT_ID;
-  const secret = env.REDDIT_CLIENT_SECRET;
-  if (!id || !secret) return null;
-  if (redditToken && Date.now() < redditToken.exp) return redditToken.token;
-  try {
-    const res = await fetch('https://www.reddit.com/api/v1/access_token', {
-      method: 'POST',
-      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': REDDIT_UA
-      },
-      body: 'grant_type=client_credentials'
-    });
-    if (!res.ok) return null;
-    const d = (await res.json()) as AnyRec;
-    if (!d?.access_token) return null;
-    redditToken = { token: String(d.access_token), exp: Date.now() + 50 * 60 * 1000 };
-    return redditToken.token;
-  } catch {
-    return null;
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function redditGet(path: string): Promise<any | null> {
-  const token = await redditAccessToken();
-  if (!token) return null;
-  try {
-    const res = await fetch(`https://oauth.reddit.com${path}`, {
-      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
-      headers: { Authorization: `Bearer ${token}`, 'User-Agent': REDDIT_UA }
-    });
-    return res.ok ? await res.json() : null;
-  } catch {
-    return null;
-  }
-}
-
 // NOTE (verified live 2026-07-03): Exa (exa.ai) is NOT an option for Reddit — the API rejects
 // includeDomains:['reddit.com'] ("domain not available") and its index contains zero reddit URLs
-// (Reddit's data is exclusively licensed). For server-side Reddit reads the ONLY reliable path is
-// the official OAuth API below.
+// (Reddit's data is exclusively licensed). For server-side Reddit reads the paths are
+// ScrapeCreators and the RSS feeds.
 // Fair-share selection: round-robin one item per origin per pass, up to `cap`. Guarantees every
 // source with fresh content contributes before any single source takes a second slot — so a
 // high-volume source can't starve the others (see radarScan). Pure + exported for tests.
@@ -384,8 +337,8 @@ export function roundRobin<T>(byOrigin: Map<string, T[]>, cap: number): T[] {
 async function fetchSubredditRising(sub: string): Promise<RedditItem[]> {
   const clean = sub.replace(/^r\//, '').replace(/\/+$/, '');
   // PRIMARY: ScrapeCreators' Reddit endpoint — same key/gateway the whole app already uses for
-  // IG/TikTok/etc., with real `rising` sort and full post fields. The chains below (OAuth, RSS)
-  // stay as fallbacks.
+  // IG/TikTok/etc., with real `rising` sort and full post fields. The RSS chain below stays as
+  // fallback.
   try {
     const data = await scrapeCreatorsGet(`/v1/reddit/subreddit?subreddit=${encodeURIComponent(clean)}&sort=rising&trim=true`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -404,27 +357,11 @@ async function fetchSubredditRising(sub: string): Promise<RedditItem[]> {
   } catch (e) {
     console.warn(`[radar] scrapecreators reddit r/${clean} failed:`, e instanceof Error ? e.message.slice(0, 120) : e);
   }
-  // Primary: official API (rich data — created_utc, selftext). Fallback: the RSS endpoint, which
-  // works from some networks (curl-like clients) but is fingerprint-blocked from most servers.
-  const data = await redditGet(`/r/${encodeURIComponent(clean)}/rising?limit=15`);
-  if (data) {
-    return ((data?.data?.children ?? []) as AnyRec[])
-      .map((c) => {
-        const d = c?.data ?? {};
-        return {
-          title: String(d.title ?? ''),
-          url: `https://www.reddit.com${d.permalink ?? ''}`,
-          snippet: String(d.selftext ?? '').slice(0, 1000),
-          sourceName: `r/${clean}`,
-          publishedAt: d.created_utc ? new Date(Number(d.created_utc) * 1000).toISOString() : null,
-          createdUtc: Number(d.created_utc) || 0
-        };
-      })
-      .filter((i) => i.title && i.url.includes('/comments/'));
-  }
+  // Fallback: the RSS endpoint, which works from some networks (curl-like clients) but is
+  // fingerprint-blocked from most servers.
   const xml = await fetchRedditText(redditRssAuth(`https://old.reddit.com/r/${encodeURIComponent(clean)}/rising/.rss`));
   if (!xml) {
-    console.warn(`[radar] reddit r/${clean} unavailable — set REDDIT_FEED_TOKEN/USER (prefs/feeds) or REDDIT_CLIENT_ID/SECRET`);
+    console.warn(`[radar] reddit r/${clean} unavailable — set REDDIT_FEED_TOKEN/USER (prefs/feeds)`);
     return [];
   }
   return parseFeed(xml)
@@ -666,9 +603,10 @@ const VERDICT_SCHEMA = {
           action: { type: 'string' as const, enum: ['post', 'comment', 'article', 'none'] as const, description: "How the brand should react: 'post' = publish its own social post about this news; 'comment' = join the conversation with a useful reply (ONLY for Reddit/Threads/X threads where the brand's expertise genuinely helps — never pure promotion); 'article' = a deep, substantive blog article draft expanding on this from the brand's expertise (ONLY when the brand's blog is active and the topic has enough depth for long-form, not just a quick social reaction); 'none' = not relevant." },
           pillar: { type: 'string' as const, description: "Which of the brand's content pillars this serves. Empty if none." },
           intent: { type: 'string' as const, enum: ['seeking_now', 'comparing', 'researching', 'venting', 'none'] as const, description: "For CONVERSATIONS only, how close this PERSON is to buying — judge the person, not the topic: 'seeking_now' = explicitly asking for a recommendation or a solution right now; 'comparing' = weighing named options; 'researching' = trying to understand the problem, no purchase in sight; 'venting' = complaining, wants peers not vendors; 'none' = not a person with this problem (news and feed items are always 'none')." },
-          skip_reason: { type: 'string' as const, description: 'One short line on WHY it was skipped (empty when relevant) — shown to the user for transparency.' }
+          skip_reason: { type: 'string' as const, description: 'One short line on WHY it was skipped (empty when relevant) — shown to the user for transparency.' },
+          gist: { type: 'string' as const, description: 'For CONVERSATIONS only: ≤140 characters capturing what this person asked or needs, distilled — never a quote of their words, always in the item\'s language. Empty for news items.' }
         },
-        required: ['index', 'relevant', 'relevance', 'angle', 'urgency', 'pillar', 'action', 'intent', 'skip_reason']
+        required: ['index', 'relevant', 'relevance', 'angle', 'urgency', 'pillar', 'action', 'intent', 'skip_reason', 'gist']
       }
     }
   },
@@ -1034,12 +972,18 @@ Duplicated stories: keep the best one, skip the rest ("duplicate"). Never invent
     const id = idByHash.get(h);
     const relevant = v?.relevant === true && Number(v?.relevance) >= 50 && v?.urgency !== 'none' && v?.action !== 'none';
     const intent = normalizeIntent(v?.intent);
+    // Minimizzazione: il testo verbatim del post NON resta nel database. Il judge distilla il
+    // gist (cosa ha chiesto la persona); lo snippet viene cancellato alla stessa stesura. Il
+    // drafting e l'utente leggono il contenuto vero dal permalink, non da una copia nostra.
+    const gist = relevant && intent !== 'none' ? String(v?.gist ?? '').slice(0, 200) || null : null;
     await admin.from('brand_news_items').update({
       status: relevant ? 'proposed' : 'skipped',
       relevance: Math.max(0, Math.min(100, Number(v?.relevance) || 0)),
       angle: relevant ? String(v?.angle ?? '') : null,
       urgency: relevant ? String(v?.urgency ?? 'timely') : null,
       intent: relevant ? intent : null,
+      gist,
+      snippet: null,
       skip_reason: relevant ? null : String(v?.skip_reason ?? '').slice(0, 300) || null
     }).eq('id', id ?? '');
     if (relevant && id) {
@@ -1221,14 +1165,15 @@ export async function radarEngage(
   for (const it of items) {
     try {
       // Full thread context: ScrapeCreators first (post body + comments, same key as everything
-      // else), then — for Reddit only — the official API, then RSS.
+      // else), then — for Reddit only — RSS.
       let postBody = '';
       let topComments = '';
       let author = '';
-      const isThreads = it.url.includes('threads.net');
-      const isX = it.url.includes('x.com') || it.url.includes('twitter.com');
-      const isLinkedIn = it.url.includes('linkedin.com');
-      const isReddit = !isThreads && !isX && !isLinkedIn;
+      const platform = platformOf(it.url);
+      const isLinkedIn = platform === 'linkedin';
+      const isThreads = platform === 'threads';
+      const isX = platform === 'x';
+      const isReddit = platform === 'reddit';
       try {
         if (isLinkedIn) {
           // The search already returned the post's full text in `snippet` — no comment API for
@@ -1259,27 +1204,29 @@ export async function radarEngage(
         console.warn('[radar] thread fetch failed:', e instanceof Error ? e.message.slice(0, 120) : e);
       }
 
-      // Reddit-only fallbacks, and ONLY when the primary came back empty. This block used to run
+      // One gate before anything gets drafted: whoever opted out, and whoever already got their
+      // one touch — across every brand on the instance, not just this one.
+      if (author) {
+        const gate = await contactGate(admin, platform, author).catch((error) => { swallow('lead contact gate', error); return null; });
+        const verdict = gate ? gateVerdict(gate) : 'ok';
+        if (verdict !== 'ok') {
+          await admin.from('brand_news_items').update({ status: 'skipped', skip_reason: `engage: ${verdict} — ${author}` }).eq('id', it.id);
+          continue;
+        }
+      }
+
+      // Reddit-only fallback, and ONLY when the primary came back empty. This block used to run
       // for EVERY platform whenever the official API returned nothing: it fetched
       // <threads|x|linkedin url>/.rss, got nothing back, and then overwrote the body and the top
       // comments ScrapeCreators had just returned with the empty result.
       if (isReddit && !postBody) {
-        const thread = (await redditGet(`${new URL(it.url).pathname}?limit=8`)) as AnyRec[] | null;
-        if (thread) {
-          postBody = String(thread?.[0]?.data?.children?.[0]?.data?.selftext ?? '');
-          author = author || String(thread?.[0]?.data?.children?.[0]?.data?.author ?? '');
-          topComments = ((thread?.[1]?.data?.children ?? []) as AnyRec[])
-            .map((c) => String(c?.data?.body ?? '')).filter(Boolean).slice(0, 5)
-            .map((b) => `- ${b.replace(/\s+/g, ' ').slice(0, 220)}`).join('\n');
-        } else {
-          const xml = await fetchRedditText(redditRssAuth(`${it.url.replace(/\/$/, '').replace('://www.', '://old.')}/.rss`));
-          const entries = xml ? parseFeed(xml) : [];
-          postBody = entries[0]?.snippet ?? '';
-          topComments = entries.slice(1, 6)
-            .map((e) => `- ${e.snippet.replace(/\s+/g, ' ').slice(0, 220)}`)
-            .filter((l) => l.length > 4)
-            .join('\n');
-        }
+        const xml = await fetchRedditText(redditRssAuth(`${it.url.replace(/\/$/, '').replace('://www.', '://old.')}/.rss`));
+        const entries = xml ? parseFeed(xml) : [];
+        postBody = entries[0]?.snippet ?? '';
+        topComments = entries.slice(1, 6)
+          .map((e) => `- ${e.snippet.replace(/\s+/g, ' ').slice(0, 220)}`)
+          .filter((l) => l.length > 4)
+          .join('\n');
       }
 
       // What we know about the room this reply is going into: their words, what they already
@@ -1321,7 +1268,14 @@ export async function radarEngage(
       }
       const dm = String(draft?.dm ?? '').trim();
       const dmProfileUrl = dm ? authorProfileUrl(it.url, author) : '';
-      await admin.from('brand_news_items').update({ status: 'suggested', suggestion: comment, dm_draft: dm || null, dm_target: author || null }).eq('id', it.id);
+      await admin.from('brand_news_items').update({
+        status: 'suggested',
+        suggestion: comment,
+        dm_draft: dm ? dmWithOptOut(dm) : null,
+        dm_target: author || null,
+        author_handle: author || null,
+        author_platform: author ? platform : null
+      }).eq('id', it.id);
       out.push({ title: it.title, url: it.url, sourceName: it.sourceName, comment, dm, dmTarget: author, dmProfileUrl });
     } catch (e) {
       console.error('[radar] engage failed for item:', e instanceof Error ? e.message : e);
@@ -1583,7 +1537,8 @@ export function radarDigestHtml(
   appBase: string,
   posts: DigestPostRow[],
   comments: DigestCommentRow[],
-  articles: DigestArticleRow[]
+  articles: DigestArticleRow[],
+  radarUrl = ''
 ): string {
   const postBlocks = posts.map((r) => `
     <div style="border:1px solid #e5e5e5;border-radius:12px;padding:16px;margin:0 0 14px;">
@@ -1620,6 +1575,7 @@ export function radarDigestHtml(
     ${posts.length ? `<p style="color:#555;margin:14px 0 10px;"><b>${it ? 'Post pronti (approva con un click)' : 'Posts ready (one-click approve)'}</b></p>${postBlocks}` : ''}
     ${articles.length ? `<p style="color:#555;margin:14px 0 10px;"><b>${it ? 'Articoli blog pronti da rivedere' : 'Blog articles ready to review'}</b></p>${articleBlocks}` : ''}
     ${comments.length ? `<p style="color:#555;margin:14px 0 10px;"><b>${it ? 'Conversazioni dove dire la tua — commento pronto da incollare (pubblichi tu, mai in automatico)' : 'Conversations worth joining — comment ready to paste (you post it, never automated)'}</b></p>${commentBlocks}` : ''}
+    ${radarUrl ? `<p style="color:#999;font-size:12px;margin:20px 0 0;">${it ? 'Non vuoi più il Radar? <a href="' + radarUrl + '">Disiscriviti qui</a>.' : 'No more Radar? <a href="' + radarUrl + '">Unsubscribe here</a>.'}</p>` : ''}
   </div>`;
 }
 
@@ -1642,7 +1598,7 @@ async function sendRadarDigest(admin: SupabaseClient, brand: AnyRec, posts: Dige
       await sendEmail({
         to: contact.email,
         subject,
-        html: radarDigestHtml(it, appBase, posts, comments, articles),
+        html: radarDigestHtml(it, appBase, posts, comments, articles, radarUrl),
         text: [
           ...posts.map((r) => `${r.title}\n${r.sourceUrl}\n${r.caption}`),
           ...articles.map((a) => `${a.title} (draft)\n${appBase}/blog-preview/${a.articleId}`),

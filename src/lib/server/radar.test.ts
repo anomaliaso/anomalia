@@ -450,6 +450,16 @@ describe('selectTopComments (il cap è "gli N migliori", non "i primi N")', () =
 });
 
 describe('radarDigestHtml (la mail porta la merce: testo pronto + link diretto)', () => {
+  it('con radarUrl porta il link di disiscrizione nel corpo, non solo negli header', () => {
+    const html = radarDigestHtml(false, 'https://app.example.com', [], [], [], 'https://app.example.com/app/acme/radar');
+    expect(html).toContain('https://app.example.com/app/acme/radar');
+    expect(html.toLowerCase()).toContain('unsubscribe');
+  });
+
+  it('senza radarUrl nessun footer: il corpo resta come prima', () => {
+    const html = radarDigestHtml(false, 'https://app.example.com', [], [], []);
+    expect(html).not.toContain('unsubscribe');
+  });
   it('carries the ready-to-paste comment, the direct thread link and the DM', () => {
     const html = radarDigestHtml(true, 'https://app.example.com', [], [{
       title: 'Best organic olive oil?',
@@ -475,5 +485,13 @@ describe('radarDigestHtml (la mail porta la merce: testo pronto + link diretto)'
     }], [], []);
     expect(html).toContain('https://app.example.com/api/radar/approve/tok-a');
     expect(html).toContain('https://app.example.com/api/radar/reject/tok-r');
+  });
+});
+
+describe('sorgenti Reddit (solo ScrapeCreators e RSS: niente OAuth ufficiale)', () => {
+  it('non resta alcun riferimento al client OAuth Reddit nel radar', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(new URL('./radar.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/oauth\.reddit\.com|REDDIT_CLIENT_(ID|SECRET)|redditAccessToken|redditGet/);
   });
 });

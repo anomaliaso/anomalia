@@ -6439,6 +6439,7 @@
       "openAndDm": "Apri profilo e invia DM →",
       "dismiss": "Ignora",
       "restore": "Ripristina",
+      "dontContact": "Non contattare mai più",
       "empty": "Nessun lead qui per ora.",
       "rewrite": "Riscrivi",
       "feedbackPh": "es. più breve, più informale, menziona il nostro prodotto…",
@@ -6454,6 +6455,7 @@
       "searchPh": "Cerca contenuto, commento o DM…",
       "markDone": "Fatto",
       "postLabel": "Post originale",
+      "postGist": "Cosa chiede la persona (riassunto AI — il post originale è nel link)",
       "openPost": "Apri",
       "relevanceLabel": "Affinità stimata dall'AI",
       "close": "Chiudi",
@@ -7561,7 +7563,11 @@
         },
         "notePre": "Utilizziamo i contenuti e la cronologia pubblica dei post forniti dall’utente per generare contenuti tramite intelligenza artificiale.",
         "noteStrong": "Non",
-        "notePost": "vendiamo i dati personali dell’utente e non utilizziamo i suoi contenuti per addestrare modelli di intelligenza artificiale di terze parti per finalità estranee alla fornitura del servizio."
+        "notePost": "vendiamo i dati personali dell’utente e non utilizziamo i suoi contenuti per addestrare modelli di intelligenza artificiale di terze parti per finalità estranee alla fornitura del servizio.",
+        "row7": {
+          "purpose": "Ricerca di contatti commerciali (radar/leads): lettura di contenuti pubblici di terzi su piattaforme social per proporre conversazioni da raggiungere e bozze di contatto",
+          "basis": "Legittimo interesse — art. 6, par. 1, lett. f)"
+        }
       },
       "s4": {
         "heading": "4. Contenuti generati dall’intelligenza artificiale",
@@ -7586,7 +7592,7 @@
         "stripe": "Fatturazione degli abbonamenti ed elaborazione dei pagamenti",
         "google": "Generazione di testi e immagini tramite IA",
         "kie": "Generazione di immagini / video tramite IA",
-        "scrapecreators": "Raccolta della cronologia pubblica dei post dagli account collegati",
+        "scrapecreators": "Lettura in tempo reale di contenuti pubblici (post e profili) da piattaforme social per il radar di notizie e lead, e raccolta della cronologia pubblica degli account collegati",
         "resend": "Invio di email transazionali e di notifica",
         "metaProvider": "Meta (Instagram, Facebook) e TikTok",
         "meta": "Pubblicazione dei contenuti sugli account collegati",
@@ -7617,7 +7623,8 @@
       },
       "s9": {
         "heading": "9. Per quanto tempo conserviamo i dati",
-        "body": "Conserviamo i dati personali dell’utente per tutto il tempo in cui l’account è attivo e per quanto necessario a fornire il servizio. Dopo la chiusura dell’account, cancelliamo o rendiamo anonimi i dati entro un periodo ragionevole, salvo i casi in cui sia necessario conservarli più a lungo per adempiere a obblighi di legge (ad esempio, le fatture a fini fiscali) o per la risoluzione di controversie."
+        "body": "Conserviamo i dati personali dell’utente per tutto il tempo in cui l’account è attivo e per quanto necessario a fornire il servizio. Dopo la chiusura dell’account, cancelliamo o rendiamo anonimi i dati entro un periodo ragionevole, salvo i casi in cui sia necessario conservarli più a lungo per adempiere a obblighi di legge (ad esempio, le fatture a fini fiscali) o per la risoluzione di controversie.",
+        "body2": " Per i contenuti di terzi trovati dal radar vale una retention dedicata: il riassunto del post si cancella dopo 14 giorni, i lead non convertiti dopo 90 giorni, gli esiti dei commenti dopo 12 mesi. Chi non vuole essere ricontattato può dirlo in risposta al messaggio ricevuto o tramite il cliente che lo ha contattato: il profilo viene escluso da ogni proposta futura, per tutti i brand."
       },
       "s10": {
         "heading": "10. I diritti dell’utente",
@@ -7759,7 +7766,8 @@
       "s13": {
         "heading": "13. Servizi di terze parti",
         "body": "Il Servizio si avvale di fornitori di terze parti (per hosting, IA, analisi, pagamenti, email e piattaforme social). Non siamo responsabili dei servizi di tali fornitori e l’utilizzo delle piattaforme collegate è altresì disciplinato dai rispettivi termini.",
-        "body2": "Alcune funzioni pilotano un browser reale per conto dell’utente — per esempio la cattura di screenshot del proprio prodotto dopo l’accesso con credenziali demo salvate dall’utente. È possibile salvare credenziali solo per un servizio di cui si è titolari o che si è autorizzati ad automatizzare, e tale autorizzazione è responsabilità dell’utente. Non le utilizzeremo per accedere a piattaforme di terzi come Instagram, Facebook, LinkedIn o TikTok: l’accesso automatizzato e la pubblicazione automatizzata violano generalmente i termini di tali piattaforme e possono comportare limitazioni dell’account, quindi il Servizio li rifiuta. La pubblicazione avviene esclusivamente tramite le API ufficiali degli account collegati, previa approvazione dei contenuti da parte dell’utente."
+        "body2": "Alcune funzioni pilotano un browser reale per conto dell’utente — per esempio la cattura di screenshot del proprio prodotto dopo l’accesso con credenziali demo salvate dall’utente. È possibile salvare credenziali solo per un servizio di cui si è titolari o che si è autorizzati ad automatizzare, e tale autorizzazione è responsabilità dell’utente. Non le utilizzeremo per accedere a piattaforme di terzi come Instagram, Facebook, LinkedIn o TikTok: l’accesso automatizzato e la pubblicazione automatizzata violano generalmente i termini di tali piattaforme e possono comportare limitazioni dell’account, quindi il Servizio li rifiuta. La pubblicazione avviene esclusivamente tramite le API ufficiali degli account collegati, previa approvazione dei contenuti da parte dell’utente.",
+        "body3": " Alcune funzioni (radar/leads) leggono contenuti pubblici di terzi su piattaforme social per suggerire all’utente conversazioni a cui partecipare, con bozze di commento e messaggio. L’utente è l’unico mittente: il Servizio non invia mai messaggi a terzi in automatico — ogni bozza richiede la revisione e l’invio manuale da parte dell’utente con il proprio account. L’utente è pertanto titolare del trattamento dei contatti che invia e risponde del contenuto del messaggio, del rispetto dei termini della piattaforma su cui lo pubblica e di onorare le richieste delle persone di non essere ricontattate. Il Servizio minimizza i dati delle persone trovate (riassunto e link al post, senza copia del testo) e le esclude da ogni proposta futura quando chiedono di non essere ricontattate."
       },
       "s14": {
         "heading": "14. Disponibilità e modifiche",
@@ -9524,14 +9532,14 @@
     "tier": {
       "label": "Modello",
       "custom": "Custom",
-    "modelFamily": {
-      "luna": "Luna",
-      "grok": "Grok 4.6",
-      "gemini-flash": "Gemini Flash",
-      "deepseek-pro": "DeepSeek V4 Pro",
-      "gpt-terra": "GPT 5.6 Terra",
-      "gpt-sol": "GPT 5.6 Sol"
-    },
+      "modelFamily": {
+        "luna": "Luna",
+        "grok": "Grok 4.6",
+        "gemini-flash": "Gemini Flash",
+        "deepseek-pro": "DeepSeek V4 Pro",
+        "gpt-terra": "GPT 5.6 Terra",
+        "gpt-sol": "GPT 5.6 Sol"
+      },
       "auto": "Auto",
       "fast": "Fast",
       "pro": "Pro",
