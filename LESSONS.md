@@ -100,6 +100,12 @@ aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio
 
 ## Codice
 
+### Un dettaglio eliminato non si invalida prima di uscire
+Il reject del post cancellava la riga, poi aggiornava la pagina `/posts/:id`: il layout trovava
+correttamente un 404 prima che il callback portasse al calendario. Segnale: la pagina 404 lampeggia
+solo dopo una cancellazione dal dettaglio. Mossa: sul successo distruttivo navigare subito e lasciare
+che la nuova pagina carichi i dati; `update()` resta per errori e modifiche non distruttive.
+
 ### Markdown venduto: file veri + `?raw`, non template literal
 Skill e guide upstream restano file `.md` diffabili contro upstream, inlineati con `import x from './x.md?raw'` (pattern di `agent-files.ts`). 43KB di markdown in un template literal sono mine: backtick e `${` nel testo upstream rompono la compilazione in modo opaco.
 

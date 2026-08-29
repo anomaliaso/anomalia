@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { invalidateAll } from '$app/navigation';
   import PostEditor from '$lib/components/PostEditor.svelte';
   import { _ } from 'svelte-i18n';
 
@@ -10,7 +9,6 @@
   const studioOn = $derived(!!data.flags?.studio);
 
   async function onLeave() {
-    await invalidateAll();
     await goto(`/app/${brand.slug}/calendar`);
   }
 </script>
