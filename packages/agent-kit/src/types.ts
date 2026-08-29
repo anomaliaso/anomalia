@@ -41,6 +41,11 @@ export interface ToolSpec {
 	 */
 	requiresMode?: 'plan' | 'agent';
 	terminal?: boolean;
+	/**
+	 * Il tool ha un effetto collaterale reale (scrive/post/schedula/rende un file): va avvolto dal
+	 * ledger, così un resume a metà turno non lo riesegue. Assente = si legge e basta, mai una riga.
+	 */
+	effectful?: boolean;
 }
 
 /** Testo e/o immagini, più un flag d'errore che INSEGNA. */
@@ -51,6 +56,23 @@ export type ToolResultContent =
 export interface ToolResult {
 	content: ToolResultContent[];
 	isError?: boolean;
+}
+
+/** Lo stato di un effetto collaterale nel ledger — la macchina a stati di `agent_kit_effects`. */
+export type EffectStatus = 'intended' | 'completed' | 'failed' | 'ambiguous' | 'reconciled';
+
+/** Una riga del ledger degli effetti: chi, cosa, con quale chiave, in che stato. */
+export interface ToolEffect {
+	id: string;
+	brandId: string;
+	runId: string | null;
+	toolName: string;
+	idempotencyKey: string;
+	status: EffectStatus;
+	request?: unknown;
+	result?: unknown;
+	createdAt: string;
+	updatedAt: string;
 }
 
 export interface ToolCall {

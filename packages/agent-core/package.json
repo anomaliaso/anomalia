@@ -9,6 +9,8 @@
     "./run-store": "./src/run-store.ts",
     "./computer": "./src/computer.ts",
     "./memory-context": "./src/memory-context.ts",
+    "./effects": "./src/effects.ts",
+    "./effects-store": "./src/effects-store.ts",
     "./tools/builtin": "./src/tools/builtin.ts"
   },
   "dependencies": {

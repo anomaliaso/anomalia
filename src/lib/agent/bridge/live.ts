@@ -91,6 +91,7 @@ import { attachForChat } from './attach';
 import { buildTools } from '@anomalia/agent-adapters/runtime/ai-runtime';
 import { createCheckpointStorage } from '@anomalia/agent-adapters/checkpoint-storage';
 import { markComputerRunning, touchComputer } from '@anomalia/agent-core/computer';
+import { createEffectsLedger } from '@anomalia/agent-core/effects-store';
 import {
 	createServerBrandFs,
 	createPostgresMemoryStore,
@@ -491,6 +492,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			queryTool: queryToolAdapter({ supabase, brandId: brand.id, userId: user.id, threadId }),
 			attach: async (a, c) => attachForChat(a, c, { supabase, admin, sandbox, brandId: brand.id, userId: user.id, collect: turnAttachments }),
 			graphicalBootstrap: graphicalBootstrapDeps,
+			// Adesso un post creato/schedulato in un turno abortito NON viene ricreato al resume: il
+			// ledger ha già la chiave e il gate congelare invece di rieseguire.
+			effects: createEffectsLedger(admin),
 			plugins
 		});
 		// LO STOP DELL'UTENTE arriva da un'ALTRA invocazione (`cancelKitRun`, chiamata dall'endpoint

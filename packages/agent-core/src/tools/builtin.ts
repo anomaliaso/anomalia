@@ -50,6 +50,7 @@ export const BUILTIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'brand_write',
 		requiresMode: 'plan',
+		effectful: true,
 		description:
 			"Scrive un file dove l'albero del brand lo consente (studio, piano, post, artefatti) — NON il filesystem della macchina, per quello c'è `shell`. Fallisce se il path non è scrivibile: non è un errore da nascondere, è un permesso.",
 		inputSchema: {
@@ -74,6 +75,7 @@ export const BUILTIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'shell',
 		requiresMode: 'agent',
+		effectful: true,
 		description:
 			"Esegue un comando nella VM del brand (si accende da sola al primo uso). Rete CHIUSA: passano solo i registry dei pacchetti (npm, pip) — internet no. Un fetch verso un sito qualsiasi fallisce per firewall, non per guasto DNS: non riprovarlo, e per leggere il web usa i tool di lettura del brand invece della shell.",
 		inputSchema: {
@@ -84,6 +86,7 @@ export const BUILTIN_TOOLS: ToolSpec[] = [
 	},
 	{
 		name: 'attach',
+		effectful: true,
 		description: 'Allega un file o un media alla chat, così resta visibile senza incollarne il contenuto nel testo.',
 		inputSchema: {
 			type: 'object',
@@ -93,6 +96,7 @@ export const BUILTIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'remember',
 		requiresMode: 'plan',
+		effectful: true,
 		description: 'Scrive un fatto in memoria durevole: sopravvive al turno e ai run successivi. Non per appunti temporanei del piano.',
 		inputSchema: {
 			type: 'object',
@@ -146,6 +150,7 @@ export const BUILTIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'act',
 		requiresMode: 'agent',
+		effectful: true,
 		description: "Esegue fino a 24 azioni sullo schermo grafico della VM e torna uno screenshot aggiornato. Accende il modo grafico da solo se serve. kind:'click'/'move' vogliono x,y (pixel); 'type' vuole text; 'key' vuole key (es. 'Return', 'ctrl+l'); 'scroll' vuole amount (righe, negativo = verso l'alto); 'wait' vuole ms.",
 		inputSchema: {
 			type: 'object',
