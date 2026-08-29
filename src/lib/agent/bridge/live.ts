@@ -91,7 +91,7 @@ import { attachForChat } from './attach';
 import { buildTools } from '@anomalia/agent-adapters/runtime/ai-runtime';
 import { createCheckpointStorage } from '@anomalia/agent-adapters/checkpoint-storage';
 import { markComputerRunning, touchComputer } from '@anomalia/agent-core/computer';
-import { createEffectsLedger } from '@anomalia/agent-core/effects-store';
+import { createEffectsLedger } from '$lib/server/agent-kit-effects-store';
 import {
 	createServerBrandFs,
 	createPostgresMemoryStore,
@@ -106,7 +106,7 @@ import {
 import { reportChatError } from '$lib/server/chat/report-error';
 import { BUILTIN_TOOLS } from '../tools/builtin';
 import { createRun, transition, finish, resume, closeRunSaving, type CloseMessage, type CloseOutcome, type RunRow } from '../run-store';
-import type { AdapterContext, RunStopReason, ToolResult } from '../kit/types';
+import type { ActionApprovalConfig, AdapterContext, RunStopReason, ToolResult } from '../kit/types';
 import { createMotionPlugin } from '../plugins/motion';
 import { createContentPlugin } from '../plugins/content';
 import { createUgcPlugin } from '../plugins/ugc';
@@ -203,6 +203,7 @@ export interface RunKitTurnInput {
 	 * automatica. Senza, è un normale turno kit.
 	 */
 	dm?: { speaker: string; meName: string; otherName: string };
+	approval?: ActionApprovalConfig;
 }
 
 /**
@@ -736,7 +737,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				)
 			: turnTools;
 		const toolNames = turnToolsFinal.map((t) => t.name);
-		const toolSet = buildTools(turnToolsFinal, applyTool, ctx);
+		const toolSet = buildTools(turnToolsFinal, applyTool, ctx, input.approval);
 
 		// Il set che i worker di delega ricevono: gli STESSI oggetti tool dell'orchestratore, quindi
 		// ogni chiamata di un worker passa dall'applyTool qui sopra — battito, Stop e

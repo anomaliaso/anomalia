@@ -48,6 +48,7 @@ import { loadThreadState } from './lib/thread-load';
 import { handlePostAction } from './lib/post-actions';
 import { applyGoalCommand, applyTurnBriefings, buildTurnContext, buildTurnMessages, type DeadlineRef } from './lib/turn-prep';
 import { finishSuccessfulTurn } from './lib/turn-finish';
+import { createChatActionApproval } from '$lib/server/chat/action-approval';
 
 // Vercel extended max duration (Pro/Enterprise, nodejs22.x). Must stay in sync with
 // CHAT_MAX_DURATION_MS — every budget in turn-limits.ts is carved out of this number.
@@ -268,6 +269,12 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       // senza, un follow-up accodato su un thread kit resta fermo fino al cron (2 minuti) e poi
       // viene risposto dal motore CLASSICO invece che dallo specialista.
       origin,
+      approval: createChatActionApproval({
+        messages,
+        brandId: brand.id,
+        userId: user.id,
+        threadId
+      }),
       waitUntil: (platform as Platform)?.context?.waitUntil
     });
   }

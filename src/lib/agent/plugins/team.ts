@@ -51,12 +51,14 @@ export function createTeamPlugin(deps: TeamPluginDeps): ToolPlugin {
 	const tools: ToolSpec[] = [
 		{
 			name: 'message_agent',
+			effectful: true,
 			consequential: true,
 			description: String(dm.message_agent?.description ?? ''),
 			inputSchema: jsonSchemaOf(dm.message_agent)
 		},
 		{
 			name: 'open_session_with_user',
+			effectful: true,
 			consequential: true,
 			description: String(session.open_session_with_user?.description ?? ''),
 			inputSchema: jsonSchemaOf(session.open_session_with_user)

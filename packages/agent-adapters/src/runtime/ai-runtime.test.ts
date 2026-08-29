@@ -7,6 +7,7 @@ const ctx: AdapterContext = { brandId: 'b1', userId: 'u1', runId: 'run-1', local
 const BURN_TOOL: ToolSpec = {
 	name: 'burn',
 	description: 'brucia token',
+	effectful: false,
 	consequential: false,
 	inputSchema: { type: 'object', properties: {}, additionalProperties: false }
 };
@@ -14,6 +15,7 @@ const BURN_TOOL: ToolSpec = {
 const REPLY_TOOL: ToolSpec = {
 	name: 'reply',
 	description: 'chiude il turno',
+	effectful: false,
 	consequential: false,
 	inputSchema: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] },
 	terminal: true

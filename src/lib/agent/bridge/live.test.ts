@@ -3,6 +3,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { applyChatStreamEvent, emptyStreamState, readSseEvents } from '$lib/chat-stream-events';
 import { judgeTranscript, type TranscriptEvent } from '$lib/server/eval/transcript-judge';
+import type { ActionApprovalConfig } from '@anomalia/agent-kit/types';
 
 /**
  * COME `ai-runtime.test.ts` E `run-store.test.ts`: il turno arriva scripted sull'harness finto
@@ -503,7 +504,7 @@ const spec = specById('content')!;
 // turno (brand_memory per l'iniezione della memoria): righe vuote, catena PostgREST minima.
 function emptyReadChain(): Record<string, unknown> {
 	const chain: Record<string, unknown> = {};
-	for (const m of ['select', 'eq', 'is', 'or', 'not', 'neq', 'order', 'limit', 'in']) {
+	for (const m of ['select', 'insert', 'update', 'delete', 'eq', 'is', 'or', 'not', 'neq', 'order', 'limit', 'in']) {
 		chain[m] = () => chain;
 	}
 	chain.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
@@ -614,6 +615,30 @@ describe('la squadra: message_agent è montato per OGNI mestiere', () => {
 		expect(prompt.text).toContain("language of the user's latest message");
 		expect(prompt.text).toContain('an English message gets an English reply');
 		expect(prompt.text).not.toMatch(/^Sei /m);
+	});
+});
+
+describe('runKitTurn — action approval', () => {
+	it('applica il judge al tool del turno prima di arrivare al plugin', async () => {
+		const checker = vi.fn(async () => 'error' as const);
+		const approval: ActionApprovalConfig = { autoReviewEnabled: true, checker };
+		toolCallModel('content_update_post', { post_id: 'p1', caption: 'nuova caption' });
+		const { db } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval
+		});
+		await res.text();
+
+		expect(checker).toHaveBeenCalledOnce();
 	});
 });
 

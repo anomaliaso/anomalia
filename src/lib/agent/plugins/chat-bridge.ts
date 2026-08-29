@@ -68,6 +68,6 @@ export async function execChatTool(
 			isError: !!out && typeof out === 'object' && 'error' in out
 		};
 	} catch (e) {
-		return { content: [{ type: 'text', text: errMsg(e) }], isError: true };
+		return { content: [{ type: 'text', text: errMsg(e) }], isError: true, effectStatus: 'ambiguous' };
 	}
 }

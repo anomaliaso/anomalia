@@ -33,7 +33,7 @@ type ContentSource = {
 	source: string;
 	description: string;
 	requiresMode?: ToolSpec['requiresMode'];
-	effectful?: boolean;
+	effectful: boolean;
 	consequential: boolean;
 };
 
@@ -93,6 +93,7 @@ const MAP: Record<string, ContentSource> = {
 	},
 	content_list_posts: {
 		source: 'read_posts',
+		effectful: false,
 		consequential: false,
 		description:
 			'List brand posts, optionally filtered by status (pending_user/approved/scheduled/published/failed). Each post carries media_origin (typographic_graphic/ai_generated/user_uploaded/video/none) and, when reviewed, a media_review verdict (ship/fix/kill) — honor fix/kill, do not approve as-is.'

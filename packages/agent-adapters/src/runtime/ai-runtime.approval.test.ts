@@ -7,6 +7,7 @@ const context: AdapterContext = { brandId: 'b1', userId: 'u1', runId: 'r1', loca
 const CONSEQUENT: ToolSpec = {
 	name: 'publish',
 	description: 'publish',
+	effectful: true,
 	inputSchema: { type: 'object' },
 	consequential: true
 };
@@ -14,6 +15,7 @@ const CONSEQUENT: ToolSpec = {
 const READ: ToolSpec = {
 	name: 'read',
 	description: 'read',
+	effectful: false,
 	consequential: false,
 	inputSchema: { type: 'object' }
 };
@@ -26,6 +28,19 @@ describe('buildTools — action approval', () => {
 		const tools = buildTools([CONSEQUENT], execute, context, {
 			autoReviewEnabled: true,
 			checker: async () => 'error'
+		});
+
+		const result = await (tools.publish.execute as (input: Record<string, unknown>) => Promise<ToolResult>)({});
+
+		expect(execute).not.toHaveBeenCalled();
+		expect(result.isError).toBe(true);
+	});
+
+	it('fails closed when the judge asks for a person before a consequential tool executes', async () => {
+		const execute = vi.fn(async () => ok);
+		const tools = buildTools([CONSEQUENT], execute, context, {
+			autoReviewEnabled: true,
+			checker: async () => 'ask'
 		});
 
 		const result = await (tools.publish.execute as (input: Record<string, unknown>) => Promise<ToolResult>)({});

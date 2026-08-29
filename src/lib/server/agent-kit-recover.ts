@@ -7,7 +7,7 @@ import {
 } from '$lib/server/chat/turn-limits';
 import { ChatTurnDeadError } from '$lib/server/chat/job-cancel';
 import { assistantContentFromPartial, type ChatPartialSnapshot } from '$lib/server/chat/partial-persist';
-import { createEffectsLedger } from '@anomalia/agent-core/effects-store';
+import { createEffectsLedger } from '$lib/server/agent-kit-effects-store';
 
 /**
  * IL RECUPERO DEL LAVORO MORTO, per una riga sola — estratto dal loop del cron perché `sweep.test.ts`
