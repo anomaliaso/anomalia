@@ -6,6 +6,7 @@ import type {
 	AdapterContext,
 	AdapterDescriptor,
 	CommandRequest,
+	EffectsLedger,
 	FileEntry,
 	MemoryCapabilities,
 	MemoryEntry,
@@ -13,6 +14,7 @@ import type {
 	SandboxCapabilities,
 	SandboxRef,
 	ToolCall,
+	ToolEffect,
 	ToolResult
 } from './index';
 import type { BrandFs, MemoryStore, SandboxProvider, ToolPlugin } from './index';
@@ -130,6 +132,73 @@ export function fakePlugin(name: string, reply: ToolResult): ToolPlugin {
 		tools: [{ name, description: `tool di test per ${name}`, inputSchema: { type: 'object' } }],
 		async execute(_call: ToolCall) {
 			return reply;
+		}
+	};
+}
+
+/**
+ * IL LEDGER IN MEMORIA per i test del gate: `intend`/`resolve`/`find`/`reconcileRun` su una mappa
+ * per (brand, chiave). Così il gate dell'executor si verifica col suo comportamento vero — decidere
+ * se rieseguire o congelare — senza montare un database.
+ */
+export function createMemoryEffectsLedger(seed: { [key: string]: unknown } = {}): EffectsLedger & { rows: ToolEffect[] } {
+	const rows: ToolEffect[] = [];
+
+	for (const [status, request] of Object.entries(seed)) {
+		rows.push({
+			id: `e-${rows.length + 1}`,
+			brandId: 'brand-test',
+			runId: 'run-test',
+			toolName: 'content_schedule',
+			idempotencyKey: 'seed',
+			status: status as ToolEffect['status'],
+			request: request as unknown,
+			result: null,
+			createdAt: '2026-08-29T00:00:00.000Z',
+			updatedAt: '2026-08-29T00:00:00.000Z'
+		});
+	}
+
+	return {
+		rows,
+		async intend(record) {
+			const existing = rows.find((r) => r.brandId === record.brandId && r.idempotencyKey === record.key);
+			if (existing) return existing;
+			const effect: ToolEffect = {
+				id: `e-${rows.length + 1}`,
+				brandId: record.brandId,
+				runId: record.runId,
+				toolName: record.toolName,
+				idempotencyKey: record.key,
+				status: 'intended',
+				request: record.request,
+				result: null,
+				createdAt: '2026-08-29T00:00:00.000Z',
+				updatedAt: '2026-08-29T00:00:00.000Z'
+			};
+			rows.push(effect);
+			return effect;
+		},
+		async resolve(id, status, result) {
+			const effect = rows.find((r) => r.id === id);
+			if (effect) {
+				effect.status = status;
+				effect.result = result;
+				effect.updatedAt = '2026-08-29T00:00:00.000Z';
+			}
+		},
+		async find(brandId, key) {
+			return rows.find((r) => r.brandId === brandId && r.idempotencyKey === key) ?? null;
+		},
+		async reconcileRun(runId) {
+			let n = 0;
+			for (const r of rows) {
+				if (r.runId === runId && r.status === 'intended') {
+					r.status = 'ambiguous';
+					n += 1;
+				}
+			}
+			return n;
 		}
 	};
 }

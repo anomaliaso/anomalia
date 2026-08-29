@@ -10,6 +10,7 @@ import type {
 	AdapterContext,
 	AdapterDescriptor,
 	CommandRequest,
+	EffectStatus,
 	FileEntry,
 	MemoryCapabilities,
 	MemoryEntry,
@@ -20,9 +21,26 @@ import type {
 	SandboxCapabilities,
 	SandboxRef,
 	ToolCall,
+	ToolEffect,
 	ToolResult,
 	ToolSpec
 } from './types';
+
+/**
+ * IL LEDGER DEGLI EFFETTI — il port che l'executor usa per non rieseguire un tool dal un effetto
+ * collaterale già avvenuto (o avviato e lasciato ambiguo da un segmento morto). Declarato qui, nel
+ * contratto: l'executor non sa dove viva la riga, la superficie gliela passa come implementazione.
+ */
+export interface EffectsLedger {
+	/** Registra `intended` PRIMA di eseguire. Se esiste già la chiave, la restituisce senza toccare. */
+	intend(record: { brandId: string; runId: string; toolName: string; key: string; request: unknown }): Promise<ToolEffect>;
+	/** Risolve dopo l'esecuzione: completed (con result) o failed. */
+	resolve(id: string, status: 'completed' | 'failed', result: unknown): Promise<void>;
+	/** Legge per chiave: la riga esistente, o null. */
+	find(brandId: string, key: string): Promise<ToolEffect | null>;
+	/** Attira gli `intended` orfani di un run morto verso `ambiguous` — il ripiego che non duplica. */
+	reconcileRun(runId: string): Promise<number>;
+}
 
 /** Chi fa girare il ciclo. Oggi: ai-runtime (SDK v6). */
 export interface AgentRuntime {

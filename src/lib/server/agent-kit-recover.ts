@@ -7,6 +7,7 @@ import {
 } from '$lib/server/chat/turn-limits';
 import { ChatTurnDeadError } from '$lib/server/chat/job-cancel';
 import { assistantContentFromPartial, type ChatPartialSnapshot } from '$lib/server/chat/partial-persist';
+import { createEffectsLedger } from '@anomalia/agent-core/effects-store';
 
 /**
  * IL RECUPERO DEL LAVORO MORTO, per una riga sola — estratto dal loop del cron perché `sweep.test.ts`
@@ -118,6 +119,15 @@ export async function reapDeadKitRuns(
       .maybeSingle();
     if (!claimed) continue;
     reaped += 1;
+
+    // Gli effetti di questo run ancora `intended` (un tool di scrittura avviato, mai risolto)
+    // diventano `ambiguous`: il risiko del doppio post/schedulazione. Prima di rieseguire, il gate
+    // li legge e congela — mai due volte la stessa scrittura perché il segmento è morto a metà.
+    try {
+      await createEffectsLedger(db).reconcileRun(run.id);
+    } catch (e) {
+      console.error('[sweep] reconciliazione effetti fallita', run.id, e);
+    }
 
     try {
       await recoverDeadPartial(db, run.id);
