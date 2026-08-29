@@ -6454,6 +6454,7 @@
       "searchPh": "Search content, comment or DM…",
       "markDone": "Done",
       "postLabel": "Original post",
+      "postGist": "What the person is asking (AI summary — the original post is one link away)",
       "openPost": "Open",
       "relevanceLabel": "AI relevance",
       "close": "Close",

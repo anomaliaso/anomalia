@@ -217,7 +217,7 @@ export async function buildSystemPrompt(
     needGrow || needPublish
       ? supabase
           .from('brand_news_items')
-          .select('title, url, source_name, snippet, status, relevance')
+          .select('title, url, source_name, gist, snippet, status, relevance')
           .eq('brand_id', brandId)
           .eq('status', 'suggested')
           .not('suggestion', 'is', null)

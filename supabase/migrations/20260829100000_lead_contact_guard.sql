@@ -12,7 +12,8 @@
 
 alter table public.brand_news_items
   add column if not exists author_handle text,
-  add column if not exists author_platform text;
+  add column if not exists author_platform text,
+  add column if not exists gist text;
 
 create table if not exists public.lead_suppressions (
   id uuid primary key default gen_random_uuid(),

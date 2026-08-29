@@ -20,7 +20,7 @@
   };
 
   type Lead = {
-    id: string; title: string; url: string; source_name: string | null; snippet: string | null; status: string;
+    id: string; title: string; url: string; source_name: string | null; snippet: string | null; gist: string | null; status: string;
     relevance: number | null; intent: string | null; suggestion: string | null; dm_draft: string | null; dm_target: string | null; created_at: string;
     // Com'è andata al commento 48h dopo che l'hai incollato. Null finché il controllo non è passato.
     outcome: { found: boolean; upvotes: number | null; replies: number | null; removed: boolean | null } | null;
@@ -111,7 +111,7 @@
     const q = query.trim().toLowerCase();
     if (!q) return bySource;
     return bySource.filter((l) =>
-      [l.title, l.snippet, l.suggestion, l.dm_draft, l.dm_target, l.source_name]
+      [l.title, l.gist, l.snippet, l.suggestion, l.dm_draft, l.dm_target, l.source_name]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -284,7 +284,7 @@
                 <span class="lead-time">{ago(l.created_at)}</span>
               </span>
               <span class="lead-card-title">{l.title}</span>
-              {#if l.snippet}<span class="lead-card-snippet">{snippetPreview(l.snippet, 220)}</span>{/if}
+              {#if l.gist || l.snippet}<span class="lead-card-snippet">{snippetPreview(l.gist ?? l.snippet, 220)}</span>{/if}
               <span class="lead-card-foot">
                 {#if l.dm_target}<span class="lead-user">{handleOf(l)}</span>{/if}
                 <span class="lead-chips">
@@ -336,12 +336,12 @@
     <div class="sugg-block post-block">
       <div class="sugg-header">
         <span class="sugg-icon"><FileText size={13} /></span>
-        <span class="sugg-label">{$_('app.leads.postLabel')}</span>
+        <span class="sugg-label">{selectedLead.gist ? $_('app.leads.postGist') : $_('app.leads.postLabel')}</span>
         <a class="head-link" href={openUrl(selectedLead.url)} target="_blank" rel="noopener noreferrer">{$_('app.leads.openPost')} <ArrowUpRight size={12} /></a>
       </div>
       <a href={openUrl(selectedLead.url)} target="_blank" rel="noopener noreferrer" class="lead-title">{selectedLead.title}</a>
-      {#if selectedLead.snippet}
-        <p class="lead-snippet-full">{snippetPreview(selectedLead.snippet, 4000)}</p>
+      {#if selectedLead.gist || selectedLead.snippet}
+        <p class="lead-snippet-full">{snippetPreview(selectedLead.gist ?? selectedLead.snippet, 4000)}</p>
       {/if}
     </div>
 

@@ -93,3 +93,33 @@ export function dmWithOptOut(dm: string): string {
   if (clean.toLowerCase().includes('stop')) return clean;
   return `${clean}\n\n${DM_OPT_OUT_LINE}`;
 }
+
+// Retention (giorni): il contenuto derivato dal post è il dato delicato — 14 giorni e poi nulla.
+// La riga minima (permalink, handle, stato) tiene 90 giorni ma SOLO per i lead non convertiti: un
+// 'done' è storia del rapporto e ancora gli outcome. Esiti 12 mesi, telemetria di scansione 90.
+const GIST_RETENTION_DAYS = 14;
+const UNCONVERTED_LEAD_DAYS = 90;
+const OUTCOME_RETENTION_DAYS = 365;
+const SCAN_TELEMETRY_DAYS = 90;
+const UNCONVERTED_STATUSES = ['proposed', 'suggested', 'skipped', 'dismissed'];
+
+export async function sweepLeadRetention(admin: SupabaseClient): Promise<void> {
+  const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+  // I builder Supabase sono thenable ma non promesse: niente .catch — il try sta qua.
+  const quiet = async (what: string, run: () => unknown) => {
+    try {
+      await run();
+    } catch (e) {
+      swallow(`lead retention: ${what}`, e);
+    }
+  };
+
+  await quiet('gist purge', () =>
+    admin.from('brand_news_items').update({ gist: null }).lt('created_at', daysAgo(GIST_RETENTION_DAYS)).not('gist', 'is', null));
+  await quiet('unconverted rows', () =>
+    admin.from('brand_news_items').delete().lt('created_at', daysAgo(UNCONVERTED_LEAD_DAYS)).in('status', UNCONVERTED_STATUSES).is('done_at', null));
+  await quiet('outcomes', () =>
+    admin.from('lead_outcomes').delete().lt('checked_at', daysAgo(OUTCOME_RETENTION_DAYS)));
+  await quiet('scan telemetry', () =>
+    admin.from('radar_searches').delete().lt('created_at', daysAgo(SCAN_TELEMETRY_DAYS)));
+}

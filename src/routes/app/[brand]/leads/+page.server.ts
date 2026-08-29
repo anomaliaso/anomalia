@@ -29,7 +29,7 @@ export const load: PageServerLoad = async (event) => {
     const [{ data: leads }, { data: recent }] = await Promise.all([
       supabase
         .from('brand_news_items')
-        .select('id, title, url, source_name, snippet, status, relevance, intent, suggestion, dm_draft, dm_target, created_at')
+        .select('id, title, url, source_name, snippet, gist, status, relevance, intent, suggestion, dm_draft, dm_target, created_at')
         .eq('brand_id', brand.id)
         .in('status', ['suggested', 'done', 'dismissed'])
         .not('suggestion', 'is', null)
@@ -189,7 +189,7 @@ async function rewriteSuggestion(
   // Fetch the lead (brand_id guard = authorization).
   const { data: lead, error: leadErr } = await admin
     .from('brand_news_items')
-    .select('id, title, url, source_name, snippet, suggestion, dm_draft, dm_target')
+    .select('id, title, url, source_name, snippet, gist, suggestion, dm_draft, dm_target')
     .eq('id', id)
     .eq('brand_id', brand.id)
     .maybeSingle();
@@ -232,7 +232,7 @@ async function rewriteSuggestion(
 Brand: ${brandRow?.name ?? ''} — ${String(kit?.about ?? '').slice(0, 300)}
 ${siteUrl ? `Brand site: ${siteUrl}\n` : ''}${kit?.ai_context ? `Voice & expertise:\n${String(kit.ai_context).slice(0, 1200)}\n` : ''}
 THREAD "${lead.title}":
-${(lead.snippet || '').slice(0, 1500) || '(no body — title only)'}
+${(lead.gist || lead.snippet || '').slice(0, 1500) || '(no body — title only)'}
 ${lead.source_name ? `SOURCE: ${lead.source_name}` : ''}
 ${lead.dm_target ? `POST AUTHOR: ${lead.dm_target}` : ''}
 

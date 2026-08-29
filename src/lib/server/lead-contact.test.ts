@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { platformOf, isOptOutSignal, dmWithOptOut, gateVerdict, contactGate, suppressAuthor } from './lead-contact';
+import { platformOf, isOptOutSignal, dmWithOptOut, gateVerdict, contactGate, suppressAuthor, sweepLeadRetention } from './lead-contact';
 
 describe('platformOf (una sola fonte di verità per la piattaforma di un lead)', () => {
   it('riconosce le quattro piattaforme di engage e manda il resto a web', () => {
@@ -118,5 +118,51 @@ describe('suppressAuthor (upsert idempotente, mai duplicati)', () => {
       from: () => ({ upsert: () => Promise.resolve({ error: { message: 'boom' } }) })
     } as unknown as SupabaseClient;
     await expect(suppressAuthor(client, { platform: 'x', handle: 'pippo', source: 'reply' })).resolves.toBe(false);
+  });
+});
+
+describe('sweepLeadRetention (il contenuto scade, la riga minima e gli esiti no)', () => {
+  type Op = { table: string; op: string; payload?: Record<string, unknown>; filters: string[] };
+  function fakeAdmin() {
+    const ops: Op[] = [];
+    const chain = (op: Op) => {
+      const b: Record<string, unknown> = {};
+      const add = (f: string) => { op.filters.push(f); return b; };
+      b.update = (payload: Record<string, unknown>) => { op.op = 'update'; op.payload = payload; return b; };
+      b.delete = () => { op.op = 'delete'; return b; };
+      b.lt = (col: string, v: unknown) => add(`lt:${col}`);
+      b.in = (col: string, v: unknown) => add(`in:${col}=${JSON.stringify(v)}`);
+      b.is = (col: string) => add(`is:${col}=null`);
+      b.not = (col: string, word: string) => add(`not:${col}.${word}`);
+      b.then = (resolve: (v: { data: []; error: null }) => void) => resolve({ data: [], error: null });
+      return b;
+    };
+    const client = {
+      from: (table: string) => {
+        const op: Op = { table, op: 'unknown', filters: [] };
+        ops.push(op);
+        return chain(op);
+      }
+    } as unknown as SupabaseClient;
+    return { client, ops };
+  }
+
+  it('applica le quattro scadenze alle tabelle giuste', async () => {
+    const { client, ops } = fakeAdmin();
+    await sweepLeadRetention(client);
+    const byKey = Object.fromEntries(ops.map((o) => [`${o.table}:${o.op}`, o]));
+    expect(byKey['brand_news_items:update']).toMatchObject({ payload: { gist: null }, filters: ['lt:created_at', 'not:gist.is'] });
+    expect(byKey['brand_news_items:delete']?.filters.join(' ')).toContain("in:status=");
+    expect(byKey['brand_news_items:delete']?.filters.join(' ')).toContain('is:done_at=null');
+    expect(byKey['brand_news_items:delete']?.filters.join(' ')).toContain('lt:created_at');
+    expect(byKey['lead_outcomes:delete']?.op).toBe('delete');
+    expect(byKey['radar_searches:delete']?.op).toBe('delete');
+  });
+
+  it('non lancia mai: una scadenza rotta non deve fermare il tick', async () => {
+    const client = {
+      from: () => { throw new Error('boom'); }
+    } as unknown as SupabaseClient;
+    await expect(sweepLeadRetention(client)).resolves.toBeUndefined();
   });
 });

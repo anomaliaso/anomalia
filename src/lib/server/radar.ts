@@ -603,9 +603,10 @@ const VERDICT_SCHEMA = {
           action: { type: 'string' as const, enum: ['post', 'comment', 'article', 'none'] as const, description: "How the brand should react: 'post' = publish its own social post about this news; 'comment' = join the conversation with a useful reply (ONLY for Reddit/Threads/X threads where the brand's expertise genuinely helps — never pure promotion); 'article' = a deep, substantive blog article draft expanding on this from the brand's expertise (ONLY when the brand's blog is active and the topic has enough depth for long-form, not just a quick social reaction); 'none' = not relevant." },
           pillar: { type: 'string' as const, description: "Which of the brand's content pillars this serves. Empty if none." },
           intent: { type: 'string' as const, enum: ['seeking_now', 'comparing', 'researching', 'venting', 'none'] as const, description: "For CONVERSATIONS only, how close this PERSON is to buying — judge the person, not the topic: 'seeking_now' = explicitly asking for a recommendation or a solution right now; 'comparing' = weighing named options; 'researching' = trying to understand the problem, no purchase in sight; 'venting' = complaining, wants peers not vendors; 'none' = not a person with this problem (news and feed items are always 'none')." },
-          skip_reason: { type: 'string' as const, description: 'One short line on WHY it was skipped (empty when relevant) — shown to the user for transparency.' }
+          skip_reason: { type: 'string' as const, description: 'One short line on WHY it was skipped (empty when relevant) — shown to the user for transparency.' },
+          gist: { type: 'string' as const, description: 'For CONVERSATIONS only: ≤140 characters capturing what this person asked or needs, distilled — never a quote of their words, always in the item\'s language. Empty for news items.' }
         },
-        required: ['index', 'relevant', 'relevance', 'angle', 'urgency', 'pillar', 'action', 'intent', 'skip_reason']
+        required: ['index', 'relevant', 'relevance', 'angle', 'urgency', 'pillar', 'action', 'intent', 'skip_reason', 'gist']
       }
     }
   },
@@ -971,12 +972,18 @@ Duplicated stories: keep the best one, skip the rest ("duplicate"). Never invent
     const id = idByHash.get(h);
     const relevant = v?.relevant === true && Number(v?.relevance) >= 50 && v?.urgency !== 'none' && v?.action !== 'none';
     const intent = normalizeIntent(v?.intent);
+    // Minimizzazione: il testo verbatim del post NON resta nel database. Il judge distilla il
+    // gist (cosa ha chiesto la persona); lo snippet viene cancellato alla stessa stesura. Il
+    // drafting e l'utente leggono il contenuto vero dal permalink, non da una copia nostra.
+    const gist = relevant && intent !== 'none' ? String(v?.gist ?? '').slice(0, 200) || null : null;
     await admin.from('brand_news_items').update({
       status: relevant ? 'proposed' : 'skipped',
       relevance: Math.max(0, Math.min(100, Number(v?.relevance) || 0)),
       angle: relevant ? String(v?.angle ?? '') : null,
       urgency: relevant ? String(v?.urgency ?? 'timely') : null,
       intent: relevant ? intent : null,
+      gist,
+      snippet: null,
       skip_reason: relevant ? null : String(v?.skip_reason ?? '').slice(0, 300) || null
     }).eq('id', id ?? '');
     if (relevant && id) {
