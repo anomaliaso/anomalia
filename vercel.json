@@ -178,10 +178,11 @@
       "path": "/api/v1/benchmark/tick",
       "schedule": "15 * * * *"
     },
-    {
-      "path": "/api/v1/market/harvest",
-      "schedule": "40 6 * * *"
-    },
+    // Raccolta mercato spesa (kill 2026-08-29, audit budget): decommentare per riattivare.
+    // {
+    //   "path": "/api/v1/market/harvest",
+    //   "schedule": "40 6 * * *"
+    // },
     {
       "path": "/api/v1/market/field",
       "schedule": "50 6 * * *"
@@ -190,10 +191,10 @@
       "path": "/api/v1/leads/outcomes",
       "schedule": "20 7 * * *"
     },
-    {
-      "path": "/api/v1/market/trends",
-      "schedule": "20 */4 * * *"
-    },
+    // {
+    //   "path": "/api/v1/market/trends",
+    //   "schedule": "20 */4 * * *"
+    // },
     {
       "path": "/api/v1/webhooks/work",
       "schedule": "*/10 * * * *"
