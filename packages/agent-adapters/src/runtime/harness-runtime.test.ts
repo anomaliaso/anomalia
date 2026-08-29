@@ -7,6 +7,7 @@ const ctx: AdapterContext = { brandId: 'b1', userId: 'u1', runId: 'r1', locale: 
 const spec: ToolSpec = {
 	name: 'publish_post',
 	description: 'publish',
+	consequential: true,
 	inputSchema: { type: 'object', properties: {} }
 };
 

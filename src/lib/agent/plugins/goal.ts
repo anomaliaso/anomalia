@@ -46,6 +46,7 @@ export function createGoalPlugin(deps: GoalPluginDeps): ToolPlugin {
 		name,
 		description: withKitToolNames(String(goalTools[name]?.description ?? name)),
 		requiresMode: 'plan',
+		consequential: true,
 		inputSchema: jsonSchemaOf(goalTools[name])
 	}));
 
