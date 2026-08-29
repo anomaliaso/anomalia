@@ -83,6 +83,9 @@ Il turno di setup dell'onboarding consegna la prima risposta in ~20s e continua 
 ### I rimount (`{#key}`) rendono stale i ref dell'automazione browser
 Un click su un ref catturato prima del re-render non arriva a nessuno: il carosello dell'onboarding sembrava bloccato prima del pick — era il bottone rimontato ad ogni slide. Mossa: snapshot fresco e selettori stabili (`.wide-btn`), click lenti; un "blocco" va riprodotto con click lenti e selelettori nuovi prima di chiamarlo bug. Il falso positivo costa un'ora, la prudenza tre secondi.
 
+### Un file input SSR accetta la selezione prima dell'hydration
+`waitForSelector` può vedere il file input nel markup SSR mentre `onchange` non è ancora collegato; `setInputFiles` allora perde l'immagine senza errore, la strip non nasce e il turno parte cieco. Mossa: montare il picker solo dopo `onMount`, così il selettore trova solo un input interattivo.
+
 ### Un cookie di sessione malformato abbatte il dev server
 Una curl con `sb-<host>-auth-token` corrotto produce `Invalid Base64-URL character` non gestito nella recovery della sessione e il processo muore (`curl` → 000, niente più risposte). È un finding prodotto, non rumore: la recovery non tollera input corrotto. Mossa: quando curl dà 000, guardare il log del server prima di incolpare la rete; e la richiesta che ha ucciso il server diventa un test.
 
