@@ -19,6 +19,7 @@
   let syncForm = $state<HTMLFormElement | null>(null);
   let pendingConnect = $state(false);
   let confirmingDisconnect = $state<string | null>(null);
+  let disconnecting = $state<string | null>(null);
   let syncing = $state(false);
 
   // Coming back from the OAuth tab, the sync runs for a few seconds — say so instead of showing
@@ -28,6 +29,17 @@
     return async ({ update }: { update: () => Promise<void> }) => {
       await update();
       syncing = false;
+    };
+  };
+
+  const withDisconnectSpinner = (id: string) => () => {
+    disconnecting = id;
+    return async ({ update }: { update: () => Promise<void> }) => {
+      try {
+        await update();
+      } finally {
+        disconnecting = null;
+      }
     };
   };
 
@@ -72,10 +84,12 @@
         </div>
         <div class="nm"><div class="h">{a.display_name ?? a.username ?? a.platform}</div><div class="s">{a.platform}{a.username ? ` · @${a.username}` : ''}</div></div>
         {#if confirmingDisconnect === a.id}
-          <form method="POST" action="?/disconnect" use:enhance class="disc-confirm">
+          <form method="POST" action="?/disconnect" use:enhance={withDisconnectSpinner(a.id)} class="disc-confirm" aria-busy={disconnecting === a.id}>
             <input type="hidden" name="id" value={a.id} />
-            <button class="mini danger" type="submit">{$_('app.settings.remove')}</button>
-            <button class="mini ghost" type="button" onclick={() => (confirmingDisconnect = null)}>{$_('app.settings.keep')}</button>
+            <button class="mini danger" type="submit" disabled={disconnecting === a.id}>
+              {disconnecting === a.id ? $_('app.settings.del.deleting') : $_('app.settings.remove')}
+            </button>
+            <button class="mini ghost" type="button" disabled={disconnecting === a.id} onclick={() => (confirmingDisconnect = null)}>{$_('app.settings.keep')}</button>
           </form>
         {:else}
           <span class="status"><span class="d"></span>{$_('app.settings.active')}</span>
