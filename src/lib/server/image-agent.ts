@@ -35,7 +35,11 @@ export const MAX_AGENT_INSPECTS = 2;
 export const MAX_AGENT_STEPS = 50;
 export const STALL_STEP_THRESHOLD = 3;
 export const CONTEXT_IMAGE_MAX_PX = 768;
-/** Typical Nano Banana Pro render at list — and list is what the brand pays, on every plan. */
+/**
+ * Nano Banana Pro render at list — kept as the BUDGET estimate even though renders now default to
+ * the cheaper Nano Banana 2 Lite: until Lite's credits are measured, Pro list is the prudent upper
+ * bound, and real cost is in ai_calls from renderPostImage regardless.
+ */
 export const NANO_BANANA_PRO_LIST_RENDER_USD = 0.1386;
 
 /**

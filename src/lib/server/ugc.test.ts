@@ -15,8 +15,8 @@ import {
 } from './ugc';
 
 describe('UGC_COVER_MODEL', () => {
-  it('uses Nano Banana Pro for UGC first frames', () => {
-    expect(UGC_COVER_MODEL).toBe('gemini-3-pro-image-preview');
+  it('uses Nano Banana 2 Lite for UGC first frames', () => {
+    expect(UGC_COVER_MODEL).toBe('gemini-3.1-flash-lite-image');
   });
 });
 

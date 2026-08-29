@@ -7,6 +7,9 @@
  *
  *   nano-banana-pro   18 crediti = $0.09   (Google: $0.1344 — −33%)
  *   nano-banana-2      8 crediti = $0.04   a 1K, 12 = $0.06 a 2K   (Google: $0.067 — −40% a 1K)
+ *   nano-banana-2-lite ? crediti — il costo vero arriva comunque da creditsConsumed sul poll.
+ *
+ * Il default di render del prodotto è nano-banana-2-lite: il mapping lo aggiunge senza un elenco.
  *
  * La voce si sposta ANCHE SE COSTA DI PIÙ: 0.62 crediti = $0.0031 per una battuta di 4.4s, contro
  * ~$0.0011 su Google. Circa 3× tanto. Non è un risparmio ed è stato accettato come tale: lo scopo
@@ -222,12 +225,24 @@ export const KIE_IMAGE_INPUT_MAX = 8;
 /**
  * Da id Gemini a id kie.
  *
- * Sono lo stesso modello con due nomi: `gemini-3-pro-image-preview` è Nano Banana Pro,
- * `gemini-3.1-flash-image` è Nano Banana 2. La regola è una sola riga apposta — un elenco di
- * corrispondenze invecchia al primo id nuovo, mentre "pro nel nome ⇒ pro" regge anche allora.
+ * Sono gli stessi modelli con due nomi: `gemini-3-pro-image-preview` è Nano Banana Pro,
+ * `gemini-3.1-flash-image` è Nano Banana 2, `gemini-3.1-flash-lite-image` è Nano Banana 2 Lite.
+ * La regola è una sola riga apposta — un elenco di corrispondenze invecchia al primo id nuovo,
+ * mentre "pro nel nome ⇒ pro", "lite nel nome ⇒ lite" reggono anche allora.
  */
-export function kieImageModel(geminiModel: string | undefined): 'nano-banana-pro' | 'nano-banana-2' {
-  return /pro/i.test(geminiModel ?? '') ? 'nano-banana-pro' : 'nano-banana-2';
+export type KieImageModel = 'nano-banana-pro' | 'nano-banana-2' | 'nano-banana-2-lite';
+
+export function kieImageModel(geminiModel: string | undefined): KieImageModel {
+  if (/pro/i.test(geminiModel ?? '')) return 'nano-banana-pro';
+  if (/lite/i.test(geminiModel ?? '')) return 'nano-banana-2-lite';
+  return 'nano-banana-2';
+}
+
+/** Nano Banana 2 Lite: solo prompt + image_urls + aspect_ratio, e al massimo 10 riferimenti. */
+const KIE_LITE_IMAGE_MAX = 10;
+
+export function isKieLiteImageModel(model: string): model is 'nano-banana-2-lite' {
+  return model === 'nano-banana-2-lite';
 }
 
 /**
@@ -242,6 +257,7 @@ export function buildKieImageInput(opts: {
   aspectRatio?: string;
   refUrls?: string[];
   resolution?: KieResolution;
+  model?: string;
 }): Record<string, unknown> {
   const aspect = opts.aspectRatio && KIE_ASPECT_RATIOS.has(opts.aspectRatio) ? opts.aspectRatio : '1:1';
   if (opts.aspectRatio && aspect !== opts.aspectRatio) {
@@ -258,6 +274,18 @@ export function buildKieImageInput(opts: {
         `${refUrls.length - KIE_IMAGE_INPUT_MAX} scartati. Il tetto va imposto A MONTE, dove si sa che cosa sono.`
     );
   }
+
+  // La forma Lite è un DIALETTO, non un sottoinsieme: il campo riferimenti si chiama image_urls,
+  // la cap è 10, e resolution/output_format NON esistono (il "2K" inviato a un modello che li
+  // scarta è un payload sbagliato che funziona per sbaglio).
+  if (isKieLiteImageModel(opts.model ?? '')) {
+    return {
+      prompt: opts.prompt.slice(0, 10_000),
+      aspect_ratio: aspect,
+      ...(refUrls.length ? { image_urls: refUrls.slice(0, KIE_LITE_IMAGE_MAX) } : {})
+    };
+  }
+
   return {
     prompt: opts.prompt.slice(0, 10_000), // limite dichiarato dalla API
     aspect_ratio: aspect,
@@ -392,6 +420,7 @@ export async function generateImageOnKie(
   }
 
   const input = buildKieImageInput({
+    model,
     prompt,
     aspectRatio: req.config?.imageConfig?.aspectRatio,
     refUrls

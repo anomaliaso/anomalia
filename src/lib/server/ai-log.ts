@@ -199,6 +199,9 @@ const RATES: Record<string, { input: number; cachedInput: number; output: number
   [NANO_BANANA_PRO]: { input: 2, cachedInput: 2, output: 12, imageOutput: 120 },
   // Nano Banana 2: docs and AI Studio disagree on image output ($30 vs $60/M) — the higher wins.
   'gemini-3.1-flash-image': { input: 0.5, cachedInput: 0.5, output: 3, imageOutput: 60 },
+  // Nano Banana 2 Lite: no published Google rate found — priced at Nano Banana 2 as the prudent
+  // upper bound. On kie (the default transport) the real cost comes from credits_consumed anyway.
+  'gemini-3.1-flash-lite-image': { input: 0.5, cachedInput: 0.5, output: 3, imageOutput: 60 },
   'mimo-v2.5-pro': { input: 0.435, cachedInput: 0.0036, output: 0.87, searchPerQuery: 0.005, thinkingInOutput: true },
   // The only MiMo that accepts image input; used as the vision model.
   'mimo-v2.5': { input: 0.14, cachedInput: 0.003, output: 0.28, searchPerQuery: 0.005, thinkingInOutput: true },
