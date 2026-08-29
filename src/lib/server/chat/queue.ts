@@ -415,6 +415,28 @@ async function igniteTeamAfterSetupTurn(
 }
 
 /**
+ * «La risposta è pronta» — il punto di completamento CONDIVISO dai due motori, come il saluto del
+ * team: un turno che finisce mentre nessuno guarda deve farsi trovare.
+ */
+async function notifyReplyReady(
+	admin: SupabaseClient,
+	opts: { userId: string; locale: string; brandSlug?: string | null; threadId: string }
+): Promise<void> {
+	try {
+		const { sendPushToUser } = await import('$lib/server/web-push');
+		await sendPushToUser(admin, opts.userId, {
+			title: 'Anomalia',
+			body: bilingualNoticeLocale(opts.locale) === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere",
+			url: `/app/${opts.brandSlug}/chat/${opts.threadId}`,
+			tag: 'chat-ai-ready',
+			skipIfFocused: true
+		});
+	} catch {
+		/* best-effort */
+	}
+}
+
+/**
  * Claim the oldest pending queued chat_response that has no sibling still running
  * on the same thread, then generate + persist the assistant reply.
  */
@@ -638,15 +660,16 @@ export async function processNextQueuedChatJob(
 		// L'agente è lo STESSO `agentId` del percorso classico (thread + `params.agent`): una sola
 		// risoluzione, o i due motori risponderebbero con agenti diversi allo stesso job.
 		//
-		// FUORI dal kit restano DM, stanze e agenti custom: sono meccaniche del motore classico che
-		// vivono QUI dentro (chi firma la battuta, la voce successiva, il persona nel system prompt) e
-		// che il bridge non conosce. Mandarcele dentro non è «uno specialista al posto di un altro»,
-		// è perdere il mittente, il persona e la catena delle voci.
+		// FUORI dal kit restano stanze e agenti custom: sono meccaniche del motore classico che
+		// vivono QUI dentro (la voce successiva della stanza, il persona nel system prompt) e che
+		// il bridge non conosce. Mandarcele dentro non è «uno specialista al posto di un altro»,
+		// è perdere la catena delle voci e il persona. I DM ci stanno: il contesto del DM (chi
+		// parla, il blocco in testa al prompt) entra nel turno kit come `dm`.
 		//
 		// Il flag si guarda PRIMA dell'import: `shouldUseKit` resta l'autorità sulla condizione, ma
 		// tirare dentro il bridge (executor, sandbox, plugin) a ogni turno accodato si paga anche a
 		// kit spento.
-		if (env.AGENT_KIT === 'on' && !isDm && !personaId && parseRoomAgents(threadRow?.room_agents).length < 2) {
+		if (env.AGENT_KIT === 'on' && !personaId && parseRoomAgents(threadRow?.room_agents).length < 2) {
 			const { shouldUseKit, runKitTurn } = await import('$lib/agent/bridge/live');
 			const kitSpec = shouldUseKit(env, agentId);
 			if (kitSpec) {
@@ -688,7 +711,10 @@ await maybeCompactThread(admin, {
 					})().catch((e) => console.warn('[Chat Queue] compattazione kit saltata:', e));
 					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId);
 					const tail = hist[hist.length - 1];
+					// Un DM è SEMPRE già salvato: message_agent scrive la riga (firmata col mittente) al
+					// momento dell'invio — risalvarla qui la duplicherebbe senza firma.
 					const alreadySaved =
+						isDm ||
 						replay ||
 						(tail?.role === 'user' &&
 							(typeof tail.content === 'string' ? tail.content : '') === userMessageContent);
@@ -705,11 +731,12 @@ await maybeCompactThread(admin, {
 					// La storia ricaricata porta le tool call CON i loro risultati
 					// (`assistantContentFromSteps` le salva, `messagesFromRow` le rimonta): è questo che
 					// fa RIPRENDERE la continuazione invece di farla ricominciare da capo.
-					// `modelUserContent` e non il testo grezzo: porta i documenti allegati al turno,
-					// esattamente come sul percorso classico.
+					// `modelUserContent` e non il testo grezzo: porta i documenti allegati al turno e, in
+					// un DM, l'identità del mittente DENTRO il contenuto — sostituisce l'ultima riga
+					// user invece di duplicarla, stesso gesto del percorso classico.
 					const kitMessages: ModelMessage[] = replay
 						? [...hist, { role: 'user', content: modelUserContent } as ModelMessage]
-						: turnDocuments.length && hist[hist.length - 1]?.role === 'user'
+						: (turnDocuments.length || dmTaggedContent) && hist[hist.length - 1]?.role === 'user'
 							? [...hist.slice(0, -1), { role: 'user', content: modelUserContent } as ModelMessage]
 							: hist;
 
@@ -727,9 +754,19 @@ await maybeCompactThread(admin, {
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model)?.family,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
-						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato o una
-						// ripresa scritta dal sistema restano sul default.
-						escalationText: params.scheduled === true || replay ? undefined : userMessageContent,
+						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
+						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
+						escalationText: params.scheduled === true || replay || isDm ? undefined : userMessageContent,
+						// Il contesto del DM: chi parla, per chi. Il turno kit nasce DM (blocco in testa
+						// al prompt, firma della risposta, niente riprese) come lo nasceva quello classico.
+						dm:
+							dmPair && dmSpeaker && dmOtherName
+								? {
+										speaker: dmSpeaker,
+										meName: dmMemberNames[dmSpeaker] ?? dmSpeaker,
+										otherName: dmOtherName
+									}
+								: undefined,
 						origin,
 						budgetMs,
 						continuationDepth: Math.max(0, Math.trunc(Number(params.continuation_depth)) || 0),
@@ -772,6 +809,12 @@ await maybeCompactThread(admin, {
 					threadRow,
 					locale,
 					origin
+				});
+				await notifyReplyReady(admin, {
+					userId: job.user_id as string,
+					locale,
+					brandSlug: brand.slug,
+					threadId
 				});
 				return { processed: true, jobId };
 				}).finally(stopHeartbeat);
@@ -1419,18 +1462,12 @@ const result = await harnessGenerateText({
 				origin
 			});
 
-			try {
-				const { sendPushToUser } = await import('$lib/server/web-push');
-				await sendPushToUser(admin, job.user_id as string, {
-					title: 'Anomalia',
-					body: bilingualNoticeLocale(locale) === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere",
-					url: `/app/${brand.slug}/chat/${threadId}`,
-					tag: 'chat-ai-ready',
-					skipIfFocused: true
-				});
-			} catch {
-				/* best-effort */
-			}
+			await notifyReplyReady(admin, {
+				userId: job.user_id as string,
+				locale,
+				brandSlug: brand.slug,
+				threadId
+			});
 			return { processed: true, jobId };
 		});
 	} catch (e) {
