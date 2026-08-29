@@ -307,7 +307,7 @@ const [url, ...rest] = process.argv.slice(2);
 const opts = Object.fromEntries(rest.map((a) => { const i = a.indexOf('='); return i < 0 ? [a, 'true'] : [a.slice(0, i), a.slice(i + 1)]; }));
 if (!url) { console.error('usage: browse.mjs <url> [wait=selector] [screenshot=path] [maxChars=20000]'); process.exit(2); }
 
-const args = ['--no-sandbox', '--disable-dev-shm-usage'];
+const args = ['--no-sandbox', '--disable-dev-shm-usage', '--no-first-run'];
 const onScreen = existsSync('${X_SOCKET}');
 const browser = onScreen
   ? await chromium

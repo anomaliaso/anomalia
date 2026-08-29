@@ -182,6 +182,12 @@ describe('BROWSE_SCRIPT', () => {
     expect(BROWSE_SCRIPT).toContain('browser.close()');
   });
 
+  it('passa --no-first-run agli avvii effettivi di Chromium', () => {
+    expect(BROWSE_SCRIPT).toContain(
+      "const args = ['--no-sandbox', '--disable-dev-shm-usage', '--no-first-run'];"
+    );
+  });
+
   /**
    * Un delegato apriva Chromium in headless mentre l'utente guardava lo schermo della stessa VM:
    * il desktop restava vuoto per tutta la ricerca. Se il display c'è, si naviga a vista.
