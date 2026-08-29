@@ -98,6 +98,7 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'motion_write',
 		requiresMode: 'agent',
+		consequential: true,
 		description: [
 			'Build a kinetic motion video from a brief in prose. You do NOT write Remotion source: the motion agent does, and it is the one that carries the craft — the transition recipes, the easing rules, the reference wall, and the gates that refuse a composition written in one shot.',
 			'Say what the video must do: the angle, the beats, the copy that matters, the proof, the CTA. Name products, people and features by their real names — vague in, vague out.',
@@ -118,6 +119,7 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'motion_check',
 		requiresMode: 'agent',
+		consequential: false,
 		description: [
 			'Where a queued motion build got to: its status, the tools it is running now, and what it has said so far.',
 			'Do NOT poll it in a loop — check, then do other work or tell the user where it is, and come back later. A composition is still not a video when the build is done: motion_render makes the MP4.'
@@ -131,6 +133,7 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'motion_edit',
 		requiresMode: 'agent',
+		consequential: true,
 		description: [
 			'The PREFERRED way to change an existing composition: targeted search-and-replace on the saved source instead of resending it whole — full motion_write with id+force stays for total rewrites only.',
 			"op 'grep' lists every saved-source line containing pattern as numbered lines (plain text, case-insensitive) — run it first to find exact text.",
@@ -152,6 +155,7 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'motion_render',
 		requiresMode: 'agent',
+		consequential: true,
 		description: [
 			'Render the REAL MP4 in a VM from the saved source, and attach it to the gallery as its preview.',
 			'This is the only way to produce a file someone can actually watch — motion_write only saves code. Costs VM time.',
@@ -169,6 +173,7 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	{
 		name: 'motion_stills',
 		requiresMode: 'agent',
+		consequential: true,
 		description:
 			'Render a few real frames of the saved source — cheap, no audio, no MP4 — so you can look at the composition before spending a full render. Frames come back attached as images FOR YOU, and are ALSO published as chat artifacts so the user sees them in the conversation. Do not re-publish or show_media the same frames.',
 		inputSchema: {
@@ -186,6 +191,7 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	},
 	{
 		name: 'motion_list',
+		consequential: false,
 		description: [
 			'List this brand’s motion videos — id, title, created_at/updated_at, status (rendered or source only), preview_url when it exists, and source_path. Use it to find the one to keep editing (“the one from the 4th” is a date, and the date is here), or to check what already exists before making something new.',
 			'source_path is artifacts/motion/<id>.md: brand_read opens it and gives you the whole TSX plus its meta. That file is a projection of the row, so it exists the moment motion_write saves — there is no extra step. It is NOT writable: to change the code, call motion_edit (targeted search-and-replace) or motion_write with that id and a brief of what must change.'
@@ -194,19 +200,22 @@ export const MOTION_PLUGIN_TOOLS: ToolSpec[] = [
 	}
 ];
 
-export const MOTION_AUDIO_MAP: Record<string, { source: string; description: string }> = {
+export const MOTION_AUDIO_MAP: Record<string, { source: string; description: string; consequential: boolean }> = {
 	motion_voiceover: {
 		source: 'generate_voiceover',
+		consequential: true,
 		description:
 			'Record the spoken voice-over for the video: ONE take of the whole script, cut afterwards into one clip per line with motion_cut_voiceover. It is a single recording on purpose — a clip per beat gives a slightly different voice in every beat. Returns one https URL with its real duration in seconds and in frames, plus the pauses to cut at. Bills AI credits. Does NOT change the TSX.'
 	},
 	motion_cut_voiceover: {
 		source: 'cut_voiceover',
+		consequential: true,
 		description:
 			'Cut the take from motion_voiceover into one clip per line, at timestamps taken from its `pauses` list — never guessed. N cuts give N+1 clips, each with its real duration in seconds and frames; put each inside the <Sequence> of the beat that speaks it. Free: it slices a file that already exists. Cuts falling outside the take come back in dropped_cuts instead of silently shifting the labels.'
 	},
 	motion_music: {
 		source: 'generate_music',
+		consequential: true,
 		description:
 			'Generate an instrumental music bed and get back an https URL. Describe the music, not the video: tempo, instruments, mood, energy. It is a bed — it sits under the voice, it does not compete with it. The clip always comes back short: a longer composition repeats it with `loop` on the <Audio>. Bills AI credits. Does NOT change the TSX.'
 	}
@@ -238,6 +247,7 @@ export function createMotionPlugin(deps: MotionPluginDeps): ToolPlugin {
 	const audioTools: ToolSpec[] = Object.entries(MOTION_AUDIO_MAP).map(([name, m]) => ({
 		name,
 		description: m.description,
+		consequential: m.consequential,
 		inputSchema: jsonSchemaOf(chatTools[m.source])
 	}));
 

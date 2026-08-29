@@ -13,6 +13,7 @@ describe('BUILTIN_TOOLS', () => {
 			expect(tool.name).toMatch(/^[a-z_]+$/);
 			expect(tool.description.length).toBeGreaterThan(0);
 			expect(tool.inputSchema.type).toBe('object');
+			expect(typeof tool.consequential).toBe('boolean');
 		}
 	});
 

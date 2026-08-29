@@ -265,7 +265,7 @@ describe('createApplyTool — il gate sugli effetti', () => {
 	function effectfulPlugin(counter: { calls: number }) {
 		return {
 			name: 'content',
-			tools: [{ name: 'content_schedule', description: 'schedula', inputSchema: { type: 'object' }, effectful: true }],
+			tools: [{ name: 'content_schedule', description: 'schedula', inputSchema: { type: 'object' }, effectful: true, consequential: true }],
 			async execute() {
 				counter.calls += 1;
 				return { content: [{ type: 'text' as const, text: `post ${counter.calls}` }] };
@@ -307,7 +307,7 @@ describe('createApplyTool — il gate sugli effetti', () => {
 		const { brandId } = fakeContext();
 		const injected = createMemoryEffectsLedger();
 		await injected.intend({ brandId, runId: 'run-dead', toolName: 'content_schedule', key: effectKey('content_schedule', { post_id: 'p1' }), request: { post_id: 'p1' } });
-		await injected.resolve(injected.rows[0].id, 'ambiguous', null);
+		await injected.reconcileRun('run-dead');
 		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: injected }));
 
 		const out = await apply({ name: 'content_schedule', args: { post_id: 'p1' } }, fakeContext({ runId: 'run-new' }));
@@ -332,7 +332,7 @@ describe('createApplyTool — il gate sugli effetti', () => {
 	it('solo i tool marcat effectful passano dal gate; gli altri no', async () => {
 		const counter = { calls: 0 };
 		const ledger = createMemoryEffectsLedger();
-		const plugin = { ...effectfulPlugin(counter), tools: [{ name: 'content_read', description: 'legge', inputSchema: { type: 'object' } }] };
+		const plugin = { ...effectfulPlugin(counter), tools: [{ name: 'content_read', description: 'legge', inputSchema: { type: 'object' }, consequential: false }] };
 		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
 		const out = await apply({ name: 'content_read', args: {} }, fakeContext());
 		expect(out.isError).toBeFalsy();

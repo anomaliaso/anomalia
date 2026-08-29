@@ -230,7 +230,7 @@ export class HarnessRuntime implements AgentRuntime {
 			harness: setup.harness(request.model.id),
 			sandbox: this.deps.sandboxProvider ?? setup.sandbox(),
 			instructions: request.system,
-			tools: buildTools(request.tools, this.deps.execToolCall, context),
+			tools: buildTools(request.tools, this.deps.execToolCall, context, request.approval),
 			stopWhen: request.tools.filter((tool) => tool.terminal).map((tool) => hasToolCall(tool.name))
 		};
 	}

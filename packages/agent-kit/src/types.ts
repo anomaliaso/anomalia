@@ -40,6 +40,7 @@ export interface ToolSpec {
 	 * quindi vive anche dove si può solo leggere.
 	 */
 	requiresMode?: 'plan' | 'agent';
+	consequential: boolean;
 	terminal?: boolean;
 	/**
 	 * Il tool ha un effetto collaterale reale (scrive/post/schedula/rende un file): va avvolto dal
@@ -47,6 +48,24 @@ export interface ToolSpec {
 	 */
 	effectful?: boolean;
 }
+
+export type ActionApprovalRule = {
+	effect: 'require_approval' | 'always_allow';
+	matchKind: 'tool' | 'connector' | 'category';
+	matchValue: string;
+};
+
+export type ActionApprovalChecker = (input: {
+	spec: ToolSpec;
+	call: ToolCall;
+	context: AdapterContext;
+}) => Promise<'pass' | 'ask' | 'error'>;
+
+export type ActionApprovalConfig = {
+	autoReviewEnabled: boolean;
+	rules?: readonly ActionApprovalRule[];
+	checker?: ActionApprovalChecker;
+};
 
 /** Testo e/o immagini, più un flag d'errore che INSEGNA. */
 export type ToolResultContent =
@@ -111,6 +130,7 @@ export interface RunRequest {
 	system: string;
 	messages: Array<{ role: 'user' | 'assistant' | 'tool'; content: unknown }>;
 	tools: ToolSpec[];
+	approval?: ActionApprovalConfig;
 	model: ModelRef;
 	limits: { maxSteps: number; tokenBudget: number; deadlineMs: number };
 }
