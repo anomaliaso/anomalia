@@ -27,10 +27,9 @@ export const KIE_MODEL = env.KIE_MODEL || 'grok-4-5';
 // GTM / director / design still use grok-4-5, and env must not silently downgrade chat.
 export const KIE_GROK_PRO_MODEL = 'grok-4-6';
 
-// GPT 5.6 Luna on kie Codex Responses — IL modello di chat di default (Fast e Auto), multimodale
-// (misurato: legge un PNG e ne descrive i quadranti). Vedi `lunaFast` in chat/model.ts, che e' la
-// fonte di verita'. Serve ANCHE come motore GPT dell'audit di citazione GEO (KIE_CITATION_GPT),
-// ma e' un riuso, non la sua identita'.
+// GPT 5.6 Luna on kie Codex Responses — multimodale
+// (misurato: legge un PNG e ne descrive i quadranti). Serve ANCHE come motore GPT dell'audit di
+// citazione GEO (KIE_CITATION_GPT), ma e' un riuso, non la sua identita'.
 //
 // Qui c'era scritto l'opposto — «NOT a chat model: the chat Fast/Auto tiers are Gemini Flash» —
 // residuo del 17/08, quando Gemini Flash era l'unico modello dietro Fast/Auto. Quella scelta e'
@@ -72,7 +71,7 @@ export type KieReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
  * il modello come reasoning model, e li riconosce DAL NOME — `o1|o3|o4-mini|gpt-5*`. `grok-*` non
  * ci sta dentro: senza `forceReasoning: true` accanto a questo spread, ogni step dopo il primo
  * butta i pensieri («Skipping reasoning parts») e l'effort non parte proprio. Sui gpt-5-6-* di kie
- * non serve, sono già riconosciuti. Vedi `kiePro` in chat/model.ts.
+ * non serve, sono già riconosciuti.
  */
 export const KIE_NO_STORE = { store: false } as const;
 

@@ -46,7 +46,6 @@ vi.mock('./model', () => ({
     provider: 'test',
     callOptions: {}
   }),
-  takeKieUsage: () => ({})
 }));
 
 const { roomBeat, roomContinue, ROOM_MAX_VOICES_PER_MESSAGE } = await import('./room');

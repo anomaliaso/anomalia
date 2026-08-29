@@ -35,7 +35,7 @@ import {
 } from '$lib/ai-act';
 import { extractMemoryFromChat } from '$lib/server/brand-memory';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
-import { resolveChatModel, takeKieUsage } from '$lib/server/chat/model';
+import { resolveChatModel } from '$lib/server/chat/model';
 import { hasWebHub } from '$lib/server/plans';
 import { contentFromFailedTurn, persistPartialAssistantReply } from '$lib/server/chat/partial-persist';
 import { createAdminClient } from '$lib/server/supabase-admin';
@@ -1161,9 +1161,6 @@ const result = await harnessGenerateText({
 				ms: Date.now() - chatT0,
 				ok: true,
 				...extractSdkUsage(result.totalUsage),
-				// kie fattura in crediti e riporta `input_tokens: 0` sugli step di un loop agentico:
-				// senza questo, cost_usd direbbe zero per un turno che è costato davvero.
-				...takeKieUsage(chatModel),
 				brandId: brand.id,
 				userId: job.user_id as string,
 				threadId,

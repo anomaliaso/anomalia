@@ -16,8 +16,6 @@ type Row = Record<string, any>;
 
 // Il percorso sotto test è quello classico del queue: il kit si spegne qui, non nel .env
 // locale — altrimenti la suite passa sul laptop di chi lo ha spento e muore su chi lo ha acceso.
-vi.mock('$env/dynamic/private', () => ({ env: { AGENT_KIT: 'off' } }));
-
 // ── Il confine mockato: modello, prompt base, tool pesanti. Il resto è codice vero. ────────────
 const harnessCalls: Array<{ system: string; messages: Array<{ role: string; content: unknown }> }> = [];
 vi.mock('$lib/server/harness', () => ({
@@ -71,7 +69,6 @@ vi.mock('$lib/server/ai-log', async (importOriginal) => ({
 }));
 vi.mock('./model', () => ({
 	resolveChatModel: () => ({ model: {}, modelId: 'test-model', provider: 'test', tier: 'auto', callOptions: {} }),
-	takeKieUsage: () => ({})
 }));
 vi.mock('./rate-limits', () => ({
 	getChatRateUsage: vi.fn(async () => ({ ok: true })),

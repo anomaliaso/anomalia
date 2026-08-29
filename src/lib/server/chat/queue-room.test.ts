@@ -57,7 +57,6 @@ vi.mock('$lib/server/ai-log', async (importOriginal) => ({
 }));
 vi.mock('./model', () => ({
 	resolveChatModel: () => ({ model: {}, modelId: 'test-model', provider: 'test', tier: 'auto', callOptions: {} }),
-	takeKieUsage: () => ({})
 }));
 vi.mock('./rate-limits', () => ({
 	getChatRateUsage: vi.fn(async () => ({ ok: true })),
