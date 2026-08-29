@@ -106,7 +106,7 @@ describe('contracts: schema dagli stessi valori del codice', () => {
 // ── Sample call strutturali: il campo promesso dal contratto viene prodotto davvero ──
 // Solo i rami che toccano SOLO supabase (nessun Zernio/publish): post pending_user.
 
-const OPTS = { toolCallId: 't1', messages: [] } as unknown as ToolExecutionOptions;
+const OPTS = { toolCallId: 't1', messages: [] } as unknown as ToolExecutionOptions<unknown>;
 
 function toolsWithPosts(posts: Record<string, unknown>[]) {
   const kit = createTestSupabase({ posts });

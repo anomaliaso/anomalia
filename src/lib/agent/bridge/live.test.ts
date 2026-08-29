@@ -1541,7 +1541,15 @@ describe('lo scenario del thread incastrato e61c5136: partito da lì, l’agente
 			locale: 'it'
 		});
 		await res.text();
-		await new Promise((r) => setTimeout(r, 250));
+		await vi.waitFor(
+			() => {
+				const threadRuns = rows.filter((r) => r.thread_id === 't-stuck');
+				expect(threadRuns.at(-1)?.state).toBe('waiting_input');
+				expect(threadRuns.slice(0, -1).every((r) => r.state === 'done')).toBe(true);
+				expect(savedMessages.some((m) => JSON.stringify(m.content).includes('Cosa ti aspettavi'))).toBe(true);
+			},
+			{ timeout: 15_000, interval: 100 }
+		);
 
 		for (const m of savedMessages) {
 			expect(JSON.stringify(m.content)).not.toContain('502 frame');
@@ -1610,7 +1618,15 @@ describe('lo scenario del thread incastrato e61c5136: partito da lì, l’agente
 			locale: 'it'
 		});
 		await res.text();
-		await new Promise((r) => setTimeout(r, 250));
+		// Il salvataggio di fine turno è best-effort asincrono: si aspetta lo stato finale invece
+		// di sperare in un sonno fisso, che sotto il carico della suite intera non basta mai.
+		await vi.waitFor(
+			() => {
+				expect(rows.filter((r) => r.thread_id === 't-no-repeat').every((r) => r.state === 'done')).toBe(true);
+				expect(savedMessages.some((m) => JSON.stringify(m.content).includes('502 frame'))).toBe(true);
+			},
+			{ timeout: 15_000, interval: 100 }
+		);
 
 		const withReply = savedMessages.filter((m) => JSON.stringify(m.content).includes('502 frame'));
 		expect(withReply).toHaveLength(1);
@@ -1633,7 +1649,13 @@ describe('lo scenario del thread incastrato e61c5136: partito da lì, l’agente
 			locale: 'it'
 		});
 		await res.text();
-		await new Promise((r) => setTimeout(r, 250));
+		await vi.waitFor(
+			() => {
+				expect(rows.filter((r) => r.thread_id === 't-repeat-cap').every((r) => r.state === 'done')).toBe(true);
+				expect(savedMessages.some((m) => JSON.stringify(m.content).includes('Mi sto ripetendo'))).toBe(true);
+			},
+			{ timeout: 15_000, interval: 100 }
+		);
 
 		for (const m of savedMessages) {
 			expect(JSON.stringify(m.content)).not.toContain('502 frame');

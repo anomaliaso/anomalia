@@ -60,8 +60,9 @@ export async function execChatTool(
 		const out = (await t.execute(args as never, {
 			toolCallId: `${toolName}:${runId}`,
 			messages: [],
-			abortSignal: signal
-		} as ToolExecutionOptions)) as Record<string, unknown>;
+			abortSignal: signal,
+			context: {}
+		} as ToolExecutionOptions<unknown>)) as Record<string, unknown>;
 		return {
 			content: [{ type: 'text', text: JSON.stringify(out) }],
 			isError: !!out && typeof out === 'object' && 'error' in out

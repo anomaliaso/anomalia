@@ -155,7 +155,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           graphic_brief?: string;
           caption?: string;
         },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         const { data: brandRow } = await supabase.from('brands').select('name, plan, timezone, content_prefs, target_platforms').eq('id', brandId).maybeSingle();
         const budget = await remaining(supabase, brandId, brandRow?.plan, brandRow?.timezone ?? tz);
@@ -666,7 +666,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           talent_ids?: string[];
           reference_image_urls?: string[];
         },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         const {
           resolvePeopleVisualRefsDetailed,

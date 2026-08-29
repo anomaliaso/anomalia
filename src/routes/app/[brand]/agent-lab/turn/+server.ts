@@ -50,7 +50,12 @@ const noSandbox: SandboxProvider = {
 function buildQueryTool(supabase: SupabaseClient, brandId: string, userId: string, threadId: string) {
 	const { query } = createQueryTool({ supabase, brandId, userId, threadId });
 	return async (args: Record<string, unknown>, ctx: AdapterContext): Promise<ToolResult> => {
-		const opts: ToolExecutionOptions = { toolCallId: `query:${ctx.runId}`, messages: [], abortSignal: ctx.signal };
+		const opts: ToolExecutionOptions<Record<string, unknown>> = {
+			toolCallId: `query:${ctx.runId}`,
+			messages: [],
+			abortSignal: ctx.signal,
+			context: {}
+		};
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const out = await query.execute!(args as any, opts);
 		return { content: [{ type: 'text', text: JSON.stringify(out) }], isError: Boolean(out && 'error' in (out as object)) };

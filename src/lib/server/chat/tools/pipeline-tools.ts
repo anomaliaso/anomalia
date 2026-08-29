@@ -23,7 +23,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       }),
       execute: async (
         { title, markdown, summary }: { title: string; markdown: string; summary?: string },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         const { data, error } = await supabase
           .from('brand_documents')
@@ -77,7 +77,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
           kind?: string;
           from_attachment?: string;
         },
-        _opts: ToolExecutionOptions
+        _opts: ToolExecutionOptions<unknown>
       ) => {
         const { ingestDocument, kickKnowledgeWork } = await import('$lib/server/knowledge');
         const { matchTurnDocument } = await import('$lib/chat-documents');
@@ -140,7 +140,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
           how_to_use,
           where_to_use
         }: AnyRec,
-        _opts: ToolExecutionOptions
+        _opts: ToolExecutionOptions<unknown>
       ) => {
         const patch: AnyRec = { updated_at: new Date().toISOString() };
         if (title != null) patch.title = String(title).trim() || null;
@@ -201,7 +201,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         objective: z.string().optional().describe("The user's stated objective/goal for the coming months, if any")
       }),
-      execute: async ({ objective }: { objective?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ objective }: { objective?: string }, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(
           supabase,
           brandId,
@@ -220,7 +220,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       description:
         'Generate (and auto-activate) the EDITORIAL PLAN — a 4-week plan with voice, cadence, platform mix and weekly themes. Runs in the BACKGROUND: it returns immediately with a job id and the result comes back to you as a NEW message when it lands, so say one line and end your turn. Onboarding: only after Strategy exists; the plan is activated immediately — do not ask the user to approve. When the result lands, briefly summarize it; only then ask about photos/videos before first-week content.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(
           supabase,
           brandId,
@@ -239,7 +239,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       description:
         'ONBOARDING: generate the FIRST WEEK of draft posts (captions + images together) from the approved editorial plan. Runs in the BACKGROUND: it returns immediately with a job id and the result comes back to you as a NEW message when it lands, so say one line and end your turn. Only AFTER the editorial plan is approved AND you have already asked about photos/videos. Prefer produce_week for later weeks. When the result lands, confirm the drafts are ready with images.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(
           supabase,
           brandId,
@@ -260,7 +260,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         week: z.number().int().min(0).max(11).optional().describe('0-based week index in the editorial plan. Omit for the current week.')
       }),
-      execute: async ({ week }: { week?: number }, opts: ToolExecutionOptions) => {
+      execute: async ({ week }: { week?: number }, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(
           supabase,
           brandId,
@@ -286,7 +286,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       }),
       execute: async (
         { name, event_date, brief, platform }: { name: string; event_date: string; brief: string; platform?: string },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         return startLongToolJob(
           supabase,
@@ -309,7 +309,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         platforms: z.array(z.string()).optional().describe('Platforms to focus on (e.g. ["instagram", "tiktok"]). Omit to use brand\'s target_platforms.')
       }),
-      execute: async ({ platforms: inputPlatforms }: { platforms?: string[] }, opts: ToolExecutionOptions) => {
+      execute: async ({ platforms: inputPlatforms }: { platforms?: string[] }, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(supabase, brandId, userId, 'discover_competitors', { platforms: inputPlatforms }, threadId, opts.abortSignal, origin, locale);
       }
     }),
@@ -319,7 +319,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         platform: z.string().optional().describe('Specific platform to sync (e.g. "instagram"). Omit to sync all connected platforms.')
       }),
-      execute: async ({ platform }: { platform?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ platform }: { platform?: string }, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(supabase, brandId, userId, 'sync_social_history', { platform }, threadId, opts.abortSignal, origin, locale);
       }
     }),
@@ -333,7 +333,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
           .optional()
           .describe('Optional owner focus for this review (platform, format, goal).')
       }),
-      execute: async ({ guidance }: { guidance?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ guidance }: { guidance?: string }, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(
           supabase,
           brandId,
@@ -351,7 +351,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
     analyze_post_people: tool({
       description: 'Analyze the brand\'s post history to detect recurring people, best posting times, top formats, and engagement patterns. Use when the user wants to understand what works in their content.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { analyzePostHistory, historyInsightsDigest } = await import('$lib/server/post-history-insights');
         const { data: posts } = await supabase.from('social_post_history')
           .select('content, media_type, published_at, metrics, platform')
@@ -386,7 +386,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
         gender: z.string().optional().describe('Gender (for AI generation only)'),
         age_range: z.string().optional().describe('Age range (for AI generation only)')
       }),
-      execute: async ({ name, role, description, photo_urls, gender, age_range }: AnyRec, opts: ToolExecutionOptions) => {
+      execute: async ({ name, role, description, photo_urls, gender, age_range }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(supabase, brandId, userId, 'generate_person', { name, role, description, photo_urls, gender, age_range }, threadId, opts.abortSignal, origin, locale);
       }
     }),
@@ -396,7 +396,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         url: z.string().optional().describe('Website URL to analyze. Omit to use the brand\'s existing website.')
       }),
-      execute: async ({ url: inputUrl }: { url?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ url: inputUrl }: { url?: string }, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(supabase, brandId, userId, 'reanalyze_brand', { url: inputUrl }, threadId, opts.abortSignal, origin, locale);
       }
     }),
@@ -406,7 +406,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         image_url: z.string().describe('URL of the image to extract colors from')
       }),
-      execute: async ({ image_url }: { image_url: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ image_url }: { image_url: string }, opts: ToolExecutionOptions<unknown>) => {
         const { extractColorsFromImage } = await import('$lib/server/brand-analysis');
         // Anche qui il filtro del form: l'estrattore è un modello, e un modello che torna
         // "rgb(12,30,44)" o dieci colori scriverebbe una palette che la UI non accetterebbe mai.
@@ -433,7 +433,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         colors: z.array(z.string()).describe('Array of hex color values (e.g. ["#FF5733", "#33FF57", "#000000"])')
       }),
-      execute: async ({ colors }: { colors: string[] }, opts: ToolExecutionOptions) => {
+      execute: async ({ colors }: { colors: string[] }, opts: ToolExecutionOptions<unknown>) => {
         // Stesso filtro del form (sanitizeBrandColors), non una regex scritta qui: un tool più
         // permesso del form scrive una palette che la UI non potrebbe produrre, e il colore
         // sbagliato non fallisce da nessuna parte — esce stampato.
@@ -467,7 +467,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       }),
       execute: async (
         { image_url, type = 'logo', remove }: { image_url?: string; type?: string; remove?: boolean },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         const { data: kit } = await supabase.from('brand_kit').select('logos, favicon_url').eq('brand_id', brandId).maybeSingle();
         const previous =
@@ -516,7 +516,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
     sync_products: tool({
       description: 'Sync products from the brand\'s e-commerce platform (Shopify/WooCommerce). Runs in the BACKGROUND: it returns immediately with a job id and the result comes back to you as a NEW message when it lands, so say one line and end your turn.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         return startLongToolJob(supabase, brandId, userId, 'sync_products', {}, threadId, opts.abortSignal, origin, locale);
       }
     }),
@@ -526,7 +526,7 @@ export function pipelineTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         job_id: z.string().describe('The job ID returned when the async tool was launched')
       }),
-      execute: async ({ job_id }: { job_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ job_id }: { job_id: string }, opts: ToolExecutionOptions<unknown>) => {
         const { data: job } = await supabase.from('chat_jobs')
           .select('id, tool_name, status, result, error, created_at, completed_at')
           .eq('id', job_id)

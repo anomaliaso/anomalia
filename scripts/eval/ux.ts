@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { openSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { generateText } from 'ai';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { geminiFast } from '$lib/server/chat/model';
@@ -14,15 +14,27 @@ import { writeReport, type FlowFact, type JudgeUsage } from './ux/report';
 const APP_URL = process.env.EVAL_UX_APP_URL ?? 'http://localhost:4180';
 const VITE_PORT = Number(APP_URL.split(':').pop() ?? 4180);
 const REPLY_WAIT_MS = Number(process.env.EVAL_UX_WAIT_MS ?? 240_000);
+// Il contatto del team nasce quando il TURNO di setup chiude, non quando la prima risposta
+// arriva: il turno continua a lavorare per minuti dopo (tool, memoria) e la finestra della
+// prima risposta scadde troppo presto. Il poll del team ha la sua finestra, più larga.
+const TEAM_WAIT_MS = Number(process.env.EVAL_UX_TEAM_WAIT_MS ?? 420_000);
 const RESULTS_ROOT = process.env.EVAL_UX_RESULTS_DIR ?? 'eval-results';
 const BRAND_POLL_MS = 60_000;
 const HEALTH_TIMEOUT_MS = 90_000;
 const CHAT_SNAPSHOT_CHARS = 8_000;
 const PICK_SNAPSHOT_CHARS = 4_000;
 
-const runId = `ux-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
+// Il ramo che il run misura va DECISO qui, non ereditato dal .env del momento: due run con lo
+// stesso codice e .env diversi non sono paragonabili. `AGENT_KIT=on npm run eval:ux` misura il
+// ramo kit (quello che in produzione gira davvero) — la variante che ha trovato il difetto
+// dell'onboarding-team mai contattato (task #47).
+const AGENT_KIT: 'on' | 'off' = process.env.AGENT_KIT === 'on' ? 'on' : 'off';
+
+const runId = `ux${AGENT_KIT === 'on' ? '-kit' : ''}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
 const runDir = join(RESULTS_ROOT, runId);
-const evidenceDir = join(runDir, 'evidence');
+// Il daemon agent-browser risolve i path relativi col SUO cwd: le evidenze devono essere
+// assolute o la screenshot muore con "No such file or directory".
+const evidenceDir = resolve(join(runDir, 'evidence'));
 mkdirSync(evidenceDir, { recursive: true });
 
 const transcriptLines: string[] = [];
@@ -44,7 +56,7 @@ function startViteServer(): Promise<() => Promise<void>> {
   return new Promise((resolve, reject) => {
     const logFd = openSync(join(runDir, 'server.log'), 'a');
     const child = spawn('npx', ['vite', 'dev', '--port', String(VITE_PORT), '--strictPort'], {
-      env: { ...process.env, NO_HMR: '1' },
+      env: { ...process.env, NO_HMR: '1', AGENT_KIT },
       detached: true,
       stdio: ['ignore', logFd, logFd]
     });
@@ -143,7 +155,7 @@ async function main(): Promise<number> {
     const { replied, facts: chat } = await waitForAssistantReply(admin, brand.id, REPLY_WAIT_MS);
     log(`[chat] replied=${replied} assistant=${chat.assistantMessages} latency=${chat.firstAssistantLatencyMs}ms`);
 
-    const team = await waitForTeamContact(admin, brand.id, REPLY_WAIT_MS);
+    const team = await waitForTeamContact(admin, brand.id, TEAM_WAIT_MS);
     log(`[team] contatti firmati: ${team.agents.join(', ') || 'nessuno'}`);
 
     // Prova di delega: una domanda cross-craft (audit + idee post). Il fatto misurato è se
@@ -211,6 +223,7 @@ async function main(): Promise<number> {
         runId,
         appUrl: APP_URL,
         judgeModel: judged.modelId,
+        agentKit: AGENT_KIT,
         startedAt: new Date(stamp).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - stamp
