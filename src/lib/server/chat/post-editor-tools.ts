@@ -6,6 +6,7 @@ import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
 import { regeneratePost, loadBrandMoodImageUrls } from '$lib/server/content-preview';
 import { GRAPHIC_ASSET_MINT_HINT, isVideoPostRow } from '$lib/server/media-origin';
 import { mintStandaloneImage } from '$lib/server/mint-standalone-image';
+import { VIDEO_BRIEF_MAX_CHARS } from '$lib/video-models';
 import { designGraphicVideoBlock, resolveMakeVideoSource } from '$lib/server/chat/post-editor-video';
 import { resolveTypography } from '$lib/design/typography';
 import {
@@ -1108,11 +1109,18 @@ export function createPostEditorTools(
         script: z.string().optional().describe('Line to be spoken on camera; trimmed to fit the runtime. Omit for silent clips.'),
         prompt: z
           .string()
+          .max(VIDEO_BRIEF_MAX_CHARS)
           .optional()
           .describe(
-            'YOUR creative brief for THIS clip (camera, motion, energy, genre). When set it replaces hardcoded UGC/cinematic MOTION templates — you can still pass ugc:true together with it. Never ask the video model for on-screen text.'
+            'YOUR creative brief for THIS clip (camera, motion, energy, genre). When set it replaces hardcoded UGC/cinematic MOTION templates — you can still pass ugc:true together with it. Never ask the video model for on-screen text. Keep under ' +
+              VIDEO_BRIEF_MAX_CHARS +
+              ' chars.'
           ),
-        instructions: z.string().optional().describe('Extra delivery direction (tone, accent). Overrides Settings → Video when set.'),
+        instructions: z
+          .string()
+          .max(600)
+          .optional()
+          .describe('Extra delivery direction (tone, accent), at most 600 chars. Overrides Settings → Video when set.'),
         ugc: z
           .boolean()
           .optional()

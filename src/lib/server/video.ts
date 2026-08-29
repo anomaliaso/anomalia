@@ -17,7 +17,8 @@ import {
 import {
   VIDEO_MODEL_CHOICES as SHARED_VIDEO_MODEL_CHOICES,
   isKnownVideoModelId,
-  isSeedance25Model
+  isSeedance25Model,
+  GROK_PROMPT_LIMIT
 } from '$lib/video-models';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
@@ -61,6 +62,17 @@ export const UPSCALE_RESOLUTION = env.KIE_VIDEO_UPSCALE_RESOLUTION || '720p';
 const GROK_RATIOS = ['2:3', '3:2', '1:1', '16:9', '9:16'] as const;
 const SEEDANCE_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9', 'adaptive'] as const;
 
+// Provider text ceilings. Grok rejects over-long prompts at createTask ("text length cannot
+// exceed the maximum limit"); an over-long brief would otherwise surface as a silent clip loss.
+const SEEDANCE_PROMPT_LIMIT = 10_000;
+
+/** Truncate a video prompt to the model's provider ceiling. Keeps the head, where the scene and
+ *  the clean-frame rule live, and drops only the tail that already exceeded the model. */
+export function clampVideoPrompt(prompt: string, model: string): string {
+  const limit = videoModelCaps(model).maxPromptChars;
+  return prompt.length > limit ? prompt.slice(0, limit).trim() : prompt;
+}
+
 export type VideoModelFamily = 'grok-1.5' | 'grok-v1' | 'seedance-2' | 'seedance-2-5' | 'unknown';
 
 export type VideoModelCaps = {
@@ -69,6 +81,13 @@ export type VideoModelCaps = {
   minDuration: number;
   /** L'UNICO posto in cui la lunghezza di una clip è limitata. */
   maxDuration: number;
+  /**
+   * Provider prompt ceiling, in characters. Grok rejects anything longer at createTask
+   * ("text length cannot exceed the maximum limit") and the failure surfaces as a bare
+   * "Video render returned nothing". Unlike images (clamped in buildKieImageInput), video had
+   * no clamp: an over-long AI-authored brief silently killed the clip.
+   */
+  maxPromptChars: number;
   ratios: readonly string[];
   /** Whether grok-imagine/upscale can take this model's task_id. */
   supportsUpscale: boolean;
@@ -84,6 +103,7 @@ export function videoModelCaps(model: string): VideoModelCaps {
       family: 'seedance-2-5',
       minDuration: 4,
       maxDuration: 30,
+      maxPromptChars: SEEDANCE_PROMPT_LIMIT,
       ratios: SEEDANCE_RATIOS,
       supportsUpscale: false,
       generateAudio: true
@@ -94,6 +114,7 @@ export function videoModelCaps(model: string): VideoModelCaps {
       family: 'seedance-2',
       minDuration: 4,
       maxDuration: 15,
+      maxPromptChars: SEEDANCE_PROMPT_LIMIT,
       ratios: SEEDANCE_RATIOS,
       supportsUpscale: false,
       generateAudio: true
@@ -104,6 +125,7 @@ export function videoModelCaps(model: string): VideoModelCaps {
       family: 'grok-1.5',
       minDuration: 1,
       maxDuration: 15,
+      maxPromptChars: GROK_PROMPT_LIMIT,
       ratios: GROK_RATIOS,
       supportsUpscale: true,
       generateAudio: false
@@ -114,6 +136,7 @@ export function videoModelCaps(model: string): VideoModelCaps {
       family: 'grok-v1',
       minDuration: 1,
       maxDuration: 15,
+      maxPromptChars: GROK_PROMPT_LIMIT,
       ratios: GROK_RATIOS,
       supportsUpscale: true,
       generateAudio: false
@@ -123,6 +146,7 @@ export function videoModelCaps(model: string): VideoModelCaps {
     family: 'unknown',
     minDuration: 1,
     maxDuration: 15,
+    maxPromptChars: GROK_PROMPT_LIMIT,
     ratios: GROK_RATIOS,
     supportsUpscale: false,
     generateAudio: false
@@ -618,11 +642,14 @@ export function buildJobInput(
   }
 ): Record<string, unknown> {
   const { prompt, durationSeconds, resolution, aspectRatio, imageUrl } = opts;
+  // Un breve troppo lungo viene rifiutato da kie alla submit: qui si taglia a monte, per ogni
+  // famiglia, perché è l'unico posto dove modello e prompt si incontrano prima di partire.
+  const clampedPrompt = clampVideoPrompt(prompt, model);
   // La 1-5 rompe con la famiglia v1 proprio sul campo che fallirebbe in SILENZIO: qui `duration` è
   // un intero, lì una stringa. `aspect_ratio` è rifiutato con una singola immagine allegata.
   if (/^grok-imagine-video-1-5/.test(model)) {
     return {
-      prompt,
+      prompt: clampedPrompt,
       duration: durationSeconds, // integer, [1, 15]
       resolution,
       ...(imageUrl ? { image_urls: [imageUrl] } : { aspect_ratio: aspectRatio })
@@ -643,7 +670,7 @@ export function buildJobInput(
         ? 'adaptive'
         : aspectRatio;
     const input: Record<string, unknown> = {
-      prompt,
+      prompt: clampedPrompt,
       duration: durationSeconds, // integer, not a string
       resolution,
       aspect_ratio: ratio,
@@ -662,7 +689,7 @@ export function buildJobInput(
     return input;
   }
   return {
-    prompt,
+    prompt: clampedPrompt,
     duration: String(durationSeconds),
     resolution,
     // Con una cover la clip eredita le dimensioni dell'immagine: un ratio contraddittorio confonde.
