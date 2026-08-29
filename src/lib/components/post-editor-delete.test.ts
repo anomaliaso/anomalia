@@ -26,7 +26,9 @@ describe('la cancellazione dal post editor non passa dal 404 del post eliminato'
     const source = read(path);
     const leave = source.slice(source.indexOf('async function onLeave'), source.indexOf('</script>'));
 
-    expect(leave).toContain('await goto(`/app/${brand.slug}/calendar`)');
+    expect(source).toContain('const calendarHref = $derived(`/app/${brand.slug}/calendar`)');
+    expect(source).toContain('const returnHref = $derived(backHref($pageModalOrigin, calendarHref))');
+    expect(leave).toContain('await goto(returnHref)');
     expect(leave).not.toContain('invalidateAll');
   });
 });

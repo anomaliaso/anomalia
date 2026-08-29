@@ -11,6 +11,7 @@
   import { hasWebHub } from '$lib/plans';
   import { openPlanDocument } from '$lib/stores/plan-panel';
   import { pageTopActions } from '$lib/stores/page-meta';
+  import { postPreviewHref } from '$lib/page-modal-navigation';
   import TopbarCta from '$lib/components/TopbarCta.svelte';
   import AgentComputerPanel from '$lib/components/AgentComputerPanel.svelte';
   import {
@@ -971,7 +972,7 @@
   <ChatImageLightbox
     src={zoomPost.media_urls?.length ? zoomPost.media_urls : (zoomPost.media_url ?? '')}
     caption={zoomPost.caption}
-    calendarHref={`/app/${data.brandSlug}/calendar?post=${zoomPost.post_id}`}
+    calendarHref={postPreviewHref(`/app/${data.brandSlug}`, zoomPost.post_id)}
     onclose={() => (zoomPost = null)}
   />
 {/if}

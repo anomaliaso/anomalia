@@ -1,13 +1,17 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { backHref } from '$lib/page-modal-navigation';
+  import { pageModalOrigin } from '$lib/stores/page-modal';
   import PostEditor from '$lib/components/PostEditor.svelte';
 
   let { data } = $props();
   const brand = $derived(data.brand);
   const post = $derived(data.post);
+  const calendarHref = $derived(`/app/${brand.slug}/calendar`);
+  const returnHref = $derived(backHref($pageModalOrigin, calendarHref));
 
   async function onLeave() {
-    await goto(`/app/${brand.slug}/calendar`);
+    await goto(returnHref);
   }
 </script>
 

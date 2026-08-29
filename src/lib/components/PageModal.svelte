@@ -41,7 +41,7 @@
 
 <script lang="ts">
   import { page } from '$app/stores';
-  import { setContext } from 'svelte';
+  import { onDestroy, setContext } from 'svelte';
   import { writable } from 'svelte/store';
   import { preloadData } from '$app/navigation';
   import { applyAction, deserialize } from '$app/forms';
@@ -59,6 +59,8 @@
   import { matchShortcut, paletteOpen } from '$lib/shortcuts';
   import { emptyPageMeta, PAGE_META_SINK, type PageMetaSink } from '$lib/stores/page-meta';
   import { setHostedQuery } from '$lib/page-query';
+  import { ModalSurface, modalVisible } from '$lib/page-modal-navigation';
+  import { pageModalOrigin } from '$lib/stores/page-modal';
   // La modal ospita le +page.svelte vere senza il loro +layout: il contratto `.settings-shell`
   // (bbtn, apikey-*, team-form…) va portato qui.
   import '$lib/styles/settings-shell.css';
@@ -93,7 +95,15 @@
   /** Nella modal l'URL del browser non cambia: una pagina che leggesse `page.url.searchParams`
    * vedrebbe i parametri della pagina SOTTO. `pageQuery()` ($lib/page-query.ts) trova questa. */
   setHostedQuery(() => routeSearch);
-  const open = $derived(route !== null);
+  let origin = $state<string | null>(null);
+  const currentHref = $derived(`${$page.url.pathname}${$page.url.search}${$page.url.hash}`);
+  const open = $derived(
+    modalVisible(
+      { route, origin },
+      currentHref,
+      desktop ? ModalSurface.Desktop : ModalSurface.FullWidth
+    )
+  );
   /** Le pagine del brand vogliono sempre la taglia larga; nelle impostazioni è l'eccezione
    * elencata in platforms.ts. */
   const isWide = (r: string | null) =>
@@ -149,6 +159,11 @@
   }
 
   function show(next: string, search = '') {
+    const href = `${location.pathname}${location.search}${location.hash}`;
+    if (origin !== href) {
+      origin = href;
+      pageModalOrigin.set(href);
+    }
     if (route === next && routeSearch === search && hosted?.route === next + search) return;
     route = next;
     routeSearch = search;
@@ -176,10 +191,14 @@
   }
 
   function close() {
-    // Puro stato: nessuna history da toccare. `hosted` resta com'è (vedi `show`).
+    const previousOrigin = origin;
     route = null;
+    origin = null;
+    pageModalOrigin.update((current) => (current === previousOrigin ? null : current));
     loadError = null;
   }
+
+  onDestroy(close);
 
   /**
    * Le azioni delle pagine ospitate sono relative (`?/disconnect`) e SvelteKit le risolve
@@ -193,7 +212,9 @@
     routeSearch ? `${base}/${route}${routeSearch}&${relative.slice(1)}` : `${base}/${route}${relative}`;
 
   function onFormSubmitCapture(e: SubmitEvent) {
-    if (route === null) return;
+    if (!open) {
+      return;
+    }
     const rewrite = (el: Element, attr: 'action' | 'formaction') => {
       const value = el.getAttribute(attr);
       if (value?.startsWith('?/')) el.setAttribute(attr, actionUrlFor(value));
@@ -210,7 +231,7 @@
         const r = route;
         const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
         const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
-        if (r && method.toUpperCase() === 'POST' && url.pathname === `${base}/${r}` && res.ok) {
+        if (open && r && method.toUpperCase() === 'POST' && url.pathname === `${base}/${r}` && res.ok) {
           const result = deserialize(await res.clone().text());
           if (result.type === 'success' || result.type === 'failure') void applyAction(result);
         }
@@ -239,11 +260,12 @@
     };
   });
 
-  // La modal non è una destinazione: se il resto dell'app naviga davvero (una CTA
-  // che porta altrove, un redirect), si chiude invece di restare appesa sopra.
   $effect(() => {
-    $page.url.pathname;
-    if (route !== null && !desktop) close();
+    const current = currentHref;
+    if (route === null || current === origin || !desktop) {
+      return;
+    }
+    close();
   });
 
   // Dopo una action (`use:enhance` nelle pagine ospitate) `applyAction` aggiorna
