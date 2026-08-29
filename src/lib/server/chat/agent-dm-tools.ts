@@ -49,6 +49,7 @@ import {
   setThreadRoomAgents
 } from '$lib/server/chat/room';
 import { dmAgents, dmMarker, dmNames } from '$lib/chat-dm';
+import { getCustomAgent, listCustomAgents } from '$lib/server/custom-agents-read';
 
 /**
  * Tetto agli invii per turno: oltre, non è coordinamento — è un loop che accoda turni pagati.
@@ -95,22 +96,20 @@ export async function resolveDmTarget(
     const def = AGENTS[key as AgentId];
     return { key, name: def.labels[lang(locale)], agent: key as AgentId, customAgentId: null };
   }
-  // Accetta sia `custom:<uuid>` sia l'uuid nudo — il modello li scrive entrambi.
+  // L'identità sta su `custom_agents` (0210): si raggiunge per id (`custom:<uuid>` o nudo) o per
+  // il nome che il modello conosce — non ha modo di impararsi gli uuid se non listando.
   const id = key.startsWith('custom:') ? key.slice('custom:'.length) : key;
-  if (!UUID.test(id)) return null;
-  const { data } = await supabase
-    .from('custom_agent_schedules')
-    .select('id, name, agent')
-    .eq('brand_id', brandId)
-    .eq('id', id)
-    .maybeSingle();
-  if (!data) return null;
+  const rows = await listCustomAgents(supabase, brandId);
+  const row =
+    (UUID.test(id) ? rows.find((r) => r.id === id) : undefined) ??
+    rows.find((r) => r.name.trim().toLowerCase() === key.toLowerCase());
+  if (!row) return null;
   return {
-    key: `custom:${data.id as string}`,
-    name: (data.name as string) || 'Agent',
+    key: `custom:${row.id}`,
+    name: row.name || 'Agent',
     // La restrizione di mestiere del custom vale anche nel DM (stessa regola di roomRoster).
-    agent: resolveAgent(data.agent),
-    customAgentId: data.id as string
+    agent: resolveAgent(row.agent),
+    customAgentId: row.id
   };
 }
 
@@ -122,18 +121,14 @@ export async function resolveDmInitiator(
   locale: string
 ): Promise<DmMember> {
   if (thread?.custom_agent_id) {
-    const { data } = await supabase
-      .from('custom_agent_schedules')
-      .select('id, name, agent')
-      .eq('brand_id', brandId)
-      .eq('id', thread.custom_agent_id)
-      .maybeSingle();
-    if (data) {
+    // L'identità sta su `custom_agents` (0210), non sulla schedulazione.
+    const persona = await getCustomAgent(supabase, brandId, thread.custom_agent_id);
+    if (persona) {
       return {
-        key: `custom:${data.id as string}`,
-        name: (data.name as string) || 'Agent',
-        agent: resolveAgent(data.agent),
-        customAgentId: data.id as string
+        key: `custom:${persona.id}`,
+        name: persona.name || 'Agent',
+        agent: resolveAgent(persona.agent),
+        customAgentId: persona.id
       };
     }
   }
@@ -327,7 +322,7 @@ export function createAgentDmTools(opts: {
           if (!target) {
             failed.push({
               to: one,
-              error: `Unknown agent "${one}". Valid: ${AGENT_IDS.join(', ')} or a custom agent id.`
+              error: `Unknown agent "${one}". Use a specialist id (${AGENT_IDS.join(', ')}), or the exact NAME or id of one of this brand's custom agents.`
             });
             continue;
           }

@@ -30,7 +30,9 @@ const { subagentToolNames } = await import('./subagents');
 // ── Supabase finto: chat_threads con .contains sul marcatore, chat_jobs come lista ────────────
 type ThreadRow = { id: string; brand_id: string; user_id: string; title: string; room_agents: unknown; created_at: string };
 
-function fakeDb() {
+type CustomAgentSeed = { id: string; name: string; agent: string | null };
+
+function fakeDb(customAgents: CustomAgentSeed[] = []) {
 	const threads: ThreadRow[] = [];
 	const jobs: Array<Record<string, unknown>> = [];
 	const roomUpdates: Array<{ id: string; room_agents: unknown }> = [];
@@ -92,18 +94,18 @@ function fakeDb() {
 					}
 				};
 			}
-			if (table === 'custom_agent_schedules') {
-				return {
-					select: () => ({
-						eq: () => ({
-							eq: () => ({
-								maybeSingle: async () => ({
-									data: { id: '11111111-2222-3333-4444-555555555555', name: 'Chief of Staff', agent: null }
-								})
-							})
-						})
-					})
+			// L'identità dei custom agent (0210). La catena serve sia a listCustomAgents
+			// (…eq → order) sia a getCustomAgentsByIds (…eq → in): entrambe si aspettano
+			// { data, error } al primo await.
+			if (table === 'custom_agents') {
+				const chain: Record<string, unknown> = {
+					eq: () => chain,
+					in: () => chain,
+					order: () => chain,
+					then: (res: (v: unknown) => unknown) =>
+						Promise.resolve({ data: customAgents, error: null }).then(res)
 				};
+				return { select: () => chain };
 			}
 			throw new Error(`unexpected table ${table}`);
 		}
@@ -239,6 +241,46 @@ describe('message_agent — invio, await, budget', () => {
 		const tools = createAgentDmTools(toolOpts(supabase));
 		expect((await exec(tools, { to: 'reparto-inesistente', message: 'x' })).error).toBeTruthy();
 		expect((await exec(tools, { to: 'analyst', message: 'x' })).error).toBeTruthy();
+	});
+
+	const CUSTOM_ID = 'aaaaaaaa-1111-4222-8333-444455555555';
+
+	it('un custom agent del brand si raggiunge col nome che il modello conosce', async () => {
+		const { supabase, jobs } = fakeDb([{ id: CUSTOM_ID, name: 'Scriba Fischietto', agent: 'content' }]);
+		const tools = createAgentDmTools(toolOpts(supabase));
+		const out = await exec(tools, { to: 'Scriba Fischietto', message: 'CADM-1' });
+		expect(out.success).toBe(true);
+		expect(out.sends[0].to).toBe(`custom:${CUSTOM_ID}`);
+		expect((jobs[0].input_params as Record<string, unknown>).custom_agent_id).toBe(CUSTOM_ID);
+	});
+
+	it('l’identità basta anche senza routine: l’id del custom agent arriva a destinazione', async () => {
+		const { supabase, jobs } = fakeDb([{ id: CUSTOM_ID, name: 'Watcher', agent: 'web' }]);
+		const tools = createAgentDmTools(toolOpts(supabase));
+		for (const [i, to] of [CUSTOM_ID, `custom:${CUSTOM_ID}`].entries()) {
+			const out = await exec(tools, { to, message: `m-${i}` });
+			expect(out.success, to).toBe(true);
+			expect(out.sends[0].to).toBe(`custom:${CUSTOM_ID}`);
+		}
+		expect((jobs[0].input_params as Record<string, unknown>).custom_agent_id).toBe(CUSTOM_ID);
+		expect((jobs[1].input_params as Record<string, unknown>).custom_agent_id).toBe(CUSTOM_ID);
+	});
+
+	it('chi scriva da un thread custom si firma con l’identità nuova, non con la schedulazione', async () => {
+		const { supabase } = fakeDb([{ id: CUSTOM_ID, name: 'Scriba Fischietto', agent: 'content' }]);
+		getThread.mockResolvedValue({ id: 'custom-thread', agent: 'content', custom_agent_id: CUSTOM_ID });
+		const tools = createAgentDmTools(toolOpts(supabase));
+		const out = await exec(tools, { to: 'motion', message: 'x' });
+		expect(out.success).toBe(true);
+		expect(saveMessages).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+			{ speaker: `custom:${CUSTOM_ID}` }
+		);
+		getThread.mockResolvedValue({ id: 'main-thread', agent: 'analyst', custom_agent_id: null });
 	});
 
 	it('dentro un thread DM si rifiuta: la risposta È già il messaggio (niente ping-pong)', async () => {

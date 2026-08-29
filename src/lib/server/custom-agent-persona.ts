@@ -36,6 +36,19 @@ export async function getCustomAgentPersona(
   };
 }
 
+/** The overlay the kit turn needs to wear a custom agent over its craft spec. */
+export function kitPersonaOverlay(persona: CustomAgentPersona, locale: string): {
+  id: string;
+  memoryKey: string;
+  systemBlock: string;
+} {
+  return {
+    id: persona.id,
+    memoryKey: `custom:${persona.id}`,
+    systemBlock: customAgentSystemBlock(persona, locale)
+  };
+}
+
 /**
  * System block for a thread the user pointed at one of their custom agents: the brief they
  * wrote becomes the standing objective, without muting what they type turn by turn.
