@@ -13,6 +13,25 @@ import { marketingShellTarget } from '$lib/server/marketing-shell';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
+const SESSION_COOKIE_NAME = `sb-${new URL(PUBLIC_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
+const SESSION_COOKIE_PREFIX = `${SESSION_COOKIE_NAME}.`;
+const BASE64_COOKIE_PREFIX = 'base64-';
+const BASE64_URL = /^[A-Za-z0-9_-]*$/;
+
+function isSessionCookie(name: string): boolean {
+  return name === SESSION_COOKIE_NAME || name.startsWith(SESSION_COOKIE_PREFIX);
+}
+
+function isValidSessionCookie(cookie: { name: string; value: string }): boolean {
+  if (!isSessionCookie(cookie.name) || !cookie.value.startsWith(BASE64_COOKIE_PREFIX)) return true;
+  return BASE64_URL.test(cookie.value.slice(BASE64_COOKIE_PREFIX.length));
+}
+
+function validSessionCookies(cookies: { name: string; value: string }[]) {
+  if (cookies.every(isValidSessionCookie)) return cookies;
+  return cookies.filter(({ name }) => !isSessionCookie(name));
+}
+
 // slug → brand id for the AI-credits brand context. Slugs are stable, so a per-instance cache
 // with a 10-min TTL amortises the lookup to ~once per brand per instance.
 // ponytail: in-memory Map; move to Redis only if instance churn ever makes the hit rate matter.
@@ -48,7 +67,7 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
   // Per-request Supabase client bound to the request cookies (SSR auth).
   event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
-      getAll: () => event.cookies.getAll(),
+      getAll: () => validSessionCookies(event.cookies.getAll()),
       setAll: (cookiesToSet: CookieToSet[]) => {
         cookiesToSet.forEach(({ name, value, options }) => {
           try {
