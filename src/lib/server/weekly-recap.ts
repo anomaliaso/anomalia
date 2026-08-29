@@ -81,70 +81,10 @@ export type WeeklyRecap = {
   suggestions: { type: string; message: string }[];
   actionItems: { label: string; url?: string }[];
 
-  /** Lowest media-review scores this week — omitted from the email when empty. */
-  weakReviews?: WeakMediaReview[];
-
   /** Organic-growth data gate — surfaced in the weekly email when incomplete. */
   growth: GrowthReadiness | null;
 };
 
-export type WeakMediaReview = {
-  postId: string;
-  overall: number;
-  verdict: 'ship' | 'fix' | 'kill';
-  kind: string;
-  judgment: string | null;
-  caption: string | null;
-};
-
-export const WEAK_MEDIA_REVIEW_LIMIT = 3;
-/** Ready scores below this, plus any fix/kill, surface in the recap. */
-export const WEAK_MEDIA_REVIEW_SCORE = 6;
-
-export function isWeakMediaScore(
-  overall: number | null | undefined,
-  verdict: string | null | undefined
-): boolean {
-  if (verdict === 'kill' || verdict === 'fix') return true;
-  const n = Number(overall);
-  return Number.isFinite(n) && n < WEAK_MEDIA_REVIEW_SCORE;
-}
-
-export function pickWeakMediaReviews(
-  rows: Array<{
-    post_id?: string | null;
-    overall?: number | null;
-    verdict?: string | null;
-    kind?: string | null;
-    judgment?: string | null;
-    status?: string | null;
-  }>,
-  captions: Map<string, string | null> = new Map()
-): WeakMediaReview[] {
-  const byPost = new Map<string, WeakMediaReview>();
-  for (const r of rows) {
-    const postId = r.post_id ? String(r.post_id) : '';
-    if (!postId) continue;
-    if (String(r.status ?? 'ready') !== 'ready') continue;
-    const overall = Number(r.overall);
-    if (!Number.isFinite(overall)) continue;
-    const verdict =
-      r.verdict === 'kill' || r.verdict === 'fix' || r.verdict === 'ship' ? r.verdict : null;
-    if (!isWeakMediaScore(overall, verdict)) continue;
-    const prev = byPost.get(postId);
-    if (prev && prev.overall <= overall) continue;
-    const caption = captions.get(postId);
-    byPost.set(postId, {
-      postId,
-      overall,
-      verdict: verdict ?? 'fix',
-      kind: String(r.kind ?? 'video'),
-      judgment: r.judgment ? String(r.judgment).slice(0, 180) : null,
-      caption: caption ? String(caption).slice(0, 160) : null
-    });
-  }
-  return [...byPost.values()].sort((a, b) => a.overall - b.overall).slice(0, WEAK_MEDIA_REVIEW_LIMIT);
-}
 
 export type VisualInsightSummary = {
   dimension: string;
@@ -434,35 +374,6 @@ async function gatherRecapData(
     console.warn('[weekly-recap] rank snapshot query failed:', e instanceof Error ? e.message : e);
   }
 
-  // Lowest media-review scores on this week's posts (ready only). Best-effort.
-  let weakReviews: WeakMediaReview[] = [];
-  try {
-    const postIds = [...new Set((weekPosts ?? []).map((p) => String(p.id)).filter(Boolean))];
-    const captions = new Map<string, string | null>(
-      (weekPosts ?? []).map((p) => [String(p.id), (p.caption as string | null) ?? null])
-    );
-    const reviewRows: Array<{
-      post_id: string | null;
-      overall: number | null;
-      verdict: string | null;
-      kind: string | null;
-      judgment: string | null;
-      status: string | null;
-    }> = [];
-    for (let i = 0; i < postIds.length; i += 80) {
-      const { data } = await supabase
-        .from('video_reviews')
-        .select('post_id, overall, verdict, kind, judgment, status')
-        .eq('brand_id', brandId)
-        .eq('status', 'ready')
-        .in('post_id', postIds.slice(i, i + 80));
-      for (const r of data ?? []) reviewRows.push(r as (typeof reviewRows)[number]);
-    }
-    weakReviews = pickWeakMediaReviews(reviewRows, captions);
-  } catch (e) {
-    console.warn('[weekly-recap] media reviews query failed:', e instanceof Error ? e.message : e);
-  }
-
   return {
     brandName: brand.name,
     brandSlug: brand.slug,
@@ -490,8 +401,7 @@ async function gatherRecapData(
     adsSpend,
     linkClicks,
     visualInsights,
-    webKpis,
-    weakReviews
+    webKpis
   };
 }
 
@@ -648,16 +558,6 @@ async function generateSuggestions(data: Omit<WeeklyRecap, 'trends' | 'suggestio
         : `${data.webKpis.worsened} tracked keyword(s) dropped — review and refresh the target articles.`
     });
   }
-  if (data.weakReviews?.length) {
-    const n = data.weakReviews.length;
-    extra.push({
-      type: 'content_strategy',
-      message: isIt
-        ? `${n} post di questa settimana hanno uno score media basso. Apri il post e decidi se rifare il visual.`
-        : `${n} post${n > 1 ? 's' : ''} this week scored poorly on media review. Open them and decide whether to redo the visual.`
-    });
-  }
-
   // WHAT I COULD NOT DETERMINE. Deterministic, so it appears whether or not the model remembers to
   // write it: a recap that never says what it could not see reads as complete, and the week a user
   // discovers the gap they discount every recap that came before it too.
@@ -705,7 +605,7 @@ ${noOwnHistory ? 'NOTE: the brand has NO own published-post engagement data in t
 Paid ads spend (last week metrics): ${data.adsSpend.toFixed(2)}; pending ads proposals: ${data.adsProposed}
 Editorial plan: ${data.editorialPlan?.status ?? 'none'}
 Scheduler runs this week: ${data.schedulerRunsThisWeek}
-${visualLines ? `Visual insights (own posts, % ER vs brand mean): ${visualLines}\n` : ''}${data.webKpis && data.webKpis.tracked > 0 ? `Rank tracking: ${data.webKpis.tracked} keywords tracked, ${data.webKpis.improved} improved, ${data.webKpis.worsened} worsened\n` : ''}${data.weakReviews?.length ? `Weak media reviews this week: ${data.weakReviews.map((w) => `${w.overall}/10 ${w.verdict}`).join(', ')}\n` : ''}
+${visualLines ? `Visual insights (own posts, % ER vs brand mean): ${visualLines}\n` : ''}${data.webKpis && data.webKpis.tracked > 0 ? `Rank tracking: ${data.webKpis.tracked} keywords tracked, ${data.webKpis.improved} improved, ${data.webKpis.worsened} worsened\n` : ''}
 ${evidenceBlock(
         assessEvidence({
           // Week over week on whatever happened to be published: nothing randomised, several things
@@ -873,16 +773,6 @@ function buildActionItems(
         ? `Hai ${n} proposta/e ads in attesa. Rivedile su Ads e approva solo i budget che vuoi spendere.`
         : `You have ${n} ads proposal(s) waiting. Review them on Ads and approve only the budgets you want to spend.`,
       url: `/app/${data.brandSlug}/ads`
-    });
-  }
-
-  if (data.weakReviews?.length) {
-    const n = data.weakReviews.length;
-    items.push({
-      label: isIt
-        ? `${n} post con score media basso. Vuoi rifare il visual, o li lasci così?`
-        : `${n} post${n > 1 ? 's' : ''} with a weak media score. Redo the visual, or leave them as-is?`,
-      url: `/app/${data.brandSlug}/settings/media-reviewer`
     });
   }
 

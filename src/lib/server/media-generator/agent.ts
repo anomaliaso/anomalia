@@ -133,7 +133,7 @@ export function buildSystem(opts: {
   hasSeedanceMaterials?: boolean;
 }): string {
   const kindLine = opts.forceUgc
-    ? 'Produce UGC talking VIDEO(s) only. Always call generate_video with ugc:true and durationSeconds≤15. Prefer a still cover via generate_image first when useful, then animate it. Use subject/camera/audio/timeline shot briefs (never a vibe paragraph), and a CONCISE spoken PAS script (~40–48 words total — brand-relevant problem → agitate → brand/feature solution → soft CTA; personal and emotional, not a rant). Pain must be THIS brand\'s category problem — never medical/family/unrelated life drama. Never burn captions/subtitles on the clip. After every generate_video the system auto-reviews the clip (calendar-style score). If the verdict is fix/kill or the score is below 7, remake from the QC notes — do not ship the first take. You may still call review_video to re-score a reference/competitor clip.'
+    ? 'Produce UGC talking VIDEO(s) only. Always call generate_video with ugc:true and durationSeconds≤15. Prefer a still cover via generate_image first when useful, then animate it. Use subject/camera/audio/timeline shot briefs (never a vibe paragraph), and a CONCISE spoken PAS script (~40–48 words total — brand-relevant problem → agitate → brand/feature solution → soft CTA; personal and emotional, not a rant). Pain must be THIS brand\'s category problem — never medical/family/unrelated life drama. Never burn captions/subtitles on the clip.'
     : opts.kind === 'image'
       ? 'Produce IMAGE(s) only — do not call generate_video.'
       : opts.kind === 'video'
@@ -561,54 +561,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
       }
     }),
 
-    review_video: tool({
-      description:
-        'Review a FINISHED clip against organic UGC or paid-ads standards (hook, doomscroll stop, sound-off, hold, CTA/offer). Call when the user asks if a generated video works, or to QC a reference/competitor clip. Credits only — does not spend the video budget.',
-      inputSchema: z.object({
-        url: z
-          .string()
-          .optional()
-          .describe('Public URL of the video. Defaults to the last generated clip or the first reference video.'),
-        standard: z
-          .enum(['organic', 'ads'])
-          .optional()
-          .describe('organic = Reels/TikTok UGC (default in UGC Creator). ads = paid UGC ad.'),
-        script: z.string().optional()
-      }),
-      execute: async ({ url, standard, script }) => {
-        try {
-          const { parseVideoStandard, reviewVideo } = await import('$lib/server/video-review');
-          const target =
-            url?.trim() ||
-            produced.filter((p) => p.type === 'video').at(-1)?.url ||
-            opts.referenceVideoUrls?.[0]?.trim() ||
-            '';
-          if (!target) return { error: 'No video URL — pass url or generate a clip first.' };
-          const std = parseVideoStandard(standard) ?? 'organic';
-          const result = await reviewVideo(target, {
-            standard: std,
-            brandName: String(brandRow?.name ?? '').trim() || null,
-            script: script?.trim() || null,
-            language:
-              brandRow?.content_prefs && typeof brandRow.content_prefs === 'object'
-                ? String((brandRow.content_prefs as { language?: string }).language ?? '').trim() ||
-                  null
-                : null
-          });
-          if (!result.ok) return { error: result.error };
-          const { persistReadyReview } = await import('$lib/server/video-review-store');
-          await persistReadyReview(opts.supabase, {
-            brandId: opts.brandId,
-            url: target,
-            standard: std,
-            review: result.review
-          });
-          return { ok: true, ...result.review };
-        } catch (e) {
-          return { error: e instanceof Error ? e.message : String(e) };
-        }
-      }
-    }),
+
 
     generate_video: tool({
       description: `Animate a cover (or Seedance multimodal refs) into a short clip via kie. Prefer passing coverImageUrl from a prior generate_image unless the user already supplied a first frame / refs. When a reference video exists, prefer a shot brief from breakdown_reference_video as the prompt. Budget: ${budget.videos} videos this run.`,
@@ -720,94 +673,8 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
             });
             if (!rendered?.url) return { error: 'Video render returned nothing' };
             const videoAspect = aspectIn ?? (aspect === '16:9' ? '16:9' : '9:16');
-            let final = rendered;
-            let id = await persistItem('video', final.url, motionPrompt, videoAspect, isUgc);
-            let review: ReturnType<
-              typeof import('$lib/server/video-review-apply').compactReviewForTool
-            > | undefined;
-
-            if (isUgc) {
-              const {
-                compactReviewForTool,
-                formatReviewApplyBrief,
-                reviewNeedsRewrite,
-                scoreFinishedClip,
-                VIDEO_QC_REMAKE_MAX
-              } = await import('$lib/server/video-review-apply');
-              const { deleteMediaGeneratorItem } = await import('$lib/server/media-generator/persist');
-              const language =
-                brandRow?.content_prefs && typeof brandRow.content_prefs === 'object'
-                  ? String((brandRow.content_prefs as { language?: string }).language ?? '').trim() ||
-                    null
-                  : null;
-              const scoreClip = (url: string) =>
-                scoreFinishedClip(opts.supabase, {
-                  brandId: opts.brandId,
-                  url,
-                  // Automatico: giudizio in linea che pilota il rifacimento della clip.
-                  auto: true,
-                  standard: isAd ? 'ads' : 'organic',
-                  opts: {
-                    standard: isAd ? 'ads' : 'organic',
-                    brandName: String(brandRow?.name ?? '').trim() || null,
-                    script: spoken || null,
-                    language,
-                    kind: 'video',
-                    abortSignal: opts.abortSignal
-                  }
-                });
-              let qc = await scoreClip(final.url);
-              if (qc.ok && reviewNeedsRewrite(qc.review)) {
-                for (let attempt = 0; attempt < VIDEO_QC_REMAKE_MAX; attempt += 1) {
-                  if (opts.abortSignal?.aborted) break;
-                  try {
-                    const applyBrief = `${motionPrompt}\n\n${formatReviewApplyBrief(qc.review, 'ugc')}`;
-                    const remade = await renderVideo(opts.supabase, opts.userId, applyBrief, {
-                      imageUrl: firstFrame,
-                      firstFrameUrl: opts.firstFrameUrl,
-                      lastFrameUrl: opts.lastFrameUrl,
-                      referenceVideoUrls: [final.url, ...(opts.referenceVideoUrls ?? [])].slice(
-                        0,
-                        10
-                      ),
-                      referenceAudioUrls: opts.referenceAudioUrls,
-                      aspectRatio: aspectIn ?? (aspect === '16:9' ? '16:9' : '9:16'),
-                      visualStyle: useBrandStyle ? visualStyle : undefined,
-                      duration: duration != null
-                        ? Math.min(caps.maxDuration, Math.max(caps.minDuration, duration))
-                        : undefined,
-                      model: lockedModel,
-                      prompt: creativePrompt ? applyBrief : undefined,
-                      shotBrief: shotBrief ? applyBrief : undefined,
-                      ugc: isUgc,
-                      ugcAd: isAd,
-                      script: spoken
-                    });
-                    if (!remade?.url) break;
-                    const prevId = id;
-                    const remadeQc = await scoreClip(remade.url);
-                    const remadeId = await persistItem(
-                      'video',
-                      remade.url,
-                      motionPrompt,
-                      videoAspect,
-                      isUgc
-                    );
-                    if (prevId) {
-                      await deleteMediaGeneratorItem(opts.supabase, opts.brandId, prevId).catch(swallow('delete replaced item'));
-                    }
-                    final = remade;
-                    id = remadeId;
-                    qc = remadeQc;
-                    if (!qc.ok || !reviewNeedsRewrite(qc.review)) break;
-                  } catch (e) {
-                    console.error('[media-generator] QC remake failed', e);
-                    break;
-                  }
-                }
-              }
-              if (qc.ok) review = compactReviewForTool(qc.review);
-            }
+            const final = rendered;
+            const id = await persistItem('video', final.url, motionPrompt, videoAspect, isUgc);
 
             produced.push({ type: 'video', url: final.url, prompt: motionPrompt, id });
             return {
@@ -819,8 +686,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
               coverImageUrl: firstFrame,
               duration: final.durationSeconds,
               taskId: final.taskId,
-              model: lockedModel,
-              review
+              model: lockedModel
             };
           } catch (e) {
             return { error: e instanceof Error ? e.message : String(e) };

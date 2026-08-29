@@ -38,7 +38,6 @@ export const SETTINGS_SECTIONS = [
   'ads-accounts',
   'autopilot',
   'radar',
-  'media-reviewer',
   'video',
   'timezone',
   'blog-appearance',
@@ -135,7 +134,6 @@ export const SETTINGS_MODAL_SECTIONS = [
   'connectors',
   'autopilot',
   'radar',
-  'media-reviewer',
   'video',
   'publishing',
   'timezone',
@@ -170,7 +168,6 @@ export const SETTINGS_MODAL_WIDE = [
   'blog-appearance',
   'ads/accounts',
   'ads',
-  'media-reviewer',
   'video',
   'usage',
   'radar'
@@ -231,7 +228,6 @@ export const SETTINGS_MODAL_GROUPS: readonly {
       { section: 'connectors', labelKey: 'app.settings.connectors.nav', flag: 'connectors' },
       { section: 'autopilot', labelKey: 'app.settings.autopilot' },
       { section: 'radar', labelKey: 'app.settings.radar.nav' },
-      { section: 'media-reviewer', labelKey: 'app.settings.mediaReviewer.nav' },
       { section: 'video', labelKey: 'app.settings.video.title' },
       { section: 'publishing', labelKey: 'app.settings.publishing.title' },
       { section: 'timezone', labelKey: 'app.settings.postingTimezone' }

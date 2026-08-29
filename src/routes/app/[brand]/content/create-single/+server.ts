@@ -210,23 +210,6 @@ export const POST: RequestHandler = async ({ params, request, locals: { supabase
         .then(undefined, () => {});
     }
 
-    // Non mentre un clip è in arrivo: qui mediaUrl è ancora la copertina, e valutarla vorrebbe
-    // dire archiviare la recensione di un fermo immagine come quella del video.
-    if (mediaUrl && !submittedRender) {
-      const { queueVideoReview, kickVideoReviewWork } = await import('$lib/server/video-review-store');
-      await queueVideoReview(supabase, {
-        brandId: brand.id,
-        url: mediaUrl,
-        postId: row.id as string,
-        durationSeconds: videoDurationSeconds
-      });
-      const origin = new URL(request.url).origin;
-      const p = vercelPlatform as { context?: { waitUntil?: (pr: Promise<unknown>) => void } } | undefined;
-      const kick = kickVideoReviewWork(origin, brand.id);
-      if (p?.context?.waitUntil) p.context.waitUntil(kick);
-      else void kick.catch(swallow('p.context.waitUntil failed'));
-    }
-
     if (result.knowledgeChunkIds?.length) {
       try {
         const { recordChunkUsedByPost } = await import('$lib/server/knowledge');

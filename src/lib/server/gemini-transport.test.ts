@@ -104,12 +104,7 @@ describe('le superfici sul centralino (non lo SDK Google)', () => {
   });
 
   it('2. i giudici video passano dal centralino, non da googleGenaiClient', () => {
-    const judges = [
-      'video-review.ts',
-      'motion-references.ts',
-      'motion-video/reference-fidelity.ts',
-      'motion-video/craft-review.ts'
-    ];
+    const judges = ['motion-references.ts'];
     for (const f of judges) {
       const src = readFileSync(join(HERE, f), 'utf8');
       expect(src, f).not.toContain('googleGenaiClient(');

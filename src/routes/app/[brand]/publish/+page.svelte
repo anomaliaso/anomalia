@@ -12,7 +12,6 @@
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Globe from '@lucide/svelte/icons/globe';
   import Swords from '@lucide/svelte/icons/swords';
-  import VideoScoreRing from '$lib/components/VideoScoreRing.svelte';
 
   let { data } = $props();
   const base = $derived(`/app/${$page.params.brand}`);
@@ -55,7 +54,6 @@
             <div class="publish-preview-media">
               {#if post.media_url}
                 <img src={post.media_url} alt="" loading="lazy" />
-                <VideoScoreRing url={post.media_url} size={24} />
               {:else}
                 <div class="publish-preview-ph"
                   >{(post.platform ?? '?').slice(0, 2).toUpperCase()}</div

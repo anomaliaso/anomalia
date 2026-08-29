@@ -32,13 +32,6 @@ import {
 import { UGC_MAX_DURATION } from '$lib/server/video';
 import { deleteMediaGeneratorItem, insertMediaGeneratorItem } from '$lib/server/media-generator/persist';
 import {
-  compactReviewForTool,
-  formatReviewApplyBrief,
-  reviewNeedsRewrite,
-  scoreFinishedClip,
-  VIDEO_QC_REMAKE_MAX
-} from '$lib/server/video-review-apply';
-import {
   formatUgcBrandGrounding,
   loadUgcBrandGrounding,
   type UgcBrandGrounding
@@ -961,78 +954,8 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
         return 'row' in saved ? saved.row.id : undefined;
       };
 
-      const scoreClip = async (url: string) =>
-        scoreFinishedClip(opts.supabase, {
-          brandId: opts.brandId,
-          url,
-          // Automatico: giudizio in linea che pilota il rifacimento della presa.
-          auto: true,
-          standard: 'organic',
-          opts: {
-            standard: 'organic',
-            brandName: brand.name || null,
-            product: plan.product?.name || null,
-            script: spoken,
-            language: brand.language || null,
-            kind: 'video',
-            abortSignal: opts.abortSignal
-          }
-        });
-
-      let take = await renderTake(remakeBrief, refForClip);
-      // Persist first so the grid shows the clip with a pending score ring
-      // (calendar-style). persistReadyReview then overwrites pending → ready.
-      let id = await persistClip(take.url, spoken);
-      let qc = await scoreClip(take.url);
-
-      writer.write({
-        type: 'text-delta',
-        id: textId,
-        delta: qc.ok
-          ? `Clip ${plan.index + 1} QC ${qc.review.overall}/10 · ${qc.review.verdict}.\n`
-          : `Clip ${plan.index + 1} QC skipped (${qc.error}).\n`
-      });
-
-      if (qc.ok && reviewNeedsRewrite(qc.review)) {
-        for (let attempt = 0; attempt < VIDEO_QC_REMAKE_MAX; attempt += 1) {
-          if (opts.abortSignal?.aborted) throw new Error('Aborted');
-          const applyBrief = `${remakeBrief}\n\n${formatReviewApplyBrief(qc.review, 'ugc')}`;
-          writer.write({
-            type: 'text-delta',
-            id: textId,
-            delta: `Clip ${plan.index + 1} insufficient — applying QC notes…\n`
-          });
-          try {
-            const remade = await renderTake(applyBrief, [take.url, ...refForClip].slice(0, 10));
-            const prevId = id;
-            const remadeQc = await scoreClip(remade.url);
-            const remadeId = await persistClip(remade.url, spoken);
-            if (prevId) {
-              await deleteMediaGeneratorItem(opts.supabase, opts.brandId, prevId).catch(swallow('delete replaced item'));
-            }
-            take = remade;
-            id = remadeId;
-            qc = remadeQc;
-            writer.write({
-              type: 'text-delta',
-              id: textId,
-              delta: remadeQc.ok
-                ? `Clip ${plan.index + 1} remake QC ${remadeQc.review.overall}/10 · ${remadeQc.review.verdict}.\n`
-                : `Clip ${plan.index + 1} remake ready (QC skipped).\n`
-            });
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.error(`[ugc-batch] clip ${plan.index + 1} QC remake failed`, msg);
-            writer.write({
-              type: 'text-delta',
-              id: textId,
-              delta: `Clip ${plan.index + 1} remake failed — keeping first take.\n`
-            });
-            break;
-          }
-          if (!qc.ok || !reviewNeedsRewrite(qc.review)) break;
-        }
-      }
+      const take = await renderTake(remakeBrief, refForClip);
+      const id = await persistClip(take.url, spoken);
 
       tally.done += 1;
       finished.add(plan.index);
@@ -1053,8 +976,7 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
           model: plan.model?.name ?? null,
           index: plan.index + 1,
           of: videoCount,
-          remake: remakeMode,
-          review: qc.ok ? compactReviewForTool(qc.review) : undefined
+          remake: remakeMode
         }
       });
       writer.write({

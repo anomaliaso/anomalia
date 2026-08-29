@@ -87,10 +87,6 @@ function toRecapData(recap: WeeklyRecap, tz: string): RecapData {
     connectedAccounts: recap.connectedAccounts,
     visualInsights: recap.visualInsights,
     webKpis: recap.webKpis,
-    weakReviews: recap.weakReviews?.map((w) => ({
-      ...w,
-      postUrl: abs(`/app/${recap.brandSlug}/posts/${w.postId}/edit`)
-    })),
     growth:
       growthFixes.length > 0
         ? {

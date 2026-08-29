@@ -266,15 +266,6 @@ async function applyToPost(
 		console.error('[video-render] usage accounting failed:', e);
 	}
 
-	// Score the clip now that it exists. Callers used to request this right after renderVideo
-	// returned; with the render deferred, asking there would have graded whatever the post held
-	// before — the cover, or the previous clip on a re-render.
-	try {
-		const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-		await requestPostMediaReview(admin, { brandId: row.brand_id, postId: row.post_id, force: true });
-	} catch (e) {
-		console.error('[video-render] media review request failed:', e);
-	}
 	return true;
 }
 

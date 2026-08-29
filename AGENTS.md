@@ -30,10 +30,8 @@ anomalia web <slug>                                # Blog articles (drafts too)
 # Field watch: GET/POST /api/v1/brands/:slug/market/field (what moves in the brand's field, taken apart)
 # Radar self-test: GET /api/v1/brands/:slug/radar/diagnose (fetches every source live, says why one finds nothing)
 # Brand doctor: GET /api/v1/brands/:slug/doctor (per cycle, the first gate the brand fails and how to unlock it)
-# Video review: POST /api/v1/brands/:slug/videos/review  { url | post_id, standard: organic|ads }
 # Agent Library: GET /api/v1/agent-templates (public catalogue behind /agents + Automations › Custom Agents)
 # Chat goals: GET /api/v1/brands/:slug/goals (history + summary of goal mode — met_first_pass, laps, stopped_by)
-# Auto-score worker: GET/POST /api/v1/videos/review/work (cron */5)
 anomalia studio <slug> add-note --text "..."       # Add knowledge
 anomalia ai <slug> --message "..."                 # AI chat (full access)
 ```

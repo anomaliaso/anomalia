@@ -6,7 +6,6 @@ import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
 import { CreditsExhaustedError } from '$lib/server/credits';
 import { runMotionVideoTurn } from '$lib/server/motion-video/run-turn';
-import { scoreAndMaybeRewriteMotion } from '$lib/server/motion-video/qc';
 import {
 	deleteMotionVideo,
 	getMotionVideo,
@@ -84,15 +83,6 @@ const getSchema = z.object({
 	id: z.string().uuid()
 });
 
-const qcSchema = z.object({
-	action: z.literal('qc'),
-	id: z.string().uuid(),
-	/** When false, only score the current preview — never patch TSX. */
-	apply: z.boolean().optional().default(true),
-	/** Passes already remade this encode — skip rewriting them again. */
-	rewritten: z.array(z.enum(['craft', 'fidelity', 'ads'])).optional().default([])
-});
-
 async function loadBrand(supabase: SupabaseClient, slug: string) {
 	const { data: brand } = await supabase
 		.from('brands')
@@ -161,22 +151,6 @@ export const POST: RequestHandler = async ({
 		const row = await getMotionVideo(supabase, brand.id, parsed.data.id);
 		if (!row) throw error(404, 'Not found');
 		return json({ ok: true, video: row });
-	}
-
-	if (action === 'qc') {
-		const parsed = qcSchema.safeParse(raw);
-		if (!parsed.success) throw error(400, 'Invalid qc body');
-		const result = await scoreAndMaybeRewriteMotion({
-			supabase,
-			userId: user.id,
-			brand: { id: brand.id, name: brand.name as string },
-			videoId: parsed.data.id,
-			apply: parsed.data.apply,
-			rewritten: parsed.data.rewritten,
-			abortSignal: request.signal
-		});
-		if (result.error === 'not_found') throw error(404, 'Not found');
-		return json(result);
 	}
 
 	if (action !== 'chat') throw error(400, 'Unknown action');

@@ -48,7 +48,7 @@ describe('mediaGeneratorBudget', () => {
 });
 
 describe('buildSystem UGC QC', () => {
-  it('requires auto-review and a remake when the score is low', () => {
+  it('does not promise a video auto-review anymore', () => {
     const system = buildSystem({
       aspect: '9:16',
       kind: 'video',
@@ -59,8 +59,7 @@ describe('buildSystem UGC QC', () => {
       imageBudget: 1,
       videoBudget: 1
     });
-    expect(system).toMatch(/auto-reviews/i);
-    expect(system).not.toMatch(/do not auto-review/);
-    expect(system).toMatch(/fix\/kill|below 7/);
+    expect(system).not.toMatch(/auto-reviews/i);
+    expect(system).not.toMatch(/review_video/);
   });
 });

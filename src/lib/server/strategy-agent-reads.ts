@@ -18,7 +18,6 @@ import {
   VISUAL_WINNERS_NO_DATA,
   visualInsightsBlock
 } from '$lib/server/platform-hygiene';
-import { isWeakMediaScore } from '$lib/server/weekly-recap';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -452,84 +451,3 @@ export async function readVisualInsightsForAgent(
   }
 }
 
-export type AgentMediaReview = {
-  post_id: string | null;
-  overall: number | null;
-  verdict: string | null;
-  judgment: string | null;
-  next_test: string | null;
-  status: string;
-};
-
-export function mediaReviewsBlock(reviews: AgentMediaReview[]): string {
-  const ready = reviews.filter((r) => r.status === 'ready' && r.overall != null);
-  if (!ready.length) return '';
-  const weak = ready.filter((r) => isWeakMediaScore(r.overall, r.verdict));
-  const lines: string[] = [
-    'MEDIA QC — Anomalia media reviewer (hook, scroll-stop, authenticity, hold). Apply these lessons to NEW visuals.'
-  ];
-  if (weak.length) {
-    lines.push('Weak visuals — do NOT repeat; apply next_test:');
-    for (const w of weak.slice(0, 5)) {
-      const score = `${w.overall}/10 ${w.verdict ?? ''}`.trim();
-      const why = w.judgment ? ` · ${w.judgment}` : '';
-      const next = w.next_test ? ` Next: ${w.next_test}` : '';
-      lines.push(`- ${score}${why}${next}`);
-    }
-  }
-  lines.push(
-    `Recent scores: ${ready
-      .slice(0, 10)
-      .map((r) => `${r.overall}/10 ${r.verdict ?? ''}`.trim())
-      .join(', ')}`
-  );
-  return lines.join('\n');
-}
-
-/**
- * Recent media-review scores for produce / week-planner. Ready rows only, newest first.
- */
-export async function readMediaReviewsForAgent(
-  supabase: SupabaseClient,
-  brandId: string,
-  opts?: { limit?: number }
-): Promise<{ reviews: AgentMediaReview[]; weak: AgentMediaReview[]; block: string }> {
-  const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 40);
-  try {
-    const { data, error } = await supabase
-      .from('video_reviews')
-      .select('post_id, overall, verdict, judgment, status, review, updated_at')
-      .eq('brand_id', brandId)
-      .eq('status', 'ready')
-      .order('updated_at', { ascending: false })
-      .limit(limit);
-    if (error) {
-      console.warn('[media-reviews] read for agent', error.message);
-      return { reviews: [], weak: [], block: '' };
-    }
-    const { rowToChatMediaReview } = await import('$lib/server/video-review-store');
-    const reviews: AgentMediaReview[] = [];
-    const seen = new Set<string>();
-    for (const row of data ?? []) {
-      const rec = row as AnyRec;
-      const chat = rowToChatMediaReview(rec);
-      const postId = rec.post_id ? String(rec.post_id) : null;
-      const key = postId || `url:${String(rec.updated_at ?? reviews.length)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      reviews.push({
-        post_id: postId,
-        overall: chat.overall,
-        verdict: chat.verdict,
-        judgment: chat.judgment,
-        next_test: chat.next_test,
-        status: chat.status
-      });
-    }
-    const weak = reviews.filter((r) => isWeakMediaScore(r.overall, r.verdict));
-    return { reviews, weak, block: mediaReviewsBlock(reviews) };
-  } catch (e) {
-    console.warn('[media-reviews] read for agent failed:', e instanceof Error ? e.message : e);
-    return { reviews: [], weak: [], block: '' };
-  }
-}

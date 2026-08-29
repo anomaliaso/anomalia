@@ -96,90 +96,15 @@ describe('agent registry', () => {
 		expect(missing).toEqual([]);
 	});
 
-	/**
-	 * Un nome in SHARED_TOOL_KEYS che non esiste in `createChatTools` non monta NIENTE: `pickTools`
-	 * filtra le chiavi del suo argomento, e il suo argomento in produzione è solo quello. Ci sono
-	 * stati otto nomi così per giorni (delegate_task, run_task_pipeline, run_parallel_tasks e i
-	 * cinque sandbox_*), messi lì in buona fede da chi credeva di dare qualcosa a tutti i mestieri.
-	 * Quindi il confronto è contro CHAT, non contro ALL.
-	 */
-	it('nessuna chiave condivisa è inerte: SHARED monta solo tool della chat', () => {
-		const inert = SHARED_TOOL_KEYS.filter((k) => !(k in CHAT));
-		expect(inert, 'chiavi in SHARED_TOOL_KEYS che pickTools non può montare').toEqual([]);
-	});
-
-	it('e nemmeno una chiave di mestiere', () => {
-		const inert = AGENT_IDS.flatMap((id) =>
-			AGENTS[id].toolKeys.filter((k) => !(k in CHAT)).map((k) => `${id}: ${k}`)
-		);
-		expect(inert).toEqual([]);
-	});
-
-	// Il thread di setup parla con l'Analyst e il brief si aspetta CHE SIA LUI a salvare i social
-	// (save_social_handles) e a direzionare la strategia: se il tool non gli arrivasse, il brief
-	// prometterebbe un lavoro che il modello non può fare.
-	it('l\'Analyst ha i tool del setup che il brief gli affida', () => {
-		const analyst = mountedFor('analyst');
-		expect(analyst).toContain('save_social_handles');
-		expect(analyst).toContain('sync_social_history');
-		expect(analyst).toContain('generate_strategy');
-		expect(analyst).toContain('update_gtm_plan');
-	});
-
-	it('the maker agents got the tools their pages are built on', () => {
-		const motion = mountedFor('motion');
-		expect(motion).toContain('create_motion_video');
-		expect(motion).toContain('replace_motion_source');
-		expect(motion).toContain('search_motion_references');
-		expect(motion).toContain('study_motion_reference');
-		expect(motion).toContain('read_media');
-
-		const media = mountedFor('content');
-		expect(media).toContain('design_graphic');
-		expect(media).toContain('generate_image');
-		expect(media).toContain('replace_source');
-
-		const ugc = mountedFor('ugc');
-		expect(ugc).toContain('create_post');
-		expect(ugc).toContain('read_talents');
-		// make_video lives only in the per-post editor tool set. The main chat prompt promised it
-		// anyway until this registry test went looking.
-		expect(ugc).not.toContain('make_video');
-	});
-
-	/**
-	 * L'INVERSO, e va scritto il perché o fra un mese qualcuno lo "ripristina".
-	 *
-	 * `review_video` è SMONTATO dagli agenti di chat dal 23/8/2026 — `CHAT_REVIEW_VIDEO_ENABLED`
-	 * in agents.ts, filtrato dentro `pickTools`. Il nome è ancora nelle `toolKeys` di quattro
-	 * mestieri e l'implementazione è intera: l'interruttore è la sola cosa da girare per riavere
-	 * tutto. Quindi il test NON può guardare `toolKeys` — deve guardare cosa esce da `pickTools`,
-	 * che è ciò che il modello riceve davvero.
-	 *
-	 * Perché è smontato: 12 chiamate in 10 giorni di vita e ZERO righe in `video_reviews`; il tool
-	 * non accetta un `video_id`, quindi davanti a un motion video l'agente si costruiva una url di
-	 * storage indovinando il path, oppure infilava l'id del video in `post_id` (che interroga solo
-	 * `posts`) — `media_not_found` e poi `post_not_found`, due errori che non nominano il difetto.
-	 *
-	 * L'agente NULLO conta quanto gli altri: `pickTools(ALL, null)` restituiva tutto, ed è la
-	 * strada dell'onboarding e del legacy. Uno smontaggio che una strada scavalca non è smontato.
-	 */
-	it('nessuno riceve review_video, e nemmeno l’agente nullo', () => {
+	it('review_video non esiste piu\', da nessuna parte', () => {
 		for (const id of AGENT_IDS) {
 			expect(mountedFor(id), `${id} monta ancora review_video`).not.toContain(
 				'review_video'
 			);
 		}
 		expect(mountedFor(null)).not.toContain('review_video');
-		// Ma il tool ESISTE ancora: si è smontato il montaggio, non l'implementazione.
-		expect(ALL).toHaveProperty('review_video');
-	});
-
-	/**
-	 * Un tool smontato ma ancora NOMINATO manda il modello a chiamare il vuoto — ed è il difetto
-	 * che questo file esiste per impedire, nella direzione opposta a `every agent key resolves`.
-	 */
-	it('e nessun head lo nomina più', () => {
+		// Ucciso, non smontato: né il tool né il suo nome devono esistere.
+		expect(ALL).not.toHaveProperty('review_video');
 		for (const id of AGENT_IDS) {
 			expect(buildAgentHead(id, 'it', 'acme', 'Acme'), id).not.toContain('review_video');
 		}

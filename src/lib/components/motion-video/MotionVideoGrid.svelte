@@ -3,7 +3,6 @@
 	import Film from '@lucide/svelte/icons/film';
 	import Check from '@lucide/svelte/icons/check';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import VideoScoreRing from '$lib/components/VideoScoreRing.svelte';
 	import type { GridItem } from './motion-video-model';
 
 	interface Props {
@@ -11,7 +10,6 @@
 		selectedIds: string[];
 		loading: boolean;
 		blurred: boolean;
-		brandSlug: string;
 		onToggleSelect: (id: string) => void;
 		onRemove: (id: string) => void;
 		onOpen: (item: GridItem) => void;
@@ -22,7 +20,6 @@
 		selectedIds,
 		loading,
 		blurred,
-		brandSlug,
 		onToggleSelect,
 		onRemove,
 		onOpen
@@ -84,12 +81,6 @@
 								onloadedmetadata={(e) => syncTileRatio(item.id, e.currentTarget)}
 							></video>
 							<span class="mv-badge">video</span>
-							<VideoScoreRing
-								url={item.preview_url}
-								brandSlug={brandSlug}
-								size={28}
-								corner="br"
-							/>
 						{:else}
 							<div class="mv-tile-pending">
 								<Film size={22} strokeWidth={1.5} />

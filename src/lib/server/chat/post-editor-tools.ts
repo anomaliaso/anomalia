@@ -190,25 +190,6 @@ export async function readPostState(t: EditorTarget) {
   }
 
   const coverOrigin = await resolveMediaOrigin(t.supabase, t.postId, row);
-  const { loadChatMediaReviews, lookupChatMediaReview, emptyChatMediaReview } = await import(
-    '$lib/server/video-review-store'
-  );
-  const { visualUrlsFromPost } = await import('$lib/server/video-review');
-  const reviewMap = await loadChatMediaReviews(t.supabase, t.brandId, [
-    row,
-    ...(slides ?? []).map((s) => ({ media_url: s.url }))
-  ]);
-  if (slides) {
-    for (const s of slides) {
-      const slideReview =
-        lookupChatMediaReview(reviewMap, { media_url: s.url }) ??
-        (visualUrlsFromPost({ media_url: s.url }).length ? emptyChatMediaReview() : null);
-      if (slideReview) s.media_review = slideReview;
-    }
-  }
-  const mediaReview =
-    lookupChatMediaReview(reviewMap, row) ??
-    (visualUrlsFromPost(row).length ? emptyChatMediaReview() : null);
 
   return {
     content_type: row.content_type,
@@ -240,7 +221,6 @@ export async function readPostState(t: EditorTarget) {
     slides,
     status: row.status,
     text_only: isTextOnly(row),
-    ...(mediaReview ? { media_review: mediaReview } : {}),
     ...coverOrigin
   };
 }
@@ -461,8 +441,6 @@ export async function regeneratePostImage(t: EditorTarget, args: { instruction: 
   if (error) return { error: error.message };
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
   if (r.imageUrl) {
-    const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-    await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
   }
   return { success: true, rendered: !!r.imageUrl, media_url: media, notes: r.notes ?? undefined };
 }
@@ -501,8 +479,6 @@ export async function editCarouselSlide(t: EditorTarget, args: { slide_index: nu
   if (error) return { error: error.message };
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
   if (r.imageUrl) {
-    const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-    await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
   }
   return { success: true, slide_index: args.slide_index, rendered: !!r.imageUrl };
 }
@@ -725,8 +701,6 @@ export async function persistRenderedGraphic(
   });
 
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
-  const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-  await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
 
   return {
     success: true,
@@ -1002,8 +976,6 @@ export async function restructureCarouselSlides(t: EditorTarget, args: { order: 
     .eq('id', t.postId).eq('brand_id', t.brandId);
   if (error) return { error: error.message };
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
-  const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-  await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
   return { success: true, slide_count: newUrls.length };
 }
 
@@ -1033,7 +1005,7 @@ export function createPostEditorTools(
 
     read_post: tool({
       description:
-        'Read the current state of the post: caption, title, media_origin (typographic_graphic | ai_generated | user_uploaded | video | none), and media_review (overall /10, verdict ship|fix|kill, judgment, next_test, issues — always present when this post has reviewable media). When media_origin is typographic_graphic, graphic.source_chars / source_kind are metadata only — grep_source → read_source → replace_source to patch the HTML/TSX (write_source only to rebuild). Photos inside the graphic: read_media first; if a library image fits, use_library_image then replace_source <img src>; generate_image only when nothing fits (returns image_url, does not change the post). For carousels, every slide includes its own origin and media_review when scored. Call this first. Honor media_review.verdict: ship is ok to approve; fix/kill means apply next_test before approving. Call review_video only when media_review.status is none/failed or the media changed. When media_origin is video (or is_video is true), remakes go through make_video — never design_graphic / write_source.',
+        'Read the current state of the post: caption, title, media_origin (typographic_graphic | ai_generated | user_uploaded | video | none). When media_origin is typographic_graphic, graphic.source_chars / source_kind are metadata only — grep_source → read_source → replace_source to patch the HTML/TSX (write_source only to rebuild). Photos inside the graphic: read_media first; if a library image fits, use_library_image then replace_source <img src>; generate_image only when nothing fits (returns image_url, does not change the post). Call this first. When media_origin is video (or is_video is true), remakes go through make_video — never design_graphic / write_source.',
       inputSchema: z.object({}),
       execute: async () => readPostState(t)
     }),
@@ -1176,75 +1148,6 @@ export function createPostEditorTools(
       }) => renderPostVideo(t, args)
     }),
 
-    review_video: tool({
-      description:
-        'Review THIS post\'s finished video (or a public mp4 URL) against organic UGC or paid-ads standards. Scores hook / doomscroll stop, sound-off, hold, authenticity, CTA/offer. Call when the user asks if the reel works, before approving, or after make_video. Credits only — not the monthly video budget.',
-      inputSchema: z.object({
-        standard: z
-          .enum(['organic', 'ads'])
-          .describe('organic = Reels/TikTok UGC. ads = paid UGC ad (proof, offer, uniqueness).'),
-        url: z
-          .string()
-          .optional()
-          .describe('Public https mp4 URL. Omit to use this post\'s attached video.'),
-        product: z.string().optional(),
-        script: z.string().optional()
-      }),
-      execute: async ({
-        standard,
-        url,
-        product,
-        script
-      }: {
-        standard: 'organic' | 'ads';
-        url?: string;
-        product?: string;
-        script?: string;
-      }) => {
-        const { extraReviewOpts, parseVideoStandard, resolveReviewVideoUrl, reviewVideo } = await import('$lib/server/video-review');
-        const { withBrandContext } = await import('$lib/server/ai-log');
-        return withBrandContext(t.brandId, async () => {
-          const resolved = await resolveReviewVideoUrl(t.supabase, t.brandId, {
-            url,
-            postId: url?.trim() ? null : t.postId
-          });
-          if ('error' in resolved) return { error: resolved.error };
-          const { data: brand } = await t.supabase
-            .from('brands')
-            .select('name, content_prefs')
-            .eq('id', t.brandId)
-            .maybeSingle();
-          const language =
-            brand?.content_prefs && typeof brand.content_prefs === 'object'
-              ? String((brand.content_prefs as { language?: string }).language ?? '')
-              : '';
-          try {
-            const result = await reviewVideo(resolved.url, {
-              standard: parseVideoStandard(standard) ?? 'organic',
-              brandName: brand?.name,
-              product: product?.trim() || resolved.product || null,
-              caption: resolved.caption || null,
-              script: script?.trim() || null,
-              language: language || t.ctx.language,
-              ...extraReviewOpts(resolved)
-            });
-            if (!result.ok) return { error: result.error };
-            const { persistReadyReview } = await import('$lib/server/video-review-store');
-            await persistReadyReview(t.supabase, {
-              brandId: t.brandId,
-              url: resolved.url,
-              postId: t.postId,
-              standard: parseVideoStandard(standard) ?? 'organic',
-              review: result.review,
-              kind: extraReviewOpts(resolved).kind
-            });
-            return { ok: true, ...result.review };
-          } catch (e) {
-            return { error: e instanceof Error ? e.message : String(e) };
-          }
-        });
-      }
-    }),
 
     design_graphic: tool({
       description: [

@@ -109,7 +109,7 @@ const TABLES =
   'post_visual_meta posts products profiles publish_logs push_subscriptions radar_feed_cache ' +
   'radar_jobs radar_searches referral_codes referrals rubrics scheduler_runs scrapecreators_cache ' +
   'social_accounts social_post_history social_thumb_cache talent_views talents tool_usage ' +
-  'video_renders video_requests video_reviews waitlist webhook_deliveries zernio_ad_accounts';
+  'video_renders video_requests waitlist webhook_deliveries zernio_ad_accounts';
 
 export const QUERY_TABLE_LIST = TABLES.split(' ');
 

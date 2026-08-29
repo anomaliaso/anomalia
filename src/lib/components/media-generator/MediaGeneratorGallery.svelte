@@ -4,7 +4,6 @@
   import UgcPlaybook from '$lib/components/media-generator/UgcPlaybook.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
   import Check from '@lucide/svelte/icons/check';
-  import VideoScoreRing from '$lib/components/VideoScoreRing.svelte';
   import type { Action } from 'svelte/action';
   import { UGC_ORGANIC_SECONDS } from '$lib/ugc-formats';
   import type { StreamToolCallState } from '$lib/chat-stream-events';
@@ -205,7 +204,6 @@
                 {#if item.type === 'video'}
                   <video src={item.url} muted playsinline loop autoplay></video>
                   <span class="mg-badge">video</span>
-                  <VideoScoreRing url={item.url} brandSlug={brandSlug} size={28} corner="tl" />
                 {:else}
                   <img src={item.url} alt="" loading="eager" />
                 {/if}

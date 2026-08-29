@@ -224,7 +224,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'search_library_docs',
       'cross_post',
       'update_post',
-      'review_video',
       'approve_post',
       'reject_post',
       'reschedule_post',
@@ -282,7 +281,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'sync_social_history',
       'save_social_handles',
       'run_analytics_review',
-      'review_video',
       'show_media',
       'fetch_social_thumbs',
       'research_meta_ads',
@@ -318,7 +316,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       // Senza questo la chat consegna codice, non video: con l'audio il file finito lo può produrre
       // solo il render server.
       'render_motion_video',
-      'review_video',
       'read_posts',
       'capture_website',
       'harvest_product_ui',
@@ -339,7 +336,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'read_posts',
       'create_post',
       'update_post',
-      'review_video',
       'generate_image',
       'read_people',
       'read_talents',
@@ -400,30 +396,10 @@ export function resolveAgent(raw: unknown): AgentId | null {
   return (AGENT_IDS as readonly string[]).includes(mapped) ? (mapped as AgentId) : null;
 }
 
-/**
- * `review_video` è SMONTATO dalla chat (riaccensione: `CHAT_REVIEW_VIDEO=on`). L'implementazione e
- * le altre superfici restano intere; qui si spegne solo il montaggio, e i nomi restano nelle
- * `toolKeys` qui sopra.
- *
- * Da riparare PRIMA di riaccenderlo: non accetta un `video_id` (solo `url` e `post_id`, e un motion
- * video non è un post, quindi l'agente si costruisce a mano un path di storage), e non controlla che
- * il file esista — con `preview_url` NULL riporta un problema di media invece di «renderizza prima».
- */
-const CHAT_REVIEW_VIDEO_ENABLED = env.CHAT_REVIEW_VIDEO === 'on';
-
-/** I tool definiti ma non montati in chat. Vuoto = tutto montato. */
-const UNMOUNTED_TOOL_KEYS = new Set<string>(CHAT_REVIEW_VIDEO_ENABLED ? [] : ['review_video']);
-
-/**
- * Narrow a full tool object to the subset owned by `agentId` (own keys + shared).
- * A null agentId returns the full object unchanged (legacy / onboarding behavior) — minus whatever
- * is unmounted, perché uno smontaggio che l'agente nullo scavalca non è uno smontaggio.
- */
 export function pickTools<T extends Record<string, unknown>>(tools: T, agentId: AgentId | null): Partial<T> {
   const allow = agentId ? new Set<string>([...AGENTS[agentId].toolKeys, ...SHARED_TOOL_KEYS]) : null;
   const out: Partial<T> = {};
   for (const key of Object.keys(tools)) {
-    if (UNMOUNTED_TOOL_KEYS.has(key)) continue;
     if (!allow || allow.has(key)) out[key as keyof T] = tools[key as keyof T];
   }
   return out;

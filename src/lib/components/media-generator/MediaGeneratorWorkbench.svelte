@@ -24,7 +24,6 @@
     type UgcPlatformId
   } from '$lib/ugc-formats';
   import ChatImageLightbox from '$lib/components/ChatImageLightbox.svelte';
-  import VideoReviewPanel from '$lib/components/VideoReviewPanel.svelte';
   import { isVideoUrl } from '$lib/content-formats';
   import {
     isKnownVideoModelId,
@@ -912,16 +911,7 @@
 
 {#if previewUrl}
   {#if isVideoUrl(previewUrl)}
-    <ChatImageLightbox src={previewUrl} caption={previewCaption} onclose={closePreview}>
-      {#snippet extra()}
-        <VideoReviewPanel
-          url={previewUrl}
-          brandSlug={brand.slug}
-          defaultStandard="organic"
-          caption={previewCaption}
-        />
-      {/snippet}
-    </ChatImageLightbox>
+    <ChatImageLightbox src={previewUrl} caption={previewCaption} onclose={closePreview} />
   {:else}
     <ChatImageLightbox src={previewUrl} caption={previewCaption} onclose={closePreview} />
   {/if}
