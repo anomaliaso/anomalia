@@ -1,12 +1,12 @@
 <script lang="ts">
   import { siInstagram, siTiktok, siFacebook, siX, siThreads, siYoutube, siBluesky, siReddit } from 'simple-icons';
+  import { platformMixRows, type PlatformMixItem } from '$lib/platform-mix';
 
   // Horizontal platform-mix chart: one row per platform — social logo + name on the left, a
   // %-proportional bar in the platform's colour, the percentage on the right. Shared by the
   // onboarding manifesto, the editorial-plan cards and the GTM phase panel so a "mix" always
   // looks the same everywhere (brief §8: consistent per-platform colours).
-  type MixItem = { platform: string; percent?: number; share?: string; role?: string };
-  let { mix = [] }: { mix: MixItem[] } = $props();
+  let { mix = [] }: { mix: PlatformMixItem[] } = $props();
 
   const META: Record<string, { l: string; c: string; g: string }> = {
     instagram: { l: 'Instagram', c: '#dd2a7b', g: 'IG' },
@@ -30,33 +30,7 @@
     reddit: siReddit
   };
 
-  // Resolve a percentage per row. Sources, in order: an explicit `percent` (GTM weights), a
-  // share string containing '%' ("40%"), else the first number in the share normalised across
-  // rows ("2/week" style), else an equal split. Always clamped to 0–100.
-  const rows = $derived.by(() => {
-    const parsed = mix
-      .filter((m) => m?.platform)
-      .map((m) => {
-        const key = String(m.platform).toLowerCase().trim();
-        let p: number | null = typeof m.percent === 'number' && Number.isFinite(m.percent) ? m.percent : null;
-        if (p == null && m.share) {
-          const pm = String(m.share).match(/(\d+(?:[.,]\d+)?)\s*%/);
-          if (pm) p = parseFloat(pm[1].replace(',', '.'));
-        }
-        return { key, role: m.role ?? '', share: m.share ?? '', p };
-      });
-    if (parsed.some((r) => r.p == null)) {
-      const nums = parsed.map((r) => {
-        const nm = String(r.share).match(/(\d+(?:[.,]\d+)?)/);
-        return nm ? parseFloat(nm[1].replace(',', '.')) : 1;
-      });
-      const tot = nums.reduce((a, b) => a + b, 0) || 1;
-      parsed.forEach((r, i) => {
-        if (r.p == null) r.p = Math.round((nums[i] / tot) * 100);
-      });
-    }
-    return parsed.map((r) => ({ ...r, p: Math.max(0, Math.min(100, Math.round(r.p ?? 0))) }));
-  });
+  const rows = $derived(platformMixRows(mix));
 </script>
 
 {#if rows.length}
@@ -72,8 +46,8 @@
           {META[r.key]?.l ?? r.key}
           {#if r.role}<small>{r.role}</small>{/if}
         </span>
-        <span class="pm-track"><span class="pm-fill" style={`width:${r.p}%`}></span></span>
-        <span class="pm-pct">{r.p}%</span>
+        <span class="pm-track">{#if r.percent != null}<span class="pm-fill" style={`width:${r.percent}%`}></span>{/if}</span>
+        <span class="pm-pct">{r.percent == null ? '' : `${r.percent}%`}</span>
       </div>
     {/each}
   </div>
