@@ -18,7 +18,6 @@ vi.mock('@ai-sdk/sandbox-vercel', () => ({
 }));
 
 const { openBrandHarnessSession, resolveHarnessModelRef, harnessSdkModel } = await import('./adapters');
-const { KIE_LUNA_MODEL } = await import('$lib/server/kie');
 const { env } = await import('$env/dynamic/private');
 
 describe('openBrandHarnessSession', () => {
@@ -42,55 +41,49 @@ describe('openBrandHarnessSession', () => {
 	});
 });
 
-describe('resolveHarnessModelRef — la catena preferenza → tier → env → lista', () => {
+describe('resolveHarnessModelRef — la catena preferenza → tier → lista, tutta sul centralino', () => {
 	beforeEach(() => {
 		for (const key of Object.keys(env)) {
 			if (/MODEL|MODELS|PROVIDER|API_KEY/.test(key)) delete env[key];
 		}
 	});
 
-	it('senza provider configurato torna null', () => {
+	it('senza il centralino configurato torna null', () => {
 		expect(resolveHarnessModelRef({ tier: 'pro' })).toBeNull();
 	});
 
-	it('la preferenza famiglia servibile dal provider attivo vince sul tier', () => {
-		env.KIE_API_KEY = 'k';
+	it('la preferenza famiglia mappa il wireId del catalogo attraverso il centralino', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		const ref = resolveHarnessModelRef({ family: 'grok', tier: 'fast' });
-		expect(ref).toEqual({ provider: 'kie', id: 'kie/grok-4-6', label: 'grok-4-6' });
+		expect(ref).toEqual({ provider: 'llm', id: 'llm/grok-4-6', label: 'grok-4-6' });
 	});
 
-	it('una famiglia di un altro provider degrada sul tier, non si forza', () => {
-		env.OPENROUTER_API_KEY = 'o';
-		env.OPENROUTER_PRO_MODEL = 'vendor/pro-model';
-		const ref = resolveHarnessModelRef({ family: 'grok', tier: 'pro' });
-		expect(ref?.id).toBe('openrouter/vendor/pro-model');
+	it('una famiglia che non esiste degrada sul tier del picker', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
+		expect(resolveHarnessModelRef({ family: 'inesistente', tier: 'pro' })?.id).toBe('llm/openai/gpt-5.6-sol');
 	});
 
-	it('il tier del turno arriva davvero al provider non-kie', () => {
-		env.OPENCODE_API_KEY = 'x';
-		env.OPENCODE_FAST_MODEL = 'oc-fast';
-		expect(resolveHarnessModelRef({ tier: 'fast' })?.id).toBe('opencode/oc-fast');
+	it('il tier mappa il picker del centralino: fast il default, pro il secondo della lista', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
+		expect(resolveHarnessModelRef({ tier: 'fast' })?.id).toBe('llm/z-ai/glm-5.3-flash');
+		expect(resolveHarnessModelRef({ tier: 'pro' })?.id).toBe('llm/openai/gpt-5.6-sol');
 	});
 
-	it('il tier mappa la famiglia di catalogo quando il provider la serve (kie pro → grok)', () => {
-		env.KIE_API_KEY = 'k';
-		expect(resolveHarnessModelRef({ tier: 'pro' })?.id).toBe('kie/grok-4-6');
-		expect(resolveHarnessModelRef({ tier: 'auto' })?.id).toBe(`kie/${KIE_LUNA_MODEL}`);
-	});
-
-	it('senza *_MODEL ma con la lista dichiarata: il primo della lista', () => {
-		env.OPENROUTER_API_KEY = 'o';
-		env.OPENROUTER_MODELS = 'stealth/ox-alpha, openai/gpt-5.6-luna';
+	it('senza tier né famiglia: il primo della lista dichiarata', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_MODELS = 'stealth/ox-alpha, openai/gpt-5.6-luna';
 		const ref = resolveHarnessModelRef({ tier: 'auto' });
-		expect(ref?.id).toBe('openrouter/stealth/ox-alpha');
+		expect(ref?.id).toBe('llm/stealth/ox-alpha');
 	});
 
-	it("il fallback 'ox-alpha' è morto: env e lista assenti → null", () => {
-		env.OPENROUTER_API_KEY = 'o';
-		const ref = resolveHarnessModelRef({ tier: 'pro' });
-		if (ref) console.log('RESIDUAL REF', JSON.stringify(ref));
-		expect(ref).toBeNull();
+	it('chiave ma lista e default vuoti: niente da risolvere, null', () => {
+		env.LLM_API_KEY = 'k';
 		expect(resolveHarnessModelRef()).toBeNull();
+		expect(resolveHarnessModelRef('auto')).toBeNull();
 	});
 });
 
@@ -100,32 +93,35 @@ describe('resolveHarnessModelRef — la catena preferenza → tier → env → l
  * dell'harness — oggi il motion video, inchiodato a `google(...)`. La conoscenza del provider
  * (base url, chiave, quale env porta quale tier) resta in questo file: chi lo usa chiede un tier.
  */
-describe('harnessSdkModel — un modello dell’AI SDK sul provider attivo', () => {
+describe('harnessSdkModel — un modello dell’AI SDK sul centralino', () => {
 	beforeEach(() => {
 		for (const key of Object.keys(env)) {
 			if (/MODEL|MODELS|PROVIDER|API_KEY/.test(key)) delete env[key];
 		}
 	});
 
-	it('senza provider configurato torna null, invece di cadere su Google in silenzio', () => {
+	it('senza il centralino configurato torna null', () => {
 		expect(harnessSdkModel('pro')).toBeNull();
 	});
 
-	it('col provider attivo risolve il modello del tier e lo dichiara come tale', () => {
-		env.OPENROUTER_API_KEY = 'k';
-		env.CHAT_PROVIDER = 'openrouter';
-		env.OPENROUTER_FAST_MODEL = 'z-ai/glm-5.3-flash';
-		const m = harnessSdkModel('fast');
-		expect(m?.provider).toBe('openrouter');
-		expect(m?.modelId).toBe('z-ai/glm-5.3-flash');
-		expect(m?.model).toBeTruthy();
+	it('risolve il tier del picker e lo dichiara come llm', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
+		const fast = harnessSdkModel('fast');
+		expect(fast?.provider).toBe('llm');
+		expect(fast?.modelId).toBe('z-ai/glm-5.3-flash');
+		expect(fast?.model).toBeTruthy();
+		expect(harnessSdkModel('pro')?.modelId).toBe('openai/gpt-5.6-sol');
 	});
 
-	it('cade sulla lista dichiarata quando il tier non ha un env suo', () => {
+	it('le env dei provider legacy non attivano più niente', () => {
 		env.OPENROUTER_API_KEY = 'k';
+		env.OPENROUTER_MODELS = 'z-ai/glm-5.3-flash';
 		env.CHAT_PROVIDER = 'openrouter';
-		env.OPENROUTER_MODELS = 'z-ai/glm-5.3-flash,qwen/qwen3.8-27b';
-		expect(harnessSdkModel('pro')?.modelId).toBe('z-ai/glm-5.3-flash');
+		env.HARNESS_PROVIDER = 'kie';
+		env.KIE_API_KEY = 'k';
+		expect(harnessSdkModel('pro')).toBeNull();
 	});
 });
 

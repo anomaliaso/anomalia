@@ -15,7 +15,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { swallow } from '$lib/server/swallow';
-import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { Sandbox } from '@vercel/sandbox';
 import {
@@ -26,7 +25,7 @@ import {
 	SANDBOX_MAX_LEASE_MS
 } from '$lib/server/sandbox';
 import { createFileTools, isOverridable, OVERRIDABLE_PREFIXES, AGENT_DOCS_BUCKET } from '$lib/server/chat/agent-files';
-import { KIE_CODEX_BASE, KIE_LUNA_MODEL } from '$lib/server/kie';
+import { KIE_CODEX_BASE } from '$lib/server/kie';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,13 +33,12 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { loadMemoryEntries, writeMemory } from '$lib/server/brand-memory';
 import { chatTokenBudget, chatTurnDeadline } from '$lib/server/chat/turn-limits';
 import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
-import { MODEL_FAMILIES, TIER_DEFAULT_FAMILY } from '$lib/models/catalog';
+import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
 import { PostgresMemoryStore } from '@anomalia/agent-adapters/memory-postgres';
 import { VercelSandboxProvider } from '@anomalia/agent-adapters/vercel-sandbox';
-import { createModelResolver } from '@anomalia/agent-adapters/runtime/models';
 import type { ExecToolCall } from '@anomalia/agent-adapters/runtime/ai-runtime';
 import { HarnessRuntime } from '@anomalia/agent-adapters/runtime/harness-runtime';
 import { HARNESS_SETUPS, stickySessionExtension } from '@anomalia/agent-adapters/runtime/harness-runtime';
@@ -103,92 +101,17 @@ export async function sandboxPortUrl(name: string, port: number): Promise<string
 
 const moduleLiveSessions = new Map<string, unknown>();
 
-const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const OPENCODE_DEFAULT_BASE = 'https://opencode.ai/zen/v1';
-
-type HarnessProviderName = 'llm' | 'kie' | 'openrouter' | 'opencode';
-
-function providerConfigured(name: HarnessProviderName): boolean {
-	if (name === 'llm') return Boolean(llmApiKey());
-	if (name === 'kie') return Boolean(env.KIE_API_KEY);
-	if (name === 'openrouter') return Boolean(env.OPENROUTER_API_KEY);
-	return Boolean(env.OPENCODE_API_KEY);
-}
-
-function providerBaseUrl(name: HarnessProviderName): string {
-	if (name === 'llm') return llmBaseUrl();
-	if (name === 'kie') return env.KIE_BASE_URL || KIE_CODEX_BASE;
-	if (name === 'openrouter') return env.OPENROUTER_BASE_URL || OPENROUTER_BASE;
-	return env.OPENCODE_BASE_URL || OPENCODE_DEFAULT_BASE;
-}
-
-function providerApiKey(name: HarnessProviderName): string | undefined {
-	if (name === 'llm') return llmApiKey();
-	if (name === 'kie') return env.KIE_API_KEY;
-	if (name === 'openrouter') return env.OPENROUTER_API_KEY;
-	return env.OPENCODE_API_KEY;
-}
-
-/** Ordine di caduta: HARNESS_PROVIDER esplicito, poi il centralino, kie, openrouter, opencode. */
-function activeProvider(): HarnessProviderName | null {
-	const forced = (env.CHAT_PROVIDER || env.HARNESS_PROVIDER) as HarnessProviderName | undefined;
-	if (forced && providerConfigured(forced)) return forced;
-	const order: HarnessProviderName[] = ['llm', 'kie', 'openrouter', 'opencode'];
-	return order.find(providerConfigured) ?? null;
-}
-
-function modelForTier(tier: string | undefined, name: HarnessProviderName): string | null {
-	const prefix = name === 'kie' ? '' : name.toUpperCase() + '_';
-	const byTier = tier === 'fast' || tier === 'pro' ? `${prefix}${tier.toUpperCase()}_MODEL` : `${prefix}AUTO_MODEL`;
-	const fromEnv = env[byTier] as string | undefined;
-	if (fromEnv) return fromEnv;
-	const generic = env[`HARNESS_MODEL_${(tier ?? 'auto').toUpperCase()}`] as string | undefined;
-	return generic || null;
-}
-
 /**
  * IL SEAM verso le superfici che chiamano `streamText` da sole invece di passare dal runtime
- * dell'harness — il motion video, che finora costruiva `google(geminiFlash())` a mano.
- *
- * Sta QUI e non da loro perche' la conoscenza del provider — base url, chiave, quale variabile
- * porta quale tier — e' gia' tutta in questo file: un secondo posto che la ricopia diverge al
- * primo provider aggiunto. Chi lo usa chiede un tier e riceve un modello, o `null` se non c'e'
- * nessun provider configurato: cadere in silenzio su un provider cablato e' come si finisce con
- * meta` del prodotto su un modello che nessuno ha scelto.
- *
- * I provider dell'harness sono tutti compatibili OpenAI, quindi il client e' uno solo.
+ * dell'harness — il motion video, le rese UGC. Un solo tubo, il centralino `$lib/server/llm.ts`:
+ * chi lo usa chiede un tier e riceve un modello, o `null` se il centralino non è configurato.
  */
 export function harnessSdkModel(
 	tier: 'fast' | 'auto' | 'pro'
-): { model: LanguageModel; modelId: string; provider: HarnessProviderName } | null {
-	const name = activeProvider();
-	if (!name) return null;
-	if (name === 'llm') {
-		const id = llmModelForPicker(tier === 'pro' ? 'pro' : 'fast');
-		return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
-	}
-	const wire = modelForTier(tier, name) ?? firstListModel(name);
-	if (!wire) return null;
-	const client = createOpenAI({ baseURL: providerBaseUrl(name), apiKey: providerApiKey(name), name });
-	return { model: client.chat(wire), modelId: wire, provider: name };
-}
-
-function firstListModel(name: HarnessProviderName): string | null {
-	if (name === 'llm') return llmModels()[0] ?? null;
-	const raw = env[`${name.toUpperCase()}_MODELS`] as string | undefined;
-	const first = raw?.split(',').map((x) => x.trim()).filter(Boolean)[0];
-	return first || null;
-}
-
-/** Lista modelli dichiarati per un provider (OPENROUTER_MODELS ecc.), con caduta sul modello auto. */
-function providerModels(name: HarnessProviderName): Array<{ id: string }> {
-	if (name === 'llm') return llmModels().map((id) => ({ id }));
-	const listKey = `${name.toUpperCase()}_MODELS`;
-	const raw = env[listKey] as string | undefined;
-	const list = raw ? raw.split(',').map((x) => x.trim()).filter(Boolean) : [];
-	const auto = modelForTier('auto', name);
-	if (auto && !list.includes(auto)) list.push(auto);
-	return list.map((id) => ({ id }));
+): { model: LanguageModel; modelId: string; provider: 'llm' } | null {
+	if (!llmApiKey()) return null;
+	const id = llmModelForPicker(tier === 'pro' ? 'pro' : 'fast');
+	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }
 
 export interface HarnessModelRef {
@@ -202,32 +125,24 @@ export interface HarnessModelPreference {
 	tier?: unknown;
 }
 
-function servableWireId(family: unknown, name: HarnessProviderName): string | null {
+function servableWireId(family: unknown): string | null {
 	if (typeof family !== 'string') return null;
 	if (!(MODEL_FAMILY_IDS as readonly string[]).includes(family)) return null;
 	const def = MODEL_FAMILIES[family as keyof typeof MODEL_FAMILIES];
-	return def.provider === name ? def.wireId : null;
-}
-
-function tierDefaultFamily(tier: unknown): unknown {
-	if (typeof tier !== 'string' || !(tier in TIER_DEFAULT_FAMILY)) return null;
-	return TIER_DEFAULT_FAMILY[tier as keyof typeof TIER_DEFAULT_FAMILY];
+	return def.wireId;
 }
 
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {
-	const name = activeProvider();
-	if (!name) return null;
+	if (!llmApiKey()) return null;
 	const family = typeof pref === 'object' && pref ? pref.family : undefined;
 	const tier = typeof pref === 'string' ? pref : pref?.tier;
 
 	const wire =
-		servableWireId(family, name) ??
-		modelForTier(tier, name) ??
-		servableWireId(tierDefaultFamily(tier), name) ??
-		(name === 'kie' ? KIE_LUNA_MODEL : null) ??
-		firstListModel(name);
+		servableWireId(family) ??
+		(tier === 'pro' || tier === 'fast' ? llmModelForPicker(tier) : undefined) ??
+		(llmModels()[0] ?? null);
 	if (!wire) return null;
-	return { provider: name, id: `${name}/${wire}`, label: wire.split('/').pop() ?? wire };
+	return { provider: 'llm', id: `llm/${wire}`, label: wire.split('/').pop() ?? wire };
 }
 
 function hydrateHarnessEnv() {
@@ -291,28 +206,23 @@ export function harnessSessionSettings(sessionKey?: string): { extensionFactorie
 }
 
 export function ensureKieAgentDir(): string | undefined {
-	// L'LLM di chat è vision-native: il manifest lo dichiara, o pi omette le immagini
-	// («image omitted: model does not support images») e il modello risponde di non averle viste.
-	const visionModels = (ids: Array<{ id: string }>) =>
-		ids.map((m) => ({ ...m, input: ['text', 'image'] }));
-	const providers: Record<string, unknown> = {};
-	for (const name of ['llm', 'kie', 'openrouter', 'opencode'] as HarnessProviderName[]) {
-		const key = providerApiKey(name);
-		if (!key) continue;
-		providers[name] = {
-			baseUrl: process.env[`${name.toUpperCase()}_BASE_URL`] ?? providerBaseUrl(name),
-			api: 'openai-completions',
-			apiKey: key,
-			models: name === 'kie' ? visionModels([{ id: KIE_LUNA_MODEL }]) : visionModels(providerModels(name))
-		};
-	}
-	if (!Object.keys(providers).length) return undefined;
+	const key = llmApiKey();
+	if (!key) return undefined;
 	if (kieAgentDirCache) return kieAgentDirCache;
 	const dir = join(tmpdir(), 'anomalia-pi-agent');
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
 		join(dir, 'models.json'),
-		JSON.stringify({ providers })
+		JSON.stringify({
+			providers: {
+				llm: {
+					baseUrl: llmBaseUrl(),
+					api: 'openai-completions',
+					apiKey: key,
+					models: llmModels().map((id) => ({ id, input: ['text', 'image'] }))
+				}
+			}
+		})
 	);
 	kieAgentDirCache = dir;
 	return dir;
