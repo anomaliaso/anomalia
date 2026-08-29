@@ -5,13 +5,11 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { googleGenaiClient } from '$lib/server/gemini';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, hasToolCall } from 'ai';
 import { harnessStreamText } from '$lib/server/harness';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
+import { llmLanguageModel } from '$lib/server/llm';
 import { resolveUserTurnMediaParts, type MediaPart } from '$lib/media-parts';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
@@ -34,12 +32,6 @@ import {
 } from '$lib/server/chat/brand-context-tools';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-
-function genaiClient() {
-  return googleGenaiClient();
-}
 
 export type MediaKindPreference = 'auto' | 'image' | 'video';
 
@@ -251,7 +243,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
   const kind: MediaKindPreference = forceUgc ? 'video' : (opts.kind ?? 'auto');
   const variants = clampVariants(opts.variants);
   const useBrandStyle = opts.useBrandStyle !== false;
-  const ai = genaiClient();
+  const ai = null as never;
 
   const [{ data: kit }, { data: brandRow }] = await Promise.all([
     opts.supabase
@@ -412,7 +404,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
     model: (() => {
       const b = geminiFast();
       const id = IMAGE_AGENT_MODEL();
-      return id === b.modelId ? b : { ...b, model: google(id), modelId: id };
+      return id === b.modelId ? b : { ...b, model: llmLanguageModel(id), modelId: id };
     })(),
     defaultAgent: 'media',
     surfaceWriteKeys: ['generate_image', 'generate_video', 'design_graphic'],
@@ -1021,10 +1013,10 @@ If editing attached photos, call generate_image once per target × variants with
     agent: 'media_generator',
     mode: `${kind}:v${variants}`,
     model: IMAGE_AGENT_MODEL(),
-    provider: 'gemini',
+    provider: 'llm',
     surface: 'chat'
   }, {
-    model: google(IMAGE_AGENT_MODEL()),
+    model: llmLanguageModel(IMAGE_AGENT_MODEL()),
     maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
     system,
     messages: [{ role: 'user', content: userContent }],
@@ -1037,7 +1029,7 @@ If editing attached photos, call generate_image once per target × variants with
       void base.close();
       logAiCall({
         label: 'media-generator',
-        provider: 'gemini',
+        provider: 'llm',
         model: IMAGE_AGENT_MODEL(),
         ms: Date.now() - t0,
         ok: true,

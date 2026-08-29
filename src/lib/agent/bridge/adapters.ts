@@ -36,7 +36,7 @@ import { chatTokenBudget, chatTurnDeadline } from '$lib/server/chat/turn-limits'
 import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
 import { MODEL_FAMILIES, TIER_DEFAULT_FAMILY } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
-import { XIAOMI_MODEL } from '$lib/server/xiaomi';
+import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
 import { PostgresMemoryStore } from '@anomalia/agent-adapters/memory-postgres';
 import { VercelSandboxProvider } from '@anomalia/agent-adapters/vercel-sandbox';
@@ -101,42 +101,39 @@ export async function sandboxPortUrl(name: string, port: number): Promise<string
 	return sb.domain(port);
 }
 
-export interface HarnessModelRef {
-	provider: string;
-	id: string;
-	label: string;
-}
-
 const moduleLiveSessions = new Map<string, unknown>();
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const OPENCODE_DEFAULT_BASE = 'https://opencode.ai/zen/v1';
 
-type HarnessProviderName = 'kie' | 'openrouter' | 'opencode';
+type HarnessProviderName = 'llm' | 'kie' | 'openrouter' | 'opencode';
 
 function providerConfigured(name: HarnessProviderName): boolean {
+	if (name === 'llm') return Boolean(llmApiKey());
 	if (name === 'kie') return Boolean(env.KIE_API_KEY);
 	if (name === 'openrouter') return Boolean(env.OPENROUTER_API_KEY);
 	return Boolean(env.OPENCODE_API_KEY);
 }
 
 function providerBaseUrl(name: HarnessProviderName): string {
+	if (name === 'llm') return llmBaseUrl();
 	if (name === 'kie') return env.KIE_BASE_URL || KIE_CODEX_BASE;
 	if (name === 'openrouter') return env.OPENROUTER_BASE_URL || OPENROUTER_BASE;
 	return env.OPENCODE_BASE_URL || OPENCODE_DEFAULT_BASE;
 }
 
 function providerApiKey(name: HarnessProviderName): string | undefined {
+	if (name === 'llm') return llmApiKey();
 	if (name === 'kie') return env.KIE_API_KEY;
 	if (name === 'openrouter') return env.OPENROUTER_API_KEY;
 	return env.OPENCODE_API_KEY;
 }
 
-/** Ordine di caduta: HARNESS_PROVIDER esplicito, poi kie, openrouter, opencode. */
+/** Ordine di caduta: HARNESS_PROVIDER esplicito, poi il centralino, kie, openrouter, opencode. */
 function activeProvider(): HarnessProviderName | null {
 	const forced = (env.CHAT_PROVIDER || env.HARNESS_PROVIDER) as HarnessProviderName | undefined;
 	if (forced && providerConfigured(forced)) return forced;
-	const order: HarnessProviderName[] = ['kie', 'openrouter', 'opencode'];
+	const order: HarnessProviderName[] = ['llm', 'kie', 'openrouter', 'opencode'];
 	return order.find(providerConfigured) ?? null;
 }
 
@@ -166,6 +163,10 @@ export function harnessSdkModel(
 ): { model: LanguageModel; modelId: string; provider: HarnessProviderName } | null {
 	const name = activeProvider();
 	if (!name) return null;
+	if (name === 'llm') {
+		const id = llmModelForPicker(tier === 'pro' ? 'pro' : 'fast');
+		return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
+	}
 	const wire = modelForTier(tier, name) ?? firstListModel(name);
 	if (!wire) return null;
 	const client = createOpenAI({ baseURL: providerBaseUrl(name), apiKey: providerApiKey(name), name });
@@ -173,6 +174,7 @@ export function harnessSdkModel(
 }
 
 function firstListModel(name: HarnessProviderName): string | null {
+	if (name === 'llm') return llmModels()[0] ?? null;
 	const raw = env[`${name.toUpperCase()}_MODELS`] as string | undefined;
 	const first = raw?.split(',').map((x) => x.trim()).filter(Boolean)[0];
 	return first || null;
@@ -180,6 +182,7 @@ function firstListModel(name: HarnessProviderName): string | null {
 
 /** Lista modelli dichiarati per un provider (OPENROUTER_MODELS ecc.), con caduta sul modello auto. */
 function providerModels(name: HarnessProviderName): Array<{ id: string }> {
+	if (name === 'llm') return llmModels().map((id) => ({ id }));
 	const listKey = `${name.toUpperCase()}_MODELS`;
 	const raw = env[listKey] as string | undefined;
 	const list = raw ? raw.split(',').map((x) => x.trim()).filter(Boolean) : [];
@@ -293,7 +296,7 @@ export function ensureKieAgentDir(): string | undefined {
 	const visionModels = (ids: Array<{ id: string }>) =>
 		ids.map((m) => ({ ...m, input: ['text', 'image'] }));
 	const providers: Record<string, unknown> = {};
-	for (const name of ['kie', 'openrouter', 'opencode'] as HarnessProviderName[]) {
+	for (const name of ['llm', 'kie', 'openrouter', 'opencode'] as HarnessProviderName[]) {
 		const key = providerApiKey(name);
 		if (!key) continue;
 		providers[name] = {
@@ -348,6 +351,8 @@ export async function startHarnessTurn(opts: {
 	stopWhen: unknown[];
 	sandboxSession?: unknown;
 	sessionKey?: string;
+	/** Salta il riuso della sessione viva: la cache è un'ottimizzazione, non un obbligo. */
+	freshSession?: boolean;
 	resumeFrom?: unknown;
 	historyMd?: string;
 	/**
@@ -374,7 +379,7 @@ export async function startHarnessTurn(opts: {
 	} as never);
 	type LiveEntry = { agent: unknown; session: { destroy(): Promise<void> } };
 	const liveSessions = moduleLiveSessions as unknown as Map<string, LiveEntry>;
-	const cached = opts.sessionKey ? liveSessions.get(opts.sessionKey) : undefined;
+	const cached = opts.sessionKey && !opts.freshSession ? liveSessions.get(opts.sessionKey) : undefined;
 	if (cached) {
 		/**
 		 * RIUSARE UNA SESSIONE E` UN'OTTIMIZZAZIONE, NON UN OBBLIGO — e da quando Stop aborta il

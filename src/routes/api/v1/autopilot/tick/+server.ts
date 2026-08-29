@@ -1,11 +1,10 @@
 import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { cronAuthorized } from '$lib/server/cron-auth';
-import { runAutopilotForBrand, REVIEW_GRACE_MS, type AutopilotBrand } from '$lib/server/scheduler';
+import { brandOwnerContact, REVIEW_GRACE_MS, type AutopilotBrand } from '$lib/server/scheduler';
 import { dailyReconciliation } from '$lib/server/reconciliation';
 import { recordLoopTick, nextRunBudgetMs } from '$lib/server/loop-ticks';
 import { queueForLoop, markServed } from '$lib/server/loop-fairness';
-import { reportToAgentThread } from '$lib/server/team-ignition';
 
 // Tick giornaliero dell'autopilot. Due modi di chiamarlo: Vercel Cron (GET con
 // `Authorization: Bearer $CRON_SECRET`, iniettato in automatico), o uno scheduler esterno con
@@ -14,7 +13,7 @@ import { reportToAgentThread } from '$lib/server/team-ignition';
 // Client admin (service-role) di proposito: su un cron non c'è sessione utente e serve leggere e
 // scrivere su TUTTI i brand, quindi si bypassa RLS. L'unico cancello è il segreto.
 
-// La generazione per brand (Gemini + render) è lenta: serve spazio.
+// La generazione per brand (LLM + render) è lenta: il tick però ACCODA soltanto, non esegue.
 export const config = { maxDuration: 300 };
 
 /**
@@ -182,28 +181,28 @@ async function runTick(request: Request): Promise<Response> {
     // diversi di non produrre, e senza questa riga «l'autopilot non fa niente» non ha risposta.
     const startedAt = Date.now();
     try {
-      const res = await runAutopilotForBrand(admin, brand as AutopilotBrand);
-      if (res.ran) {
-        processed += 1;
-        console.log(
-          `[autopilot tick] ${brand.slug}: ${res.postsCreated} posts awaiting approval, emailed=${res.emailed ?? false}`
-        );
-        // Resoconto nel thread del producer. Non alza mai, e i giri saltati non scrivono.
-        await reportToAgentThread(admin, brand.id, {
-          job: 'autopilot',
-          postsCreated: res.postsCreated ?? 0,
-          emailed: res.emailed ?? false,
-          ...(res.planned ? { planned: true } : {})
-        });
-      } else {
+      const owner = await brandOwnerContact(admin, (brand as AutopilotBrand).org_id);
+      if (!owner?.userId) {
         skipped += 1;
-        console.log(`[autopilot tick] ${brand.slug}: skipped (${res.reason}).`);
+        recordLoopTick({ loop: 'autopilot', brandId: brand.id, outcome: 'skipped', reason: 'unknown' });
+        console.warn(`[autopilot tick] ${brand.slug}: no owner — cannot enqueue.`);
+        continue;
       }
+      const { error: jobErr } = await admin.from('chat_jobs').insert({
+        brand_id: brand.id,
+        user_id: owner.userId,
+        tool_name: 'run_autopilot',
+        input_params: { deadline_ms: 3_600_000 },
+        status: 'pending',
+        thread_id: null
+      });
+      if (jobErr) throw new Error(jobErr.message);
+      processed += 1;
+      console.log(`[autopilot tick] ${brand.slug}: enqueued run_autopilot for worker`);
       recordLoopTick({
         loop: 'autopilot',
         brandId: brand.id,
-        outcome: res.ran ? 'ok' : 'skipped',
-        reason: res.ran ? null : (res.reason ?? 'unknown'),
+        outcome: 'ok',
         durationMs: Date.now() - startedAt
       });
     } catch (e) {

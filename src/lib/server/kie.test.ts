@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 // Live-shaped kie Responses API payload (verified 2026-07-29).
 const LIVE_KIE_RESPONSE = {
@@ -39,25 +39,63 @@ describe('extractKieText', () => {
   });
 });
 
-describe('aiStructured kie fallback', () => {
+describe('aiStructured: ripiego dal secondario sul gateway LLM', () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
-  it('falls back to Gemini when kie returns an empty object', async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Il ripiego di kie NON è più Gemini via SDK Google: è il gateway OpenAI-compatibile
+   * (`llmStructured`). Per questo la chiave e l'id default del gateway vanno stubbati, e non si
+   * mocca `$lib/server/llm`: la prova del comportamento vero è che parte una fetch verso
+   * `<LLM_BASE_URL>/responses` (l'SDK usa l'endpoint Responses) con l'id `LLM_DEFAULT_MODEL`.
+   */
+  const GATEWAY_RESPONSE = {
+    id: 'resp-test',
+    object: 'response',
+    status: 'completed',
+    model: 'google/gemini-2.5-flash',
+    output: [
+      {
+        type: 'message',
+        id: 'msg-test',
+        role: 'assistant',
+        status: 'completed',
+        content: [{ type: 'output_text', text: '{"plan":"from-gateway"}', annotations: [] }]
+      }
+    ],
+    usage: { input_tokens: 5, output_tokens: 7, total_tokens: 12 }
+  };
+
+  it('falls back to the LLM gateway when kie returns an empty object', async () => {
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify(GATEWAY_RESPONSE), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+    vi.stubGlobal('fetch', fetchSpy);
     vi.doMock('$env/dynamic/private', () => ({
-      env: { GTM_PROVIDER: 'kie', KIE_API_KEY: 'test-key', GEMINI_API_KEY: 'test' }
+      env: {
+        // KIE_API_KEY serve a route('text') per accettare GTM_PROVIDER=kie come endpoint reale.
+        GTM_PROVIDER: 'kie',
+        KIE_API_KEY: 'test-key',
+        // Il gateway è la rete di conformità: senza chiave/default la ripartenza muore su llm_unconfigured.
+        LLM_API_KEY: 'llm-key',
+        LLM_DEFAULT_MODEL: 'google/gemini-2.5-flash',
+        LLM_BASE_URL: 'http://gateway.local/v1'
+      }
     }));
     vi.doMock('$lib/server/kie', () => ({
       structuredKie: vi.fn().mockResolvedValue({}),
       textKie: vi.fn().mockResolvedValue('')
     }));
-    vi.doMock('$lib/server/research', () => ({
-      structuredGemini: vi.fn().mockResolvedValue({ plan: 'from-gemini' })
-    }));
 
     const { structuredKie } = await import('./kie');
-    const { structuredGemini } = await import('./research');
     const { aiStructured } = await import('./xiaomi');
 
     const ai = {} as import('@google/genai').GoogleGenAI;
@@ -70,7 +108,12 @@ describe('aiStructured kie fallback', () => {
     );
 
     expect(structuredKie).toHaveBeenCalled();
-    expect(structuredGemini).toHaveBeenCalled();
-    expect(result).toEqual({ plan: 'from-gemini' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string | URL, RequestInit];
+    expect(String(url)).toBe('http://gateway.local/v1/responses');
+    const headers = new Headers(init.headers as HeadersInit);
+    expect(headers.get('authorization')).toBe('Bearer llm-key');
+    expect(JSON.parse(String(init.body)).model).toBe('google/gemini-2.5-flash');
+    expect(result).toEqual({ plan: 'from-gateway' });
   });
 });

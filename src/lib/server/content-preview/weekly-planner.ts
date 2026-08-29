@@ -64,6 +64,8 @@ type PlanPreviewOpts = {
    */
   ladder?: LadderContext;
   onProgress?: Progress;
+  /** Wall-clock for the week-planner agent. Absent → 200s (HTTP). Autopilot worker passes 1h. */
+  deadlineMs?: number;
 };
 type RenderPreviewOpts = {
   supabase: SupabaseClient;
@@ -224,7 +226,8 @@ async function invokeWeekPlannerAgent(
       calendarHooks: opts.calendarHooks,
       rubrics: opts.rubrics,
       timezone: opts.timezone,
-      verbose: opts.agentVerbose
+      verbose: opts.agentVerbose,
+      deadlineMs: opts.deadlineMs
     });
     return result.strategy;
   } catch (e) {

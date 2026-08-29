@@ -722,10 +722,14 @@ export function createMotionOutputTools(opts: {
 					.min(2)
 					.max(MAX_MUSIC_SECONDS)
 					.describe(
-						`The composition’s length, so the response can tell you whether to loop. The clip itself is always ~${MUSIC_CLIP_SECONDS}s.`
-					)
+						`The composition’s length, so the response can tell you whether to loop. Clip beds are always ~${MUSIC_CLIP_SECONDS}s; Pro uses the duration you asked for.`
+					),
+				tier: z
+					.enum(['clip', 'pro'])
+					.optional()
+					.describe('clip (default, ~30s, loop if longer) or pro (real duration, higher cost).')
 			}),
-			execute: async (input: { prompt: string; seconds: number }) => {
+			execute: async (input: { prompt: string; seconds: number; tier?: 'clip' | 'pro' }) => {
 				if (musics >= MAX_MUSIC_PER_TURN) {
 					return { error: 'music_budget_spent', hint: `Already generated ${MAX_MUSIC_PER_TURN} beds this turn.` };
 				}
@@ -737,6 +741,7 @@ export function createMotionOutputTools(opts: {
 						userId: opts.userId,
 						prompt: input.prompt,
 						seconds: input.seconds,
+						tier: input.tier ?? 'clip',
 						abortSignal: opts.abortSignal
 					});
 					return {
@@ -745,7 +750,7 @@ export function createMotionOutputTools(opts: {
 						did_not_change_source: true,
 						hint: [
 							'One <Audio> at the top of the composition, with a low volume so the voice stays in front — around 0.15–0.25 under a voice-over, up to 0.5 with no voice.',
-							input.seconds > MUSIC_CLIP_SECONDS
+							(input.tier ?? 'clip') === 'clip' && input.seconds > MUSIC_CLIP_SECONDS
 								? `The bed is ~${MUSIC_CLIP_SECONDS}s and your composition is longer: add loop on that <Audio> so it repeats to the end.`
 								: ''
 						]

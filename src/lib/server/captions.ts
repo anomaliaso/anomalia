@@ -19,14 +19,11 @@
  * So the model supplies word order and relative timing, and the waveform supplies the anchors the
  * whole thing is rescaled onto.
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { env } from '$env/dynamic/private';
-import { loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { llmConfigured, llmStructured } from '$lib/server/llm';
 import { ensureFfmpegPath } from '$lib/server/ffmpeg-bin';
 
 // 720px wide at font size 54 fits ~14 uppercase characters. Chunking by CHARACTER rather than word
@@ -146,38 +143,38 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 }
 
 async function transcribe(mp3: Buffer): Promise<Cue[]> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) return [];
-  const ai = googleGenaiClient();
-  const res = await loggedGemini('captions.transcribe', () =>
-    ai.models.generateContent({
-      model: geminiFlash(),
-      config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS },
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { inlineData: { mimeType: 'audio/mp3', data: mp3.toString('base64') } },
-            {
-              text: `Transcribe the speech in this audio. Split it into SHORT phrases of at most 4 words each.
-Return ONLY a JSON array, no prose, no markdown fence: [{"start": <seconds>, "end": <seconds>, "text": "<phrase>"}]
-Timings must be precise to a tenth of a second and must match when each phrase is actually spoken.
-Transcribe what is ACTUALLY said, not what you expect. Do not include pauses, filler, or anything not spoken.`
-            }
-          ]
+  if (!llmConfigured()) return [];
+  const CUE_SCHEMA = {
+    type: 'object' as const,
+    properties: {
+      cues: {
+        type: 'array' as const,
+        items: {
+          type: 'object' as const,
+          properties: {
+            start: { type: 'number' as const },
+            end: { type: 'number' as const },
+            text: { type: 'string' as const }
+          },
+          required: ['start', 'end', 'text']
         }
-      ]
-    })
-  );
-  const text = (res.text ?? '').trim();
-  const open = text.indexOf('[');
-  const close = text.lastIndexOf(']');
-  if (open < 0 || close <= open) return [];
+      }
+    },
+    required: ['cues']
+  };
   try {
-    const parsed = JSON.parse(text.slice(open, close + 1));
-    return Array.isArray(parsed)
-      ? parsed
-          .map((c: { start?: unknown; end?: unknown; text?: unknown }) => ({
+    const parsed = await llmStructured<{ cues?: Array<{ start?: unknown; end?: unknown; text?: unknown }> }>({
+      prompt: `Transcribe the speech in this audio. Split it into SHORT phrases of at most 4 words each.
+Return JSON { "cues": [{"start": <seconds>, "end": <seconds>, "text": "<phrase>"}] }.
+Timings must be precise to a tenth of a second and must match when each phrase is actually spoken.
+Transcribe what is ACTUALLY said, not what you expect. Do not include pauses, filler, or anything not spoken.`,
+      schema: CUE_SCHEMA,
+      file: { mediaType: 'audio/mp3', data: mp3.toString('base64') },
+      label: 'captions.transcribe'
+    });
+    return Array.isArray(parsed.cues)
+      ? parsed.cues
+          .map((c) => ({
             start: Number(c.start),
             end: Number(c.end),
             text: String(c.text ?? '')

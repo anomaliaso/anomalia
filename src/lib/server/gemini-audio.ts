@@ -13,22 +13,30 @@
  * Gli id dei modelli si leggono dall'ambiente: la suite audio di Gemini si muove più in fretta
  * della nostra release, e un id cablato costa un deploy mentre una variabile costa un minuto.
  */
-import type { GoogleGenAI } from '@google/genai';
-import { googleGenaiClient } from '$lib/server/gemini';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { spawnSync } from 'node:child_process';
+import { writeFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { env } from '$env/dynamic/private';
 import { logAiCall } from '$lib/server/ai-log';
 import { generateSpeechOnKie, kieFlatCostUsd, kieTtsModel } from '$lib/server/kie-jobs';
 import { route } from '$lib/server/model-routing';
+import {
+	LYRIA_CLIP_SECONDS,
+	LYRIA_COST_USD,
+	llmChatCompletions,
+	lyriaModel,
+	musicBytesFromChatCompletion,
+	type MusicTier
+} from '$lib/server/llm';
 import {
 	TTS_PCM,
 	cutAtSeconds,
 	findGaps,
 	pcmFromWav,
 	planCuts,
-	samplesFromPcm,
 	sliceToWav,
-	wavFromPcm,
 	type DroppedCut,
 	type Gap
 } from '$lib/server/voiceover-cut';
@@ -38,12 +46,9 @@ export function ttsModel(): string {
 	return env.GEMINI_TTS_MODEL?.trim() || 'gemini-2.5-flash-preview-tts';
 }
 
-/**
- * Lyria 3: una richiesta, un MP3. `lyria-3-pro-preview` esiste (canzoni di minuti, $0.08) ma per
- * un letto da 20 secondi è spreco — si imposta da qui il giorno in cui servirà.
- */
+/** Alias del clip Lyria sul centralino (test / log). */
 export function musicModel(): string {
-	return env.GEMINI_MUSIC_MODEL?.trim() || 'lyria-3-clip-preview';
+	return lyriaModel('clip');
 }
 
 /**
@@ -109,12 +114,6 @@ export async function withRetry<T>(fn: () => Promise<T>, retryable: (e: unknown)
 		await new Promise((r) => setTimeout(r, 1500));
 		return fn();
 	}
-}
-
-function client(): GoogleGenAI {
-	const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-	if (!apiKey) throw new Error('GEMINI_API_KEY is not configured — no audio can be generated.');
-	return googleGenaiClient();
 }
 
 /**
@@ -187,24 +186,13 @@ export async function generateVoiceOver(opts: {
 	if (!lines.length) throw new Error('No lines to read.');
 	const voice = opts.voice && isVoiceOverVoice(opts.voice) ? opts.voice : DEFAULT_VOICE;
 	/**
-	 * La voce passa da kie e COSTA DI PIÙ (~3× a parità di battuta, misurato sui crediti): non è un
-	 * risparmio, serve a togliere una dipendenza dalla API di Google. Ogni altro spostamento su kie
-	 * ha abbassato il conto, questo no.
-	 * `AI_ROUTE_TTS=gemini-tts@google` la rimette su Google senza deploy.
+	 * La voce passa da kie: il centralino non fa TTS. Un endpoint diverso si ferma qui, senza
+	 * cadere sullo SDK Google.
 	 */
 	const useKie = route('tts').endpoint === 'kie';
 	const model = useKie ? kieTtsModel() : ttsModel();
 	let credits: number | undefined;
 	const t0 = Date.now();
-
-	/**
-	 * Un 500 `INTERNAL` qui non è una diagnosi: il messaggio di Google stessa dice "Please retry".
-	 * Se fallisce due volte allora è nostro, e l'errore arriva all'agente col corpo dentro.
-	 */
-	const transient = (e: unknown): boolean => {
-		const m = e instanceof Error ? e.message : String(e);
-		return /\b(429|500|502|503|504)\b|INTERNAL|UNAVAILABLE|RESOURCE_EXHAUSTED/i.test(m);
-	};
 
 	/**
 	 * Il caricamento sta DENTRO il try apposta: fuori, uno storage che rifiuta il file lancia senza
@@ -224,7 +212,7 @@ export async function generateVoiceOver(opts: {
 				languageCode: opts.languageCode,
 				signal: opts.abortSignal
 			});
-			if (!spoken) throw new Error('kie returned no audio. Set TTS_PROVIDER=gemini to fall back.');
+			if (!spoken) throw new Error('kie returned no audio.');
 			credits = spoken.credits;
 			// Il taglio a valle assume L16 24 kHz mono e lo assume in SILENZIO: un WAV a 48 kHz
 			// stereo non fallisce, produce pezzi lunghi la metà e una voce al doppio della velocità.
@@ -242,30 +230,7 @@ export async function generateVoiceOver(opts: {
 			// Il WAV di kie è già valido e il suo URL vive 24h: si carica subito.
 			fullUrl = await uploadAudio(opts.supabase, opts.brandId, spoken.wav, 'full');
 		} else {
-			const res = await withRetry(() => client().models.generateContent({
-				model,
-				contents: buildVoiceOverPrompt(lines, opts.style),
-				config: {
-					responseModalities: ['AUDIO'],
-					speechConfig: {
-						voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName(voice) } },
-						...(opts.languageCode ? { languageCode: opts.languageCode } : {})
-					},
-					abortSignal: opts.abortSignal
-				} as never
-			}), transient);
-			const inline = res.candidates?.[0]?.content?.parts?.find(
-				(p: { inlineData?: { data?: string } }) => p.inlineData?.data
-			) as { inlineData?: { data?: string } } | undefined;
-			const b64 = inline?.inlineData?.data;
-			if (!b64) {
-				throw new Error(
-					`${model} returned no audio. If this model id is wrong for the current Gemini suite, set GEMINI_TTS_MODEL.`
-				);
-			}
-			const pcm = new Uint8Array(Buffer.from(b64, 'base64'));
-			samples = samplesFromPcm(pcm);
-			fullUrl = await uploadAudio(opts.supabase, opts.brandId, wavFromPcm(pcm), 'full');
+			throw new Error('TTS is kie-only. Google speech is not on the gateway.');
 		}
 	} catch (e) {
 		logAiCall({
@@ -380,43 +345,28 @@ export async function cutVoiceOver(opts: {
  * clip più lunga: Remotion sa ripetere (`<Audio loop>`).
  */
 export const MAX_MUSIC_SECONDS = 90;
-/** La durata della clip di Lyria 3, documentata e verificata (30.77 s misurati). */
-export const MUSIC_CLIP_SECONDS = 30;
-/** Prezzo pubblicato, per clip e non per token. */
-const MUSIC_COST_USD: Record<string, number> = {
-	'lyria-3-clip-preview': 0.04,
-	'lyria-3-pro-preview': 0.08
-};
+/** Clip Lyria: 30s fisse. Pro: durata reale del file (o i secondi chiesti se non si legge). */
+export const MUSIC_CLIP_SECONDS = LYRIA_CLIP_SECONDS;
 
-/**
- * I byte della clip: `steps[] → content[] → { type:'audio', data:<base64> }`, con eventuali blocchi
- * di testo prima. Il controllo guarda i BYTE e non il mime dichiarato — la pipeline carica `.mp3` e
- * Remotion lo suona com'è, quindi un file che non è MP3 deve fermarsi qui, non diventare un video
- * muto.
- */
-export function musicFromInteraction(body: unknown): Uint8Array {
-	type Block = { type?: string; data?: string; mime_type?: string };
-	const steps = (body as { steps?: Array<{ type?: string; content?: Block[] }> })?.steps ?? [];
-	for (const step of steps) {
-		if (step?.type !== 'model_output') continue;
-		for (const block of step.content ?? []) {
-			if (block?.type !== 'audio' || !block.data) continue;
-			const bytes = new Uint8Array(Buffer.from(block.data, 'base64'));
-			// MP3: tag ID3 in testa, oppure direttamente il frame sync MPEG (0xFFEx).
-			const isMp3 =
-				(bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) ||
-				(bytes[0] === 0xff && (bytes[1]! & 0xe0) === 0xe0);
-			if (!isMp3) {
-				throw new Error(
-					`The music model returned ${block.mime_type ?? 'unknown'} audio that is not MP3 — the pipeline stores .mp3. Check GEMINI_MUSIC_MODEL.`
-				);
-			}
-			return bytes;
-		}
+/** Durata reale di un MP3, se ffmpeg è in PATH. Nessun helper dedicato esiste altrove. */
+function probeMp3Duration(mp3: Uint8Array): number | null {
+	let dir: string | undefined;
+	try {
+		dir = mkdtempSync(join(tmpdir(), 'lyria-'));
+		const file = join(dir, 'a.mp3');
+		writeFileSync(file, mp3);
+		const r = spawnSync('ffmpeg', ['-hide_banner', '-i', file], { encoding: 'utf8' });
+		const m = `${r.stderr ?? ''}${r.stdout ?? ''}`.match(/Duration: (\d+):(\d+):([0-9.]+)/);
+		return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : null;
+	} catch {
+		return null;
+	} finally {
+		if (dir) rmSync(dir, { recursive: true, force: true });
 	}
-	throw new Error(
-		'The music model returned no audio. If this model id is wrong for the current Gemini suite, set GEMINI_MUSIC_MODEL.'
-	);
+}
+
+export function musicFromInteraction(body: unknown): Uint8Array {
+	return musicBytesFromChatCompletion(body);
 }
 
 /** Come il `transient` del voice-over: un tentativo in più solo su ciò che si dichiara passeggero. */
@@ -429,57 +379,46 @@ export async function generateMusicBed(opts: {
 	userId?: string;
 	prompt: string;
 	seconds: number;
+	tier?: MusicTier;
 	abortSignal?: AbortSignal;
 }): Promise<{ url: string; durationSeconds: number }> {
 	const seconds = Math.max(2, Math.min(MAX_MUSIC_SECONDS, Math.round(opts.seconds)));
-	const model = musicModel();
+	const tier: MusicTier = opts.tier === 'pro' ? 'pro' : 'clip';
+	const model = lyriaModel(tier);
 	const t0 = Date.now();
 
-	/** Il fallimento si registra come il successo: una riga sempre, o la musica fallita è invisibile. */
 	const logFailure = (e: unknown) => {
 		logAiCall({
 			label: 'music',
-			provider: 'gemini',
+			provider: 'llm',
 			model,
 			ms: Date.now() - t0,
 			ok: false,
 			brandId: opts.brandId,
 			userId: opts.userId,
 			error: errorMessage(e).slice(0, 800),
-			context: `music:${seconds}s`
+			context: `music:${tier}:${seconds}s`
 		});
 	};
 
 	let mp3: Uint8Array;
 	try {
-		const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-		if (!apiKey) throw new Error('GEMINI_API_KEY is not configured — no audio can be generated.');
-		const body = await withRetry(async () => {
-			const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-				method: 'POST',
-				headers: { 'x-goog-api-key': apiKey, 'content-type': 'application/json' },
-				body: JSON.stringify({ model, input: opts.prompt }),
-				// Risponde in ~12 s: 120 è il margine oltre il quale è meglio un errore di un'attesa.
-				signal: AbortSignal.any([
-					...(opts.abortSignal ? [opts.abortSignal] : []),
-					AbortSignal.timeout(120_000)
-				])
-			});
-			if (!res.ok) {
-				const detail = (await res.text().catch(() => '')).slice(0, 300);
-				throw new Error(
-					`${model} answered ${res.status}. ${detail} If this model id is wrong for the current Gemini suite, set GEMINI_MUSIC_MODEL.`
-				);
-			}
-			return res.json();
-		}, transientMusicError);
-		mp3 = musicFromInteraction(body);
+		const body = await withRetry(
+			() =>
+				llmChatCompletions({
+					model,
+					prompt: opts.prompt,
+					timeoutMs: tier === 'pro' ? 180_000 : 120_000,
+					abortSignal: opts.abortSignal
+				}),
+			transientMusicError
+		);
+		mp3 = musicBytesFromChatCompletion(body);
 	} catch (e) {
 		logFailure(e);
 		throw e;
 	}
 
-	// MP3 com'è: <Audio src> lo suona senza transcodifica.
 	const path = `${opts.brandId}/music/${crypto.randomUUID()}.mp3`;
 	const { error } = await opts.supabase.storage
 		.from('media')
@@ -492,22 +431,18 @@ export async function generateMusicBed(opts: {
 
 	logAiCall({
 		label: 'music',
-		provider: 'gemini',
+		provider: 'llm',
 		model,
 		ms: Date.now() - t0,
 		ok: true,
 		brandId: opts.brandId,
 		userId: opts.userId,
-		// Un modello sovrascritto che non conosciamo resta senza costo: un buco visibile vale più di
-		// un numero inventato.
-		flatCostUsd: MUSIC_COST_USD[model],
-		context: `music:${seconds}s`
+		flatCostUsd: LYRIA_COST_USD[model],
+		context: `music:${tier}:${seconds}s`
 	});
 
 	return {
 		url: opts.supabase.storage.from('media').getPublicUrl(path).data.publicUrl,
-		// La durata documentata, non i byte: un MP3 non la porta in testa come un WAV, e il reale
-		// ~30.8 s finisce oltre la fine del loop, mai prima.
-		durationSeconds: MUSIC_CLIP_SECONDS
+		durationSeconds: tier === 'clip' ? MUSIC_CLIP_SECONDS : probeMp3Duration(mp3) ?? seconds
 	};
 }

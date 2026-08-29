@@ -1,5 +1,4 @@
 import { json } from '@sveltejs/kit';
-import { googleGenaiClient } from '$lib/server/gemini';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 
@@ -49,11 +48,8 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   try {
     const { discoverCompetitors } = await import('$lib/server/research');
-    const { GoogleGenAI } = await import('@google/genai');
-    const { env } = await import('$env/dynamic/private');
 
-    const genai = googleGenaiClient();
-    const { competitors: discovered } = await discoverCompetitors(genai, profile, 'italiano');
+    const { competitors: discovered } = await discoverCompetitors(null as never, profile, 'italiano');
 
     // Deduplicate and insert
     let added = 0;

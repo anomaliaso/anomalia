@@ -28,11 +28,9 @@
  * missing the module still works — it just pays for the watch every time.
  */
 import { swallow } from '$lib/server/swallow';
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
-import { getBrandContext, loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, genaiThinking, googleGenaiClient } from '$lib/server/gemini';
+import { getBrandContext } from '$lib/server/ai-log';
+import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { fetchVideoBytes, prepareReviewMedia } from '$lib/server/video-review';
 import {
@@ -569,8 +567,7 @@ export async function studyMotionReference(opts: {
   | { ok: false; error: string }
 > {
   if (!isPostsDesignEnabled()) return { ok: false, error: 'reference_wall_disabled' };
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) return { ok: false, error: 'gemini_unconfigured' };
+  if (!llmConfigured()) return { ok: false, error: 'gemini_unconfigured' };
 
   const entry = await findEntry(opts.idOrSlug);
   if (!entry) return { ok: false, error: 'unknown_reference' };
@@ -604,63 +601,32 @@ export async function studyMotionReference(opts: {
   if (opts.abortSignal?.aborted) return { ok: false, error: 'aborted' };
   if (!media) return { ok: false, error: 'media_unavailable' };
 
-  const parts: Array<Record<string, unknown>> = [];
-  for (const f of media.frames) {
-    if (f.label) parts.push({ text: f.label });
-    parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
-  }
-  if (media.clipMp4) {
-    parts.push({ text: 'FULL CLIP (watch the scene changes in order):' });
-    parts.push({
-      inlineData: { mimeType: 'video/mp4', data: media.clipMp4 },
-      videoMetadata: { fps: 4 }
-    });
-  }
+  const frameNote = media.frames.map((f, i) => `${i + 1}. ${f.label || `frame ${i + 1}`}`).join('\n');
 
   try {
-// GIUDICE VIDEO — SEMPRE GOOGLE, MAI IL TRASPORTO kie.
-    // kie ignora `videoMetadata.fps`: a fps 1 e a fps 4 la risposta conta 388 token di prompt
-    // contro i 1627 di Google, cioè guarda ~1 fotogramma al secondo qualunque cosa gli si chieda.
-    // Un giudice che valuta easing e transizioni su un fotogramma al secondo non fallisce: emette
-    // verdetti sbagliati e sicuri di sé. Per questo il client è costruito con googleGenaiClient(),
-    // che non guarda GEMINI_TRANSPORT.
-    const ai = googleGenaiClient();
-    const res = await loggedGemini('motion.reference_study', () =>
-      ai.models.generateContent({
-        model: geminiFlash(),
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: studyPrompt({
-                  medium: media.medium,
-                  brandName: opts.brandName,
-                  language: opts.language,
-                  ref,
-                  duration: media.durationS
-                })
-              },
-              ...parts
-            ]
-          }
-        ],
-        config: {
-          maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-          responseMimeType: 'application/json',
-          responseSchema: SPEC_SCHEMA,
-          thinkingConfig: genaiThinking()
-        }
-      })
-    );
-    let raw: AnyRec | null = null;
-    try {
-      const parsed = JSON.parse((res.text ?? '').trim());
-      raw = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as AnyRec) : null;
-    } catch {
-      raw = null;
-    }
-    if (!raw) return { ok: false, error: 'model_parse_failed' };
+    // QC video sul centralino (`llmVideoReviewerModel`): kie ignorava `videoMetadata.fps: 4`.
+    const prompt = [
+      studyPrompt({
+        medium: media.medium,
+        brandName: opts.brandName,
+        language: opts.language,
+        ref,
+        duration: media.durationS
+      }),
+      frameNote ? `\nSTILLS (in order):\n${frameNote}` : '',
+      media.clipMp4 ? '\nFULL CLIP is attached (watch the scene changes in order).' : ''
+    ]
+      .filter(Boolean)
+      .join('');
+    const raw = (await llmStructured<AnyRec>({
+      prompt,
+      schema: SPEC_SCHEMA,
+      images: media.frames.map((f) => ({ mediaType: f.mimeType, data: f.data })),
+      file: media.clipMp4 ? { mediaType: 'video/mp4', data: media.clipMp4 } : undefined,
+      model: llmVideoReviewerModel(),
+      label: 'motion.reference_study'
+    })) as AnyRec | null;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'model_parse_failed' };
     const spec = finalizeSpec(raw, media.durationS);
     if (admin) await writeCachedSpec(admin, ref, media.medium, spec).catch((error) => { swallow('cache motion spec', error); return undefined; });
     return {

@@ -3,36 +3,30 @@
  *
  * `motion-video/model.ts` l'ha fissata per il motion: il tier di questo mestiere è il PRO del
  * provider attivo (il fast ha già dimostrato di non saperlo fare — 23 minuti, zero output),
- * con la scappatoia esplicita in env e il fallback dichiarato su Gemini. Le rese dei video
+ * con la scappatoia esplicita in env e il fallback dichiarato sul centralino. Le rese dei video
  * generativi/UGC sono lo stesso mestiere: stessa fabbrica, stesso ragionamento, zero copie.
  */
 import { env } from '$env/dynamic/private';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import { harnessSdkModel } from '$lib/agent/bridge/adapters';
-import { geminiFlash } from '$lib/server/gemini';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 
 export type CraftAgentModel = {
 	model: LanguageModel;
 	modelId: string;
-	provider: 'gemini' | 'kie' | 'openrouter' | 'opencode';
+	provider: 'gemini' | 'kie' | 'openrouter' | 'opencode' | 'llm';
 };
-
-function google(id: string): LanguageModel {
-	return createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY })(id);
-}
 
 export function craftAgentModel(opts: {
 	/** La scappatoia esplicita del mestiere (es. MOTION_VIDEO_MODEL / UGC_VIDEO_MODEL). */
 	envModel: string | undefined;
-	/** Il fallback dichiarato: senza nessun provider si cade qui, e lo si dice. */
-	fallbackId: string;
 }): CraftAgentModel {
 	const forced = opts.envModel?.trim();
-	if (forced) return { model: google(forced), modelId: forced, provider: 'gemini' };
+	if (forced) return { model: llmLanguageModel(forced), modelId: forced, provider: 'llm' };
 
 	const routed = harnessSdkModel('pro');
 	if (routed) return routed;
 
-	return { model: google(opts.fallbackId), modelId: opts.fallbackId, provider: 'gemini' };
+	const id = llmDefaultModel();
+	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }

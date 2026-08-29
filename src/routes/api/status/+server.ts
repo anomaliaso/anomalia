@@ -45,29 +45,24 @@ async function checkSupabase(): Promise<ServiceCheck> {
 // tutte e due sono giù per davvero, ed è giusto che si vedano tutte e due rosse.
 async function checkAiText(): Promise<ServiceCheck> {
   return timed('ai:text', async () => {
-    const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
+    const key = env.LLM_API_KEY?.trim();
     if (!key) throw new Error('text model API key not set');
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`,
-      { method: 'GET', signal: AbortSignal.timeout(10_000) }
-    );
-    if (res.status === 400 || res.status === 403) throw new Error('API key invalid or rejected');
+    const base = (env.LLM_BASE_URL?.trim() || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+    const res = await fetch(`${base}/models`, {
+      method: 'GET',
+      headers: { authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10_000)
+    });
+    if (res.status === 400 || res.status === 401 || res.status === 403) throw new Error('API key invalid or rejected');
     if (res.status >= 500) throw new Error(`text model API returned ${res.status}`);
   });
 }
 
-// Multimodal + image generation, and the fallback whenever the text model does not conform.
+// Pixel generation (Kie images) — not the text gateway.
 async function checkAiVision(): Promise<ServiceCheck> {
   return timed('ai:vision', async () => {
-    const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-    if (!key) throw new Error('vision model API key not set');
-    // Lightweight check: hit the models endpoint to verify the key works
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`,
-      { method: 'GET', signal: AbortSignal.timeout(10_000) }
-    );
-    if (res.status === 400 || res.status === 403) throw new Error('API key invalid or rejected');
-    if (res.status >= 500) throw new Error(`vision model API returned ${res.status}`);
+    const key = env.KIE_API_KEY?.trim();
+    if (!key) throw new Error('image/video API key not set');
   });
 }
 

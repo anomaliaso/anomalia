@@ -1,11 +1,11 @@
-import { GEMINI_MAX_OUTPUT_TOKENS, XIAOMI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
+import { XIAOMI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
-import { structuredGemini } from '$lib/server/research';
 import { structuredKie, textKie } from '$lib/server/kie';
-import { logAiCall, extractXiaomiUsage, extractGeminiUsage, requireBrandContext } from '$lib/server/ai-log';
-import { flashModelFor, geminiFlash, googleGenaiClient, isKieTransport, type GeminiThinkingLevel } from '$lib/server/gemini';
+import { logAiCall, extractXiaomiUsage, requireBrandContext } from '$lib/server/ai-log';
+import { geminiFlash, type GeminiThinkingLevel } from '$lib/server/gemini';
 import { env } from '$env/dynamic/private';
 import { route } from '$lib/server/model-routing';
+import { llmImagesFromInline, llmStructured, llmText } from '$lib/server/llm';
 
 // ── Xiaomi MiMo structured output via tool calling ──────────────────────────
 // Shared module used by GTM engine, strategy report, editorial plan, etc.
@@ -222,7 +222,7 @@ export async function structuredXiaomi<T>(
 // `opts.provider` forces a specific provider for this call (e.g. blog writing → xiaomi + cheap pro).
 // `opts.noFallback` skips the Gemini safety net when set.
 export async function aiStructured<T>(
-  ai: GoogleGenAI,
+  _ai: GoogleGenAI,
   prompt: string,
   schema: AnyRec,
   systemInstruction?: string,
@@ -247,7 +247,7 @@ export async function aiStructured<T>(
           ? 'xiaomi'
           : 'gemini';
   const t0 = Date.now();
-  const { images, temperature, model, provider: _forced, noFallback, thinkingLevel, ...logExtras } = opts ?? {};
+  const { images, temperature, model, provider: _forced, noFallback, thinkingLevel: _thinkingLevel, ...logExtras } = opts ?? {};
 
   // Il lavoro strutturato di sfondo va su Gemini Flash, e basta.
   //
@@ -263,60 +263,50 @@ export async function aiStructured<T>(
   // `deepseekAlive()` / `noteDeepseekFailure()` in deepseek.ts spengono il provider per il
   // processo al primo 401/402, invece di riprovare all'infinito.
   console.log(`[AI] structured call → ${provider}${opts?.model ? ` (${opts.model})` : ''}`);
-  const geminiOn = (client: GoogleGenAI) => structuredGemini<T>(client, prompt, schema, systemInstruction, { label: toolName, images, temperature, thinkingLevel, ...logExtras });
-  // Il ramo Gemini non ha mai controllato la conformità: con Google non serviva, perché
-  // responseSchema è vincolante lato server. Su kie sì, ed è un guasto MISURATO: quando la
-  // risposta viene troncata torna `finishReason: STOP` con `parts: []`, quindi `res.text` è
-  // undefined e il chiamante riceve `{}` che sembra un successo. Su un cron ogni 2 minuti non se
-  // ne accorge nessuno per una settimana. Stesso `satisfiesSchema` degli altri provider, e una
-  // sola ripetizione su Google: se sbaglia anche Google, il problema è la richiesta, non il trasporto.
-  const gemini = async (): Promise<T> => {
-    const out = await geminiOn(ai);
-    if (!isKieTransport(ai) || satisfiesSchema(out, schema)) return out;
-    console.warn('[AI] gemini via kie did not satisfy the schema, retrying once on Google');
-    return await geminiOn(googleGenaiClient());
-  };
+  const viaLlm = () =>
+    llmStructured<T>({
+      prompt,
+      schema,
+      system: systemInstruction,
+      images: llmImagesFromInline(images),
+      temperature,
+      model,
+      label: toolName
+    });
   const secondary = provider === 'kie'
     ? () => structuredKie<T>(prompt, schema, systemInstruction, toolName, logExtras, images, temperature, model)
     : () => structuredXiaomi<T>(prompt, schema, systemInstruction, toolName, logExtras, images, temperature, model);
   try {
     if (provider === 'xiaomi' || provider === 'kie') {
       const result = await secondary();
-      // Fall back on a result that is EMPTY *or* missing a required field — not just empty.
-      // An "empty" check alone lets a partial object through as success, and the caller then
-      // throws on the missing key (live: MiMo's vision tier returned a brand profile with
-      // colours, audience and language but no `name`, and onboarding died with "LLM returned
-      // invalid brand profile" while Gemini sat right there able to answer). This is the same
-      // conformance test the DeepSeek branch above already applies — the two providers had no
-      // business being held to different standards.
       if (!satisfiesSchema(result, schema)) {
         if (noFallback) {
-          console.warn(`[AI] ${provider} returned an unusable result (no Gemini fallback)`);
+          console.warn(`[AI] ${provider} returned an unusable result (no LLM fallback)`);
           return {} as T;
         }
-        console.warn(`[AI] ${provider} did not satisfy the schema, falling back to Gemini`);
-        const fallback = await gemini();
-        console.log(`[AI] gemini fallback responded in ${Date.now() - t0}ms`);
+        console.warn(`[AI] ${provider} did not satisfy the schema, falling back to the LLM gateway`);
+        const fallback = await viaLlm();
+        console.log(`[AI] llm fallback responded in ${Date.now() - t0}ms`);
         return fallback;
       }
       console.log(`[AI] ${provider} responded in ${Date.now() - t0}ms`);
       return result;
     }
-    const result = await gemini();
-    console.log(`[AI] gemini responded in ${Date.now() - t0}ms`);
+    const result = await viaLlm();
+    console.log(`[AI] llm responded in ${Date.now() - t0}ms`);
     return result;
   } catch (err) {
     if (provider === 'xiaomi' || provider === 'kie') {
       if (noFallback) {
-        console.error(`[AI] ${provider} failed (no Gemini fallback):`, err);
+        console.error(`[AI] ${provider} failed (no LLM fallback):`, err);
         throw err;
       }
-      console.warn(`[AI] ${provider} failed, falling back to Gemini:`, err);
-      const fallback = await gemini();
-      console.log(`[AI] gemini fallback responded in ${Date.now() - t0}ms`);
+      console.warn(`[AI] ${provider} failed, falling back to the LLM gateway:`, err);
+      const fallback = await viaLlm();
+      console.log(`[AI] llm fallback responded in ${Date.now() - t0}ms`);
       return fallback;
     }
-    console.error(`[AI] gemini failed after ${Date.now() - t0}ms:`, err);
+    console.error(`[AI] llm failed after ${Date.now() - t0}ms:`, err);
     throw err;
   }
 }
@@ -371,7 +361,7 @@ export async function textXiaomi(
 
 // Provider-aware free-text call with Gemini fallback. Supports image inputs on both paths.
 export async function aiText(
-  ai: GoogleGenAI,
+  _ai: GoogleGenAI | undefined,
   prompt: string,
   systemInstruction?: string,
   opts?: { label?: string; images?: ImagePart[] } & AiLogExtras
@@ -381,34 +371,14 @@ export async function aiText(
   const t0 = Date.now();
   const { label = 'text', images, ...logExtras } = opts ?? {};
 
-  // Stessa regola di `aiStructured`: il testo di sfondo va su Gemini Flash. Vedi lì il perché.
-  // One logged Gemini text call, shared by the direct path and secondary-provider fallbacks.
-  const geminiText = async (client: GoogleGenAI): Promise<string> => {
-    const g0 = Date.now();
-    // L'id del modello segue il client: su kie il passthrough vuole `gemini-3-7-flash`.
-    const modelId = flashModelFor(client);
-    try {
-      const res = await client.models.generateContent({ model: modelId, config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS, ...(systemInstruction ? { systemInstruction } : {}) }, contents: [{ role: 'user', parts: [{ text: prompt }, ...(images ?? [])] }] });
-      const usage = extractGeminiUsage(res);
-      logAiCall({ label, provider: 'gemini', model: modelId, prompt, ms: Date.now() - g0, ok: true, ...usage, ...logExtras, brandId: logExtras.brandId ?? brandId ?? undefined });
-      return (res.text ?? '').trim();
-    } catch (e) {
-      logAiCall({ label, provider: 'gemini', model: modelId, prompt, ms: Date.now() - g0, ok: false, error: e instanceof Error ? e.message : String(e), ...logExtras, brandId: logExtras.brandId ?? brandId ?? undefined });
-      throw e;
-    }
-  };
-  // Su kie, un troncamento torna `finishReason: STOP` con `parts: []`: nessun errore, testo vuoto.
-  // Una sola ripetizione su Google, e poi basta — è la stessa rete che aiStructured stende sotto
-  // le chiamate JSON, per lo stesso guasto.
-  const geminiTextWithRetry = async (): Promise<string> => {
-    const out = await geminiText(ai).catch((e) => {
-      if (!isKieTransport(ai)) throw e;
-      console.warn('[AI] gemini via kie failed, retrying once on Google:', e);
-      return '';
+  const viaLlm = async (): Promise<string> => {
+    const r = await llmText({
+      prompt,
+      system: systemInstruction,
+      images: llmImagesFromInline(images),
+      label
     });
-    if (out || !isKieTransport(ai)) return out;
-    console.warn('[AI] gemini via kie returned empty text, retrying once on Google');
-    return await geminiText(googleGenaiClient());
+    return r.text.trim();
   };
   try {
     if (provider === 'xiaomi' || provider === 'kie') {
@@ -417,19 +387,19 @@ export async function aiText(
         ? await textKie(prompt, systemInstruction, secondaryOpts)
         : await textXiaomi(prompt, systemInstruction, secondaryOpts);
       if (!result.trim()) {
-        console.warn(`[AI] ${provider} text returned empty, falling back to Gemini`);
-        return await geminiTextWithRetry();
+        console.warn(`[AI] ${provider} text returned empty, falling back to the LLM gateway`);
+        return await viaLlm();
       }
       console.log(`[AI] ${provider} text responded in ${Date.now() - t0}ms`);
       return result;
     }
-    const out = await geminiTextWithRetry();
-    console.log(`[AI] gemini text responded in ${Date.now() - t0}ms`);
+    const out = await viaLlm();
+    console.log(`[AI] llm text responded in ${Date.now() - t0}ms`);
     return out;
   } catch (err) {
     if (provider === 'xiaomi' || provider === 'kie') {
-      console.warn(`[AI] ${provider} text failed, falling back to Gemini:`, err);
-      return await geminiTextWithRetry();
+      console.warn(`[AI] ${provider} text failed, falling back to the LLM gateway:`, err);
+      return await viaLlm();
     }
     throw err;
   }

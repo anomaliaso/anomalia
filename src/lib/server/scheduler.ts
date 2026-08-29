@@ -184,7 +184,8 @@ export type AutopilotResult = {
 // row and the brand's failure counter.
 export async function runAutopilotForBrand(
   supabase: SupabaseClient,
-  brand: AutopilotBrand
+  brand: AutopilotBrand,
+  opts?: { deadlineMs?: number }
 ): Promise<AutopilotResult> {
   // Guard 1: il producer è un lavoro del roster (chiave 'autopilot'), non più il booleano
   // `brands.autopilot_enabled` — quel flag restava false per mesi e nessuno se ne accorgeva.
@@ -1051,7 +1052,8 @@ export async function runAutopilotForBrand(
           supabase,
           brandId: brand.id,
           weekIndex: weekIdx ?? undefined,
-          timezone: brand.timezone
+          timezone: brand.timezone,
+          deadlineMs: opts?.deadlineMs
         },
         count
       );

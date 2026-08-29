@@ -28,14 +28,12 @@ describe('ugcAgentModel — la resa UGC segue il provider attivo, non il flash c
 		expect(m.modelId).toBe('openai/gpt-5.6-sol');
 	});
 
-	it('UGC_VIDEO_MODEL è la scappatoia esplicita e vince sul provider', () => {
-		env.OPENROUTER_API_KEY = 'k';
-		env.CHAT_PROVIDER = 'openrouter';
-		env.OPENROUTER_PRO_MODEL = 'openai/gpt-5.6-sol';
-		env.UGC_VIDEO_MODEL = 'gemini-3.7-flash';
+	it('UGC_VIDEO_MODEL è la scappatoia esplicita e vince sul provider, via centralino', () => {
+		env.LLM_API_KEY = 'k';
+		env.UGC_VIDEO_MODEL = 'google/gemini-3.7-flash';
 		const m = ugcAgentModel();
-		expect(m.modelId).toBe('gemini-3.7-flash');
-		expect(m.provider).toBe('gemini');
+		expect(m.modelId).toBe('google/gemini-3.7-flash');
+		expect(m.provider).toBe('llm');
 	});
 
 	it('craftAgentModel è la stessa fabbrica del motion: nessuna seconda fonte di verità', async () => {
@@ -43,7 +41,7 @@ describe('ugcAgentModel — la resa UGC segue il provider attivo, non il flash c
 		env.OPENROUTER_API_KEY = 'k';
 		env.CHAT_PROVIDER = 'openrouter';
 		env.OPENROUTER_PRO_MODEL = 'openai/gpt-5.6-sol';
-		const viaShared = craftAgentModel({ envModel: env.UGC_VIDEO_MODEL, fallbackId: 'gemini-3.7-flash' });
+		const viaShared = craftAgentModel({ envModel: env.UGC_VIDEO_MODEL });
 		expect(viaShared.modelId).toBe('openai/gpt-5.6-sol');
 		expect(motionAgentModel().modelId).toBe('openai/gpt-5.6-sol');
 	});

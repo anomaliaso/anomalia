@@ -3,7 +3,7 @@ import { type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { logAiCall, extractGeminiUsage } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { geminiFlash } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
 import { upcomingTimelyHooks } from '$lib/server/thematic-calendar';
 import { normalizeContentFormat } from '$lib/content-formats';
@@ -12,8 +12,9 @@ import { guardrailsBlock } from '$lib/server/brand-guardrails';
 import { rubricsBrief, type Rubric } from '$lib/server/rubrics';
 import { knownSubredditsBlock } from '$lib/server/platform-hygiene';
 
-export function client() {
-  return googleGenaiClient();
+/** Dummy: structured()/testo ignorano il client; le immagini Google le costruisce images.ts. */
+export function client(): GoogleGenAI {
+  return null as unknown as GoogleGenAI;
 }
 
 // Ritenta su 429/503 con backoff esponenziale + jitter: la generazione immagini fa fan-out
@@ -196,7 +197,7 @@ export async function planStrategy(
   const hooks =
     calendarHooks !== undefined
       ? calendarHooks
-      : await upcomingTimelyHooks(ai, {
+      : await upcomingTimelyHooks({
           category: profile?.category,
           archetype: siteType,
           language: profile?.language

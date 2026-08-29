@@ -8,7 +8,7 @@ import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext } from '$lib/server/ai-log';
-import { judgeThinkingLevel } from '$lib/server/gemini';
+import { googleGenaiClient, judgeThinkingLevel } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
@@ -261,13 +261,16 @@ export async function renderPostImage(
     }
     throw new Error(`No image returned from kie (${imageModel}) after 2 attempts`);
   }
+  // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
+  const googleAi = googleGenaiClient();
+  void ai;
   // genWithRetry ritenta gli ERRORI, ma il modello risponde spesso 200 SENZA parte immagine — un
   // fallimento transitorio che lascia il post senza immagine. Qui si ritenta il render intero, e si
   // esce subito solo su un blocco di sicurezza, che non si risolve riprovando.
   const MAX_IMAGE_ATTEMPTS = 3;
   let lastInfo = '';
   for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
-    const res = await genWithRetry(() => ai.models.generateContent(req), 'renderPostImage', { model: imageModel });
+    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: imageModel });
     const found = imageFromResponse(res);
     if (found) return found;
     const out = res.candidates?.[0]?.content?.parts ?? [];

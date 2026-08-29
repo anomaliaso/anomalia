@@ -855,10 +855,11 @@ const GROUNDED_SYS = 'You are a helpful assistant answering a real user. Recomme
 // Get a grounded answer to the query from a specific engine. Same {text, sources} shape either way.
 // Each engine does its OWN web search — Exa is a separate engine, not a shared grounding layer.
 //
-// NEVER route this through groundedText(): that is a fallback CHAIN (Google grounding first, then
-// DeepSeek/Exa/Tavily), so it would answer as whichever link happened to respond and get recorded
+// NEVER route this through groundedText(): that is a fallback CHAIN (Exa, then DeepSeek, then
+// Tavily), so it would answer as whichever link happened to respond and get recorded
 // under whatever engine the caller asked for. This audit's whole output is per-engine share of
-// voice, so every branch must call one named provider directly.
+// voice, so every branch must call one named provider directly. Gemini uses the gateway plugin
+// `web` + `engine: native` (groundedGemini), not the Google SDK.
 async function groundedAnswer(engine: GeoEngine, ai: GoogleGenAI, query: string): Promise<{ text: string; sources: string[] }> {
   if (engine === 'deepseek') {
     const r = await deepseekGroundedAnswer(`${GROUNDED_SYS}\n\n${query}`);

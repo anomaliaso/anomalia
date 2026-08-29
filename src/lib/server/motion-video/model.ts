@@ -9,18 +9,17 @@
  *
  * Ora il modello esce dal provider attivo dell'harness, lo stesso che serve i turni di chat: un
  * posto solo decide su cosa gira il prodotto. `MOTION_VIDEO_MODEL` resta la scappatoia
- * esplicita, e senza nessun provider si cade su Gemini — dichiarandolo, perche` una riga di
+ * esplicita, e senza nessun provider si cade sul centralino (`llm`) — dichiarandolo, perche` una riga di
  * `ai_calls` che mente sul provider e` un conto che non torna.
  */
 import { env } from '$env/dynamic/private';
 import type { LanguageModel } from 'ai';
-import { geminiFlash } from '$lib/server/gemini';
 import { craftAgentModel } from '$lib/server/craft-model';
 
 export type MotionAgentModel = {
 	model: LanguageModel;
 	modelId: string;
-	provider: 'gemini' | 'kie' | 'openrouter' | 'opencode';
+	provider: 'gemini' | 'kie' | 'openrouter' | 'opencode' | 'llm';
 };
 
 /**
@@ -34,6 +33,6 @@ export type MotionAgentModel = {
  */
 export function motionAgentModel(): MotionAgentModel {
 	// La fabbrica è condivisa (craft-model.ts): stessa misura delle rese UGC, un posto solo
-	// che decide su cosa gira una resa. Il fallback su Gemini resta dichiarato.
-	return craftAgentModel({ envModel: env.MOTION_VIDEO_MODEL, fallbackId: geminiFlash() });
+	// che decide su cosa gira una resa. Il fallback sul centralino resta dichiarato.
+	return craftAgentModel({ envModel: env.MOTION_VIDEO_MODEL });
 }
