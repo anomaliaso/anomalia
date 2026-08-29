@@ -20,6 +20,11 @@ risolto dal selettore dei destinatari) con la persona come OVERLAY sul turno kit
 Modello: il ramo kit passava solo `threadRow.model`; ora porta anche la preferenza permanente
 dell'agente (`persona.model`), stessa `turnModelFamily` del classico.
 
+Difetto trovato al gate del ticket 2: il ramo INTERATTIVO (+server.ts) buttava via `systemPrompt`
+dopo che `buildTurnContext` ci aveva già montato il persona — il brief dell'utente si perdeva a ogni
+turno live, MENSO parità della coda. L'overlay ora si costruisce con un helper solo
+(`kitPersonaOverlay` in custom-agent-persona.ts) che coda e percorso interattivo condividono.
+
 La persona si carica UNA volta prima del gate e serve entrambi i rami (prima era caricata solo dal
 classico, a ~170 righe sotto).
 

@@ -15,7 +15,7 @@ import { withSandboxTools } from '$lib/server/chat/sandbox-tools';
 import { computerOwner } from '$lib/agent-computer';
 import { stripUnattendedTools } from '$lib/server/chat/unattended';
 import { withStrategistTools } from '$lib/server/chat/strategist-tools';
-import { customAgentSystemBlock, getCustomAgentPersona } from '$lib/server/custom-agent-persona';
+import { customAgentSystemBlock, getCustomAgentPersona, kitPersonaOverlay } from '$lib/server/custom-agent-persona';
 import { agentStickerColor } from '$lib/chat-expression';
 import {
 	saveMessages,
@@ -777,11 +777,7 @@ await maybeCompactThread(admin, {
 						// L'overlay della persona: chi è (macchina), dove legge la memoria, cosa vuole
 						// l'utente. Il blocco lo monta il formatter condiviso, col locale del kit.
 						persona: persona
-							? {
-									id: persona.id,
-									memoryKey: `custom:${persona.id}`,
-									systemBlock: customAgentSystemBlock(persona, bilingualNoticeLocale(locale))
-								}
+							? kitPersonaOverlay(persona, bilingualNoticeLocale(locale))
 							: undefined,
 						origin,
 						budgetMs,
