@@ -17,6 +17,14 @@ import { swallow } from '$lib/server/swallow';
 
 const TABLE = 'sandbox_holders';
 
+/**
+ * IL NOME DELL'INDICE IN COLONNE: l'upsert deduplica solo se questa coppia coincide con
+ * l'unique index della migration. Un drift qui non dà errori vistosi — ogni upsert fallisce,
+ * acquireHolder torna null, la contabilità tace e le VM restano accese. `sandbox-leases.test.ts`
+ * confronta questa costante col file SQL: se divergono, il test lo urla.
+ */
+export const HOLDER_CONFLICT_TARGET = 'sandbox_name,holder_key';
+
 /** Il pannello ripassa ogni ~2.5s: il TTL deve coprire più poll, non più di tanto. */
 export const DESKTOP_HOLDER_TTL_MS = 120_000;
 
@@ -74,7 +82,7 @@ export async function acquireHolder(opts: {
       .from(TABLE)
       .upsert(
         { sandbox_name: opts.name, brand_id: opts.brandId, holder_key: opts.key, kind: opts.kind, expires_at },
-        { onConflict: 'sandbox_name,holder_key' }
+        { onConflict: HOLDER_CONFLICT_TARGET }
       )
       .select('id')
       .single();

@@ -22,7 +22,8 @@ import {
 	oidcTokenFromRequestContext,
 	openBrandSandbox,
 	resolvePlaywrightEnv,
-	SANDBOX_MAX_LEASE_MS
+	SANDBOX_MAX_LEASE_MS,
+	type SandboxHandle
 } from '$lib/server/sandbox';
 import { createFileTools, isOverridable, OVERRIDABLE_PREFIXES, AGENT_DOCS_BUCKET } from '$lib/server/chat/agent-files';
 import { KIE_CODEX_BASE } from '$lib/server/kie';
@@ -170,6 +171,8 @@ export function createHarnessRuntime(execToolCall: ExecToolCall): HarnessRuntime
 export interface HarnessSandboxSession {
 	session: unknown;
 	name: string;
+	/** L'handle aperto: chi ha il turno in mano lo rilascia, o la VM corre fino al lease. */
+	handle: SandboxHandle;
 }
 
 /** La STESSA macchina del brand (getOrCreate per nome): i builtin Pi atterrano lì, un solo canone. */
@@ -187,7 +190,7 @@ export async function openBrandHarnessSession(
 		runId
 	});
 	const provider = createVercelSandbox({ sandbox: handle.raw as never });
-	return { session: await provider.createSession(), name: handle.name };
+	return { session: await provider.createSession(), name: handle.name, handle };
 }
 
 type HarnessStreamResult = Awaited<ReturnType<InstanceType<typeof HarnessAgent>['stream']>>;

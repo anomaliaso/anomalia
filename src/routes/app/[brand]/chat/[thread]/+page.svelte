@@ -879,19 +879,21 @@
 {/snippet}
 
 {#snippet agentPanelContent()}
-  <AgentComputerPanel
-    brandSlug={data.brandSlug}
-    thread={data.thread}
-    job={data.agentPanel?.job ?? null}
-    custom={data.agentPanel?.custom ?? null}
-    renders={data.agentPanel?.renders ?? []}
-    live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
-    backgroundLabels={panelBgLabels}
-    lastReport={panelLastReport}
-    lastPostId={panelWork.post}
-    lastPlanId={panelWork.plan}
-    onclose={() => (agentPanelOpen = false)}
-  />
+  {#if data.agentDesktopEnabled}
+    <AgentComputerPanel
+      brandSlug={data.brandSlug}
+      thread={data.thread}
+      job={data.agentPanel?.job ?? null}
+      custom={data.agentPanel?.custom ?? null}
+      renders={data.agentPanel?.renders ?? []}
+      live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
+      backgroundLabels={panelBgLabels}
+      lastReport={panelLastReport}
+      lastPostId={panelWork.post}
+      lastPlanId={panelWork.plan}
+      onclose={() => (agentPanelOpen = false)}
+    />
+  {/if}
 {/snippet}
 
 <div class="chat-thread-shell">

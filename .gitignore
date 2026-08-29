@@ -87,3 +87,4 @@ AGENT-CHAT-*.md
 /mcp.json
 /.mcp.json
 .mimocode/
+vite.config.ts.timestamp-*.mjs

@@ -261,7 +261,11 @@ vi.mock('./adapters', async (importOriginal) => {
 	return {
 		...actual,
 		resolveHarnessModelRef: () => ({ provider: 'kie', id: 'kie/test-luna', label: 'test-luna' }),
-		openBrandHarnessSession: async () => ({ session: { fake: true }, name: 'brand-vm' }),
+		openBrandHarnessSession: async () => ({
+			session: { fake: true },
+			name: 'brand-vm',
+			handle: { release: vi.fn(async () => {}) }
+		}),
 		startHarnessTurn: async (opts: {
 			system: string;
 			messages: unknown;
@@ -848,7 +852,8 @@ describe('i tool dei plugin sono ANNUNCIATI al modello, non solo eseguibili', ()
 		const src = fs.readFileSync(new URL('./live.ts', import.meta.url), 'utf8');
 		// Dichiarare un plugin senza esporlo era il buco: l'executor rispondeva a motion_*,
 		// il modello non sapeva di poterlo chiedere. Questo pinna la fusione nel catalogo.
-		expect(src).toMatch(/\.\.\.BUILTIN_TOOLS, \.\.\.plugins\.flatMap\(\(p\) => p\.tools\)/);
+		// Il filtro observe/act (desktop tolto dal prodotto) non spezza la fusione.
+		expect(src).toMatch(/\.\.\.\(?agentDesktopEnabled\(\) \? BUILTIN_TOOLS : BUILTIN_TOOLS\.filter\(\(t\) => t\.name !== 'observe' && t\.name !== 'act'\)\)?,?\s*\.\.\.plugins\.flatMap\(\(p\) => p\.tools\)/);
 	});
 
 	it('il catalogo che arriva al modello porta i builtin E quelli del mestiere', async () => {

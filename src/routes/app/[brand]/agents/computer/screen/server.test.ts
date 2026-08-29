@@ -9,6 +9,7 @@ const captureScreenshotMock = vi.fn();
 
 // La route monta la sandbox via `$lib/agent/bridge/adapters` (il cablaggio DI del lotto 2b), non
 // più con `new VercelSandboxProvider()` diretto — mockare quel modulo, non il pacchetto sotto.
+vi.mock('$lib/server/agent-desktop', () => ({ agentDesktopEnabled: () => true }));
 vi.mock('$lib/agent/bridge/adapters', () => ({
 	createVercelSandboxProvider: () => ({ provision: provisionMock })
 }));

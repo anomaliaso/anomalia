@@ -563,6 +563,12 @@ export async function openBrandSandbox(opts: {
    * dietro (un cron, uno script) non devono inventarsene uno.
    */
   agentId?: string;
+  /**
+   * Quanto a lungo QUESTO chiamante tiene viva la contabilità della VM, quando il suo ciclo di
+   * vita non ha una release nota. Il default è il lease intero (chi lavora e rilascia); chi
+   * ripassa spesso — i poll del pannello — passa un TTL corto e rinfresca a ogni giro.
+   */
+  holderTtlMs?: number;
   needsBrowser?: boolean;
   /**
    * Porte raggiungibili da fuori (`sandbox.domain(p)`). Parametro di CREAZIONE: su un nome che
@@ -679,7 +685,7 @@ export async function openBrandSandbox(opts: {
     brandId: opts.brandId,
     key: `turn:${opts.runId}`,
     kind: 'turn',
-    ttlMs: SANDBOX_MAX_LEASE_MS
+    ttlMs: opts.holderTtlMs ?? SANDBOX_MAX_LEASE_MS
   });
 
   const handle: SandboxHandle = {
@@ -733,8 +739,12 @@ export async function openBrandSandbox(opts: {
       return buf as Buffer;
     },
     async release() {
-      // Lo snapshot deve contenere Chromium e i pacchetti, non il workspace di un brand.
-      await handle.run('rm', ['-rf', root]).catch(swallow('handle.run failed'));
+      // Lo snapshot deve contenere Chromium e i pacchetti, non il workspace di un brand. Ma su
+      // una VM ferma il comando la riaccenderebbe solo per cancellare una directory: lo stato
+      // è quello letto all'apertura — se dice stopped, la directory sta nello snapshot e la
+      // pulizia si può anche perdere.
+      const cold = (sandbox as { status?: unknown }).status === 'stopped';
+      if (!cold) await handle.run('rm', ['-rf', root]).catch(swallow('handle.run failed'));
       if (holderId) await releaseHolder(holderId, sandbox as unknown as { stop: () => Promise<unknown> });
     }
   };

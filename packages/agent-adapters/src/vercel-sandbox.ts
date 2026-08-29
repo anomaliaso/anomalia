@@ -48,6 +48,8 @@ export interface VercelSandboxDeps {
 		runId: string;
 		agentId?: string;
 		ports?: number[];
+		/** TTL dell'holder: breve per chi ripassa spesso (i poll del pannello), lease intero di default. */
+		holderTtlMs?: number;
 		abortSignal?: AbortSignal;
 		onLog?: (line: string) => void;
 	}) => Promise<SandboxHandle>;
@@ -73,6 +75,13 @@ const DEFAULT_TIMEOUT_MS = 5 * 60_000;
 const MODE: SandboxNetworkMode = 'agent';
 
 import { DESKTOP_PORT } from './graphical-bootstrap';
+
+/**
+ * Quanto a lungo provision() tiene viva la contabilità della VM dopo l'ultima richiesta.
+ * Chi guarda il pannello ripassa ogni ~2.5s e rinfresca la riga: se il tab muore, la VM si
+ * spegne al prossimo evento invece di correre fino al lease di 15 minuti.
+ */
+export const PROVISION_HOLDER_TTL_MS = 120_000;
 
 /** Gli handle vivi di questo processo, per nome di sandbox. */
 const handles = new Map<string, SandboxHandle>();
@@ -111,6 +120,9 @@ export class VercelSandboxProvider implements SandboxProvider {
 			// e chiederla dopo su una VM già nata non ha effetto. Finché nessuno ascolta, quella
 			// porta risponde 502 «not listening» — nessuna superficie in più.
 			ports: [DESKTOP_PORT],
+			// Il keep-alive vero di chi guarda è l'holder desktop (rinfrescato dai poll): il turno
+			// di provision copre solo la richiesta, non quindici minuti di pannello chiuso.
+			holderTtlMs: PROVISION_HOLDER_TTL_MS,
 			abortSignal: context.signal,
 			onLog: (line) => context.log?.({ label: 'sandbox', detail: { line } })
 		});
