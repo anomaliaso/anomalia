@@ -90,6 +90,7 @@ describe('which model runs the text agents', () => {
     expect(m.modelId).toBe('z-ai/glm-5.3-flash');
   });
 
+
   it('has no fallback model anymore, whoever is configured', async () => {
     const full = await load({ GEMINI_API_KEY: 'g-key', DEEPSEEK_API_KEY: 'd-key' });
     expect(full.agentFallbackModel()).toBeNull();

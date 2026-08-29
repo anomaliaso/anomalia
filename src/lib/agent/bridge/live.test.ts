@@ -309,11 +309,15 @@ type Row = Record<string, unknown>;
  * Lo stesso finto client di `run-store.test.ts`, esteso con `order`/`maybeSingle` — il bridge li
  * usa per trovare un run `waiting_input` sul thread prima di aprirne uno nuovo.
  */
-function fakeDb(seed: Row[] = []) {
+	function fakeDb(seed: Row[] = []) {
 	const rows: Row[] = seed.map((r) => ({ ...r }));
 	let seq = rows.length;
+	// L'emulazione di `agent_kit_close_run` (migration 0222): CAS su state='running', inserimento
+	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
+	const chatMessages: Row[] = [];
 
 	function from(_table: string) {
+		const store = _table === 'chat_messages' ? chatMessages : rows;
 		let op: 'select' | 'insert' | 'update' = 'select';
 		let payload: Row | undefined;
 		const eqFilters: Array<[string, unknown]> = [];
@@ -322,7 +326,7 @@ function fakeDb(seed: Row[] = []) {
 		let orderAscending = true;
 
 		function matchedRows(): Row[] {
-			let matched = rows;
+			let matched = store;
 			for (const [col, val] of eqFilters) matched = matched.filter((r) => r[col] === val);
 			if (orderCol) {
 				const col = orderCol;
@@ -374,20 +378,20 @@ function fakeDb(seed: Row[] = []) {
 			// vedere QUELLA. Prima solo `single` la depositava, e `maybeSingle` dopo un insert
 			// tornava la prima riga della tabella — cioè un id di un'altra riga, spacciato per
 			// quello appena creato.
-			insertedRow() {
-				if (op !== 'insert' || !payload) return null;
-				const row: Row = {
-					id: `run-${++seq}`,
-					state: 'queued',
-					reason: null,
-					question: null,
-					created_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
-					updated_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
-					...payload
-				};
-				rows.push(row);
-				return row;
-			},
+		insertedRow() {
+			if (op !== 'insert' || !payload) return null;
+			const row: Row = {
+				id: `run-${++seq}`,
+				state: 'queued',
+				reason: null,
+				question: null,
+				created_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
+				updated_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
+				...payload
+			};
+			store.push(row);
+			return row;
+		},
 			single() {
 				const fresh = (b.insertedRow as () => Row | null)();
 				if (fresh) return Promise.resolve({ data: { ...fresh }, error: null });
@@ -422,7 +426,7 @@ function fakeDb(seed: Row[] = []) {
 
 	// L'emulazione di `agent_kit_close_run` (migration 0222): CAS su state='running', inserimento
 	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
-	const chatMessages: Row[] = [];
+	// `chatMessages` vive in testa a `fakeDb`: `from('chat_messages')` ci opera sopra.
 	function rpc(fn: string, params: Record<string, unknown>) {
 		if (fn !== 'agent_kit_close_run') {
 			return Promise.resolve({ data: null, error: { message: `rpc sconosciuta: ${fn}` } });
@@ -2044,5 +2048,92 @@ describe('un turno che non da` segni di vita si ferma da solo', async () => {
 
 	it('gli eventi dello stream e i tool sono i soli segni di vita', () => {
 		expect(src.match(/signOfLife\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+	});
+});
+
+/**
+ * IL TURNO DI RISPOSTA DI UN DM FRA AGENTI, SUL KIT — ticket «Migra le private al Kit».
+ *
+ * Il DM è la conversazione fra due agenti, ognuno con la propria sessione, memoria e mestiere:
+ * chi risponde parla col proprio spec e la propria sessione kit, come farebbe con l'utente — ma
+ * chi legge è un collega, non una persona. Le regole portate fedelmente dal motore classico: il
+ * blocco DM in testa al prompt, niente tool che presuppongono una persona in stanza, la risposta
+ * firmata col membro che parla, e nessuna ripresa automatica (un consulto fra colleghi si
+ * chiude, non si allunga da solo).
+ */
+const dmContext = { speaker: 'content', meName: 'Content Creator', otherName: 'Anomalia' };
+
+describe('runKitTurn — DM fra agenti', () => {
+	function dmTurnInput(extra: Record<string, unknown> = {}) {
+		return {
+			supabase: fakeSupabase,
+			admin: fakeDb().db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-dm',
+			spec: specById('content')!,
+			messages: [{ role: 'user' as const, content: '[Message from Anomalia — a fellow AI agent of this brand, NOT the user]: ciao' }],
+			locale: 'it' as const,
+			dm: dmContext,
+			...extra
+		};
+	}
+
+	it('il blocco DM apre il system prompt, davanti a tutto', async () => {
+		const prompt = { text: '' };
+		toolCatalogModel([], prompt);
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput(), admin: db });
+		await res.text();
+		expect(prompt.text.startsWith('## CHAT PRIVATA TRA AGENTI')).toBe(true);
+		expect(prompt.text).toContain('Content Creator');
+		expect(prompt.text).toContain('Anomalia');
+	});
+
+	it('i tool che presuppongono una persona in stanza sono fuori dal catalogo', async () => {
+		const seen: string[] = [];
+		toolCatalogModel(seen);
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput(), admin: db });
+		await res.text();
+		expect(seen).not.toContain('ask_user');
+	});
+
+	it('la risposta è firmata col membro che parla', async () => {
+		scriptTurns({ calls: [replyCall('fatto')] });
+		const { db, chatMessages } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput(), admin: db });
+		await res.text();
+		const reply = chatMessages.find((m) => m.role === 'assistant' && m.content === 'fatto');
+		expect(reply).toBeTruthy();
+		expect(reply?.name).toBe('content');
+	});
+
+	it('il DM non si continua da solo: tempo scaduto → riferisce e basta', async () => {
+		openToolModel('brand_ls');
+		const { db } = fakeDb();
+		const res = await runKitTurn({
+			...dmTurnInput({ origin: 'http://localhost:5183', budgetMs: 1, continuationDepth: 1 }),
+			admin: db
+		});
+		await res.text();
+		await new Promise((r) => setTimeout(r, 80));
+		expect(continuations).toHaveLength(0);
+	});
+
+	it('il DM non si continua da solo: neanche un obiettivo aperto riaccende il lavoro', async () => {
+		goalState.settlement = {
+			goal: { id: 'g1', statement: 'obiettivo' },
+			decision: { continue: true, reason: 'criteria_open', handBack: false },
+			closedNow: [],
+			notice: null,
+			continuationPrompt: 'criterio 2 resta aperto'
+		};
+		scriptTurns({ calls: [replyCall('fatto')] });
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput({ origin: 'http://localhost:5183' }), admin: db });
+		await res.text();
+		await new Promise((r) => setTimeout(r, 80));
+		expect(continuations).toHaveLength(0);
 	});
 });

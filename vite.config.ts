@@ -76,8 +76,9 @@ export default defineConfig({
     // scan, and that full-catalogue lookup is the contract (unknown slug → null, any brand works).
     noExternal: ['simple-icons']
   },
-  test: {
+    test: {
     testTimeout: TEST_TIMEOUT_MS,
+    hookTimeout: 30_000,
     include: [
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',

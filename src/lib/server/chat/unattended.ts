@@ -39,3 +39,6 @@ export function stripUnattendedTools<T extends Record<string, unknown>>(tools: T
   for (const name of UNATTENDED_TOOL_EXCLUSIONS) delete out[name];
   return out;
 }
+
+/** Il catalogo kit parla nomi suoi per lo stesso concetto: la domanda bloccante è `ask_user`. */
+export const UNATTENDED_KIT_TOOL_EXCLUSIONS: readonly string[] = ['ask_user'];

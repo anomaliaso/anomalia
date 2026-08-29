@@ -32,6 +32,8 @@ import {
 	HARNESS_ABORT_FORCE_CLOSE_MS,
 	type KitRunLiveness
 } from '$lib/server/chat/turn-limits';
+import { DM_REPLY_STEP_CAP, dmBrief } from '$lib/chat-dm';
+import { UNATTENDED_TOOL_EXCLUSIONS, UNATTENDED_KIT_TOOL_EXCLUSIONS } from '$lib/server/chat/unattended';
 import { logAiCall, extractSdkUsage } from '$lib/server/ai-log';
 import { filesIndexFor } from '$lib/server/chat/agent-files';
 import { resolveAgent, teamBlock } from '$lib/server/chat/agents';
@@ -192,6 +194,12 @@ export interface RunKitTurnInput {
 	 * attesa morta dopo un turno già concluso.
 	 */
 	origin?: string;
+	/**
+	 * Il contesto del DM fra agenti: chi parla, per chi. Il turno nasce DM — blocco in testa al
+	 * prompt, niente tool che presuppongono una persona, risposta firmata, nessuna ripresa
+	 * automatica. Senza, è un normale turno kit.
+	 */
+	dm?: { speaker: string; meName: string; otherName: string };
 }
 
 /**
@@ -337,6 +345,7 @@ async function currentWaitingRun(db: SupabaseClient, threadId: string): Promise<
 export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 	const { supabase, admin, brand, user, threadId, spec, messages, locale } = input;
 	const mode: ChatMode = isChatMode(input.mode) ? input.mode : 'agent';
+	const isDm = !!input.dm;
 
 	let run: RunRow;
 	const waitingId = await currentWaitingRun(admin, threadId);
@@ -686,7 +695,10 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		// where REPLY LANGUAGE lives after the amazon.in incident. Without this block here, an
 		// English message still gets an Italian reply: the kit preamble used to be Italian and
 		// nothing told the model to follow the user.
+		// In un DM il blocco sta IN TESTA, davanti a tutto: in coda ha già perso una volta contro
+		// l'intero prompt di brand (il modello salutava l'utente per nome).
 		let system =
+			(input.dm ? `${dmBrief(input.dm.meName, input.dm.otherName, locale)}\n\n` : '') +
 			buildSystemPrompt(spec, { memoryMd, fileIndex: filesIndexFor(spec.id) }) +
 			`\n\n${chatReplyLanguageBlock(locale)}` +
 			(peer ? `\n\n${teamBlock(peer)}` : '') +
@@ -708,8 +720,16 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		let settled = false;
 		const loopGuard = createChatLoopGuard();
 		const turnTools = toolsForMode([...BUILTIN_TOOLS, ...plugins.flatMap((p) => p.tools)], mode);
-		const toolNames = turnTools.map((t) => t.name);
-		const toolSet = buildTools(turnTools, applyTool, ctx);
+		// Le esclusioni del turno non presidiato valgono per entrambi i cataloghi: nel kit la sola
+		// voce che ricade è `ask_user` — una domanda senza nessuno che possa rispondere lascerebbe
+		// il run in waiting_input per sempre.
+		const turnToolsFinal = isDm
+			? turnTools.filter(
+					(t) => !UNATTENDED_TOOL_EXCLUSIONS.includes(t.name) && !UNATTENDED_KIT_TOOL_EXCLUSIONS.includes(t.name)
+				)
+			: turnTools;
+		const toolNames = turnToolsFinal.map((t) => t.name);
+		const toolSet = buildTools(turnToolsFinal, applyTool, ctx);
 
 		// Il set che i worker di delega ricevono: gli STESSI oggetti tool dell'orchestratore, quindi
 		// ogni chiamata di un worker passa dall'applyTool qui sopra — battito, Stop e
@@ -751,7 +771,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			messages: stripProviderRefs(messages),
 			tools: toolSet,
 			abortSignal: turnAbort.signal,
-			stopWhen: [isStepCount(TURN_MAX_STEPS)],
+			// Un DM è un consulto fra colleghi, non una produzione: il tetto tiene il suo costo lì,
+			// come DM_REPLY_STEP_CAP fa sul motore classico.
+			stopWhen: [isStepCount(isDm ? DM_REPLY_STEP_CAP : TURN_MAX_STEPS)],
 			sessionKey: threadId,
 				...(fresh ? { freshSession: true } : {}),
 				sandboxSession: brandSandbox?.session
@@ -871,9 +893,10 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					// SOLO su 'deadline': riprendere un turno fermato dal tetto sui token
 					// raddoppierebbe esattamente il costo che quel tetto esiste per fermare, e su
 					// 'step_limit' il modello sta girando a vuoto, non lavorando. È la stessa
-					// scelta del classico (queue.ts, `shouldContinue`).
+					// scelta del classico (queue.ts, `shouldContinue`). Un DM non si continua da
+					// solo: chi ha scritto, o l'utente, decide il passo dopo.
 					// Senza `origin` non si accoda niente: il drain va svegliato via HTTP.
-					if (reason === 'deadline' && input.origin && stillOurs()) {
+					if (reason === 'deadline' && !isDm && input.origin && stillOurs()) {
 						continued = !!(await enqueueTurnContinuation(admin, {
 							brandId: brand.id,
 							userId: user.id,
@@ -971,7 +994,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				// La ripresa per tempo scaduto è già in coda qui sopra: qui si accoda solo quella che
 				// il tempo non aveva chiesto — criteri ancora aperti — e col prompt che li nomina, o
 				// il turno che riparte ricomincerebbe dal primo elemento della lista.
-				if (goalSettled?.decision.continue && !continued && input.origin && stillOurs()) {
+				if (goalSettled?.decision.continue && !isDm && !continued && input.origin && stillOurs()) {
 					continued = !!(await enqueueTurnContinuation(admin, {
 						brandId: brand.id,
 						userId: user.id,
@@ -1010,6 +1033,16 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					return;
 				}
 				if (messageId) {
+					// La firma della battuta: l'RPC che inserisce non porta `chat_messages.name`,
+					// quindi la firma arriva subito dopo la chiusura — come `speaker` nella
+					// `saveMessages` del motore classico.
+					if (input.dm) {
+						try {
+							await admin.from('chat_messages').update({ name: input.dm.speaker }).eq('id', messageId);
+						} catch (e) {
+							console.warn(`[AGENT_KIT] run ${run.id} firma DM non applicata`, e);
+						}
+					}
 					// Il checkpoint ha finito il suo mestiere: la riga definitiva è a terra, quindi la
 					// provvisoria va via. DOPO la chiusura e non prima — se il processo muore in
 					// mezzo resta un doppione, visibile e riparabile, invece di cancellare l'unica
