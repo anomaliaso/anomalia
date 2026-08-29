@@ -44,6 +44,7 @@
   import { setContext } from 'svelte';
   import { writable } from 'svelte/store';
   import { preloadData } from '$app/navigation';
+  import { applyAction, deserialize } from '$app/forms';
   import { _ } from 'svelte-i18n';
   import { fade, scale } from 'svelte/transition';
   import XIcon from '@lucide/svelte/icons/x';
@@ -180,6 +181,49 @@
     loadError = null;
   }
 
+  /**
+   * Le azioni delle pagine ospitate sono relative (`?/disconnect`) e SvelteKit le risolve
+   * contro l'URL del BROWSER — che nella modal non è mai la rotta ospitata → 404
+   * "No action". Riscriviamo form/button sulla rotta vera in fase di submit (capture,
+   * prima che `use:enhance` legga `action`), e applichiamo noi il risultato a `page.form`:
+   * il fallback di SvelteKit salta `applyAction` quando il pathname non coincide, e senza
+   * quello né i toast né il ricarico della sezione partirebbero.
+   */
+  const actionUrlFor = (relative: string) =>
+    routeSearch ? `${base}/${route}${routeSearch}&${relative.slice(1)}` : `${base}/${route}${relative}`;
+
+  function onFormSubmitCapture(e: SubmitEvent) {
+    if (route === null) return;
+    const rewrite = (el: Element, attr: 'action' | 'formaction') => {
+      const value = el.getAttribute(attr);
+      if (value?.startsWith('?/')) el.setAttribute(attr, actionUrlFor(value));
+    };
+    if (e.target instanceof HTMLFormElement) rewrite(e.target, 'action');
+    if (e.submitter) rewrite(e.submitter, 'formaction');
+  }
+
+  $effect(() => {
+    const nativeFetch: typeof window.fetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const res = await nativeFetch(input as RequestInfo, init);
+      try {
+        const r = route;
+        const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
+        const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
+        if (r && method.toUpperCase() === 'POST' && url.pathname === `${base}/${r}` && res.ok) {
+          const result = deserialize(await res.clone().text());
+          if (result.type === 'success' || result.type === 'failure') void applyAction(result);
+        }
+      } catch {
+        // risposta non-azione (o body non JSON): passa indietro intatta
+      }
+      return res;
+    };
+    return () => {
+      window.fetch = nativeFetch;
+    };
+  });
+
   // Il marker su <html> dice "da adesso un click su una pagina del brand apre la modal invece di
   // navigare": prima dell'idratazione i link sono link normali e nessun JS può impedirlo, quindi
   // lo si dichiara invece di fingere. scripts/settings-modal-check.mjs lo aspetta prima di cliccare.
@@ -291,7 +335,7 @@
   });
 </script>
 
-<svelte:window onclickcapture={onClickCapture} onkeydown={onKeydown} />
+<svelte:window onclickcapture={onClickCapture} onkeydown={onKeydown} onsubmitcapture={onFormSubmitCapture} />
 
 <!-- Mai un corpo vuoto e muto: se la sezione non si carica lo si dice, con la via d'uscita verso
      la pagina piena. È l'UNICA uscita da un carico fallito, per questo `app.settings.modalExpand`
