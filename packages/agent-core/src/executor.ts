@@ -7,8 +7,7 @@ import type { AdapterContext, EffectsLedger, ToolCall, ToolResult } from '@anoma
 import type { BrandFs, CheckpointStore, MemoryStore, SandboxProvider, SandboxRef, ToolPlugin } from '@anomalia/agent-kit';
 import { SYSTEM_PROMPT_MAX_CHARS, type AgentSpec } from '@anomalia/agent-contracts/contracts';
 import { BUILTIN_TOOLS, TERMINAL_TOOL_NAMES } from './tools/builtin';
-import { decide, frozenResult } from './effects';
-import { effectKey } from './effects-store';
+import { frozenResult, legacyEffectKey } from './effects';
 import { ensureComputer, touchComputer } from './computer';
 import {
 	ensureGraphicalMode,
@@ -78,8 +77,8 @@ export interface ApplyToolDeps {
 	/** Senza, `observe`/`act` rispondono con l'errore-che-insegna invece di esplodere. */
 	graphicalBootstrap?: GraphicalBootstrapDeps;
 	/**
-	 * Presente: i tool con `effectful: true` passano dal ledger degli effetti — `intend` prima di
-	 * eseguire, `resolve` dopo, e su un resume che rivede la stessa chiave congelano invece di
+	 * Presente: i tool con `effectful: true` passano dal ledger degli effetti — claim prima di
+	 * eseguire, resolve dopo, e su un resume che rivede la stessa identità congelano invece di
 	 * rieseguire (un doppio post/schedulazione è un danno, non un errore da riprovare).
 	 * Assente: nessun gate, si esegue e basta (il lab, i test, le superfici senza righe).
 	 */
@@ -228,28 +227,40 @@ export function createApplyTool(deps: ApplyToolDeps): ApplyTool {
 	return async (call: ToolCall, ctx: AdapterContext): Promise<ToolResult> => {
 		const name = LEGACY_TOOL_ALIASES[call.name] ?? call.name;
 
-		if (!deps.effects || !isEffectful(name, deps.plugins)) return execute(call, ctx);
-
-		// GATE: una stessa chiave (brand + tool + args) che ha già un esito non-rieseguibile NON va
-		// rieseguita. `intended` è un ripiego di sicurezza (il segmento è vivo, è il primo autore),
-		// quindi decide() lo lascia riprovare; `ambiguous`/`completed`/`reconciled` congelano.
-		const key = effectKey(name, call.args);
-		const existing = await deps.effects.find(ctx.brandId, key);
-		const decision = decide(existing);
-		if (!decision.run) {
-			const frozen = frozenResult(existing!);
-			if (frozen) return frozen;
-			return err(`${decision.note}. Esito registrato: ${existing!.status}`);
+		if (!deps.effects || !isEffectful(name, deps.plugins)) {
+			return execute(call, ctx);
 		}
 
-		const effect = await deps.effects.intend({ brandId: ctx.brandId, runId: ctx.runId, toolName: name, key, request: call.args });
+		const invocationId = call.id?.trim();
+		if (!invocationId) {
+			return err(`tool '${name}' senza identità stabile della chiamata`);
+		}
+
+		const claim = await deps.effects.claim({
+			brandId: ctx.brandId,
+			runId: ctx.runId,
+			invocationId,
+			toolName: name,
+			request: call.args,
+			legacyKey: legacyEffectKey(name, call.args)
+		});
+		if (claim.kind === 'mismatch') {
+			return err(`tool '${name}' rifiutato: payload diverso per la stessa identità di chiamata`);
+		}
+		if (claim.kind === 'existing') {
+			const frozen = frozenResult(claim.effect);
+			if (frozen) {
+				return frozen;
+			}
+			return err(`tool '${name}' non eseguito: effetto già registrato (${claim.effect.status})`);
+		}
+
+		const effect = claim.effect;
 		try {
 			const result = await execute(call, ctx);
 			await deps.effects.resolve(effect.id, result.isError ? 'failed' : 'completed', result);
 			return result;
 		} catch (err) {
-			// L'effetto resta `intended`: sarà `reconcileRun` (morte del segmento) a tirarlo verso
-			// `ambiguous`. Espongo l'errore vero, mai un esito finto.
 			await deps.effects.resolve(effect.id, 'failed', { message: err instanceof Error ? err.message : String(err) });
 			throw err;
 		}

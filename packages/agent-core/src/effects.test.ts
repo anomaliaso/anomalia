@@ -9,7 +9,7 @@ function effect(status: ToolEffect['status'], result?: unknown, over: Partial<To
 		brandId: 'b1',
 		runId: 'r1',
 		toolName: 'content_schedule',
-		idempotencyKey: 'k',
+		invocationId: 'call-1',
 		status,
 		result,
 		createdAt: '2026-08-29T00:00:00.000Z',
