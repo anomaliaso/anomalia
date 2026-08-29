@@ -33,6 +33,7 @@ import {
 	type KitRunLiveness
 } from '$lib/server/chat/turn-limits';
 import { DM_REPLY_STEP_CAP, dmBrief } from '$lib/chat-dm';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { UNATTENDED_TOOL_EXCLUSIONS, UNATTENDED_KIT_TOOL_EXCLUSIONS } from '$lib/server/chat/unattended';
 import { logAiCall, extractSdkUsage } from '$lib/server/ai-log';
 import { filesIndexFor } from '$lib/server/chat/agent-files';
@@ -719,7 +720,15 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		const tokenBudget = chatTokenBudget();
 		let settled = false;
 		const loopGuard = createChatLoopGuard();
-		const turnTools = toolsForMode([...BUILTIN_TOOLS, ...plugins.flatMap((p) => p.tools)], mode);
+		const turnTools = toolsForMode(
+			[
+				// Il desktop grafico è fuori dal prodotto: l'agente vede il web con `browse`, non
+				// pilotando uno schermo. Con AGENT_DESKTOP_ENABLED=1 tornano com'erano.
+				...(agentDesktopEnabled() ? BUILTIN_TOOLS : BUILTIN_TOOLS.filter((t) => t.name !== 'observe' && t.name !== 'act')),
+				...plugins.flatMap((p) => p.tools)
+			],
+			mode
+		);
 		// Le esclusioni del turno non presidiato valgono per entrambi i cataloghi: nel kit la sola
 		// voce che ricade è `ask_user` — una domanda senza nessuno che possa rispondere lascerebbe
 		// il run in waiting_input per sempre.
@@ -754,6 +763,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		}
 		}
 		const brandSandbox = savedResume ? null : await openBrandHarnessSession(brand.id, run.id, spec.id);
+		try {
 		const startTurnOnce = (fresh: boolean) => {
 			const startedTurn = startHarnessTurn({
 			runId: run.id,
@@ -1394,6 +1404,13 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					void broadcastToBrand(brand.id, { event: 'kit_stream_done', payload: { runId: run.id, threadId } });
 				}
 			})();
+		}
+		} finally {
+			// Il turno è finito, bene o male: via l'holder e, se era l'ultimo, la VM si spegne.
+			// La sessione cached del prossimo messaggio riaccende da sola al primo comando.
+			if (brandSandbox) {
+				await brandSandbox.handle.release().catch((e) => console.warn(`[AGENT_KIT] run ${run.id} sandbox release`, e));
+			}
 		}
 	} catch (err) {
 		stopTurnHeartbeat();

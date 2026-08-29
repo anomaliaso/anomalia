@@ -14,6 +14,7 @@
  */
 import { json } from '@sveltejs/kit';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { ensureGraphicalMode, ensureRemoteDesktop } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider, graphicalBootstrapDeps, sandboxPortUrl } from '$lib/agent/bridge/adapters';
 import { desktopPassword, desktopUrl, publishComputerRunning } from '$lib/server/agent-desktop';
@@ -27,6 +28,7 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!agentDesktopEnabled()) return new Response(null, { status: 404 });
 
 	const { data: brand } = await supabase.from('brands').select('id').eq('slug', params.brand).maybeSingle();
 	if (!brand) return new Response('Not found', { status: 404 });

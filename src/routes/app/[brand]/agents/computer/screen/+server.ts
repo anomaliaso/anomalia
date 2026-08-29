@@ -18,6 +18,7 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { captureScreenshot, ensureGraphicalMode } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider, graphicalBootstrapDeps } from '$lib/agent/bridge/adapters';
 import { holdDesktop } from '$lib/server/sandbox-leases';
@@ -31,6 +32,7 @@ const cache = new Map<string, { at: number; png: Buffer }>();
 export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!agentDesktopEnabled()) return new Response(null, { status: 404 });
 
 	const { data: brand } = await supabase.from('brands').select('id').eq('slug', params.brand).maybeSingle();
 	if (!brand) return new Response('Not found', { status: 404 });
