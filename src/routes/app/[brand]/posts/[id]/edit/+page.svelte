@@ -1,6 +1,5 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { invalidateAll } from '$app/navigation';
   import { backHref } from '$lib/page-modal-navigation';
   import { pageModalOrigin } from '$lib/stores/page-modal';
   import PostEditor from '$lib/components/PostEditor.svelte';
@@ -12,7 +11,6 @@
   const returnHref = $derived(backHref($pageModalOrigin, calendarHref));
 
   async function onLeave() {
-    await invalidateAll();
     await goto(returnHref);
   }
 </script>
