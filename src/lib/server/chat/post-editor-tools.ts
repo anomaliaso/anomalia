@@ -565,13 +565,12 @@ export async function renderPostVideo(
   const { isKnownVideoModel, UGC_AD_DURATION } = await import('$lib/server/video');
   const { submitAndTrackVideoRender } = await import('$lib/server/video-render-queue');
   const { createAdminClient } = await import('$lib/server/supabase-admin');
-  const { SEEDANCE_25_MODEL } = await import('$lib/video-models');
-  // Ads force Seedance 2.5; else AI override / brand setting / env default.
-  const model = isUgcAd
-    ? SEEDANCE_25_MODEL
-    : (args.model && isKnownVideoModel(args.model) ? args.model : null) ??
-      (typeof prefs.videoModel === 'string' ? prefs.videoModel : null) ??
-      t.ctx.videoModel;
+  // Ads do NOT force a model — 22s only lands on Seedance 2.5, other models clamp to the
+  // organic 15s ceiling. Else AI override / brand setting / Grok Imagine default.
+  const model =
+    (args.model && isKnownVideoModel(args.model) ? args.model : null) ??
+    (typeof prefs.videoModel === 'string' ? prefs.videoModel : null) ??
+    t.ctx.videoModel;
   // Submitted, not awaited. kie owns the job from here and the reconciler attaches the clip; this
   // tool used to hold the editor for minutes watching someone else's render queue.
   const clip = await submitAndTrackVideoRender({
@@ -1122,7 +1121,7 @@ export function createPostEditorTools(
         'When the post is ALREADY a video: remakes it in place from the stored cover (video_thumbnail_url) or the existing clip. Does NOT convert it into a graphic.',
         'Use when the user asks to remake the reel, rewrite the spoken script (più naturale/fluido), or remove on-screen subtitles/captions/titles — those are burned into the VIDEO, not a typographic canvas.',
         'Pass script (the spoken line), ugc:true for talking UGC (also disables burned-in captions), and prompt directing delivery ("no on-screen text, natural full sentences").',
-        'Do NOT call design_graphic for subtitle/script requests. Seedance 2.5 via model="bytedance/seedance-2-5". Paid UGC ads: ugc_ad:true → 22s. Bills the monthly video budget.'
+        'Do NOT call design_graphic for subtitle/script requests. Default model is Grok Imagine (480p, ≤15s); pass model="bytedance/seedance-2-5" for Seedance 2.5. Paid UGC ads: 22s on Seedance 2.5, 15s cap elsewhere. Bills the monthly video budget.'
       ].join('\n'),
       inputSchema: z.object({
         duration: z
@@ -1150,7 +1149,7 @@ export function createPostEditorTools(
           .boolean()
           .optional()
           .describe(
-            'Paid UGC ad. Implies ugc. Forces Seedance 2.5 and locks duration to 22s. Omit/false = organic ≤15s when ugc.'
+            'Paid UGC ad. Implies ugc. 22s on Seedance 2.5 (pass model), capped at 15s on other models. Omit/false = organic ≤15s when ugc.'
           ),
         model: z
           .enum([
@@ -1162,7 +1161,7 @@ export function createPostEditorTools(
           ])
           .optional()
           .describe(
-            'Video model for THIS clip. Pass "bytedance/seedance-2-5" for Seedance 2.5. Omit to use Settings → Video (or platform default). This IS the manual selector — do not claim it is missing. Ignored when ugc_ad:true (always Seedance 2.5).'
+            'Video model for THIS clip. Default is Grok Imagine ("grok-imagine-video-1-5-preview", 480p, ≤15s). Pass "bytedance/seedance-2-5" for Seedance 2.5 (up to 30s or reference video/audio). Omit to use Settings → Video. This IS the manual selector — do not claim it is missing.'
           )
       }),
       execute: async (args: {
