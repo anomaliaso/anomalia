@@ -477,3 +477,11 @@ describe('radarDigestHtml (la mail porta la merce: testo pronto + link diretto)'
     expect(html).toContain('https://app.example.com/api/radar/reject/tok-r');
   });
 });
+
+describe('sorgenti Reddit (solo ScrapeCreators e RSS: niente OAuth ufficiale)', () => {
+  it('non resta alcun riferimento al client OAuth Reddit nel radar', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(new URL('./radar.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/oauth\.reddit\.com|REDDIT_CLIENT_(ID|SECRET)|redditAccessToken|redditGet/);
+  });
+});
