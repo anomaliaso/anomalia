@@ -76,18 +76,14 @@ export default defineConfig({
     // scan, and that full-catalogue lookup is the contract (unknown slug → null, any brand works).
     noExternal: ['simple-icons']
   },
-  test: {
+    test: {
     testTimeout: TEST_TIMEOUT_MS,
+    hookTimeout: 30_000,
     include: [
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',
       'packages/*.{test,spec}.{js,ts}',
       'scripts/**/*.{test,spec}.{js,ts}'
-    ],
-    // Il grafo di import dei moduli server pesa diversi secondi da freddo (strategy-agent,
-    // queue, ugc): sotto carico il default di 5s molla a metà setup e un file passa e fallisce
-    // a seconda della parallelismo. 30s valutano la LOGICA, non la macchina.
-    testTimeout: 30_000,
-    hookTimeout: 30_000
+    ]
   }
 });
