@@ -32,6 +32,10 @@ vi.mock('./system-prompt', () => ({
 	wrapTurnMessage: (_block: string, message: unknown) => message
 }));
 vi.mock('./tools', () => ({ createChatTools: () => ({}) }));
+vi.mock('$env/dynamic/private', async (importOriginal) => {
+	const original = (await importOriginal()) as { env: Record<string, string> };
+	return { ...original, env: { ...original.env, AGENT_KIT: 'off' } };
+});
 vi.mock('./subagents', () => ({ withSubagentTools: (t: unknown) => t }));
 vi.mock('./sandbox-tools', () => ({
 	withSandboxTools: (t: unknown) => ({ tools: t, close: async () => undefined })

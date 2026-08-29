@@ -49,7 +49,7 @@ import { loadHarnessSkills, parseHarnessSkillSelection } from '$lib/server/harne
 import { skillsForAgent } from '$lib/server/brand-skills';
 import { createJustBashSandbox } from '@ai-sdk/sandbox-just-bash';
 import { createVercelSandbox } from '@ai-sdk/sandbox-vercel';
-import type { StreamTextResult, ToolSet } from 'ai';
+import type { ToolSet } from 'ai';
 import type { GraphicalBootstrapDeps } from '@anomalia/agent-adapters/graphical-bootstrap';
 
 export function createServerBrandFs(supabase: SupabaseClient, agent?: string | null): ServerBrandFs {
@@ -272,8 +272,10 @@ export async function openBrandHarnessSession(
 	return { session: await provider.createSession(), name: handle.name };
 }
 
+type HarnessStreamResult = Awaited<ReturnType<InstanceType<typeof HarnessAgent>['stream']>>;
+
 export interface HarnessTurnStream {
-	result: StreamTextResult<ToolSet>;
+	result: HarnessStreamResult;
 	detach(): Promise<unknown>;
 	destroy(): Promise<void>;
 }
@@ -398,11 +400,11 @@ export async function startHarnessTurn(opts: {
 				} catch {}
 			}
 			return {
-				result: (await (cached.agent as typeof agent).stream({
+				result: await (cached.agent as typeof agent).stream({
 					session: cached.session,
 					messages: opts.messages,
 					abortSignal: opts.abortSignal
-				})) as StreamTextResult<ToolSet>,
+				}),
 				detach: async () => {
 					const st = await (cached.session as { detach?: () => Promise<unknown> }).detach?.();
 					return st;
@@ -425,11 +427,11 @@ export async function startHarnessTurn(opts: {
 			});
 	if (opts.sessionKey) liveSessions.set(opts.sessionKey, { agent, session });
 	return {
-		result: (await agent.stream({
+		result: await agent.stream({
 			session,
 			messages: opts.messages,
 			abortSignal: opts.abortSignal
-		})) as StreamTextResult<ToolSet>,
+		}),
 		detach: async () => {
 			const st = await (session as { detach?: () => Promise<unknown> }).detach?.();
 			if (opts.sessionKey) moduleLiveSessions.delete(opts.sessionKey);

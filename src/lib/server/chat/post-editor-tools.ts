@@ -1045,7 +1045,7 @@ export function createPostEditorTools(
         title: z.string().optional().describe('New title (Reddit / YouTube / carousels)'),
         first_comment: z.string().optional().describe('First comment (hashtags / CTA)')
       }),
-      execute: async (patch: AnyRec, _opts: ToolExecutionOptions) => setPostText(t, patch)
+      execute: async (patch: AnyRec, _opts: ToolExecutionOptions<unknown>) => setPostText(t, patch)
     }),
 
     youtube_thumbnail: tool({

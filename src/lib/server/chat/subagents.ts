@@ -1118,7 +1118,7 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
           network?: SandboxNetworkMode;
           brand_data?: boolean;
         },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         const blocked = budgetError();
         if (blocked) return blocked;
@@ -1201,7 +1201,7 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
           skip_research?: boolean;
           repair?: boolean;
         },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         const blocked = budgetError();
         if (blocked) return blocked;
@@ -1283,7 +1283,7 @@ export function createSubagentTools(opts: SubagentFactoryOpts) {
           agent?: AgentId;
           max_steps?: number;
         },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         const blocked = budgetError();
         if (blocked) return blocked;

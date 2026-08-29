@@ -73,7 +73,7 @@ export function catalogTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         status: z.enum(['draft', 'planned', 'approved', 'published']).optional().describe('Filter by status')
       }),
-      execute: async ({ status }: { status?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ status }: { status?: string }, opts: ToolExecutionOptions<unknown>) => {
         let q = supabase.from('brand_articles').select('id, title, status, scheduled_for, created_at').eq('brand_id', brandId).order('created_at', { ascending: false }).limit(50);
         if (status) q = q.eq('status', status);
         const { data, error } = await q;
@@ -93,7 +93,7 @@ export function catalogTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         article_id: z.string().describe('The article ID to read')
       }),
-      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions<unknown>) => {
         const { data, error } = await supabase.from('brand_articles')
           .select('id, slug, title, meta_title, meta_description, body_md, status, scheduled_for, cover_image, language, created_at')
           .eq('id', article_id).eq('brand_id', brandId).maybeSingle();
@@ -115,7 +115,7 @@ export function catalogTools(ctx: ChatToolCtx) {
         article_id: z.string().describe('The article ID'),
         scheduled_for: z.string().optional().describe(`Future datetime to publish at, in the BRAND's local time (${tz}) — e.g. "2026-07-15T10:00". Add a Z/offset only for a real UTC instant. Omit to unschedule.`)
       }),
-      execute: async ({ article_id, scheduled_for }: { article_id: string; scheduled_for?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id, scheduled_for }: { article_id: string; scheduled_for?: string }, opts: ToolExecutionOptions<unknown>) => {
         const { admin } = await blogAdmin();
         const { data: art } = await admin.from('brand_articles').select('id, title, status').eq('id', article_id).eq('brand_id', brandId).maybeSingle();
         if (!art) return { error: 'Article not found' };
@@ -153,7 +153,7 @@ export function catalogTools(ctx: ChatToolCtx) {
         meta_description: z.string().optional(),
         body_md: z.string().optional().describe('The COMPLETE new markdown body (replaces the old one entirely)')
       }),
-      execute: async ({ article_id, ...patch }: AnyRec, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id, ...patch }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         const clean: AnyRec = {};
         for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
         if (!Object.keys(clean).length) return { error: 'No changes specified' };
@@ -172,7 +172,7 @@ export function catalogTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         article_id: z.string().describe('The article ID to optimize')
       }),
-      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions<unknown>) => {
         const { admin, brand } = await blogAdmin();
         if (!brand) return { error: 'Brand not found' };
         const { optimizeArticleForScore } = await import('$lib/server/blog-generate');
@@ -190,7 +190,7 @@ export function catalogTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         article_id: z.string().describe('The article ID')
       }),
-      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions<unknown>) => {
         const { admin, brand } = await blogAdmin();
         if (!brand) return { error: 'Brand not found' };
         const { data: art } = await admin.from('brand_articles').select('title, meta_description').eq('id', article_id).eq('brand_id', brandId).maybeSingle();
@@ -209,7 +209,7 @@ export function catalogTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         article_id: z.string().describe('The article ID')
       }),
-      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions<unknown>) => {
         const { admin, brand } = await blogAdmin();
         if (!brand) return { error: 'Brand not found' };
         const { data: art } = await admin.from('brand_articles').select('title, body_md').eq('id', article_id).eq('brand_id', brandId).maybeSingle();
@@ -229,7 +229,7 @@ export function catalogTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         article_id: z.string().describe('The planned placeholder\'s article ID')
       }),
-      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ article_id }: { article_id: string }, opts: ToolExecutionOptions<unknown>) => {
         const { admin, brand } = await blogAdmin();
         if (!brand) return { error: 'Brand not found' };
         const { generatePlannedArticle } = await import('$lib/server/blog-generate');
@@ -250,7 +250,7 @@ export function catalogTools(ctx: ChatToolCtx) {
         url: z.string().optional().describe('Product page URL on the brand site (https)'),
         remove: z.boolean().optional().describe('true to delete this product from the catalog')
       }),
-      execute: async ({ product_id, remove, ...patch }: AnyRec, opts: ToolExecutionOptions) => {
+      execute: async ({ product_id, remove, ...patch }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         if (remove) {
           const { error } = await supabase.from('products').delete().eq('id', product_id).eq('brand_id', brandId);
           if (error) return { error: error.message };
@@ -290,7 +290,7 @@ export function catalogTools(ctx: ChatToolCtx) {
           .describe('true ONLY when the USER has just stated, in their own words, that they have this person\'s consent. Never infer it. False or omitted changes nothing.'),
         remove: z.boolean().optional().describe('true to delete this person and their photos')
       }),
-      execute: async ({ person_id, consent, remove, ...patch }: AnyRec, opts: ToolExecutionOptions) => {
+      execute: async ({ person_id, consent, remove, ...patch }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         if (remove) {
           // Come deletePerson nel form: prima i file, poi la riga. Lasciare le foto nel bucket
           // significa tenere il volto di una persona reale dopo che è stata cancellata.
@@ -342,7 +342,7 @@ export function catalogTools(ctx: ChatToolCtx) {
         rationale: z.string().optional().describe('Why they are a competitor'),
         remove: z.boolean().optional().describe('true to delete this competitor')
       }),
-      execute: async ({ competitor_id, name, website, kind, rationale, remove }: AnyRec, _opts: ToolExecutionOptions) => {
+      execute: async ({ competitor_id, name, website, kind, rationale, remove }: AnyRec, _opts: ToolExecutionOptions<unknown>) => {
         if (remove) {
           if (!competitor_id) return { error: 'competitor_id is required to remove a competitor' };
           const { error } = await supabase.from('competitors').delete().eq('id', competitor_id).eq('brand_id', brandId);
@@ -406,7 +406,7 @@ export function catalogTools(ctx: ChatToolCtx) {
         markdown: z.string().optional().describe('Replace the document text. It is re-chunked for search.'),
         remove: z.boolean().optional().describe('true to delete the document and its stored file')
       }),
-      execute: async ({ document_id, title, collection, markdown, remove }: AnyRec, _opts: ToolExecutionOptions) => {
+      execute: async ({ document_id, title, collection, markdown, remove }: AnyRec, _opts: ToolExecutionOptions<unknown>) => {
         const { data: doc } = await supabase
           .from('brand_documents')
           .select('id, file_url, kind, updated_at')
@@ -480,7 +480,7 @@ export function catalogTools(ctx: ChatToolCtx) {
         history_post_id: z.string().optional().describe('Id of one of the brand\'s own past posts (from read_posts history) to use its image'),
         remove_id: z.string().optional().describe('brand_documents id of a reference to remove')
       }),
-      execute: async ({ image_url, history_post_id, remove_id }: AnyRec, _opts: ToolExecutionOptions) => {
+      execute: async ({ image_url, history_post_id, remove_id }: AnyRec, _opts: ToolExecutionOptions<unknown>) => {
         if (remove_id) {
           const { data: doc } = await supabase
             .from('brand_documents').select('file_url, kind').eq('id', remove_id).eq('brand_id', brandId).maybeSingle();
