@@ -9238,7 +9238,8 @@
       "importing": "Importation…",
       "imported": "{n} images importées dans Media generation",
       "importFailed": "Échec de l'import",
-      "remove": "Retirer"
+      "remove": "Retirer",
+      "processing": "Traitement de l'image…"
     },
     "toolReading": {
       "brandKit": "🔧 Reading brand data...",

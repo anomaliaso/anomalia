@@ -1533,7 +1533,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--muted);
+    color: var(--ink-soft);
   }
   .ch-ref-busy svg {
     width: 18px;

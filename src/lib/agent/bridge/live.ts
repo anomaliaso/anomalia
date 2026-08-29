@@ -99,6 +99,7 @@ import {
 	graphicalBootstrapDeps,
 	openBrandHarnessSession,
 	dropLiveHarnessSession,
+	hasLiveHarnessSession,
 	resolveHarnessModelRef,
 	startHarnessTurn
 } from './adapters';
@@ -804,9 +805,17 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		 * con sessione fresca: il riuso e` un'ottimizzazione, la risposta dell'utente no.
 		 */
 		let turn: Awaited<ReturnType<typeof startTurnOnce>>;
+		// Lo stato PRIMA del tentativo: un avvio riuscito popola la cache, e il retry deve
+		// decidere se c'era qualcosa da riusare alla partenza, non se una sessione esiste adesso.
+		const hadReusableSession = hasLiveHarnessSession(threadId);
 		try {
 			turn = await startTurnOnce(false);
 		} catch (firstStartError) {
+			// Il retry è per la sessione RIUSATA che non parte. Su un thread NUOVO non c'è nulla
+			// di riusato: `startTurnOnce(false)` ha già creato una sessione fresca, e ritentare
+			// ne crea una seconda identica — due avvii a freddo, due minuti, e un log che accusa
+			// una «sessione riusata» mai esistita. Senza cache il retry non salva niente.
+			if (!hadReusableSession) throw firstStartError;
 			await dropLiveHarnessSession(threadId).catch(() => undefined);
 			try {
 				turn = await startTurnOnce(true);

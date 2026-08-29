@@ -253,6 +253,14 @@ export async function dropLiveHarnessSession(sessionKey?: string | null): Promis
 	await entry.session.destroy().catch(() => undefined);
 }
 
+/** C'è una sessione viva in cache per questo thread? Un retry «fresco» ha senso solo se
+ * il primo tentativo stava RIUSANDO qualcosa: senza sessione da riusare, riprovare è un
+ * secondo avvio a freddo pagato due volte. */
+export function hasLiveHarnessSession(sessionKey?: string | null): boolean {
+	if (!sessionKey) return false;
+	return (moduleLiveSessions as Map<string, unknown>).has(sessionKey);
+}
+
 export async function startHarnessTurn(opts: {
 	runId: string;
 	agentId?: string;
