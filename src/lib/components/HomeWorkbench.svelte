@@ -5,7 +5,6 @@
   import { closePageModal } from '$lib/components/PageModal.svelte';
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
   import GrowthReadiness from '$lib/components/GrowthReadiness.svelte';
-  import MediaReviewStatsPanel from '$lib/components/MediaReviewStatsPanel.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
 
   type Extras = {
@@ -899,7 +898,6 @@
       </div>
     </div>
 
-    <MediaReviewStatsPanel stats={overview.mediaReviews} brandSlug={brandSlug} compact />
   </section>
 </div>
 

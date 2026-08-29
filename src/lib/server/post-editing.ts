@@ -183,7 +183,6 @@ export async function applyPostEdits(
   opts?: { origin?: string }
 ) {
   const wantsCaptionLearn = typeof patch.caption === 'string' && patch.caption.trim();
-  const wantsMedia = 'media_url' in patch || 'media_urls' in patch;
   let before: {
     brand_id: string;
     caption: string | null;
@@ -191,7 +190,7 @@ export async function applyPostEdits(
     media_url: string | null;
     media_urls: unknown;
   } | null = null;
-  if (wantsCaptionLearn || wantsMedia) {
+  if (wantsCaptionLearn) {
     const { data } = await supabase
       .from('posts')
       .select('brand_id, caption, source, media_url, media_urls')
@@ -212,17 +211,6 @@ export async function applyPostEdits(
     void captureCaptionEditPair(before.brand_id, String(before.caption), String(patch.caption)).catch(swallow('String failed'));
   }
   const result = await supabase.from('posts').update(patch).eq('id', id);
-  if (!result.error && wantsMedia && before?.brand_id) {
-    const { postMediaChanged, requestPostMediaReview } = await import('$lib/server/video-review-store');
-    if (postMediaChanged(before, patch)) {
-      await requestPostMediaReview(supabase, {
-        brandId: before.brand_id,
-        postId: id,
-        origin: opts?.origin,
-        force: true
-      });
-    }
-  }
   return result;
 }
 
@@ -536,23 +524,5 @@ export const editorActions: Actions = {
 
     const res = await publishApprovedPost(supabase, post as ApprovablePost, tz, { now: true });
     return { ok: true, noAccount: res.noAccount };
-  },
-
-  requestReview: async ({ request, url, locals: { supabase } }) => {
-    const data = await request.formData();
-    const id = String(data.get('id') ?? '');
-    if (!id) return fail(400, { error: 'Missing post' });
-    const { data: post } = await supabase.from('posts').select('id, brand_id, media_url').eq('id', id).maybeSingle();
-    if (!post) return fail(404, { error: 'Post not found' });
-    const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-    const r = await requestPostMediaReview(supabase, {
-      brandId: post.brand_id,
-      postId: id,
-      origin: url.origin,
-      force: true
-    });
-    if (!r.queued && r.skippedRunning) return { reviewQueued: 0, skippedRunning: r.skippedRunning };
-    if (!r.queued) return fail(400, { error: 'No reviewable media on this post.' });
-    return { reviewQueued: r.queued, skippedRunning: r.skippedRunning };
   }
 };

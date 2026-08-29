@@ -32,8 +32,7 @@ import {
   readLeadsForAgent,
   readMediaForAgent,
   readRubricsForAgent,
-  readStrategyReportForAgent,
-  readMediaReviewsForAgent
+  readStrategyReportForAgent
 } from '$lib/server/strategy-agent-reads';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
 import { disruptiveBriefSection } from '$lib/disruptive';
@@ -105,15 +104,14 @@ async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<Wee
   const usdBudget = await fetchUsdBudget(opts.brandId);
   const budget = createStrategyBudget({ drafts: MAX_WEEK_PLANNER_DRAFTS, repairs: MAX_WEEK_PLANNER_REPAIRS, usdRemaining: usdBudget });
 
-  const [editorialPlan, batchCtx, mediaReviews] = await Promise.all([
+  const [editorialPlan, batchCtx] = await Promise.all([
     loadActivePlan(opts.supabase, opts.brandId),
     loadBatchFeasibilityContext(opts.supabase, opts.brandId, {
       expectedSeedCount: opts.count,
       selectedPlatforms: opts.platforms,
       weekIndex: opts.weekIndex,
       rubrics: opts.rubrics
-    }),
-    readMediaReviewsForAgent(opts.supabase, opts.brandId)
+    })
   ]);
 
   if (opts.weekIndex != null && editorialPlan) {
@@ -143,7 +141,7 @@ async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<Wee
   const system = `You are a week planner agent. Produce ${opts.count} post SEEDS for one editorial week.
 
 Workflow:
-1. read_* tools are FREE — start with read_rubrics, read_leads, read_editorial_plan, read_brand_studio, read_media, read_post_history, read_media_reviews as needed.
+1. read_* tools are FREE — start with read_rubrics, read_leads, read_editorial_plan, read_brand_studio, read_media, read_post_history as needed.
 2. draft_seeds (max ${MAX_WEEK_PLANNER_DRAFTS}/run) generates seeds from your brief.
 3. check_batch_feasibility before finish — repair_seeds or draft again if violations remain.
 4. When approved rubrics exist (${rubricNames}), every seed MUST carry rubric = exact series name and match the week's content_mix counts.
@@ -160,7 +158,6 @@ Una settimana di sette post corretti è una settimana invisibile: fra i seed cer
 EDITORIAL BRIEF (verify and enrich with read_* tools):
 ${opts.strategyBrief ?? '(no brief — read editorial plan and GTM)'}
 ${opts.marketBrief ? `\n${opts.marketBrief}` : ''}
-${mediaReviews.block ? `\n${mediaReviews.block}\nApply next_test to NEW visual seeds; do not copy kill/fix looks.` : ''}
 ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
 
   const planPreviewOpts = {
@@ -224,16 +221,6 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
         limit: z.number().int().min(1).max(40).optional()
       }),
       execute: async (input) => readMediaForAgent(opts.supabase, opts.brandId, input)
-    }),
-    read_media_reviews: tool({
-      description:
-        'Anomalia media-reviewer scores on recent posts (overall /10, verdict, judgment, next_test). Apply next_test to NEW visual seeds. Free.',
-      inputSchema: z.object({}),
-      execute: async () => {
-        const { reviews, weak, block } = await readMediaReviewsForAgent(opts.supabase, opts.brandId);
-        if (!reviews.length) return { reviews: [], weak: [], note: 'No media-review scores yet.' };
-        return { reviews, weak, block };
-      }
     }),
     read_post_history: tool({
       description: 'Post performance digest (free).',

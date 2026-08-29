@@ -414,16 +414,6 @@ export const POST: RequestHandler = async ({ params, request, locals: { supabase
               .eq('task_id', videoRenderTaskId)
               .then(undefined, () => {});
           }
-          if (row?.id && mediaUrl) {
-            const { queueVideoReview } = await import('$lib/server/video-review-store');
-            await queueVideoReview(supabase, {
-              brandId: brand.id,
-              url: mediaUrl,
-              postId: row.id as string,
-              ugcAd: post.ugc_ad === true,
-              durationSeconds: videoDurationSeconds
-            });
-          }
           // Solo i chunk davvero iniettati nel prompt della caption.
           if (row?.id && post.knowledgeChunkIds?.length) {
             try {
@@ -493,15 +483,6 @@ export const POST: RequestHandler = async ({ params, request, locals: { supabase
 
         // Si aspetta ogni insert prima di dire 'done', o il reload del client vede un piano monco.
         await Promise.all([...pending]);
-
-        if (renderedVideos > 0) {
-          const { kickVideoReviewWork } = await import('$lib/server/video-review-store');
-          const origin = new URL(request.url).origin;
-          const p = platform as { context?: { waitUntil?: (pr: Promise<unknown>) => void } } | undefined;
-          const kick = kickVideoReviewWork(origin, brand.id);
-          if (p?.context?.waitUntil) p.context.waitUntil(kick);
-          else await kick.catch(swallow('p.context.waitUntil failed'));
-        }
 
         // Riga singola: si toglie solo il seed prodotto, e la bozza resta in revisione finché ne
         // restano; passa a 'proposed' quando è vuota.

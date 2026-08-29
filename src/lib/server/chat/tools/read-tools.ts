@@ -462,7 +462,7 @@ export function readTools(ctx: ChatToolCtx) {
 
     read_posts: tool({
       description:
-        'Read posts filtered by status (includes media_url / media_urls, media_origin, and media_review). With status "published" (or no status) the result ALSO carries `published_on_socials`: what the brand published on its own connected accounts, which is not in the posts table — so "nothing published" is only true when both are empty. Each post is annotated with media_origin: typographic_graphic (editable HTML/TSX — patch with grep_source / read_source / replace_source; write_source only to rebuild; design_graphic for a high-level brief; new photos → generate_image then replace_source <img src>), ai_generated, user_uploaded, video, or none. media_review is ALWAYS present when the post has reviewable media: overall (0–10), verdict (ship|fix|kill), judgment (why), next_test (one change to try), issues[]. status none/pending/running/failed/ready. Honor fix/kill — do not approve as-is; apply next_test when remaking. The score is read-only in chat: when status is none/failed, look at the media yourself (read_media, or render_stills for a motion video) instead of waiting for a score. Reading is SILENT: nothing is shown to the user unless you pass show_to_user: true.',
+        'Read posts filtered by status (includes media_url / media_urls and media_origin). With status "published" (or no status) the result ALSO carries `published_on_socials`: what the brand published on its own connected accounts, which is not in the posts table — so "nothing published" is only true when both are empty. Each post is annotated with media_origin: typographic_graphic (editable HTML/TSX — patch with grep_source / read_source / replace_source; write_source only to rebuild; design_graphic for a high-level brief; new photos → generate_image then replace_source <img src>), ai_generated, user_uploaded, video, or none. Reading is SILENT: nothing is shown to the user unless you pass show_to_user: true.',
       inputSchema: z.object({
         status: z.enum(['pending_user', 'approved', 'scheduled', 'published', 'failed']).optional().describe('Filter by post status. Omit to get all recent posts.'),
         limit: z.number().min(1).max(50).optional().describe('Max posts to return (default 20). `count` nel risultato è quante ne ESISTONO col filtro chiesto, `returned` quante ne vedi qui'),
@@ -519,8 +519,6 @@ export function readTools(ctx: ChatToolCtx) {
           const origin = annotatePostMedia(p, graphics.get(String(p.id)) ?? null);
           Object.assign(p, origin);
         }
-        const { attachChatMediaReviews } = await import('$lib/server/video-review-store');
-        await attachChatMediaReviews(supabase, brandId, posts);
 
         // Which of these are still waiting on a clip. Asked separately rather than added to
         // EDITOR_POST_COLS on purpose: that list warns that an unmigrated column in it breaks

@@ -7,7 +7,6 @@
   import { siInstagram, siTiktok, siFacebook, siX, siThreads, siYoutube, siBluesky, siReddit } from 'simple-icons';
   import { _ } from 'svelte-i18n';
   import type { CalendarPost } from './+page.server';
-  import VideoScoreRing from '$lib/components/VideoScoreRing.svelte';
 
   let { data, form } = $props();
   const brand = $derived(data.brand);
@@ -312,7 +311,6 @@
         {/if}
       </span>
       {#if !blog && p.media_url}
-        <VideoScoreRing url={p.media_url} badge={p.videoScore} size={22} corner="tl" />
       {/if}
     {:else}
       <span class="evph" style={`background:${blog ? '#5b6470' : (meta?.bg ?? '#7c5cff')}`}>
@@ -345,7 +343,6 @@
         {/if}
       </span>
     {:else if !blog && p.media_url}
-      <VideoScoreRing url={p.media_url} badge={p.videoScore} size={22} />
     {/if}
   </span>
   <span class="cl-when">{p.whenLabel}</span>

@@ -152,9 +152,6 @@ const TOOL_VOCABULARY = [
   'generate_voiceover',
   'generate_music',
   'render_stills',
-  // `review_video` è uscito il 23/8/2026: smontato dalla chat
-  // (CHAT_REVIEW_VIDEO_ENABLED). Un'ancora su un tool che non può più tornare con successo è un
-  // obiettivo che non chiude mai — il nome qui vale solo se il tool è in mano all'agente.
   'design_graphic',
   'generate_image',
   'create_post',

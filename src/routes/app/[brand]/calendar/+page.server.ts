@@ -15,9 +15,6 @@ import {
 } from '$lib/server/post-editing';
 import { founderVideoBudget, listVideoRequests } from '$lib/server/video-requests';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { isReviewableMediaUrl } from '$lib/content-formats';
-import { loadVideoScoreBadges, mediaUrlHash } from '$lib/server/video-review-store';
-import type { VideoScoreBadge } from '$lib/video-score';
 import { cachedBrandPage } from '$lib/server/page-cache';
 
 function parseIds(form: FormData, key = 'ids'): string[] {
@@ -54,7 +51,6 @@ export type CalendarPost = {
   product_name?: string | null;
   format?: string | null;
   lastError?: string | null;
-  videoScore?: VideoScoreBadge | null;
   /** Full decorated social row for PostEditor — absent for blog. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   editorPost?: any;
@@ -231,15 +227,6 @@ export const load: PageServerLoad = async (event) => {
         editorPost: p
       };
     });
-
-    const videoUrls = socialCal.map((p) => p.media_url).filter((u): u is string => !!u && isReviewableMediaUrl(u));
-    if (videoUrls.length) {
-      const badges = await loadVideoScoreBadges(supabase, brand.id, videoUrls);
-      for (const p of socialCal) {
-        if (!p.media_url || !isReviewableMediaUrl(p.media_url)) continue;
-        p.videoScore = badges.get(mediaUrlHash(p.media_url)) ?? badges.get(p.media_url) ?? null;
-      }
-    }
 
     const articleCal: CalendarPost[] = ((articleRows ?? []) as Array<Record<string, unknown>>)
       .map((a): CalendarPost | null => {

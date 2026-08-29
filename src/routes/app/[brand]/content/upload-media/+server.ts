@@ -38,13 +38,5 @@ export const POST: RequestHandler = async ({ params, request, locals: { supabase
     .single();
   if (insErr || !row) return json({ error: insErr?.message ?? 'insert_failed' }, { status: 500 });
 
-  const { queueVideoReview, kickVideoReviewWork } = await import('$lib/server/video-review-store');
-  const queued = await queueVideoReview(supabase, {
-    brandId: brand.id,
-    url: mediaUrl,
-    postId: row.id as string
-  });
-  if (queued) void kickVideoReviewWork(new URL(request.url).origin, brand.id);
-
   return json({ ok: true, id: row.id, contentType });
 };

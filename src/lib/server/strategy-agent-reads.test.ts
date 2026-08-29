@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planForPrompt } from './editorial-plan';
-import { leadsBriefForPrompt, mediaReviewsBlock } from './strategy-agent-reads';
+import { leadsBriefForPrompt } from './strategy-agent-reads';
 
 describe('strategy agent reads', () => {
   it('planForPrompt includes week themes for editorial plan tool output', () => {
@@ -47,34 +47,5 @@ describe('strategy agent reads', () => {
     expect(leadsBriefForPrompt([])).toBe('');
   });
 
-  it('mediaReviewsBlock lists weak scores and next_test', () => {
-    const block = mediaReviewsBlock([
-      {
-        post_id: 'a',
-        overall: 4.1,
-        verdict: 'fix',
-        judgment: 'Hook is weak',
-        next_test: 'Open on a face',
-        status: 'ready'
-      },
-      {
-        post_id: 'b',
-        overall: 8,
-        verdict: 'ship',
-        judgment: null,
-        next_test: null,
-        status: 'ready'
-      }
-    ]);
-    expect(block).toContain('MEDIA QC');
-    expect(block).toContain('4.1/10');
-    expect(block).toContain('Open on a face');
-    expect(block).toContain('8/10');
-  });
 
-  it('mediaReviewsBlock is empty without ready scores', () => {
-    expect(mediaReviewsBlock([{ post_id: 'a', overall: null, verdict: null, judgment: null, next_test: null, status: 'pending' }])).toBe(
-      ''
-    );
-  });
 });

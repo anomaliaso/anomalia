@@ -548,7 +548,6 @@ Need photo assets? Call read_media first. If a library image fits, use_library_i
 					supabase,
 					brandId,
 					userId,
-					brandName,
 					fps: () => {
 						try {
 							const cur = resolveTargets()[0]?.get();
@@ -560,11 +559,7 @@ Need photo assets? Call read_media first. If a library image fits, use_library_i
 						}
 					},
 					remainingMs: opts.remainingMs,
-					abortSignal: opts.abortSignal,
-					// Il thread dove far rientrare l'esito della QC accodata (render senza budget per
-					// il giudice → "in verifica", vedi output-tools.ts). Assente nei giri del designer
-					// senza conversazione: la QC gira lo stesso, solo il rientro non ha dove atterrare.
-					threadId: opts.threadId
+					abortSignal: opts.abortSignal
 				})
 			: {};
 

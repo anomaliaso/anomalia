@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// Il gate di craft sul render (vedi render_motion_video): giudice e persistenza finti, così il
-// test guarda solo il contratto del tool result — must_fix + fix_brief quando il verdetto non è ship.
+// Giudice e persistenza finti, così il test guarda solo il contratto del tool result del render.
 vi.mock('./persist', () => ({
 	getMotionVideo: vi.fn(async () => ({
 		id: 'video-1',
@@ -26,35 +25,11 @@ vi.mock('./render-tools', async () => {
 // La VM c'è: senza questo lo storyboard si dichiarerebbe saltato e i test sotto guarderebbero
 // il percorso sbagliato.
 vi.mock('$lib/server/sandbox', () => ({ isSandboxConfigured: () => true }));
-vi.mock('./craft-review', () => ({
-	reviewMotionCraft: vi.fn(async () => ({
-		ok: true,
-		review: {
-			verdict: 'fix',
-			overall: 5.2,
-			duration_s: 24,
-			transitions_broken: false,
-			scores: { craft: 5, content: 7, pleasant: 7, transitions: 5 },
-			weakest_link: 'transitions',
-			issues: [],
-			next_test: 'n',
-			summary: 's',
-			judgment: 'j',
-			on_screen: ''
-		}
-	})),
-	compactCraftReview: vi.fn((r: { verdict: string }) => ({ verdict: r.verdict })),
-	formatCraftApplyBrief: vi.fn(() => 'MOTION CRAFT QC FAILED — patch now')
-}));
-
-import { reviewMotionCraft } from './craft-review';
 import {
 	MAX_MUSIC_PER_TURN,
 	MAX_VIDEO_RENDERS_PER_DAY,
 	MAX_VIDEO_RENDERS_PER_TURN,
-	MOTION_QC_JOB,
 	createMotionOutputTools,
-	enqueueMotionQcJob,
 	latestVoiceoverTakeUrl,
 	motionRenderBudget,
 	motionRendersToday,
@@ -189,65 +164,6 @@ describe('render_motion_video — lo storyboard prima della VM', () => {
 	});
 });
 
-describe('render_motion_video — il gate di craft morde sul percorso vero', () => {
-	it('un render il cui giudizio è FIX torna con must_fix e il brief da applicare', async () => {
-		const tools = createMotionOutputTools({
-			supabase: fakeAiCallsClient(0) as never,
-			brandId: 'b1',
-			fps: () => 30,
-			remainingMs: () => 600_000
-		});
-		const res = await renderPastStoryboard(tools);
-		expect(res.url).toBe('https://cdn.test/out.mp4');
-		expect(res.must_fix).toBe(true);
-		expect(res.craft_qc).toMatchObject({ verdict: 'fix' });
-		expect(res.fix_brief).toContain('MOTION CRAFT QC FAILED');
-		// Il render NON deve dirsi pronto: l'hint manda a patchare, non dall'utente.
-		expect(res.hint).not.toContain('Tell the user it is ready');
-	});
-
-	it('senza tempo per il giudice il render NON è "pronto": è IN VERIFICA, con la QC accodata', async () => {
-		// Prima usciva senza verdetto e senza traccia — il trailer del 21/8 è nato così. Ora il
-		// risultato dice under_review e l'hint vieta di dire "pronto".
-		vi.mocked(reviewMotionCraft).mockClear();
-		const tools = createMotionOutputTools({
-			supabase: fakeAiCallsClient(0) as never,
-			brandId: 'b1',
-			fps: () => 30,
-			remainingMs: () => 30_000
-		});
-		// 30s residui: non bastano nemmeno per lo storyboard (STORYBOARD_MIN_MS), che infatti viene
-		// saltato — ma DETTO, non in silenzio. È la stessa lezione della QC di craft.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const res = await (tools.render_motion_video as any).execute(
-			{ video_id: 'video-1' },
-			{ toolCallId: 't', messages: [] }
-		);
-		expect(res.storyboard_skipped).toBe('not_enough_time_left_in_this_turn');
-		expect(res.url).toBe('https://cdn.test/out.mp4');
-		expect(res.must_fix).toBeUndefined();
-		expect(res.craft_qc).toBeUndefined();
-		expect(res.under_review).toBe(true);
-		expect(res.hint).toContain('IN VERIFICATION');
-		expect(res.hint).not.toContain('Tell the user it is ready.');
-		expect(reviewMotionCraft).not.toHaveBeenCalled();
-	});
-
-	it('un giudice che esplode non si mangia il render — ma il video resta in verifica', async () => {
-		vi.mocked(reviewMotionCraft).mockRejectedValueOnce(new Error('boom'));
-		const tools = createMotionOutputTools({
-			supabase: fakeAiCallsClient(0) as never,
-			brandId: 'b1',
-			fps: () => 30,
-			remainingMs: () => 600_000
-		});
-		const res = await renderPastStoryboard(tools);
-		expect(res.url).toBe('https://cdn.test/out.mp4');
-		expect(res.must_fix).toBeUndefined();
-		expect(res.under_review).toBe(true);
-	});
-});
-
 describe('render_motion_video — il gate sulla voce rifiuta PRIMA della VM', () => {
 	it('un MotionVoiceGateError torna come voice_gate_failed con il rimedio, non come render_failed', async () => {
 		const { renderMotionMp4 } = await import('./render-tools');
@@ -268,62 +184,6 @@ describe('render_motion_video — il gate sulla voce rifiuta PRIMA della VM', ()
 		expect(res.must_fix).toBe(true);
 		expect(res.violations[0]).toContain('TRONCATO');
 		expect(res.fix_brief).toContain('si allunga il video');
-	});
-});
-
-describe('enqueueMotionQcJob — la review che gira sempre, accodata come chat_job', () => {
-	function fakeChatJobsClient(existing: boolean) {
-		const inserted: Record<string, unknown>[] = [];
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const q: any = {
-			eq: () => q,
-			in: () => q,
-			limit: () => q,
-			maybeSingle: async () => ({ data: existing ? { id: 'job-1' } : null })
-		};
-		const client = {
-			from: () => ({
-				select: () => q,
-				insert: async (row: Record<string, unknown>) => {
-					inserted.push(row);
-					return { error: null };
-				}
-			})
-		} as never;
-		return { client, inserted };
-	}
-
-	it('accoda una riga pending con il video e il thread del rientro', async () => {
-		const { client, inserted } = fakeChatJobsClient(false);
-		const res = await enqueueMotionQcJob(client, {
-			brandId: 'b1',
-			userId: 'u1',
-			videoId: 'video-1',
-			threadId: 'thread-1',
-			locale: 'it'
-		});
-		expect(res.queued).toBe(true);
-		expect(inserted).toHaveLength(1);
-		expect(inserted[0]).toMatchObject({
-			tool_name: MOTION_QC_JOB,
-			status: 'pending',
-			thread_id: 'thread-1'
-		});
-		expect(inserted[0].input_params).toMatchObject({ video_id: 'video-1', report_locale: 'it' });
-	});
-
-	it('dedupe: un giro già in coda per questo video basta — non se ne compra un secondo', async () => {
-		const { client, inserted } = fakeChatJobsClient(true);
-		const res = await enqueueMotionQcJob(client, { brandId: 'b1', userId: 'u1', videoId: 'video-1' });
-		expect(res).toMatchObject({ queued: true, reason: 'already_queued' });
-		expect(inserted).toHaveLength(0);
-	});
-
-	it('senza userId non si accoda (chat_jobs vuole un utente) e lo si dice', async () => {
-		const { client, inserted } = fakeChatJobsClient(false);
-		const res = await enqueueMotionQcJob(client, { brandId: 'b1', videoId: 'video-1' });
-		expect(res).toMatchObject({ queued: false, reason: 'no_user' });
-		expect(inserted).toHaveLength(0);
 	});
 });
 

@@ -104,8 +104,6 @@ export type MotionContinuation = {
 	prompt?: string;
 	/** Speso su questo thread da quando il video esiste, in USD. */
 	spentUsd?: number | null;
-	/** I voti di craft, dal primo all'ultimo. */
-	scores?: number[];
 };
 
 /**
@@ -135,7 +133,7 @@ export async function decideMotionContinuation(
 			reason: 'never_rendered',
 			videoId: null,
 			title: null,
-			prompt: continuationPrompt(null, null, opts.locale)
+			prompt: continuationPrompt(null, opts.locale)
 		};
 	}
 
@@ -151,18 +149,10 @@ export async function decideMotionContinuation(
 	if (!video) return null;
 	const title = (video as { title?: string }).title ?? null;
 
-	const { data: scoreRows } = await supabase
-		.from('motion_craft_scores')
-		.select('overall, verdict, created_at')
-		.eq('video_id', videoId)
-		.order('created_at', { ascending: true });
-	const rows = (scoreRows ?? []) as Array<{ overall: number | string; verdict: string }>;
-	const scores = rows.map((r) => Number(r.overall)).filter((n) => Number.isFinite(n));
-	const latest = rows[rows.length - 1];
-
-	// FINITO significa questo, e solo questo.
-	if (latest?.verdict === 'ship') {
-		return { continue: false, reason: 'shipped', videoId, title, scores };
+	// FINITO significa questo, e solo questo: un MP4 di anteprima esiste e sta sulla riga.
+	const previewUrl = (video as { preview_url?: string | null }).preview_url;
+	if (previewUrl) {
+		return { continue: false, reason: 'shipped', videoId, title };
 	}
 
 	// Il tetto di spesa, DOPO "finito": un video consegnato non deve mai uscire con un messaggio
@@ -173,24 +163,16 @@ export async function decideMotionContinuation(
 		String((video as { created_at?: string }).created_at ?? '')
 	);
 	if (spentUsd != null && spentUsd >= MOTION_CHAIN_USD_CAP) {
-		return { continue: false, reason: 'budget_spent', videoId, title, spentUsd, scores };
+		return { continue: false, reason: 'budget_spent', videoId, title, spentUsd };
 	}
 
-	// Il voto non sale: si smette di lucidare. Serve un confronto vero — due giudizi — quindi al
-	// primo verdetto negativo si riprende comunque, ed è giusto: è la prima correzione.
-	if (scores.length >= 2 && scores[scores.length - 1] <= scores[scores.length - 2]) {
-		return { continue: false, reason: 'not_improving', videoId, title, spentUsd, scores };
-	}
-
-	const previewUrl = (video as { preview_url?: string | null }).preview_url;
 	return {
 		continue: true,
-		reason: !previewUrl || !latest ? 'never_rendered' : 'verdict_open',
+		reason: 'never_rendered',
 		videoId,
 		title,
 		spentUsd,
-		scores,
-		prompt: continuationPrompt(title, latest ? Number(latest.overall) : null, opts.locale)
+		prompt: continuationPrompt(title, opts.locale)
 	};
 }
 
@@ -218,19 +200,19 @@ async function threadSpendSince(
 	return (data ?? []).reduce((sum, r) => sum + (Number((r as { cost_usd?: unknown }).cost_usd) || 0), 0);
 }
 
-function continuationPrompt(title: string | null, score: number | null, locale?: string): string {
+function continuationPrompt(title: string | null, locale?: string): string {
 	const en = bilingualNoticeLocale(locale) === 'en';
 	const name = title ? `"${title}"` : en ? 'the motion video' : 'il motion video';
 	if (en) {
 		return [
-			`${name} is NOT delivered: ${score == null ? 'no reviewed MP4 exists yet' : `the craft verdict is ${score}/10, not shippable`}.`,
+			`${name} is NOT delivered: no MP4 preview exists yet.`,
 			'Pick it back up where you left it. Call render_motion_video: the first call on this version hands you the storyboard — one frame per scene — plus the source checks a still cannot show.',
 			'Look at every scene, fix the ones that do not convince you with ONE replace_motion_source each, then render.',
 			'Do not start over, do not create a second video, and do not answer the user as if this were finished.'
 		].join(' ');
 	}
 	return [
-		`${name} NON è consegnato: ${score == null ? 'non esiste ancora un MP4 rivisto' : `il verdetto di craft è ${score}/10, non consegnabile`}.`,
+		`${name} NON è consegnato: non esiste ancora un MP4 di anteprima.`,
 		'Riprendi da dove eri. Chiama render_motion_video: la prima chiamata su questa versione ti dà lo storyboard — un fotogramma per scena — più i controlli sul sorgente che un fermo immagine non può mostrare.',
 		'Guarda ogni scena, correggi quelle che non ti convincono con UNA replace_motion_source ciascuna, poi rendi.',
 		'Non ricominciare da capo, non creare un secondo video, e non rispondere all’utente come se fosse finito.'
@@ -247,21 +229,14 @@ function continuationPrompt(title: string | null, score: number | null, locale?:
 export function motionUnfinishedNotice(d: MotionContinuation | null, locale: string): string | null {
 	if (!d || d.continue || d.reason === 'shipped' || d.reason === 'no_video_id') return null;
 	const en = bilingualNoticeLocale(locale) === 'en';
-	const best = d.scores?.length ? Math.max(...d.scores) : null;
-	const grade = best == null ? '' : en ? ` The best it reached is ${best}/10.` : ` Il voto più alto raggiunto è ${best}/10.`;
-	if (d.reason === 'not_improving') {
-		return en
-			? `\n\n_I stopped reworking this video: two rounds in a row without the score going up is polishing that leads nowhere.${grade} It is saved as it is — tell me what bothers you about it and I will go at that instead._`
-			: `\n\n_Ho smesso di rilavorare questo video: due giri di fila senza che il voto salga sono lucidatura che non porta da nessuna parte.${grade} È salvato com'è — dimmi tu cosa non ti torna e vado su quello._`;
-	}
 	if (d.reason === 'budget_spent') {
 		const spent = d.spentUsd != null ? d.spentUsd.toFixed(2) : '?';
 		return en
-			? `\n\n_I stopped here: this video has already used about $${spent} of work, which is the ceiling I keep for one video.${grade} It is saved as it is — say the word and I will carry on._`
-			: `\n\n_Mi fermo qui: su questo video è già andato circa $${spent} di lavoro, che è il tetto che tengo per un video solo.${grade} È salvato com'è — dimmi tu se vado avanti._`;
+			? `\n\n_I stopped here: this video has already used about $${spent} of work, which is the ceiling I keep for one video. It is saved as it is — say the word and I will carry on._`
+			: `\n\n_Mi fermo qui: su questo video è già andato circa $${spent} di lavoro, che è il tetto che tengo per un video solo. È salvato com'è — dimmi tu se vado avanti._`;
 	}
 	// laps_spent
 	return en
-		? `\n\n_I stopped after ${MOTION_MAX_CONTINUATIONS} passes on this video.${grade} It is saved as it is — a video that needs more than that needs a different brief, not another pass._`
-		: `\n\n_Mi fermo dopo ${MOTION_MAX_CONTINUATIONS} passaggi su questo video.${grade} È salvato com'è — un video che ne chiede di più ha bisogno di un brief diverso, non di un altro giro._`;
+		? `\n\n_I stopped after ${MOTION_MAX_CONTINUATIONS} passes on this video. It is saved as it is — a video that needs more than that needs a different brief, not another pass._`
+		: `\n\n_Mi fermo dopo ${MOTION_MAX_CONTINUATIONS} passaggi su questo video. È salvato com'è — un video che ne chiede di più ha bisogno di un brief diverso, non di un altro giro._`;
 }

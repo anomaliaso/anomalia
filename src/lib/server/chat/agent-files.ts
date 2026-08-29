@@ -789,14 +789,11 @@ function capSource(src: string, full?: boolean): string {
 type ArtifactRow = { path: string; type: ArtifactType; label: string; status: string; date: string; sortKey: string };
 
 /**
- * `status` è DERIVATO: `motion_videos` non ha quella colonna. La verità sono due fatti — c'è un MP4
- * (`preview_url`) ed è mai stato giudicato `ship` — la stessa lettura di `unfinished.ts`.
+ * `status` è DERIVATO: `motion_videos` non ha quella colonna. La verità è un fatto — c'è un MP4
+ * (`preview_url`) — la stessa lettura di `unfinished.ts`.
  */
-function motionStatus(previewUrl: string | null, score: { verdict: string; overall: number } | null): string {
-  if (!previewUrl) return 'no render yet';
-  if (!score) return 'rendered, not yet scored';
-  if (score.verdict === 'ship') return `shipped (craft ${score.overall}/10)`;
-  return `rendered, verdict ${score.verdict} (craft ${score.overall}/10)`;
+function motionStatus(previewUrl: string | null): string {
+  return previewUrl ? 'shipped' : 'no render yet';
 }
 
 async function fetchMotionRows(ctx: RunCtx, limit: number): Promise<ArtifactRow[]> {
@@ -808,22 +805,11 @@ async function fetchMotionRows(ctx: RunCtx, limit: number): Promise<ArtifactRow[
     .limit(limit);
   const rows = (data ?? []) as Array<{ id: string; title: string; preview_url: string | null; created_at: string }>;
   if (!rows.length) return [];
-  const ids = rows.map((r) => r.id);
-  const { data: scoreRows } = await ctx.supabase
-    .from('motion_craft_scores')
-    .select('video_id, verdict, overall, created_at')
-    .in('video_id', ids)
-    .order('created_at', { ascending: true });
-  // Ascendente e si sovrascrive: l'ultima scrittura per id è quella più recente.
-  const latest = new Map<string, { verdict: string; overall: number }>();
-  for (const s of (scoreRows ?? []) as Array<{ video_id: string; verdict: string; overall: number }>) {
-    latest.set(s.video_id, { verdict: s.verdict, overall: s.overall });
-  }
   return rows.map((r) => ({
     path: `artifacts/motion/${r.id}.md`,
     type: 'motion' as const,
     label: clipLabel(r.title),
-    status: motionStatus(r.preview_url, latest.get(r.id) ?? null),
+    status: motionStatus(r.preview_url),
     date: (r.created_at || '').slice(0, 10),
     sortKey: r.created_at || ''
   }));
@@ -912,18 +898,10 @@ async function resolveMotionArtifact(ctx: RunCtx, id: string, full?: boolean): P
     created_at: string;
     updated_at: string;
   };
-  const { data: scoreRows } = await ctx.supabase
-    .from('motion_craft_scores')
-    .select('verdict, overall, created_at')
-    .eq('video_id', id)
-    .order('created_at', { ascending: false })
-    .limit(1);
-  const latest = ((scoreRows ?? [])[0] ?? null) as { verdict: string; overall: number } | null;
-
   const head = `# artifacts/motion/${row.id}.md
 
 Motion video · created ${row.created_at} · updated ${row.updated_at}
-Status: ${motionStatus(row.preview_url, latest)}
+Status: ${motionStatus(row.preview_url)}
 Public URL: ${row.preview_url || 'none — not rendered yet, so there is no MP4 to link.'}
 Linked post: none — motion videos live in their own gallery, not attached to a post.`;
 
@@ -932,8 +910,7 @@ Linked post: none — motion videos live in their own gallery, not attached to a
 - title: ${row.title}
 - fps: ${row.fps}
 - duration_in_frames: ${row.duration_in_frames}
-- size: ${row.width}x${row.height}
-- craft verdict (latest): ${latest ? `${latest.verdict} (${latest.overall}/10)` : 'not yet scored'}`;
+- size: ${row.width}x${row.height}`;
 
   const source = `## Source
 \`\`\`tsx

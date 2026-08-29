@@ -32,7 +32,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { getBrandContext } from '$lib/server/ai-log';
 import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { fetchVideoBytes, prepareReviewMedia } from '$lib/server/video-review';
+import { fetchVideoBytes, prepareReviewMedia } from '$lib/server/video-fetch';
 import {
   isPostsDesignEnabled,
   loadPostsDesignDetail,

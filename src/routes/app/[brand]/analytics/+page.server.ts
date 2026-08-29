@@ -11,7 +11,6 @@ import {
   metricNum,
   type SocialHistoryRow
 } from '$lib/server/social-history-metrics';
-import { loadMediaReviewStats } from '$lib/server/media-review-stats';
 import { cachedBrandPage } from '$lib/server/page-cache';
 
 const HERO_SPARK_DAYS = 14;
@@ -122,8 +121,7 @@ export const load: PageServerLoad = async (event) => {
       { count: accounts },
       { data: brandMeta },
       { data: lastZernioSync },
-      _historyEnsured,
-      mediaReviews
+      _historyEnsured
     ] = await Promise.all([
       supabase.from('posts').select('platform, status').eq('brand_id', brand.id),
       supabase
@@ -159,8 +157,7 @@ export const load: PageServerLoad = async (event) => {
       // get their history pulled in on first visit — cache-first, so usually instant; without this
       // the organic section sat empty for brands with perfectly healthy socials. Must complete
       // BEFORE the social_post_history read below.
-      ensureBrandHistory(supabase, brand.id, 1),
-      loadMediaReviewStats(supabase, brand.id, { withCaptions: true })
+      ensureBrandHistory(supabase, brand.id, 1)
     ]);
 
     // Soft-refresh Zernio publish analytics when stale so likes/views on Anomalia-published posts
@@ -410,8 +407,7 @@ export const load: PageServerLoad = async (event) => {
       products: products ?? 0,
       accounts: accounts ?? 0,
       paid,
-      statsUpdatedAt,
-      mediaReviews
+      statsUpdatedAt
     };
   });
 };

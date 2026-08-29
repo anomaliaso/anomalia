@@ -4,7 +4,6 @@ import { senderEmailDomain } from './support-config';
 import type { Locale } from '$lib/i18n/locale';
 import type { Stage } from './lifecycle';
 import { siteUrl } from '$lib/seo';
-import { formatVideoScore } from '$lib/video-score';
 
 // Sender address. The domain must be verified in Resend, otherwise Resend rejects delivery to
 // anyone but the account owner. Override EMAIL_FROM entirely, or just EMAIL_DOMAIN to change only
@@ -381,16 +380,6 @@ export type RecapData = {
   /** Web/rank KPIs (P4): tracked keywords and their movement. Optional — the section renders
    *  only when present and tracked > 0. */
   webKpis?: { tracked: number; improved: number; worsened: number; improvedList: string[] };
-  /** Lowest media-review scores this week. Optional — the section renders only when present. */
-  weakReviews?: {
-    postId: string;
-    overall: number;
-    verdict: 'ship' | 'fix' | 'kill';
-    kind: string;
-    judgment: string | null;
-    caption: string | null;
-    postUrl?: string;
-  }[];
 };
 
 function sectionTitle(text: string): string {
@@ -466,47 +455,6 @@ function visualInsightsSectionHtml(locale: Locale, data: RecapData): string {
     })
     .join('');
   return `${sectionTitle(tEmail(locale, 'recap_weekly.visual_insights'))}${items}`;
-}
-
-function verdictColor(verdict: 'ship' | 'fix' | 'kill'): string {
-  if (verdict === 'kill') return '#dc2626';
-  if (verdict === 'fix') return '#b7791f';
-  return '#16a34a';
-}
-
-function recapReviewsUrl(data: RecapData): string {
-  if (!data.dashboardUrl) return '';
-  return `${data.dashboardUrl.replace(/\/$/, '')}/settings/media-reviewer`;
-}
-
-function weakReviewsSectionHtml(locale: Locale, data: RecapData): string {
-  const rows = data.weakReviews ?? [];
-  if (!rows.length) return '';
-  const items = rows
-    .map((r) => {
-      const snippet = (r.caption || r.judgment || '').trim().slice(0, 120);
-      const score = tEmail(locale, 'recap_weekly.weak_reviews.score', {
-        score: formatVideoScore(r.overall)
-      });
-      const verdict = tEmail(locale, `recap_weekly.weak_reviews.verdict.${r.verdict}`);
-      const open = r.postUrl
-        ? `<div style="margin-top:6px;"><a href="${esc(r.postUrl)}" style="font-size:12px;color:${ACCENT};text-decoration:none;font-weight:600;">${tEmail(locale, 'recap_weekly.weak_reviews.open_post')}</a></div>`
-        : '';
-      return `<div style="padding:12px 16px;background:#f9f9fb;border-radius:10px;margin-bottom:8px;">
-        <div style="font-size:13px;font-weight:700;color:${verdictColor(r.verdict)};">${esc(score)} · ${esc(verdict)}</div>
-        ${snippet ? `<div style="font-size:13px;color:#1d1d1f;line-height:1.5;margin-top:4px;">${esc(snippet)}</div>` : ''}
-        ${open}
-      </div>`;
-    })
-    .join('');
-  const seeAllUrl = recapReviewsUrl(data);
-  const seeAll = seeAllUrl
-    ? `<div style="margin-top:4px;"><a href="${esc(seeAllUrl)}" style="font-size:12px;color:${ACCENT};text-decoration:none;font-weight:600;">${tEmail(locale, 'recap_weekly.weak_reviews.see_all')}</a></div>`
-    : '';
-  return `${sectionTitle(tEmail(locale, 'recap_weekly.weak_reviews.title'))}
-    <p style="font-size:13px;color:#6e6e73;line-height:1.5;margin:0 0 12px;">${esc(tEmail(locale, 'recap_weekly.weak_reviews.lede'))}</p>
-    ${items}
-    ${seeAll}`;
 }
 
 // Web/rank KPIs (P4): tracked/improved/worsened + top improved keywords. Renders nothing when
@@ -654,7 +602,6 @@ export function weeklyRecapEmailHtml(locale: Locale, data: RecapData, origin?: s
     ${data.postsPending > 0 ? `<div style="margin-top:12px;padding:10px 14px;background:#fff8f0;border-radius:8px;border:1px solid #fde68a;font-size:13px;color:#92400e;font-weight:600;">${tEmail(locale, 'recap_weekly.pending_posts', { count: data.postsPending })}</div>` : ''}
 
     ${topPostSection}
-    ${weakReviewsSectionHtml(locale, data)}
 
     ${platformRows ? `
     ${divider()}
@@ -746,23 +693,6 @@ export function weeklyRecapEmailText(locale: Locale, data: RecapData): string {
   if (data.topPostCaption) {
     lines.push(`— ${tEmail(locale, 'recap_weekly.top_post')} (${data.topPostPlatform}) —`);
     lines.push(data.topPostCaption.slice(0, 200));
-    lines.push('');
-  }
-
-  if (data.weakReviews?.length) {
-    lines.push(`— ${tEmail(locale, 'recap_weekly.weak_reviews.title')} —`);
-    lines.push(tEmail(locale, 'recap_weekly.weak_reviews.lede'));
-    for (const r of data.weakReviews) {
-      const score = tEmail(locale, 'recap_weekly.weak_reviews.score', {
-        score: formatVideoScore(r.overall)
-      });
-      const verdict = tEmail(locale, `recap_weekly.weak_reviews.verdict.${r.verdict}`);
-      const snippet = (r.caption || r.judgment || '').trim().slice(0, 120);
-      lines.push(`  ${score} · ${verdict}${snippet ? ` — ${snippet}` : ''}`);
-      if (r.postUrl) lines.push(`    ${tEmail(locale, 'recap_weekly.weak_reviews.open_post')} ${r.postUrl}`);
-    }
-    const seeAllUrl = recapReviewsUrl(data);
-    if (seeAllUrl) lines.push(`  ${tEmail(locale, 'recap_weekly.weak_reviews.see_all')} ${seeAllUrl}`);
     lines.push('');
   }
 
