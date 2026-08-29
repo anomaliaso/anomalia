@@ -33,12 +33,8 @@ One persistent thread per main agent where it works with the user (`surface='tea
 _Avoid_: agent chat, journal (journal is the role, not the object).
 
 **DM (agent-to-agent)**:
-The private thread between exactly two main agents. Coordination only: the work that concerns the user happens in a team thread.
-_Avoid_: private chat, room.
-
-**Private thread**:
-A thread where the user talks with exactly one main agent, away from the team.
-_Avoid_: DM, direct message, one-to-one chat.
+The private thread between exactly two main agents. Coordination only: the work that concerns the user happens in a team thread. The user can read it but not write in it.
+_Avoid_: private thread, private chat, room.
 
 **Room (group chat)**:
 A thread where several agents and the user talk in turns. Behind a flag; not the default surface.
