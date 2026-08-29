@@ -33,7 +33,7 @@ import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AGENT_IDS, AGENTS, type AgentId } from '$lib/server/chat/agents';
 import { buildSystemPrompt, buildTurnVolatileBlock, wrapTurnContext } from '$lib/server/chat/system-prompt';
-import { takeKieUsage, type ChatModelResolved } from '$lib/server/chat/model';
+import { type ChatModelResolved } from '$lib/server/chat/model';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
 import { createSandboxTools, type SandboxSession } from '$lib/server/chat/sandbox-tools';
 import { chatSubAgentMaxTurns, SUB_AGENT_STEP_CEILING } from '$lib/server/chat/turn-limits';
@@ -677,9 +677,6 @@ You are not talking to the user and no one is reading you live — your final me
       ms: Date.now() - t0,
       ok: true,
       ...extractSdkUsage(totalUsage),
-      // Il sotto-agente condivide il client kie del turno che lo ha chiamato: takeKieUsage
-      // azzera il contatore, quindi si porta via la sua fetta e il padre logga il resto.
-      ...takeKieUsage(model),
       brandId,
       userId,
       threadId,

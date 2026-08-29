@@ -16,7 +16,6 @@ vi.mock('$lib/server/chat/model', () => ({
 	resolveChatModel: () => ({ model: modelHolder.current }),
 	// La riga di spesa del turno (`logTurnCost`) legge i crediti kie dal modello risolto: senza
 	// questo il mock non esporta la funzione e ogni turno muore prima di salvare il messaggio.
-	takeKieUsage: () => ({})
 }));
 
 // Doppio resume (caso 2): il resto di `../run-store` resta VERO (createRun/transition/askUser/

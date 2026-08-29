@@ -28,7 +28,7 @@ import {
   normalizeAvatarColor,
   normalizeAvatarFace
 } from '$lib/agent-avatars';
-import { compactionModel, takeKieUsage } from '$lib/server/chat/model';
+import { compactionModel } from '$lib/server/chat/model';
 import { getCustomAgentsByIds } from '$lib/server/custom-agents-read';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 
@@ -442,7 +442,6 @@ export async function pickRoomSpeakers(opts: {
       ...(extra.error ? { error: extra.error } : {}),
       inputTokens: extra.res?.usage?.inputTokens,
       outputTokens: extra.res?.usage?.outputTokens,
-      ...(model ? takeKieUsage(model) : {}),
       brandId: opts.brandId,
       userId: opts.userId,
       threadId: opts.threadId,
@@ -614,7 +613,6 @@ export async function roomContinue(
       ...(extra.error ? { error: extra.error } : {}),
       inputTokens: extra.res?.usage?.inputTokens,
       outputTokens: extra.res?.usage?.outputTokens,
-      ...(model ? takeKieUsage(model) : {}),
       brandId: opts.brandId,
       userId: opts.userId,
       threadId: opts.thread.id,

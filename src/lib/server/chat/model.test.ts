@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HARNESS_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { choiceForPolicy, policyForChoice } from '$lib/chat-model-policy';
-import type { ChatModelResolved } from './model';
 
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-const { resolveChatModel, modelSeesImages, modelSeesVideo, compactionModel, takeKieUsage, isHeavyProductionAsk } =
+const { resolveChatModel, modelSeesImages, modelSeesVideo, compactionModel, isHeavyProductionAsk } =
   await import('./model');
 
 // Il default del centralino è un Gemini (i video passano solo lì); il secondo id è solo-testo,
@@ -159,47 +158,6 @@ describe('compactionModel', () => {
     env.GEMINI_API_KEY = 'gemini-test';
     delete env.LLM_API_KEY;
     expect(compactionModel()).toBeNull();
-  });
-});
-
-/**
- * IL CONTATORE KIE — oggi fuori rotta. La migration porta tutto il testo sul gateway: nessun
- * ChatModelResolved nasce più con `takeCredits`, quindi `takeKieUsage` resta un no-op per i turni
- * veri. Il perché falliva: non erano effetti collaterali d'import, era `resolveChatModel('fast')`
- * dentro ai test che ora termina in `llmDefaultModel()` e lanciava `llm_unconfigured` con le vecchie
- * env di sola kie. Le sue semantiche (flat cost dai crediti grezzi, lettura che AZZERA) restano
- * codificate qui su un oggetto sintetico, pronte se il contatore torna utile.
- */
-describe('takeKieUsage', () => {
-  beforeEach(() => {
-    for (const k of Object.keys(env)) delete env[k];
-    setLlmEnv();
-  });
-
-  it('un turno del centralino non fattura a crediti kie: né prima né dopo la lettura', () => {
-    const m = resolveChatModel('auto');
-    expect(takeKieUsage(m)).toEqual({});
-    expect(takeKieUsage(m)).toEqual({});
-  });
-
-  it('semantiche invariate: crediti grezzi → cost_usd flat, e la seconda lettura è vuota', () => {
-    let credits = 0.42;
-    const metered = {
-      takeCredits: () => {
-        const c = credits;
-        credits = 0;
-        return c;
-      }
-    } as unknown as ChatModelResolved;
-    // 0.42 crediti × $0.005 = $0.0021.
-    expect(takeKieUsage(metered)).toEqual({ providerCredits: 0.42, flatCostUsd: 0.0021 });
-    // Il contatore si azzera: padre e sotto-agente non fatturano due volte la stessa fetta.
-    expect(takeKieUsage(metered)).toEqual({});
-  });
-
-  it('zero crediti = niente riga: si lascia che logAiCall ricada sulle RATES invece di scrivere 0', () => {
-    const metered = { takeCredits: () => 0 } as unknown as ChatModelResolved;
-    expect(takeKieUsage(metered)).toEqual({});
   });
 });
 

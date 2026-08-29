@@ -11,7 +11,7 @@ import { maybeCompactThread } from '$lib/server/chat/compaction';
 import { sourcesFromSteps } from '$lib/chat-sources';
 import { extractMemoryFromChat } from '$lib/server/brand-memory';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
-import { resolveChatModel, takeKieUsage } from '$lib/server/chat/model';
+import { resolveChatModel } from '$lib/server/chat/model';
 import { hasWebHub } from '$lib/server/plans';
 import { createChatLoopGuard, turnLoopNotice } from '$lib/server/chat/loop-guard';
 import { chatMaxTurns, chatTokenBudget, chatTurnDeadline, turnTokenBudgetNotice } from '$lib/server/chat/turn-limits';
@@ -187,8 +187,6 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
       ms: Date.now() - chatT0,
       ok: true,
       ...extractSdkUsage(result.totalUsage),
-      // Su kie il costo vero sono i crediti della risposta, non i token (vedi takeKieUsage).
-      ...takeKieUsage(chatModel),
       brandId: brand.id,
       userId: user.id,
       threadId,
