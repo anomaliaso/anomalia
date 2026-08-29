@@ -139,7 +139,7 @@ export function buildSystem(opts: {
       : opts.kind === 'video'
         ? opts.hasSeedanceMaterials
           ? 'Produce VIDEO(s). The user already supplied Seedance materials (first/last frame and/or reference audio/video). When a reference VIDEO is present, call breakdown_reference_video FIRST to reverse-engineer a second-by-second shot brief, then pass that brief as the generate_video prompt (and keep the reference video URL). Remake intent ("rifallo", "redo", "change the script") → keep the reference video URL and apply the brief changes. Do NOT invent a new cover with generate_image unless they left every frame/ref empty.'
-          : 'Produce VIDEO(s). Prefer a UGC STORYBOARD first: generate_image for the HOOK cover (pain-moment face, product NOT visible yet), optionally a DEMO still, then generate_video. Organic UGC: ugc:true, durationSeconds≤15. Paid UGC ads: ugc:true + ugcAd:true → forces Seedance 2.5 at 22s. Use ALL-CAPS Seedance block prompts (REFERENCES/CAMERA/LOOK/STYLE/STAGES/CONSTRAINTS). Spoken script: Hook → Problem → Demo → Proof → CTA; pain must be brand-category relevant (never invent medical/family/unrelated life drama); name the brand/feature in the solution beat. If the user selected an existing grid VIDEO to remake, that URL is in the run as a Seedance reference video — keep it and revise from the brief (Seedance only; Grok cannot take video refs).'
+          : 'Produce VIDEO(s). Prefer a UGC STORYBOARD first: generate_image for the HOOK cover (pain-moment face, product NOT visible yet), optionally a DEMO still, then generate_video. Organic UGC: ugc:true, durationSeconds≤15. Paid UGC ads: ugc:true + ugcAd:true → 22s on Seedance 2.5 (pass video_model), 15s cap on the Grok Imagine default. Use ALL-CAPS Seedance block prompts (REFERENCES/CAMERA/LOOK/STYLE/STAGES/CONSTRAINTS). Spoken script: Hook → Problem → Demo → Proof → CTA; pain must be brand-category relevant (never invent medical/family/unrelated life drama); name the brand/feature in the solution beat. If the user selected an existing grid VIDEO to remake, that URL is in the run as a Seedance reference video — keep it and revise from the brief (Seedance only; Grok cannot take video refs).'
         : 'Decide whether the brief needs an image, a video, or both. Prefer images unless motion is clearly requested.';
 
   const modelLine = opts.videoModel
@@ -626,14 +626,14 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
           .max(30)
           .optional()
           .describe(
-            'Clip length in seconds. Organic UGC ≤15; ugcAd:true locks 22s on Seedance 2.5. Prefer a shorter script over a longer clip.'
+            'Clip length in seconds. Organic UGC ≤15; ugcAd is 22s on Seedance 2.5, capped at 15s on other models. Prefer a shorter script over a longer clip.'
           ),
         ugc: z.boolean().optional().describe('Opt into handheld UGC genre + dead-space tighten. Spoken audio only when script is set — never burn captions/subtitles on UGC.'),
         ugcAd: z
           .boolean()
           .optional()
           .describe(
-            'Paid UGC ad. Requires ugc:true. Forces Seedance 2.5 and locks duration to 22s (fuller Demo+Proof). Omit/false = organic ≤15s.'
+            'Paid UGC ad. Requires ugc:true. 22s on Seedance 2.5 (pass video_model); other models cap at 15s (fuller Demo+Proof). Omit/false = organic ≤15s.'
           ),
         script: z
           .string()
@@ -650,14 +650,10 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
           try {
             const { renderVideo, videoModelCaps, isKnownVideoModel, UGC_AD_DURATION, UGC_ORGANIC_MAX_DURATION } =
               await import('$lib/server/video');
-            const { SEEDANCE_25_MODEL } = await import('$lib/video-models');
             const isUgc = forceUgc || ugc === true;
             const isAd = isUgc && ugcAd === true;
-            const lockedModel = isAd
-              ? SEEDANCE_25_MODEL
-              : opts.videoModel && isKnownVideoModel(opts.videoModel)
-                ? opts.videoModel
-                : null;
+            const lockedModel =
+              opts.videoModel && isKnownVideoModel(opts.videoModel) ? opts.videoModel : null;
             const caps = videoModelCaps(lockedModel ?? 'grok-imagine-video-1-5-preview');
             const firstFrame =
               opts.firstFrameUrl?.trim() ||

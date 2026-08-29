@@ -20,7 +20,7 @@ export function createContentTools(ctx: ChatToolCtx) {
   return {
     create_post: tool({
       description:
-        'Create a new social media post — caption + visual as a pending draft. MEDIA FIRST: if the brand Media library has usable assets (call read_media), pass media_ids so the post reuses those photos pixel-perfect (media_mode use_as_is) or composites them into a branded frame (composite). Only generate a brand-new AI image when no library asset fits. Set content_type to "carousel" for a multi-slide post (Instagram/Facebook/LinkedIn only), or "video" for a reel. For videos YOU choose model, duration, genre and creative brief via video_model / duration / ugc / ugc_ad / video_prompt — pass video_prompt to direct the clip freely (avoids hardcoded UGC/cinematic templates). Paid UGC ads: ugc_ad:true → 22s on Seedance 2.5. For Seedance 2.5 pass video_model="bytedance/seedance-2-5".',
+        'Create a new social media post — caption + visual as a pending draft. MEDIA FIRST: if the brand Media library has usable assets (call read_media), pass media_ids so the post reuses those photos pixel-perfect (media_mode use_as_is) or composites them into a branded frame (composite). Only generate a brand-new AI image when no library asset fits. Set content_type to "carousel" for a multi-slide post (Instagram/Facebook/LinkedIn only), or "video" for a reel. For videos YOU choose model, duration, genre and creative brief via video_model / duration / ugc / ugc_ad / video_prompt — pass video_prompt to direct the clip freely (avoids hardcoded UGC/cinematic templates). Default video model is Grok Imagine (480p); for Seedance 2.5 (up to 30s or reference video/audio) pass video_model="bytedance/seedance-2-5". Paid UGC ads: 22s on Seedance 2.5, capped at 15s on other models.',
       inputSchema: z.object({
         brief: z.string().describe('What the post should say/show — the user\'s brief or topic'),
         platform: z.string().optional().describe('Target platform (e.g. "instagram", "tiktok", "linkedin"). Omit to use brand\'s primary platform. Carousels require instagram, facebook or linkedin. A platform the brand has NOT connected is refused before any work is done — connect it first, or pass allow_unconnected to make a draft anyway.'),
@@ -36,7 +36,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           .boolean()
           .optional()
           .describe(
-            'Video + UGC only. true = paid UGC AD (22s, forces Seedance 2.5, fuller Demo+Proof script ~55–66 words). false/omit = organic ≤15s. Use when the user asks for an ad/boost creative.'
+            'Video + UGC only. true = paid UGC AD (22s on Seedance 2.5 via video_model, capped at 15s on other models; fuller Demo+Proof script ~55–66 words). false/omit = organic ≤15s. Use when the user asks for an ad/boost creative.'
           ),
         video_prompt: z
           .string()
@@ -60,7 +60,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           ])
           .optional()
           .describe(
-            'Video only. kie video model for THIS clip. Use "bytedance/seedance-2-5" when the user asks for Seedance / Seedance 2.5 (up to 30s). Use "grok-imagine-video-1-5-preview" for Grok Imagine. Omit to use the brand Settings → Video model (or platform default). NEVER claim Seedance is unavailable — this parameter IS the selector.'
+            'Video only. kie video model for THIS clip. Default is Grok Imagine ("grok-imagine-video-1-5-preview", 480p, ≤15s). Use "bytedance/seedance-2-5" when the user asks for Seedance / Seedance 2.5, longer than 15s, or reference video/audio. Omit to use the brand Settings → Video model (or the Grok Imagine default). NEVER claim Seedance is unavailable — this parameter IS the selector.'
           ),
         duration: z
           .number()
@@ -69,7 +69,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           .max(30)
           .optional()
           .describe(
-            'Video only. YOU choose the clip length in seconds for THIS reel — do not default everything to 13s. Size it to the spoken script at ~3.5 words/sec with headroom (Grok/Seedance 2: 10–15s; Seedance 2.5: up to 30s). Organic UGC ≤15s; ugc_ad:true locks 22s on Seedance 2.5. Prefer 10 for a punchy hook, 15 for organic Hook→Problem→Demo→Proof→CTA. Omit only if Settings → Video has a fixed length the brand wants enforced.'
+            'Video only. YOU choose the clip length in seconds for THIS reel — do not default everything to 13s. Size it to the spoken script at ~3.5 words/sec with headroom (Grok/Seedance 2: 10–15s; Seedance 2.5: up to 30s). Organic UGC ≤15s; ugc_ad asks for 22s — only Seedance 2.5 holds it. Prefer 10 for a punchy hook, 15 for organic Hook→Problem→Demo→Proof→CTA. Omit only if Settings → Video has a fixed length the brand wants enforced.'
           ),
         slide_count: z.number().min(3).max(8).optional().describe('Number of slides for a carousel (default 5; only used when content_type is "carousel")'),
         script: z
@@ -405,7 +405,6 @@ export function createContentTools(ctx: ChatToolCtx) {
               const inFlightVideos = await countOutstandingVideoRenders(adminForCount(), brandId);
               if (env.KIE_API_KEY && budget.videos - inFlightVideos > 0) {
                 const { UGC_AD_DURATION, submitVideoRender } = await import('$lib/server/video');
-                const { SEEDANCE_25_MODEL } = await import('$lib/video-models');
                 // Submit and stop. kie holds the job; a cron collects the clip and attaches it to
                 // this post. Waiting here was the longest block in the whole tool — up to ten
                 // minutes of an invocation spent watching someone else's queue, which also capped
@@ -418,8 +417,10 @@ export function createContentTools(ctx: ChatToolCtx) {
                   // AI instructions win; else brand Settings → Video.
                   instructions: video_instructions ?? prefs.videoInstructions,
                   resolution: prefs.videoResolution,
-                  // Ads force Seedance 2.5; else AI video_model / Settings.
-                  model: isUgcAd ? SEEDANCE_25_MODEL : (video_model || prefs.videoModel),
+                  // Selected model wins; else Settings; else the Grok Imagine default.
+                  // Ads do NOT force a model — 22s only lands on Seedance 2.5, other models
+                  // clamp to the organic 15s ceiling (ugcDurationCap).
+                  model: video_model || prefs.videoModel,
                   // Freeform brief replaces hardcoded MOTION templates when set (buildVideoPrompt).
                   // Ads keep the UGC template (ignore freeform) so speech rails stay on.
                   prompt: isUgcAd ? undefined : video_prompt,

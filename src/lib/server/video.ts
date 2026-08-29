@@ -17,8 +17,7 @@ import {
 import {
   VIDEO_MODEL_CHOICES as SHARED_VIDEO_MODEL_CHOICES,
   isKnownVideoModelId,
-  isSeedance25Model,
-  SEEDANCE_25_MODEL
+  isSeedance25Model
 } from '$lib/video-models';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
@@ -166,7 +165,8 @@ export const DEFAULT_VIDEO_DURATION = 13;
  * Talking UGC ceilings.
  * - Organic / feed: {@link UGC_ORGANIC_MAX_DURATION} (15s) on any model.
  * - Paid UGC ads (`ugcAd`): {@link UGC_AD_DURATION} (22s) **only** on Seedance 2.5 —
- *   other models fall back to the organic cap (and renderVideo forces 2.5 when ugcAd is set).
+ *   other models, including the default Grok Imagine, fall back to the organic cap.
+ *   The ad flag never picks the model: the selected/brand/default model runs the job.
  */
 export const UGC_ORGANIC_MAX_DURATION = UGC_ORGANIC_SECONDS;
 export const UGC_AD_DURATION = UGC_AD_SECONDS;
@@ -317,9 +317,9 @@ export type RenderVideoOpts = {
   // applica, di proposito — vedi buildVideoPrompt.
   ugc?: boolean;
   /**
-   * Paid UGC ad mode. When true with `ugc`, locks duration to {@link UGC_AD_DURATION} (22s) and
-   * forces Seedance 2.5 (the only model that holds identity + speech for that length in one pass).
-   * Organic UGC stays at {@link UGC_ORGANIC_MAX_DURATION} (15s).
+   * Paid UGC ad mode. When true with `ugc`, asks for {@link UGC_AD_DURATION} (22s) — which only
+   * Seedance 2.5 holds (identity + speech in one pass); other models clamp to the organic
+   * {@link UGC_ORGANIC_MAX_DURATION} (15s). The flag never picks the model.
    */
   ugcAd?: boolean;
   // Presente → clip PARLATA: audio e lip-sync nativi si pilotano CITANDO la riga dentro il prompt.
@@ -815,10 +815,9 @@ async function prepareVideoRender(
   const hasRefs =
     referenceVideoUrls.length > 0 || referenceAudioUrls.length > 0 || referenceImageUrls.length > 0;
   // Prima il modello: i tetti di durata e ratio sono proprietà di QUESTO modello, non globali.
-  const model = resolveVideoModel({
-    model: opts.ugc && opts.ugcAd ? SEEDANCE_25_MODEL : opts.model,
-    hasCover: !!cover || hasRefs
-  });
+  // L'ad UGC non impone il modello: 22s solo su Seedance 2.5 (`ugcDurationCap`), altrimenti tetto
+  // organico 15s sul default (Grok Imagine).
+  const model = resolveVideoModel({ model: opts.model, hasCover: !!cover || hasRefs });
 
   const durationSeconds = resolveVideoDuration(
     opts.duration ?? (opts.ugc && opts.ugcAd ? UGC_AD_DURATION : undefined),
