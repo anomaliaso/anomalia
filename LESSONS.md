@@ -255,6 +255,16 @@ piu` povero. Mossa: consenso ESPLICITO come per gli altri test di integrazione d
 (`E2E_REAL_STACK=1`, come `SANDBOX_HOLDER_INTEGRATION=1`), e poi provare che con lo stack vero il
 test passa davvero — una guardia che nasconde un test rotto non vale niente.
 
+### Un finto client che IGNORA la select regala colonne che il database non ha
+`team_activity` chiedeva `speaker` a `chat_messages`, dove la colonna si chiama `name`: PostgREST
+risponde 42703, supabase-js torna `data: null` SENZA alzare, e lo strumento restituiva vuoto in
+silenzio. I test passavano perché il loro `fakeClient` restituiva l'array seminato tale e quale,
+select o no — quindi il campo inventato c'era sempre. Segnale: `schema-drift-check` che segna una
+colonna «che il codice nomina e non esiste» mentre la suite e` verde. Mossa: il finto PROIETTA le
+colonne chieste e applica gli alias `alias:colonna`, come fa PostgREST; con quello i test sono
+diventati rossi da soli, e solo dopo si corregge la query. Un finto piu` generoso del database non
+e` un finto, e` una benda.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema

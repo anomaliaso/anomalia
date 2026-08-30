@@ -18,8 +18,12 @@ function fakeClient(): any {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const from = (_table: string) => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let cols: string[] = [];
 		const self: any = {
-			select: () => self,
+			select: (c?: string) => {
+				cols = (c ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+				return self;
+			},
 			eq: () => self,
 			in: () => self,
 			not: () => self,
@@ -27,9 +31,24 @@ function fakeClient(): any {
 			order: () => self,
 			limit: () => self,
 			async then(resolve: (v: unknown) => unknown) {
-				if (_table === 'chat_threads') return resolve({ data: threads, error: null });
-				if (_table === 'chat_messages') return resolve({ data: messages, error: null });
-				return resolve({ data: customs, error: null });
+				// PostgREST restituisce SOLO le colonne chieste, e `alias:colonna` le rinomina. Senza
+				// questa proiezione il finto regalava campi che il database non ha — ed è così che
+				// `speaker` (colonna inesistente: si chiama `name`) passava i test e tornava vuoto
+				// in produzione, dove un 42703 diventa `data: null` senza alzare.
+				const proietta = (righe: Record<string, unknown>[]) =>
+					cols.length
+						? righe.map((r) =>
+								Object.fromEntries(
+									cols.map((c) => {
+										const [alias, vera] = c.includes(':') ? c.split(':') : [c, c];
+										return [alias, r[vera]];
+									})
+								)
+							)
+						: righe;
+				if (_table === 'chat_threads') return resolve({ data: proietta(threads), error: null });
+				if (_table === 'chat_messages') return resolve({ data: proietta(messages), error: null });
+				return resolve({ data: proietta(customs), error: null });
 			},
 			async maybeSingle() {
 				return { data: null, error: null };
@@ -88,7 +107,7 @@ describe('team_activity', () => {
 			}
 		];
 		messages = [
-			{ thread_id: 'dm1', role: 'assistant', speaker: 'analyst', content: 'Numbers look off — check before publishing.', created_at: '2026-08-26T09:00:00Z' }
+			{ thread_id: 'dm1', role: 'assistant', name: 'analyst', content: 'Numbers look off — check before publishing.', created_at: '2026-08-26T09:00:00Z' }
 		];
 		const out = await run('motion');
 		expect(out.waiting_on_me).toHaveLength(1);
@@ -106,7 +125,7 @@ describe('team_activity', () => {
 			}
 		];
 		messages = [
-			{ thread_id: 'dm2', role: 'user', speaker: 'motion', content: 'Sending you the draft brief.', created_at: '2026-08-26T09:00:00Z' }
+			{ thread_id: 'dm2', role: 'user', name: 'motion', content: 'Sending you the draft brief.', created_at: '2026-08-26T09:00:00Z' }
 		];
 		const out = await run('motion');
 		expect(out.waiting_on_me).toHaveLength(0);
