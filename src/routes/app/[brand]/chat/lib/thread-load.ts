@@ -6,6 +6,7 @@ import { loadLastReads } from '$lib/server/chat/unread';
 import { loadLatestGoal } from '$lib/server/chat/goal';
 import { chatJobFreshSince, reapStaleChatJobs } from '$lib/server/chat/job-cancel';
 import { KIT_RUN_WORKING_STATES, kitRunIsAlive } from '$lib/server/chat/turn-limits';
+import { loadThreadEvents } from '$lib/server/chat/thread-events';
 import { speakerOf } from './jobs';
 
 export async function loadThreadState(
@@ -24,6 +25,19 @@ export async function loadThreadState(
     .maybeSingle();
   if (!brand) return json({ error: 'Brand not found', messages: [] }, { status: 404 });
   const brandPlan = (brand.plan as string | null) ?? null;
+
+  // La risposta al poke `thread-seq`: il canale annuncia una sequenza, il client rilegge da qui
+  // tutto ciò che sta oltre il cursore che ha già applicato. La lettura passa dal client
+  // dell'utente, quindi la RLS di `thread_events` decide da sola cosa può uscire.
+  const eventsAfter = url.searchParams.get('events_after');
+  const eventsThreadId = url.searchParams.get('thread');
+  if (eventsAfter !== null && eventsThreadId) {
+    const cursor = Number.parseInt(eventsAfter, 10);
+    if (!Number.isFinite(cursor) || cursor < 0) return json({ error: 'Bad cursor' }, { status: 400 });
+    const events = await loadThreadEvents(supabase, eventsThreadId, cursor);
+    if (!events) return json({ error: 'Event page unavailable' }, { status: 503 });
+    return json({ events });
+  }
 
   // Check job status if job_id is provided
   const jobId = url.searchParams.get('job_id');

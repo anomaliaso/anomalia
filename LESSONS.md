@@ -25,8 +25,9 @@ Un worktree creato dentro la cartella della repo (`anomalia/anomalia-wt/<slug>`)
 ### Verifica il `workdir` prima di ogni Edit
 Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagliato tocca dev. È successo: `live.ts` modificato nel checkout principale per un secondo, poi `git checkout --` e riapplicato nel posto giusto. Il tool Edit non ti proteggere — proteggiti tu: guarda il percorso del file che stai per toccare, sempre.
 
-### Il `git stash` è condiviso fra tutti i worktree dello stesso repo
+### Il `git stash` è condiviso fra tutti i worktree — ora è BLOCCATO da un hook
 `git stash` legge e scrive lo STESSO ref (`refs/stash`) per l'intero repository, non per worktree: stashare dentro un worktree e fare `git stash pop` in un altro applica lì le modifiche del primo. È successo: `git stash` nella feature ha creato uno stash (e spinto via i miei edit di `live.ts`), e il `pop` eseguito dopo un timeout del tool di shell ha riesumato le modifiche di un ALTRO worktree (`video.ts`, irrelate) dentro il mio — lasciando il mio `live.ts` senza i miei edit. Segnale: dopo un `git stash`/`pop` i file modificati non corrispondono a quelli che avevi in mano, o compaiono modifiche a file mai toccati nel branch corrente. Mossa: evita `git stash` in un worktree — per sospendere delle modifiche usa il checkout dedicato (o `git diff > patch && git checkout --` e poi `git apply`), e se devi proprio stashare verifica sempre `git stash list` + `git show stash@{0} --stat` PRIMA del `pop`; un `pop` che finisce in timeout non è affidabile, riapri il file a mano e ricontrolla che i tuoi edit ci siano ancora.
+**Aggiornamento (30/8): non è più una raccomandazione.** Un agente ha stashato di nuovo dentro un worktree, e questa volta è andata bene solo per fortuna. Un hook `PreToolUse` su Bash (`~/.claude/settings.json`) ora rifiuta ogni comando che invochi `git stash`, in qualunque posizione della riga, e spiega le alternative nel messaggio di rifiuto. La regola sta anche in CLAUDE.md e AGENTS.md.
 
 ### Un test verde sul checkout principale può essere rosso nel worktree: il `.env` locale entra nei test
 `$env/dynamic/private` in vitest porta dentro il `.env` DELLA MACCHINA. Il checkout principale può passare per cache Vite stantia (env congelata prima di una variabile), il worktree con cache fresca fallisce — v. `queue-dm.test`: con `AGENT_KIT=on` locale il turno scappava nel ramo kit e il mock di `./subagents` moriva su `createSubagentTools`. Segnale: stesso codice, esito opposto fra checkout e worktree, e nessuna differenza nel diff. Mossa: il test che prova un percorso specifico fissa le variabili che gli servono spente (`vi.mock('$env/dynamic/private')` con override), non conta sul `.env` di chi lo lancia.
@@ -132,6 +133,16 @@ Il typechecker rifiuta: `Type '{ [k: string]: ... }' is missing properties from 
 
 ### La PR che dice "risolto" è verificata solo sul primo invio, non sul redo
 La PR #24 verificava l'immagine allegata al primo messaggio: viaggia come data-URL, una **stringa**, e sopravvive a ogni trasformazione. Sul redo la history ricostruita porta l'URL come **oggetto `URL`**, e `stripProviderRefs` lo ricostruiva via `Object.entries` — che per un `URL` restituisce `[]` — lasciando `image: {}`: l'adattatore pi scarta in silenzio e il modello risponde di vedere solo il testo `[attached: url]`. Il difetto visivo tornava solo sui turni ricostruiti (redo, retry, continuazione), mai su quelli che la verifica aveva coperto. Segnale: il reasoning dell'agente dice "l'utente ha allegato un'immagine via URL… non percepisso nessun contenuto visivo". Mossa: riprodurre l'INTERA catena di trasformazioni che il messaggio subisce (ricostruzione history → strip → adattatore), non solo l'invio felice; e ogni funzione che riscrive ricorsivamente i messaggi ha il suo unit test su parti multimodali, non solo su parti testuali.
+
+### Chi pota un log concorrente pota per ULTIMO, non nel punto semanticamente giusto
+I `progress` del turno kit venivano cancellati accanto alla riga definitiva — il momento in cui
+il messaggio davvero *supera* le istantanee. Ma `mirrorSseToRun` è un ramo concorrente al driver
+che chiude il run: la sua scrittura in volo passa davanti alla cancellazione e lascia righe
+orfane che nessuno supererà più. Segnale: un test di potatura che vede ancora le righe subito
+dopo la chiusura, e le vede sparire se aspetti. Mossa: potare nel `finally` dell'ULTIMO scrittore
+(lì lo specchio, che è anche l'unico a scrivere quelle righe), non dove la semantica sembra
+chiederlo — e chiedersi se l'altra chiamata non fosse codice morto: lo era.
+
 
 ## Prodotto
 

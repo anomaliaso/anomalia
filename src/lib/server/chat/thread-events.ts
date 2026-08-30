@@ -91,6 +91,34 @@ export async function appendThreadEvent(
 	return row as StoredThreadEvent;
 }
 
+export async function appendRunProgress(
+	db: SupabaseClient,
+	threadId: string,
+	tick: number,
+	progress: ThreadProgress
+): Promise<number> {
+	const event = progressEvent(threadId, `${progress.runId}:progress:${tick}`, progress);
+	const stored = await appendThreadEvent(db, event);
+	return stored.seq;
+}
+
+export async function pruneRunProgress(
+	db: SupabaseClient,
+	threadId: string,
+	runId: string
+): Promise<void> {
+	try {
+		await db
+			.from('thread_events')
+			.delete()
+			.eq('thread_id', threadId)
+			.eq('kind', 'progress')
+			.eq('payload->>runId', runId);
+	} catch {
+		return;
+	}
+}
+
 export function threadMessageRows(events: readonly StoredThreadEvent[]): Record<string, unknown>[] | null {
 	const converted: ThreadEvent[] = events.map((event) => {
 		if (event.kind === 'message') {
@@ -117,6 +145,6 @@ export function threadMessageRows(events: readonly StoredThreadEvent[]): Record<
 		};
 	});
 	const result = reduceThreadEvents(emptyThreadProjection(), converted);
-	if (result.gap || result.conflict) return null;
+	if (result.conflict) return null;
 	return result.projection.messages.filter((message) => message.superseded !== true) as Record<string, unknown>[];
 }

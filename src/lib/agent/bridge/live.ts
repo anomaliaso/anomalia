@@ -45,6 +45,7 @@ import { CHAT_USER_ERROR } from '$lib/server/chat/report-error';
 import { enqueueTurnContinuation, kickChatQueueWork } from '$lib/server/chat/queue';
 import { applyChatStreamEvent, closeDanglingToolCalls, emptyStreamState, readSseEvents, toolsForMirror } from '$lib/chat-stream-events';
 import { isChatMode, modeBlock, toolsForMode, type ChatMode } from '$lib/chat-modes';
+import { appendRunProgress, pruneRunProgress } from '$lib/server/chat/thread-events';
 import { broadcastToBrand } from '$lib/server/realtime';
 import { specById } from '../specs';
 import type { AgentSpec } from '../contracts';
@@ -68,6 +69,12 @@ import {
  * riscritta, e il beneficio è entrare in una chat viva nel punto esatto in cui sta.
  */
 const PARTIAL_MIRROR_MS = 100;
+/**
+ * Il parziale si riscrive sulla stessa riga, l'evento di progress ne aggiunge una: la stessa
+ * cadenza costerebbe una riga ogni 100ms col testo intero dentro. Un quarto di secondo resta
+ * sotto la soglia in cui l'occhio legge uno scatto, e le righe se ne vanno a fine turno.
+ */
+const PROGRESS_EVENT_MS = 250;
 
 /**
  * GLI EVENTI CHE NON POSSONO ASPETTARE IL THROTTLE.
@@ -1452,7 +1459,33 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				let mustWrite = false;
 				/** La scrittura in volo: una alla volta, e MAI attesa dal ciclo di lettura (v1). */
 				let inFlight: Promise<void> | null = null;
-				const writePartial = async () => {
+				let progressTick = 0;
+				let lastProgressAt = 0;
+				// Il log durevole vive dietro una migration che i deploy di questo repo non applicano.
+				// Dove non c'e`, il primo append fallisce e la corsia si chiude: il turno continua sul
+				// mirror, e non si paga un errore ogni 250ms per tutto il turno.
+				let progressLane: 'open' | 'closed' = 'open';
+				const publishProgress = async (when: 'throttled' | 'final') => {
+					if (progressLane === 'closed') return;
+					const now = Date.now();
+					if (when === 'throttled' && now - lastProgressAt < PROGRESS_EVENT_MS) return;
+					lastProgressAt = now;
+					try {
+						const seq = await appendRunProgress(admin, threadId, ++progressTick, {
+							runId: run.id,
+							status: 'running',
+							text: state.text,
+							reasoning: state.reasoning || undefined,
+							tools: toolsForMirror(state.tools)
+						});
+						void broadcastToBrand(brand.id, { event: 'thread-seq', payload: { threadId, seq } });
+					} catch (e) {
+						progressLane = 'closed';
+						console.warn(`[AGENT_KIT] run ${run.id} progress event`, e);
+					}
+				};
+				const writePartial = async (when: 'throttled' | 'final' = 'throttled') => {
+					await publishProgress(when);
 					try {
 						// La scrittura resta per id (l'ULTIMA, post-chiusura, deve comunque lasciare
 						// il testo intero — vedi sotto).
@@ -1542,10 +1575,15 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					// scritto `partial` altrimenti. Si aspetta prima quella in volo, o la finale
 					// potrebbe arrivare al database PRIMA di una più vecchia e farsi sovrascrivere.
 					await inFlight;
-					await writePartial();
+					await writePartial('final');
 				} catch (e) {
 					console.error(`[AGENT_KIT] run ${run.id} mirror error`, e);
 				} finally {
+					// Lo specchio è l'ULTIMO scrittore di `progress` per questo run: il driver che
+					// chiude pota in parallelo e una scrittura in volo gli passerebbe davanti,
+					// lasciando righe orfane che nessuno supera più. Potare qui, dopo la scrittura
+					// finale, è l'unico punto in cui non ne può più arrivare una.
+					await pruneRunProgress(admin, threadId, run.id);
 					void broadcastToBrand(brand.id, { event: 'kit_stream_done', payload: { runId: run.id, threadId } });
 				}
 			})();

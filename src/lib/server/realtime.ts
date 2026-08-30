@@ -35,7 +35,13 @@ export type BrandBroadcast =
       };
     }
   /** The tee'd mirror reader finished draining — client should stop waiting on this run and reload. */
-  | { event: 'kit_stream_done'; payload: { runId: string; threadId: string } };
+  | { event: 'kit_stream_done'; payload: { runId: string; threadId: string } }
+  /**
+   * The thread's durable event log advanced to `seq`. Carries no content on purpose: the client
+   * answers it by reading `thread_events` above its own cursor, so a dropped, duplicated or
+   * reordered notification costs a read, never a desynchronised transcript.
+   */
+  | { event: 'thread-seq'; payload: { threadId: string; seq: number } };
 
 /**
  * Never throws and never blocks the caller's real work: a dropped notification costs one client

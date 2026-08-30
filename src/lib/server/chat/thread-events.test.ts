@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+	appendRunProgress,
 	appendThreadEvent,
 	messageEvent,
 	progressEvent,
+	pruneRunProgress,
 	supersedeEvent,
 	threadMessageRows
 } from './thread-events';
@@ -79,12 +81,89 @@ describe('thread event writer', () => {
 		expect(projected).toEqual([{ ...row, id: 'message-2', content: 'new' }]);
 	});
 
-	it('refuses to project an incomplete event page', () => {
+	it('projects a page whose progress events were pruned', () => {
 		expect(
 			threadMessageRows([
 				{ thread_id: 'thread-1', seq: 1, source_key: 'm-1', kind: 'message', payload: row },
 				{ thread_id: 'thread-1', seq: 3, source_key: 'm-3', kind: 'message', payload: { ...row, id: 'message-3' } }
 			])
+		).toHaveLength(2);
+	});
+
+	it('refuses to project two events that claim the same source key', () => {
+		expect(
+			threadMessageRows([
+				{ thread_id: 'thread-1', seq: 1, source_key: 'm-1', kind: 'message', payload: row },
+				{ thread_id: 'thread-1', seq: 2, source_key: 'm-1', kind: 'message', payload: { ...row, id: 'message-2' } }
+			])
 		).toBeNull();
+	});
+});
+
+describe('run progress lane', () => {
+	it('appends an absolute snapshot under a per-tick source key', async () => {
+		const rpc = vi.fn(async () => ({
+			data: [{ thread_id: 'thread-1', seq: 9, source_key: 'run-1:progress:3', kind: 'progress', payload: {} }],
+			error: null
+		}));
+
+		const seq = await appendRunProgress({ rpc } as unknown as SupabaseClient, 'thread-1', 3, {
+			runId: 'run-1',
+			status: 'running',
+			text: 'half a sentence'
+		});
+
+		expect(seq).toBe(9);
+		expect(rpc).toHaveBeenCalledWith('append_thread_event', {
+			p_thread_id: 'thread-1',
+			p_source_key: 'run-1:progress:3',
+			p_kind: 'progress',
+			p_payload: { runId: 'run-1', status: 'running', text: 'half a sentence' }
+		});
+	});
+
+	it('replays one tick to the same sequence instead of appending twice', async () => {
+		const rpc = vi.fn(async () => ({
+			data: [{ thread_id: 'thread-1', seq: 9, source_key: 'run-1:progress:3', kind: 'progress', payload: {} }],
+			error: null
+		}));
+		const db = { rpc } as unknown as SupabaseClient;
+		const snapshot = { runId: 'run-1', status: 'running', text: 'half a sentence' };
+
+		expect(await appendRunProgress(db, 'thread-1', 3, snapshot)).toBe(9);
+		expect(await appendRunProgress(db, 'thread-1', 3, snapshot)).toBe(9);
+	});
+
+	it('prunes only the progress of the finished run', async () => {
+		const filters: [string, unknown][] = [];
+		const query = {
+			eq(column: string, value: unknown) {
+				filters.push([column, value]);
+				return this;
+			},
+			then(resolve: (value: { error: null }) => void) {
+				resolve({ error: null });
+			}
+		};
+		const from = vi.fn(() => ({ delete: () => query }));
+
+		await pruneRunProgress({ from } as unknown as SupabaseClient, 'thread-1', 'run-1');
+
+		expect(from).toHaveBeenCalledWith('thread_events');
+		expect(filters).toEqual([
+			['thread_id', 'thread-1'],
+			['kind', 'progress'],
+			['payload->>runId', 'run-1']
+		]);
+	});
+
+	it('never fails a turn because pruning failed', async () => {
+		const from = vi.fn(() => {
+			throw new Error('database gone');
+		});
+
+		await expect(
+			pruneRunProgress({ from } as unknown as SupabaseClient, 'thread-1', 'run-1')
+		).resolves.toBeUndefined();
 	});
 });

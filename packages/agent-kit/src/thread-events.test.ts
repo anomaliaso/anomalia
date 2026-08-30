@@ -30,7 +30,6 @@ describe('thread event reducer', () => {
 			progress(1, 'run-1', 'running')
 		]);
 
-		expect(result.gap).toBeNull();
 		expect(result.conflict).toBeNull();
 		expect(result.projection.cursor).toBe(3);
 		expect(result.projection.messages).toEqual([
@@ -57,7 +56,6 @@ describe('thread event reducer', () => {
 
 		const result = reduceThreadEvents(existing, [next, message(1, 'message-1', 'changed'), next]);
 
-		expect(result.gap).toBeNull();
 		expect(result.conflict).toBeNull();
 		expect(result.applied).toEqual([next]);
 		expect(result.projection).toEqual({
@@ -71,19 +69,24 @@ describe('thread event reducer', () => {
 		});
 	});
 
-	it('reports a missing sequence without skipping later events', () => {
+	it('applies events across a pruned sequence', () => {
 		const result = reduceThreadEvents(emptyThreadProjection(), [
 			message(1, 'message-1', 'first'),
 			message(3, 'message-3', 'third'),
 			message(4, 'message-4', 'fourth')
 		]);
 
-		expect(result.gap).toEqual({ from: 2, to: 2 });
 		expect(result.conflict).toBeNull();
-		expect(result.applied).toEqual([message(1, 'message-1', 'first')]);
-		expect(result.projection.cursor).toBe(1);
+		expect(result.applied).toEqual([
+			message(1, 'message-1', 'first'),
+			message(3, 'message-3', 'third'),
+			message(4, 'message-4', 'fourth')
+		]);
+		expect(result.projection.cursor).toBe(4);
 		expect(result.projection.messages).toEqual([
-			{ id: 'message-1', role: 'assistant', content: 'first' }
+			{ id: 'message-1', role: 'assistant', content: 'first' },
+			{ id: 'message-3', role: 'assistant', content: 'third' },
+			{ id: 'message-4', role: 'assistant', content: 'fourth' }
 		]);
 	});
 
@@ -123,7 +126,6 @@ describe('thread event reducer', () => {
 			superseded(3, ['message-1'])
 		]);
 
-		expect(result.gap).toBeNull();
 		expect(result.projection.messages).toEqual([
 			{ id: 'message-2', role: 'assistant', content: 'new' }
 		]);
