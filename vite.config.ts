@@ -75,10 +75,6 @@ export default defineConfig({
     // Bundling it into the server chunks keeps one copy per function instead. Tree-shaking cannot
     // slim it further — graphic-icons.ts resolves arbitrary model-emitted slugs via a namespace
     // scan, and that full-catalogue lookup is the contract (unknown slug → null, any brand works).
-    // The node build ships full node_modules in the Docker image (no per-function tracing), so
-    // it leaves simple-icons external instead of inlining a dead 5 MB copy into every SSR chunk
-    // Rollup has to parse and minify. See changelog/2026-08-30-server-bundle-memory.md for what
-    // this alone does and doesn't fix in `npm run build:node`'s memory use.
     noExternal: ssrNoExternalForDeploy(process.env.DEPLOY_TARGET ?? '')
   },
     test: {

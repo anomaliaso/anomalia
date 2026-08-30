@@ -19,6 +19,11 @@ build; the node build leaves it as a normal `require`, already satisfied by
 `node_modules` at runtime. `index3.js` drops from 5,382.78 kB to 295.52 kB
 (-94.5%) and the SSR build phase runs measurably faster.
 
+The node target still bundles `@anomalia/*`: the Dockerfile's final stage
+runs `npm ci --omit=dev` without `packages/`, so the workspaces are not on
+disk at runtime and Rollup has to inline them, same as it always did before
+this change — only `simple-icons` moved.
+
 This does **not** by itself fix the OOM: bisecting `--max-old-space-size`
 shows both the old and new build fail at 4096 MB and succeed at 4608/5120 MB —
 unchanged. Instrumenting `adapter-node`'s own `adapt()` (temporary, not
