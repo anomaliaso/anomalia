@@ -162,6 +162,22 @@ Skip the public changelog only when the change is genuinely invisible from outsi
 an index, a test, a log. When in doubt, write it — one more line in the public changelog costs
 far less than a shipped feature nobody discovers.
 
+## `git stash` non si usa, mai (una regola, non un'abitudine)
+
+`git stash` legge e scrive **lo stesso ref** (`refs/stash`) per l'intero repository, non per
+worktree. Con più worktree aperti — che qui è la norma, uno per task — uno stash preso in uno può
+essere riesumato in un altro e sostituire in silenzio i tuoi edit con quelli di un lavoro
+estraneo. È già successo, ed è costato lavoro perso: la storia sta in [`LESSONS.md`](LESSONS.md).
+
+Non c'è un caso in cui valga la pena: **un hook `PreToolUse` lo blocca prima che parta.** Per
+sospendere delle modifiche ci sono tre strade, tutte più sicure e nessuna più lenta:
+
+- **committa sul branch del task** — è per questo che il branch esiste, e un commit di lavoro si
+  riscrive dopo con un `rebase -i` o un `commit --amend`;
+- **`git diff > /tmp/patch.diff && git checkout -- <file>`**, e più tardi `git apply` — la patch è
+  un file tuo, che nessun altro worktree può reclamare;
+- **usa il checkout dedicato**, se ti serve una copia pulita mentre tieni le modifiche altrove.
+
 ## Lessons already paid for: LESSONS.md (a rule, not a habit)
 
 [`LESSONS.md`](LESSONS.md) keeps the lessons learned from real incidents — stale node_modules
