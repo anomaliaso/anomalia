@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   CHAT_REAP_MIN_AGE_MS,
+  MAX_RUN_ATTEMPTS,
   chatJobDeathMessage,
   classifyKitRun,
   type KitRunLiveness
@@ -93,7 +94,10 @@ export async function reapDeadKitRuns(
 ): Promise<number> {
   const { data: candidates, error } = await db
     .from('agent_kit_runs')
-    .select('id, brand_id, user_id, thread_id, agent_id, state, heartbeat_at, created_at')
+    // `*` e non la lista dei nomi, per la ragione scritta in `recoverDeadPartial`: i deploy non
+    // eseguono le migration, e una select che NOMINA una colonna ancora assente (`attempt`)
+    // prende un 42703 che supabase-js non alza — spegnerebbe il reaper in silenzio.
+    .select('*')
     .eq('state', 'running')
     .lt('created_at', new Date(Date.now() - CHAT_REAP_MIN_AGE_MS).toISOString())
     .order('created_at', { ascending: true })
@@ -110,6 +114,39 @@ export async function reapDeadKitRuns(
     const verdict = classifyKitRun(run);
     if (!verdict.dead) continue;
 
+    // Gli effetti di questo run ancora `intended` (un tool di scrittura avviato, mai risolto)
+    // diventano `ambiguous`: il risiko del doppio post/schedulazione. Prima di rieseguire, il gate
+    // li legge e congela — mai due volte la stessa scrittura perché il segmento è morto a metà.
+    // Vale su ENTRAMBI i rami: è ciò che rende sicura la ripresa, non solo la resa.
+    try {
+      await createEffectsLedger(db).reconcileRun(run.id);
+    } catch (e) {
+      console.error('[sweep] reconciliazione effetti fallita', run.id, e);
+    }
+
+    const attempt = (run as { attempt?: number }).attempt ?? 1;
+    if (run.thread_id && run.user_id && attempt < MAX_RUN_ATTEMPTS) {
+      // La riga resta `running` col lease scaduto: è quello che permette a `agent_kit_claim_run`
+      // di prenderla col fence successivo. Abortirla la renderebbe irriprendibile, e salvarne il
+      // parziale lascerebbe un mezzo messaggio accanto alla risposta che la ripresa produrrà.
+      const { enqueueTurnContinuation } = await import('$lib/server/chat/queue');
+      const queued = await enqueueTurnContinuation(db, {
+        brandId: run.brand_id,
+        userId: run.user_id,
+        threadId: run.thread_id,
+        origin: 'kit-reaper',
+        depth: attempt,
+        resumeRunId: run.id
+      }).catch((e) => {
+        console.error('[sweep] ripresa non accodata', run.id, e);
+        return null;
+      });
+      if (queued) {
+        reaped += 1;
+        continue;
+      }
+    }
+
     const { data: claimed } = await db
       .from('agent_kit_runs')
       .update({ state: 'aborted', reason: 'aborted', updated_at: new Date().toISOString() })
@@ -119,15 +156,6 @@ export async function reapDeadKitRuns(
       .maybeSingle();
     if (!claimed) continue;
     reaped += 1;
-
-    // Gli effetti di questo run ancora `intended` (un tool di scrittura avviato, mai risolto)
-    // diventano `ambiguous`: il risiko del doppio post/schedulazione. Prima di rieseguire, il gate
-    // li legge e congela — mai due volte la stessa scrittura perché il segmento è morto a metà.
-    try {
-      await createEffectsLedger(db).reconcileRun(run.id);
-    } catch (e) {
-      console.error('[sweep] reconciliazione effetti fallita', run.id, e);
-    }
 
     try {
       await recoverDeadPartial(db, run.id);

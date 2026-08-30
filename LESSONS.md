@@ -143,6 +143,16 @@ dopo la chiusura, e le vede sparire se aspetti. Mossa: potare nel `finally` dell
 (lì lo specchio, che è anche l'unico a scrivere quelle righe), non dove la semantica sembra
 chiederlo — e chiedersi se l'altra chiamata non fosse codice morto: lo era.
 
+### Una migration che ELIMINA una firma rompe la produzione prima ancora del deploy
+Qui i deploy non applicano le migration, quindi fra l'apply e il deploy del codice c'è una finestra
+in cui la produzione chiama ancora la firma vecchia. `0229` toglieva `agent_kit_close_run` a cinque
+argomenti per sostituirla con quella recintata dal lease: applicata da sola avrebbe fatto fallire
+OGNI chiusura di turno finché il codice nuovo non fosse arrivato — e la chiusura è ciò che salva la
+risposta. Segnale: una migration il cui diff contiene `drop function` o un cambio di firma, su una
+funzione che il codice deployato chiama. Mossa: i parametri nuovi hanno un default e il vincolo vale
+solo quando sono valorizzati, così la chiamata vecchia continua a risolvere; renderli obbligatori è
+una migration DOPO il deploy. E la vecchia firma si elimina comunque nella stessa migration: due
+overload che accettano gli stessi nomi rendono la chiamata ambigua (`function is not unique`).
 
 ## Prodotto
 
