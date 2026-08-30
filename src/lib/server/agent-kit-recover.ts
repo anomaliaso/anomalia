@@ -90,7 +90,7 @@ type DeadKitRun = KitRunLiveness & {
  */
 export async function reapDeadKitRuns(
   db: SupabaseClient,
-  opts: { limit?: number; emailBudget?: number } = {}
+  opts: { limit?: number; emailBudget?: number; brandId?: string } = {}
 ): Promise<number> {
   const { data: candidates, error } = await db
     .from('agent_kit_runs')
@@ -102,6 +102,12 @@ export async function reapDeadKitRuns(
     .lt('created_at', new Date(Date.now() - CHAT_REAP_MIN_AGE_MS).toISOString())
     .order('created_at', { ascending: true })
     .limit(opts.limit ?? 200);
+  // Il cron mieteva tutto ciò che trovava, e va bene per il cron. Per chiunque altro — un eval
+  // che gira su un database condiviso — significa toccare il lavoro vero di altre persone:
+  // `brandId` recinta la passata al brand usa e getta.
+  const scoped = opts.brandId
+    ? ((candidates ?? []) as DeadKitRun[]).filter((r) => r.brand_id === opts.brandId)
+    : ((candidates ?? []) as DeadKitRun[]);
   if (error) {
     console.error('[sweep] lettura dei run da chiudere fallita', error.message);
     return 0;
@@ -110,7 +116,7 @@ export async function reapDeadKitRuns(
   let emailsLeft = opts.emailBudget ?? 3;
   let reaped = 0;
 
-  for (const run of (candidates ?? []) as DeadKitRun[]) {
+  for (const run of scoped) {
     const verdict = classifyKitRun(run);
     if (!verdict.dead) continue;
 
