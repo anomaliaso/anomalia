@@ -144,6 +144,11 @@ dopo la chiusura, e le vede sparire se aspetti. Mossa: potare nel `finally` dell
 chiederlo — e chiedersi se l'altra chiamata non fosse codice morto: lo era.
 
 
+## Build e bundle
+
+### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
+`index3.js` (5,4 MB, dieci volte il secondo chunk) era `simple-icons` intero, bundlato via `ssr.noExternal` per un motivo Vercel-only (nft duplica il pacchetto per funzione) che non vale per `DEPLOY_TARGET=node`. Rimuoverlo lo porta a 295 KB (-94,5%) — ma bisecando `--max-old-space-size` (4096/4608/5120) il build muore e riesce agli stessi tetti prima e dopo: zero spostamento. Strumentando `adapter-node`'s `adapt()` (scritture sincrone `appendFileSync`, non `console.error` — l'OOM abort salta il flush dei buffer stdio e perde l'ultimo log) l'heap è già a ~3,4 GB PRIMA che `adapt()` faccia alcunché di suo, durante la sola copia/compressione asset. Segnale: bisecare il tetto di memoria prima e dopo un fix e vedere la stessa soglia di crash — il chunk grande era un difetto reale (fix corretto, va tenuto) ma non la causa del crash. Mossa: non fidarsi della dimensione di un chunk come proxy del picco di memoria; misurare il picco stesso, e quando serve isolare DOVE cresce, strumentare con scritture sincrone perché un OOM non flush-a l'output normale.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
