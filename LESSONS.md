@@ -154,6 +154,14 @@ solo quando sono valorizzati, così la chiamata vecchia continua a risolvere; re
 una migration DOPO il deploy. E la vecchia firma si elimina comunque nella stessa migration: due
 overload che accettano gli stessi nomi rendono la chiamata ambigua (`function is not unique`).
 
+### `git commit -a` non aggiunge i file NUOVI: la PR parte senza i documenti che cita
+`-a` mette in stage solo i file gia` tracciati. In una sessione sola ha lasciato fuori dalla PR #90
+due ADR, due changelog e un file di test — tutti creati in quella stessa sessione — e il corpo della
+PR rimandava a `docs/adr/0004` che nella PR non c'era. Nessun errore, nessun avviso: il commit
+riesce e il diff sembra completo. Segnale: `git status --short` dopo il commit mostra righe `??`.
+Mossa: `git add -A <percorsi>` esplicito prima del commit, e `git status --short` come ultimo gesto
+prima di aprire la PR — deve essere vuoto.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
