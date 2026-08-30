@@ -167,7 +167,14 @@ export function classifyChatJob(
 	return createdAge > CHAT_RUNNING_HARD_STALE_MS ? { dead: true, reason: 'wall' } : ALIVE;
 }
 
-export const KIT_RUN_WORKING_STATES = ['queued', 'running'] as const;
+/**
+ * Quante volte un run kit può essere ripreso dopo che l'invocazione che lo teneva è morta.
+ * Oltre, il turno non è "sfortunato": è più grande di quanto una invocazione possa contenere,
+ * e va restituito all'utente col lavoro fatto invece di rinascere per sempre.
+ */
+export const MAX_RUN_ATTEMPTS = 3;
+
+export const KIT_RUN_WORKING_STATES = ['queued', 'running', 'waiting_input', 'waiting_takeover'] as const;
 
 /**
  * Lo stato in cui lo Stop dell'utente mette il run — dichiarato QUI, dove vive il resto del
@@ -186,7 +193,8 @@ export type KitRunLiveness = {
 };
 
 export function classifyKitRun(run: KitRunLiveness, now: number = Date.now()): ChatJobLiveness {
-	const working = (KIT_RUN_WORKING_STATES as readonly string[]).includes(run.state ?? '');
+  if (run.state === 'waiting_input' || run.state === 'waiting_takeover') return ALIVE;
+  const working = run.state === 'queued' || run.state === 'running';
 	const lastSignOfLife = run.heartbeat_at ?? run.created_at;
 	return classifyChatJob(
 		{

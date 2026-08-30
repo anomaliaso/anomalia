@@ -20,7 +20,11 @@ export type RunRow = {
 	reason: string | null;
 	question: unknown | null;
 	lease_until: string | null;
+	lease_owner?: string | null;
+	lease_fence?: number;
+	attempt?: number;
 	heartbeat_at: string | null;
+	harness_continue_state?: unknown;
 	created_at: string;
 	updated_at: string;
 };
@@ -94,16 +98,54 @@ export async function resume(
 	return { run, question: data.question ?? null };
 }
 
-/** Rinnova il lease del worker che sta girando il run — il battito che lo tiene reclamato. */
-export async function renewLease(db: SupabaseClient, runId: string, ms: number): Promise<RunRow> {
+/** Chi tiene il run: il proprietario dichiarato e la generazione della presa. */
+export type RunLease = { owner: string; fence: number };
+
+/**
+ * Prende il run: o è libero (queued/waiting_*), o è `running` col lease scaduto e allora si
+ * sfratta chi lo teneva. Ogni presa incrementa il fence, che è ciò che rende NO-OP ogni
+ * scrittura successiva del worker sfrattato: non l'abort, che un processo ucciso non riceve mai.
+ * Perde chi arriva su un lease ancora valido, e lo dice tornando null invece di alzare.
+ */
+export async function claimRun(
+	db: SupabaseClient,
+	runId: string,
+	owner: string,
+	{ ttlMs, now = new Date() }: { ttlMs: number; now?: Date }
+): Promise<{ run: RunRow; fence: number } | null> {
+	const { data, error } = await db.rpc('agent_kit_claim_run', {
+		p_run_id: runId,
+		p_owner: owner,
+		p_now: now.toISOString(),
+		p_lease_until: new Date(now.getTime() + ttlMs).toISOString()
+	});
+	if (error) throw new Error(`run: presa fallita — ${error.message}`);
+	if (!data) return null;
+	const run = (Array.isArray(data) ? data[0] : data) as RunRow | undefined;
+	if (!run) return null;
+	return { run, fence: run.lease_fence ?? 0 };
+}
+
+/**
+ * Rinnova il lease, ma SOLO per chi lo tiene davvero. Torna false quando il run è passato di
+ * mano: chi chiama deve fermare il turno, non continuare a scrivere su un run di un altro.
+ */
+export async function renewLease(
+	db: SupabaseClient,
+	runId: string,
+	lease: RunLease,
+	ms: number
+): Promise<boolean> {
 	const { data, error } = await db
 		.from(TABLE)
 		.update({ lease_until: new Date(Date.now() + ms).toISOString(), heartbeat_at: nowIso(), updated_at: nowIso() })
 		.eq('id', runId)
+		.eq('state', 'running')
+		.eq('lease_owner', lease.owner)
+		.eq('lease_fence', lease.fence)
 		.select();
 	if (error) throw new Error(`run: rinnovo lease fallito — ${error.message}`);
-	if (!data || data.length === 0) throw new Error(`run: rinnovo lease — run ${runId} non trovato`);
-	return data[0] as RunRow;
+	return (data?.length ?? 0) > 0;
 }
 
 /** I run `running` col lease scaduto: NON li transiziona, restituisce le righe e chi chiama decide. */
@@ -152,6 +194,7 @@ export type CloseMessage = {
 	reasoning?: string;
 	toolCalls?: unknown;
 	attachments?: string[];
+	speaker?: string;
 };
 
 /**
@@ -165,12 +208,15 @@ export async function closeRunSaving(
 	db: SupabaseClient,
 	runId: string,
 	outcome: CloseOutcome,
-	message: CloseMessage | null
+	message: CloseMessage | null,
+	lease: RunLease
 ): Promise<{ closed: boolean; messageId: string | null }> {
 	const to = outcome.kind === 'ask_user' ? 'waiting_input' : terminalStateFor(outcome.reason);
 	assertTransition('running', to);
 	const { data, error } = await db.rpc('agent_kit_close_run', {
 		p_run_id: runId,
+		p_owner: lease.owner,
+		p_fence: lease.fence,
 		p_to_state: to,
 		p_reason: outcome.kind === 'finish' ? outcome.reason : null,
 		p_question: outcome.kind === 'ask_user' ? outcome.question : null,
@@ -179,7 +225,8 @@ export async function closeRunSaving(
 					content: message.content,
 					reasoning: message.reasoning ?? null,
 					tool_calls: message.toolCalls ?? null,
-					attachments: message.attachments ?? null
+					attachments: message.attachments ?? null,
+					name: message.speaker ?? null
 				}
 			: null
 	});

@@ -40,6 +40,20 @@ class FakeClient {
   }
 }
 
+class MissingRealtimeClient extends FakeClient {
+  async query(sql: string, params: unknown[] = []) {
+    if (sql.includes('on realtime.messages')) {
+      const error = Object.assign(new Error('relation "realtime.messages" does not exist'), {
+        code: '42P01',
+        position: sql.indexOf('realtime.messages') + 1
+      });
+      throw error;
+    }
+
+    return super.query(sql, params);
+  }
+}
+
 describe('listMigrationFiles', () => {
   it('lists .sql files in lexicographic (= numeric, zero-padded) order', () => {
     const dir = makeMigrationsDir({
@@ -114,6 +128,23 @@ describe('statementChunks', () => {
 });
 
 describe('applyOne', () => {
+  it('defers Realtime policies without recording the migration when Realtime is not ready', async () => {
+    const dir = makeMigrationsDir({
+      '0226_realtime_brand_channel_policies.sql':
+        'create policy "brand channel" on realtime.messages for select using (true);'
+    });
+    const client = new MissingRealtimeClient();
+    try {
+      expect(await applyOne(client, '0226_realtime_brand_channel_policies.sql', dir)).toEqual({
+        status: 'deferred',
+        prerequisite: 'realtime.messages'
+      });
+      expect(client.calls).not.toContainEqual(expect.stringContaining('insert into app_schema_migrations'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('runs a vacuum migration outside a transaction, one statement per query', async () => {
     const dir = makeMigrationsDir({
       '0003_vac.sql': 'create index i on t (a);\nvacuum (analyze) public.posts;'

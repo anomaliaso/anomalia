@@ -25,8 +25,9 @@ Un worktree creato dentro la cartella della repo (`anomalia/anomalia-wt/<slug>`)
 ### Verifica il `workdir` prima di ogni Edit
 Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagliato tocca dev. È successo: `live.ts` modificato nel checkout principale per un secondo, poi `git checkout --` e riapplicato nel posto giusto. Il tool Edit non ti proteggere — proteggiti tu: guarda il percorso del file che stai per toccare, sempre.
 
-### Il `git stash` è condiviso fra tutti i worktree dello stesso repo
+### Il `git stash` è condiviso fra tutti i worktree — ora è BLOCCATO da un hook
 `git stash` legge e scrive lo STESSO ref (`refs/stash`) per l'intero repository, non per worktree: stashare dentro un worktree e fare `git stash pop` in un altro applica lì le modifiche del primo. È successo: `git stash` nella feature ha creato uno stash (e spinto via i miei edit di `live.ts`), e il `pop` eseguito dopo un timeout del tool di shell ha riesumato le modifiche di un ALTRO worktree (`video.ts`, irrelate) dentro il mio — lasciando il mio `live.ts` senza i miei edit. Segnale: dopo un `git stash`/`pop` i file modificati non corrispondono a quelli che avevi in mano, o compaiono modifiche a file mai toccati nel branch corrente. Mossa: evita `git stash` in un worktree — per sospendere delle modifiche usa il checkout dedicato (o `git diff > patch && git checkout --` e poi `git apply`), e se devi proprio stashare verifica sempre `git stash list` + `git show stash@{0} --stat` PRIMA del `pop`; un `pop` che finisce in timeout non è affidabile, riapri il file a mano e ricontrolla che i tuoi edit ci siano ancora.
+**Aggiornamento (30/8): non è più una raccomandazione.** Un agente ha stashato di nuovo dentro un worktree, e questa volta è andata bene solo per fortuna. Un hook `PreToolUse` su Bash (`~/.claude/settings.json`) ora rifiuta ogni comando che invochi `git stash`, in qualunque posizione della riga, e spiega le alternative nel messaggio di rifiuto. La regola sta anche in CLAUDE.md e AGENTS.md.
 
 ### Un test verde sul checkout principale può essere rosso nel worktree: il `.env` locale entra nei test
 `$env/dynamic/private` in vitest porta dentro il `.env` DELLA MACCHINA. Il checkout principale può passare per cache Vite stantia (env congelata prima di una variabile), il worktree con cache fresca fallisce — v. `queue-dm.test`: con `AGENT_KIT=on` locale il turno scappava nel ramo kit e il mock di `./subagents` moriva su `createSubagentTools`. Segnale: stesso codice, esito opposto fra checkout e worktree, e nessuna differenza nel diff. Mossa: il test che prova un percorso specifico fissa le variabili che gli servono spente (`vi.mock('$env/dynamic/private')` con override), non conta sul `.env` di chi lo lancia.
@@ -132,6 +133,97 @@ Il typechecker rifiuta: `Type '{ [k: string]: ... }' is missing properties from 
 
 ### La PR che dice "risolto" è verificata solo sul primo invio, non sul redo
 La PR #24 verificava l'immagine allegata al primo messaggio: viaggia come data-URL, una **stringa**, e sopravvive a ogni trasformazione. Sul redo la history ricostruita porta l'URL come **oggetto `URL`**, e `stripProviderRefs` lo ricostruiva via `Object.entries` — che per un `URL` restituisce `[]` — lasciando `image: {}`: l'adattatore pi scarta in silenzio e il modello risponde di vedere solo il testo `[attached: url]`. Il difetto visivo tornava solo sui turni ricostruiti (redo, retry, continuazione), mai su quelli che la verifica aveva coperto. Segnale: il reasoning dell'agente dice "l'utente ha allegato un'immagine via URL… non percepisso nessun contenuto visivo". Mossa: riprodurre l'INTERA catena di trasformazioni che il messaggio subisce (ricostruzione history → strip → adattatore), non solo l'invio felice; e ogni funzione che riscrive ricorsivamente i messaggi ha il suo unit test su parti multimodali, non solo su parti testuali.
+
+### Chi pota un log concorrente pota per ULTIMO, non nel punto semanticamente giusto
+I `progress` del turno kit venivano cancellati accanto alla riga definitiva — il momento in cui
+il messaggio davvero *supera* le istantanee. Ma `mirrorSseToRun` è un ramo concorrente al driver
+che chiude il run: la sua scrittura in volo passa davanti alla cancellazione e lascia righe
+orfane che nessuno supererà più. Segnale: un test di potatura che vede ancora le righe subito
+dopo la chiusura, e le vede sparire se aspetti. Mossa: potare nel `finally` dell'ULTIMO scrittore
+(lì lo specchio, che è anche l'unico a scrivere quelle righe), non dove la semantica sembra
+chiederlo — e chiedersi se l'altra chiamata non fosse codice morto: lo era.
+
+### Una migration che ELIMINA una firma rompe la produzione prima ancora del deploy
+Qui i deploy non applicano le migration, quindi fra l'apply e il deploy del codice c'è una finestra
+in cui la produzione chiama ancora la firma vecchia. `0229` toglieva `agent_kit_close_run` a cinque
+argomenti per sostituirla con quella recintata dal lease: applicata da sola avrebbe fatto fallire
+OGNI chiusura di turno finché il codice nuovo non fosse arrivato — e la chiusura è ciò che salva la
+risposta. Segnale: una migration il cui diff contiene `drop function` o un cambio di firma, su una
+funzione che il codice deployato chiama. Mossa: i parametri nuovi hanno un default e il vincolo vale
+solo quando sono valorizzati, così la chiamata vecchia continua a risolvere; renderli obbligatori è
+una migration DOPO il deploy. E la vecchia firma si elimina comunque nella stessa migration: due
+overload che accettano gli stessi nomi rendono la chiamata ambigua (`function is not unique`).
+
+### `git commit -a` non aggiunge i file NUOVI: la PR parte senza i documenti che cita
+`-a` mette in stage solo i file gia` tracciati. In una sessione sola ha lasciato fuori dalla PR #90
+due ADR, due changelog e un file di test — tutti creati in quella stessa sessione — e il corpo della
+PR rimandava a `docs/adr/0004` che nella PR non c'era. Nessun errore, nessun avviso: il commit
+riesce e il diff sembra completo. Segnale: `git status --short` dopo il commit mostra righe `??`.
+Mossa: `git add -A <percorsi>` esplicito prima del commit, e `git status --short` come ultimo gesto
+prima di aprire la PR — deve essere vuoto.
+
+### Cancellare l'utente NON distrugge il brand di prova: gli eval perdono un brand per giro
+La regola dice che il brand di prova va distrutto sempre, e `deleteEvalUser` sembrava bastare. Non
+basta: il brand pende dall'ORGANIZZAZIONE, non dall'utente, e resta a terra. In produzione ci sono
+4 brand `eval-mt*` dai giri di `eval:ux` fra il 24 e il 26 agosto, ognuno con la sua organizzazione.
+Segnale: `select count(*) from brands where slug like 'eval-%'` maggiore di zero a eval fermo.
+Mossa: nel `finally` si cancella l'ORGANIZZAZIONE per prima (il brand se ne va in cascata) e poi
+l'utente. E il caso che perde davvero è la creazione fallita a METÀ — utente già creato, nessun
+fixture restituito, `destroyFixture(null)` che esce subito: la creazione ripulisce da sola prima
+di rilanciare.
+
+### PostgREST tiene in CACHE lo schema: la migration applicata in locale non basta
+Applicate 0226/0227/0229 allo stack locale, la chat continuava a ricadere sul percorso vecchio e la
+lettura per cursore rispondeva 503. La RLS era sana (provata a mano: l'utente leggeva i suoi eventi),
+il codice era giusto, e il colpevole era il container `rest`: PostgREST aveva la cache dello schema
+di PRIMA della migration, quindi per l'API `thread_events` non esisteva. `loadThreadEvents` cattura
+l'errore e torna `null`, e tutto scivola in silenzio sul fallback. Segnale: dopo una migration
+locale, un endpoint che nomina la tabella nuova risponde vuoto o 503 mentre psql la vede benissimo.
+Mossa: `notify pgrst, 'reload schema'` e, se non basta, `docker restart anomalia-rest`.
+
+### Il `catch` muto nel load nasconde proprio la causa che ti servirà
+`loadLiveRun(supabase, thread).catch(() => null)` sembrava prudenza: un caricamento pagina non deve
+rompersi per una lettura accessoria. Ma quando il parziale non compariva, quel catch aveva ingoiato
+l'unica informazione utile, e ho perso mezz'ora a interrogare il database invece di leggere l'errore.
+Mossa: il catch che protegge il caricamento LOGGA sempre prima di tornare `null`. Ingoiare l'errore
+e ingoiare la diagnosi sono la stessa riga.
+
+### Vite: dopo aver toccato un `package.json` di `packages/`, il browser resta su hash morti
+Aggiunta una subpath export a `@anomalia/agent-kit`, la pagina ha smesso di idratarsi con
+`Failed to fetch dynamically imported module: .../nodes/150.js`. Non era il mio modulo: era
+`/node_modules/.vite/deps/@lucide_svelte.js?v=<hash>` in 404 — l'ottimizzatore aveva rigenerato le
+dipendenze con hash nuovi. Segnale: la pagina non idrata, nessun effetto gira, e in console un
+`Failed to fetch dynamically imported module` su un nodo di rotta che via `curl` risponde 200.
+Mossa: `rm -rf node_modules/.vite .svelte-kit/generated` e riavvia il dev server.
+
+### Un turno kit reale dura ~80s: il test che asserisce a 10 secondi misura il nulla
+Il primo stress nel browser dava tutto verde in 9 secondi, e in chat non c'era nessuna risposta: il
+modello (glm-5.3-flash, con reasoning) impiega ~80s e le mie asserzioni guardavano `body.innerText`,
+che comprende la barra laterale — quindi «testo presente» era sempre vero. Segnale: un turno che
+«finisce» in pochi secondi e conteggi di caratteri a quattro cifre che non cambiano. Mossa: asserire
+sulla BOLLA (`.assistant-msg-wrap`), non sul body, e considerare finito un turno solo quando la riga
+assistant esiste in `chat_messages` — il DOM dice cosa si vede, il database dice cosa è successo.
+
+### `progress` a zero dopo un turno finito è la POTATURA che funziona, non un difetto
+Cercavo le istantanee durevoli a turno concluso e ne trovavo zero, e per un momento ho creduto che
+la corsia non scrivesse. Le scrive: guardate DURANTE il turno erano 259 in 90 secondi, la cadenza dei
+250ms. A fine turno il messaggio definitivo le supera e il `finally` dello specchio le cancella —
+esattamente il disegno della ADR 0004. Mossa: una corsia potata si osserva in volo, non a terra.
+
+### Un glob di intercettazione che prende anche il MODULO col nome dell'endpoint accusa il prodotto
+`page.route('**/kit-run**')` per provare cosa succede quando il poll fallisce: intercettava anche
+`src/routes/app/[brand]/chat/components/kit-run.ts`, cioè il modulo sorgente con lo stesso nome.
+Abortito quello, la pagina non si idrata, niente si disegna, e i tre casi provati (rete caduta, 500,
+204) risultavano TUTTI E TRE rotti — compreso quello che funzionava. Segnale: intercettando qualcosa,
+il conteggio delle richieste è 1 e non decine, e il difetto sembra colpire anche i casi che il codice
+gestisce chiaramente. Mossa: intercettare per PATHNAME esatto (una regex sull'URL), mai per un glob
+che un file sorgente può soddisfare — e prima di credere a un difetto, misurare il caso base senza
+intercettazione.
+
+## Build e bundle
+
+### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
+`index3.js` (5,4 MB, dieci volte il secondo chunk) era `simple-icons` intero, bundlato via `ssr.noExternal` per un motivo Vercel-only (nft duplica il pacchetto per funzione) che non vale per `DEPLOY_TARGET=node`. Rimuoverlo lo porta a 295 KB (-94,5%) — ma bisecando `--max-old-space-size` (4096/4608/5120) il build muore e riesce agli stessi tetti prima e dopo: zero spostamento. Strumentando `adapter-node`'s `adapt()` (scritture sincrone `appendFileSync`, non `console.error` — l'OOM abort salta il flush dei buffer stdio e perde l'ultimo log) l'heap è già a ~3,4 GB PRIMA che `adapt()` faccia alcunché di suo, durante la sola copia/compressione asset. Segnale: bisecare il tetto di memoria prima e dopo un fix e vedere la stessa soglia di crash — il chunk grande era un difetto reale (fix corretto, va tenuto) ma non la causa del crash. Mossa: non fidarsi della dimensione di un chunk come proxy del picco di memoria; misurare il picco stesso, e quando serve isolare DOVE cresce, strumentare con scritture sincrone perché un OOM non flush-a l'output normale.
 
 ## Prodotto
 

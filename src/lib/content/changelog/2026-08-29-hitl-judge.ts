@@ -5,6 +5,6 @@ export default {
   title: 'Safer action approvals',
   items: [
     'Read-only work continues without an approval prompt, while consequential actions can now be checked automatically before they run.',
-    'If an automatic check fails, the action waits for your approval instead of running on an uncertain verdict.'
+    'If an automatic check asks or fails, the action is blocked instead of running on an uncertain verdict.'
   ]
 } satisfies ChangelogEntry;

@@ -44,9 +44,10 @@ export interface ToolSpec {
 	terminal?: boolean;
 	/**
 	 * Il tool ha un effetto collaterale reale (scrive/post/schedula/rende un file): va avvolto dal
-	 * ledger, così un resume a metà turno non lo riesegue. Assente = si legge e basta, mai una riga.
+	 * ledger, così un resume a metà turno non lo riesegue. La dichiarazione è obbligatoria per non
+	 * lasciare alla convenzione la decisione se una chiamata scrive o legge.
 	 */
-	effectful?: boolean;
+	effectful: boolean;
 }
 
 export type ActionApprovalRule = {
@@ -75,6 +76,7 @@ export type ToolResultContent =
 export interface ToolResult {
 	content: ToolResultContent[];
 	isError?: boolean;
+	effectStatus?: Exclude<EffectStatus, 'intended' | 'reconciled'>;
 }
 
 /** Lo stato di un effetto collaterale nel ledger — la macchina a stati di `agent_kit_effects`. */

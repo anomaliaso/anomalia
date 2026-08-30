@@ -530,6 +530,7 @@ export async function startChatSession(opts: {
    * Resend / edit: supersede this message (+ later rows) before saving the new user turn.
    */
   truncateFromMessageId?: string;
+  approval?: { approvalId: string; approved: boolean; reason?: string };
 }): Promise<'ok' | 'busy' | 'busy_saved' | 'error' | 'cancelled'> {
   const displayPending = opts.pendingUserText ?? opts.userText;
   const existing = sessions.get(opts.threadId);
@@ -579,7 +580,14 @@ export async function startChatSession(opts: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ...(opts.redoMessageId
+        ...(opts.approval
+          ? {
+              action: 'approval_response',
+              approval_id: opts.approval.approvalId,
+              approval_decision: opts.approval.approved ? 'approved' : 'denied',
+              ...(opts.approval.reason ? { approval_reason: opts.approval.reason } : {})
+            }
+          : opts.redoMessageId
           ? { action: 'redo', message_id: opts.redoMessageId }
           : { messages: [{ role: 'user', content: opts.userText }] }),
         thread_id: opts.threadId,
@@ -1359,4 +1367,3 @@ async function tickToolWatch(threadId: string): Promise<void> {
     /* best-effort */
   }
 }
-

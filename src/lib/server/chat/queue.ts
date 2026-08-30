@@ -93,6 +93,7 @@ import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { carryImagesToContinuation } from '$lib/agent/bridge/provider-refs';
+import { createChatActionApproval } from '$lib/server/chat/action-approval';
 
 export function kickChatQueueWork(origin: string): Promise<void> {
 	const headers: Record<string, string> = {};
@@ -151,6 +152,7 @@ export async function enqueueQueuedChatTurn(
 		 * domanda, è un prefill, e la seconda voce continuerebbe la frase della prima.
 		 */
 		userMessageSaved?: boolean;
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const locale = bilingualNoticeLocale(opts.locale);
@@ -179,7 +181,8 @@ export async function enqueueQueuedChatTurn(
 				...(opts.agent ? { agent: opts.agent } : {}),
 				...(opts.customAgentId ? { custom_agent_id: opts.customAgentId } : {}),
 				...(opts.speaker ? { speaker: opts.speaker } : {}),
-				...(opts.userMessageSaved ? { user_message_saved: true } : {})
+				...(opts.userMessageSaved ? { user_message_saved: true } : {}),
+				...(opts.resumeRunId ? { resume_run_id: opts.resumeRunId } : {})
 			}
 		})
 		.select('id')
@@ -228,6 +231,12 @@ export async function enqueueTurnContinuation(
 		 * di battute. Vedi motion-video/unfinished.ts.
 		 */
 		maxDepth?: number;
+		/**
+		 * Il run da RIPRENDERE, invece di aprirne uno nuovo. Lo passa il reaper per una riga
+		 * lasciata `running` col lease scaduto: chi drena la prende col fence successivo e
+		 * continua lo stesso turno, senza un secondo messaggio in chat.
+		 */
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const depth = Math.max(0, Math.trunc(opts.depth ?? 0));
@@ -260,7 +269,8 @@ export async function enqueueTurnContinuation(
 		continuationDepth: depth + 1,
 		mode: opts.mode,
 		tier: opts.tier,
-		reasoning: opts.reasoning
+		reasoning: opts.reasoning,
+		resumeRunId: opts.resumeRunId
 	});
 }
 
@@ -773,9 +783,20 @@ await maybeCompactThread(admin, {
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model)?.family,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
+						// La ripresa di un run lasciato dal reaper: lo stesso turno continua, con il
+						// fence successivo, invece di aprirne uno nuovo accanto al lavoro a metà.
+						resumeRunId: typeof params.resume_run_id === 'string' ? params.resume_run_id : undefined,
 						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
 						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
 						escalationText: params.scheduled === true || replay || isDm ? undefined : userMessageContent,
+						approval: isDm
+							? undefined
+							: createChatActionApproval({
+									messages: kitMessages,
+									brandId: brand.id,
+									userId: job.user_id as string,
+									threadId
+							  }),
 						// Il contesto del DM: chi parla, per chi. Il turno kit nasce DM (blocco in testa
 						// al prompt, firma della risposta, niente riprese) come lo nasceva quello classico.
 						dm:
