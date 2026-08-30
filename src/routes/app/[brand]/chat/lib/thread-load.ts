@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getThread, loadAllHistoryForUI, loadHistoryForUI } from '$lib/server/chat/persistence';
+import { getThread, loadAllHistoryForUI, loadThreadUiHistory } from '$lib/server/chat/persistence';
 import { listThreadArtifacts } from '$lib/server/chat/artifacts';
 import { loadLastReads } from '$lib/server/chat/unread';
 import { loadLatestGoal } from '$lib/server/chat/goal';
@@ -199,8 +199,8 @@ export async function loadThreadState(
   // The reply still being generated for this thread, if any. sessionStorage only survives a reload
   // of the SAME tab, so this is the only way a reopened/duplicated tab can reattach to a turn that
   // is still running (the generation itself survives the disconnect — see consumeSseStream below).
-  const [messages, artifacts, goal, { data: activeJob }, lastReads] = await Promise.all([
-    loadHistoryForUI(supabase, brand.id, user.id, threadId),
+  const [threadHistory, artifacts, goal, { data: activeJob }, lastReads] = await Promise.all([
+    loadThreadUiHistory(supabase, brand.id, user.id, threadId),
     // Gli artefatti del thread arrivano firmati insieme alla cronologia: le card devono esserci al
     // primo paint, non dopo una seconda chiamata che a volte non parte.
     listThreadArtifacts(supabase, threadId, brand.id).catch(() => []),
@@ -224,7 +224,9 @@ export async function loadThreadState(
     loadLastReads(supabase, user.id, [threadId])
   ]);
   return json({
-    messages,
+    messages: threadHistory.messages,
+    liveProgress: threadHistory.liveProgress,
+    eventCursor: threadHistory.eventCursor,
     artifacts,
     goal,
     last_read_at: lastReads[threadId] ?? null,

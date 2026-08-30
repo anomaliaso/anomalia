@@ -36,6 +36,13 @@ export function latestRunProgress(projection: ThreadProjection, runId: string): 
 	return projection.progress[runId] ?? null;
 }
 
+export function seedThreadProjection(
+	progress: Readonly<Record<string, ThreadProgress>>,
+	cursor: number
+): ThreadProjection {
+	return { cursor, messages: [], progress: { ...progress }, sourceEvents: {} };
+}
+
 function toThreadEvent(raw: RawThreadEvent): ThreadEvent {
 	const base = { seq: raw.seq, sourceKey: raw.source_key };
 	if (raw.kind === 'message') {

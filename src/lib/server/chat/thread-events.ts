@@ -119,32 +119,44 @@ export async function pruneRunProgress(
 	}
 }
 
-export function threadMessageRows(events: readonly StoredThreadEvent[]): Record<string, unknown>[] | null {
-	const converted: ThreadEvent[] = events.map((event) => {
-		if (event.kind === 'message') {
-			return {
-				seq: event.seq,
-				sourceKey: event.source_key,
-				kind: event.kind,
-				message: event.payload as ThreadMessage
-			};
-		}
-		if (event.kind === 'progress') {
-			return {
-				seq: event.seq,
-				sourceKey: event.source_key,
-				kind: event.kind,
-				progress: event.payload as ThreadProgress
-			};
-		}
-		return {
-			seq: event.seq,
-			sourceKey: event.source_key,
-			kind: event.kind,
-			messageIds: ((event.payload as { messageIds?: unknown }).messageIds ?? []) as string[]
-		};
-	});
-	const result = reduceThreadEvents(emptyThreadProjection(), converted);
+export type ThreadProjectionRows = {
+	messages: Record<string, unknown>[];
+	progress: Record<string, ThreadProgress>;
+	cursor: number;
+};
+
+/**
+ * Il carico a freddo e il tail live si riducono con LA STESSA funzione, e leggono lo stesso log:
+ * è l'unico modo perché una scheda aperta a metà turno veda ciò che una scheda viva sta
+ * accumulando. Prima di qui il freddo proiettava solo i `message` e buttava via i `progress`, e
+ * il parziale ricompariva solo al poke successivo — cioè la ricarica mostrava meno di quanto il
+ * database avesse già.
+ */
+export function threadProjectionRows(events: readonly StoredThreadEvent[]): ThreadProjectionRows | null {
+	const result = reduceThreadEvents(emptyThreadProjection(), events.map(asThreadEvent));
 	if (result.conflict) return null;
-	return result.projection.messages.filter((message) => message.superseded !== true) as Record<string, unknown>[];
+	return {
+		messages: result.projection.messages.filter((m) => m.superseded !== true) as Record<string, unknown>[],
+		progress: { ...result.projection.progress },
+		cursor: result.projection.cursor
+	};
+}
+
+function asThreadEvent(event: StoredThreadEvent): ThreadEvent {
+	if (event.kind === 'message') {
+		return { seq: event.seq, sourceKey: event.source_key, kind: 'message', message: event.payload as ThreadMessage };
+	}
+	if (event.kind === 'progress') {
+		return { seq: event.seq, sourceKey: event.source_key, kind: 'progress', progress: event.payload as ThreadProgress };
+	}
+	return {
+		seq: event.seq,
+		sourceKey: event.source_key,
+		kind: 'messages_superseded',
+		messageIds: ((event.payload as { messageIds?: unknown }).messageIds ?? []) as string[]
+	};
+}
+
+export function threadMessageRows(events: readonly StoredThreadEvent[]): Record<string, unknown>[] | null {
+	return threadProjectionRows(events)?.messages ?? null;
 }
