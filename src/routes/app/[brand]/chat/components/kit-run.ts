@@ -21,3 +21,13 @@ export const LIVE_POLL_MS = 350;
 
 /** A vuoto si chiede un giro su questi: ~10 secondi fra due domande, come prima. */
 export const IDLE_POLL_EVERY = 28;
+
+/**
+ * Cosa fare della risposta del poll. `keep` è il caso che mancava: un errore del server non
+ * dice che il turno è finito, dice che non lo sappiamo — e ciò che è già a schermo resta.
+ */
+export function pollOutcome(status: number): 'run' | 'finished' | 'keep' {
+	if (status === 200) return 'run';
+	if (status === 204) return 'finished';
+	return 'keep';
+}

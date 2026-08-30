@@ -62,7 +62,7 @@
   import EditMessageDialog from '../components/EditMessageDialog.svelte';
   import AgentComputerDock from '../components/AgentComputerDock.svelte';
   import { consolidateMessages, mapMsg, planIdsIn, parseToolCalls, redoIdOf, type ChatArtifactUi, type ChatMessage, type PostPreview } from '../components/transcript';
-  import { LIVE_POLL_MS, IDLE_POLL_EVERY, type KitRun } from '../components/kit-run';
+  import { LIVE_POLL_MS, IDLE_POLL_EVERY, pollOutcome, type KitRun } from '../components/kit-run';
   import { createLifecycle, assistantReportOf, assistantWorkOf } from './lifecycle.svelte';
   import { dmAgents } from '$lib/chat-dm';
 
@@ -410,13 +410,11 @@
       try {
         const res = await fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`);
         if (stop) return;
-        if (res.status === 200) {
+        const esito = pollOutcome(res.status);
+        if (esito === 'run') {
           orphanRun = (await res.json()) as KitRun;
-        } else {
-          // 204: nessun run attivo. Se prima ne mostravamo uno, è appena finito.
-          if (orphanRun) {
-            void finalizeOrphanRun();
-          }
+        } else if (esito === 'finished' && orphanRun) {
+          void finalizeOrphanRun();
         }
       } catch {
         /* un poll fallito riprova al giro dopo */

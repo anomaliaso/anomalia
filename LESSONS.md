@@ -210,6 +210,16 @@ la corsia non scrivesse. Le scrive: guardate DURANTE il turno erano 259 in 90 se
 250ms. A fine turno il messaggio definitivo le supera e il `finally` dello specchio le cancella —
 esattamente il disegno della ADR 0004. Mossa: una corsia potata si osserva in volo, non a terra.
 
+### Un glob di intercettazione che prende anche il MODULO col nome dell'endpoint accusa il prodotto
+`page.route('**/kit-run**')` per provare cosa succede quando il poll fallisce: intercettava anche
+`src/routes/app/[brand]/chat/components/kit-run.ts`, cioè il modulo sorgente con lo stesso nome.
+Abortito quello, la pagina non si idrata, niente si disegna, e i tre casi provati (rete caduta, 500,
+204) risultavano TUTTI E TRE rotti — compreso quello che funzionava. Segnale: intercettando qualcosa,
+il conteggio delle richieste è 1 e non decine, e il difetto sembra colpire anche i casi che il codice
+gestisce chiaramente. Mossa: intercettare per PATHNAME esatto (una regex sull'URL), mai per un glob
+che un file sorgente può soddisfare — e prima di credere a un difetto, misurare il caso base senza
+intercettazione.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
