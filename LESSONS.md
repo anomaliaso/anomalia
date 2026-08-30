@@ -35,6 +35,9 @@ Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagli
 ### **Una patch cambiata in un PR non si propaga ai worktree impilati con `npx patch-package`**
 patch-package non aggiorna uno stato già patchato: dopo un merge/rebase che tocca `patches/`, i worktree impilati falliscono sui test del parser (es. pi-stream) anche se su dev passano, e patch-package muore con "cannot apply". Mossa: dopo ogni merge che cambia `patches/`, `npm ci` + `npx patch-package` in OGNI worktree impilato — il reinstall del solo pacchetto basta se sei sicuro del lockfile.
 
+### Una sessione precedente uccisa lascia una `vite build` orfana che scrive nella STESSA `build/`
+Una sessione (agente o terminale) chiusa a metà `npm run build` non porta via il processo: il trap del genitore non lo tocca, e `vite build` resta parente di `init`, vivo per decine di minuti, a scrivere in `build/`. Rilanciare il build nello stesso worktree fa gareggiare due `vite build` sulla stessa cartella d'output — corruzione silenziosa, non un errore chiaro. Segnale: `ps -ef | grep "vite build"` mostra più di un processo con lo stesso `cwd`, uno con `PPID 1` e un'ora di avvio molto più vecchia. Mossa: prima di rilanciare un build lungo in un worktree, cerca ed elimina (`kill -9`) ogni `vite build`/`npm run build` orfano di QUEL worktree — non toccare processi di altri worktree che condividono la macchina.
+
 ## Test: distinguere il tuo difetto dal rumore
 
 ### La suite completa fallisce da sola: confronta run-per-run con dev puro
@@ -225,6 +228,23 @@ intercettazione.
 ### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
 `index3.js` (5,4 MB, dieci volte il secondo chunk) era `simple-icons` intero, bundlato via `ssr.noExternal` per un motivo Vercel-only (nft duplica il pacchetto per funzione) che non vale per `DEPLOY_TARGET=node`. Rimuoverlo lo porta a 295 KB (-94,5%) — ma bisecando `--max-old-space-size` (4096/4608/5120) il build muore e riesce agli stessi tetti prima e dopo: zero spostamento. Strumentando `adapter-node`'s `adapt()` (scritture sincrone `appendFileSync`, non `console.error` — l'OOM abort salta il flush dei buffer stdio e perde l'ultimo log) l'heap è già a ~3,4 GB PRIMA che `adapt()` faccia alcunché di suo, durante la sola copia/compressione asset. Segnale: bisecare il tetto di memoria prima e dopo un fix e vedere la stessa soglia di crash — il chunk grande era un difetto reale (fix corretto, va tenuto) ma non la causa del crash. Mossa: non fidarsi della dimensione di un chunk come proxy del picco di memoria; misurare il picco stesso, e quando serve isolare DOVE cresce, strumentare con scritture sincrone perché un OOM non flush-a l'output normale.
 
+### `git checkout --ours <file>` in un merge BUTTA anche le fusioni riuscite di quel file
+Un conflitto solo in `live.ts` fra il lease (dev) e la sandbox riusata (#96): risolto con
+`git checkout --ours src/lib/agent/bridge/live.ts`, che NON risolve il pezzo — riporta il file
+INTERO alla versione nostra, cancellando tutte le hunk che git aveva gia` fuso bene da `theirs`.
+Sparito in silenzio tutto il lavoro del lease appena mergiato: `claimRun`, `publishProgress`,
+`RUN_LEASE_TTL_MS`, `resumeRunId` a zero occorrenze, nessun errore, nessun marcatore residuo.
+Segnale: dopo `--ours`/`--theirs` su un file, i simboli che l'ALTRO ramo aveva portato non ci sono
+piu`. Mossa: contare le occorrenze dei simboli di ENTRAMBI i rami dopo ogni risoluzione, e risolvere
+la singola hunk (a mano o con un merge tool), mai il file intero.
+
+### `describe.skipIf` salta i TEST, non il corpo della suite
+`sandbox-leases.integration.test.ts` costruiva il client Supabase dentro il corpo della describe
+saltata: vitest esegue comunque quel corpo per raccogliere i test, quindi su ogni macchina senza
+`SANDBOX_TEST_SUPABASE_URL` la RACCOLTA moriva con «supabaseUrl is required» e si portava giu` la
+suite intera per un test che non doveva nemmeno partire. Segnale: `Test Files 1 failed` con
+`Tests: no tests` — un file che non arriva neppure a eseguire un caso. Mossa: tutto cio` che ha
+bisogno dell'ambiente nasce in `beforeAll`, che una suite saltata non esegue.
 ### Una guardia su una variabile che l'harness mette SEMPRE non e` una guardia
 `onboarding.real.spec.ts` si proteggeva con `test.skip(!PUBLIC_SUPABASE_URL, ...)`, e in CI falliva
 sempre: quella variabile la mette `playwright.config.ts` come SEGNAPOSTO

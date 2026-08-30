@@ -1,0 +1,38 @@
+name: anomalia-task85
+
+services:
+  db:
+    container_name: anomalia-task85-db
+    ports: !override
+      - '55432:5432'
+
+  kong:
+    container_name: anomalia-task85-kong
+    ports: !override
+      - '58085:8000'
+
+  auth:
+    container_name: anomalia-task85-auth
+
+  rest:
+    container_name: anomalia-task85-rest
+
+  realtime:
+    container_name: anomalia-task85-realtime
+
+  storage:
+    container_name: anomalia-task85-storage
+    volumes: !override
+      - task85-storage:/var/lib/storage
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://storage:5000/status']
+      timeout: 5s
+      interval: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  db-data:
+    name: anomalia-task85-db-data
+  task85-storage:
+    name: anomalia-task85-storage

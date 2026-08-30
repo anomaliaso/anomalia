@@ -469,6 +469,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		if (turnHeartbeat) clearInterval(turnHeartbeat);
 		turnHeartbeat = null;
 	};
+	let brandSandbox: Awaited<ReturnType<typeof openBrandHarnessSession>> | null = null;
 
 	try {
 		const modelRef = resolveHarnessModelRef({ family: input.modelFamily, tier: input.tier });
@@ -847,8 +848,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			savedResume = null;
 		}
 		}
-		const brandSandbox = savedResume ? null : await openBrandHarnessSession(brand.id, run.id, spec.id);
-		try {
+		brandSandbox = savedResume ? null : await openBrandHarnessSession(brand.id, run.id, spec.id, threadId);
 		const startTurnOnce = (fresh: boolean) => {
 			const startedTurn = startHarnessTurn({
 			runId: run.id,
@@ -909,6 +909,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			if (!hadReusableSession) throw firstStartError;
 			await dropLiveHarnessSession(threadId).catch(() => undefined);
 			try {
+				brandSandbox = await openBrandHarnessSession(brand.id, run.id, spec.id, threadId);
 				turn = await startTurnOnce(true);
 			} catch {
 				throw firstStartError;
@@ -1356,7 +1357,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				// La sessione se ne va col turno che l'ha rotta: senza, il messaggio dopo eredita un
 				// turno non chiuso e muore uguale, e il FE non mostra niente perche` il run e` gia`
 				// chiuso. Vedi `dropLiveHarnessSession`.
-				await dropLiveHarnessSession(threadId).catch(() => undefined);
+					await dropLiveHarnessSession(threadId).catch(() => undefined);
 				const why = error instanceof Error ? error.message : String(error);
 				// English unless this chat is actually Italian — missing/en-IN/es used to dump
 				// Italian into an English thread (amazon.in, 27/8/2026). Keep the Italian template
@@ -1386,39 +1387,44 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					detail: `run ${run.id} · agente ${spec.id}`
 				}).catch((e) => console.error('[AGENT_KIT] report fallito', e));
 				if (brandSandbox) {
-				// Nota al MODELLO, mai all'utente: inglese, tag <system-reminder> (la convenzione di fatto:
-				// Claude Code e simili), TRANSITORIA —
-				// vive solo nella request del turno di retry e non finisce mai né in chat né nel DB.
-				// Le alternative peggio:
-				// - `role: 'system'` a metà conversazione → Google la rifiuta
-				//   ("only supported at the beginning", convertToGoogleMessages);
-				// - appenderla al system del turno di retry → cambia il primo blocco del prompt e
-				//   invalida la cache dell'intero prefisso proprio sul giro che rilegge più storia.
-				// Una user-role transitoria e marcata paga solo i token della nota.
-				const corrective = `<system-reminder>This is an automated backend note, NOT from the user. Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.</system-reminder>`;
-				try {
-					const retryTurn = await startHarnessTurn({
-						runId: `${run.id}-retry`,
-						model: modelRef ?? undefined,
-						system,
-						messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
+					try {
+						brandSandbox = await openBrandHarnessSession(brand.id, run.id, spec.id, threadId);
+					} catch {
+						brandSandbox = null;
+					}
+					// Nota al MODELLO, mai all'utente: inglese, tag <system-reminder> (la convenzione di fatto:
+					// Claude Code e simili), TRANSITORIA —
+					// vive solo nella request del turno di retry e non finisce mai né in chat né nel DB.
+					// Le alternative peggio:
+					// - `role: 'system'` a metà conversazione → Google la rifiuta
+					//   ("only supported at the beginning", convertToGoogleMessages);
+					// - appenderla al system del turno di retry → cambia il primo blocco del prompt e
+					//   invalida la cache dell'intero prefisso proprio sul giro che rilegge più storia.
+					// Una user-role transitoria e marcata paga solo i token della nota.
+					const corrective = `<system-reminder>This is an automated backend note, NOT from the user. Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.</system-reminder>`;
+					try {
+						const retryTurn = await startHarnessTurn({
+							runId: `${run.id}-retry`,
+							model: modelRef ?? undefined,
+							system,
+							messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
 							tools: toolSet as never,
-						stopWhen: [isStepCount(TURN_MAX_STEPS)],
-						sandboxSession: brandSandbox?.session,
-						sessionKey: threadId
-					});
-					await retryTurn.result.consumeStream({
-						onError: (e) => console.error(`[AGENT_KIT] run ${run.id} retry consume error`, e)
-					});
-					await handleFinish({ steps: await retryTurn.result.steps, text: await retryTurn.result.text });
-				} catch (retryError) {
-					console.error(`[AGENT_KIT] run ${run.id} retry failed`, retryError);
-					await finish(admin, run.id, 'aborted').catch(() => {});
+							stopWhen: [isStepCount(TURN_MAX_STEPS)],
+							sandboxSession: brandSandbox?.session,
+							sessionKey: threadId
+						});
+						await retryTurn.result.consumeStream({
+							onError: (e) => console.error(`[AGENT_KIT] run ${run.id} retry consume error`, e)
+						});
+						await handleFinish({ steps: await retryTurn.result.steps, text: await retryTurn.result.text });
+					} catch (retryError) {
+						console.error(`[AGENT_KIT] run ${run.id} retry failed`, retryError);
+						await finish(admin, run.id, 'aborted').catch(() => {});
+						await turn.destroy();
+					}
+				} else {
 					await turn.destroy();
 				}
-			} else {
-				await turn.destroy();
-			}
 			}
 			try {
 				const usage = extractSdkUsage(await result.totalUsage);
@@ -1440,7 +1446,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			} catch (e) {
 				console.error(`[AGENT_KIT] run ${run.id} usage log error`, e);
 			}
-		}).finally(() => {
+			}).finally(() => {
 			stopSilenceWatch();
 			stopTurnHeartbeat();
 		});
@@ -1622,14 +1628,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				}
 			})();
 		}
-		} finally {
-			// Il turno è finito, bene o male: via l'holder e, se era l'ultimo, la VM si spegne.
-			// La sessione cached del prossimo messaggio riaccende da sola al primo comando.
-			if (brandSandbox) {
-				await brandSandbox.handle.release().catch((e) => console.warn(`[AGENT_KIT] run ${run.id} sandbox release`, e));
-			}
-		}
 	} catch (err) {
+		await dropLiveHarnessSession(threadId).catch(() => undefined);
 		stopTurnHeartbeat();
 		await finish(admin, run.id, 'aborted').catch(() => {});
 		kickQueue();

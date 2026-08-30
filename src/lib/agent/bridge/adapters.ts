@@ -175,22 +175,48 @@ export interface HarnessSandboxSession {
 	handle: SandboxHandle;
 }
 
+const liveSandboxSessions = new Map<string, Promise<HarnessSandboxSession>>();
+
 /** La STESSA macchina del brand (getOrCreate per nome): i builtin Pi atterrano lì, un solo canone. */
 export async function openBrandHarnessSession(
 	brandId: string,
 	runId: string,
 	/** Chi sta girando: la macchina è sua, non del brand (vedi `sandboxName`). */
-	agentId?: string
+	agentId?: string,
+	sessionKey?: string
 ): Promise<HarnessSandboxSession> {
-	const handle = await openBrandSandbox({
-		brandId,
-		agentId,
-		mode: 'research',
-		timeoutMs: SANDBOX_MAX_LEASE_MS,
-		runId
-	});
-	const provider = createVercelSandbox({ sandbox: handle.raw as never });
-	return { session: await provider.createSession(), name: handle.name, handle };
+	if (sessionKey) {
+		const live = liveSandboxSessions.get(sessionKey);
+		if (live) return live;
+	}
+
+	const opening = (async () => {
+		const handle = await openBrandSandbox({
+			brandId,
+			agentId,
+			mode: 'research',
+			timeoutMs: SANDBOX_MAX_LEASE_MS,
+			runId
+		});
+		try {
+			const provider = createVercelSandbox({ sandbox: handle.raw as never });
+			return { session: await provider.createSession(), name: handle.name, handle };
+		} catch (error) {
+			await handle.release().catch(() => undefined);
+			throw error;
+		}
+	})();
+
+	if (!sessionKey) return opening;
+	liveSandboxSessions.set(sessionKey, opening);
+	try {
+		const opened = await opening;
+		if (liveSandboxSessions.get(sessionKey) === opening) liveSandboxSessions.set(sessionKey, Promise.resolve(opened));
+		return opened;
+	} catch (error) {
+		if (liveSandboxSessions.get(sessionKey) === opening) liveSandboxSessions.delete(sessionKey);
+		throw error;
+	}
 }
 
 type HarnessStreamResult = Awaited<ReturnType<InstanceType<typeof HarnessAgent>['stream']>>;
@@ -248,9 +274,14 @@ export async function dropLiveHarnessSession(sessionKey?: string | null): Promis
 	if (!sessionKey) return;
 	const live = moduleLiveSessions as unknown as Map<string, { session: { destroy(): Promise<void> } }>;
 	const entry = live.get(sessionKey);
-	if (!entry) return;
-	live.delete(sessionKey);
-	await entry.session.destroy().catch(() => undefined);
+	const sandbox = liveSandboxSessions.get(sessionKey);
+	if (!entry && !sandbox) return;
+	if (entry) live.delete(sessionKey);
+	if (sandbox) liveSandboxSessions.delete(sessionKey);
+	await Promise.all([
+		entry?.session.destroy().catch(() => undefined),
+		sandbox?.then((value) => value.handle.release()).catch(() => undefined)
+	]);
 }
 
 /** C'è una sessione viva in cache per questo thread? Un retry «fresco» ha senso solo se

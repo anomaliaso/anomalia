@@ -138,15 +138,22 @@ type FakeTurn = {
 	calls?: FakeCall[];
 	nativeApproval?: boolean;
 	totalUsage?: Record<string, unknown>;
+	delayMs?: number;
 	onStreamStart?: () => void;
 	/** Non produce MAI il primo evento: la sessione riusata che non parte (incidente reale). */
 	hang?: boolean;
+	/** Il turno regge, ma `handleFinish` esplode dopo — il retry-dopo-errore lo trova qui. */
+	stepsError?: string;
 	capture?: (opts: { system: string; messages: unknown; tools: Record<string, unknown>; stopWhen: unknown[] }) => void;
 };
 
 const harnessQueue: FakeTurn[] = [];
 const harnessTurnOpts: Array<Record<string, unknown>> = [];
 let harnessServed = 0;
+let brandSandboxOpenCount = 0;
+const brandSandboxReleases: Array<ReturnType<typeof vi.fn>> = [];
+const harnessSandboxes = new Map<string, { session: unknown; name: string; handle: { release: ReturnType<typeof vi.fn> } }>();
+const sandboxOpenFailures: Error[] = [];
 
 /**
  * La cache di produzione (`moduleLiveSessions` in adapters.ts): il SECONDO turno sul thread
@@ -197,7 +204,7 @@ function buildFakeHarnessResult(turn: FakeTurn, opts: {
 			stepParts.push({ type: 'tool-call', toolCallId: call.toolCallId, toolName: call.toolName, input: call.input });
 			stepToolCalls.push(call);
 		}
-		await new Promise((r) => setTimeout(r, 8));
+		await new Promise((r) => setTimeout(r, turn.delayMs ?? 8));
 		for (const call of turn.calls ?? []) {
 			if (turn.nativeApproval && opts.toolApproval?.[call.toolName] === 'user-approval') {
 				const approvalId = `approval-${call.toolCallId}`;
@@ -252,7 +259,10 @@ function buildFakeHarnessResult(turn: FakeTurn, opts: {
 				onError?.(e);
 			}
 		},
-		steps: drained.then(() => [{ content: stepParts, toolCalls: stepToolCalls, toolResults: stepToolResults, text, reasoningText: '' }]),
+		steps: drained.then(() => {
+			if (turn.stepsError) throw new Error(turn.stepsError);
+			return [{ content: stepParts, toolCalls: stepToolCalls, toolResults: stepToolResults, text, reasoningText: '' }];
+		}),
 		text: drained.then(() => text),
 		totalUsage: Promise.resolve(usage),
 		toUIMessageStreamResponse: (
@@ -274,11 +284,31 @@ vi.mock('./adapters', async (importOriginal) => {
 	return {
 		...actual,
 		resolveHarnessModelRef: () => ({ provider: 'kie', id: 'kie/test-luna', label: 'test-luna' }),
-		openBrandHarnessSession: async () => ({
-			session: { fake: true },
-			name: 'brand-vm',
-			handle: { release: vi.fn(async () => {}) }
-		}),
+		openBrandHarnessSession: async (_brandId: string, _runId: string, _agentId?: string, sessionKey?: string) => {
+			if (sessionKey) {
+				const cached = harnessSandboxes.get(sessionKey);
+				if (cached) return cached;
+			}
+			const failure = sandboxOpenFailures.shift();
+			if (failure) throw failure;
+			brandSandboxOpenCount++;
+			const release = vi.fn(async () => {});
+			brandSandboxReleases.push(release);
+			const opened = {
+				session: { fake: true },
+				name: 'brand-vm',
+				handle: { release }
+			};
+			if (sessionKey) harnessSandboxes.set(sessionKey, opened);
+			return opened;
+		},
+		dropLiveHarnessSession: async (sessionKey?: string | null) => {
+			if (!sessionKey) return;
+			const sandbox = harnessSandboxes.get(sessionKey);
+			harnessSandboxes.delete(sessionKey);
+			bakedToolsBySession.delete(sessionKey);
+			await sandbox?.handle.release();
+		},
 		// La cache di produzione è `moduleLiveSessions` (adapters.ts); il mock la colma con
 		// `bakedToolsBySession` (una sessione esiste ⇔ il thread ha già cotto i suoi tool), e il
 		// retry «fresco» decide UNA volta se c'è qualcosa da riusare.
@@ -327,6 +357,7 @@ function scriptTurns(...turns: FakeTurn[]) {
 const replyCall = (message: string): FakeCall => ({ toolCallId: 'c1', toolName: 'reply', input: { message, delivered: [] } });
 
 const { runKitTurn, shouldUseKit } = await import('./live');
+const { dropLiveHarnessSession } = await import('./adapters');
 const { specById } = await import('../specs');
 
 type Row = Record<string, unknown>;
@@ -631,6 +662,10 @@ beforeEach(async () => {
 	harnessQueue.length = 0;
 	harnessTurnOpts.length = 0;
 	harnessServed = 0;
+	brandSandboxOpenCount = 0;
+	brandSandboxReleases.length = 0;
+	harnessSandboxes.clear();
+	sandboxOpenFailures.length = 0;
 	bakedToolsBySession.clear();
 	goalState.open = null;
 	goalState.settleCalls.length = 0;
@@ -987,12 +1022,114 @@ describe('runKitTurn — reply', () => {
 		// Il body va consumato perché `onFinish` gira solo quando lo stream è drenato.
 		await res.text();
 
+		expect(brandSandboxOpenCount).toBe(1);
 		expect(rows).toHaveLength(1);
 		expect(rows[0].state).toBe('done');
 		expect(rows[0].reason).toBe('reply');
 		expect(savedMessages).toHaveLength(1);
 		expect(savedMessages[0].threadId).toBe('t1');
 		expect(JSON.stringify(savedMessages[0].content)).toContain('ho letto lo studio');
+	});
+
+	it('tiene la sandbox fino alla fine del consumo server-side', async () => {
+		scriptTurns({ delayMs: 40, calls: [replyCall('fatto')] });
+		const { db } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-lifecycle',
+			spec,
+			messages: [{ role: 'user', content: 'usa la sandbox' }],
+			locale: 'it'
+		});
+
+		expect(brandSandboxOpenCount).toBe(1);
+		expect(harnessTurnOpts[0]?.sandboxSession).toEqual({ fake: true });
+		expect(brandSandboxReleases[0]).not.toHaveBeenCalled();
+
+		await res.text();
+		expect(brandSandboxReleases[0]).not.toHaveBeenCalled();
+		await dropLiveHarnessSession('t-lifecycle');
+		await vi.waitFor(() => expect(brandSandboxReleases[0]).toHaveBeenCalledOnce());
+	});
+
+	it('riusa lo stesso holder fra due turni dello stesso thread', async () => {
+		scriptTurns({ calls: [replyCall('primo')] }, { calls: [replyCall('secondo')] });
+		const { db } = fakeDb();
+		const first = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-holder-reuse',
+			spec,
+			messages: [{ role: 'user', content: 'primo' }],
+			locale: 'it'
+		});
+		await first.text();
+		expect(brandSandboxReleases[0]).not.toHaveBeenCalled();
+
+		const second = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-holder-reuse',
+			spec,
+			messages: [{ role: 'user', content: 'secondo' }],
+			locale: 'it'
+		});
+		await second.text();
+
+		expect(brandSandboxOpenCount).toBe(1);
+		await dropLiveHarnessSession('t-holder-reuse');
+		await vi.waitFor(() => expect(brandSandboxReleases[0]).toHaveBeenCalledOnce());
+	});
+
+	it('rilancia dopo un errore di finish anche se la sandbox non si riapre', async () => {
+		scriptTurns(
+			{
+				calls: [replyCall('primo')],
+				stepsError: 'boom',
+				// La prima apertura (prima del turno) deve riuscire: solo la RIAPERTURA dopo
+				// l'errore di finish deve fallire, quindi accodo il fallimento allo start dello
+				// stream, non prima.
+				onStreamStart: () => sandboxOpenFailures.push(new Error('reopen failed'))
+			},
+			{ calls: [replyCall('secondo')] }
+		);
+		const { db } = fakeDb();
+		const logs: string[] = [];
+		const errors: string[] = [];
+		const logSpy = vi.spyOn(console, 'log').mockImplementation((m) => void logs.push(String(m)));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation((m) => void errors.push(String(m)));
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-retry-no-sandbox',
+			spec,
+			messages: [{ role: 'user', content: 'prova' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		// La riapertura fallita non deve buttare via il rilancio: `startHarnessTurn` va
+		// chiamato una SECONDA volta, senza sandbox. Il turno originale è già chiuso
+		// dall'errore, quindi `handleFinish` del retry trova il CAS chiuso e lo dice — è il
+		// marcatore che il rilancio è arrivato in fondo, invece di morire nel catch
+		// `retry failed` (il sintomo del difetto: `brandSandbox.session` su `null`).
+		await vi.waitFor(() => expect(logs.some((l) => l.includes('sfrattato prima della chiusura'))).toBe(true));
+		expect(harnessTurnOpts.length).toBeGreaterThanOrEqual(2);
+		expect(harnessTurnOpts.at(-1)?.sandboxSession).toBeUndefined();
+		expect(errors.some((e) => e.includes('retry failed'))).toBe(false);
+		logSpy.mockRestore();
+		errorSpy.mockRestore();
 	});
 });
 
