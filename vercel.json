@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm ci",
   "headers": [
     {
       "source": "/fonts/(.*)",
