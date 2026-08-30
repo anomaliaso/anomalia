@@ -31,7 +31,8 @@
     "eval:ux": "vite-node --config scripts/vite-node.config.ts scripts/eval/ux.ts",
     "oss:export": "node scripts/export-oss.mjs",
     "test:durability": "npm run eval:durability",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "eval:durability": "vite-node --config scripts/vite-node.config.ts scripts/eval/durability.ts"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.0",
