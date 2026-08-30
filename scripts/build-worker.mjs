@@ -126,8 +126,7 @@ await build({
 		$lib: resolve(root, 'src/lib'),
 		'$app/environment': resolve(root, 'src/worker/app-environment-shim.ts'),
 		'$env/dynamic/private': resolve(root, 'src/worker/env-shim.ts'),
-		'$env/dynamic/public': resolve(root, 'src/worker/env-shim.ts'),
-		'$env/static/public': resolve(root, 'src/worker/env-static-shim.ts')
+		'$env/dynamic/public': resolve(root, 'src/worker/env-shim.ts')
 	},
 	loader: {
 		// `?raw` text imports (`WRITE-VIDEO-PROMPTS.md?raw`) — esbuild strips the query to resolve the

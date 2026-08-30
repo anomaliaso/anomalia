@@ -74,7 +74,8 @@ export default defineConfig({
     // Bundling it into the server chunks keeps one copy per function instead. Tree-shaking cannot
     // slim it further — graphic-icons.ts resolves arbitrary model-emitted slugs via a namespace
     // scan, and that full-catalogue lookup is the contract (unknown slug → null, any brand works).
-    noExternal: ['simple-icons']
+    noExternal:
+      process.env.DEPLOY_TARGET === 'node' ? ['simple-icons', /^@anomalia\//] : ['simple-icons']
   },
     test: {
     testTimeout: TEST_TIMEOUT_MS,

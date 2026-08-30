@@ -19,7 +19,7 @@
  * sempre con `isVideoUrl`). SVG e HTML non sono nell'elenco: sono markup eseguibile travestito da
  * contenuto, esattamente per cui `inferArtifactKind` li degrada a `code`.
  */
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { isVideoUrl, isImageUrl } from '$lib/content-formats';
 
 export type ChatMediaItem = {
@@ -34,7 +34,7 @@ export const MAX_CHAT_MEDIA = 8;
 
 const OWN_HOST = (() => {
   try {
-    return new URL(PUBLIC_SUPABASE_URL).host;
+    return new URL(publicEnv.PUBLIC_SUPABASE_URL).host;
   } catch {
     return '';
   }

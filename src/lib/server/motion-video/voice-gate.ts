@@ -26,7 +26,7 @@
  */
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { isOwnStorageUrl } from '$lib/storage-url';
 import { pcmFromWav } from '$lib/server/voiceover-cut';
 import {
@@ -45,7 +45,7 @@ import {
  * `/voiceover/`: tutto il resto non va nemmeno tentato. (Era in output-tools.ts; vive qui perché
  * il gate ne ha bisogno e output-tools importa già da questo lato.)
  */
-export function isVoiceoverTakeUrl(url: string, supabaseUrl: string = PUBLIC_SUPABASE_URL): boolean {
+export function isVoiceoverTakeUrl(url: string, supabaseUrl: string = publicEnv.PUBLIC_SUPABASE_URL): boolean {
 	return isOwnStorageUrl(url, supabaseUrl) && url.includes('/voiceover/');
 }
 

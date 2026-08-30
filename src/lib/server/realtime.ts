@@ -8,7 +8,7 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { env } from '$env/dynamic/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 
 /** Channel every client in a brand's shell joins. Must match the topic shape the RLS policy parses. */
 export function brandChannelTopic(brandId: string): string {
@@ -48,7 +48,7 @@ export async function broadcastToBrand(brandId: string, msg: BrandBroadcast): Pr
   const event = encodeURIComponent(msg.event);
   try {
     await fetch(
-      `${PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast/${topic}/events/${event}?private=true`,
+      `${publicEnv.PUBLIC_SUPABASE_URL}/realtime/v1/api/broadcast/${topic}/events/${event}?private=true`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` },

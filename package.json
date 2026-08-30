@@ -12,7 +12,7 @@
     "dev:stable": "NO_HMR=1 vite dev",
     "dev:vercel": "vercel dev --listen 5173",
     "build": "node scripts/typecheck-runtime.mjs && vite build",
-    "build:node": "NODE_OPTIONS=--max-old-space-size=8192 DEPLOY_TARGET=node npm run build",
+    "build:node": "NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=8192} DEPLOY_TARGET=node npm run build",
     "start": "node --env-file-if-exists=.env build",
     "preview": "vite preview",
     "sync": "svelte-kit sync",
@@ -28,7 +28,7 @@
     "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.mjs",
     "db:seed": "node --env-file-if-exists=.env scripts/db-seed.mjs",
     "tool-e2e": "vite-node --config scripts/vite-node.config.ts scripts/tool-e2e/run.ts",
-    "eval:ux": "vite-node --config scripts/vite-node.config.ts scripts/eval/ux.ts",
+    "eval:ux": "node scripts/eval/ux-run.mjs",
     "oss:export": "node scripts/export-oss.mjs",
     "test:durability": "npm run eval:durability",
     "postinstall": "patch-package"

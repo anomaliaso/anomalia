@@ -25,10 +25,11 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
-      // Boot-minimal env (verified: the app starts without a real database and every
-      // smoke target answers). NO_HMR keeps the server quiet under parallel workers.
-      PUBLIC_SUPABASE_URL: 'http://localhost:54321',
-      PUBLIC_SUPABASE_ANON_KEY: 'e2e-placeholder-anon-key',
+      PUBLIC_SUPABASE_URL: process.env.PUBLIC_SUPABASE_URL ?? 'http://localhost:54321',
+      PUBLIC_SUPABASE_ANON_KEY: process.env.PUBLIC_SUPABASE_ANON_KEY ?? 'e2e-placeholder-anon-key',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+      PUBLIC_APP_URL: BASE_URL,
+      ORIGIN: BASE_URL,
       NO_HMR: '1'
     }
   }

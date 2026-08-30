@@ -143,3 +143,15 @@ Motion prende `remotion-best-practices` perché è l'unico che scrive sorgente R
 
 ### La continuazione senza testo per il modello muore due volte
 Una ripresa accodata con `user_message` vuoto è morta due volte prima di chiamare il modello: prima col gate `Missing user_message`, poi — superato il gate — col prompt vuoto, perché il provider rifiuta una conversazione che non apre con un turno `user` e `dropLeadingAssistant` mangia l'apertura firmata. Il segnale: `chat_jobs.status='failed'` con errori diversi per lo stesso job. La mossa: una continuazione porta SEMPRE un testo solo-per-il-modello (mai salvato, mai mostrato), come `enqueueTurnContinuation`; `open_session_with_user` era nata rotta così ed è sopravvissuta mesi perché la coda è buio per i test unitari — è la verifica nel browser che l'ha vista.
+
+## L'immagine del self-host non entra in un builder Docker da 8 GB
+
+**Segnale.** `docker compose build` sull'immagine app fallisce in due modi diversi, e vanno
+distinti: `ResourceExhausted: cannot allocate memory` è la VM che rifiuta, `FATAL ERROR:
+Ineffective mark-compacts near heap limit` è il tetto di heap troppo basso. Il primo dice che hai
+chiesto troppo, il secondo che hai chiesto troppo poco.
+
+**Mossa.** Non bisezionare `--max-old-space-size`: con 7,75 GiB di VM la finestra è chiusa (4096
+va in heap overflow a 3,4 GB, da 4608 in su la VM non alloca). Il consumo viene da `adapter-node`
+su un chunk server da 5,1 MB, non dal flag. Misura il picco con `/usr/bin/time -l` e riduci il
+bundle; alzare la memoria di Docker Desktop nasconde il problema senza risolverlo per chi installa.
