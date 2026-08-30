@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const openCalls: Array<Record<string, unknown>> = [];
+const sandboxReleases: Array<ReturnType<typeof vi.fn>> = [];
 
 vi.mock('$lib/server/sandbox', async (importOriginal) => {
 	const actual = (await importOriginal()) as Record<string, unknown>;
@@ -8,7 +9,9 @@ vi.mock('$lib/server/sandbox', async (importOriginal) => {
 		...actual,
 		openBrandSandbox: async (opts: Record<string, unknown>) => {
 			openCalls.push(opts);
-			return { name: 'anomalia-b1-research-g2', raw: {} };
+			const release = vi.fn(async () => {});
+			sandboxReleases.push(release);
+			return { name: 'anomalia-b1-research-g2', raw: {}, release };
 		}
 	};
 });
@@ -17,7 +20,8 @@ vi.mock('@ai-sdk/sandbox-vercel', () => ({
 	createVercelSandbox: () => ({ createSession: async () => ({ fake: true }) })
 }));
 
-const { openBrandHarnessSession, resolveHarnessModelRef, harnessSdkModel } = await import('./adapters');
+const { openBrandHarnessSession, dropLiveHarnessSession, resolveHarnessModelRef, harnessSdkModel } =
+	await import('./adapters');
 const { env } = await import('$env/dynamic/private');
 
 describe('openBrandHarnessSession', () => {
@@ -38,6 +42,57 @@ describe('openBrandHarnessSession', () => {
 		await openBrandHarnessSession('b1', 'r1');
 		expect(openCalls[0]?.runId).toBe('r1');
 		expect(openCalls[0]?.timeoutMs).toBeGreaterThan(0);
+	});
+});
+
+describe('openBrandHarnessSession — riuso per sessionKey (task 85)', () => {
+	beforeEach(() => {
+		openCalls.length = 0;
+		sandboxReleases.length = 0;
+		delete env.HARNESS_SANDBOX_MODE;
+	});
+
+	it('due turni con la stessa sessionKey aprono la sandbox UNA sola volta', async () => {
+		const first = await openBrandHarnessSession('b1', 'r1', 'a1', 'thread-1');
+		const second = await openBrandHarnessSession('b1', 'r2', 'a1', 'thread-1');
+		expect(openCalls).toHaveLength(1);
+		expect(second).toBe(first);
+	});
+
+	it('sessionKey diverse restano macchine (chiamate) separate', async () => {
+		await openBrandHarnessSession('b1', 'r1', 'a1', 'thread-3');
+		await openBrandHarnessSession('b1', 'r2', 'a1', 'thread-4');
+		expect(openCalls).toHaveLength(2);
+	});
+
+	it('due aperture concorrenti sulla stessa sessionKey non aprono due sandbox (race)', async () => {
+		const [a, b] = await Promise.all([
+			openBrandHarnessSession('b1', 'r1', 'a1', 'thread-race'),
+			openBrandHarnessSession('b1', 'r1', 'a1', 'thread-race')
+		]);
+		expect(openCalls).toHaveLength(1);
+		expect(a).toBe(b);
+	});
+
+	/**
+	 * `dropLiveHarnessSession` rilasciava la sandbox SOLO se esisteva anche una sessione harness
+	 * in `moduleLiveSessions` — se l'harness non arrivava mai a cacciarsi lì (un `startHarnessTurn`
+	 * mai chiamato, o fallito prima di scriverci), l'`if (!entry) return` usciva subito e la
+	 * sandbox restava aperta per sempre nella mappa module-level. Qui non si passa da `live.ts`:
+	 * si chiama solo `openBrandHarnessSession`, quindi `moduleLiveSessions` resta vuota — la
+	 * riprova diretta del difetto.
+	 */
+	it('rilascia la sandbox anche senza una sessione harness cacciata per la stessa chiave', async () => {
+		await openBrandHarnessSession('b1', 'r1', 'a1', 'thread-orphan-sandbox');
+		await dropLiveHarnessSession('thread-orphan-sandbox');
+		expect(sandboxReleases[0]).toHaveBeenCalledOnce();
+	});
+
+	it('dopo il drop, la stessa sessionKey riapre una sandbox nuova', async () => {
+		await openBrandHarnessSession('b1', 'r1', 'a1', 'thread-reopen');
+		await dropLiveHarnessSession('thread-reopen');
+		await openBrandHarnessSession('b1', 'r2', 'a1', 'thread-reopen');
+		expect(openCalls).toHaveLength(2);
 	});
 });
 
