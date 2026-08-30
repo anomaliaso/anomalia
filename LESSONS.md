@@ -278,6 +278,16 @@ test che lo pinna, perche` la prossima volta il sintomo sara` di nuovo «ma la C
 E la lezione dietro la lezione: un merge in `main` che passa i check NON e` un rilascio. Il
 deployment va guardato (`state`), o si festeggia una consegna che non e` avvenuta.
 
+### La suite spediva DAVVERO: un test non sveglia nessuno
+Ops riceveva segnalazioni `agent_kit_stream` con dentro `thread: t-retry-no-sandbox`, `brand b1`,
+`user u1` e uno stack che punta a `live.test.ts`: la suite gira col `.env` di chi la lancia — chiavi
+vere di Sentry, PostHog e Resend — e `reportChatError` partiva sul serio. Segnale: una segnalazione
+il cui `detail` nomina entita` che esistono solo nei fixture. Mossa: la guardia sta nella SORGENTE
+(`reportChatError` e `sendEmail` escono subito sotto `process.env.VITEST`), mai nei mock dei singoli
+file — `live.test.ts` non mockava `report-error`, e bastera` un altro file distratto perche' ricominci.
+Il `console.error` resta: serve a chi guarda la suite. Il danno peggiore non e` il rumore, e` che una
+segnalazione finta rende sospette anche quelle vere.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
