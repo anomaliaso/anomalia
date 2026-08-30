@@ -54,11 +54,11 @@
     border: 1px solid var(--line, #d7d7d7);
     border-radius: 0.75rem;
     padding: 0.85rem;
-    background: var(--paper-1, #fff);
+    background: var(--paper, #fff);
   }
 
   .approval-title { font-weight: 650; }
-  .approval-tool { margin-top: 0.2rem; color: var(--muted, #666); font-size: 0.85rem; }
+  .approval-tool { margin-top: 0.2rem; color: var(--ink-faint, #666); font-size: 0.85rem; }
   pre { max-height: 12rem; overflow: auto; margin: 0.7rem 0; white-space: pre-wrap; font-size: 0.75rem; }
   .approval-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
   button { border: 0; border-radius: 0.5rem; padding: 0.45rem 0.75rem; cursor: pointer; }
