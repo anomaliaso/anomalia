@@ -9504,6 +9504,13 @@
     },
     "unread": "Messaggi non letti",
     "unreadCount": "{count, plural, one {# messaggio non letto} other {# messaggi non letti}}",
+    "replyNotification": {
+      "region": "Nuove risposte in chat",
+      "label": "Nuova risposta",
+      "message": "Apri la chat per leggerla",
+      "open": "Apri la chat di {name}",
+      "count": "{count, plural, one {# risposta non letta} other {# risposte non lette}}"
+    },
     "docPanel": {
       "subtitle": "Dalla knowledge base",
       "openInKnowledge": "Apri in Knowledge",

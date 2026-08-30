@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { isUnread, loadLastReads, loadUnreadCounts, markThreadRead } from './unread';
 import { saveMessages } from './persistence';
+import { broadcastToBrand } from '$lib/server/realtime';
+
+vi.mock('$lib/server/realtime', () => ({ broadcastToBrand: vi.fn() }));
 
 /** Client finto: `select(...).eq(...).in(...)` risolve con quello che gli si passa. */
 function selectClient(result: { data?: unknown; error?: { message: string } } | Error) {
@@ -216,5 +219,22 @@ describe('saveMessages ↔ read state', () => {
       't1'
     );
     expect(reads).toHaveLength(0);
+  });
+
+  it('announces whether the saved batch contains an agent reply', async () => {
+    const announced = vi.mocked(broadcastToBrand);
+    announced.mockClear();
+
+    await saveMessages(client([]), 'b1', 'u1', [{ role: 'user', content: 'ciao' }], 't1');
+    await saveMessages(client([]), 'b1', 'u1', [{ role: 'assistant', content: 'fatto' }], 't1');
+
+    expect(announced).toHaveBeenNthCalledWith(1, 'b1', {
+      event: 'thread-changed',
+      payload: { threadId: 't1', hasAssistantReply: false }
+    });
+    expect(announced).toHaveBeenNthCalledWith(2, 'b1', {
+      event: 'thread-changed',
+      payload: { threadId: 't1', hasAssistantReply: true }
+    });
   });
 });

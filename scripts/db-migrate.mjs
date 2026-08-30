@@ -56,6 +56,10 @@ export function lineForPosition(sql, position) {
  *  failure halfway leaves it unrecorded and partially applied — the price of VACUUM. */
 const OUTSIDE_TRANSACTION = /^[ \t]*(vacuum|reindex|create\s+index\s+concurrently|drop\s+index\s+concurrently)\b/im;
 
+const DEFERRED_PREREQUISITES = new Map([
+  ['0226_realtime_brand_channel_policies.sql', 'realtime.messages']
+]);
+
 export function runsInTransaction(sql) {
   return !OUTSIDE_TRANSACTION.test(stripComments(sql));
 }
@@ -94,6 +98,13 @@ function stripComments(sql) {
   return sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
+function missingPrerequisite(file, error) {
+  const prerequisite = DEFERRED_PREREQUISITES.get(file);
+  if (!prerequisite || error?.code !== '42P01') return null;
+  if (!String(error.message).includes(`"${prerequisite}"`)) return null;
+  return prerequisite;
+}
+
 export async function applyOne(client, file, dir = MIGRATIONS_DIR) {
   const sql = readFileSync(join(dir, file), 'utf8');
   const transactional = runsInTransaction(sql);
@@ -106,9 +117,15 @@ export async function applyOne(client, file, dir = MIGRATIONS_DIR) {
     if (transactional) await client.query('commit');
   } catch (err) {
     if (transactional) await client.query('rollback').catch(() => {});
+
+    const prerequisite = missingPrerequisite(file, err);
+    if (prerequisite) return { status: 'deferred', prerequisite };
+
     const line = lineForPosition(sql, err.position);
     throw new Error(`${file}${line ? `:${line}` : ''} — ${err.message}`);
   }
+
+  return { status: 'applied' };
 }
 
 async function main() {
@@ -147,12 +164,19 @@ async function main() {
     console.log(`${pending.length} pending migration(s):`);
     for (const file of pending) console.log(`  ${file}`);
 
+    let applied = 0;
     for (const file of pending) {
-      await applyOne(client, file);
+      const result = await applyOne(client, file);
+      if (result.status === 'deferred') {
+        console.log(`deferred ${file} — waiting for ${result.prerequisite}`);
+        continue;
+      }
+
       console.log(`applied ${file}`);
+      applied += 1;
     }
 
-    console.log(`Applied ${pending.length} migration(s).`);
+    console.log(`Applied ${applied} migration(s).`);
   } catch (err) {
     console.error(`FAILED: ${err.message}`);
     process.exitCode = 1;
