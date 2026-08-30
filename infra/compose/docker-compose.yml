@@ -218,6 +218,25 @@ services:
       RUN_JANITOR: 'true'
       DISABLE_HEALTHCHECK_LOGGING: 'true'
 
+  realtime-policies:
+    profiles: ['init']
+    container_name: anomalia-realtime-policies
+    image: supabase/postgres:17.6.1.136
+    restart: 'no'
+    depends_on:
+      realtime:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: ${POSTGRES_PORT:-5432}
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+    volumes:
+      - ../../supabase/migrations/0226_realtime_brand_channel_policies.sql:/0226_realtime_brand_channel_policies.sql:ro
+      - ./volumes/db/realtime-policies.sh:/realtime-policies.sh:ro
+    entrypoint: ['/bin/sh', '/realtime-policies.sh']
+
   storage:
     container_name: anomalia-storage
     image: supabase/storage-api:v1.60.4

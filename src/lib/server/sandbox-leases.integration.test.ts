@@ -15,8 +15,16 @@ if (enabled && (!url || !serviceKey)) {
 type LeaseDb = NonNullable<Parameters<typeof acquireHolder>[0]['db']>;
 
 integration('sandbox holder lifecycle', () => {
-	const client = createClient(url!, serviceKey!) as SupabaseClient;
-	const db = client as LeaseDb;
+	// `describe.skipIf` salta i TEST ma esegue comunque questo corpo: costruire qui il client
+	// faceva esplodere la RACCOLTA con «supabaseUrl is required» su ogni macchina senza le due
+	// variabili — cioè su tutte, di default, rompendo l'intera suite per un test che non doveva
+	// nemmeno girare. Il client nasce in `beforeAll`, che una suite saltata non esegue.
+	let client: SupabaseClient;
+	let db: LeaseDb;
+	beforeAll(() => {
+		client = createClient(url!, serviceKey!) as SupabaseClient;
+		db = client as LeaseDb;
+	});
 	const sandboxName = `task85-integration-${Date.now()}`;
 	let brandId = '';
 	let stopCalls = 0;

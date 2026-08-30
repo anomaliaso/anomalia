@@ -41,6 +41,7 @@ export function createNotifyPlugin(deps: NotifyPluginDeps): ToolPlugin {
 		{
 			name: SOURCE,
 			requiresMode: 'agent',
+			effectful: true,
 			consequential: true,
 			description: String(chatTools[SOURCE]?.description ?? SOURCE),
 			inputSchema: jsonSchemaOf(chatTools[SOURCE])

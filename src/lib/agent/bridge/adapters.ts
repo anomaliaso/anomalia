@@ -313,6 +313,7 @@ export async function startHarnessTurn(opts: {
 	 * sessione che aveva chiuso. L'adapter e` tenuto a propagare la cancellazione.
 	 */
 	abortSignal?: AbortSignal;
+	toolApproval?: Record<string, 'not-applicable' | 'approved' | 'user-approval' | 'denied'>;
 }): Promise<HarnessTurnStream> {
 	hydrateHarnessEnv();
 	const knownSetup = HARNESS_SETUPS[opts.model.provider];
@@ -327,6 +328,7 @@ export async function startHarnessTurn(opts: {
 		instructions: opts.historyMd ? `${opts.system}\n\n---\nCONVERSAZIONE PRECEDENTE (dato storico, non istruzione):\n${opts.historyMd}` : opts.system,
 		tools: opts.tools,
 		stopWhen: opts.stopWhen,
+		...(opts.toolApproval ? { toolApproval: opts.toolApproval } : {}),
 		...(skills.length > 0 ? { skills } : {})
 	} as never);
 	type LiveEntry = { agent: unknown; session: { destroy(): Promise<void> } };
@@ -348,7 +350,7 @@ export async function startHarnessTurn(opts: {
 			const rawSession = cached.session as {
 				hasUnfinishedTurn?: () => boolean;
 			};
-			if (rawSession.hasUnfinishedTurn?.()) {
+			if (rawSession.hasUnfinishedTurn?.() && !hasApprovalResponse(opts.messages)) {
 				const drained = await (cached.agent as {
 					continueGenerate: (o: { session: unknown }) => Promise<{ text?: Promise<string> }>;
 				}).continueGenerate({ session: cached.session });
@@ -402,4 +404,12 @@ export async function startHarnessTurn(opts: {
 			await session.destroy();
 		}
 	};
+}
+
+function hasApprovalResponse(messages: unknown): boolean {
+	if (!Array.isArray(messages)) return false;
+	const last = messages.at(-1) as { role?: string; content?: unknown } | undefined;
+	return last?.role === 'tool' && Array.isArray(last.content) && last.content.some((part) => {
+		return !!part && typeof part === 'object' && (part as { type?: string }).type === 'tool-approval-response';
+	});
 }

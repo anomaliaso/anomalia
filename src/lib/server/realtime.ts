@@ -18,7 +18,10 @@ export function brandChannelTopic(brandId: string): string {
 /** Payloads the shell knows how to react to. Keep names stable — clients match on them. */
 export type BrandBroadcast =
   /** A message row was written to this thread by anyone (live turn, queue worker, salvage). */
-  | { event: 'thread-changed'; payload: { threadId: string } }
+  | {
+      event: 'thread-changed';
+      payload: { threadId: string; hasAssistantReply: boolean };
+    }
   /**
    * One `ai` v6 UI message chunk from a live agent-kit turn (live.ts), mirrored so a client that
    * reloads mid-turn can reattach instead of only seeing "still working". `chunk` is normally the
@@ -35,7 +38,13 @@ export type BrandBroadcast =
       };
     }
   /** The tee'd mirror reader finished draining — client should stop waiting on this run and reload. */
-  | { event: 'kit_stream_done'; payload: { runId: string; threadId: string } };
+  | { event: 'kit_stream_done'; payload: { runId: string; threadId: string } }
+  /**
+   * The thread's durable event log advanced to `seq`. Carries no content on purpose: the client
+   * answers it by reading `thread_events` above its own cursor, so a dropped, duplicated or
+   * reordered notification costs a read, never a desynchronised transcript.
+   */
+  | { event: 'thread-seq'; payload: { threadId: string; seq: number } };
 
 /**
  * Never throws and never blocks the caller's real work: a dropped notification costs one client

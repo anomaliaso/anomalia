@@ -33,7 +33,8 @@ export function buildTools(
 	specs: ToolSpec[],
 	execToolCall: ExecToolCall,
 	context: AdapterContext,
-	approval?: ActionApprovalConfig
+	approval?: ActionApprovalConfig,
+	approvedToolCallIds: ReadonlySet<string> = new Set()
 ): ToolSet {
 	const tools: ToolSet = {};
 	for (const spec of specs) {
@@ -55,7 +56,7 @@ export function buildTools(
 				args: input ?? {},
 				...(options?.toolCallId ? { id: options.toolCallId } : {})
 			};
-			if (approval) {
+			if (approval && !approvedToolCallIds.has(call.id ?? '')) {
 				const cached = options?.toolCallId ? approvalResults.get(options.toolCallId) : undefined;
 				if (options?.toolCallId) approvalResults.delete(options.toolCallId);
 				const gate = cached ?? (await gateAction({ spec, call, context, config: approval }));

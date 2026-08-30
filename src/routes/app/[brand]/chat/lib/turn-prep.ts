@@ -43,6 +43,7 @@ import { aiActTurnBriefing, screenForProhibitedPractice, type PracticeHit } from
 import { goalCommandInstruction, parseGoalCommand } from '$lib/goal-command';
 import { lastUserText } from './jobs';
 import { persistChatAttachments, resolveChatAttachments } from './attachments';
+import { approvalContinuationMessage } from '$lib/agent/bridge/approval';
 
 export type DeadlineRef = { current: { remainingMs: () => number } | null };
 
@@ -84,7 +85,7 @@ export async function buildTurnContext(input: {
   // arriva molto più sotto, dopo la history, e allo smistatore serve adesso.
   // ponytail: sul `redo` la stanza non si rismista — si rigenera con l'agente del thread. Redo su
   // una room è raro e reinterrogare il router costerebbe un giro per cambiare voce a metà.
-  const roomPlan = isRedo
+  const roomPlan = isRedo || body.action === 'approval_response'
     ? null
     : await roomBeat(supabase, {
         thread: { id: threadId, room_agents: threadRoomAgents },
@@ -349,6 +350,8 @@ export async function buildTurnMessages(input: {
   let messages: ModelMessage[];
   let textContent: string;
 
+  const isApprovalResponse = body.action === 'approval_response';
+
   if (isRedo) {
     const messageId = typeof body.message_id === 'string' ? body.message_id : '';
     if (!messageId) return { response: new Response('message_id required', { status: 400 }) };
@@ -376,6 +379,25 @@ export async function buildTurnMessages(input: {
             .join('');
     // History already ends at the user turn — do not append or re-save it.
     messages = history;
+  } else if (isApprovalResponse) {
+    const approvalId = typeof body.approval_id === 'string' ? body.approval_id : '';
+    const approved = body.approval_decision === 'approved';
+    if (!approvalId || !['approved', 'denied'].includes(String(body.approval_decision))) {
+      return { response: new Response('approval_id and approval_decision are required', { status: 400 }) };
+    }
+
+    history = await loadHistory(supabase, brand.id, userId, threadId, 50, historyMedia);
+    const priorUser = [...history].reverse().find((m) => m.role === 'user');
+    if (!priorUser) return { response: new Response('No user message to resume', { status: 400 }) };
+    lastUserMsg = priorUser;
+    textContent = '';
+    messages = [...history, approvalContinuationMessage({
+      approvalId: typeof body.approval_harness_id === 'string' ? body.approval_harness_id : approvalId,
+      approved,
+      ...(typeof body.approval_reason === 'string' && body.approval_reason.trim()
+        ? { reason: body.approval_reason.trim() }
+        : {})
+    })];
   } else {
     const truncateFrom =
       typeof body.truncate_from_message_id === 'string' ? body.truncate_from_message_id : '';
@@ -436,7 +458,7 @@ export async function buildTurnMessages(input: {
     if (!isRetryOfDeadTurn) {
       const attachments = refUrls.length ? await persistChatAttachments(supabase, userId, refUrls) : [];
       await saveMessages(supabase, brand.id, userId, [persistMsg], threadId, {
-        ...(attachments.length ? { attachments } : {})
+        ...(attachments.length ? { attachments } : {}),
       });
     }
   }

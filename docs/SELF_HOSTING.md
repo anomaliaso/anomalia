@@ -115,7 +115,7 @@ cp .env.example .env
 # 3. Supabase stack: Postgres + Auth + REST + Storage + Realtime + the API gateway
 #    --wait is not optional: step 5 needs tables that the storage and realtime containers
 #    create during their own startup.
-(cd infra/compose && docker compose up -d --wait)
+(cd infra/compose && docker compose up -d --wait db kong auth rest realtime storage)
 
 # 4. App dependencies
 npm install
@@ -125,10 +125,14 @@ npm install
 DATABASE_URL="postgres://postgres:<POSTGRES_PASSWORD from infra/compose/.env>@localhost:5432/postgres" \
   npm run db:migrate
 
-# 6. One demo user + org + brand to log in with
+# 6. Realtime's policies depend on a table created by the Realtime service, so
+#    apply this idempotent hook after the service is healthy.
+(cd infra/compose && docker compose --profile init run --rm realtime-policies)
+
+# 7. One demo user + org + brand to log in with
 DATABASE_URL="postgres://postgres:<same password>@localhost:5432/postgres" npm run db:seed
 
-# 7. The app
+# 8. The app
 npm run dev
 
 #    `npm run dev` is the local-trial path. For a real deployment use the production build:
@@ -140,8 +144,10 @@ npm run dev
 and `SUPABASE_SERVICE_ROLE_KEY` (the `SERVICE_ROLE_KEY` from `infra/compose/.env`): it creates the
 demo user through GoTrue's admin API, not with a hand-written insert.
 
-`npm run db:migrate` and `npm run db:seed` are idempotent — re-run either any time (after pulling
-new migrations, for instance) without duplicating anything.
+`npm run db:migrate`, the Realtime policy hook and `npm run db:seed` are idempotent — re-run any of
+them after pulling new migrations, for instance, without duplicating anything. If migration runs
+before Realtime has created `realtime.messages`, it defers 0226 without recording it; the hook
+applies and records it after the Realtime healthcheck.
 
 If `db:migrate` stops on `0004` with `relation "storage.buckets" does not exist`, the storage
 container hadn't finished creating its own tables yet (this is what `--wait` above prevents). Just

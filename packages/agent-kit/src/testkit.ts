@@ -132,7 +132,7 @@ export function createMemoryStore(): MemoryStore & { entries: MemoryEntry[] } {
 export function fakePlugin(name: string, reply: ToolResult): ToolPlugin {
 	return {
 		name: `plugin-${name}`,
-		tools: [{ name, description: `tool di test per ${name}`, consequential: false, inputSchema: { type: 'object' } }],
+		tools: [{ name, description: `tool di test per ${name}`, effectful: false, consequential: false, inputSchema: { type: 'object' } }],
 		async execute(_call: ToolCall) {
 			return reply;
 		}

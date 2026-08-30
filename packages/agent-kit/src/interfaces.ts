@@ -49,7 +49,7 @@ export interface EffectsLedger {
 		legacyKey?: string;
 	}): Promise<EffectClaim>;
 	/** Risolve solo un claim ancora `intended`; un worker riconciliato non può sovrascriverlo. */
-	resolve(id: string, status: 'completed' | 'failed', result: unknown): Promise<boolean>;
+	resolve(id: string, status: 'completed' | 'failed' | 'ambiguous', result: unknown): Promise<boolean>;
 	/** Attira gli `intended` orfani di un run morto verso `ambiguous` — il ripiego che non duplica. */
 	reconcileRun(runId: string): Promise<number>;
 }

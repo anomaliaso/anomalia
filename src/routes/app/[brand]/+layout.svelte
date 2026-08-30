@@ -7,6 +7,7 @@
   import PageModal from '$lib/components/PageModal.svelte';
   import PageRailDrawer from '$lib/components/PageRailDrawer.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
+  import ChatReplyNotifications from '$lib/components/ChatReplyNotifications.svelte';
   import Send from '@lucide/svelte/icons/send';
   import Layers from '@lucide/svelte/icons/layers';
   import Globe from '@lucide/svelte/icons/globe';
@@ -46,7 +47,7 @@
   import { onDestroy } from 'svelte';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
   import { get } from 'svelte/store';
-  import { chatThreadId, chatThreads, markThreadUnread, unreadThreadIds } from '$lib/stores/chat';
+  import { chatThreadId, chatThreads, markThreadUnread, refreshThreads, unreadThreadIds } from '$lib/stores/chat';
   import { roomMemberKeys, threadIdentity, type ThreadIdentitySource } from '$lib/thread-identity';
   import { hasAds, hasWebHub } from '$lib/plans';
   let { data, children } = $props();
@@ -285,8 +286,10 @@
   // aperto lo segna letto ChatColumn.
   $effect(() => {
     if (!browser) return;
-    return brandChannel.onThreadChanged((threadId) => {
-      if (threadId !== get(chatThreadId)) markThreadUnread(threadId);
+    return brandChannel.onThreadChanged((threadId, hasAssistantReply) => {
+      if (!hasAssistantReply || threadId === get(chatThreadId)) return;
+      markThreadUnread(threadId);
+      void refreshThreads(data.brand.slug);
     });
   });
 
@@ -766,6 +769,8 @@
 <!-- Montata una volta per tutto il brand, fuori dai rami settings/full-width: le scorciatoie
      devono valere ovunque. -->
 <CommandPalette {base} brandSlug={data.brand.slug} navGroups={sidebarGroups} />
+
+<ChatReplyNotifications brandSlug={data.brand.slug} />
 
 </div>
 

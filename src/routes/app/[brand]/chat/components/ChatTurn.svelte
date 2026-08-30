@@ -17,6 +17,7 @@
   import ChatConnectCard from '$lib/components/ChatConnectCard.svelte';
   import ChatDeviceLoginCard from '$lib/components/ChatDeviceLoginCard.svelte';
   import ChatQuestionsCard from '$lib/components/ChatQuestionsCard.svelte';
+  import ChatApprovalCard from '$lib/components/ChatApprovalCard.svelte';
   import ChatTeamCard from '$lib/components/ChatTeamCard.svelte';
   import ChatMessageActions from '$lib/components/ChatMessageActions.svelte';
   import ChatSources from '$lib/components/ChatSources.svelte';
@@ -56,7 +57,9 @@
     onredo,
     onfeedback,
     onsend,
-    onpreview
+    onpreview,
+    approvalStatuses,
+    onapproval
   }: {
     msg: ChatMessage;
     index: number;
@@ -75,6 +78,8 @@
     onfeedback: (messageId: string | undefined, value: 1 | -1 | null, note?: string) => void;
     onsend: (text: string) => void;
     onpreview: (p: PostPreview) => void;
+    approvalStatuses: Record<string, string>;
+    onapproval: (approvalId: string, approved: boolean) => void;
   } = $props();
 
   const blocks = $derived(messageBlocks(msg.content, msg.tool_calls));
@@ -170,6 +175,16 @@
 <!-- Quali tool restino muti lo decide `chipCalls` dentro ChatToolChips: mai un elenco
      copiato a mano qui, o una chip nuda compare al posto di una card. -->
 <ChatToolChips {calls} />
+{#each calls.filter((tc) => tc.approval) as tc (tc.toolCallId)}
+  <ChatApprovalCard
+    approvalId={tc.approval!.approvalId}
+    toolName={tc.toolName}
+    input={tc.input}
+    status={approvalStatuses[tc.approval!.approvalId] ?? 'pending'}
+    disabled={loading}
+    ondecision={(approved) => onapproval(tc.approval!.approvalId, approved)}
+  />
+{/each}
 <ChatExpressionStickers {calls} />
 <ChatDmChip {calls} {brandSlug} />
 {@const arts = calls.flatMap((tc) => {

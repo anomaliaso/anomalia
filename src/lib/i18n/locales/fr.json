@@ -9386,6 +9386,13 @@
     },
     "unread": "Messages non lus",
     "unreadCount": "{count, plural, one {# message non lu} other {# messages non lus}}",
+    "replyNotification": {
+      "region": "Nouvelles réponses de chat",
+      "label": "Nouvelle réponse",
+      "message": "Ouvrez le chat pour la lire",
+      "open": "Ouvrir le chat de {name}",
+      "count": "{count, plural, one {# réponse non lue} other {# réponses non lues}}"
+    },
     "docPanel": {
       "subtitle": "Depuis la base de connaissances",
       "openInKnowledge": "Ouvrir dans Knowledge",

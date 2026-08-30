@@ -377,6 +377,47 @@ describe('createApplyTool — il gate sugli effetti', () => {
 		expect((out.content[0] as { text: string }).text).toBe('post 1');
 	});
 
+	it('un risultato ambiguo resta congelato anche se il tool lo segnala come errore', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const plugin = {
+			...effectfulPlugin(counter),
+			async execute() {
+				counter.calls += 1;
+				return { content: [{ type: 'text' as const, text: 'esito incerto' }], isError: true, effectStatus: 'ambiguous' as const };
+			}
+		};
+		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
+
+		const first = await apply(CALL, fakeContext({ runId: 'run-1' }));
+		const second = await apply(CALL, fakeContext({ runId: 'run-2' }));
+
+		expect(first.effectStatus).toBe('ambiguous');
+		expect(second).toEqual(first);
+		expect(counter.calls).toBe(1);
+		expect(ledger.rows[0]?.status).toBe('ambiguous');
+	});
+
+	it('un eccezione durante un effetto diventa ambiguous, non un retry cieco', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const plugin = {
+			...effectfulPlugin(counter),
+			async execute() {
+				counter.calls += 1;
+				throw new Error('connessione interrotta dopo la scrittura');
+			}
+		};
+		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
+
+		await expect(apply(CALL, fakeContext({ runId: 'run-1' }))).rejects.toThrow('connessione interrotta');
+		const second = await apply(CALL, fakeContext({ runId: 'run-2' }));
+
+		expect(second.isError).toBe(true);
+		expect(counter.calls).toBe(1);
+		expect(ledger.rows[0]?.status).toBe('ambiguous');
+	});
+
 	it('la stessa identità con payload diverso viene rifiutata', async () => {
 		const counter = { calls: 0 };
 		const ledger = createMemoryEffectsLedger();
@@ -396,7 +437,7 @@ describe('createApplyTool — il gate sugli effetti', () => {
 	it('solo i tool marcat effectful passano dal gate; gli altri no', async () => {
 		const counter = { calls: 0 };
 		const ledger = createMemoryEffectsLedger();
-		const plugin = { ...effectfulPlugin(counter), tools: [{ name: 'content_read', description: 'legge', inputSchema: { type: 'object' }, consequential: false }] };
+		const plugin = { ...effectfulPlugin(counter), tools: [{ name: 'content_read', description: 'legge', inputSchema: { type: 'object' }, effectful: false, consequential: false }] };
 		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
 		const out = await apply({ name: 'content_read', args: {} }, fakeContext());
 		expect(out.isError).toBeFalsy();

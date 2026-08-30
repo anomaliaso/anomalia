@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createEffectsLedger, effectKey } from './effects-store';
+import { createEffectsLedger, effectKey } from './agent-kit-effects-store';
 
 type Row = Record<string, unknown>;
 
