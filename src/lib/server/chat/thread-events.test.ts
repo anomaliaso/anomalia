@@ -79,11 +79,20 @@ describe('thread event writer', () => {
 		expect(projected).toEqual([{ ...row, id: 'message-2', content: 'new' }]);
 	});
 
-	it('refuses to project an incomplete event page', () => {
+	it('projects a page whose progress events were pruned', () => {
 		expect(
 			threadMessageRows([
 				{ thread_id: 'thread-1', seq: 1, source_key: 'm-1', kind: 'message', payload: row },
 				{ thread_id: 'thread-1', seq: 3, source_key: 'm-3', kind: 'message', payload: { ...row, id: 'message-3' } }
+			])
+		).toHaveLength(2);
+	});
+
+	it('refuses to project two events that claim the same source key', () => {
+		expect(
+			threadMessageRows([
+				{ thread_id: 'thread-1', seq: 1, source_key: 'm-1', kind: 'message', payload: row },
+				{ thread_id: 'thread-1', seq: 2, source_key: 'm-1', kind: 'message', payload: { ...row, id: 'message-2' } }
 			])
 		).toBeNull();
 	});

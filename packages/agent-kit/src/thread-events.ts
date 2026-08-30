@@ -37,15 +37,9 @@ export interface ThreadProjection {
 	sourceEvents: Readonly<Record<string, ThreadEvent>>;
 }
 
-export interface ThreadEventGap {
-	from: number;
-	to: number;
-}
-
 export interface ThreadEventReduction {
 	projection: ThreadProjection;
 	applied: readonly ThreadEvent[];
-	gap: ThreadEventGap | null;
 	conflict: ThreadEventConflict | null;
 }
 
@@ -74,7 +68,6 @@ export function reduceThreadEvents(
 	const sourceEvents = { ...projection.sourceEvents };
 	const applied: ThreadEvent[] = [];
 	let cursor = projection.cursor;
-	let gap: ThreadEventGap | null = null;
 	let conflict: ThreadEventConflict | null = null;
 
 	for (const event of ordered) {
@@ -89,12 +82,6 @@ export function reduceThreadEvents(
 
 		if (event.seq <= cursor) {
 			continue;
-		}
-
-		const expected = cursor + 1;
-		if (event.seq > expected) {
-			gap = { from: expected, to: event.seq - 1 };
-			break;
 		}
 
 		if (event.kind === 'message') {
@@ -120,7 +107,6 @@ export function reduceThreadEvents(
 	return {
 		projection: { cursor, messages, progress, sourceEvents },
 		applied,
-		gap,
 		conflict
 	};
 }

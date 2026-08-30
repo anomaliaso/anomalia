@@ -117,6 +117,6 @@ export function threadMessageRows(events: readonly StoredThreadEvent[]): Record<
 		};
 	});
 	const result = reduceThreadEvents(emptyThreadProjection(), converted);
-	if (result.gap || result.conflict) return null;
+	if (result.conflict) return null;
 	return result.projection.messages.filter((message) => message.superseded !== true) as Record<string, unknown>[];
 }
