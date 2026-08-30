@@ -62,6 +62,12 @@ export async function reportChatError(
 
   console.error(`[chat:${kind}]`, message, context);
 
+  // Un test non sveglia nessuno. La suite gira col `.env` di chi la lancia — chiavi vere — e da
+  // qui partivano segnalazioni con dentro thread e run finti. Il log resta (serve a chi guarda la
+  // suite), tutto ciò che ESCE si ferma. La guardia sta qui e non nei mock dei singoli file: uno
+  // che si dimentica il mock e ops riceve di nuovo un incidente che non esiste.
+  if (process.env.VITEST) return;
+
   Sentry.captureException(error instanceof Error ? error : new Error(message), {
     tags: {
       chat_error: kind,

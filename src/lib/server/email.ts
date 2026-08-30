@@ -17,6 +17,11 @@ const ACCENT = '#7c5cff';
 // Always send a plain-text part alongside the HTML: a missing text/plain alternative is a strong
 // spam signal, so this materially improves inbox placement (and degrades gracefully everywhere).
 export async function sendEmail(opts: { to: string; subject: string; html: string; text?: string; headers?: Record<string, string> }): Promise<void> {
+  // La posta è l'unica cosa che arriva a una PERSONA. La suite gira col `.env` di chi la lancia,
+  // quindi da qui partivano davvero: ops ha ricevuto incidenti con dentro thread e run finti. Si
+  // ferma qui e non nei mock dei singoli file, perché basta un file che se ne dimentica.
+  if (process.env.VITEST) return;
+
   const key = env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not configured');
 
