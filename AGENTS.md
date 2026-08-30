@@ -197,17 +197,29 @@ single quality defect, because they run on a fake model and a fake database: bra
 arrived empty, attachments were rejected by a constraint, the model resolved to the wrong one,
 and a read crossed every brand of the user — **green suite for everyone**.
 
-The evaluation (`scripts/eval/`, plan in [`docs/EVAL_PLAN.md`](docs/EVAL_PLAN.md)) is the only
-thing that verifies **the product works**: it puts the real agents to work on a disposable trial
-brand, with real requests, and judges FACTS before tastes — does the artifact exist? is the
-number right? how many text blocks? what did it cost?
+The evaluation (`scripts/eval/`) is the only thing that verifies **the product works**: it puts
+the real agents to work on a disposable trial brand, with real requests, and judges FACTS before
+tastes — does the artifact exist? is the number right? how many text blocks? what did it cost?
+
+**What exists today. Only these two commands are real:**
 
 ```bash
-npm run eval                                  # phase 1: the cheap scenarios (~$0.001)
-npm run eval -- --only <scenario>             # just one
-npm run eval -- --all --budget 0.50 --jobs 1  # everything, with the spending cap
-npm run eval -- --compare eval-results/<run>  # free: what got WORSE than before
+npm run eval:ux           # the onboarding walk: a real browser, 6 deterministic gates + 4 judged criteria
+npm run eval:durability   # the work does not vanish: 3 scenarios against the real database and the real plpgsql
+npm run eval:durability -- --only=<scenario>
 ```
+
+`eval:ux` measures whether the product is *good*. `eval:durability` measures whether it *keeps
+what it produced* — a turn killed mid-work, the salvage when it gives up, and a taken-over run
+that must not deposit a second message. Those run against real SQL, which is the whole point:
+the two defects that slipped through in one session were a changed function signature and a
+reaper whose contract had moved under its own tests, and a fake client cannot see either.
+
+**What does NOT exist, so nobody writes it in a report as if it had run:** `npm run eval`, the
+`--all` / `--budget` / `--jobs` / `--compare` flags, cost read from `ai_calls`, `docs/EVAL_PLAN.md`,
+and the browser engine with a throttled network. The richer scenario catalogue described in the
+frozen `CHANGELOG.md` (`brand-nudo`, `conteggio-secco`, …) was designed and never merged. Reading
+about a command here is not evidence that it runs — check `package.json`.
 
 **When to run it** — not on every commit (it costs real money), but always:
 

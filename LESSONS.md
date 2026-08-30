@@ -162,6 +162,16 @@ riesce e il diff sembra completo. Segnale: `git status --short` dopo il commit m
 Mossa: `git add -A <percorsi>` esplicito prima del commit, e `git status --short` come ultimo gesto
 prima di aprire la PR — deve essere vuoto.
 
+### Cancellare l'utente NON distrugge il brand di prova: gli eval perdono un brand per giro
+La regola dice che il brand di prova va distrutto sempre, e `deleteEvalUser` sembrava bastare. Non
+basta: il brand pende dall'ORGANIZZAZIONE, non dall'utente, e resta a terra. In produzione ci sono
+4 brand `eval-mt*` dai giri di `eval:ux` fra il 24 e il 26 agosto, ognuno con la sua organizzazione.
+Segnale: `select count(*) from brands where slug like 'eval-%'` maggiore di zero a eval fermo.
+Mossa: nel `finally` si cancella l'ORGANIZZAZIONE per prima (il brand se ne va in cascata) e poi
+l'utente. E il caso che perde davvero è la creazione fallita a METÀ — utente già creato, nessun
+fixture restituito, `destroyFixture(null)` che esce subito: la creazione ripulisce da sola prima
+di rilanciare.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
