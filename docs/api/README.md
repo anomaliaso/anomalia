@@ -14,7 +14,7 @@ integrazioni esterne via API key — request, response, query params, body, erro
 | [04 — Studio](04-studio.md) | `/studio`, `/kit`, `/colors`, `/memory`, `/people`, `/documents`, `/competitors`, `/history/sync`, `/people/:id` |
 | [05 — Editorial plan](05-editorial-plan.md) | `/editorial-plan` + `propose` `approve` `discard` `revise` `update` `save-brief` `replan-week` |
 | [06 — Weekly plan](06-weekly-plan.md) | `/weekly-plan` + `plan` `produce` `render` `save` |
-| [07 — Growth: SEO/GEO/web](07-growth-seo-geo.md) | `/seo`, `/geo`, `/keywords`, `/backlinks`, `/web`, `/articles`, `/gsc`, `/ranks`, `/library/scan`, `/videos/review` |
+| [07 — Growth: SEO/GEO/web](07-growth-seo-geo.md) | `/seo`, `/geo`, `/keywords`, `/backlinks`, `/web`, `/articles`, `/gsc`, `/ranks`, `/library/scan` |
 | [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | `/ads`, `/ads/remix`, `/voice`, `/gtm`, `/rubrics`, `/products`, `/api-keys` |
 | [09 — Connections](09-connections.md) | `/connections`, `/connections/catalog`, `/connections/:id/complete`, `/connections/:id` |
 

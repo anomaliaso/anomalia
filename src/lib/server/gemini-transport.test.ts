@@ -83,7 +83,7 @@ describe('lo scambio di trasporto', () => {
   });
 });
 
-describe('le quattro superfici che restano su Google', () => {
+describe('le superfici sul centralino (non lo SDK Google)', () => {
   beforeEach(() => {
     vi.resetModules();
     setEnv({});
@@ -103,61 +103,39 @@ describe('le quattro superfici che restano su Google', () => {
     expect(kie.supportsClipInToolResult('gemini-3-7-flash')).toBe(false);
   });
 
-  it('2. i giudici video costruiscono il client con googleGenaiClient(), non con quello condiviso', () => {
-    const judges = [
-      'video-review.ts',
-      'motion-references.ts',
-      'motion-video/reference-fidelity.ts',
-      'motion-video/craft-review.ts'
-    ];
+  it('2. i giudici video passano dal centralino, non da googleGenaiClient', () => {
+    const judges = ['motion-references.ts'];
     for (const f of judges) {
       const src = readFileSync(join(HERE, f), 'utf8');
-      // Passano fps: 4 apposta, e kie ignora videoMetadata.fps (388 token di prompt contro 1627).
-      expect(src, f).toContain('fps: 4');
-      expect(src, f).toContain('googleGenaiClient()');
-      expect(src, f).not.toContain('genaiClient()');
+      expect(src, f).not.toContain('googleGenaiClient(');
+      expect(src, f).toMatch(/llmStructured|llmText|llmVideoReviewerModel/);
     }
   });
 
-  it('3. la chat non ha un interruttore di trasporto da sbagliare', async () => {
-    const src = readFileSync(join(HERE, 'chat/model.ts'), 'utf8');
-    // 79.6s al primo token contro 4.7s: il trasporto kie non deve nemmeno essere leggibile da qui.
-    expect(src).not.toContain('env.GEMINI_TRANSPORT');
-    expect(src).not.toContain('makeGenaiClient');
-    expect(src).toContain('createGoogleGenerativeAI');
+  it('3. la chat parla col centralino (llmLanguageModel / LLM_API_KEY), non con lo SDK Google', () => {
+    const chat = readFileSync(join(HERE, 'chat/model.ts'), 'utf8');
+    const llm = readFileSync(join(HERE, 'llm.ts'), 'utf8');
+    expect(chat).not.toContain('env.GEMINI_TRANSPORT');
+    expect(chat).not.toContain('makeGenaiClient');
+    expect(chat).not.toContain('createGoogleGenerativeAI');
+    expect(chat).toContain('llmLanguageModel');
+    expect(chat).toContain('llmConfigured');
+    // La chiave del loop lingua è LLM_API_KEY, letta in llm.ts.
+    expect(llm).toContain('LLM_API_KEY');
   });
 
-  it('4. il grounding con citazioni scavalca il client kie e chiama Google', async () => {
-    setEnv(KIE_ENV);
-    vi.doMock('$lib/server/ai-log', () => ({
-      logAiCall: vi.fn(),
-      extractGeminiUsage: () => ({}),
-      requireBrandContext: () => 'brand-1'
-    }));
-    const calls: string[] = [];
-    vi.stubGlobal('fetch', async (url: string | URL | Request) => {
-      calls.push(String(url));
-      return new Response(
-        JSON.stringify({
-          candidates: [
-            {
-              content: { parts: [{ text: 'risposta' }] },
-              groundingMetadata: { groundingChunks: [{ web: { uri: 'https://a.dev', title: 'A' } }], webSearchQueries: ['q'] }
-            }
-          ]
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      );
-    });
-    const { makeGenaiClient } = await import('./gemini');
-    const { groundedGemini } = await import('./research');
-    const res = await groundedGemini(makeGenaiClient(), 'domanda');
-    expect(res.citations).toEqual([{ uri: 'https://a.dev', title: 'A' }]);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).not.toContain('kie.ai');
-    expect(calls[0]).toContain('generativelanguage.googleapis.com');
-    vi.unstubAllGlobals();
-    vi.doUnmock('$lib/server/ai-log');
+  it('4. Google Search nativo solo per GEO via llmText webSearch, non in chat', () => {
+    const chat = readFileSync(join(HERE, 'chat/model.ts'), 'utf8');
+    const research = readFileSync(join(HERE, 'research.ts'), 'utf8');
+    const geo = readFileSync(join(HERE, 'geo.ts'), 'utf8');
+    const llm = readFileSync(join(HERE, 'llm.ts'), 'utf8');
+    expect(chat).not.toContain('googleSearch');
+    expect(chat).not.toContain('webSearch');
+    expect(research).toContain('webSearch: true');
+    expect(research).toContain('llmGeminiSearchModel');
+    expect(research).not.toContain('tools: [{ googleSearch');
+    expect(geo).toContain('groundedGemini');
+    expect(llm).toContain("engine: 'native'");
   });
 });
 
@@ -226,54 +204,10 @@ describe('la fatturazione di una chiamata passata da kie', () => {
 });
 
 describe('la rete di sicurezza sullo structured output', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    setEnv(KIE_ENV);
-  });
-
-  it('su kie una risposta non conforme viene ritentata una volta su Google', async () => {
-    const structuredGemini = vi.fn();
-    vi.doMock('$lib/server/research', () => ({ structuredGemini }));
-    vi.doMock('$lib/server/ai-log', () => ({
-      logAiCall: vi.fn(),
-      extractXiaomiUsage: () => ({}),
-      extractGeminiUsage: () => ({}),
-      requireBrandContext: () => 'brand-1'
-    }));
-    const { makeGenaiClient, isKieTransport } = await import('./gemini');
-    const { aiStructured, PIN_GEMINI } = await import('./xiaomi');
-    const SCHEMA = { type: 'object', properties: { plan: { type: 'string' } }, required: ['plan'] };
-
-    // kie tronca: finishReason STOP, parts vuoto, res.text undefined → il chiamante vede {}.
-    structuredGemini.mockResolvedValueOnce({}).mockResolvedValueOnce({ plan: 'ok' });
-    const kieClient = makeGenaiClient();
-    const out = await aiStructured(kieClient, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GEMINI });
-
-    expect(out).toEqual({ plan: 'ok' });
-    expect(structuredGemini).toHaveBeenCalledTimes(2);
-    expect(isKieTransport(structuredGemini.mock.calls[0][0])).toBe(true);
-    expect(isKieTransport(structuredGemini.mock.calls[1][0])).toBe(false);
-    vi.doUnmock('$lib/server/research');
-    vi.doUnmock('$lib/server/ai-log');
-  });
-
-  it('su Google non ritenta niente: una chiamata sola, come prima', async () => {
-    setEnv({ GEMINI_API_KEY: 'g' });
-    const structuredGemini = vi.fn().mockResolvedValue({});
-    vi.doMock('$lib/server/research', () => ({ structuredGemini }));
-    vi.doMock('$lib/server/ai-log', () => ({
-      logAiCall: vi.fn(),
-      extractXiaomiUsage: () => ({}),
-      extractGeminiUsage: () => ({}),
-      requireBrandContext: () => 'brand-1'
-    }));
-    const { makeGenaiClient } = await import('./gemini');
-    const { aiStructured, PIN_GEMINI } = await import('./xiaomi');
-    const SCHEMA = { type: 'object', properties: { plan: { type: 'string' } }, required: ['plan'] };
-    const out = await aiStructured(makeGenaiClient(), 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GEMINI });
-    expect(out).toEqual({});
-    expect(structuredGemini).toHaveBeenCalledTimes(1);
-    vi.doUnmock('$lib/server/research');
-    vi.doUnmock('$lib/server/ai-log');
+  it('aiStructured passa da llmStructured sul centralino, non dallo SDK Google', () => {
+    const src = readFileSync(join(HERE, 'xiaomi.ts'), 'utf8');
+    expect(src).toContain('llmStructured');
+    expect(src).not.toContain('createGoogleGenerativeAI');
+    expect(src).toContain('falling back to the LLM gateway');
   });
 });

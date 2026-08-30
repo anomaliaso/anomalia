@@ -195,6 +195,33 @@ describe('processNextPendingToolJob', () => {
 		expect(table[0].status).toBe('pending');
 	});
 
+	it('il drain serverless non reclama run_autopilot (solo il worker)', async () => {
+		const { table, client } = makeDb([pendingToolJob({ tool_name: 'run_autopilot' })]);
+		const { processNextPendingToolJob } = await import('./queue');
+		const r = await processNextPendingToolJob(client as never, '', { mode: 'serverless' });
+		expect(r.processed).toBe(false);
+		expect(executeChatToolJob).not.toHaveBeenCalled();
+		expect(table[0].status).toBe('pending');
+	});
+
+	it('il worker reclama run_autopilot', async () => {
+		const { table, client } = makeDb([pendingToolJob({ tool_name: 'run_autopilot' })]);
+		const { processNextPendingToolJob } = await import('./queue');
+		executeChatToolJob.mockResolvedValue({ ran: true, postsCreated: 0 });
+		const r = await processNextPendingToolJob(client as never, '', { mode: 'worker' });
+		expect(r.processed).toBe(true);
+		expect(executeChatToolJob).toHaveBeenCalledWith(
+			expect.anything(),
+			'brand-1',
+			'user-1',
+			'run_autopilot',
+			{ week: 0 },
+			expect.anything(),
+			expect.objectContaining({ id: expect.any(String) })
+		);
+		expect(table[0].status).toBe('done');
+	});
+
 	// `create_motion_video` is a chat tool but has no case in executeChatToolJob, so it is not
 	// runnable out-of-band yet. Claiming it would mark it done having done nothing — the allowlist
 	// is what makes "not yet supported" fail safe instead of failing silently.

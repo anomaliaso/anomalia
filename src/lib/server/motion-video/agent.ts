@@ -3,10 +3,8 @@ import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { tool, stepCountIs, hasToolCall, type ModelMessage, type UIMessage } from 'ai';
 import { harnessStreamText } from '$lib/server/harness';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
 import { transform } from 'sucrase';
 import { MOTION_CRAFT_SPECS } from '$lib/motion-video/craft';
 import { MOTION_TRANSITIONS_COOKBOOK_PROMPT } from '$lib/motion-video/transitions-cookbook';
@@ -39,7 +37,6 @@ import {
 } from '$lib/motion-video/source-ops';
 import { resolveUserTurnMediaParts, type MediaPart } from '$lib/media-parts';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
-import { geminiFlash } from '$lib/server/gemini';
 import { CHAT_USER_ERROR } from '$lib/server/chat/report-error';
 import { MOTION_ASSET_MINT_HINT } from '$lib/server/media-origin';
 import { mintStandaloneImage } from '$lib/server/mint-standalone-image';
@@ -80,8 +77,6 @@ import { createMotionRenderTools, readSourceMeta } from '$lib/server/motion-vide
 import { createMotionOutputTools } from '$lib/server/motion-video/output-tools';
 import { geminiFast } from '$lib/server/chat/model';
 import { motionAgentModel } from '$lib/server/motion-video/model';
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 
 export type MotionPersistResult = { id: string; title: string };
 
@@ -553,7 +548,6 @@ Need photo assets? Call read_media first. If a library image fits, use_library_i
 					supabase,
 					brandId,
 					userId,
-					brandName,
 					fps: () => {
 						try {
 							const cur = resolveTargets()[0]?.get();
@@ -565,11 +559,7 @@ Need photo assets? Call read_media first. If a library image fits, use_library_i
 						}
 					},
 					remainingMs: opts.remainingMs,
-					abortSignal: opts.abortSignal,
-					// Il thread dove far rientrare l'esito della QC accodata (render senza budget per
-					// il giudice → "in verifica", vedi output-tools.ts). Assente nei giri del designer
-					// senza conversazione: la QC gira lo stesso, solo il rientro non ha dove atterrare.
-					threadId: opts.threadId
+					abortSignal: opts.abortSignal
 				})
 			: {};
 

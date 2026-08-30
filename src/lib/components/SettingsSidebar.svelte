@@ -41,7 +41,6 @@
     Radar,
     Gift,
     Send,
-    ScanSearch,
     LogIn,
   } from '@lucide/svelte';
   import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
@@ -275,12 +274,6 @@
           href: `${settingsBase}/radar`,
           label: $_('app.settings.radar.nav'),
           icon: Radar,
-        },
-        {
-          id: 'media-reviewer',
-          href: `${settingsBase}/media-reviewer`,
-          label: $_('app.settings.mediaReviewer.nav'),
-          icon: ScanSearch,
         },
         {
           id: 'publishing',

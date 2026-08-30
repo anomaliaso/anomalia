@@ -48,19 +48,25 @@ const VIDEO_FIELDS = [
 	'image_urls'
 ];
 
-const PASSTHROUGH: Record<string, { source: string; description: string; requiresMode?: ToolSpec['requiresMode'] }> = {
+const PASSTHROUGH: Record<string, { source: string; description: string; requiresMode?: ToolSpec['requiresMode']; effectful: boolean; consequential: boolean }> = {
 	ugc_list_people: {
 		source: 'read_people',
+		effectful: false,
+		consequential: false,
 		description:
 			'List brand people (real team + AI personas) with ids and signed preview URLs. Pass ids into ugc_generate_video.people_ids as face references. Real people need recorded consent (Studio → People) before their face can appear in a generated clip — this list does not show consent status, ugc_generate_video applies the gate.'
 	},
 	ugc_list_talents: {
 		source: 'read_talents',
+		effectful: false,
+		consequential: false,
 		description: 'List the AI talent library (global synthetic models — no consent needed, they depict nobody). Pass ids into ugc_generate_video.talent_ids as face/body references.'
 	},
 	ugc_review_video: {
 		source: 'review_video',
+		effectful: true,
 		requiresMode: 'plan',
+		consequential: false,
 		description:
 			'Review a FINISHED video against organic UGC or paid-ads standards (Gemini watches the clip): hook, doomscroll stop, sound-off, hold, authenticity, CTA. Use before calling a post ready, or on a competitor URL for research. Bills credits only, never the monthly video budget.'
 	}
@@ -83,9 +89,11 @@ export function createUgcPlugin(deps: UgcPluginDeps): ToolPlugin {
 	) as ChatToolsRecord;
 
 	const tools: ToolSpec[] = [
-		{
+	{
 			name: 'ugc_generate_video',
+			effectful: true,
 			requiresMode: 'agent',
+			consequential: true,
 			description:
 				'Generate an AI video clip as a new post draft (UGC-style, product shot, or talking-head — the real submission path create_post uses for content_type "video"). Renders in the BACKGROUND: the result carries video_render_status ("rendering" while the clip is in flight) and video_note — call ugc_check_video with the returned post_id later, do not claim a finished video from this call alone. ugc defaults to true (handheld UGC genre, no burned-in captions) unless set false for silent/cinematic b-roll. Real people in people_ids without recorded consent are silently dropped from the reference set (server-logged), not refused.',
 			inputSchema: pickJsonSchema(chatTools['create_post'], VIDEO_FIELDS, ['brief'])
@@ -94,10 +102,14 @@ export function createUgcPlugin(deps: UgcPluginDeps): ToolPlugin {
 			name,
 			description: m.description,
 			requiresMode: m.requiresMode,
+			effectful: m.effectful,
+			consequential: m.consequential,
 			inputSchema: jsonSchemaOf(chatTools[m.source])
 		})),
 		{
 			name: 'ugc_check_video',
+			effectful: false,
+			consequential: false,
 			description:
 				"Check a post's real video state — the honest status ugc_generate_video points you back to. video_render_status \"rendering\" means the clip has NOT landed yet (media_url/video_thumbnail_url is still the cover frame); null/absent means the clip either finished or was never in flight — check content_type (\"generated_video\" = done) and media_url.",
 			inputSchema: {

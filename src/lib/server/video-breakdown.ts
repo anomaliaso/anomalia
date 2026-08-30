@@ -7,17 +7,14 @@
  *
  * BEST-EFFORT: returns null when ffmpeg/Gemini/key is missing or the model returns garbage.
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { env } from '$env/dynamic/private';
-import { loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { ensureFfmpegPath } from '$lib/server/ffmpeg-bin';
 // One fetcher, one size cap, one place that says why a clip was rejected.
-import { fetchVideoBytes } from '$lib/server/video-review';
+import { fetchVideoBytes } from '$lib/server/video-fetch';
 import { structured } from '$lib/server/research';
 import {
   formatUgcShotBrief,
@@ -156,8 +153,7 @@ export type UgcBreakdownResult = {
  * Analyze a public reference video URL into a structured UGC shot brief + Seedance prompt text.
  */
 export async function breakdownReferenceVideo(url: string): Promise<UgcBreakdownResult | null> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key || !url?.trim()) return null;
+  if (!llmConfigured() || !url?.trim()) return null;
 
   const bytes = await fetchVideoBytes(url.trim());
   if (!bytes) return null;
@@ -165,51 +161,23 @@ export async function breakdownReferenceVideo(url: string): Promise<UgcBreakdown
   if (!media?.frames.length) return null;
 
   try {
-    const ai = googleGenaiClient();
-    const parts: Array<Record<string, unknown>> = [
-      {
-        text: `You are reverse-engineering a real UGC selfie video into a Seedance 2.5 shot brief.
+    const prompt = `You are reverse-engineering a real UGC selfie video into a Seedance 2.5 shot brief.
 The attached images are frames from the clip (opening / mid / close) and the audio is the spoken take.
 Produce a 1:1 timestamped breakdown of EVERYTHING on screen and in the mix — subject, camera, audio, performance beats.
 Do NOT invent a different scene. Do NOT polish. Capture imperfect presence (gaze breaks, blinks, grip adjusts) when visible.
 duration_seconds should be ~${media.duration.toFixed(1)}.
 beats must cover the whole clip second-by-second (3–8 beats). action describes VISUAL/performance only — dialogue goes in dialogue_summary.
-Return JSON.`
-      }
-    ];
-    for (const f of media.frames) {
-      parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
-    }
-    if (media.audioMp3) {
-      parts.push({ inlineData: { mimeType: 'audio/mp3', data: media.audioMp3.toString('base64') } });
-    }
-
-    // Prefer structured() path when we only need JSON — but we also need multimodal parts.
-    // Use loggedGemini + structured schema via generateContent with responseSchema when available;
-    // fall back to parse-from-text via structured with a text-only summary if needed.
-    const res = await loggedGemini('ugc.breakdown', () =>
-      ai.models.generateContent({
-        model: geminiFlash(),
-        contents: [{ role: 'user', parts }],
-        config: {
-          maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-          responseMimeType: 'application/json',
-          responseSchema: BREAKDOWN_SCHEMA
-        }
-      })
-    );
-    const text = (res.text ?? '').trim();
-    if (!text) return null;
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      // Sometimes the model wraps JSON in fences despite responseMimeType.
-      const open = text.indexOf('{');
-      const close = text.lastIndexOf('}');
-      if (open < 0 || close <= open) return null;
-      parsed = JSON.parse(text.slice(open, close + 1));
-    }
+Return JSON.`;
+    const parsed = await llmStructured<Record<string, unknown>>({
+      prompt,
+      schema: BREAKDOWN_SCHEMA,
+      images: media.frames.map((f) => ({ mediaType: f.mimeType, data: f.data })),
+      file: media.audioMp3
+        ? { mediaType: 'audio/mp3', data: media.audioMp3.toString('base64') }
+        : undefined,
+      model: llmVideoReviewerModel(),
+      label: 'ugc.breakdown'
+    });
 
     const beatsRaw = Array.isArray(parsed.beats) ? parsed.beats : [];
     const timeline: UgcShotBeat[] = beatsRaw
@@ -268,11 +236,10 @@ export async function breakdownReferenceVideoTextOnly(
 ): Promise<UgcBreakdownResult | null> {
   if (!description.trim()) return null;
   try {
-    const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
+    const key = llmConfigured();
     if (!key) return null;
-    const ai = googleGenaiClient();
     const parsed = await structured(
-      ai,
+      null as never,
       `Turn this UGC video description into a Seedance shot brief JSON (subject, camera, audio, duration_seconds, beats[{start,end,action}], dialogue_summary).\n\nDESCRIPTION:\n${description.slice(0, 4000)}`,
       BREAKDOWN_SCHEMA,
       undefined,

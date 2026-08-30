@@ -6,7 +6,7 @@
 import { harnessGenerateText } from '$lib/server/harness';
 import { env } from '$env/dynamic/private';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { compactionModel, takeKieUsage } from './model';
+import { compactionModel } from './model';
 import { logAiCall } from '$lib/server/ai-log';
 import { CHAT_CONTEXT_CAP_TOKENS, hasFullChatContext } from '$lib/plans';
 import { COMPACT_AT, estimateTokens, rowContextChars, type ContextRow } from '$lib/chat-context';
@@ -258,8 +258,6 @@ export async function maybeCompactThread(
       ok: true,
       inputTokens: res.usage?.inputTokens,
       outputTokens: res.usage?.outputTokens,
-      // Su kie i token non bastano (`input_tokens` torna 0): il costo vero sono i crediti.
-      ...takeKieUsage(model),
       brandId: opts.brandId,
       userId: opts.userId,
       threadId: opts.threadId,

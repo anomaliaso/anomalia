@@ -32,9 +32,7 @@
  * di un cliente.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { llmConfigured, llmText } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { minDesignScore } from '$lib/server/design-judge';
 import { TRENDING_MIN_OUTPERFORMANCE, TRENDING_WINDOW_DAYS } from '$lib/server/wall';
@@ -198,16 +196,13 @@ async function writeWallDigest(admin: SupabaseClient, digest: WallDigest): Promi
 }
 
 async function distillText(label: string, prompt: string): Promise<string | null> {
-  const ai = googleGenaiClient();
-  const res = await loggedGemini(label, () =>
-    ai.models.generateContent({
-      model: geminiFlash(),
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS }
-    })
-  );
-  const text = (res.text ?? '').trim();
-  return text || null;
+  if (!llmConfigured()) return null;
+  try {
+    const { text } = await llmText({ prompt, label });
+    return text.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export type DistillResult = {

@@ -184,7 +184,8 @@ export type AutopilotResult = {
 // row and the brand's failure counter.
 export async function runAutopilotForBrand(
   supabase: SupabaseClient,
-  brand: AutopilotBrand
+  brand: AutopilotBrand,
+  opts?: { deadlineMs?: number }
 ): Promise<AutopilotResult> {
   // Guard 1: il producer è un lavoro del roster (chiave 'autopilot'), non più il booleano
   // `brands.autopilot_enabled` — quel flag restava false per mesi e nessuno se ne accorgeva.
@@ -479,10 +480,6 @@ export async function runAutopilotForBrand(
             connectedAccounts: recap.connectedAccounts,
             visualInsights: recap.visualInsights,
             webKpis: recap.webKpis,
-            weakReviews: recap.weakReviews?.map((w) => ({
-              ...w,
-              postUrl: abs(`/app/${recap.brandSlug}/posts/${w.postId}/edit`)
-            })),
             growth:
               growthFixes.length > 0
                 ? {
@@ -847,16 +844,6 @@ export async function runAutopilotForBrand(
       .filter(Boolean)
       .join('\n\n');
 
-    // Propose remakes for pending posts that already scored poorly — flag only, never auto-rerender.
-    // Runs before week_already_produced / backlog / no-accounts so weak drafts still surface.
-    try {
-      const { flagWeakPendingPosts } = await import('./autopilot-media-propose');
-      const n = await flagWeakPendingPosts(supabase, brand.id);
-      if (n) console.log(`[autopilot] ${brand.slug}: proposed remake on ${n} weak-media pending post(s)`);
-    } catch (e) {
-      console.warn('[autopilot] media remake propose failed (continuing):', e instanceof Error ? e.message : e);
-    }
-
     // Batch size: the post count the user approved on the plan's week (content-mix sum) when a
     // plan drives this run, else the cadence default. Always clamped to the remaining quota.
     const desired = editorialPlan && weekIdx != null ? postsForWeek(editorialPlan, weekIdx) : countForFrequency(prefs.frequency);
@@ -1051,7 +1038,8 @@ export async function runAutopilotForBrand(
           supabase,
           brandId: brand.id,
           weekIndex: weekIdx ?? undefined,
-          timezone: brand.timezone
+          timezone: brand.timezone,
+          deadlineMs: opts?.deadlineMs
         },
         count
       );
@@ -1122,7 +1110,6 @@ export async function runAutopilotForBrand(
     let createdPosts = 0;
     let videoFormatPosts = 0;
     const createdPostIds: string[] = [];
-    let queuedReviews = 0;
 
     const persist = async (post: PreviewPost) => {
       // Click path: turn an own-site CTA into a tracked short link (+UTM) BEFORE the row is
@@ -1200,19 +1187,6 @@ export async function runAutopilotForBrand(
             await recordChunkUsedByPost(supabase, brand.id, row.id as string, post.knowledgeChunkIds);
           } catch (e) {
             console.warn('[scheduler] recordChunkUsedByPost', e instanceof Error ? e.message : e);
-          }
-        }
-        if (post.imageUrl) {
-          try {
-            const { queueVideoReview } = await import('$lib/server/video-review-store');
-            const ok = await queueVideoReview(supabase, {
-              brandId: brand.id,
-              url: post.imageUrl,
-              postId: row.id as string
-            });
-            if (ok) queuedReviews += 1;
-          } catch (e) {
-            console.warn('[scheduler] queueVideoReview', e instanceof Error ? e.message : e);
           }
         }
       }
@@ -1298,15 +1272,6 @@ export async function runAutopilotForBrand(
     if (directorLog) await supabase.from('content_plans').update({ director_log: directorLog }).eq('id', planId);
 
     await Promise.all(produced.map((post) => persist(post)));
-
-    if (queuedReviews > 0) {
-      try {
-        const { kickVideoReviewWork } = await import('$lib/server/video-review-store');
-        await kickVideoReviewWork(appBase || undefined, brand.id);
-      } catch (e) {
-        console.warn('[scheduler] kickVideoReviewWork', e instanceof Error ? e.message : e);
-      }
-    }
 
     // The draft's rows are now real posts — flip the container into the normal approval flow.
     if (draft && createdPosts > 0) {

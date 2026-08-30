@@ -2,19 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Il modulo che genera tocca rete, chiave e registro: qui si sostituiscono i tre, così anche la
 // parte non pura di `gemini-audio` si prova senza uscire dal processo.
-vi.mock('$env/dynamic/private', () => ({ env: { GEMINI_API_KEY: 'test-key' } }));
+vi.mock('$env/dynamic/private', () => ({ env: { GEMINI_API_KEY: 'test-key', LLM_API_KEY: 'test-key', KIE_API_KEY: 'test-key' } }));
 const logged = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock('$lib/server/ai-log', () => ({
 	logAiCall: (row: Record<string, unknown>) => {
 		logged.push(row);
 	}
 }));
-const genai = vi.hoisted(() => ({ generateContent: vi.fn() }));
-vi.mock('@google/genai', () => ({
-	GoogleGenAI: class {
-		models = { generateContent: (...a: unknown[]) => genai.generateContent(...a) };
-	}
+const kieJobs = vi.hoisted(() => ({
+	generateSpeechOnKie: vi.fn(),
+	kieFlatCostUsd: (c?: number) => (typeof c === 'number' ? 0.001 * c : null),
+	kieTtsModel: () => 'gemini-3.5-pro-preview-tts'
 }));
+vi.mock('$lib/server/kie-jobs', () => kieJobs);
 import {
 	TTS_SAMPLE_RATE,
 	cutAtSeconds,
@@ -455,7 +455,7 @@ describe('musicFromInteraction', () => {
 	});
 
 	it('nessun audio nella risposta nomina la variabile da toccare', () => {
-		expect(() => musicFromInteraction({ steps: [] })).toThrow(/GEMINI_MUSIC_MODEL/);
+		expect(() => musicFromInteraction({ steps: [] })).toThrow(/no audio/);
 	});
 });
 
@@ -470,7 +470,8 @@ describe('generateMusicBed', () => {
 		expect(logged.at(-1)).toMatchObject({
 			label: 'music',
 			ok: true,
-			model: 'lyria-3-clip-preview',
+			provider: 'llm',
+			model: 'google/lyria-3-clip-preview',
 			flatCostUsd: 0.04
 		});
 	});
@@ -500,10 +501,10 @@ describe('generateMusicBed', () => {
 
 describe('generateVoiceOver', () => {
 	it('un caricamento fallito lascia una riga nel registro, non il silenzio', async () => {
-		genai.generateContent.mockResolvedValue({
-			candidates: [
-				{ content: { parts: [{ inlineData: { data: Buffer.alloc(2000).toString('base64') } }] } }
-			]
+		kieJobs.generateSpeechOnKie.mockResolvedValue({
+			wav: wavFromPcm(new Uint8Array(TTS_SAMPLE_RATE * 2)),
+			credits: 1,
+			model: 'gemini-3.5-pro-preview-tts'
 		});
 		await expect(
 			generateVoiceOver({

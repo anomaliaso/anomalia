@@ -6,7 +6,6 @@ import { hasWebHub, isPaidPlan, hasBacklinkNetwork } from '$lib/server/plans';
 import { studioCompleteness } from '$lib/studio-completeness';
 import { aggregateRecentEngagement, type SocialHistoryRow } from '$lib/server/social-history-metrics';
 import { loadGrowthReadiness, type GrowthReadiness } from '$lib/server/growth-readiness';
-import { loadMediaReviewStats, type MediaReviewStats } from '$lib/server/media-review-stats';
 
 type BrandRow = { id: string; slug: string; plan: string | null; timezone: string; content_prefs?: unknown };
 
@@ -209,7 +208,6 @@ export type HomeOverview = {
     statsUpdatedAt: string | null;
   };
   /** Anomalia media-reviewer mix (unique posts, worst score when organic+ads). */
-  mediaReviews: MediaReviewStats;
   /** Organic-growth data gate — same checks as /plan produce. */
   growth: GrowthReadiness;
 };
@@ -785,8 +783,7 @@ export async function loadHomeOverview(
     { data: kwRow },
     { count: radarRecentCount },
     { data: leadRows },
-    growth,
-    mediaReviews
+    growth
   ] = await Promise.all([
     // One index-only read answers every post COUNT this page shows (pending, scheduled,
     // published, radar-needs-review). It replaces four separate head:true counts: each was
@@ -888,8 +885,7 @@ export async function loadHomeOverview(
       : Promise.resolve({ data: [] as { status: string }[] }),
     // `brand` is the layout's brand embed, so growth readiness reuses it instead of
     // re-reading the same row.
-    loadGrowthReadiness(supabase, brand.id, brand),
-    loadMediaReviewStats(supabase, brand.id)
+    loadGrowthReadiness(supabase, brand.id, brand)
   ]);
 
   const postCounts = derivePostCounts(postFacts as PostFactRow[] | null);
@@ -1036,7 +1032,6 @@ export async function loadHomeOverview(
       likesByDay: engagement.likesByDay,
       statsUpdatedAt: lastStatsSync?.synced_at ? String(lastStatsSync.synced_at) : null
     },
-    mediaReviews,
     growth
   };
 }

@@ -9,6 +9,7 @@ import { runTurn } from '$lib/agent/turn';
 import { resume } from '$lib/agent/run-store';
 import { createApplyTool } from '$lib/agent/executor';
 import { BUILTIN_TOOLS } from '$lib/agent/tools/builtin';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { createServerBrandFs, createPostgresMemoryStore, createHarnessRuntime, resolveHarnessModelRef } from '$lib/agent/bridge/adapters';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { createQueryTool } from '$lib/server/chat/query-tool';
@@ -50,7 +51,12 @@ const noSandbox: SandboxProvider = {
 function buildQueryTool(supabase: SupabaseClient, brandId: string, userId: string, threadId: string) {
 	const { query } = createQueryTool({ supabase, brandId, userId, threadId });
 	return async (args: Record<string, unknown>, ctx: AdapterContext): Promise<ToolResult> => {
-		const opts: ToolExecutionOptions = { toolCallId: `query:${ctx.runId}`, messages: [], abortSignal: ctx.signal };
+		const opts: ToolExecutionOptions<Record<string, unknown>> = {
+			toolCallId: `query:${ctx.runId}`,
+			messages: [],
+			abortSignal: ctx.signal,
+			context: {}
+		};
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const out = await query.execute!(args as any, opts);
 		return { content: [{ type: 'text', text: JSON.stringify(out) }], isError: Boolean(out && 'error' in (out as object)) };
@@ -141,7 +147,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 			userId: user.id,
 			locale: bilingualNoticeLocale(uiLocale),
 			messages,
-			tools: BUILTIN_TOOLS,
+			tools: agentDesktopEnabled() ? BUILTIN_TOOLS : BUILTIN_TOOLS.filter((t) => t.name !== 'observe' && t.name !== 'act'),
 			// ponytail: fileIndex vuoto — costruirlo richiede un altro giro su agent-files.ts che il
 			// lab non ha ancora; l'agente vede comunque l'albero via brand_ls/brand_read/brand_grep. Aggiungere quando
 			// il lab deve mostrare "cosa l'agente sa" senza che lo chieda lui.
@@ -167,7 +173,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 							userId: user.id,
 							locale: bilingualNoticeLocale(uiLocale),
 							messages,
-							tools: BUILTIN_TOOLS,
+							tools: agentDesktopEnabled() ? BUILTIN_TOOLS : BUILTIN_TOOLS.filter((t) => t.name !== 'observe' && t.name !== 'act'),
 							extras: { memoryMd, fileIndex: '' },
 							limits: { maxSteps: 20, tokenBudget: 500_000, deadlineMs: 240_000 },
 							sessionKey: `agent-lab:${agentId}`,

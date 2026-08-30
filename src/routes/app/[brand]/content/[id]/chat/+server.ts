@@ -2,15 +2,14 @@ import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { json } from '@sveltejs/kit';
 import { stepCountIs, type ModelMessage } from 'ai';
 import { harnessStreamText } from '$lib/server/harness';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { env } from '$env/dynamic/private';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { canEnter } from '$lib/server/access';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { createPostEditorTools, loadEditorContext, loadGraphicEditorSystemSuffix } from '$lib/server/chat/post-editor-tools';
 import { loadMediaLibraryPromptSection } from '$lib/server/brand-media';
 import { getOrCreatePostThread, saveMessages, loadHistory, loadHistoryForUI, assistantContentFromSteps } from '$lib/server/chat/persistence';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
-import { geminiFlash } from '$lib/server/gemini';
 import { createChatLoopGuard, turnLoopNotice } from '$lib/server/chat/loop-guard';
 import {
   chatMaxTurns,
@@ -26,11 +25,10 @@ import type { RequestHandler } from './$types';
 // was the last one left at 300s.
 export const config = { maxDuration: 1800 };
 
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 // Small model on purpose: the per-post editor keeps a tiny context (just this post), so a
 // cheap flash tier is plenty and keeps token spend low. Override with STUDIO_CHAT_MODEL.
 function studioChatModel(): string {
-  return env.STUDIO_CHAT_MODEL?.trim() || geminiFlash();
+  return env.STUDIO_CHAT_MODEL?.trim() || llmDefaultModel();
 }
 
 const flagOn = env.FEATURE_STUDIO === 'true';
@@ -176,10 +174,10 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       agent: 'chat_editor',
       mode: 'editor',
       model: studioChatModel(),
-      provider: 'gemini',
+      provider: 'llm',
       surface: 'chat'
     }, {
-      model: google(studioChatModel()),
+      model: llmLanguageModel(studioChatModel()),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system,
       messages: [...history, lastUserMsg],
@@ -199,7 +197,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       onFinish: async ({ text, steps, totalUsage }) => {
         logAiCall({
           label: 'post-editor-chat',
-          provider: 'gemini',
+          provider: 'llm',
           model: studioChatModel(),
           ms: Date.now() - t0,
           ok: true,

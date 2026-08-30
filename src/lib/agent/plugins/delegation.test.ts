@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { ToolCall } from '../kit';
+import type { AdapterContext, ToolCall } from '../kit';
 import { createDelegationPlugin } from './delegation';
 
-const ctx = { brandId: 'b1', userId: 'u1', runId: 'r1', locale: 'it' };
+const ctx: AdapterContext = { brandId: 'b1', userId: 'u1', runId: 'r1', locale: 'it' };
 
 function fakeTool(result: unknown) {
 	return {
@@ -17,7 +17,7 @@ function fakeTools() {
 		delegate_task: fakeTool({ role: 'research', report: 'FINDINGS', steps: 2, tools_used: ['brand_read'] }),
 		run_task_pipeline: fakeTool({ verdict: 'pass', phases: [] }),
 		run_parallel_tasks: fakeTool({ tasks: [], failed: 0 })
-	} as Record<string, never>;
+	};
 }
 
 const call = (name: string, args: Record<string, unknown> = { role: 'research' }): ToolCall => ({ name, args });
@@ -38,7 +38,8 @@ describe('delegation plugin — la delega del motore classico, montata sul kit',
 			expect.objectContaining({ role: 'verify' }),
 			expect.objectContaining({ abortSignal: undefined })
 		);
-		expect(JSON.parse(res.content[0].text)).toMatchObject({ role: 'research', report: 'FINDINGS' });
+		const text = res.content[0].type === 'text' ? res.content[0].text : '';
+		expect(JSON.parse(text)).toMatchObject({ role: 'research', report: 'FINDINGS' });
 		expect(res.isError).toBeFalsy();
 	});
 

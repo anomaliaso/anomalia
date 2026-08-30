@@ -812,7 +812,6 @@
 			{selectedIds}
 			{loading}
 			blurred={liveOpen}
-			{brandSlug}
 			onToggleSelect={toggleSelect}
 			onRemove={(id) => void removeItem(id)}
 			onOpen={(item) => (lightbox = item)}
@@ -865,7 +864,7 @@
 </div>
 
 {#if lightbox}
-	<MotionVideoLightbox item={lightbox} {brandSlug} onClose={() => (lightbox = null)} />
+	<MotionVideoLightbox item={lightbox} onClose={() => (lightbox = null)} />
 {/if}
 
 

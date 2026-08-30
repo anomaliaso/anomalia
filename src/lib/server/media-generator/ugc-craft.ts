@@ -14,13 +14,12 @@
  */
 import { generateText } from 'ai';
 import { env } from '$env/dynamic/private';
-import { geminiFlash } from '$lib/server/gemini';
 import { craftAgentModel } from '$lib/server/craft-model';
 
 export type UgcCraftModel = ReturnType<typeof ugcAgentModel>;
 
 export function ugcAgentModel() {
-	return craftAgentModel({ envModel: env.UGC_VIDEO_MODEL, fallbackId: geminiFlash() });
+	return craftAgentModel({ envModel: env.UGC_VIDEO_MODEL });
 }
 
 export type UgcCraftInput = {

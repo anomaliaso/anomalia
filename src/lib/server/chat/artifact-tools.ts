@@ -47,7 +47,7 @@ export function createArtifactTools(opts: {
       }),
       execute: async (
         input: { title: string; file_name: string; content: string; description?: string },
-        toolOpts: ToolExecutionOptions
+        toolOpts: ToolExecutionOptions<unknown>
       ) => {
         if (!threadId) return { error: 'No thread — an artifact must belong to a conversation.' };
         if (published >= MAX_ARTIFACTS_PER_TURN) {

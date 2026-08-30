@@ -5,15 +5,13 @@
  * Pipeline: fetch homepage -> discover internal pages -> fetch pages -> LLM analysis -> save.
  */
 import { swallow } from '$lib/server/swallow';
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
 import { env } from '$env/dynamic/private';
 import { browserlessContent, isBrowserlessConfigured } from './browserless';
 import { slugify } from '$lib/brand-slug';
 import { aiStructured } from '$lib/server/xiaomi';
-import { loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
+import { llmStructured } from '$lib/server/llm';
 
 // --- Costanti ---
 
@@ -1443,14 +1441,15 @@ export async function extractAnnouncements(
     const systemInstruction = 'You extract only real announcements present in the provided text. Never fabricate.';
 
     try {
-        // Use aiStructured (UltraSpeed with tool calling) when ai instance is available.
+        void client;
         const parsed = ai
             ? await aiStructured<{ announcements?: Array<Record<string, unknown>> }>(ai, prompt, ANNOUNCEMENTS_SCHEMA, systemInstruction, 'return_announcements')
-            : JSON.parse((await loggedGemini('announcements', () => client.models.generateContent({
-                model: geminiFlash(),
-                config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: 'application/json', responseSchema: ANNOUNCEMENTS_SCHEMA, systemInstruction },
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            }))).text || '{}');
+            : await llmStructured<{ announcements?: Array<Record<string, unknown>> }>({
+                prompt,
+                schema: ANNOUNCEMENTS_SCHEMA,
+                system: systemInstruction,
+                label: 'announcements'
+              });
         if (!Array.isArray(parsed.announcements)) return [];
         return parsed.announcements
             .slice(0, 8)
@@ -1607,7 +1606,7 @@ export async function runBrandAnalysis(
 
     // 5. LLM Analysis
     onProgress('analyzing', 'AI is analyzing brand identity...');
-    const client = genaiClient || googleGenaiClient();
+    const client = genaiClient || (null as never);
 
     // Representative images for the multimodal palette/style read: the OG preview first (often a
     // full-site screenshot — the best single palette signal), then the first harvested heroes.

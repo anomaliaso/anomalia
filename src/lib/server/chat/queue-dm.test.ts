@@ -16,8 +16,6 @@ type Row = Record<string, any>;
 
 // Il percorso sotto test è quello classico del queue: il kit si spegne qui, non nel .env
 // locale — altrimenti la suite passa sul laptop di chi lo ha spento e muore su chi lo ha acceso.
-vi.mock('$env/dynamic/private', () => ({ env: { AGENT_KIT: 'off' } }));
-
 // ── Il confine mockato: modello, prompt base, tool pesanti. Il resto è codice vero. ────────────
 const harnessCalls: Array<{ system: string; messages: Array<{ role: string; content: unknown }> }> = [];
 vi.mock('$lib/server/harness', () => ({
@@ -32,7 +30,18 @@ vi.mock('./system-prompt', () => ({
 	wrapTurnMessage: (_block: string, message: unknown) => message
 }));
 vi.mock('./tools', () => ({ createChatTools: () => ({}) }));
-vi.mock('./subagents', () => ({ withSubagentTools: (t: unknown) => t }));
+vi.mock('$env/dynamic/private', async (importOriginal) => {
+	const original = (await importOriginal()) as { env: Record<string, string> };
+	return { ...original, env: { ...original.env, AGENT_KIT: 'off' } };
+});
+vi.mock('./subagents', async (orig) => {
+	const actual = await orig<typeof import('./subagents')>();
+	return {
+		SUBAGENT_TOOL_KEYS: actual.SUBAGENT_TOOL_KEYS,
+		withSubagentTools: (t: unknown) => t,
+		createSubagentTools: () => ({})
+	};
+});
 vi.mock('./sandbox-tools', () => ({
 	withSandboxTools: (t: unknown) => ({ tools: t, close: async () => undefined })
 }));
@@ -46,7 +55,13 @@ vi.mock('$lib/server/chat/artifacts', () => ({
 	formatArtifactsForPrompt: () => ''
 }));
 vi.mock('./compaction', () => ({ maybeCompactThread: vi.fn(async () => undefined) }));
-vi.mock('$lib/server/brand-memory', () => ({ extractMemoryFromChat: vi.fn(async () => undefined) }));
+vi.mock('$lib/server/brand-memory', async (orig) => {
+	const actual = await orig<typeof import('$lib/server/brand-memory')>();
+	return {
+		...actual,
+		extractMemoryFromChat: vi.fn(async () => undefined)
+	};
+});
 vi.mock('$lib/server/ai-log', async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
 	logAiCall: () => undefined,
@@ -54,31 +69,45 @@ vi.mock('$lib/server/ai-log', async (importOriginal) => ({
 }));
 vi.mock('./model', () => ({
 	resolveChatModel: () => ({ model: {}, modelId: 'test-model', provider: 'test', tier: 'auto', callOptions: {} }),
-	takeKieUsage: () => ({})
 }));
 vi.mock('./rate-limits', () => ({
 	getChatRateUsage: vi.fn(async () => ({ ok: true })),
 	chatCreditsBlocked: vi.fn(async () => false)
 }));
-vi.mock('./goal', () => ({
-	closeGoal: vi.fn(async () => null),
-	goalBriefing: () => '',
-	goalNudge: () => '',
-	goalTurnNotice: () => '',
-	goalWorthyRequest: () => false,
-	loadOpenGoal: vi.fn(async () => null),
-	setThreadGoal: vi.fn(async () => null),
-	settleGoalForTurn: vi.fn(async () => null),
-	succeededToolNames: vi.fn(() => []),
-	refusedToolNames: vi.fn(() => []),
-	trackGoalSettlement: () => undefined
-}));
+vi.mock('./goal', async (orig) => {
+	const actual = await orig<typeof import('./goal')>();
+	return {
+		...actual,
+		closeGoal: vi.fn(async () => null),
+		goalBriefing: () => '',
+		goalNudge: () => '',
+		goalTurnNotice: () => '',
+		goalWorthyRequest: () => false,
+		loadOpenGoal: vi.fn(async () => null),
+		setThreadGoal: vi.fn(async () => null),
+		settleGoalForTurn: vi.fn(async () => null),
+		succeededToolNames: vi.fn(() => []),
+		refusedToolNames: vi.fn(() => []),
+		trackGoalSettlement: () => undefined
+	};
+});
 vi.mock('./mid-turn-mailbox', () => ({
 	createMidTurnMailbox: () => ({ prepareStep: async () => ({}), absorbedCount: () => 0 })
 }));
 vi.mock('$lib/server/hydrate-chat-documents', () => ({ hydrateChatDocuments: vi.fn(async () => []) }));
 vi.mock('$lib/server/web-push', () => ({ sendPushToUser: vi.fn(async () => undefined) }));
 vi.mock('./unread', () => ({ markThreadRead: vi.fn(async () => undefined) }));
+
+// Il confine del kit: con AGENT_KIT=on il turno deve arrivare QUI, non al modello classico.
+const kitTurnInputs: Array<Record<string, unknown>> = [];
+vi.mock('$lib/agent/bridge/live', () => ({
+	shouldUseKit: (e: { AGENT_KIT?: string }, agentId: string | null) =>
+		e.AGENT_KIT === 'on' && agentId ? { id: agentId } : null,
+	runKitTurn: vi.fn(async (input: Record<string, unknown>) => {
+		kitTurnInputs.push(input);
+		return new Response(null, { status: 200 });
+	})
+}));
 
 // Persistenza: legge/scrive il database finto qui sotto, così tool e runner vedono le stesse righe.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,6 +155,8 @@ vi.mock('./persistence', () => ({
 		text ? [{ type: 'text', text }] : []
 }));
 
+const { env } = await import('$env/dynamic/private');
+const { sendPushToUser } = await import('$lib/server/web-push');
 const { createAgentDmTools } = await import('./agent-dm-tools');
 const { processNextQueuedChatJob } = await import('./queue');
 
@@ -218,6 +249,93 @@ describe('riprese: user_message è solo-per-il-modello, mai vuoto', () => {
 	});
 });
 
+describe('AGENT_KIT=on: il turno di risposta del DM gira sul kit', () => {
+	beforeEach(() => {
+		env.AGENT_KIT = 'on';
+	});
+
+	function dmThreadJob() {
+		return makeDb({
+			brands: [brandRow],
+			chat_threads: [
+				{
+					id: 'dm-1',
+					brand_id: 'brand-1',
+					user_id: 'user-1',
+					agent: null,
+					custom_agent_id: null,
+					title: 'Anomalia ⇄ Content Creator',
+					room_agents: { dm: ['anomalia', 'content'], names: { anomalia: 'Anomalia', content: 'Content Creator' } }
+				}
+			],
+			chat_messages: [
+				{
+					thread_id: 'dm-1',
+					role: 'user',
+					content: 'ciao',
+					name: 'anomalia',
+					superseded: false,
+					created_at: new Date().toISOString()
+				}
+			],
+			chat_jobs: [
+				{
+					id: 'job-bare',
+					brand_id: 'brand-1',
+					user_id: 'user-1',
+					thread_id: 'dm-1',
+					tool_name: 'chat_response',
+					status: 'pending',
+					created_at: new Date().toISOString(),
+					input_params: { user_message: 'ciao', locale: 'it', origin: '' }
+				}
+			]
+		});
+	}
+
+	it('il job va al bridge, non al runner classico: contenuto taggato e chi parla nel contesto', async () => {
+		db = dmThreadJob();
+
+		const res = await processNextQueuedChatJob(db.client as never, 'http://localhost:5173');
+		expect(res.processed).toBe(true);
+		expect(harnessCalls.length).toBe(0);
+		expect(kitTurnInputs).toHaveLength(1);
+
+		const kit = kitTurnInputs[0];
+		const messages = kit.messages as Array<{ role: string; content: unknown }>;
+		expect(String(messages[messages.length - 1].content)).toBe(
+			'[Message from Anomalia — a fellow AI agent of this brand, NOT the user]: ciao'
+		);
+		expect(kit.dm).toEqual({ speaker: 'content', meName: 'Content Creator', otherName: 'Anomalia' });
+		expect(db.tables.chat_jobs[0].status).toBe('done');
+	});
+
+	it('a turno finito arriva il push «reply is ready», come sul percorso classico', async () => {
+		db = dmThreadJob();
+
+		await processNextQueuedChatJob(db.client as never, 'http://localhost:5173');
+		expect(kitTurnInputs).toHaveLength(1);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const pushes = (sendPushToUser as any).mock.calls as Array<
+			[unknown, string, { url?: string; body?: string }]
+		>;
+		expect(pushes).toHaveLength(1);
+		expect(pushes[0][2].url).toBe('/app/abd/chat/dm-1');
+		expect(pushes[0][2].body).toBe("L'AI ha finito di rispondere");
+	});
+
+	it('il messaggio dell\'utente non si risalva: il DM è già nel thread, firmato', async () => {
+		db = dmThreadJob();
+
+		await processNextQueuedChatJob(db.client as never, 'http://localhost:5173');
+		const userRows = db.tables.chat_messages.filter(
+			(m) => m.thread_id === 'dm-1' && m.role === 'user'
+		);
+		expect(userRows).toHaveLength(1);
+		expect(userRows[0].name).toBe('anomalia');
+	});
+});
+
 // ── Database finto: come queue-credits.test, più insert e contains (marker jsonb). ─────────────
 function makeDb(seed: Record<string, Row[]>) {
 	const tables: Record<string, Row[]> = { chat_messages: [], chat_threads: [], chat_jobs: [] };
@@ -244,6 +362,7 @@ function makeDb(seed: Record<string, Row[]>) {
 				}),
 				api),
 			not: () => api,
+			or: () => api,
 			order: () => api,
 			limit: () => api,
 			select: () => api,
@@ -285,8 +404,14 @@ function makeDb(seed: Record<string, Row[]>) {
 const brandRow = { id: 'brand-1', name: 'brand-di-prova', slug: 'abd', plan: 'pro', status: 'active' };
 
 beforeEach(() => {
+	// Questo suite copre il motore classico in coda: il bridge kit (sessioni pi-live) non è mockato
+	// e il ramo kit del drain resterebbe appeso alla prima sessione.
+	env.AGENT_KIT = 'off';
 	harnessCalls.length = 0;
 	savedAssistant.length = 0;
+	kitTurnInputs.length = 0;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(sendPushToUser as any).mockClear();
 });
 
 describe('DM end-to-end: message_agent → coda → turno di risposta', () => {

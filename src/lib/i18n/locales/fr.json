@@ -4978,60 +4978,6 @@
         "resolutionDesc": "480p est recommandé : le 720p coûte exactement le double à la seconde, et chaque clip est facturé même s'il n'est jamais publié. Sur un fil mobile la différence se voit peu.",
         "recommended": "recommandé"
       },
-      "mediaReviewer": {
-        "nav": "Media reviewer",
-        "title": "Media reviewer",
-        "subtitle": "Scores et erreurs des clips, stills et carrousels de cette marque.",
-        "empty": "Aucune review pour l’instant. Les scores apparaissent ici au fur et à mesure.",
-        "filterLabel": "Filtrer par statut",
-        "filter": {
-          "all": "Tous",
-          "ready": "Prêts",
-          "failed": "Échecs",
-          "pending": "En cours"
-        },
-        "tileTotal": "Reviews",
-        "tileTotalDelta": "Cette marque uniquement",
-        "tileReady": "Notés",
-        "tileReadyDelta": "Prêts à lire",
-        "tileFailed": "Échecs",
-        "tileFailedDelta": "Après les retries",
-        "tilePending": "En cours",
-        "tilePendingDelta": "En file ou en cours",
-        "logsTitle": "Journal des reviews",
-        "logsSub": "{total} dans cette vue",
-        "col": {
-          "when": "Quand",
-          "media": "Média",
-          "kind": "Type",
-          "status": "Statut",
-          "score": "Score",
-          "verdict": "Verdict",
-          "note": "Note"
-        },
-        "openPost": "Ouvrir le post",
-        "judgment": "Jugement",
-        "scriptSpoken": "Parlé",
-        "scriptOnScreen": "À l’écran",
-        "caption": "Légende",
-        "error": "Erreur",
-        "attempts": "{n} tentatives",
-        "rerun": "Relancer",
-        "rerunQueued": "Review mise en file. Le score se mettra à jour dans quelques minutes.",
-        "rerunRunning": "Une review est déjà en cours pour ce média.",
-        "status": {
-          "pending": "En attente",
-          "running": "En cours",
-          "ready": "Prêt",
-          "failed": "Échec"
-        },
-        "kind": {
-          "video": "Vidéo",
-          "image": "Image",
-          "carousel": "Carrousel",
-          "graphic": "Graphique"
-        }
-      },
       "library": {
         "subtitle": "Les pages de votre site deviennent des assets linkables pour posts et radar.",
         "website": "Site web principal",
@@ -6061,6 +6007,7 @@
       "openAndDm": "Open profile & DM →",
       "dismiss": "Ignore",
       "restore": "Restore",
+      "dontContact": "Ne plus jamais contacter",
       "empty": "No leads here yet.",
       "rewrite": "Rewrite",
       "feedbackPh": "ex. plus court, plus décontracté, mentionner notre produit…",
@@ -6076,6 +6023,7 @@
       "searchPh": "Rechercher contenu, commentaire ou DM…",
       "markDone": "Terminé",
       "postLabel": "Publication d'origine",
+      "postGist": "Ce que demande la personne (résumé IA — le post original est dans le lien)",
       "openPost": "Ouvrir",
       "relevanceLabel": "Pertinence selon l'IA",
       "close": "Fermer",
@@ -6433,44 +6381,6 @@
         "social": "Social ads",
         "google": "Google ads",
         "library": "Ads library"
-      }
-    },
-    "videoReview": {
-      "title": "Revue vidéo",
-      "standard": "Standard de revue",
-      "organic": "UGC organique",
-      "ads": "Pubs payantes",
-      "run": "Relire le clip",
-      "running": "Analyse…",
-      "error": "Impossible d’analyser cette vidéo.",
-      "fetchFailed": "Impossible de télécharger la vidéo (URL bloquée ou expirée).",
-      "credits": "Crédits IA épuisés pour cette période.",
-      "ship": "Valider",
-      "fix": "Corriger",
-      "kill": "Rejeter",
-      "stops": "Arrête le scroll",
-      "scrolls": "Le pouce continue",
-      "hook": "Hook",
-      "nextTest": "Prochain test",
-      "spoken": "Parlé",
-      "onScreen": "À l’écran",
-      "research": "Recherche",
-      "scorePending": "Notation…",
-      "dim": {
-        "scroll_stop": "Scroll-stop",
-        "sound_off": "Sans son",
-        "hold": "Rétention",
-        "authenticity": "Authenticité",
-        "anatomy": "Anatomie",
-        "structure": "Structure",
-        "spoken_craft": "Oral",
-        "cta_soft": "CTA doux",
-        "loop_worthiness": "Rewatch / save",
-        "audience_signal": "Pour qui",
-        "proof": "Preuve",
-        "offer": "Offre",
-        "uniqueness": "Unicité",
-        "claims_safe": "Claims"
       }
     },
     "motionVideo": {
@@ -7390,28 +7300,8 @@
     "prevVersion": "Previous version",
     "nextVersion": "Next version",
     "saveDraft": "Save draft",
-    "requestReview": "Demander une review média",
-    "reviewQueued": "Review mise en file. L’anneau se mettra à jour à la fin.",
     "reviewDone": "Review prête.",
     "reviewFailed": "La review a échoué. Réessayez, ou ouvrez Media reviewer.",
-    "reviewRunning": "Une review est déjà en cours pour ce média.",
-    "review": {
-      "why": "Pourquoi",
-      "improve": "Comment l’améliorer",
-      "chipApply": "Appliquer ça",
-      "chipHook": "Corriger le hook",
-      "chipReel": "Refaire le reel",
-      "chipVisual": "Refaire le visuel",
-      "promptScore": "La review média a noté ce contenu {score}/10 ({verdict}).",
-      "promptWhy": "Pourquoi : {judgment}",
-      "promptNext": "Comment l’améliorer (changer une seule chose) : {next}",
-      "promptIssue": "- {problem} → {fix}",
-      "promptApply": "Applique ce changement au média de CE post maintenant. Garde la légende sauf si la review demande de la changer.",
-      "promptVideo": "C’est une VIDÉO. Refais-la avec make_video, ugc:true, parlé caméra, sans texte à l’écran. Ne remplace pas le reel par un visuel statique.",
-      "promptHook": "Corrige le hook / les 3 premières secondes pour arrêter le scroll. Puis refais le média.",
-      "promptReel": "Refais ce reel en UGC parlé : script naturel, sans texte à l’écran, sans overlay graphique.",
-      "promptStill": "Refais le visuel (photo ou graphique) d’après cette review. Ne le transforme pas en vidéo sauf si je le demande."
-    },
     "approveSchedule": "Approve & schedule →",
     "publishNow": "Publish now",
     "reject": "Refuser",
@@ -7561,7 +7451,11 @@
         },
         "notePre": "Nous utilisons le contenu et l'historique public de posts que vous fournissez pour générer des posts avec l'IA. Nous",
         "noteStrong": "ne",
-        "notePost": "vendons pas vos données personnelles, et nous n'utilisons pas votre contenu pour entraîner des modèles d'IA tiers à des fins autres que la prestation de notre service."
+        "notePost": "vendons pas vos données personnelles, et nous n'utilisons pas votre contenu pour entraîner des modèles d'IA tiers à des fins autres que la prestation de notre service.",
+        "row7": {
+          "purpose": "Recherche de contacts commerciaux (radar/leads) : lecture de contenus publics de tiers sur les réseaux sociaux pour proposer des conversations à rejoindre et des brouillons de contact",
+          "basis": "Intérêt légitime — art. 6, par. 1, f)"
+        }
       },
       "s4": {
         "heading": "4. AI-generated content",
@@ -7586,7 +7480,7 @@
         "stripe": "Facturation d'abonnement et traitement des paiements",
         "google": "Génération de texte et d'images par IA",
         "kie": "AI image / video generation",
-        "scrapecreators": "Collecte de l'historique public des posts des comptes connectés",
+        "scrapecreators": "Lecture en temps réel de contenus publics (posts et profils) sur les plateformes sociales pour le radar d’actualités et de leads, et collecte de l’historique public des comptes connectés",
         "resend": "Envoi d'emails transactionnels et de notification",
         "metaProvider": "Meta (Instagram, Facebook) & TikTok",
         "meta": "Publication de posts sur vos comptes connectés",
@@ -7617,7 +7511,8 @@
       },
       "s9": {
         "heading": "9. Combien de temps nous conservons vos données",
-        "body": "Nous conservons vos données personnelles tant que votre compte est actif et aussi longtemps que nécessaire pour fournir le service. Lorsque vous supprimez votre compte, nous effaçons ou anonymisons vos données dans un délai de 30 jours, sauf obligation légale de conservation plus longue."
+        "body": "Nous conservons vos données personnelles tant que votre compte est actif et aussi longtemps que nécessaire pour fournir le service. Lorsque vous supprimez votre compte, nous effaçons ou anonymisons vos données dans un délai de 30 jours, sauf obligation légale de conservation plus longue.",
+        "body2": " Les contenus de tiers trouvés par le radar ont une durée de conservation propre : le résumé du post est supprimé après 14 jours, les leads non convertis après 90 jours, les résultats des commentaires après 12 mois. Toute personne qui ne souhaite plus être contactée peut le dire en réponse au message reçu ou via le client qui l’a contactée : son profil est exclu de toute proposition future, pour toutes les marques."
       },
       "s10": {
         "heading": "10. Vos droits",
@@ -7759,7 +7654,8 @@
       "s13": {
         "heading": "13. Third-party services",
         "body": "Le Service s'appuie sur des prestataires tiers (pour l'hébergement, l'IA, l'analyse, les paiements, l'email et les réseaux sociaux). Nous ne sommes pas responsables des interruptions, retards ou problèmes causés par ces prestataires.",
-        "body2": "Certaines fonctionnalités pilotent un navigateur réel pour votre compte — par exemple la capture d’écrans de votre propre produit après connexion avec des identifiants de démonstration que vous enregistrez. Vous ne pouvez enregistrer des identifiants que pour un service dont vous êtes titulaire ou que vous êtes autorisé à automatiser, et cette autorisation relève de votre responsabilité. Nous ne les utiliserons pas pour nous connecter à des plateformes tierces telles qu’Instagram, Facebook, LinkedIn ou TikTok : la connexion et la publication automatisées enfreignent généralement les conditions de ces plateformes et peuvent entraîner des restrictions de compte, c’est pourquoi le Service les refuse. La publication passe uniquement par les API officielles des comptes que vous connectez, après votre approbation du contenu."
+        "body2": "Certaines fonctionnalités pilotent un navigateur réel pour votre compte — par exemple la capture d’écrans de votre propre produit après connexion avec des identifiants de démonstration que vous enregistrez. Vous ne pouvez enregistrer des identifiants que pour un service dont vous êtes titulaire ou que vous êtes autorisé à automatiser, et cette autorisation relève de votre responsabilité. Nous ne les utiliserons pas pour nous connecter à des plateformes tierces telles qu’Instagram, Facebook, LinkedIn ou TikTok : la connexion et la publication automatisées enfreignent généralement les conditions de ces plateformes et peuvent entraîner des restrictions de compte, c’est pourquoi le Service les refuse. La publication passe uniquement par les API officielles des comptes que vous connectez, après votre approbation du contenu.",
+        "body3": " Certaines fonctions (radar/leads) lisent des contenus publics de tiers sur les réseaux sociaux pour suggérer à l’utilisateur des conversations à rejoindre, avec des brouillons de commentaires et de messages. L’utilisateur est l’unique expéditeur : le Service n’envoie jamais de messages à des tiers automatiquement — chaque brouillon exige la relecture et l’envoi manuel par l’utilisateur depuis son propre compte. L’utilisateur est donc responsable du traitement des contacts qu’il envoie et répond du contenu du message, du respect des conditions de la plateforme où il publie et de l’honneur des demandes des personnes de ne plus être contactées. Le Service minimise les données des personnes trouvées (résumé et lien vers le post, sans copie du texte) et les exclut de toute proposition future lorsqu’elles le demandent."
       },
       "s14": {
         "heading": "14. Availability & changes",
@@ -9342,7 +9238,8 @@
       "importing": "Importation…",
       "imported": "{n} images importées dans Media generation",
       "importFailed": "Échec de l'import",
-      "remove": "Retirer"
+      "remove": "Retirer",
+      "processing": "Traitement de l'image…"
     },
     "toolReading": {
       "brandKit": "🔧 Reading brand data...",
@@ -9429,14 +9326,14 @@
     "tier": {
       "label": "Modèle",
       "custom": "Personnalisé",
-    "modelFamily": {
-      "luna": "Luna",
-      "grok": "Grok 4.6",
-      "gemini-flash": "Gemini Flash",
-      "deepseek-pro": "DeepSeek V4 Pro",
-      "gpt-terra": "GPT 5.6 Terra",
-      "gpt-sol": "GPT 5.6 Sol"
-    },
+      "modelFamily": {
+        "luna": "Luna",
+        "grok": "Grok 4.6",
+        "gemini-flash": "Gemini Flash",
+        "deepseek-pro": "DeepSeek V4 Pro",
+        "gpt-terra": "GPT 5.6 Terra",
+        "gpt-sol": "GPT 5.6 Sol"
+      },
       "auto": "Auto",
       "fast": "Fast",
       "pro": "Pro",
@@ -9489,6 +9386,13 @@
     },
     "unread": "Messages non lus",
     "unreadCount": "{count, plural, one {# message non lu} other {# messages non lus}}",
+    "replyNotification": {
+      "region": "Nouvelles réponses de chat",
+      "label": "Nouvelle réponse",
+      "message": "Ouvrez le chat pour la lire",
+      "open": "Ouvrir le chat de {name}",
+      "count": "{count, plural, one {# réponse non lue} other {# réponses non lues}}"
+    },
     "docPanel": {
       "subtitle": "Depuis la base de connaissances",
       "openInKnowledge": "Ouvrir dans Knowledge",

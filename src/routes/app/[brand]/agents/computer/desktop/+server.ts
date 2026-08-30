@@ -14,10 +14,12 @@
  */
 import { json } from '@sveltejs/kit';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { ensureGraphicalMode, ensureRemoteDesktop } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider, graphicalBootstrapDeps, sandboxPortUrl } from '$lib/agent/bridge/adapters';
 import { desktopPassword, desktopUrl, publishComputerRunning } from '$lib/server/agent-desktop';
 import { SANDBOX_MAX_LEASE_MS } from '$lib/server/sandbox';
+import { holdDesktop } from '$lib/server/sandbox-leases';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { env } from '$env/dynamic/private';
 import type { AdapterContext } from '$lib/agent/kit/types';
@@ -26,6 +28,7 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!agentDesktopEnabled()) return new Response(null, { status: 404 });
 
 	const { data: brand } = await supabase.from('brands').select('id').eq('slug', params.brand).maybeSingle();
 	if (!brand) return new Response('Not found', { status: 404 });
@@ -49,6 +52,9 @@ export const POST: RequestHandler = async ({ params, url, locals: { supabase, sa
 	// con i 5 minuti di default la macchina gli muore sotto senza dire niente. La pagina ripassa
 	// di qui a intervalli per tenerla viva (`update` alza la scadenza anche a sessione in corso).
 	const ref = await sandbox.provision({ brandId: brand.id, agentId, timeoutMs: SANDBOX_MAX_LEASE_MS }, ctx);
+	// Chi guarda è un holder: finché il pannello ripassa di qui, la VM resta accesa anche se nessun
+	// turno è in corso. Il TTL scade da solo quando il tab muore.
+	await holdDesktop(ref.name, brand.id, agentId);
 	// Lo stato lo scrive il service role: `agent_computers` è in sola lettura per i membri (0217),
 	// e senza questa riga il pannello continuerebbe a dire «dorme» col desktop acceso davanti.
 	await publishComputerRunning(createAdminClient(), brand.id, ref.name, agentId);

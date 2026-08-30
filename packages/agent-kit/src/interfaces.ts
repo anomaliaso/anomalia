@@ -10,6 +10,8 @@ import type {
 	AdapterContext,
 	AdapterDescriptor,
 	CommandRequest,
+	EffectStatus,
+	EffectClaim,
 	FileEntry,
 	MemoryCapabilities,
 	MemoryEntry,
@@ -20,9 +22,37 @@ import type {
 	SandboxCapabilities,
 	SandboxRef,
 	ToolCall,
+	ToolEffect,
 	ToolResult,
 	ToolSpec
 } from './types';
+
+/**
+ * IL LEDGER DEGLI EFFETTI — il port che l'executor usa per non rieseguire un tool dal un effetto
+ * collaterale già avvenuto (o avviato e lasciato ambiguo da un segmento morto). Declarato qui, nel
+ * contratto: l'executor non sa dove viva la riga, la superficie gliela passa come implementazione.
+ */
+export interface EffectsLedger {
+	/**
+	 * Claim atomico per (brand, invocationId). L'identità è indipendente da run, lease, fence e
+	 * attempt; il payload serve solo a rilevare un riuso errato. Solo `claimed` autorizza l'esecuzione.
+	 */
+	claim(record: {
+		brandId: string;
+		/** Il run che detiene il claim, usato per audit e riconciliazione. */
+		runId: string;
+		/** L'identità persistita della singola chiamata, non derivata da `request`. */
+		invocationId: string;
+		toolName: string;
+		request: unknown;
+		/** Chiave della versione precedente, usata solo per righe legacy dello stesso run. */
+		legacyKey?: string;
+	}): Promise<EffectClaim>;
+	/** Risolve solo un claim ancora `intended`; un worker riconciliato non può sovrascriverlo. */
+	resolve(id: string, status: 'completed' | 'failed' | 'ambiguous', result: unknown): Promise<boolean>;
+	/** Attira gli `intended` orfani di un run morto verso `ambiguous` — il ripiego che non duplica. */
+	reconcileRun(runId: string): Promise<number>;
+}
 
 /** Chi fa girare il ciclo. Oggi: ai-runtime (SDK v6). */
 export interface AgentRuntime {

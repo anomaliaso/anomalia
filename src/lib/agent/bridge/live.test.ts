@@ -3,6 +3,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { applyChatStreamEvent, emptyStreamState, readSseEvents } from '$lib/chat-stream-events';
 import { judgeTranscript, type TranscriptEvent } from '$lib/server/eval/transcript-judge';
+import type { ActionApprovalConfig } from '@anomalia/agent-kit/types';
 
 /**
  * COME `ai-runtime.test.ts` E `run-store.test.ts`: il turno arriva scripted sull'harness finto
@@ -16,23 +17,11 @@ vi.mock('$lib/server/chat/model', () => ({
 	resolveChatModel: () => ({ model: modelHolder.current }),
 	// La riga di spesa del turno (`logTurnCost`) legge i crediti kie dal modello risolto: senza
 	// questo il mock non esporta la funzione e ogni turno muore prima di salvare il messaggio.
-	takeKieUsage: () => ({})
 }));
 
 // Doppio resume (caso 2): il resto di `../run-store` resta VERO (createRun/transition/askUser/
 // finish girano sopra il fakeDb come sempre) — solo `resume` diventa deviabile per un turno, per
 // pinnare la mappatura dell'errore del CAS senza dover ricostruire una vera race a due richieste.
-const resumeThrows: { current: boolean } = { current: false };
-vi.mock('../run-store', async (importOriginal) => {
-	const actual = (await importOriginal()) as typeof import('../run-store');
-	return {
-		...actual,
-		resume: async (...args: Parameters<typeof actual.resume>) => {
-			if (resumeThrows.current) throw new Error('run: stato cambiato sotto le mani (atteso waiting_input)');
-			return actual.resume(...args);
-		}
-	};
-});
 
 // `logAiCall` scrive davvero in `ai_calls` (via createAdminClient): mai nei test unitari.
 // Stesso mock di brand-fs.test.ts / agent-files.test.ts.
@@ -116,6 +105,19 @@ vi.mock('$lib/server/chat/goal', async (importOriginal) => {
 	};
 });
 
+// Lo specchio manda `thread-seq`/`thread-changed`/`kit_stream*` via Realtime davvero (fetch verso
+// Supabase): qui si cattura solo l'evento, come `queueKicks` per il drain.
+const broadcasts: Array<{ event: string; payload: unknown }> = [];
+vi.mock('$lib/server/realtime', async (importOriginal) => {
+	const actual = (await importOriginal()) as Record<string, unknown>;
+	return {
+		...actual,
+		broadcastToBrand: async (_brandId: string, msg: { event: string; payload: unknown }) => {
+			broadcasts.push(msg);
+		}
+	};
+});
+
 // La strumentazione del computer (agent_computers) qui non deve scrivere: chi la marca running e`
 // `agent-desktop.ts` quando l'utente apre il desktop, e i casi veri stanno in computer.test.ts e
 // agent-desktop.test.ts. Il turno la tocca soltanto dai tool della VM (shell/observe/act).
@@ -134,16 +136,24 @@ type FakeCall = { toolCallId: string; toolName: string; input: Record<string, un
 type FakeTurn = {
 	texts?: string[];
 	calls?: FakeCall[];
+	nativeApproval?: boolean;
 	totalUsage?: Record<string, unknown>;
+	delayMs?: number;
 	onStreamStart?: () => void;
 	/** Non produce MAI il primo evento: la sessione riusata che non parte (incidente reale). */
 	hang?: boolean;
+	/** Il turno regge, ma `handleFinish` esplode dopo — il retry-dopo-errore lo trova qui. */
+	stepsError?: string;
 	capture?: (opts: { system: string; messages: unknown; tools: Record<string, unknown>; stopWhen: unknown[] }) => void;
 };
 
 const harnessQueue: FakeTurn[] = [];
 const harnessTurnOpts: Array<Record<string, unknown>> = [];
 let harnessServed = 0;
+let brandSandboxOpenCount = 0;
+const brandSandboxReleases: Array<ReturnType<typeof vi.fn>> = [];
+const harnessSandboxes = new Map<string, { session: unknown; name: string; handle: { release: ReturnType<typeof vi.fn> } }>();
+const sandboxOpenFailures: Error[] = [];
 
 /**
  * La cache di produzione (`moduleLiveSessions` in adapters.ts): il SECONDO turno sul thread
@@ -171,7 +181,10 @@ function teeText(payload: string): [ReadableStream<Uint8Array>, ReadableStream<U
 	return src.tee();
 }
 
-function buildFakeHarnessResult(turn: FakeTurn, opts: { tools: Record<string, { execute?: (input: unknown, options: unknown) => Promise<unknown> }> }) {
+function buildFakeHarnessResult(turn: FakeTurn, opts: {
+	tools: Record<string, { execute?: (input: unknown, options: unknown) => Promise<unknown> }>;
+	toolApproval?: Record<string, string>;
+}) {
 	const stepParts: Array<Record<string, unknown>> = [];
 	const stepToolCalls: Array<{ toolCallId: string; toolName: string; input: unknown }> = [];
 	const stepToolResults: Array<{ toolCallId: string; toolName: string; input: unknown; output: unknown }> = [];
@@ -191,8 +204,14 @@ function buildFakeHarnessResult(turn: FakeTurn, opts: { tools: Record<string, { 
 			stepParts.push({ type: 'tool-call', toolCallId: call.toolCallId, toolName: call.toolName, input: call.input });
 			stepToolCalls.push(call);
 		}
-		await new Promise((r) => setTimeout(r, 8));
+		await new Promise((r) => setTimeout(r, turn.delayMs ?? 8));
 		for (const call of turn.calls ?? []) {
+			if (turn.nativeApproval && opts.toolApproval?.[call.toolName] === 'user-approval') {
+				const approvalId = `approval-${call.toolCallId}`;
+				uiChunks.push({ type: 'tool-approval-request', approvalId, toolCallId: call.toolCallId, toolName: call.toolName, input: call.input });
+				stepParts.push({ type: 'tool-approval-request', approvalId, toolCallId: call.toolCallId });
+				continue;
+			}
 			const t = opts.tools?.[call.toolName];
 			if (t && typeof t.execute === 'function') {
 				let output: unknown;
@@ -240,7 +259,10 @@ function buildFakeHarnessResult(turn: FakeTurn, opts: { tools: Record<string, { 
 				onError?.(e);
 			}
 		},
-		steps: drained.then(() => [{ content: stepParts, toolCalls: stepToolCalls, toolResults: stepToolResults, text, reasoningText: '' }]),
+		steps: drained.then(() => {
+			if (turn.stepsError) throw new Error(turn.stepsError);
+			return [{ content: stepParts, toolCalls: stepToolCalls, toolResults: stepToolResults, text, reasoningText: '' }];
+		}),
 		text: drained.then(() => text),
 		totalUsage: Promise.resolve(usage),
 		toUIMessageStreamResponse: (
@@ -262,13 +284,42 @@ vi.mock('./adapters', async (importOriginal) => {
 	return {
 		...actual,
 		resolveHarnessModelRef: () => ({ provider: 'kie', id: 'kie/test-luna', label: 'test-luna' }),
-		openBrandHarnessSession: async () => ({ session: { fake: true }, name: 'brand-vm' }),
+		openBrandHarnessSession: async (_brandId: string, _runId: string, _agentId?: string, sessionKey?: string) => {
+			if (sessionKey) {
+				const cached = harnessSandboxes.get(sessionKey);
+				if (cached) return cached;
+			}
+			const failure = sandboxOpenFailures.shift();
+			if (failure) throw failure;
+			brandSandboxOpenCount++;
+			const release = vi.fn(async () => {});
+			brandSandboxReleases.push(release);
+			const opened = {
+				session: { fake: true },
+				name: 'brand-vm',
+				handle: { release }
+			};
+			if (sessionKey) harnessSandboxes.set(sessionKey, opened);
+			return opened;
+		},
+		dropLiveHarnessSession: async (sessionKey?: string | null) => {
+			if (!sessionKey) return;
+			const sandbox = harnessSandboxes.get(sessionKey);
+			harnessSandboxes.delete(sessionKey);
+			bakedToolsBySession.delete(sessionKey);
+			await sandbox?.handle.release();
+		},
+		// La cache di produzione è `moduleLiveSessions` (adapters.ts); il mock la colma con
+		// `bakedToolsBySession` (una sessione esiste ⇔ il thread ha già cotto i suoi tool), e il
+		// retry «fresco» decide UNA volta se c'è qualcosa da riusare.
+		hasLiveHarnessSession: (key?: string | null) => (key ? bakedToolsBySession.has(key) : false),
 		startHarnessTurn: async (opts: {
 			system: string;
 			messages: unknown;
 			tools: Record<string, { execute?: (input: unknown, options: unknown) => Promise<unknown> }>;
 			stopWhen: unknown[];
 			sessionKey?: string;
+			toolApproval?: Record<string, string>;
 		}) => {
 			const idx = Math.min(harnessServed, harnessQueue.length - 1);
 			harnessServed += 1;
@@ -290,7 +341,11 @@ vi.mock('./adapters', async (importOriginal) => {
 			}
 			harnessTurnOpts.push(opts);
 			turn.capture?.({ system: opts.system, messages: opts.messages, tools, stopWhen: opts.stopWhen });
-			return { result: buildFakeHarnessResult(turn, { ...opts, tools }), destroy: async () => {} };
+			return {
+				result: buildFakeHarnessResult(turn, { ...opts, tools }),
+				detach: async () => ({ checkpoint: 'approval' }),
+				destroy: async () => {}
+			};
 		}
 	};
 });
@@ -302,6 +357,7 @@ function scriptTurns(...turns: FakeTurn[]) {
 const replyCall = (message: string): FakeCall => ({ toolCallId: 'c1', toolName: 'reply', input: { message, delivered: [] } });
 
 const { runKitTurn, shouldUseKit } = await import('./live');
+const { dropLiveHarnessSession } = await import('./adapters');
 const { specById } = await import('../specs');
 
 type Row = Record<string, unknown>;
@@ -310,21 +366,44 @@ type Row = Record<string, unknown>;
  * Lo stesso finto client di `run-store.test.ts`, esteso con `order`/`maybeSingle` — il bridge li
  * usa per trovare un run `waiting_input` sul thread prima di aprirne uno nuovo.
  */
-function fakeDb(seed: Row[] = []) {
+	function fakeDb(seed: Row[] = []) {
 	const rows: Row[] = seed.map((r) => ({ ...r }));
 	let seq = rows.length;
+	const approvals: Row[] = [];
+	// L'emulazione di `agent_kit_close_run` (migration 0222): CAS su state='running', inserimento
+	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
+	const chatMessages: Row[] = [];
+	// Gli eventi durevoli (`append_thread_event`/`thread_events`): progress dello specchio e messaggi.
+	const threadEvents: Row[] = [];
+	let eventSeq = 0;
 
 	function from(_table: string) {
+		const store =
+			_table === 'chat_messages'
+				? chatMessages
+				: _table === 'agent_kit_approval_requests'
+					? approvals
+					: _table === 'thread_events'
+						? threadEvents
+						: rows;
 		let op: 'select' | 'insert' | 'update' = 'select';
 		let payload: Row | undefined;
 		const eqFilters: Array<[string, unknown]> = [];
+		const inFilters: Array<[string, unknown[]]> = [];
 		let limitN: number | undefined;
 		let orderCol: string | undefined;
 		let orderAscending = true;
 
 		function matchedRows(): Row[] {
-			let matched = rows;
-			for (const [col, val] of eqFilters) matched = matched.filter((r) => r[col] === val);
+			let matched = store;
+			// `payload->>runId`: la sintassi Postgres per un campo JSON, usata da `pruneRunProgress`.
+			for (const [col, val] of eqFilters) {
+				const [jsonCol, jsonKey] = col.split('->>');
+				matched = jsonKey
+					? matched.filter((r) => (r[jsonCol] as Row | undefined)?.[jsonKey] === val)
+					: matched.filter((r) => r[col] === val);
+			}
+			for (const [col, values] of inFilters) matched = matched.filter((r) => values.includes(r[col]));
 			if (orderCol) {
 				const col = orderCol;
 				matched = [...matched].sort((a, b) => {
@@ -367,6 +446,10 @@ function fakeDb(seed: Row[] = []) {
 				orderAscending = opts?.ascending ?? true;
 				return b;
 			},
+			in(col: string, values: unknown[]) {
+				inFilters.push([col, values]);
+				return b;
+			},
 			limit(n: number) {
 				limitN = n;
 				return b;
@@ -375,20 +458,20 @@ function fakeDb(seed: Row[] = []) {
 			// vedere QUELLA. Prima solo `single` la depositava, e `maybeSingle` dopo un insert
 			// tornava la prima riga della tabella — cioè un id di un'altra riga, spacciato per
 			// quello appena creato.
-			insertedRow() {
-				if (op !== 'insert' || !payload) return null;
-				const row: Row = {
-					id: `run-${++seq}`,
-					state: 'queued',
-					reason: null,
-					question: null,
-					created_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
-					updated_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
-					...payload
-				};
-				rows.push(row);
-				return row;
-			},
+		insertedRow() {
+			if (op !== 'insert' || !payload) return null;
+			const row: Row = {
+				id: `run-${++seq}`,
+				state: 'queued',
+				reason: null,
+				question: null,
+				created_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
+				updated_at: new Date(2026, 7, 21, 0, 0, seq).toISOString(),
+				...payload
+			};
+			store.push(row);
+			return row;
+		},
 			single() {
 				const fresh = (b.insertedRow as () => Row | null)();
 				if (fresh) return Promise.resolve({ data: { ...fresh }, error: null });
@@ -412,7 +495,7 @@ function fakeDb(seed: Row[] = []) {
 				}
 				if (op === 'delete') {
 					const matched = matchedRows();
-					for (const row of matched) rows.splice(rows.indexOf(row), 1);
+					for (const row of matched) store.splice(store.indexOf(row), 1);
 					return Promise.resolve({ data: matched.map((r) => ({ ...r })), error: null }).then(resolve, reject);
 				}
 				return Promise.resolve({ data: matchedRows().map((r) => ({ ...r })), error: null }).then(resolve, reject);
@@ -423,12 +506,81 @@ function fakeDb(seed: Row[] = []) {
 
 	// L'emulazione di `agent_kit_close_run` (migration 0222): CAS su state='running', inserimento
 	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
-	const chatMessages: Row[] = [];
+	// `chatMessages` vive in testa a `fakeDb`: `from('chat_messages')` ci opera sopra.
 	function rpc(fn: string, params: Record<string, unknown>) {
+		if (fn === 'append_thread_event') {
+			const row: Row = {
+				thread_id: params.p_thread_id,
+				seq: ++eventSeq,
+				source_key: params.p_source_key,
+				kind: params.p_kind,
+				payload: params.p_payload
+			};
+			threadEvents.push(row);
+			return Promise.resolve({ data: [{ ...row }], error: null });
+		}
+		if (fn === 'agent_kit_wait_for_approval') {
+			const run = rows.find((r) => r.id === params.p_run_id && r.state === 'running');
+			if (!run) return Promise.resolve({ data: { closed: false }, error: null });
+			run.state = 'waiting_takeover';
+			run.harness_continue_state = params.p_continue_state;
+			const approval = {
+				id: `approval-row-${approvals.length + 1}`,
+				run_id: run.id,
+				thread_id: run.thread_id,
+				status: 'pending',
+				harness_approval_id: params.p_harness_approval_id,
+				tool_call_id: params.p_tool_call_id,
+				tool_name: params.p_tool_name,
+				tool_input: params.p_tool_input
+			};
+			approvals.push(approval);
+			const message = params.p_message as Row | null;
+			if (message) {
+				const toolCalls = Array.isArray(message.tool_calls)
+					? message.tool_calls.map((part) =>
+							(part as Row).type === 'tool-approval-request' && (part as Row).approvalId === params.p_harness_approval_id
+								? { ...(part as Row), approvalId: approval.id }
+								: part
+						)
+					: message.tool_calls;
+				const id = `msg-${chatMessages.length + 1}`;
+				chatMessages.push({ id, thread_id: run.thread_id, role: 'assistant', ...message, tool_calls: toolCalls });
+				run.partial_saved_msg_id = id;
+				savedMessages.push({
+					threadId: run.thread_id as string,
+					content: (toolCalls as unknown[]) ?? [],
+					attachments: (message.attachments as string[] | null) ?? undefined
+				});
+			}
+			return Promise.resolve({ data: { closed: true, approval_id: approval.id, harness_approval_id: approval.harness_approval_id }, error: null });
+		}
+		if (fn === 'agent_kit_claim_run') {
+			const claimable = rows.find((r) => r.id === params.p_run_id);
+			if (!claimable) return Promise.resolve({ data: null, error: null });
+			const openState = ['queued', 'waiting_input', 'waiting_takeover'].includes(claimable.state as string);
+			const expired =
+				claimable.state === 'running' &&
+				(claimable.lease_until == null || (claimable.lease_until as string) <= (params.p_now as string));
+			if (!openState && !expired) return Promise.resolve({ data: null, error: null });
+			claimable.state = 'running';
+			claimable.lease_owner = params.p_owner;
+			claimable.lease_fence = ((claimable.lease_fence as number) ?? 0) + 1;
+			claimable.attempt = ((claimable.attempt as number) ?? 0) + 1;
+			claimable.lease_until = params.p_lease_until;
+			claimable.heartbeat_at = params.p_now;
+			return Promise.resolve({ data: { ...claimable }, error: null });
+		}
 		if (fn !== 'agent_kit_close_run') {
 			return Promise.resolve({ data: null, error: { message: `rpc sconosciuta: ${fn}` } });
 		}
-		const run = rows.find((r) => r.id === params.p_run_id && r.state === 'running');
+		const run = rows.find(
+			(r) =>
+				r.id === params.p_run_id &&
+				r.state === 'running' &&
+				r.lease_owner === params.p_owner &&
+				r.lease_fence === params.p_fence
+		);
 		if (!run) return Promise.resolve({ data: { closed: false }, error: null });
 		run.state = params.p_to_state;
 		if (params.p_reason != null) run.reason = params.p_reason;
@@ -449,7 +601,7 @@ function fakeDb(seed: Row[] = []) {
 		return Promise.resolve({ data: { closed: true, message_id: msgId }, error: null });
 	}
 
-	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages };
+	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages, approvals, threadEvents };
 }
 
 /** Un turno che chiama UN tool (e unico) e basta. */
@@ -492,7 +644,7 @@ const spec = specById('content')!;
 // turno (brand_memory per l'iniezione della memoria): righe vuote, catena PostgREST minima.
 function emptyReadChain(): Record<string, unknown> {
 	const chain: Record<string, unknown> = {};
-	for (const m of ['select', 'eq', 'is', 'or', 'not', 'neq', 'order', 'limit', 'in']) {
+	for (const m of ['select', 'insert', 'update', 'delete', 'eq', 'is', 'or', 'not', 'neq', 'order', 'limit', 'in']) {
 		chain[m] = () => chain;
 	}
 	chain.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
@@ -505,12 +657,15 @@ beforeEach(async () => {
 	await new Promise((r) => setTimeout(r, 12));
 	savedMessages.length = 0;
 	modelHolder.current = null;
-	resumeThrows.current = false;
 	continuations.length = 0;
 	continuationReturns.current = 'cont-job-1';
 	harnessQueue.length = 0;
 	harnessTurnOpts.length = 0;
 	harnessServed = 0;
+	brandSandboxOpenCount = 0;
+	brandSandboxReleases.length = 0;
+	harnessSandboxes.clear();
+	sandboxOpenFailures.length = 0;
 	bakedToolsBySession.clear();
 	goalState.open = null;
 	goalState.settleCalls.length = 0;
@@ -521,6 +676,7 @@ beforeEach(async () => {
 		notice: null,
 		continuationPrompt: null
 	};
+	broadcasts.length = 0;
 });
 
 function openToolModel(toolName: string) {
@@ -603,6 +759,150 @@ describe('la squadra: message_agent è montato per OGNI mestiere', () => {
 		expect(prompt.text).toContain("language of the user's latest message");
 		expect(prompt.text).toContain('an English message gets an English reply');
 		expect(prompt.text).not.toMatch(/^Sei /m);
+	});
+});
+
+describe('runKitTurn — action approval', () => {
+	it('applica il judge al tool del turno prima di arrivare al plugin', async () => {
+		const checker = vi.fn(async () => 'error' as const);
+		const approval: ActionApprovalConfig = { autoReviewEnabled: true, checker };
+		toolCallModel('content_update_post', { post_id: 'p1', caption: 'nuova caption' });
+		const { db } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval
+		});
+		await res.text();
+
+		expect(checker).toHaveBeenCalledOnce();
+	});
+
+	it('un judge pass riprende il turno senza chiedere all’utente', async () => {
+		scriptTurns(
+			{
+				nativeApproval: true,
+				calls: [{ toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } }]
+			},
+			{ calls: [replyCall('aggiornato')] }
+		);
+		const checker = vi.fn(async () => 'pass' as const);
+		const { db, rows, approvals } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-pass',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval: { autoReviewEnabled: true, checker }
+		});
+		await res.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		expect(checker).toHaveBeenCalledOnce();
+		expect(harnessTurnOpts).toHaveLength(2);
+		expect(approvals).toHaveLength(0);
+		expect(rows[0].state).toBe('done');
+	});
+
+	it('un judge ask salva richiesta, card e continuation state prima di uscire', async () => {
+		scriptTurns({
+			nativeApproval: true,
+			calls: [{ toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } }]
+		});
+		const checker = vi.fn(async () => 'error' as const);
+		const { db, rows, approvals } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-ask',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval: { autoReviewEnabled: true, checker }
+		});
+		await res.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		expect(checker).toHaveBeenCalledOnce();
+		expect(rows[0].state).toBe('waiting_takeover');
+		expect(rows[0].harness_continue_state).toEqual({ checkpoint: 'approval' });
+		expect(approvals[0]?.status).toBe('pending');
+		expect(JSON.stringify(savedMessages.at(-1)?.content)).toContain('tool-approval-request');
+		expect(JSON.stringify(savedMessages.at(-1)?.content)).toContain('approval-row-1');
+	});
+
+	it('riprende dopo un reload quando l utente approva la richiesta persistita', async () => {
+		const checker = vi.fn(async () => 'error' as const);
+		scriptTurns(
+			{
+				nativeApproval: true,
+				calls: [{ toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } }]
+			},
+			{ calls: [replyCall('aggiornato')] }
+		);
+		const { db, rows, approvals } = fakeDb();
+		const approval = { autoReviewEnabled: true, checker };
+		const first = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-reload',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval
+		});
+		await first.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		approvals[0].status = 'approved';
+		const resumed = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-reload',
+			spec,
+			messages: [
+				{ role: 'user', content: 'aggiorna il post' },
+				{
+					role: 'assistant',
+					content: [
+						{ type: 'tool-call', toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } },
+						{ type: 'tool-approval-request', approvalId: 'approval-row-1', toolCallId: 'c1' }
+					]
+				},
+				{
+					role: 'tool',
+					content: [{ type: 'tool-approval-response', approvalId: 'approval-c1', approved: true }]
+				}
+			],
+			locale: 'it',
+			approval,
+			approvalResponse: { approvalId: 'approval-c1', approved: true, toolCallId: 'c1' }
+		});
+		await resumed.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		expect(rows[0].state).toBe('done');
+		expect(approvals[0]?.status).toBe('approved');
+		expect(harnessTurnOpts).toHaveLength(2);
 	});
 });
 
@@ -722,12 +1022,114 @@ describe('runKitTurn — reply', () => {
 		// Il body va consumato perché `onFinish` gira solo quando lo stream è drenato.
 		await res.text();
 
+		expect(brandSandboxOpenCount).toBe(1);
 		expect(rows).toHaveLength(1);
 		expect(rows[0].state).toBe('done');
 		expect(rows[0].reason).toBe('reply');
 		expect(savedMessages).toHaveLength(1);
 		expect(savedMessages[0].threadId).toBe('t1');
 		expect(JSON.stringify(savedMessages[0].content)).toContain('ho letto lo studio');
+	});
+
+	it('tiene la sandbox fino alla fine del consumo server-side', async () => {
+		scriptTurns({ delayMs: 40, calls: [replyCall('fatto')] });
+		const { db } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-lifecycle',
+			spec,
+			messages: [{ role: 'user', content: 'usa la sandbox' }],
+			locale: 'it'
+		});
+
+		expect(brandSandboxOpenCount).toBe(1);
+		expect(harnessTurnOpts[0]?.sandboxSession).toEqual({ fake: true });
+		expect(brandSandboxReleases[0]).not.toHaveBeenCalled();
+
+		await res.text();
+		expect(brandSandboxReleases[0]).not.toHaveBeenCalled();
+		await dropLiveHarnessSession('t-lifecycle');
+		await vi.waitFor(() => expect(brandSandboxReleases[0]).toHaveBeenCalledOnce());
+	});
+
+	it('riusa lo stesso holder fra due turni dello stesso thread', async () => {
+		scriptTurns({ calls: [replyCall('primo')] }, { calls: [replyCall('secondo')] });
+		const { db } = fakeDb();
+		const first = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-holder-reuse',
+			spec,
+			messages: [{ role: 'user', content: 'primo' }],
+			locale: 'it'
+		});
+		await first.text();
+		expect(brandSandboxReleases[0]).not.toHaveBeenCalled();
+
+		const second = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-holder-reuse',
+			spec,
+			messages: [{ role: 'user', content: 'secondo' }],
+			locale: 'it'
+		});
+		await second.text();
+
+		expect(brandSandboxOpenCount).toBe(1);
+		await dropLiveHarnessSession('t-holder-reuse');
+		await vi.waitFor(() => expect(brandSandboxReleases[0]).toHaveBeenCalledOnce());
+	});
+
+	it('rilancia dopo un errore di finish anche se la sandbox non si riapre', async () => {
+		scriptTurns(
+			{
+				calls: [replyCall('primo')],
+				stepsError: 'boom',
+				// La prima apertura (prima del turno) deve riuscire: solo la RIAPERTURA dopo
+				// l'errore di finish deve fallire, quindi accodo il fallimento allo start dello
+				// stream, non prima.
+				onStreamStart: () => sandboxOpenFailures.push(new Error('reopen failed'))
+			},
+			{ calls: [replyCall('secondo')] }
+		);
+		const { db } = fakeDb();
+		const logs: string[] = [];
+		const errors: string[] = [];
+		const logSpy = vi.spyOn(console, 'log').mockImplementation((m) => void logs.push(String(m)));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation((m) => void errors.push(String(m)));
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-retry-no-sandbox',
+			spec,
+			messages: [{ role: 'user', content: 'prova' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		// La riapertura fallita non deve buttare via il rilancio: `startHarnessTurn` va
+		// chiamato una SECONDA volta, senza sandbox. Il turno originale è già chiuso
+		// dall'errore, quindi `handleFinish` del retry trova il CAS chiuso e lo dice — è il
+		// marcatore che il rilancio è arrivato in fondo, invece di morire nel catch
+		// `retry failed` (il sintomo del difetto: `brandSandbox.session` su `null`).
+		await vi.waitFor(() => expect(logs.some((l) => l.includes('sfrattato prima della chiusura'))).toBe(true));
+		expect(harnessTurnOpts.length).toBeGreaterThanOrEqual(2);
+		expect(harnessTurnOpts.at(-1)?.sandboxSession).toBeUndefined();
+		expect(errors.some((e) => e.includes('retry failed'))).toBe(false);
+		logSpy.mockRestore();
+		errorSpy.mockRestore();
 	});
 });
 
@@ -797,7 +1199,7 @@ describe('runKitTurn — il turno successivo su un run waiting_input fa resume',
 });
 
 describe('runKitTurn — doppio resume su una waiting_input (due dispositivi rispondono insieme)', () => {
-	it('il perdente della corsa riceve un 409 pulito, non il 500 grezzo del CAS', async () => {
+	it('il perdente della corsa riceve un 409 ritentabile, non il 500 grezzo del CAS', async () => {
 		toolCallModel('reply', { message: 'non dovrebbe arrivarci', delivered: [] });
 		const { db, rows } = fakeDb([
 			{
@@ -806,14 +1208,19 @@ describe('runKitTurn — doppio resume su una waiting_input (due dispositivi ris
 				thread_id: 't1',
 				agent_id: 'content',
 				user_id: 'u1',
-				state: 'waiting_input',
+				// L'ALTRO DISPOSITIVO HA GIA` VINTO: la riga è passata a `running` col suo lease
+				// ancora valido. Non serve fingere un'eccezione — è lo stato che il perdente trova.
+				state: 'running',
+				lease_owner: 'altro-dispositivo',
+				lease_fence: 1,
+				lease_until: new Date(Date.now() + 5 * 60_000).toISOString(),
+				heartbeat_at: new Date().toISOString(),
 				reason: null,
 				question: { question: 'quale palette?' },
 				created_at: '2026-08-21T00:00:00.000Z',
 				updated_at: '2026-08-21T00:00:00.000Z'
 			}
 		]);
-		resumeThrows.current = true;
 
 		const res = await runKitTurn({
 			supabase: fakeSupabase,
@@ -831,11 +1238,13 @@ describe('runKitTurn — doppio resume su una waiting_input (due dispositivi ris
 
 		expect(res.status).toBe(409);
 		const body = await res.json();
-		expect(body.error).toBe('resume_conflict');
-		// Payload API, non chat: in inglese, anche per una chat italiana.
-		expect(body.message).toBe('Someone else already replied in this conversation.');
-		// La riga non è stata toccata dal perdente: resta come l'ha lasciata chi ha vinto la corsa.
-		expect(rows[0].state).toBe('waiting_input');
+		expect(body.error).toBe('busy');
+		// Il messaggio dell'utente è comunque salvato: il client riaccoda, non lo perde.
+		expect(body.user_message_saved).toBe(true);
+		// La riga NON è stata toccata dal perdente: proprietario e fence restano di chi ha vinto.
+		expect(rows[0].state).toBe('running');
+		expect(rows[0].lease_owner).toBe('altro-dispositivo');
+		expect(rows[0].lease_fence).toBe(1);
 	});
 });
 
@@ -845,7 +1254,8 @@ describe('i tool dei plugin sono ANNUNCIATI al modello, non solo eseguibili', ()
 		const src = fs.readFileSync(new URL('./live.ts', import.meta.url), 'utf8');
 		// Dichiarare un plugin senza esporlo era il buco: l'executor rispondeva a motion_*,
 		// il modello non sapeva di poterlo chiedere. Questo pinna la fusione nel catalogo.
-		expect(src).toMatch(/\.\.\.BUILTIN_TOOLS, \.\.\.plugins\.flatMap\(\(p\) => p\.tools\)/);
+		// Il filtro observe/act (desktop tolto dal prodotto) non spezza la fusione.
+		expect(src).toMatch(/\.\.\.\(?agentDesktopEnabled\(\) \? BUILTIN_TOOLS : BUILTIN_TOOLS\.filter\(\(t\) => t\.name !== 'observe' && t\.name !== 'act'\)\)?,?\s*\.\.\.plugins\.flatMap\(\(p\) => p\.tools\)/);
 	});
 
 	it('il catalogo che arriva al modello porta i builtin E quelli del mestiere', async () => {
@@ -927,6 +1337,37 @@ describe('runKitTurn — la sessione avvelenata non uccide il secondo turno', ()
 			vi.unstubAllEnvs();
 		}
 	});
+
+	it('un THREAD NUOVO paga UNA partenza, non due: niente da riusare, niente secondo avvio a freddo', async () => {
+		// Incidente reale (26/8): primo messaggio di un thread nuovo, sessione già fredda ma
+		// lenta — il timeout di partenza scattava, e il retry faceva UNA SECONDA creazione
+		// identica. Due avvii a freddo = due minuti, e il log diceva «sessione riusata» quando
+		// non c'era nulla di riusato. Il riuso è un'ottimizzazione: senza sessione in
+		// cache il retry non ha niente da salvare, e se il primo avvio non parte il turno lo
+		// dice una volta.
+		vi.stubEnv('HARNESS_START_TIMEOUT_MS', '250');
+		try {
+			scriptTurns({ hang: true }, { texts: ['nuovo '], calls: [replyCall('arrivo')] });
+			const { db } = fakeDb();
+			await expect(
+				runKitTurn({
+					supabase: fakeSupabase,
+					admin: db,
+					brand: { id: 'b1' },
+					user: { id: 'u1' },
+					threadId: 't-fresh',
+					spec,
+					messages: [{ role: 'user', content: 'ciao' }],
+					locale: 'it'
+				})
+			).rejects.toThrow();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+		const optsForThread = harnessTurnOpts.filter((o) => o.sessionKey === 't-fresh');
+		expect(optsForThread).toHaveLength(1);
+		expect(optsForThread[0]?.freshSession).toBeUndefined();
+	});
 });
 
 describe('runKitTurn — il riaggancio dello stream (consumeSseStream, 0218)', () => {
@@ -980,6 +1421,112 @@ describe('runKitTurn — il riaggancio dello stream (consumeSseStream, 0218)', (
 
 		expect(partialWrites()).toBeLessThanOrEqual(2);
 		expect(partialWrites()).toBeLessThan(pieces.length);
+	});
+
+	it('lo specchio scrive eventi `progress` durevoli col testo ASSOLUTO — l\'ultimo porta lo stesso testo che il client ricostruisce', async () => {
+		textThenReplyModel(['Cia', 'o mo', 'ndo', '!'], 'fatto');
+		const { db, threadEvents } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+
+		const clientState = emptyStreamState();
+		const { events } = readSseEvents(await res.text());
+		for (const evt of events) applyChatStreamEvent(clientState, evt);
+
+		const progress = threadEvents.filter((e) => e.kind === 'progress');
+		expect(progress.length).toBeGreaterThan(0);
+		const last = progress[progress.length - 1].payload as { text: string };
+		expect(last.text).toBe(clientState.text);
+	});
+
+	it('ogni evento `progress` durevole è seguito da un broadcast `thread-seq` con lo stesso seq — niente contenuto oltre thread e seq', async () => {
+		textThenReplyModel(['Cia', 'o mo', 'ndo', '!'], 'fatto');
+		const { db, threadEvents } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		const progress = threadEvents.filter((e) => e.kind === 'progress');
+		const seqBroadcasts = broadcasts.filter((b) => b.event === 'thread-seq');
+		expect(seqBroadcasts.length).toBe(progress.length);
+		seqBroadcasts.forEach((broadcast, i) => {
+			expect(broadcast.payload).toEqual({ threadId: 't1', seq: progress[i].seq });
+		});
+	});
+
+	it('gli eventi `progress` sono throttled: 12 pezzi ne scrivono MOLTI meno', async () => {
+		// Stesso ragionamento della scrittura throttled di `partial`: senza throttle 12 chunk
+		// farebbero 12 eventi durevoli, uno per RPC — qui l'evento condivide la soglia di `writePartial`.
+		const pieces = Array.from({ length: 12 }, (_, i) => `t${i} `);
+		textThenReplyModel(pieces, 'fatto');
+		const { db, threadEvents } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		const progressCount = threadEvents.filter((e) => e.kind === 'progress').length;
+		expect(progressCount).toBeLessThanOrEqual(2);
+		expect(progressCount).toBeLessThan(pieces.length);
+	});
+
+	it('a turno chiuso NESSUN `progress` di quel run sopravvive — quelli di un altro run e i `message` sì', async () => {
+		textThenReplyModel(['ciao'], 'fatto');
+		const { db, threadEvents } = fakeDb();
+		// 'run-1' è l'id che `fakeDb` assegna alla prima riga di `agent_kit_runs`. La chiave
+		// seminata NON è una che lo specchio genererebbe: così l'assenza finale prova la
+		// potatura per `runId`, non una collisione con una scrittura sua.
+		threadEvents.push(
+			{ thread_id: 't1', seq: 501, source_key: 'seminato:run-1', kind: 'progress', payload: { runId: 'run-1', status: 'running', text: 'cia' } },
+			{ thread_id: 't1', seq: 502, source_key: 'seminato:run-altro', kind: 'progress', payload: { runId: 'run-altro', status: 'running', text: 'altro' } },
+			{ thread_id: 't1', seq: 503, source_key: 'msg-1', kind: 'message', payload: { id: 'msg-1' } }
+		);
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		// Lo specchio è un ramo che `runKitTurn` non attende, e pota nel suo `finally`, dopo
+		// l'ultima scrittura: si aspetta la CONDIZIONE, non un istante.
+		await vi.waitFor(() =>
+			expect(threadEvents.some((e) => e.kind === 'progress' && (e.payload as { runId: string }).runId === 'run-1')).toBe(false)
+		);
+		expect(threadEvents.some((e) => e.source_key === 'seminato:run-altro')).toBe(true);
+		expect(threadEvents.some((e) => e.kind === 'message' && e.source_key === 'msg-1')).toBe(true);
 	});
 
 	it('il run porta `partial` con testo e tool — quello che GET kit-run/+server.ts restituisce dopo un reload', async () => {
@@ -1324,6 +1871,104 @@ describe('il run sfrattato non deposita il suo messaggio (la causa radice del do
 		expect(chatMessages).toHaveLength(1);
 		expect(rows[0].state).toBe('done');
 		expect(rows[0].partial_saved_msg_id).toBe(chatMessages[0].id);
+	});
+});
+
+describe('runKitTurn — resumeRunId (il reaper lascia la riga viva, un worker nuovo la riprende)', () => {
+	it('prende in carico la riga running con lease scaduta: fence su, nessuna riga nuova, il vecchio owner non chiude più nulla', async () => {
+		const { closeRunSaving } = await import('../run-store');
+		const { db, rows } = fakeDb([
+			{
+				id: 'run-dead',
+				brand_id: 'b1',
+				thread_id: 't-reap',
+				agent_id: 'content',
+				user_id: 'u1',
+				state: 'running',
+				reason: null,
+				question: null,
+				lease_owner: 'dead-owner',
+				lease_fence: 3,
+				lease_until: '2020-01-01T00:00:00.000Z',
+				created_at: '2026-08-21T00:00:00.000Z',
+				updated_at: '2026-08-21T00:00:00.000Z'
+			}
+		]);
+		let staleClose: { closed: boolean } | undefined;
+		scriptTurns({
+			calls: [replyCall('ripreso')],
+			onStreamStart: () => {
+				void closeRunSaving(
+					db,
+					'run-dead',
+					{ kind: 'finish', reason: 'aborted' },
+					null,
+					{ owner: 'dead-owner', fence: 3 }
+				).then((r) => {
+					staleClose = r;
+				});
+			}
+		});
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-reap',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it',
+			resumeRunId: 'run-dead'
+		});
+		await res.text();
+		await new Promise((r) => setTimeout(r, 40));
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0].id).toBe('run-dead');
+		expect(rows[0].lease_fence).toBe(4);
+		expect(rows[0].lease_owner).not.toBe('dead-owner');
+		expect(rows[0].state).toBe('done');
+		expect(staleClose?.closed).toBe(false);
+	});
+
+	it('la riga già ripresa da un altro non parte una seconda volta', async () => {
+		const { db, rows } = fakeDb([
+			{
+				id: 'run-fresh',
+				brand_id: 'b1',
+				thread_id: 't-reap-fresh',
+				agent_id: 'content',
+				user_id: 'u1',
+				state: 'running',
+				reason: null,
+				question: null,
+				lease_owner: 'live-owner',
+				lease_fence: 1,
+				lease_until: new Date(Date.now() + 60_000).toISOString(),
+				created_at: '2026-08-21T00:00:00.000Z',
+				updated_at: '2026-08-21T00:00:00.000Z'
+			}
+		]);
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-reap-fresh',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it',
+			resumeRunId: 'run-fresh'
+		});
+
+		expect(res.status).toBe(409);
+		const body = await res.json();
+		expect(body.error).toBe('busy');
+		expect(rows).toHaveLength(1);
+		expect(rows[0].lease_owner).toBe('live-owner');
+		expect(rows[0].lease_fence).toBe(1);
 	});
 });
 
@@ -2045,5 +2690,92 @@ describe('un turno che non da` segni di vita si ferma da solo', async () => {
 
 	it('gli eventi dello stream e i tool sono i soli segni di vita', () => {
 		expect(src.match(/signOfLife\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+	});
+});
+
+/**
+ * IL TURNO DI RISPOSTA DI UN DM FRA AGENTI, SUL KIT — ticket «Migra le private al Kit».
+ *
+ * Il DM è la conversazione fra due agenti, ognuno con la propria sessione, memoria e mestiere:
+ * chi risponde parla col proprio spec e la propria sessione kit, come farebbe con l'utente — ma
+ * chi legge è un collega, non una persona. Le regole portate fedelmente dal motore classico: il
+ * blocco DM in testa al prompt, niente tool che presuppongono una persona in stanza, la risposta
+ * firmata col membro che parla, e nessuna ripresa automatica (un consulto fra colleghi si
+ * chiude, non si allunga da solo).
+ */
+const dmContext = { speaker: 'content', meName: 'Content Creator', otherName: 'Anomalia' };
+
+describe('runKitTurn — DM fra agenti', () => {
+	function dmTurnInput(extra: Record<string, unknown> = {}) {
+		return {
+			supabase: fakeSupabase,
+			admin: fakeDb().db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-dm',
+			spec: specById('content')!,
+			messages: [{ role: 'user' as const, content: '[Message from Anomalia — a fellow AI agent of this brand, NOT the user]: ciao' }],
+			locale: 'it' as const,
+			dm: dmContext,
+			...extra
+		};
+	}
+
+	it('il blocco DM apre il system prompt, davanti a tutto', async () => {
+		const prompt = { text: '' };
+		toolCatalogModel([], prompt);
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput(), admin: db });
+		await res.text();
+		expect(prompt.text.startsWith('## CHAT PRIVATA TRA AGENTI')).toBe(true);
+		expect(prompt.text).toContain('Content Creator');
+		expect(prompt.text).toContain('Anomalia');
+	});
+
+	it('i tool che presuppongono una persona in stanza sono fuori dal catalogo', async () => {
+		const seen: string[] = [];
+		toolCatalogModel(seen);
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput(), admin: db });
+		await res.text();
+		expect(seen).not.toContain('ask_user');
+	});
+
+	it('la risposta è firmata col membro che parla', async () => {
+		scriptTurns({ calls: [replyCall('fatto')] });
+		const { db, chatMessages } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput(), admin: db });
+		await res.text();
+		const reply = chatMessages.find((m) => m.role === 'assistant' && m.content === 'fatto');
+		expect(reply).toBeTruthy();
+		expect(reply?.name).toBe('content');
+	});
+
+	it('il DM non si continua da solo: tempo scaduto → riferisce e basta', async () => {
+		openToolModel('brand_ls');
+		const { db } = fakeDb();
+		const res = await runKitTurn({
+			...dmTurnInput({ origin: 'http://localhost:5183', budgetMs: 1, continuationDepth: 1 }),
+			admin: db
+		});
+		await res.text();
+		await new Promise((r) => setTimeout(r, 80));
+		expect(continuations).toHaveLength(0);
+	});
+
+	it('il DM non si continua da solo: neanche un obiettivo aperto riaccende il lavoro', async () => {
+		goalState.settlement = {
+			goal: { id: 'g1', statement: 'obiettivo' },
+			decision: { continue: true, reason: 'criteria_open', handBack: false },
+			closedNow: [],
+			notice: null,
+			continuationPrompt: 'criterio 2 resta aperto'
+		};
+		scriptTurns({ calls: [replyCall('fatto')] });
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...dmTurnInput({ origin: 'http://localhost:5183' }), admin: db });
+		await res.text();
+		await new Promise((r) => setTimeout(r, 80));
+		expect(continuations).toHaveLength(0);
 	});
 });

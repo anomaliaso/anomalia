@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
 	askUser,
+	claimRun,
 	claimStale,
+	closeRunSaving,
 	createRun,
 	finish,
 	renewLease,
@@ -105,7 +107,44 @@ function fakeDb(seed: Row[] = []) {
 		return b;
 	}
 
-	return { db: { from } as unknown as SupabaseClient, rows, calls };
+	// L'emulazione delle due RPC che governano il lease: la stessa semantica del plpgsql,
+	// perché è lì che vive il compare-and-swap che questi test devono provare.
+	function rpc(fn: string, params: Record<string, unknown>) {
+		calls.push({ method: 'rpc', args: [fn, params] });
+		const run = rows.find((r) => r.id === params.p_run_id);
+
+		if (fn === 'agent_kit_claim_run') {
+			if (!run) return Promise.resolve({ data: null, error: null });
+			const openState = ['queued', 'waiting_input', 'waiting_takeover'].includes(run.state as string);
+			const expired =
+				['running'].includes(run.state as string) &&
+				(run.lease_until == null || (run.lease_until as string) <= (params.p_now as string));
+			if (!openState && !expired) return Promise.resolve({ data: null, error: null });
+			run.state = 'running';
+			run.lease_owner = params.p_owner;
+			run.lease_fence = ((run.lease_fence as number) ?? 0) + 1;
+			run.attempt = ((run.attempt as number) ?? 0) + 1;
+			run.lease_until = params.p_lease_until;
+			run.heartbeat_at = params.p_now;
+			return Promise.resolve({ data: { ...run }, error: null });
+		}
+
+		if (fn === 'agent_kit_close_run') {
+			const held =
+				run &&
+				run.state === 'running' &&
+				run.lease_owner === params.p_owner &&
+				run.lease_fence === params.p_fence;
+			if (!held) return Promise.resolve({ data: { closed: false }, error: null });
+			run.state = params.p_to_state;
+			run.reason = params.p_reason ?? null;
+			return Promise.resolve({ data: { closed: true, message_id: 'msg-1' }, error: null });
+		}
+
+		return Promise.resolve({ data: null, error: { message: `rpc sconosciuta: ${fn}` } });
+	}
+
+	return { db: { from, rpc } as unknown as SupabaseClient, rows, calls };
 }
 
 const QUEUED = (over: Row = {}): Row => ({ id: 'run-1', brand_id: 'b1', agent_id: 'gtm', state: 'queued', ...over });
@@ -193,11 +232,15 @@ describe('askUser / resume', () => {
 
 describe('renewLease', () => {
 	it('sposta lease_until in avanti e aggiorna heartbeat_at', async () => {
-		const { db } = fakeDb([QUEUED({ state: 'running', lease_until: null })]);
+		const { db, rows } = fakeDb([
+			QUEUED({ state: 'running', lease_until: null, lease_owner: 'w1', lease_fence: 1 })
+		]);
 		const before = Date.now();
-		const run = await renewLease(db, 'run-1', 60_000);
-		expect(new Date(run.lease_until as string).getTime()).toBeGreaterThan(before);
-		expect(run.heartbeat_at).toBeTruthy();
+
+		expect(await renewLease(db, 'run-1', { owner: 'w1', fence: 1 }, 60_000)).toBe(true);
+
+		expect(new Date(rows[0].lease_until as string).getTime()).toBeGreaterThan(before);
+		expect(rows[0].heartbeat_at).toBeTruthy();
 	});
 });
 
@@ -239,5 +282,95 @@ describe('finish', () => {
 	it('waiting_input non è un finish valido', async () => {
 		const { db } = fakeDb([QUEUED({ state: 'running' })]);
 		await expect(finish(db, 'run-1', 'waiting_input')).rejects.toThrow(/askUser/);
+	});
+});
+
+describe('il lease del run: proprietario e fence', () => {
+	const seed = (over: Row = {}): Row => ({
+		id: 'run-1',
+		brand_id: 'b1',
+		thread_id: 't1',
+		agent_id: 'a1',
+		user_id: 'u1',
+		state: 'running',
+		lease_owner: 'worker-vecchio',
+		lease_fence: 3,
+		attempt: 1,
+		lease_until: '2026-08-30T10:00:00.000Z',
+		heartbeat_at: '2026-08-30T09:59:00.000Z',
+		...over
+	});
+
+	it('il fence cresce a ogni presa, e la presa torna il proprietario nuovo', async () => {
+		const { db, rows } = fakeDb([seed()]);
+
+		const claimed = await claimRun(db, 'run-1', 'worker-nuovo', {
+			ttlMs: 300_000,
+			now: new Date('2026-08-30T10:05:00.000Z')
+		});
+
+		expect(claimed?.fence).toBe(4);
+		expect(claimed?.run.lease_owner).toBe('worker-nuovo');
+		expect(rows[0].attempt).toBe(2);
+	});
+
+	it('un lease ancora valido non si porta via: la presa perde e lo dice', async () => {
+		const { db, rows } = fakeDb([seed()]);
+
+		const claimed = await claimRun(db, 'run-1', 'worker-nuovo', {
+			ttlMs: 300_000,
+			now: new Date('2026-08-30T09:59:30.000Z')
+		});
+
+		expect(claimed).toBeNull();
+		expect(rows[0].lease_owner).toBe('worker-vecchio');
+		expect(rows[0].lease_fence).toBe(3);
+	});
+
+	it('LO ZOMBIE NON CHIUDE: dopo la presa, il worker sfrattato non salva niente', async () => {
+		const { db, rows } = fakeDb([seed()]);
+		const vecchio = { owner: 'worker-vecchio', fence: 3 };
+
+		await claimRun(db, 'run-1', 'worker-nuovo', {
+			ttlMs: 300_000,
+			now: new Date('2026-08-30T10:05:00.000Z')
+		});
+
+		const closed = await closeRunSaving(db, 'run-1', { kind: 'finish', reason: 'reply' }, null, vecchio);
+
+		expect(closed.closed).toBe(false);
+		expect(rows[0].state).toBe('running');
+		expect(rows[0].lease_owner).toBe('worker-nuovo');
+	});
+
+	it('chi tiene il lease chiude', async () => {
+		const { db, rows } = fakeDb([seed()]);
+
+		const claimed = await claimRun(db, 'run-1', 'worker-nuovo', {
+			ttlMs: 300_000,
+			now: new Date('2026-08-30T10:05:00.000Z')
+		});
+		const closed = await closeRunSaving(
+			db,
+			'run-1',
+			{ kind: 'finish', reason: 'reply' },
+			null,
+			{ owner: 'worker-nuovo', fence: claimed!.fence }
+		);
+
+		expect(closed.closed).toBe(true);
+		expect(rows[0].state).toBe('done');
+	});
+
+	it('il rinnovo con un fence vecchio fallisce invece di tenere in vita un morto', async () => {
+		const { db } = fakeDb([seed()]);
+
+		await claimRun(db, 'run-1', 'worker-nuovo', {
+			ttlMs: 300_000,
+			now: new Date('2026-08-30T10:05:00.000Z')
+		});
+
+		expect(await renewLease(db, 'run-1', { owner: 'worker-vecchio', fence: 3 }, 300_000)).toBe(false);
+		expect(await renewLease(db, 'run-1', { owner: 'worker-nuovo', fence: 4 }, 300_000)).toBe(true);
 	});
 });

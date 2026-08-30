@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { UgcClipPlan } from './ugc-batch';
 
 /**
+ * LLM_* finto: geminiFast/IMAGE_AGENT_MODEL ora passano dal centralino e senza chiave+default
+ * lanciano `llm_unconfigured` prima ancora di costruire i tool.
+ */
+const M = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
+vi.mock('$env/dynamic/private', () => ({ env: M.env }));
+M.env.LLM_API_KEY = 'test-key';
+M.env.LLM_DEFAULT_MODEL = 'google/gemini-2.5-flash';
+
+/**
  * Il giro completo dell'orchestratore UGC, guidato al posto del modello.
  *
  * L'harness è finto: invoca i tool nella sequenza che il difetto reale percorreva — resa fallita,
@@ -45,6 +54,10 @@ vi.mock(import('$lib/server/chat/media-library-tools'), async (importOriginal) =
 	createMediaLibraryTools: (() => ({})) as never
 }));
 
+// L'import sta qui e non dentro i test: valutare il grafo di ugc-agent richiede secondi, e dentro
+// il test spunterebbe il timeout di default prima ancora della prima asserzione.
+const { runUgcOrchestrator } = await import('./ugc-agent');
+
 function plan(index: number): UgcClipPlan {
 	return {
 		index,
@@ -63,7 +76,6 @@ const call = (tools: Record<string, any>, name: string, input: Record<string, un
 
 describe('runUgcOrchestrator — fallimenti, retry e finish', () => {
 	it('fallita ≠ resa, patch→re-render funziona sulle già-uscite, finish passa al secondo rifiuto', async () => {
-		const { runUgcOrchestrator } = await import('./ugc-agent');
 		const finished = new Set<number>();
 		const failed = new Map<number, string>();
 		const plans = [plan(0), plan(1)];
@@ -134,7 +146,6 @@ describe('runUgcOrchestrator — fallimenti, retry e finish', () => {
 	});
 
 	it('un rinvio per deadline è "deferred", non un fallimento, e non consuma budget', async () => {
-		const { runUgcOrchestrator } = await import('./ugc-agent');
 		const finished = new Set<number>();
 		const failed = new Map<number, string>();
 		drive = async (tools) => {

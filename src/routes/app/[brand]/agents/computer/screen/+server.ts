@@ -18,8 +18,10 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { captureScreenshot, ensureGraphicalMode } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider, graphicalBootstrapDeps } from '$lib/agent/bridge/adapters';
+import { holdDesktop } from '$lib/server/sandbox-leases';
 import type { AdapterContext } from '$lib/agent/kit/types';
 import type { RequestHandler } from './$types';
 
@@ -30,6 +32,7 @@ const cache = new Map<string, { at: number; png: Buffer }>();
 export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!agentDesktopEnabled()) return new Response(null, { status: 404 });
 
 	const { data: brand } = await supabase.from('brands').select('id').eq('slug', params.brand).maybeSingle();
 	if (!brand) return new Response('Not found', { status: 404 });
@@ -54,6 +57,8 @@ export const GET: RequestHandler = async ({ params, url, locals: { supabase, saf
 		const sandbox = createVercelSandboxProvider();
 		const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: 'computer-screen', locale: bilingualNoticeLocale(uiLocale), agentId: url.searchParams.get('agent') || undefined };
 		const ref = await sandbox.provision({ brandId: brand.id, agentId: url.searchParams.get('agent') || undefined }, ctx);
+		// Il poll è il battito di chi guarda: rinfresca l'holder del desktop mentre la pagina è viva.
+		await holdDesktop(ref.name, brand.id, url.searchParams.get('agent') || undefined);
 		let shot = await captureScreenshot(sandbox, ref, ctx);
 		// Xvfb muore col riavvio della VM ma il marker resta: la cattura fallisce con «unable to
 		// open X server» per sempre, finché nessuno rilancia i processi. Il rilancio è la parte

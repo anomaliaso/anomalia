@@ -113,4 +113,54 @@ describe('chat live join — due sorgenti, una sola posizione', () => {
 
 		expect(pending.length).toBeLessThanOrEqual(1000);
 	});
+
+	/**
+	 * L'incidente del 27/8 (task 66): la chip di un `delegate_task` restò «in corso» per tutto il
+	 * resto del turno — il chunk di chiusura era finito con lo stream morto, e lo snapshot del poll
+	 * non la riparava perché il numero di tool non era cambiato. Una transizione di stato è pur
+	 * sempre una notizia: lo snapshot la consegna anche a lunghezza invariata.
+	 */
+	it('lo snapshot chiude una chip rimasta aperta che il canale non ha mai chiuso', () => {
+		const state = emptyStreamState();
+		const pending: PendingChunk[] = [];
+		applyLiveChunk(
+			state,
+			pending,
+			{ type: 'tool-input-available', toolCallId: 'd1', toolName: 'delegate_task', input: { role: 'sandbox' } },
+			{ text: 0, reasoning: 0 }
+		);
+		expect(state.tools[0].status).toBe('running');
+
+		applyLiveSnapshot(state, pending, {
+			text: 'sto lavorando',
+			tools: [{ toolCallId: 'd1', toolName: 'delegate_task', status: 'done', input: { role: 'sandbox' }, output: 'report' }]
+		});
+
+		expect(state.tools[0].status).toBe('done');
+		expect(state.tools[0].output).toBe('report');
+	});
+
+	it('lo snapshot non butta via le chip che la tab conosce e lui no', () => {
+		const state = emptyStreamState();
+		const pending: PendingChunk[] = [];
+		applyLiveChunk(
+			state,
+			pending,
+			{ type: 'tool-input-available', toolCallId: 't1', toolName: 'shell', input: { cmd: 'ls' } },
+			{ text: 0, reasoning: 0 }
+		);
+		applyLiveChunk(
+			state,
+			pending,
+			{ type: 'tool-input-available', toolCallId: 't2', toolName: 'shell', input: { cmd: 'pwd' } },
+			{ text: 2, reasoning: 0 }
+		);
+
+		applyLiveSnapshot(state, pending, {
+			text: 'sto lavorando',
+			tools: [{ toolCallId: 't1', toolName: 'shell', status: 'done' }]
+		});
+
+		expect(state.tools.map((t) => t.toolCallId)).toEqual(['t1', 't2']);
+	});
 });

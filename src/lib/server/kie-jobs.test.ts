@@ -53,6 +53,32 @@ describe('buildKieImageInput', () => {
     );
   });
 
+  it('su nano-banana-2-lite il payload è la forma Lite: image_urls, niente resolution', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const input = buildKieImageInput({
+      model: 'nano-banana-2-lite',
+      prompt: 'x',
+      aspectRatio: '4:5',
+      refUrls: ['https://ref/1.png', 'https://ref/2.png']
+    });
+    expect(input.image_urls).toEqual(['https://ref/1.png', 'https://ref/2.png']);
+    expect(input.image_input).toBeUndefined();
+    expect(input.resolution).toBeUndefined();
+    expect(input.output_format).toBeUndefined();
+    expect(input.aspect_ratio).toBe('4:5');
+
+    const bare = buildKieImageInput({ model: 'nano-banana-2-lite', prompt: 'x' });
+    expect(bare.image_urls).toBeUndefined();
+    expect(bare.resolution).toBeUndefined();
+  });
+
+  it('su lite i riferimenti hanno tetto 10', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const many = Array.from({ length: 12 }, (_, i) => `https://ref/${i}.png`);
+    const input = buildKieImageInput({ model: 'nano-banana-2-lite', prompt: 'x', refUrls: many });
+    expect(input.image_urls).toHaveLength(10);
+  });
+
   // Un riferimento perso all'upload fa fallire il render apposta ("non è un dettaglio: è la foto del
   // prodotto vero"). Perderlo per aritmetica costava esattamente lo stesso e non lasciava traccia.
   it('quando ne arrivano più di 8 lo dice, invece di scartarli in silenzio', async () => {
@@ -72,6 +98,7 @@ describe('kieImageModel', () => {
     const { kieImageModel } = await import('./kie-jobs');
     expect(kieImageModel('gemini-3-pro-image-preview')).toBe('nano-banana-pro');
     expect(kieImageModel('gemini-3.1-flash-image')).toBe('nano-banana-2');
+    expect(kieImageModel('gemini-3.1-flash-lite-image')).toBe('nano-banana-2-lite');
     expect(kieImageModel(undefined)).toBe('nano-banana-2');
   });
 });
@@ -155,6 +182,22 @@ describe('generateImageOnKie', () => {
     const { generateImageOnKie } = await import('./kie-jobs');
     await generateImageOnKie(geminiRequest([{ text: 'solo testo' }], '1:1'));
     expect(calls.filter((c) => c.url.includes('file-base64-upload'))).toHaveLength(0);
+  });
+
+  it('una richiesta Lite esce con il modello Lite e la forma Lite del payload', async () => {
+    const { generateImageOnKie } = await import('./kie-jobs');
+    const lite = { ...geminiRequest([{ text: 'x' }, { inlineData: { mimeType: 'image/png', data: PNG_B64 } }]) };
+    lite.model = 'gemini-3.1-flash-lite-image';
+    await generateImageOnKie(lite);
+
+    const submit = calls.find((c) => c.url.includes('createTask'))!.body as {
+      model: string;
+      input: { image_urls?: string[]; image_input?: string[]; resolution?: string };
+    };
+    expect(submit.model).toBe('nano-banana-2-lite');
+    expect(submit.input.image_urls).toEqual(['https://tempfile.kie/1.png']);
+    expect(submit.input.image_input).toBeUndefined();
+    expect(submit.input.resolution).toBeUndefined();
   });
 
   it('il costo viene da creditsConsumed, non da una tariffa a listino', async () => {

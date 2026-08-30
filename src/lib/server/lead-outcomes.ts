@@ -1,6 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { scrapeCreatorsGet } from '$lib/server/scrapecreators';
+import { isOptOutSignal, platformOf, suppressAuthor } from './lead-contact';
 
 // ── L'esito di un lead: cosa è successo al commento dopo che l'hai incollato ─────────────────────
 //
@@ -170,13 +171,26 @@ export type OutcomeRow = {
  * finirebbe dritto nelle regole del profilo di community.
  */
 export async function checkLeadOutcome(
-  lead: { id: string; brand_id: string; url: string; suggestion: string | null },
-  handle?: string | null
+  lead: { id: string; brand_id: string; url: string; suggestion: string | null; author_handle?: string | null; author_platform?: string | null },
+  handle?: string | null,
+  admin?: SupabaseClient
 ): Promise<OutcomeRow | null> {
   if (!lead.suggestion || !isCheckable(lead.url)) return null;
 
   const comments = await fetchThreadComments(lead.url);
   if (comments === null) return null; // thread non leggibile: si riproverà
+
+  // Best-effort opt-out: il thread viene comunque letto — un "non contattarmi" dentro di esso
+  // sopprime l'autore a livello globale. È un bonus, non una promessa: lo sweep vede solo questa
+  // lettura, e serve l'autore noto dal momento dell'engage.
+  if (admin && lead.author_handle && comments.some((c) => isOptOutSignal(c.body))) {
+    await suppressAuthor(admin, {
+      platform: lead.author_platform ?? platformOf(lead.url),
+      handle: lead.author_handle,
+      source: 'thread_scan',
+      reason: 'opt-out signal in the thread'
+    });
+  }
 
   const hit = pickMatch(lead.suggestion, comments, { handle });
   if (!hit) {
@@ -210,7 +224,7 @@ export async function pendingOutcomeChecks(
 
   const { data } = await admin
     .from('brand_news_items')
-    .select('id, brand_id, url, suggestion, done_at')
+    .select('id, brand_id, url, suggestion, done_at, author_handle, author_platform')
     .eq('status', 'done')
     .not('done_at', 'is', null)
     .gte('done_at', from)
@@ -226,7 +240,14 @@ export async function pendingOutcomeChecks(
   return data
     .filter((l) => !done.has(l.id as string) && isCheckable(String(l.url)))
     .slice(0, limit)
-    .map((l) => ({ id: l.id as string, brand_id: l.brand_id as string, url: String(l.url), suggestion: l.suggestion as string | null }));
+    .map((l) => ({
+      id: l.id as string,
+      brand_id: l.brand_id as string,
+      url: String(l.url),
+      suggestion: l.suggestion as string | null,
+      author_handle: (l.author_handle as string | null) ?? null,
+      author_platform: (l.author_platform as string | null) ?? null
+    }));
 }
 
 /** Una passata: controlla i lead maturi e scrive gli esiti. Non lancia mai. */
@@ -239,7 +260,7 @@ export async function runOutcomeChecks(
 
   for (const lead of leads) {
     try {
-      const row = await checkLeadOutcome(lead);
+      const row = await checkLeadOutcome(lead, undefined, admin);
       if (!row) continue;
       const { error } = await admin.from('lead_outcomes').insert(row);
       if (error) { console.warn('[lead-outcomes] insert:', error.message.slice(0, 120)); continue; }

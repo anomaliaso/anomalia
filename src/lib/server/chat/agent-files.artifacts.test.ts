@@ -78,12 +78,6 @@ const MOTION_A = {
   created_at: '2026-08-20T10:00:00Z',
   updated_at: '2026-08-20T10:05:00Z'
 };
-const MOTION_A_SCORE = {
-  video_id: MOTION_A.id,
-  verdict: 'ship',
-  overall: 9,
-  created_at: '2026-08-20T11:00:00Z'
-};
 const MOTION_B_UNRENDERED = {
   id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
   brand_id: BRAND,
@@ -172,7 +166,6 @@ const GRAPHIC_F_V2 = {
 function tools(): any {
   const supabase = fakeSupabase({
     motion_videos: [MOTION_A, MOTION_B_UNRENDERED, MOTION_C_BIG],
-    motion_craft_scores: [MOTION_A_SCORE],
     brand_media: [MEDIA_D],
     graphic_designs: [GRAPHIC_E_V1, GRAPHIC_F_V2]
   });
@@ -197,7 +190,7 @@ describe('artifacts/ — ls elenca per data desc, una riga per artifact', () => 
     ]);
     // `artifacts/<tipo>/<uuid>.md — <tipo> · <titolo/prompt troncato> · <stato> · <data>`
     const motionA = out.files.find((l) => l.startsWith(`artifacts/motion/${MOTION_A.id}.md`));
-    expect(motionA).toBe(`artifacts/motion/${MOTION_A.id}.md — motion · Hero launch reel · shipped (craft 9/10) · 2026-08-20`);
+    expect(motionA).toBe(`artifacts/motion/${MOTION_A.id}.md — motion · Hero launch reel · shipped · 2026-08-20`);
   });
 
   it('un prefisso di tipo filtra a un solo sottoalbero', async () => {
@@ -216,7 +209,6 @@ describe('artifacts/motion/<id>.md — read_file', () => {
     };
     expect(out.content).toContain(MOTION_A.preview_url);
     expect(out.content).toContain('<Composition id="Hero">const x = 1;</Composition>');
-    expect(out.content).toContain('shipped (craft 9/10)');
   });
 
   it('un motion mai reso mostra lo stato onesto e NESSUN url inventato', async () => {

@@ -200,6 +200,7 @@ export type AgentSessionInsert = {
 export function agentSessionRow(s: AgentSessionInsert, events = s.recorder.events()) {
   const b = s.brandId;
   return {
+    id: crypto.randomUUID(),
     brand_id: s.brandId,
     user_id: s.userId ?? null,
     thread_id: s.threadId ?? null,

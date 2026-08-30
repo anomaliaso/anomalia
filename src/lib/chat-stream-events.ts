@@ -181,6 +181,22 @@ export function toolsForMirror(tools: StreamToolCallState[]): StreamToolCallStat
 }
 
 /**
+ * A stream finito non esiste una chip «running»: o il risultato è arrivato, o non arriverà mai.
+ * La sessione può morire a metà di un tool (il turno ripreso con una sessione fresca non
+ * riemette il risultato del call precedente) — senza questo gesto il partial conserva il loading
+ * perpetuo che l'utente ha visto il 27/8. `true` se qualcosa è cambiato.
+ */
+export function closeDanglingToolCalls(state: ChatStreamState): boolean {
+  let changed = false;
+  state.tools = state.tools.map((t) => {
+    if (t.status !== 'running' && t.status !== undefined) return t;
+    changed = true;
+    return { ...t, status: 'error' as const, errorText: t.errorText ?? 'the turn ended before this result arrived' };
+  });
+  return changed;
+}
+
+/**
  * Piega la lista di tool di uno snapshot su quella che questa scheda ha già, tenendo i payload che
  * lo snapshot ha buttato: senza, il primo poll dopo una disconnessione chiuderebbe ogni chip aperta.
  */

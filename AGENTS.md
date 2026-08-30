@@ -30,10 +30,8 @@ anomalia web <slug>                                # Blog articles (drafts too)
 # Field watch: GET/POST /api/v1/brands/:slug/market/field (what moves in the brand's field, taken apart)
 # Radar self-test: GET /api/v1/brands/:slug/radar/diagnose (fetches every source live, says why one finds nothing)
 # Brand doctor: GET /api/v1/brands/:slug/doctor (per cycle, the first gate the brand fails and how to unlock it)
-# Video review: POST /api/v1/brands/:slug/videos/review  { url | post_id, standard: organic|ads }
 # Agent Library: GET /api/v1/agent-templates (public catalogue behind /agents + Automations › Custom Agents)
 # Chat goals: GET /api/v1/brands/:slug/goals (history + summary of goal mode — met_first_pass, laps, stopped_by)
-# Auto-score worker: GET/POST /api/v1/videos/review/work (cron */5)
 anomalia studio <slug> add-note --text "..."       # Add knowledge
 anomalia ai <slug> --message "..."                 # AI chat (full access)
 ```
@@ -164,6 +162,22 @@ Skip the public changelog only when the change is genuinely invisible from outsi
 an index, a test, a log. When in doubt, write it — one more line in the public changelog costs
 far less than a shipped feature nobody discovers.
 
+## `git stash` non si usa, mai (una regola, non un'abitudine)
+
+`git stash` legge e scrive **lo stesso ref** (`refs/stash`) per l'intero repository, non per
+worktree. Con più worktree aperti — che qui è la norma, uno per task — uno stash preso in uno può
+essere riesumato in un altro e sostituire in silenzio i tuoi edit con quelli di un lavoro
+estraneo. È già successo, ed è costato lavoro perso: la storia sta in [`LESSONS.md`](LESSONS.md).
+
+Non c'è un caso in cui valga la pena: **un hook `PreToolUse` lo blocca prima che parta.** Per
+sospendere delle modifiche ci sono tre strade, tutte più sicure e nessuna più lenta:
+
+- **committa sul branch del task** — è per questo che il branch esiste, e un commit di lavoro si
+  riscrive dopo con un `rebase -i` o un `commit --amend`;
+- **`git diff > /tmp/patch.diff && git checkout -- <file>`**, e più tardi `git apply` — la patch è
+  un file tuo, che nessun altro worktree può reclamare;
+- **usa il checkout dedicato**, se ti serve una copia pulita mentre tieni le modifiche altrove.
+
 ## Lessons already paid for: LESSONS.md (a rule, not a habit)
 
 [`LESSONS.md`](LESSONS.md) keeps the lessons learned from real incidents — stale node_modules
@@ -183,17 +197,29 @@ single quality defect, because they run on a fake model and a fake database: bra
 arrived empty, attachments were rejected by a constraint, the model resolved to the wrong one,
 and a read crossed every brand of the user — **green suite for everyone**.
 
-The evaluation (`scripts/eval/`, plan in [`docs/EVAL_PLAN.md`](docs/EVAL_PLAN.md)) is the only
-thing that verifies **the product works**: it puts the real agents to work on a disposable trial
-brand, with real requests, and judges FACTS before tastes — does the artifact exist? is the
-number right? how many text blocks? what did it cost?
+The evaluation (`scripts/eval/`) is the only thing that verifies **the product works**: it puts
+the real agents to work on a disposable trial brand, with real requests, and judges FACTS before
+tastes — does the artifact exist? is the number right? how many text blocks? what did it cost?
+
+**What exists today. Only these two commands are real:**
 
 ```bash
-npm run eval                                  # phase 1: the cheap scenarios (~$0.001)
-npm run eval -- --only <scenario>             # just one
-npm run eval -- --all --budget 0.50 --jobs 1  # everything, with the spending cap
-npm run eval -- --compare eval-results/<run>  # free: what got WORSE than before
+npm run eval:ux           # the onboarding walk: a real browser, 6 deterministic gates + 4 judged criteria
+npm run eval:durability   # the work does not vanish: 3 scenarios against the real database and the real plpgsql
+npm run eval:durability -- --only=<scenario>
 ```
+
+`eval:ux` measures whether the product is *good*. `eval:durability` measures whether it *keeps
+what it produced* — a turn killed mid-work, the salvage when it gives up, and a taken-over run
+that must not deposit a second message. Those run against real SQL, which is the whole point:
+the two defects that slipped through in one session were a changed function signature and a
+reaper whose contract had moved under its own tests, and a fake client cannot see either.
+
+**What does NOT exist, so nobody writes it in a report as if it had run:** `npm run eval`, the
+`--all` / `--budget` / `--jobs` / `--compare` flags, cost read from `ai_calls`, `docs/EVAL_PLAN.md`,
+and the browser engine with a throttled network. The richer scenario catalogue described in the
+frozen `CHANGELOG.md` (`brand-nudo`, `conteggio-secco`, …) was designed and never merged. Reading
+about a command here is not evidence that it runs — check `package.json`.
 
 **When to run it** — not on every commit (it costs real money), but always:
 

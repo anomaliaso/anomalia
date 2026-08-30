@@ -2,12 +2,16 @@
   import { page } from '$app/stores';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
+  import { backHref } from '$lib/page-modal-navigation';
+  import { pageModalOrigin } from '$lib/stores/page-modal';
   import BlogEditor from '$lib/components/blog/BlogEditor.svelte';
   import ArticleChat from '$lib/components/blog/ArticleChat.svelte';
   import { jpegIfHeicFile, jpegIfHeicFormFiles } from '$lib/raster-image-client';
   import { RASTER_IMAGE_ACCEPT } from '$lib/raster-image';
 
   let { data, form } = $props();
+  const siteHref = $derived(`/app/${$page.params.brand}/site`);
+  const returnHref = $derived(backHref($pageModalOrigin, siteHref));
 
   // Flatten stored version exchanges (instruction → reply) into a chat transcript.
   const initialMessages = data.chat.messages.flatMap((m: { instruction: string; reply: string }) => [
@@ -95,7 +99,7 @@
 
 <div class="editor-page">
   <header class="ed-head">
-    <a class="back" href="/app/{$page.params.brand}/site">← Blog</a>
+    <a class="back" href={returnHref}>← Blog</a>
     <div class="ed-actions">
       <a class="btn ghost" href="/blog-preview/{data.article.id}" target="_blank" rel="noopener noreferrer">Anteprima ↗</a>
       <span class="status-tag">{data.article.status === 'published' ? 'pubblicato' : 'bozza'}</span>

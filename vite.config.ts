@@ -3,6 +3,7 @@ import { sentrySvelteKit } from "@sentry/sveltekit";
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
+import { ssrNoExternalForDeploy } from './scripts/ssr-no-external';
 
 /** Worktree `node_modules` is often a symlink into another checkout; Vite resolves it and
  *  rejects the real path unless it is on the allow list. */
@@ -74,15 +75,17 @@ export default defineConfig({
     // Bundling it into the server chunks keeps one copy per function instead. Tree-shaking cannot
     // slim it further — graphic-icons.ts resolves arbitrary model-emitted slugs via a namespace
     // scan, and that full-catalogue lookup is the contract (unknown slug → null, any brand works).
-    noExternal: ['simple-icons']
+    noExternal: ssrNoExternalForDeploy(process.env.DEPLOY_TARGET ?? '')
   },
-  test: {
+    test: {
     testTimeout: TEST_TIMEOUT_MS,
+    hookTimeout: 30_000,
     include: [
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',
       'packages/*.{test,spec}.{js,ts}',
       'scripts/**/*.{test,spec}.{js,ts}'
-    ]
+    ],
+    hookTimeout: 30_000
   }
 });

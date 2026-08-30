@@ -7,6 +7,7 @@
   import PageModal from '$lib/components/PageModal.svelte';
   import PageRailDrawer from '$lib/components/PageRailDrawer.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
+  import ChatReplyNotifications from '$lib/components/ChatReplyNotifications.svelte';
   import Send from '@lucide/svelte/icons/send';
   import Layers from '@lucide/svelte/icons/layers';
   import Globe from '@lucide/svelte/icons/globe';
@@ -16,6 +17,7 @@
   import FolderOpen from '@lucide/svelte/icons/folder-open';
   import Wrench from '@lucide/svelte/icons/wrench';
   import SettingsIcon from '@lucide/svelte/icons/settings';
+  import Sparkles from '@lucide/svelte/icons/sparkles';
   import { setCredits, refreshCredits } from '$lib/stores/credits';
   import WarningCenter from '$lib/components/WarningCenter.svelte';
   import ChatColumn from '$lib/components/ChatColumn.svelte';
@@ -45,7 +47,7 @@
   import { onDestroy } from 'svelte';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
   import { get } from 'svelte/store';
-  import { chatThreadId, chatThreads, markThreadUnread, unreadThreadIds } from '$lib/stores/chat';
+  import { chatThreadId, chatThreads, markThreadUnread, refreshThreads, unreadThreadIds } from '$lib/stores/chat';
   import { roomMemberKeys, threadIdentity, type ThreadIdentitySource } from '$lib/thread-identity';
   import { hasAds, hasWebHub } from '$lib/plans';
   let { data, children } = $props();
@@ -66,8 +68,9 @@
   const adsEnabled = $derived(hasAds(data.brand?.plan));
   const path = $derived($page.url.pathname);
   const isPostDash = $derived(/\/posts\/[^/]+\/[^/]+\/?$/.test(path));
+  const isArticleEdit = $derived(path.includes('/site/edit'));
   const isFullWidth = $derived(
-    path.includes('/success') || path.endsWith('/activate') || isPostDash
+    path.includes('/success') || path.endsWith('/activate') || isPostDash || isArticleEdit
   );
   const isSettings = $derived(path.includes('/settings'));
   const isBrandRoot = $derived(path === base || path === `${base}/`);
@@ -88,8 +91,6 @@
   const isMediaWorkbench = $derived(
     /\/(media-generator|ugc-creator|motion-video)\/?$/.test(path)
   );
-  const isArticleEdit = $derived(path.includes('/site/edit'));
-
   // Navigazione ottimistica: shimmer al clic, non alla fine della load. Include i cambi di
   // brand — col solo `base` la pagina del brand vecchio resterebbe visibile per tutta la load.
   const navToPath = $derived(navigating.to?.url.pathname ?? null);
@@ -285,8 +286,10 @@
   // aperto lo segna letto ChatColumn.
   $effect(() => {
     if (!browser) return;
-    return brandChannel.onThreadChanged((threadId) => {
-      if (threadId !== get(chatThreadId)) markThreadUnread(threadId);
+    return brandChannel.onThreadChanged((threadId, hasAssistantReply) => {
+      if (!hasAssistantReply || threadId === get(chatThreadId)) return;
+      markThreadUnread(threadId);
+      void refreshThreads(data.brand.slug);
     });
   });
 
@@ -376,8 +379,18 @@
       badge: 'leads' as const,
       also: [`${base}/automations`, `${base}/radar`, `${base}/leads`, `${base}/agents`],
     },
-    // Designer: fuori dalla nav per scelta. Le sue pagine restano vive e raggiungibili dai link
-    // della chat, da `propose_open_tab` e da ⌘K.
+    {
+      href: `${base}/designer`,
+      key: 'designer' as WorkbenchPageHub,
+      icon: Sparkles,
+      also: [
+        `${base}/designer`,
+        `${base}/media-generator`,
+        `${base}/ugc-creator`,
+        `${base}/motion-video`,
+        `${base}/media`,
+      ],
+    },
   ]);
 
   function isSubActive(href: string) {
@@ -756,6 +769,8 @@
 <!-- Montata una volta per tutto il brand, fuori dai rami settings/full-width: le scorciatoie
      devono valere ovunque. -->
 <CommandPalette {base} brandSlug={data.brand.slug} navGroups={sidebarGroups} />
+
+<ChatReplyNotifications brandSlug={data.brand.slug} />
 
 </div>
 

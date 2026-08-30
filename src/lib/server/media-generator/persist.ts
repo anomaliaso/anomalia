@@ -106,10 +106,6 @@ export async function insertMediaGeneratorItem(
   if (input.promptId) {
     await bumpMediaGeneratorPromptCount(supabase, input.promptId, 1).catch(swallow('bump prompt usage'));
   }
-  if (url) {
-    const { queueVideoReview } = await import('$lib/server/video-review-store');
-    await queueVideoReview(supabase, { brandId: input.brandId, url });
-  }
   return { row: data as MediaGeneratorItemRow };
 }
 

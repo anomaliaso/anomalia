@@ -14,11 +14,8 @@
  * Batched: one call judges up to BATCH_SIZE posts. Cataloguing is cheap next to watching a video,
  * and it must cover everything, so it is priced accordingly.
  */
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { env } from '$env/dynamic/private';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { loggedGemini } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { llmConfigured, llmStructured } from '$lib/server/llm';
 import type { HarvestError } from '$lib/server/market-harvest';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -206,19 +203,14 @@ export function reconcile(items: CatalogueItem[], raw: unknown): Catalogued[] {
 }
 
 async function judgeBatch(items: CatalogueItem[]): Promise<Catalogued[]> {
-  const key = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!key) throw new Error('gemini_unconfigured');
-  const ai = googleGenaiClient();
-  const res = await loggedGemini('market.catalogue', () =>
-    ai.models.generateContent({
-      model: geminiFlash(),
-      contents: [{ role: 'user', parts: [{ text: buildPrompt(items) }] }],
-      config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: 'application/json', responseSchema: SCHEMA }
-    })
-  );
+  if (!llmConfigured()) throw new Error('gemini_unconfigured');
   let parsed: unknown;
   try {
-    parsed = JSON.parse((res.text ?? '').trim());
+    parsed = await llmStructured({
+      prompt: buildPrompt(items),
+      schema: SCHEMA,
+      label: 'market.catalogue'
+    });
   } catch {
     return [];
   }

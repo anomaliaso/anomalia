@@ -100,7 +100,11 @@ function toRunEvent(part: StreamPart): RunEvent | null {
 			return {
 				type: 'tool_call',
 				id: part.toolCallId ?? '',
-				call: { name: part.toolName ?? '', args: (part.input ?? {}) as Record<string, unknown> }
+				call: {
+					name: part.toolName ?? '',
+					args: (part.input ?? {}) as Record<string, unknown>,
+					...(part.toolCallId ? { id: part.toolCallId } : {})
+				}
 			};
 		case 'tool-result':
 			return {
@@ -230,7 +234,7 @@ export class HarnessRuntime implements AgentRuntime {
 			harness: setup.harness(request.model.id),
 			sandbox: this.deps.sandboxProvider ?? setup.sandbox(),
 			instructions: request.system,
-			tools: buildTools(request.tools, this.deps.execToolCall, context),
+			tools: buildTools(request.tools, this.deps.execToolCall, context, request.approval),
 			stopWhen: request.tools.filter((tool) => tool.terminal).map((tool) => hasToolCall(tool.name))
 		};
 	}

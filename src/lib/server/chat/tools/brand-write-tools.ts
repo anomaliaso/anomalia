@@ -47,7 +47,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
           .optional()
           .describe('Typography for composed graphics. Both families are checked against Google Fonts before saving — an unavailable name is refused, not silently rendered as Inter.')
       }),
-      execute: async (input: Record<string, unknown>, opts: ToolExecutionOptions) => {
+      execute: async (input: Record<string, unknown>, opts: ToolExecutionOptions<unknown>) => {
         const patch: AnyRec = {};
         const brandPatch: AnyRec = {};
         const updated: string[] = [];
@@ -180,7 +180,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         week_theme: z.string().optional().describe('New theme for the specified week'),
         week_brief: z.string().optional().describe('User brief for the specified week (drives replanning)')
       }),
-      execute: async ({ voice, cadence, platform_mix, week_index, week_theme, week_brief }: AnyRec, opts: ToolExecutionOptions) => {
+      execute: async ({ voice, cadence, platform_mix, week_index, week_theme, week_brief }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         const { data: plan } = await supabase.from('editorial_plans').select('id, voice, cadence, platform_mix, weeks').eq('brand_id', brandId).eq('status', 'active').maybeSingle();
         if (!plan) return { error: 'No active editorial plan found' };
 
@@ -220,7 +220,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         })).optional().describe('Updated platform weights for the phase'),
         pillars: z.array(z.string()).optional().describe('Updated pillars for the phase')
       }),
-      execute: async ({ objective, phase_index, phase_name, phase_objective, platform_weights, pillars }: AnyRec, opts: ToolExecutionOptions) => {
+      execute: async ({ objective, phase_index, phase_name, phase_objective, platform_weights, pillars }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         const { data: plan } = await supabase.from('gtm_plans').select('id, objective, phases').eq('brand_id', brandId).eq('status', 'active').maybeSingle();
         if (!plan) return { error: 'No active GTM plan found' };
 
@@ -267,7 +267,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
           .optional()
           .describe('Real past posts of this brand, one per entry, used as writing-style references. REPLACES the list; [] clears it.')
       }),
-      execute: async (patch: Record<string, unknown>, opts: ToolExecutionOptions) => {
+      execute: async (patch: Record<string, unknown>, opts: ToolExecutionOptions<unknown>) => {
         // I sei campi voce vivono sul piano editoriale attivo. Senza piano NON si perdono in
         // silenzio: prima il tool rispondeva success anche quando li aveva scartati tutti, e il
         // modello raccontava all'utente una voce mai salvata.
@@ -347,7 +347,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
     // Schema, description e tipo di risposta vivono nel contratto (contracts/post-tools.ts):
     // i valori di content_type sono interpolati dalla costante POST_CONTENT_TYPES e ora lo
     // schema è z.enum — "carousel" non arriva più in DB, torna un errore di validazione.
-    update_post: toolFromContract(updatePostContract, async ({ post_id, ...patch }: AnyRec, opts: ToolExecutionOptions) => {
+    update_post: toolFromContract(updatePostContract, async ({ post_id, ...patch }: AnyRec, opts: ToolExecutionOptions<unknown>) => {
         const clean: AnyRec = {};
         for (const [k, v] of Object.entries(patch)) {
           if (v !== undefined) clean[k] = v;
@@ -381,82 +381,6 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         return { success: true, updated_fields: Object.keys(clean) };
     }),
 
-    review_video: tool({
-      description:
-        'Review a FINISHED video against organic UGC or paid-ads standards (Gemini watches the clip). Scores hook / doomscroll stop, 2s sound-off, hold, authenticity, structure, CTA/offer. Use before approving a reel, after creating a video, or on a competitor ad URL. Credits only — does not spend the monthly video budget.',
-      inputSchema: z.object({
-        standard: z
-          .enum(['organic', 'ads'])
-          .describe('organic = Reels/TikTok UGC. ads = Meta/paid UGC ad (proof, offer, uniqueness, claims).'),
-        url: z.string().optional().describe('Public https URL of the mp4. Omit when post_id is set.'),
-        post_id: z.string().optional().describe('Brand post id — uses its video media_url.'),
-        product: z.string().optional(),
-        caption: z.string().optional(),
-        script: z.string().optional().describe('Intended spoken line, if known.')
-      }),
-      execute: async (
-        {
-          standard,
-          url,
-          post_id,
-          product,
-          caption,
-          script
-        }: {
-          standard: 'organic' | 'ads';
-          url?: string;
-          post_id?: string;
-          product?: string;
-          caption?: string;
-          script?: string;
-        },
-        opts: ToolExecutionOptions
-      ) => {
-        return withBrandContext(brandId, async () => {
-          const { extraReviewOpts, parseVideoStandard, resolveReviewVideoUrl, reviewVideo } = await import('$lib/server/video-review');
-          const resolved = await resolveReviewVideoUrl(supabase, brandId, { url, postId: post_id });
-          if ('error' in resolved) return { error: resolved.error };
-          const { data: brand } = await supabase
-            .from('brands')
-            .select('name, content_prefs')
-            .eq('id', brandId)
-            .maybeSingle();
-          const language = (brand?.content_prefs as AnyRec)?.language
-            ? String((brand!.content_prefs as AnyRec).language)
-            : null;
-          try {
-            const result = await reviewVideo(resolved.url, {
-              standard: parseVideoStandard(standard) ?? 'organic',
-              brandName: brand?.name,
-              product: product?.trim() || resolved.product || null,
-              caption: caption?.trim() || resolved.caption || null,
-              script: script?.trim() || null,
-              language,
-              // reviewVideo has always accepted this and always been handed undefined: the clip
-              // download plus the agent loop is one of the longest steps a turn can take.
-              abortSignal: opts.abortSignal,
-              ...extraReviewOpts(resolved)
-            });
-            if (!result.ok) return { error: result.error };
-            const { persistReadyReview } = await import('$lib/server/video-review-store');
-            await persistReadyReview(supabase, {
-              brandId,
-              url: resolved.url,
-              postId: post_id ?? null,
-              standard: parseVideoStandard(standard) ?? 'organic',
-              review: result.review,
-              kind: extraReviewOpts(resolved).kind
-            });
-            return { ok: true, ...result.review };
-          } catch (e) {
-            if (e instanceof Error && e.name === 'CreditsExhaustedError') {
-              return { error: 'credits_exhausted', action: 'offer_upgrade' };
-            }
-            return { error: e instanceof Error ? e.message : String(e) };
-          }
-        });
-      }
-    }),
 
     // Il ponte fra un URL `inspect_only` e una generazione: entra un mp4 di terzi, esce TESTO.
     // Senza questo tool, in chat, `research_meta_ads` restituiva un video del competitor e l'unica
@@ -498,7 +422,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
       }
     }),
 
-    approve_post: toolFromContract(approvePostContract(tz), async ({ post_id, scheduled_for }: { post_id: string; scheduled_for?: string }, opts: ToolExecutionOptions) => {
+    approve_post: toolFromContract(approvePostContract(tz), async ({ post_id, scheduled_for }: { post_id: string; scheduled_for?: string }, opts: ToolExecutionOptions<unknown>) => {
         // Prima il guard di stato, POI la scrittura: qui scheduled_for veniva salvato prima del
         // check, così un approve rifiutato aveva comunque già spostato l'orario di un post
         // scheduled/published — una mutazione senza riga di risposta che la ammetta.
@@ -562,7 +486,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         }
     }),
 
-    reject_post: toolFromContract(rejectPostContract, async ({ post_id, confirm }: { post_id: string; confirm: boolean }, opts: ToolExecutionOptions) => {
+    reject_post: toolFromContract(rejectPostContract, async ({ post_id, confirm }: { post_id: string; confirm: boolean }, opts: ToolExecutionOptions<unknown>) => {
         if (!confirm) return { error: 'Deletion not confirmed' };
         const { data: post } = await supabase.from('posts').select('id, status').eq('id', post_id).eq('brand_id', brandId).maybeSingle();
         if (!post) return { error: 'Post not found' };
@@ -585,7 +509,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         return { success: true, deleted: post_id };
     }),
 
-    reschedule_post: toolFromContract(reschedulePostContract(tz), async ({ post_id, scheduled_for }: { post_id: string; scheduled_for: string }, opts: ToolExecutionOptions) => {
+    reschedule_post: toolFromContract(reschedulePostContract(tz), async ({ post_id, scheduled_for }: { post_id: string; scheduled_for: string }, opts: ToolExecutionOptions<unknown>) => {
         // Validate BEFORE touching Zernio: a rejected time must leave the existing schedule intact.
         const parsed = resolveScheduleInput(scheduled_for, tz);
         if ('error' in parsed) return parsed;
@@ -614,7 +538,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
 
     // L'annotazione esplicita del ritorno fa il narrowing dei literal di `status` contro
     // PostStatus — senza, TS li allarga a string e il contratto non combacia.
-    cross_post: toolFromContract(crossPostContract, async ({ post_id, platforms }: { post_id: string; platforms: string[] }, opts: ToolExecutionOptions): Promise<CrossPostResult | ToolFailure> => {
+    cross_post: toolFromContract(crossPostContract, async ({ post_id, platforms }: { post_id: string; platforms: string[] }, opts: ToolExecutionOptions<unknown>): Promise<CrossPostResult | ToolFailure> => {
         if (!platforms?.length) return { error: 'Specifica almeno una piattaforma' };
 
         const { data: post } = await supabase

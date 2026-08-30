@@ -113,9 +113,12 @@ describe('le cadenze dei cron di raccolta sono quelle decise', () => {
   }>;
   const scheduleOf = (path: string) => crons.find((c) => c.path === path)?.schedule;
 
-  it('market/trends dropped from hourly to every 4 hours — the digests carry the knowledge now', () => {
-    // Ore 0,4,8,12,16,20 × 6 tag/run coprono comunque tutti i 20 hashtag entro la giornata.
-    expect(scheduleOf('/api/v1/market/trends')).toBe('20 */4 * * *');
+  it('market/trends e market/harvest sono spenti: la raccolta senza brand costava 26 dollari/30d e cresceva 4x', () => {
+    // Pausa del 2026-08-29 (audit budget #1): ScrapeCreators senza brand_id, nessun cliente
+    // le pagava. `market/field` resta e distilla lo stock esistente. Per riattivare si
+    // riaggiungono le due righe in vercel.json — i dettagli sono nel changelog del kill.
+    expect(scheduleOf('/api/v1/market/trends')).toBeUndefined();
+    expect(scheduleOf('/api/v1/market/harvest')).toBeUndefined();
   });
 
   // Il muro pubblico non gira piu': `wall.design_judge` costava 4740 chiamate e ~100 dollari al
@@ -125,9 +128,5 @@ describe('le cadenze dei cron di raccolta sono quelle decise', () => {
   it('i due cron del muro non esistono piu\', e nemmeno i loro endpoint', () => {
     expect(scheduleOf('/api/v1/wall/sweep')).toBeUndefined();
     expect(scheduleOf('/api/v1/wall/work')).toBeUndefined();
-  });
-
-  it('market/harvest stays daily on purpose: 1 run/day is no multiplier, and slowing it stretches the 12-category rotation to two weeks', () => {
-    expect(scheduleOf('/api/v1/market/harvest')).toBe('40 6 * * *');
   });
 });

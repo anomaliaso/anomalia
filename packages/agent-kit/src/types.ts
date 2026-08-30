@@ -40,8 +40,33 @@ export interface ToolSpec {
 	 * quindi vive anche dove si può solo leggere.
 	 */
 	requiresMode?: 'plan' | 'agent';
+	consequential: boolean;
 	terminal?: boolean;
+	/**
+	 * Il tool ha un effetto collaterale reale (scrive/post/schedula/rende un file): va avvolto dal
+	 * ledger, così un resume a metà turno non lo riesegue. La dichiarazione è obbligatoria per non
+	 * lasciare alla convenzione la decisione se una chiamata scrive o legge.
+	 */
+	effectful: boolean;
 }
+
+export type ActionApprovalRule = {
+	effect: 'require_approval' | 'always_allow';
+	matchKind: 'tool' | 'connector' | 'category';
+	matchValue: string;
+};
+
+export type ActionApprovalChecker = (input: {
+	spec: ToolSpec;
+	call: ToolCall;
+	context: AdapterContext;
+}) => Promise<'pass' | 'ask' | 'error'>;
+
+export type ActionApprovalConfig = {
+	autoReviewEnabled: boolean;
+	rules?: readonly ActionApprovalRule[];
+	checker?: ActionApprovalChecker;
+};
 
 /** Testo e/o immagini, più un flag d'errore che INSEGNA. */
 export type ToolResultContent =
@@ -51,12 +76,37 @@ export type ToolResultContent =
 export interface ToolResult {
 	content: ToolResultContent[];
 	isError?: boolean;
+	effectStatus?: Exclude<EffectStatus, 'intended' | 'reconciled'>;
+}
+
+/** Lo stato di un effetto collaterale nel ledger — la macchina a stati di `agent_kit_effects`. */
+export type EffectStatus = 'intended' | 'completed' | 'failed' | 'ambiguous' | 'reconciled';
+
+/** Risultato atomico del claim: solo `claimed` può eseguire il payload. */
+export type EffectClaim =
+	| { kind: 'claimed'; effect: ToolEffect }
+	| { kind: 'existing'; effect: ToolEffect }
+	| { kind: 'mismatch'; effect: ToolEffect };
+
+/** Una riga del ledger: identità della chiamata e payload sono dati distinti. */
+export interface ToolEffect {
+	id: string;
+	brandId: string;
+	runId: string | null;
+	toolName: string;
+	/** SDK `toolCallId`, persistito nella storia e stabile tra resume e takeover. */
+	invocationId: string | null;
+	status: EffectStatus;
+	request?: unknown;
+	result?: unknown;
+	createdAt: string;
+	updatedAt: string;
 }
 
 export interface ToolCall {
 	name: string;
 	args: Record<string, unknown>;
-	/** Id della chiamata sul filo (SDK `toolCallId`). Ancora un artefatto alla chip giusta. */
+	/** Identità della chiamata sul filo (SDK `toolCallId`), non derivata dagli argomenti. */
 	id?: string;
 }
 
@@ -69,6 +119,7 @@ export interface RunTokenUsage {
 export type RunEvent =
 	| { type: 'text'; text: string }
 	| { type: 'reasoning'; text: string }
+	/** `id` è il `toolCallId` persistito e rigiocato dai runtime durante resume e takeover. */
 	| { type: 'tool_call'; call: ToolCall; id: string }
 	| { type: 'tool_result'; id: string; result: ToolResult }
 	| { type: 'done'; reason: RunStopReason; usage?: RunTokenUsage }
@@ -89,6 +140,7 @@ export interface RunRequest {
 	system: string;
 	messages: Array<{ role: 'user' | 'assistant' | 'tool'; content: unknown }>;
 	tools: ToolSpec[];
+	approval?: ActionApprovalConfig;
 	model: ModelRef;
 	limits: { maxSteps: number; tokenBudget: number; deadlineMs: number };
 }

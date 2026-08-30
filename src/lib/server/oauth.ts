@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { json } from '@sveltejs/kit';
 import type { Cookies } from '@sveltejs/kit';
 import { createAdminClient } from './supabase-admin';
@@ -144,7 +144,7 @@ export async function mintSession(email: string) {
   const hashedToken = link?.properties?.hashed_token;
   if (linkError || !hashedToken) throw new Error(linkError?.message ?? 'generateLink returned no token');
 
-  const anon = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+  const anon = createClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
   const { data, error } = await anon.auth.verifyOtp({ token_hash: hashedToken, type: 'magiclink' });
@@ -153,7 +153,7 @@ export async function mintSession(email: string) {
 }
 
 export function anonClient() {
-  return createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+  return createClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 }

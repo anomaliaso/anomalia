@@ -1,9 +1,7 @@
 import { streamText, type ModelMessage } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { geminiFlash } from '$lib/server/gemini';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
 import { guardTool } from '$lib/server/tool-guard';
 import { readSiteForAgent } from '$lib/server/agent-team-public';
@@ -26,8 +24,6 @@ import type { RequestHandler } from './$types';
 // INTERA (~90 MB di node_modules ricopiati), quindi gli scaglioni sono solo tre: 300, 800,
 // 1800. Rimetterlo a 120 non rende la rotta più sicura: aggiunge una funzione da 90 MB.
 export const config = { maxDuration: 300 };
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 
 /**
  * The free agent-team tool, as a conversation.
@@ -75,10 +71,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
     console.warn('[agent-team-chat] agent library unavailable:', e);
   }
 
-  const model = geminiFlash();
+  const model = llmDefaultModel();
   const t0 = Date.now();
   const result = streamText({
-    model: google(model),
+    model: llmLanguageModel(model),
     maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
     system: buildSystemPrompt(site, goal),
     allowSystemInMessages: true,
@@ -91,7 +87,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
       // visible in the same timeline as everything else — a free tool nobody meters is a leak.
       logAiCall({
         label: 'tool:agent-team-chat',
-        provider: 'gemini',
+        provider: 'llm',
         model,
         ms: Date.now() - t0,
         ok: true,

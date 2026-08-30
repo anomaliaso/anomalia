@@ -11,6 +11,7 @@
   import { hasWebHub } from '$lib/plans';
   import { openPlanDocument } from '$lib/stores/plan-panel';
   import { pageTopActions } from '$lib/stores/page-meta';
+  import { postPreviewHref } from '$lib/page-modal-navigation';
   import TopbarCta from '$lib/components/TopbarCta.svelte';
   import AgentComputerPanel from '$lib/components/AgentComputerPanel.svelte';
   import {
@@ -52,15 +53,16 @@
   import type { ChatDocument } from '$lib/chat-documents';
   import { DEFAULT_AGENT_ID, agentMetaForBrand, normalizeAgentIdForBrand } from '$lib/agent-icons';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
-  import { emptyStreamState } from '$lib/chat-stream-events';
+  import { emptyStreamState, type StreamToolCallState } from '$lib/chat-stream-events';
   import { applyLiveChunk, applyLiveSnapshot, type PendingChunk } from '$lib/chat-live-join';
+  import { foldThreadCursor, latestRunProgress, seedThreadProjection, type RawThreadEvent } from '$lib/thread-cursor';
   import '$lib/styles/chat-messages.css';
   import TranscriptList from '../components/TranscriptList.svelte';
   import ComposerDock from '../components/ComposerDock.svelte';
   import EditMessageDialog from '../components/EditMessageDialog.svelte';
   import AgentComputerDock from '../components/AgentComputerDock.svelte';
   import { consolidateMessages, mapMsg, planIdsIn, parseToolCalls, redoIdOf, type ChatArtifactUi, type ChatMessage, type PostPreview } from '../components/transcript';
-  import { LIVE_POLL_MS, IDLE_POLL_EVERY, type KitRun } from '../components/kit-run';
+  import { LIVE_POLL_MS, IDLE_POLL_EVERY, pollOutcome, type KitRun } from '../components/kit-run';
   import { createLifecycle, assistantReportOf, assistantWorkOf } from './lifecycle.svelte';
   import { dmAgents } from '$lib/chat-dm';
 
@@ -75,6 +77,7 @@
   });
 
   let messages = $state<ChatMessage[]>([]);
+  let approvalStatuses = $state<Record<string, string>>(data.approvalStatuses ?? {});
   let artifacts = $state<ChatArtifactUi[]>([]);
   let agentSel = $state(DEFAULT_AGENT_ID);
   // `agentSel` in coda: Anomalia non è più fra le scelte ma va rimessa in lista se è l'agente
@@ -102,6 +105,7 @@
     // ri-sottoscrive l'effect e fa scattare effect_update_depth_exceeded.
     const next = consolidateMessages((data.messages ?? []).map(mapMsg));
     messages = next;
+    approvalStatuses = { ...(data.approvalStatuses ?? {}) };
     artifacts = (data.artifacts ?? []) as ChatArtifactUi[];
     // I piani già nel thread sono cronologia, non una proposta da aprire.
     autoOpenedPlans = new Set(planIdsIn(next));
@@ -264,14 +268,73 @@
     loading || (!!session?.completedAt && hasLivePartial)
   );
 
+  function seedProjectionFromData() {
+    return seedThreadProjection(data.liveProgress ?? {}, data.eventCursor ?? 0);
+  }
+
   // Reload a metà turno: il turno CONTINUA sul server (consumeStream) e il suo stato vive in
   // agent_kit_runs. Qui lo si riaggancia (Realtime, o il poll qui sotto) e a run chiuso si
   // ricaricano i messaggi: l'utente non deve mai pensare di aver perso tutto.
-  let orphanRun = $state<KitRun | null>(null);
+  let orphanRun = $state<KitRun | null>((data.liveRun as KitRun | null) ?? null);
   let orphanState = $state(emptyStreamState());
   let orphanStateRunId = '';
   /** I chunk del canale che non continuano dove siamo: aspettano lo snapshot che colma il buco. */
   let orphanPending: PendingChunk[] = [];
+
+  /** La proiezione durevole del thread aperto: `thread-seq` la spinge oltre `kit_stream`/poll. */
+  let threadProjection = $state(seedProjectionFromData());
+  let threadCursorFetching = false;
+
+  $effect(() => {
+    void data.thread.id;
+    threadProjection = seedProjectionFromData();
+    // `orphanRun` nasce dal caricamento, e cambiando thread SENZA ricaricare quel valore
+    // iniziale resterebbe quello del thread precedente: va riseminato qui, dove si rifà anche
+    // la proiezione. Il poll lo aggiorna dopo; questo è ciò che si vede al primo fotogramma.
+    orphanRun = (data.liveRun as KitRun | null) ?? null;
+  });
+
+  $effect(() => {
+    const threadId = data.thread.id;
+    return brandChannel.onThreadSeq(({ threadId: seqThreadId, seq }) => {
+      if (seqThreadId !== threadId || seq <= threadProjection.cursor) return;
+      void syncThreadCursor(threadId);
+    });
+  });
+
+  async function syncThreadCursor(threadId: string) {
+    if (threadCursorFetching) return;
+    threadCursorFetching = true;
+    try {
+      const after = threadProjection.cursor;
+      const res = await fetch(
+        `/app/${data.brandSlug}/chat?thread=${threadId}&events_after=${after}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok || threadId !== data.thread.id) return;
+      const { events } = (await res.json()) as { events?: RawThreadEvent[] };
+      const fold = foldThreadCursor(threadProjection, events ?? []);
+      threadProjection = fold.projection;
+
+      if (orphanRun) {
+        const progress = latestRunProgress(threadProjection, orphanRun.id);
+        if (progress) {
+          applyLiveSnapshot(
+            orphanState,
+            orphanPending,
+            progress as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+          );
+        }
+      }
+
+      // La prima sincronizzazione di un thread è una SEMINA: il cursore parte da zero e
+      // rilegge tutto l'arretrato, che la pagina ha già a schermo dal caricamento. Ricaricare
+      // lì sarebbe un lampo a ogni apertura.
+      if (fold.hasMessage && !fold.seeded) await reloadMessages();
+    } finally {
+      threadCursorFetching = false;
+    }
+  }
 
   // LE DUE SORGENTI HANNO UNA POSIZIONE SOLA. Realtime consegna INCREMENTI, il poll il testo
   // ASSOLUTO: appendere gli uni sopra l'altro produce testo mescolato carattere per carattere —
@@ -292,6 +355,18 @@
       orphanPending = [];
     }
     applyLiveSnapshot(orphanState, orphanPending, orphanRun.partial);
+  });
+
+  $effect(() => {
+    if (!orphanRun) return;
+    const seeded = latestRunProgress(threadProjection, orphanRun.id);
+    if (seeded) {
+      applyLiveSnapshot(
+        orphanState,
+        orphanPending,
+        seeded as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+      );
+    }
   });
 
   // Stesso reducer che usa il server per scrivere `partial` (chat-stream-events.ts): a canale
@@ -335,13 +410,11 @@
       try {
         const res = await fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`);
         if (stop) return;
-        if (res.status === 200) {
+        const esito = pollOutcome(res.status);
+        if (esito === 'run') {
           orphanRun = (await res.json()) as KitRun;
-        } else {
-          // 204: nessun run attivo. Se prima ne mostravamo uno, è appena finito.
-          if (orphanRun) {
-            void finalizeOrphanRun();
-          }
+        } else if (esito === 'finished' && orphanRun) {
+          void finalizeOrphanRun();
         }
       } catch {
         /* un poll fallito riprova al giro dopo */
@@ -598,6 +671,24 @@
     if (id === agentSel) return;
     agentSel = id;
     await setThreadAgent(data.brandSlug, data.thread.id, id);
+  }
+
+  async function decideApproval(approvalId: string, approved: boolean) {
+    const result = await startChatSession({
+      brandSlug: data.brandSlug,
+      threadId: data.thread.id,
+      userText: '',
+      pendingUserText: '',
+      mode: chatMode,
+      tier: chatTier,
+      reasoning: chatReasoning,
+      agent: agentSel,
+      approval: { approvalId, approved }
+    });
+    if (result === 'ok') {
+      approvalStatuses = { ...approvalStatuses, [approvalId]: approved ? 'approved' : 'denied' };
+    }
+    if (result === 'error') staleError = 'chat.error';
   }
 
   async function send(
@@ -879,19 +970,21 @@
 {/snippet}
 
 {#snippet agentPanelContent()}
-  <AgentComputerPanel
-    brandSlug={data.brandSlug}
-    thread={data.thread}
-    job={data.agentPanel?.job ?? null}
-    custom={data.agentPanel?.custom ?? null}
-    renders={data.agentPanel?.renders ?? []}
-    live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
-    backgroundLabels={panelBgLabels}
-    lastReport={panelLastReport}
-    lastPostId={panelWork.post}
-    lastPlanId={panelWork.plan}
-    onclose={() => (agentPanelOpen = false)}
-  />
+  {#if data.agentDesktopEnabled}
+    <AgentComputerPanel
+      brandSlug={data.brandSlug}
+      thread={data.thread}
+      job={data.agentPanel?.job ?? null}
+      custom={data.agentPanel?.custom ?? null}
+      renders={data.agentPanel?.renders ?? []}
+      live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
+      backgroundLabels={panelBgLabels}
+      lastReport={panelLastReport}
+      lastPostId={panelWork.post}
+      lastPlanId={panelWork.plan}
+      onclose={() => (agentPanelOpen = false)}
+    />
+  {/if}
 {/snippet}
 
 <div class="chat-thread-shell">
@@ -925,6 +1018,8 @@
       onredo={(index) => life.redoAssistant(index)}
       onfeedback={(id, value, note) => void life.sendFeedback(id, value, note)}
       onsend={(text) => send(text)}
+      {approvalStatuses}
+      onapproval={decideApproval}
     />
   </div>
 
@@ -969,7 +1064,7 @@
   <ChatImageLightbox
     src={zoomPost.media_urls?.length ? zoomPost.media_urls : (zoomPost.media_url ?? '')}
     caption={zoomPost.caption}
-    calendarHref={`/app/${data.brandSlug}/calendar?post=${zoomPost.post_id}`}
+    calendarHref={postPreviewHref(`/app/${data.brandSlug}`, zoomPost.post_id)}
     onclose={() => (zoomPost = null)}
   />
 {/if}

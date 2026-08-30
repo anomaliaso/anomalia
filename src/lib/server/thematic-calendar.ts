@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { aiText } from './xiaomi';
 
 // Niche thematic calendar: surface UPCOMING moments (holidays, observances, seasonal/industry
@@ -17,16 +16,17 @@ export function buildCalendarPrompt(opts: { category?: string; archetype?: strin
   return `Today is ${opts.today}. List 3-6 UPCOMING moments in roughly the next 6 weeks that THIS brand could authentically post around — relevant holidays, observances, seasonal moments, or recurring industry events. ${bits}\nFor each: the date (or window) and a one-line angle the brand could take. Only genuinely relevant, REAL, upcoming moments — skip generic filler, and never invent fake holidays. If nothing is clearly relevant, output nothing. Short bullet lines only.`;
 }
 
-// One Gemini call → a compact "timely moments" block to fold into the planner. '' on failure or
-// when nothing relevant. `today` defaults to the current date (override in tests).
+// One gateway call → a compact "timely moments" block to fold into the planner. '' on failure or
+// when nothing relevant. `today` defaults to the current date (override in tests). Il parametro
+// client è rimasto indietro con la migrazione al centralino: resta opzionale per non toccare i
+// chiamanti che ce l'hanno ancora in mano.
 export async function upcomingTimelyHooks(
-  ai: GoogleGenAI,
   opts: { category?: string; archetype?: string; language?: string; today?: string }
 ): Promise<string> {
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   try {
     const txt = (await aiText(
-      ai,
+      undefined,
       buildCalendarPrompt({ ...opts, today }),
       'You surface only genuinely relevant, real upcoming calendar moments for a brand. Be concrete; never invent holidays; output nothing if nothing fits.',
       { label: 'timelyHooks' }

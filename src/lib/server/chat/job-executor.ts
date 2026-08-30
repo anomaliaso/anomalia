@@ -48,9 +48,12 @@ export const EXECUTABLE_TOOL_JOBS = [
   'seo_plan',
   'seo_add_initiatives',
   'analytics_review',
-  'motion_video_qc',
+  'run_autopilot',
   'subagent_run'
 ] as const;
+
+/** Job che il drain serverless di Vercel non deve reclamare: solo il worker process. */
+export const WORKER_ONLY_TOOL_JOBS = ['run_autopilot'] as const;
 
 export async function executeChatToolJob(
   supabase: SupabaseClient,
@@ -361,46 +364,32 @@ export async function executeChatToolJob(
       };
     }
 
-    case 'motion_video_qc': {
-      // La QC di un motion video, FUORI dal turno che l'ha reso. Accodata da render_motion_video
-      // (output-tools.ts) quando il turno non aveva più budget per il giudice, o quando il
-      // verdetto in banda era fix/kill: il trailer del 21/8 è uscito senza che nessuna review
-      // girasse mai, e un verdetto fix in chat produceva un flag e zero remake. Qui gira
-      // `scoreAndMaybeRewriteMotion` (qc.ts) — lo stesso loop dei banchi: review, e su fix/kill
-      // il turno di patch che riscrive il sorgente. Il tetto ai remake è già nel sistema:
-      // MAX_VIDEO_RENDERS_PER_DAY ferma la catena render→QC→patch→render al quarto giro.
-      const videoId = String(params.video_id ?? '').trim();
-      if (!videoId) return { error: 'motion_video_qc without a video_id' };
+
+    case 'run_autopilot': {
       const { data: brand } = await supabase
         .from('brands')
-        .select('id, name')
+        .select(
+          'id, name, slug, plan, timezone, target_platforms, content_prefs, autopilot_failure_count, org_id, last_autopilot_run_at, activated_at, zernio_profile_id, blog_config'
+        )
         .eq('id', brandId)
         .maybeSingle();
       if (!brand) return { error: 'Brand not found' };
       await cancel.assertActive();
-      const { scoreAndMaybeRewriteMotion } = await import('$lib/server/motion-video/qc');
-      const result = await scoreAndMaybeRewriteMotion({
-        // Parte da un job schedulato, non da una persona: è l'automatismo che va spento.
-        auto: true,
-        supabase,
-        userId,
-        brand: { id: brand.id as string, name: String(brand.name ?? '') },
-        videoId,
-        apply: params.apply !== false,
-        abortSignal: cancel.signal
-      });
+      const { runAutopilotForBrand } = await import('$lib/server/scheduler');
+      const deadlineMs =
+        typeof params.deadline_ms === 'number' && params.deadline_ms > 0 ? params.deadline_ms : 3_600_000;
+      const res = await runAutopilotForBrand(supabase, brand, { deadlineMs });
       await cancel.assertActive();
-      // Un errore SENZA verdetto (no_preview, giudice muto) è un lavoro non fatto: si dichiara,
-      // così il rientro nel thread dice "fermato" invece di inventare un esito.
-      if (result.error && !result.craft && !result.review) return { error: result.error };
-      return {
-        video_id: videoId,
-        applied: result.applied,
-        ...(result.rewrite_from ? { rewrite_from: result.rewrite_from } : {}),
-        ...(result.craft ? { craft: result.craft } : {}),
-        ...(result.review ? { review: result.review } : {}),
-        ...(result.error ? { note: result.error } : {})
-      };
+      if (res.ran) {
+        const { reportToAgentThread } = await import('$lib/server/team-ignition');
+        await reportToAgentThread(supabase, brandId, {
+          job: 'autopilot',
+          postsCreated: res.postsCreated ?? 0,
+          emailed: res.emailed ?? false,
+          ...(res.planned ? { planned: true } : {})
+        });
+      }
+      return res;
     }
 
     case 'subagent_run': {

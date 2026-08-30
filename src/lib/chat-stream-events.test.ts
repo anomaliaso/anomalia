@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   applyChatStreamEvent,
+  closeDanglingToolCalls,
   emptyStreamState,
   mergeStreamToolCalls,
   readSseEvents,
@@ -127,6 +128,41 @@ describe('the resumable snapshot', () => {
   it('takes the snapshot as truth for a call this tab never saw', () => {
     const merged = mergeStreamToolCalls([], [{ toolCallId: 't9', toolName: 'y', status: 'running' }]);
     expect(merged).toEqual([{ toolCallId: 't9', toolName: 'y', status: 'running' }]);
+  });
+});
+
+describe('closeDanglingToolCalls', () => {
+  /**
+   * L'incidente del 27/8 (riga di produzione `7bc0f716`): la sessione è morta a metà di un
+   * `delegate_task`, il turno è ripreso con una sessione fresca che non riemetteva il risultato
+   * del call precedente, e il partial finale ha mantenuto la chip «running» per sempre — loading
+   * perpetuo in UI fino al refresh. Lo stream che avrebbe consegnato la chiusura è finito: una
+   * chip ancora aperta a fine stream è una bugia, e va dichiarata come errore onesto.
+   */
+  it('a fine stream una chip ancora running diventa un errore dichiarato', () => {
+    const state = feed([
+      { type: 'tool-input-available', toolCallId: 'd1', toolName: 'delegate_task', input: { role: 'sandbox' } },
+      { type: 'text-delta', delta: 'continuo oltre' },
+      { type: 'finish', finishReason: 'stop' }
+    ]);
+    expect(state.tools[0].status).toBe('running');
+
+    const changed = closeDanglingToolCalls(state);
+
+    expect(changed).toBe(true);
+    expect(state.tools[0].status).toBe('error');
+    expect(state.tools[0].errorText).toBeTruthy();
+  });
+
+  it('una chip già chiusa non si tocca, e uno stream senza perdite non cambia nulla', () => {
+    const state = feed([
+      { type: 'tool-input-available', toolCallId: 't1', toolName: 'shell', input: { cmd: 'ls' } },
+      { type: 'tool-output-available', toolCallId: 't1', output: 'ok' },
+      { type: 'finish', finishReason: 'stop' }
+    ]);
+
+    expect(closeDanglingToolCalls(state)).toBe(false);
+    expect(state.tools[0]).toMatchObject({ status: 'done', output: 'ok' });
   });
 });
 

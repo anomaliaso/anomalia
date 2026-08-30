@@ -1,6 +1,4 @@
-import { googleGenaiClient } from '$lib/server/gemini';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
 import { structured } from '$lib/server/research';
 import { withBrandContext } from '$lib/server/ai-log';
 import { aiActCopyGuardrail } from '$lib/ai-act';
@@ -117,9 +115,8 @@ ${brief && draft && brief !== draft ? `\nEXISTING DRAFT (rewrite / adapt, do not
 
 Return JSON. "caption" is the default (use for long-form networks). Also fill a field for EACH selected platform (${platforms.join(', ')}) with that network's custom caption. If Reddit is selected, also return "title" (max 300 chars, plain, honest).`;
 
-  const ai = googleGenaiClient();
   const parsed = await withBrandContext(opts.brandId, () =>
-    structured<Record<string, unknown>>(ai, prompt, GEN_SCHEMA, undefined, {
+    structured<Record<string, unknown>>(null as never, prompt, GEN_SCHEMA, undefined, {
       label: 'manualPostingCaptions',
       brandId: opts.brandId,
       temperature: 0.7

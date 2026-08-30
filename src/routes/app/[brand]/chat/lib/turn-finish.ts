@@ -9,7 +9,7 @@ import {
 } from '$lib/server/chat/persistence';
 import { extractMemoryFromChat } from '$lib/server/brand-memory';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
-import { resolveChatModel, takeKieUsage } from '$lib/server/chat/model';
+import { resolveChatModel } from '$lib/server/chat/model';
 import { sourcesFromSteps } from '$lib/chat-sources';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import {
@@ -113,10 +113,6 @@ export async function finishSuccessfulTurn(input: {
     ms: Date.now() - chatT0,
     ok: true,
     ...extractSdkUsage(totalUsage),
-    // I crediti kie del turno (Luna/Grok/GPT): senza, il percorso interattivo — il più
-    // grosso — scriveva provider_credits NULL e il costo veniva stimato dalle RATES,
-    // che su kie riportano input_tokens 0 e farebbero sembrare il turno quasi gratis.
-    ...takeKieUsage(chatModel),
     brandId: brand.id,
     userId: user.id,
     threadId,

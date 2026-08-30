@@ -14,10 +14,37 @@ const PKG = JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Recor
 const ENV_EXAMPLE = readFileSync('.env.example', 'utf8');
 
 const COMPOSE = readFileSync('infra/compose/docker-compose.yml', 'utf8');
+const KONG = readFileSync('infra/compose/volumes/api/kong.yml', 'utf8');
+const APP_DOCKERFILE = readFileSync('infra/app/Dockerfile', 'utf8');
+
+const bundledModules = (dir = 'src'): string[] =>
+	readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+		const path = `${dir}/${e.name}`;
+		if (e.isDirectory()) return bundledModules(path);
+		if (!/\.(ts|svelte)$/.test(e.name) || /\.test\.ts$/.test(e.name)) return [];
+		return [path];
+	});
 
 const publishedPorts = (): string[] => [...COMPOSE.matchAll(/^\s*-\s*'([^']+:[^']+)'/gm)].map((m) => m[1]);
 
 describe('docker-compose del self-host', () => {
+	it('nessun modulo pretende env al momento della build: l’immagine si costruisce senza .env', () => {
+		const offenders = bundledModules().filter((f) =>
+			/^import .* from '\$env\/static\/public';/m.test(readFileSync(f, 'utf8'))
+		);
+
+		expect(offenders, `usano $env/static/public: ${offenders.join(', ')}`).toEqual([]);
+	});
+
+	it('worker riusa l’immagine di app: due build identiche non entrano insieme negli 8 GiB del builder', () => {
+		const block = (service: string) =>
+			COMPOSE.match(new RegExp(`\\n  ${service}:\\n([\\s\\S]*?)(?=\\n  \\w+:|\\n\\w|$)`))?.[1] ?? '';
+
+		expect(PKG.scripts['build:node']).toContain('max-old-space-size=8192');
+		expect(block('app')).toMatch(/^\s{4}build:/m);
+		expect(block('worker'), 'worker ricostruisce la stessa immagine di app in parallelo').not.toMatch(/^\s{4}build:/m);
+	});
+
 	it('la porta del database è la stessa dentro e fuori: cambiarla non lo stacca dall’host', () => {
 		const mapping = publishedPorts().find((p) => p.includes('POSTGRES_PORT')) ?? '';
 		const sides = mapping.match(/^(\$\{[^}]*\}|\d+):(\$\{[^}]*\}|\d+)(\/tcp)?$/);
@@ -35,6 +62,10 @@ describe('docker-compose del self-host', () => {
 });
 
 describe('avviare la build di produzione', () => {
+	it('installa i workspace package prima di npm ci', () => {
+		expect(APP_DOCKERFILE).toContain('COPY packages ./packages');
+	});
+
 	/**
 	 * `$env/dynamic/private` legge `process.env` a runtime, e `node build` non legge nessun `.env`:
 	 * lo carica Vite, che a quel punto non c'è più. La guida dice `npm run build:node && npm run
@@ -66,6 +97,21 @@ describe('healthcheck dell’app', () => {
 	it('non picchia la homepage: HIDE_MARKETING la reindirizza', () => {
 		expect(COMPOSE).toMatch(/127\.0\.0\.1:3000\/robots\.txt/);
 		expect(COMPOSE).not.toMatch(/127\.0\.0\.1:3000\/'/);
+	});
+});
+
+describe('Realtime dello stack locale', () => {
+	it('usa il servizio Realtime dello stesso compose e propaga il flag kit all’app', () => {
+		expect(COMPOSE).toContain('AGENT_KIT: ${AGENT_KIT:-off}');
+		expect(COMPOSE).toContain('BILLING_PROVIDER: ${BILLING_PROVIDER:-open}');
+		expect(COMPOSE).toContain('worker:');
+		expect(COMPOSE).toContain("command: ['node', 'build-worker/index.js']");
+		expect(COMPOSE).not.toContain('container_name:');
+		expect(KONG).toContain('url: http://realtime-dev:4000/socket');
+		expect(KONG).not.toContain('realtime-dev.anomalia-realtime');
+		expect(KONG.match(/Host: realtime-dev/g) ?? []).toHaveLength(2);
+		expect(APP_DOCKERFILE).toContain('RUN npm run worker:build');
+		expect(APP_DOCKERFILE).toContain('COPY --from=builder /app/build-worker /app/build-worker');
 	});
 });
 

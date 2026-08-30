@@ -1,6 +1,5 @@
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
 import { resolveUserTurnMediaParts } from '$lib/media-parts';
 import { harnessGenerateText } from '$lib/server/harness';
@@ -10,7 +9,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { computeCostUsd, extractSdkUsage, getBrandPlanContext, logAiCall, setBrandPlanContext, withBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, geminiVisualCreditShare, googleGenaiClient } from '$lib/server/gemini';
+import { geminiVisualCreditShare, makeGenaiClient } from '$lib/server/gemini';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { getCreditsUsage, type Brand } from '$lib/server/credits';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { listBrandMedia, publishLibraryImageAsPostMedia } from '$lib/server/brand-media';
@@ -29,13 +29,17 @@ import {
 // ── Image agent (Fase 0) ─────────────────────────────────────────────────────
 // Server-side agentic loop for post images. Replaces renderWithQC on migrated call sites only.
 
-export const IMAGE_AGENT_MODEL = geminiFlash;
+export const IMAGE_AGENT_MODEL = llmDefaultModel;
 export const MAX_AGENT_RENDERS = 4;
 export const MAX_AGENT_INSPECTS = 2;
 export const MAX_AGENT_STEPS = 50;
 export const STALL_STEP_THRESHOLD = 3;
 export const CONTEXT_IMAGE_MAX_PX = 768;
-/** Typical Nano Banana Pro render at list — and list is what the brand pays, on every plan. */
+/**
+ * Nano Banana Pro render at list — kept as the BUDGET estimate even though renders now default to
+ * the cheaper Nano Banana 2 Lite: until Lite's credits are measured, Pro list is the prudent upper
+ * bound, and real cost is in ai_calls from renderPostImage regardless.
+ */
 export const NANO_BANANA_PRO_LIST_RENDER_USD = 0.1386;
 
 /**
@@ -185,7 +189,7 @@ export function addStepCost(budget: AgentBudget, rawUsage: unknown): number {
   const stepUsd =
     computeCostUsd({
       label: 'image-agent-step',
-      provider: 'gemini',
+      provider: 'llm',
       model: IMAGE_AGENT_MODEL(),
       ms: 0,
       ok: true,
@@ -244,10 +248,8 @@ function fingerprint(best: BestResult | null, budget: AgentBudget): string {
 }
 
 function genaiClient(): GoogleGenAI {
-  return googleGenaiClient();
+  return makeGenaiClient();
 }
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
 
 async function downscaleForContext(dataUrl: string): Promise<{ mediaType: string; data: string }> {
   const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -728,10 +730,10 @@ async function runImageAgentInner(opts: ImageAgentOpts): Promise<ImageAgentResul
       agent: 'image',
       mode: opts.platform ?? 'standalone',
       model: IMAGE_AGENT_MODEL(),
-      provider: 'gemini',
+      provider: 'llm',
       surface: 'batch'
     }, {
-      model: google(IMAGE_AGENT_MODEL()),
+      model: llmLanguageModel(),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system: baseSystem,
       messages: [
@@ -772,7 +774,7 @@ async function runImageAgentInner(opts: ImageAgentOpts): Promise<ImageAgentResul
     const totalUsage = extractSdkUsage(result?.totalUsage);
     logAiCall({
       label: 'image-agent',
-      provider: 'gemini',
+      provider: 'llm',
       model: IMAGE_AGENT_MODEL(),
       ms: Date.now() - loopT0,
       ok: loopOk,

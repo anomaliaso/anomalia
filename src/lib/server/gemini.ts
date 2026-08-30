@@ -21,12 +21,15 @@ export function isGeminiFlashId(model: string | undefined): boolean {
   return !!model && FLASH_ID.test(model);
 }
 
-/** Nano Banana Pro — social stills, UGC covers, people, fidelity edits. */
+/** Nano Banana Pro — reachable only via an explicit model at a call site. */
 export const NANO_BANANA_PRO = 'gemini-3-pro-image-preview';
 
 export function isNanoBananaProId(model: string | undefined): boolean {
   return model === NANO_BANANA_PRO;
 }
+
+/** Nano Banana 2 Lite — the default render model everywhere (Gemini 3.1 Flash-Lite Image). */
+export const NANO_BANANA_2_LITE = 'gemini-3.1-flash-lite-image';
 
 /**
  * Share of *list* written to `ai_calls.cost_usd` for Gemini Flash / Nano Banana Pro: always 1,

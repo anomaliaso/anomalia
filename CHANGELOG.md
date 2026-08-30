@@ -214,6 +214,48 @@ L'healthcheck di compose picchiava `/`: busybox wget tratta un 303 come
 errore, quindi accendere la flag avrebbe lasciato l'app forever-unhealthy.
 Ora picchia `/robots.txt`, che è sempre 200.
 
+### Un tubo solo per il testo
+
+Il testo, il JSON strutturato, gli embeddings, i giudici video/audio e la
+musica Lyria passano da un client OpenAI-compatibile (`LLM_BASE_URL` +
+`LLM_API_KEY`). In produzione è OpenRouter; il codice parla il protocollo, non
+il marchio. Gemini resta un id modello sul tubo (`google/gemini-*`), non un
+secondo SDK.
+
+Foto, clip e voce restano su Kie. I motori di ricerca restano i loro (Exa,
+DeepSeek, Tavily, Bing). L'audit GEO su Gemini usa il plugin web nativo del
+gateway; Bing sintetizza i propri snippet senza Google Search.
+
+I loop batch (immagine, strategia, settimana, produce) restano su
+`generateText` con i cap USD/tempo: `HarnessAgent` non ha `prepareStep`, quindi
+un find-replace avrebbe lasciato i cap a terra. Il GTM di produzione è solo
+Zod, senza agente annidato. Il tick dell'autopilot accoda un job
+`run_autopilot` che gira solo sul worker, con un'ora di muro; il week planner
+HTTP resta a 200 secondi.
+
+### Le chat non muoiono più al secondo messaggio
+
+Riprodotto e riparato il `kit_turn_died` di produzione. Tre difetti in fila,
+tutti sul confine fra il turno e il suo processo:
+
+1. Dopo un turno FINITO, la sessione harness riusata per il thread non partiva
+   più («Request was aborted» dentro pi): il secondo messaggio prendeva un 500
+   dopo 60 secondi. Ora il timeout di avvio scarta la sessione morta e riprova
+   UNA volta con una sessione fresca — il riuso resta l'ottimizzazione del
+   primo tentativo, non un invariante.
+2. Quando il cane da guardia ferma un turno muto, il gateway poteva ignorare
+   l'abort: `consumeStream` non tornava mai, la riga restava `running` col
+   battito vivo e il reaper la raccoglieva solo al congelamento
+   dell'istanza — l'email `kit_turn_died`. C'è una chiusura forzata con
+   scadenza dopo l'abort.
+3. Un tool che risponde senza `content` uccideva la conversione del prossimo
+   step («reading 'map'»): il turno restava appeso. Ora il modello vede testo
+   vuoto, che è ciò che è.
+
+Verificato sullo stack locale col flusso reale a due messaggi: il primo
+completava, il secondo prendeva 500 in 61 secondi; ora entrambi chiudono
+`done` in 23 e 14 secondi.
+
 ### Il secondo messaggio di un thread si vedeva rifiutare OGNI tool
 
 `startHarnessTurn` cuoce il ToolSet una volta per `sessionKey` (il thread) e

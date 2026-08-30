@@ -19,7 +19,6 @@ export const DOC_LIMIT_PRO = 300;
 
 // text-embedding-004 404s on v1beta (verified live 2026-07-31) — gemini-embedding-001 is the
 // available model; outputDimensionality pins it to the vector(768) column in 0114.
-const EMBED_MODEL = 'gemini-embedding-001';
 const EMBED_DIMS = 768;
 const EMBED_BATCH = 32;
 const RRF_K = 60;
@@ -156,53 +155,27 @@ function vectorLiteral(values: number[]): string {
 
 async function embedTexts(brandId: string, texts: string[]): Promise<(number[] | null)[]> {
   if (!texts.length) return [];
-  // SEMPRE Google, mai il client condiviso. `genaiClient()` segue `AI_ROUTE_TEXT` e su kie diventa
-  // il passthrough — che NON serve `embedContent`: la ricerca semantica del brand smetterebbe di
-  // indicizzare, e il sintomo sarebbe "il chat non trova i documenti", non un errore di trasporto.
-  // È il caso da manuale di capacità mancante contro provider disponibile (vedi model-routing.ts).
-  const { googleGenaiClient } = await import('$lib/server/gemini');
-  const ai = googleGenaiClient();
+  const { llmEmbed } = await import('$lib/server/llm');
   const out: (number[] | null)[] = new Array(texts.length).fill(null);
 
   for (let i = 0; i < texts.length; i += EMBED_BATCH) {
     const batch = texts.slice(i, i + EMBED_BATCH);
-    const t0 = Date.now();
     try {
-      const embeddings = await withBrandContext(brandId, async () => {
-        const res = await ai.models.embedContent({
-          model: EMBED_MODEL,
-          contents: batch,
-          config: { outputDimensionality: EMBED_DIMS }
-        });
-        return res.embeddings ?? [];
-      });
-      const inputTokens = Math.ceil(batch.reduce((n, t) => n + t.length, 0) / 4);
-      logAiCall({
-        label: 'knowledge-embed',
-        provider: 'gemini',
-        model: EMBED_MODEL,
-        ms: Date.now() - t0,
-        ok: true,
-        inputTokens,
-        brandId,
-        context: 'knowledge'
-      });
+      const embeddings = await withBrandContext(brandId, () => llmEmbed(batch));
       for (let j = 0; j < batch.length; j++) {
-        const values = embeddings[j]?.values;
-        out[i + j] = values && values.length === EMBED_DIMS ? values : null;
+        out[i + j] = embeddings[j] ?? null;
       }
     } catch (e) {
       logAiCall({
         label: 'knowledge-embed',
-        provider: 'gemini',
-        model: EMBED_MODEL,
-        ms: Date.now() - t0,
+        provider: 'llm',
+        model: 'embedding',
+        ms: 0,
         ok: false,
         error: e instanceof Error ? e.message : String(e),
         brandId,
         context: 'knowledge'
       });
-      console.error('[knowledge] embed batch failed', e);
     }
   }
   return out;

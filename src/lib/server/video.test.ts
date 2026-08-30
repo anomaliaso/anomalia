@@ -8,6 +8,7 @@ import {
   clampVideoAspectRatio,
   videoModelCaps,
   videoDurationOptions,
+  ugcDurationCap,
   suggestVideoDuration,
   resolveVideoDuration,
   resolveVideoModel,
@@ -248,6 +249,7 @@ describe('videoModelCaps', () => {
       family: 'grok-1.5',
       minDuration: 1,
       maxDuration: 15,
+      maxPromptChars: 4096,
       supportsUpscale: true,
       generateAudio: false
     });
@@ -282,6 +284,16 @@ describe('clampVideoDuration (model-aware)', () => {
   it('the product floor is above Seedance/Grok provider floors, deliberately', () => {
     expect(MIN_DURATION).toBeGreaterThan(videoModelCaps('bytedance/seedance-2-5').minDuration);
     expect(MIN_DURATION).toBeGreaterThan(videoModelCaps('grok-imagine-video-1-5-preview').minDuration);
+  });
+});
+
+describe('ugcDurationCap', () => {
+  it('the ad flag never picks a model: 22s only on Seedance 2.5, organic ceiling elsewhere', () => {
+    expect(ugcDurationCap('bytedance/seedance-2-5', { ugc: true, ugcAd: true })).toBe(22);
+    expect(ugcDurationCap('grok-imagine-video-1-5-preview', { ugc: true, ugcAd: true })).toBe(15);
+    expect(ugcDurationCap(null, { ugc: true, ugcAd: true })).toBe(15);
+    expect(ugcDurationCap('bytedance/seedance-2-5', { ugc: true })).toBe(15);
+    expect(ugcDurationCap('grok-imagine-video-1-5-preview', { ugc: false, ugcAd: true })).toBeNull();
   });
 });
 
@@ -432,6 +444,15 @@ describe('fitScriptToDuration', () => {
 
 describe('buildJobInput (per-model adapter)', () => {
   const base = { prompt: 'p', durationSeconds: 6, resolution: '480p', aspectRatio: '9:16' };
+
+  it('grok clamps an over-limit prompt to the model cap — an over-long brief must not reach createTask', () => {
+    const long = `${base.prompt.repeat(1)} ${'scene direction and product detail '.repeat(200)}`.trim();
+    expect(long.length).toBeGreaterThan(videoModelCaps('grok-imagine-video-1-5-preview').maxPromptChars);
+    const out = buildJobInput('grok-imagine-video-1-5-preview', { ...base, prompt: long });
+    expect((out.prompt as string).length).toBeLessThanOrEqual(
+      videoModelCaps('grok-imagine-video-1-5-preview').maxPromptChars
+    );
+  });
 
   it('grok i2v: image_urls array + STRING duration, no aspect_ratio (cover fixes it)', () => {
     const out = buildJobInput('grok-imagine/image-to-video', { ...base, imageUrl: 'https://x/c.jpg' });

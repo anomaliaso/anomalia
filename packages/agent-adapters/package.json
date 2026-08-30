@@ -14,8 +14,7 @@
     "./sandbox-emulator": "./src/sandbox-emulator.ts",
     "./vercel-sandbox": "./src/vercel-sandbox.ts",
     "./runtime/ai-runtime": "./src/runtime/ai-runtime.ts",
-    "./runtime/harness-runtime": "./src/runtime/harness-runtime.ts",
-    "./runtime/models": "./src/runtime/models.ts"
+    "./runtime/harness-runtime": "./src/runtime/harness-runtime.ts"
   },
   "dependencies": {
     "@anomalia/agent-kit": "*",

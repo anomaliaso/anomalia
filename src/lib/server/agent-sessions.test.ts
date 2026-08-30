@@ -1,12 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { clipEventData, createRecorder } from './agent-sessions';
+import { agentSessionRow, clipEventData, createRecorder } from './agent-sessions';
 import { noteSecret } from './redact';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function minimalInsert() {
+  return {
+    brandId: 'b-1',
+    agent: 'web',
+    mode: 'sandbox',
+    surface: 'chat',
+    status: 'ok' as const,
+    transcript: '',
+    recorder: createRecorder()
+  };
+}
 
 /** Un orologio finto: `new Date()` dentro un test rende gli assert dipendenti da quando girano. */
 function clock() {
   let t = 1_700_000_000_000;
   return () => (t += 1000);
 }
+
+describe('agentSessionRow', () => {
+  it('la riga porta il suo id: la colonna non ha default e senza uuid la insert muore con 23502', () => {
+    const row = agentSessionRow(minimalInsert());
+    expect(row.id).toMatch(UUID_RE);
+  });
+});
 
 describe('createRecorder', () => {
   it('tiene ordine, tipo ed esito di ogni evento', () => {

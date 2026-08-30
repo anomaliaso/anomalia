@@ -5,13 +5,11 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { googleGenaiClient } from '$lib/server/gemini';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { tool, stepCountIs, hasToolCall } from 'ai';
 import { harnessStreamText } from '$lib/server/harness';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { env } from '$env/dynamic/private';
+import { llmLanguageModel } from '$lib/server/llm';
 import { resolveUserTurnMediaParts, type MediaPart } from '$lib/media-parts';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
@@ -34,12 +32,6 @@ import {
 } from '$lib/server/chat/brand-context-tools';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
-
-const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-
-function genaiClient() {
-  return googleGenaiClient();
-}
 
 export type MediaKindPreference = 'auto' | 'image' | 'video';
 
@@ -141,13 +133,13 @@ export function buildSystem(opts: {
   hasSeedanceMaterials?: boolean;
 }): string {
   const kindLine = opts.forceUgc
-    ? 'Produce UGC talking VIDEO(s) only. Always call generate_video with ugc:true and durationSeconds≤15. Prefer a still cover via generate_image first when useful, then animate it. Use subject/camera/audio/timeline shot briefs (never a vibe paragraph), and a CONCISE spoken PAS script (~40–48 words total — brand-relevant problem → agitate → brand/feature solution → soft CTA; personal and emotional, not a rant). Pain must be THIS brand\'s category problem — never medical/family/unrelated life drama. Never burn captions/subtitles on the clip. After every generate_video the system auto-reviews the clip (calendar-style score). If the verdict is fix/kill or the score is below 7, remake from the QC notes — do not ship the first take. You may still call review_video to re-score a reference/competitor clip.'
+    ? 'Produce UGC talking VIDEO(s) only. Always call generate_video with ugc:true and durationSeconds≤15. Prefer a still cover via generate_image first when useful, then animate it. Use subject/camera/audio/timeline shot briefs (never a vibe paragraph), and a CONCISE spoken PAS script (~40–48 words total — brand-relevant problem → agitate → brand/feature solution → soft CTA; personal and emotional, not a rant). Pain must be THIS brand\'s category problem — never medical/family/unrelated life drama. Never burn captions/subtitles on the clip.'
     : opts.kind === 'image'
       ? 'Produce IMAGE(s) only — do not call generate_video.'
       : opts.kind === 'video'
         ? opts.hasSeedanceMaterials
           ? 'Produce VIDEO(s). The user already supplied Seedance materials (first/last frame and/or reference audio/video). When a reference VIDEO is present, call breakdown_reference_video FIRST to reverse-engineer a second-by-second shot brief, then pass that brief as the generate_video prompt (and keep the reference video URL). Remake intent ("rifallo", "redo", "change the script") → keep the reference video URL and apply the brief changes. Do NOT invent a new cover with generate_image unless they left every frame/ref empty.'
-          : 'Produce VIDEO(s). Prefer a UGC STORYBOARD first: generate_image for the HOOK cover (pain-moment face, product NOT visible yet), optionally a DEMO still, then generate_video. Organic UGC: ugc:true, durationSeconds≤15. Paid UGC ads: ugc:true + ugcAd:true → forces Seedance 2.5 at 22s. Use ALL-CAPS Seedance block prompts (REFERENCES/CAMERA/LOOK/STYLE/STAGES/CONSTRAINTS). Spoken script: Hook → Problem → Demo → Proof → CTA; pain must be brand-category relevant (never invent medical/family/unrelated life drama); name the brand/feature in the solution beat. If the user selected an existing grid VIDEO to remake, that URL is in the run as a Seedance reference video — keep it and revise from the brief (Seedance only; Grok cannot take video refs).'
+          : 'Produce VIDEO(s). Prefer a UGC STORYBOARD first: generate_image for the HOOK cover (pain-moment face, product NOT visible yet), optionally a DEMO still, then generate_video. Organic UGC: ugc:true, durationSeconds≤15. Paid UGC ads: ugc:true + ugcAd:true → 22s on Seedance 2.5 (pass video_model), 15s cap on the Grok Imagine default. Use ALL-CAPS Seedance block prompts (REFERENCES/CAMERA/LOOK/STYLE/STAGES/CONSTRAINTS). Spoken script: Hook → Problem → Demo → Proof → CTA; pain must be brand-category relevant (never invent medical/family/unrelated life drama); name the brand/feature in the solution beat. If the user selected an existing grid VIDEO to remake, that URL is in the run as a Seedance reference video — keep it and revise from the brief (Seedance only; Grok cannot take video refs).'
         : 'Decide whether the brief needs an image, a video, or both. Prefer images unless motion is clearly requested.';
 
   const modelLine = opts.videoModel
@@ -251,7 +243,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
   const kind: MediaKindPreference = forceUgc ? 'video' : (opts.kind ?? 'auto');
   const variants = clampVariants(opts.variants);
   const useBrandStyle = opts.useBrandStyle !== false;
-  const ai = genaiClient();
+  const ai = null as never;
 
   const [{ data: kit }, { data: brandRow }] = await Promise.all([
     opts.supabase
@@ -412,7 +404,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
     model: (() => {
       const b = geminiFast();
       const id = IMAGE_AGENT_MODEL();
-      return id === b.modelId ? b : { ...b, model: google(id), modelId: id };
+      return id === b.modelId ? b : { ...b, model: llmLanguageModel(id), modelId: id };
     })(),
     defaultAgent: 'media',
     surfaceWriteKeys: ['generate_image', 'generate_video', 'design_graphic'],
@@ -569,54 +561,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
       }
     }),
 
-    review_video: tool({
-      description:
-        'Review a FINISHED clip against organic UGC or paid-ads standards (hook, doomscroll stop, sound-off, hold, CTA/offer). Call when the user asks if a generated video works, or to QC a reference/competitor clip. Credits only — does not spend the video budget.',
-      inputSchema: z.object({
-        url: z
-          .string()
-          .optional()
-          .describe('Public URL of the video. Defaults to the last generated clip or the first reference video.'),
-        standard: z
-          .enum(['organic', 'ads'])
-          .optional()
-          .describe('organic = Reels/TikTok UGC (default in UGC Creator). ads = paid UGC ad.'),
-        script: z.string().optional()
-      }),
-      execute: async ({ url, standard, script }) => {
-        try {
-          const { parseVideoStandard, reviewVideo } = await import('$lib/server/video-review');
-          const target =
-            url?.trim() ||
-            produced.filter((p) => p.type === 'video').at(-1)?.url ||
-            opts.referenceVideoUrls?.[0]?.trim() ||
-            '';
-          if (!target) return { error: 'No video URL — pass url or generate a clip first.' };
-          const std = parseVideoStandard(standard) ?? 'organic';
-          const result = await reviewVideo(target, {
-            standard: std,
-            brandName: String(brandRow?.name ?? '').trim() || null,
-            script: script?.trim() || null,
-            language:
-              brandRow?.content_prefs && typeof brandRow.content_prefs === 'object'
-                ? String((brandRow.content_prefs as { language?: string }).language ?? '').trim() ||
-                  null
-                : null
-          });
-          if (!result.ok) return { error: result.error };
-          const { persistReadyReview } = await import('$lib/server/video-review-store');
-          await persistReadyReview(opts.supabase, {
-            brandId: opts.brandId,
-            url: target,
-            standard: std,
-            review: result.review
-          });
-          return { ok: true, ...result.review };
-        } catch (e) {
-          return { error: e instanceof Error ? e.message : String(e) };
-        }
-      }
-    }),
+
 
     generate_video: tool({
       description: `Animate a cover (or Seedance multimodal refs) into a short clip via kie. Prefer passing coverImageUrl from a prior generate_image unless the user already supplied a first frame / refs. When a reference video exists, prefer a shot brief from breakdown_reference_video as the prompt. Budget: ${budget.videos} videos this run.`,
@@ -634,14 +579,14 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
           .max(30)
           .optional()
           .describe(
-            'Clip length in seconds. Organic UGC ≤15; ugcAd:true locks 22s on Seedance 2.5. Prefer a shorter script over a longer clip.'
+            'Clip length in seconds. Organic UGC ≤15; ugcAd is 22s on Seedance 2.5, capped at 15s on other models. Prefer a shorter script over a longer clip.'
           ),
         ugc: z.boolean().optional().describe('Opt into handheld UGC genre + dead-space tighten. Spoken audio only when script is set — never burn captions/subtitles on UGC.'),
         ugcAd: z
           .boolean()
           .optional()
           .describe(
-            'Paid UGC ad. Requires ugc:true. Forces Seedance 2.5 and locks duration to 22s (fuller Demo+Proof). Omit/false = organic ≤15s.'
+            'Paid UGC ad. Requires ugc:true. 22s on Seedance 2.5 (pass video_model); other models cap at 15s (fuller Demo+Proof). Omit/false = organic ≤15s.'
           ),
         script: z
           .string()
@@ -658,14 +603,10 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
           try {
             const { renderVideo, videoModelCaps, isKnownVideoModel, UGC_AD_DURATION, UGC_ORGANIC_MAX_DURATION } =
               await import('$lib/server/video');
-            const { SEEDANCE_25_MODEL } = await import('$lib/video-models');
             const isUgc = forceUgc || ugc === true;
             const isAd = isUgc && ugcAd === true;
-            const lockedModel = isAd
-              ? SEEDANCE_25_MODEL
-              : opts.videoModel && isKnownVideoModel(opts.videoModel)
-                ? opts.videoModel
-                : null;
+            const lockedModel =
+              opts.videoModel && isKnownVideoModel(opts.videoModel) ? opts.videoModel : null;
             const caps = videoModelCaps(lockedModel ?? 'grok-imagine-video-1-5-preview');
             const firstFrame =
               opts.firstFrameUrl?.trim() ||
@@ -728,94 +669,8 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
             });
             if (!rendered?.url) return { error: 'Video render returned nothing' };
             const videoAspect = aspectIn ?? (aspect === '16:9' ? '16:9' : '9:16');
-            let final = rendered;
-            let id = await persistItem('video', final.url, motionPrompt, videoAspect, isUgc);
-            let review: ReturnType<
-              typeof import('$lib/server/video-review-apply').compactReviewForTool
-            > | undefined;
-
-            if (isUgc) {
-              const {
-                compactReviewForTool,
-                formatReviewApplyBrief,
-                reviewNeedsRewrite,
-                scoreFinishedClip,
-                VIDEO_QC_REMAKE_MAX
-              } = await import('$lib/server/video-review-apply');
-              const { deleteMediaGeneratorItem } = await import('$lib/server/media-generator/persist');
-              const language =
-                brandRow?.content_prefs && typeof brandRow.content_prefs === 'object'
-                  ? String((brandRow.content_prefs as { language?: string }).language ?? '').trim() ||
-                    null
-                  : null;
-              const scoreClip = (url: string) =>
-                scoreFinishedClip(opts.supabase, {
-                  brandId: opts.brandId,
-                  url,
-                  // Automatico: giudizio in linea che pilota il rifacimento della clip.
-                  auto: true,
-                  standard: isAd ? 'ads' : 'organic',
-                  opts: {
-                    standard: isAd ? 'ads' : 'organic',
-                    brandName: String(brandRow?.name ?? '').trim() || null,
-                    script: spoken || null,
-                    language,
-                    kind: 'video',
-                    abortSignal: opts.abortSignal
-                  }
-                });
-              let qc = await scoreClip(final.url);
-              if (qc.ok && reviewNeedsRewrite(qc.review)) {
-                for (let attempt = 0; attempt < VIDEO_QC_REMAKE_MAX; attempt += 1) {
-                  if (opts.abortSignal?.aborted) break;
-                  try {
-                    const applyBrief = `${motionPrompt}\n\n${formatReviewApplyBrief(qc.review, 'ugc')}`;
-                    const remade = await renderVideo(opts.supabase, opts.userId, applyBrief, {
-                      imageUrl: firstFrame,
-                      firstFrameUrl: opts.firstFrameUrl,
-                      lastFrameUrl: opts.lastFrameUrl,
-                      referenceVideoUrls: [final.url, ...(opts.referenceVideoUrls ?? [])].slice(
-                        0,
-                        10
-                      ),
-                      referenceAudioUrls: opts.referenceAudioUrls,
-                      aspectRatio: aspectIn ?? (aspect === '16:9' ? '16:9' : '9:16'),
-                      visualStyle: useBrandStyle ? visualStyle : undefined,
-                      duration: duration != null
-                        ? Math.min(caps.maxDuration, Math.max(caps.minDuration, duration))
-                        : undefined,
-                      model: lockedModel,
-                      prompt: creativePrompt ? applyBrief : undefined,
-                      shotBrief: shotBrief ? applyBrief : undefined,
-                      ugc: isUgc,
-                      ugcAd: isAd,
-                      script: spoken
-                    });
-                    if (!remade?.url) break;
-                    const prevId = id;
-                    const remadeQc = await scoreClip(remade.url);
-                    const remadeId = await persistItem(
-                      'video',
-                      remade.url,
-                      motionPrompt,
-                      videoAspect,
-                      isUgc
-                    );
-                    if (prevId) {
-                      await deleteMediaGeneratorItem(opts.supabase, opts.brandId, prevId).catch(swallow('delete replaced item'));
-                    }
-                    final = remade;
-                    id = remadeId;
-                    qc = remadeQc;
-                    if (!qc.ok || !reviewNeedsRewrite(qc.review)) break;
-                  } catch (e) {
-                    console.error('[media-generator] QC remake failed', e);
-                    break;
-                  }
-                }
-              }
-              if (qc.ok) review = compactReviewForTool(qc.review);
-            }
+            const final = rendered;
+            const id = await persistItem('video', final.url, motionPrompt, videoAspect, isUgc);
 
             produced.push({ type: 'video', url: final.url, prompt: motionPrompt, id });
             return {
@@ -827,8 +682,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
               coverImageUrl: firstFrame,
               duration: final.durationSeconds,
               taskId: final.taskId,
-              model: lockedModel,
-              review
+              model: lockedModel
             };
           } catch (e) {
             return { error: e instanceof Error ? e.message : String(e) };
@@ -1021,10 +875,10 @@ If editing attached photos, call generate_image once per target × variants with
     agent: 'media_generator',
     mode: `${kind}:v${variants}`,
     model: IMAGE_AGENT_MODEL(),
-    provider: 'gemini',
+    provider: 'llm',
     surface: 'chat'
   }, {
-    model: google(IMAGE_AGENT_MODEL()),
+    model: llmLanguageModel(IMAGE_AGENT_MODEL()),
     maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
     system,
     messages: [{ role: 'user', content: userContent }],
@@ -1037,7 +891,7 @@ If editing attached photos, call generate_image once per target × variants with
       void base.close();
       logAiCall({
         label: 'media-generator',
-        provider: 'gemini',
+        provider: 'llm',
         model: IMAGE_AGENT_MODEL(),
         ms: Date.now() - t0,
         ok: true,

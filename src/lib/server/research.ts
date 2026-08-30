@@ -1,15 +1,15 @@
 import { swallow } from '$lib/server/swallow';
-import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { GoogleGenAI } from '@google/genai';
 import { genaiClient, fetchImagePart } from '$lib/server/brand-context';
 import { fetchPage } from '$lib/server/brand-analysis';
 import { scrapeForOnboarding, type ScrapeTarget, type ScrapedPost } from '$lib/server/scrapecreators';
 import { aiStructured, aiText, parallelVariants } from '$lib/server/xiaomi';
-import { logAiCall, extractGeminiUsage, requireBrandContext } from '$lib/server/ai-log';
-import { flashModelFor, geminiFlash, genaiThinking, googleGenaiClient, isKieTransport, type GeminiThinkingLevel } from '$lib/server/gemini';
+import { requireBrandContext } from '$lib/server/ai-log';
+import { type GeminiThinkingLevel } from '$lib/server/gemini';
 import { exaConfigured, exaGroundedAnswer } from '$lib/server/exa';
 import { tavilyConfigured, tavilyGroundedAnswer } from '$lib/server/tavily';
 import { deepseekSearchConfigured, deepseekGroundedAnswer } from '$lib/server/deepseek-search';
+import { llmGeminiSearchModel, llmImagesFromInline, llmStructured, llmText } from '$lib/server/llm';
 
 // Deep-research module for onboarding: discover competitors (web-grounded), resolve their social
 // handles, scrape + benchmark their posts, and synthesise a strategy report that both the user
@@ -19,8 +19,6 @@ import { deepseekSearchConfigured, deepseekGroundedAnswer } from '$lib/server/de
 // cannot be combined with responseSchema/JSON mode in the same call. So every grounded stage is a
 // PAIR: groundedText() (free-text + web) → structured() (normalise into typed JSON). The two
 // helpers below are the spine of that pattern; every stage reuses them.
-
-const MODEL = geminiFlash;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -47,7 +45,8 @@ export async function groundedText(
   // i $0.005-0.008 di Exa e Tavily: dieci volte tanto per una risposta che poi viene comunque
   // normalizzata da una seconda chiamata. Il motore di ricerca lo scegliamo per prezzo perché qui
   // nessuno misura CHI ha risposto — quando conta il nome del motore (audit GEO, "è citato il brand
-  // nelle risposte di Gemini?") il chiamante usa groundedGemini, che è rimasta e resta su Google.
+  // nelle risposte di Gemini?") il chiamante usa groundedGemini, che sul gateway è un Gemini con
+  // plugin web nativo, non lo SDK Google.
   //
   // Più provider e non uno solo perché il guasto tipico non è la rottura ma la raffica: Exa ha
   // risposto 192 volte su 241 in 14 giorni e ha rate-limitato (429) le altre 49, 44 delle quali in
@@ -77,63 +76,32 @@ export async function groundedText(
 }
 
 /**
- * Web-grounded answer from GEMINI SPECIFICALLY (Google Search grounding) — no provider chain.
+ * Risposta web-grounded da un GEMINI sul centralino (plugin OpenRouter `web` + `engine: native`).
  *
- * Exists for callers that need the answer to come from a NAMED engine rather than from whoever is
- * cheapest: the GEO citation audit measures "is this brand cited in Gemini's answers", so routing it
- * through groundedText would have labelled a DeepSeek answer as Gemini's and quietly measured the
- * wrong engine. Da quando groundedText è passata a Exa/DeepSeek/Tavily, questa è l'UNICA porta su
- * cui paghiamo la ricerca di Google — e l'unica che torna con groundingMetadata.
+ * Serve ai chiamanti che vogliono UN motore nominato, non il più economico: l'audit GEO misura
+ * "il brand è citato nelle risposte di Gemini", quindi passarlo da groundedText etichettava una
+ * risposta DeepSeek come Gemini. Bing usa llmText SENZA questo plugin: le fonti sono già gli URL Bing.
  */
 export async function groundedGemini(
-  ai: GoogleGenAI,
+  _ai: GoogleGenAI,
   prompt: string,
   systemInstruction?: string,
   opts?: { brandId?: string }
 ): Promise<{ text: string; citations: Citation[] }> {
-  const brandId = opts?.brandId ?? requireBrandContext(opts);
-  const t0 = Date.now();
-  // SEMPRE Google, mai il trasporto kie. kie serve `googleSearch` e risponde con prosa credibile,
-  // ma NON restituisce `groundingMetadata`: le citazioni tornerebbero vuote, e questa funzione
-  // esiste proprio per le citazioni (l'audit GEO conta chi cita il brand, la UI conta le fonti).
-  // Un elenco fonti a zero non fa rumore da nessuna parte: sembra solo un web che non ha risposto.
-  const client = isKieTransport(ai) ? googleGenaiClient() : ai;
-  let res;
-  try {
-    res = await client.models.generateContent({
-      model: MODEL(),
-      config: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS, tools: [{ googleSearch: {} }], ...(systemInstruction ? { systemInstruction } : {}) },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }]
-    });
-    const usage = extractGeminiUsage(res);
-    // Grounding fee: Google bills each web search the model ran ($14/1k on Gemini 3.x), but only
-    // when the response actually cites web sources. webSearchQueries lists the queries performed.
-    const meta = res.candidates?.[0]?.groundingMetadata;
-    const cited = (meta?.groundingChunks ?? []).length > 0;
-    const groundingQueries = cited ? Math.max(meta?.webSearchQueries?.length ?? 0, 1) : 0;
-    logAiCall({ label: 'grounded', provider: 'gemini', model: MODEL(), prompt, ms: Date.now() - t0, ok: true, groundingQueries, ...usage, brandId: brandId ?? undefined });
-  } catch (e) {
-    logAiCall({ label: 'grounded', provider: 'gemini', model: MODEL(), prompt, ms: Date.now() - t0, ok: false, error: e instanceof Error ? e.message : String(e), brandId: brandId ?? undefined });
-    throw e;
-  }
-  const chunks = res.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-  const seen = new Set<string>();
-  const citations: Citation[] = [];
-  for (const c of chunks as AnyRec[]) {
-    const uri = c?.web?.uri;
-    if (uri && !seen.has(uri)) {
-      seen.add(uri);
-      citations.push({ uri, title: c?.web?.title ?? uri });
-    }
-  }
-  return { text: res.text ?? '', citations };
+  requireBrandContext(opts);
+  return llmText({
+    prompt,
+    system: systemInstruction,
+    webSearch: true,
+    model: llmGeminiSearchModel(),
+    label: 'grounded'
+  });
 }
 
-// The pure-Gemini structured JSON call (responseSchema, NO tools). Kept as its own function so it
-// can serve BOTH as the gemini path and the fallback of the provider-aware structured()/aiStructured
-// without recursion. Returns the parsed object (or {} on parse failure).
+// JSON vincolato sul centralino. Firma invariata (il client Google non viene più usato) perché
+// ogni call site passa già `ai` — toglierlo è un lotto a parte.
 export async function structuredGemini<T>(
-  ai: GoogleGenAI,
+  _ai: GoogleGenAI,
   prompt: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: AnyRec,
@@ -142,13 +110,6 @@ export async function structuredGemini<T>(
     label?: string;
     images?: Array<{ inlineData: { mimeType: string; data: string } }>;
     temperature?: number;
-    // How hard Gemini reasons on this call. Left unset the model decides on its own — and it bills
-    // thinking tokens AT THE OUTPUT RATE: measured over 14 days they were 38% of this model's
-    // entire spend (2.6M thinking vs 1.4M output), concentrated in JUDGE-style calls that return a
-    // verdict (critiqueImage burned 14 thinking tokens per token returned, reviewCaptions 9).
-    // Opt-in, not a global default: generative calls (blog articles, editorial plans) spend their
-    // reasoning on something the user actually reads.
-    // 3.x takes a LEVEL, not a token ceiling — see judgeThinkingLevel in gemini.ts.
     thinkingLevel?: GeminiThinkingLevel;
     brandId?: string;
     userId?: string;
@@ -156,34 +117,17 @@ export async function structuredGemini<T>(
     context?: string;
   }
 ): Promise<T> {
-  const { label = 'structured', images, temperature, thinkingLevel, ...logExtras } = opts ?? {};
-  const brandId = requireBrandContext(opts);
-  const t0 = Date.now();
-  let res;
+  requireBrandContext(opts);
+  const { label = 'structured', images, temperature } = opts ?? {};
   try {
-    res = await ai.models.generateContent({
-      // L'id del modello dipende dal client: su kie il passthrough vuole `gemini-3-7-flash` (con i
-      // punti risponde 404), e quell'id è anche l'unico segno che resta in `ai_calls` di dove è
-      // passata davvero la chiamata. Vedi flashModelFor.
-      model: flashModelFor(ai),
-      config: {
-        maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-        ...(systemInstruction ? { systemInstruction } : {}),
-        ...(temperature != null ? { temperature } : {}),
-        ...(thinkingLevel != null ? { thinkingConfig: genaiThinking(thinkingLevel) } : {})
-      },
-      contents: [{ role: 'user', parts: [{ text: prompt }, ...(images ?? [])] }]
+    return await llmStructured<T>({
+      prompt,
+      schema,
+      system: systemInstruction,
+      images: llmImagesFromInline(images),
+      temperature,
+      label
     });
-    const usage = extractGeminiUsage(res);
-    logAiCall({ label, provider: 'gemini', model: flashModelFor(ai), prompt, ms: Date.now() - t0, ok: true, ...usage, ...logExtras, brandId: logExtras.brandId ?? brandId ?? undefined });
-  } catch (e) {
-    logAiCall({ label, provider: 'gemini', model: flashModelFor(ai), prompt, ms: Date.now() - t0, ok: false, error: e instanceof Error ? e.message : String(e), ...logExtras, brandId: logExtras.brandId ?? brandId ?? undefined });
-    throw e;
-  }
-  try {
-    return JSON.parse(res.text || '{}') as T;
   } catch {
     return {} as T;
   }

@@ -54,7 +54,7 @@ export const CLAUDE_MAX_OUTPUT_TOKENS = 64_000;
  */
 export const HARNESS_MAX_OUTPUT_TOKENS = KIE_GROK_MAX_OUTPUT_TOKENS;
 
-export type AiProviderId = 'gemini' | 'kie' | 'xiaomi' | 'deepseek' | 'claude' | 'openrouter' | 'opencode';
+export type AiProviderId = 'gemini' | 'kie' | 'xiaomi' | 'deepseek' | 'claude' | 'openrouter' | 'opencode' | 'llm';
 
 const BY_PROVIDER: Record<AiProviderId, number> = {
   gemini: GEMINI_MAX_OUTPUT_TOKENS,
@@ -63,7 +63,8 @@ const BY_PROVIDER: Record<AiProviderId, number> = {
   deepseek: DEEPSEEK_MAX_OUTPUT_TOKENS,
   claude: CLAUDE_MAX_OUTPUT_TOKENS,
   openrouter: HARNESS_MAX_OUTPUT_TOKENS,
-  opencode: HARNESS_MAX_OUTPUT_TOKENS
+  opencode: HARNESS_MAX_OUTPUT_TOKENS,
+  llm: HARNESS_MAX_OUTPUT_TOKENS
 };
 
 /**

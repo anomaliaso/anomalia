@@ -1,7 +1,6 @@
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import {
   tool,
   stepCountIs,
@@ -14,7 +13,7 @@ import { z } from 'zod';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, googleGenaiClient } from '$lib/server/gemini';
+import { llmConfigured, llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { persistAgentRun, type AgentStepLog } from '$lib/server/agent-runs';
 import { groundedText } from '$lib/server/research';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
@@ -29,8 +28,7 @@ import {
   readMediaForAgent,
   readRubricsForAgent,
   readStrategyReportForAgent,
-  readVisualInsightsForAgent,
-  readMediaReviewsForAgent
+  readVisualInsightsForAgent
 } from '$lib/server/strategy-agent-reads';
 import { ensureMarketReferences, formatMarketBrief } from '$lib/server/market-references';
 import { upcomingTimelyHooks } from '$lib/server/thematic-calendar';
@@ -134,14 +132,12 @@ function grokModel(): { model: LanguageModel; provider: 'kie'; modelId: string }
   return { model: kie.responses(KIE_MODEL), provider: 'kie', modelId: KIE_MODEL };
 }
 
-function geminiFallback(): { model: LanguageModel; provider: 'gemini'; modelId: string } {
-  const google = createGoogleGenerativeAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-  const modelId = geminiFlash();
-  return { model: google(modelId), provider: 'gemini', modelId };
+function llmFallback(): { model: LanguageModel; provider: 'llm'; modelId: string } {
+  return { model: llmLanguageModel(), provider: 'llm', modelId: llmDefaultModel() };
 }
 
 function resolveModel() {
-  return grokModel() ?? geminiFallback();
+  return grokModel() ?? llmFallback();
 }
 
 function seedBrief(strategy: WeeklyStrategy): string {
@@ -260,7 +256,7 @@ How you win:
 1. Research first. Use read_* + search_web / read_market / read_post_history / read_timely_moments until you have evidence of what performs for THIS brand and what is moving in the market right now. If read_market is empty/stale it will refresh competitor scrape on the spot — wait for it.
 2. Choose angles that serve growth: curiosity gaps, concrete proof, timely hooks, founder/human voice, useful specificity — never generic brand wallpaper.
 3. Write for the algorithm AND the human: strong first line, native platform length/register, one clear idea, a reason to engage (comment, save, share, click).
-4. Image briefs must be scroll-stopping scenes, on-brand, distinct from competitor clichés — the visual is half the organic bet. Each seed's subject/setting/props is the strategist's PROPOSAL, not an order: default to it, but when you have a genuinely stronger scene for that seed's angle, shoot yours and set scene_deviation (one line: why yours serves the angle better). Deviate on staging only — the seed's angle and pillar still rule, and every post's scene must stay distinct from the others. For CAROUSEL seeds, submit slide_prompts (N coherent standalone prompts; slide 1 = cover = image_prompt). When MEDIA QC scores are present (preload or read_media_reviews), apply next_test to NEW visuals; do not copy kill/fix compositions.
+4. Image briefs must be scroll-stopping scenes, on-brand, distinct from competitor clichés — the visual is half the organic bet. Each seed's subject/setting/props is the strategist's PROPOSAL, not an order: default to it, but when you have a genuinely stronger scene for that seed's angle, shoot yours and set scene_deviation (one line: why yours serves the angle better). Deviate on staging only — the seed's angle and pillar still rule, and every post's scene must stay distinct from the others. For CAROUSEL seeds, submit slide_prompts (N coherent standalone prompts; slide 1 = cover = image_prompt).
 5. Platform hygiene is part of growth:
    - Hashtags: obey HASHTAG PREFS when set; otherwise minimal/native or none. Wrong or invented tags hurt reach.
    - Reddit: pick the right subreddit, stay on-theme, avoid link/self-promo spam that triggers auto-mod bans. Set subreddit + title on every Reddit post.
@@ -298,7 +294,7 @@ type Submitted = { crafts: PostCraft[]; batchJustification: string };
 
 async function runProduceRound(opts: {
   model: LanguageModel;
-  provider: 'kie' | 'gemini';
+  provider: 'kie' | 'llm';
   modelId: string;
   messages: ModelMessage[];
   supabase: SupabaseClient;
@@ -314,12 +310,10 @@ async function runProduceRound(opts: {
   /** Preloaded VISUAL WINNERS block (brand_visual_insights) or '' when no own data yet. */
   visualInsights?: string;
   /** Preloaded MEDIA QC scores (Anomalia media reviewer). */
-  mediaReviews?: string;
 }): Promise<{ submitted: Submitted | null; messages: ModelMessage[]; steps: AgentStepLog[]; text: string }> {
   const submitted: { current: Submitted | null } = { current: null };
   const steps: AgentStepLog[] = [];
   let searches = 0;
-  const ai = googleGenaiClient();
   const t0 = Date.now();
 
   const tools = {
@@ -441,18 +435,6 @@ async function runProduceRound(opts: {
         return { visual_winners: block };
       }
     }),
-    read_media_reviews: tool({
-      description:
-        'Anomalia media-reviewer scores on recent posts (overall /10, verdict ship|fix|kill, judgment, next_test). Apply next_test to NEW visuals; do not copy kill/fix looks. Free.',
-      inputSchema: z.object({}),
-      execute: async () => {
-        const { reviews, weak, block } = await readMediaReviewsForAgent(opts.supabase, opts.brandId);
-        if (!reviews.length) {
-          return { reviews: [], weak: [], note: 'No media-review scores yet.' };
-        }
-        return { reviews, weak, block };
-      }
-    }),
     read_competitors: tool({
       description: 'Competitor benchmark digest (free).',
       inputSchema: z.object({}),
@@ -501,7 +483,7 @@ async function runProduceRound(opts: {
       description: 'Upcoming calendar / seasonal moments relevant to this brand.',
       inputSchema: z.object({}),
       execute: async () => {
-        const hooks = await upcomingTimelyHooks(ai, {
+        const hooks = await upcomingTimelyHooks({
           category: String(opts.profile?.category ?? ''),
           archetype: String(opts.profile?.site_type ?? ''),
           language: (opts.prefs.language || opts.profile?.language || '').trim() || undefined
@@ -516,7 +498,7 @@ async function runProduceRound(opts: {
       execute: async ({ query }) => {
         searches += 1;
         if (searches > SEARCH_BUDGET) return { error: `search budget exhausted (${SEARCH_BUDGET})` };
-        const g = await groundedText(ai, query, 'Answer with concrete, citable facts and recent trends.', {
+        const g = await groundedText(null as never, query, 'Answer with concrete, citable facts and recent trends.', {
           brandId: opts.brandId
         });
         return {
@@ -662,9 +644,6 @@ async function runProduceRound(opts: {
   const visuals = opts.visualInsights?.trim()
     ? `\n${opts.visualInsights.trim()}\nPrefer genres/hooks that perform for this brand; a genre with +delta is a strong default; never force a genre the brief doesn't fit.\n`
     : `\n${VISUAL_WINNERS_NO_DATA}\n`;
-  const mediaQc = opts.mediaReviews?.trim()
-    ? `\n${opts.mediaReviews.trim()}\nApply next_test on NEW image briefs; never reuse a kill/fix visual.\n`
-    : '';
   // Stessa lista di fallimenti del percorso legacy (executePlan + copy chief): il produce agent è
   // il writer di default, e writer e judge devono condividere la definizione di "sbagliato".
   // ownerEditPairsBlock: le riscritture vere dell'owner come esempi prima→dopo ('' senza edit).
@@ -675,7 +654,7 @@ Personality: ${personality || '(infer from studio)'}
 Theme: ${opts.strategy.theme}
 ${policy}
 ${CAPTION_FAILURE_MODES}
-${ownerEditPairsBlock(opts.prefs)}${winners}${visuals}${mediaQc}Seeds (${opts.strategy.seeds.length}):
+${ownerEditPairsBlock(opts.prefs)}${winners}${visuals}Seeds (${opts.strategy.seeds.length}):
 ${seedBrief(opts.strategy)}`;
 
   let result;
@@ -752,7 +731,7 @@ type ReviewVerdict =
 
 async function runProduceReviewer(opts: {
   model: LanguageModel;
-  provider: 'kie' | 'gemini';
+  provider: 'kie' | 'llm';
   modelId: string;
   supabase: SupabaseClient;
   brandId: string;
@@ -764,7 +743,6 @@ async function runProduceReviewer(opts: {
 }): Promise<ReviewVerdict> {
   const steps: AgentStepLog[] = [];
   let verdict: ReviewVerdict | null = null;
-  const ai = googleGenaiClient();
   const t0 = Date.now();
   let searches = 0;
 
@@ -795,7 +773,7 @@ JUSTIFICATION: ${just.slice(0, 400) || '(none)'}`;
       execute: async ({ query }) => {
         searches += 1;
         if (searches > 3) return { error: 'search budget exhausted' };
-        const g = await groundedText(ai, query, 'Verify concisely with sources.', { brandId: opts.brandId });
+        const g = await groundedText(null as never, query, 'Verify concisely with sources.', { brandId: opts.brandId });
         return { answer: g.text.slice(0, 800), sources: g.citations.slice(0, 3) };
       }
     }),
@@ -984,12 +962,10 @@ async function runProduceAgentLoopInner(opts: ProduceAgentOpts): Promise<Produce
   const t0 = Date.now();
   let { model, provider, modelId } = resolveModel();
 
-  const [winningPatterns, visualInsights, mediaReviewsLoaded] = await Promise.all([
+  const [winningPatterns, visualInsights] = await Promise.all([
     loadProduceWinningPatterns(opts.supabase, opts.brandId, opts.topPosts),
-    readVisualInsightsForAgent(opts.supabase, opts.brandId, { limit: 8 }),
-    readMediaReviewsForAgent(opts.supabase, opts.brandId)
+    readVisualInsightsForAgent(opts.supabase, opts.brandId, { limit: 8 })
   ]);
-  const mediaReviews = mediaReviewsLoaded.block;
 
   const initialUser = `Produce captions + image briefs that GROW "${opts.profile?.name ?? 'this brand'}" organically (${opts.strategy.seeds.length} seeds).
 Theme: ${opts.strategy.theme}
@@ -997,7 +973,6 @@ Rationale: ${opts.strategy.rationale}
 Do/Don't: ${opts.strategy.doDont}
 ${opts.strategyBrief ? `Strategy brief:\n${opts.strategyBrief.slice(0, 2500)}` : ''}
 ${winningPatterns ? `\n${winningPatterns}` : ''}
-${mediaReviews ? `\n${mediaReviews}` : ''}
 
 Think like a growth creative: use the WINNING PATTERNS above (and read_market / timely / web if needed), pick angles that earn attention and engagement, then submit_batch with growth justifications, then finish().`;
 
@@ -1034,17 +1009,16 @@ Think like a growth creative: use the WINNING PATTERNS above (and read_market / 
         timezone: opts.timezone ?? 'Europe/Rome',
         deadlineMs: Math.max(30_000, deadlineMs - (Date.now() - t0)),
         winningPatterns,
-        visualInsights,
-        mediaReviews
+        visualInsights
       } as const;
 
       let produce;
       try {
         produce = await runProduceRound(roundOpts);
       } catch (kieErr) {
-        if (provider !== 'kie' || !(env.GEMINI_API_KEY || env.GOOGLE_API_KEY)) throw kieErr;
-        console.warn('[produce-agent] kie failed, retrying round on Gemini:', kieErr);
-        ({ model, provider, modelId } = geminiFallback());
+        if (provider !== 'kie' || !llmConfigured()) throw kieErr;
+        console.warn('[produce-agent] kie failed, retrying round on llm:', kieErr);
+        ({ model, provider, modelId } = llmFallback());
         produce = await runProduceRound({ ...roundOpts, model, provider, modelId });
       }
 
@@ -1089,9 +1063,9 @@ Think like a growth creative: use the WINNING PATTERNS above (and read_market / 
           prefs
         });
       } catch (kieErr) {
-        if (provider !== 'kie' || !(env.GEMINI_API_KEY || env.GOOGLE_API_KEY)) throw kieErr;
-        console.warn('[produce-reviewer] kie failed, retrying on Gemini:', kieErr);
-        ({ model, provider, modelId } = geminiFallback());
+        if (provider !== 'kie' || !llmConfigured()) throw kieErr;
+        console.warn('[produce-reviewer] kie failed, retrying on llm:', kieErr);
+        ({ model, provider, modelId } = llmFallback());
         review = await runProduceReviewer({
           model,
           provider,

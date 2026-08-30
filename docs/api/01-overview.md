@@ -67,7 +67,6 @@ Gli endpoint che spendono AI richiedono **piano a pagamento + crediti** e scope 
 | `POST /brands/:slug/studio/people` (kind `ai`) | Ritratti AI |
 | `POST /brands/:slug/ads/remix` | Remix brief da ad competitor |
 | `POST /brands/:slug/rubrics/propose` | Batch rubriche AI |
-| `POST /brands/:slug/videos/review` | Review video AI |
 | `POST /brands/:slug/web` (generate/optimize) | Articoli blog AI |
 
 ## Convenzioni di risposta

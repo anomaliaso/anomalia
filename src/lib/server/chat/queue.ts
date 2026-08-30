@@ -35,7 +35,7 @@ import {
 } from '$lib/ai-act';
 import { extractMemoryFromChat } from '$lib/server/brand-memory';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
-import { resolveChatModel, takeKieUsage } from '$lib/server/chat/model';
+import { resolveChatModel } from '$lib/server/chat/model';
 import { hasWebHub } from '$lib/server/plans';
 import { contentFromFailedTurn, persistPartialAssistantReply } from '$lib/server/chat/partial-persist';
 import { createAdminClient } from '$lib/server/supabase-admin';
@@ -92,6 +92,8 @@ import { hydrateChatDocuments } from '$lib/server/hydrate-chat-documents';
 import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { carryImagesToContinuation } from '$lib/agent/bridge/provider-refs';
+import { createChatActionApproval } from '$lib/server/chat/action-approval';
 
 export function kickChatQueueWork(origin: string): Promise<void> {
 	const headers: Record<string, string> = {};
@@ -150,6 +152,7 @@ export async function enqueueQueuedChatTurn(
 		 * domanda, è un prefill, e la seconda voce continuerebbe la frase della prima.
 		 */
 		userMessageSaved?: boolean;
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const locale = bilingualNoticeLocale(opts.locale);
@@ -178,7 +181,8 @@ export async function enqueueQueuedChatTurn(
 				...(opts.agent ? { agent: opts.agent } : {}),
 				...(opts.customAgentId ? { custom_agent_id: opts.customAgentId } : {}),
 				...(opts.speaker ? { speaker: opts.speaker } : {}),
-				...(opts.userMessageSaved ? { user_message_saved: true } : {})
+				...(opts.userMessageSaved ? { user_message_saved: true } : {}),
+				...(opts.resumeRunId ? { resume_run_id: opts.resumeRunId } : {})
 			}
 		})
 		.select('id')
@@ -227,6 +231,12 @@ export async function enqueueTurnContinuation(
 		 * di battute. Vedi motion-video/unfinished.ts.
 		 */
 		maxDepth?: number;
+		/**
+		 * Il run da RIPRENDERE, invece di aprirne uno nuovo. Lo passa il reaper per una riga
+		 * lasciata `running` col lease scaduto: chi drena la prende col fence successivo e
+		 * continua lo stesso turno, senza un secondo messaggio in chat.
+		 */
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const depth = Math.max(0, Math.trunc(opts.depth ?? 0));
@@ -259,7 +269,8 @@ export async function enqueueTurnContinuation(
 		continuationDepth: depth + 1,
 		mode: opts.mode,
 		tier: opts.tier,
-		reasoning: opts.reasoning
+		reasoning: opts.reasoning,
+		resumeRunId: opts.resumeRunId
 	});
 }
 
@@ -412,6 +423,28 @@ async function igniteTeamAfterSetupTurn(
 		locale: opts.locale,
 		origin: opts.origin
 	});
+}
+
+/**
+ * «La risposta è pronta» — il punto di completamento CONDIVISO dai due motori, come il saluto del
+ * team: un turno che finisce mentre nessuno guarda deve farsi trovare.
+ */
+async function notifyReplyReady(
+	admin: SupabaseClient,
+	opts: { userId: string; locale: string; brandSlug?: string | null; threadId: string }
+): Promise<void> {
+	try {
+		const { sendPushToUser } = await import('$lib/server/web-push');
+		await sendPushToUser(admin, opts.userId, {
+			title: 'Anomalia',
+			body: bilingualNoticeLocale(opts.locale) === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere",
+			url: `/app/${opts.brandSlug}/chat/${opts.threadId}`,
+			tag: 'chat-ai-ready',
+			skipIfFocused: true
+		});
+	} catch {
+		/* best-effort */
+	}
 }
 
 /**
@@ -638,15 +671,16 @@ export async function processNextQueuedChatJob(
 		// L'agente è lo STESSO `agentId` del percorso classico (thread + `params.agent`): una sola
 		// risoluzione, o i due motori risponderebbero con agenti diversi allo stesso job.
 		//
-		// FUORI dal kit restano DM, stanze e agenti custom: sono meccaniche del motore classico che
-		// vivono QUI dentro (chi firma la battuta, la voce successiva, il persona nel system prompt) e
-		// che il bridge non conosce. Mandarcele dentro non è «uno specialista al posto di un altro»,
-		// è perdere il mittente, il persona e la catena delle voci.
+		// FUORI dal kit restano stanze e agenti custom: sono meccaniche del motore classico che
+		// vivono QUI dentro (la voce successiva della stanza, il persona nel system prompt) e che
+		// il bridge non conosce. Mandarcele dentro non è «uno specialista al posto di un altro»,
+		// è perdere la catena delle voci e il persona. I DM ci stanno: il contesto del DM (chi
+		// parla, il blocco in testa al prompt) entra nel turno kit come `dm`.
 		//
 		// Il flag si guarda PRIMA dell'import: `shouldUseKit` resta l'autorità sulla condizione, ma
 		// tirare dentro il bridge (executor, sandbox, plugin) a ogni turno accodato si paga anche a
 		// kit spento.
-		if (env.AGENT_KIT === 'on' && !isDm && !personaId && parseRoomAgents(threadRow?.room_agents).length < 2) {
+		if (env.AGENT_KIT === 'on' && !personaId && parseRoomAgents(threadRow?.room_agents).length < 2) {
 			const { shouldUseKit, runKitTurn } = await import('$lib/agent/bridge/live');
 			const kitSpec = shouldUseKit(env, agentId);
 			if (kitSpec) {
@@ -678,7 +712,7 @@ export async function processNextQueuedChatJob(
 							typeof params.reasoning === 'string' ? params.reasoning : undefined,
 							{ userText: params.scheduled === true ? undefined : userMessageContent, agentId }
 						).modelId;
-						await maybeCompactThread(admin, {
+await maybeCompactThread(admin, {
 							threadId,
 							brandId: brand.id,
 							userId: job.user_id as string,
@@ -686,12 +720,27 @@ export async function processNextQueuedChatJob(
 							plan: brand.plan
 						});
 					})().catch((e) => console.warn('[Chat Queue] compattazione kit saltata:', e));
-					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId);
+					// LLM di chat vision-native: la storia ricaricata per il kit porta le parti
+					// immagine, o un rilancio su un thread con allegati riparte cieco.
+					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId, undefined, 'images');
 					const tail = hist[hist.length - 1];
+					// Un DM è SEMPRE già salvato: message_agent scrive la riga (firmata col mittente) al
+					// momento dell'invio — risalvarla qui la duplicherebbe senza firma.
+					// Il confronto legge anche il content a PARTI (storia col media attivo): il testo
+					// è il primo pezzo, non l'array intero.
+					const tailText =
+						typeof tail?.content === 'string'
+							? tail.content
+							: Array.isArray(tail?.content)
+								? (tail.content as Array<{ type?: string; text?: string }>)
+										.filter((p) => p?.type === 'text')
+										.map((p) => p.text ?? '')
+										.join('\n')
+								: '';
 					const alreadySaved =
+						isDm ||
 						replay ||
-						(tail?.role === 'user' &&
-							(typeof tail.content === 'string' ? tail.content : '') === userMessageContent);
+						(tail?.role === 'user' && tailText === userMessageContent);
 					if (!alreadySaved) {
 						await saveMessages(
 							admin,
@@ -705,11 +754,18 @@ export async function processNextQueuedChatJob(
 					// La storia ricaricata porta le tool call CON i loro risultati
 					// (`assistantContentFromSteps` le salva, `messagesFromRow` le rimonta): è questo che
 					// fa RIPRENDERE la continuazione invece di farla ricominciare da capo.
-					// `modelUserContent` e non il testo grezzo: porta i documenti allegati al turno,
-					// esattamente come sul percorso classico.
+					// `modelUserContent` e non il testo grezzo: porta i documenti allegati al turno e, in
+					// un DM, l'identità del mittente DENTRO il contenuto — sostituisce l'ultima riga
+					// user invece di duplicarla, stesso gesto del percorso classico.
 					const kitMessages: ModelMessage[] = replay
-						? [...hist, { role: 'user', content: modelUserContent } as ModelMessage]
-						: turnDocuments.length && hist[hist.length - 1]?.role === 'user'
+						? [
+								...hist,
+								// La continuazione è un messaggio UTENTE per l'harness, che collassa la catena
+								// all'ultimo turno: senza le immagini del turno che si continua, l'agente
+								// riparte cieco e smentisce di averle mai viste.
+								carryImagesToContinuation(hist, modelUserContent) as ModelMessage
+							]
+						: (turnDocuments.length || dmTaggedContent) && hist[hist.length - 1]?.role === 'user'
 							? [...hist.slice(0, -1), { role: 'user', content: modelUserContent } as ModelMessage]
 							: hist;
 
@@ -727,9 +783,30 @@ export async function processNextQueuedChatJob(
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model)?.family,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
-						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato o una
-						// ripresa scritta dal sistema restano sul default.
-						escalationText: params.scheduled === true || replay ? undefined : userMessageContent,
+						// La ripresa di un run lasciato dal reaper: lo stesso turno continua, con il
+						// fence successivo, invece di aprirne uno nuovo accanto al lavoro a metà.
+						resumeRunId: typeof params.resume_run_id === 'string' ? params.resume_run_id : undefined,
+						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
+						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
+						escalationText: params.scheduled === true || replay || isDm ? undefined : userMessageContent,
+						approval: isDm
+							? undefined
+							: createChatActionApproval({
+									messages: kitMessages,
+									brandId: brand.id,
+									userId: job.user_id as string,
+									threadId
+							  }),
+						// Il contesto del DM: chi parla, per chi. Il turno kit nasce DM (blocco in testa
+						// al prompt, firma della risposta, niente riprese) come lo nasceva quello classico.
+						dm:
+							dmPair && dmSpeaker && dmOtherName
+								? {
+										speaker: dmSpeaker,
+										meName: dmMemberNames[dmSpeaker] ?? dmSpeaker,
+										otherName: dmOtherName
+									}
+								: undefined,
 						origin,
 						budgetMs,
 						continuationDepth: Math.max(0, Math.trunc(Number(params.continuation_depth)) || 0),
@@ -773,6 +850,12 @@ export async function processNextQueuedChatJob(
 					locale,
 					origin
 				});
+				await notifyReplyReady(admin, {
+					userId: job.user_id as string,
+					locale,
+					brandSlug: brand.slug,
+					threadId
+				});
 				return { processed: true, jobId };
 				}).finally(stopHeartbeat);
 			}
@@ -783,7 +866,7 @@ export async function processNextQueuedChatJob(
 			userId: job.user_id as string,
 			memoryAgent: memoryAgentKey
 		});
-		const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '');
+const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '');
 		if (dmPair && dmSpeaker && dmOtherName) {
 			// IN TESTA, non in coda: la cornice che governa il turno si legge per prima. In coda ha
 			// già perso una volta — il paragrafo finale non batteva l'intero prompt di brand.
@@ -899,7 +982,7 @@ export async function processNextQueuedChatJob(
 		// è il ponte, così una delega non parte con pochi secondi rimasti.
 		let queueDeadline: { remainingMs: () => number } | null = null;
 		return await withBrandContext(brand.id, async () => {
-			const chatModel = resolveChatModel(
+const chatModel = resolveChatModel(
 				// 'auto' e non undefined: il fallback su env.CHAT_TIER è per la chat interattiva senza
 				// preferenze, non per un seed di onboarding o uno schedule (vedi enqueueQueuedChatTurn).
 				typeof params.tier === 'string' ? params.tier : 'auto',
@@ -916,7 +999,7 @@ export async function processNextQueuedChatJob(
 			);
 			// Stessa delega del turno interattivo: un lavoro lungo si spezza in ricerca →
 			// esecuzione → verifica anche quando gira in coda, senza nessuno che guarda.
-			customTools = withSubagentTools(customTools, {
+customTools = withSubagentTools(customTools, {
 				supabase: admin,
 				brandId: brand.id,
 				tools: allTools,
@@ -931,7 +1014,7 @@ export async function processNextQueuedChatJob(
 			});
 			// Stessa macchina del turno interattivo: un lavoro in coda ne ha bisogno più di uno
 			// davanti a qualcuno, perché nessuno può fargli da terminale al posto suo.
-			const sandboxMount = withSandboxTools(customTools, {
+const sandboxMount = withSandboxTools(customTools, {
 				supabase: admin,
 				brandId: brand.id,
 				userId: job.user_id as string,
@@ -954,7 +1037,7 @@ export async function processNextQueuedChatJob(
 			// visibile SUBITO, non al primo tick del drain. Chi non la scrive la fa scrivere qui.
 			// Il patto con quei chiamanti è il confronto qui sotto: stessa identica stringa in
 			// `chat_messages.content` e in `input_params.user_message`, o si duplica.
-			let history = await loadHistory(admin, brand.id, job.user_id as string, threadId);
+let history = await loadHistory(admin, brand.id, job.user_id as string, threadId);
 			const tail = history[history.length - 1];
 			// Un DM è SEMPRE già salvato: message_agent scrive la riga (firmata col mittente) al
 			// momento dell'invio, così l'utente la vede subito — risalvarla qui la duplicherebbe
@@ -992,7 +1075,7 @@ export async function processNextQueuedChatJob(
 				if (last?.role !== 'user') return hist;
 				return [...hist.slice(0, -1), { ...last, content: modelUserContent }];
 			})();
-			const turnVolatile = await turnVolatileP;
+const turnVolatile = await turnVolatileP;
 			if (turnVolatile) {
 				const idx = messages.findLastIndex((m) => m.role === 'user');
 				if (idx >= 0) messages[idx] = wrapTurnMessage(turnVolatile, messages[idx]);
@@ -1030,7 +1113,7 @@ export async function processNextQueuedChatJob(
 
 			let genFailed = false;
 			let genError: unknown = null;
-			const result = await harnessGenerateText({
+const result = await harnessGenerateText({
 				brandId: brand.id,
 				userId: job.user_id as string,
 				threadId,
@@ -1161,9 +1244,6 @@ export async function processNextQueuedChatJob(
 				ms: Date.now() - chatT0,
 				ok: true,
 				...extractSdkUsage(result.totalUsage),
-				// kie fattura in crediti e riporta `input_tokens: 0` sugli step di un loop agentico:
-				// senza questo, cost_usd direbbe zero per un turno che è costato davvero.
-				...takeKieUsage(chatModel),
 				brandId: brand.id,
 				userId: job.user_id as string,
 				threadId,
@@ -1422,24 +1502,17 @@ export async function processNextQueuedChatJob(
 				origin
 			});
 
-			try {
-				const { sendPushToUser } = await import('$lib/server/web-push');
-				await sendPushToUser(admin, job.user_id as string, {
-					title: 'Anomalia',
-					body: bilingualNoticeLocale(locale) === 'en' ? 'Your AI reply is ready' : "L'AI ha finito di rispondere",
-					url: `/app/${brand.slug}/chat/${threadId}`,
-					tag: 'chat-ai-ready',
-					skipIfFocused: true
-				});
-			} catch {
-				/* best-effort */
-			}
-
+			await notifyReplyReady(admin, {
+				userId: job.user_id as string,
+				locale,
+				brandSlug: brand.slug,
+				threadId
+			});
 			return { processed: true, jobId };
 		});
 	} catch (e) {
 		const errorMsg = e instanceof Error ? e.message : String(e);
-		console.error(`[Chat Queue] Failed job=${jobId}`, errorMsg);
+		console.error(`[Chat Queue] Failed job=${jobId}`, errorMsg, e instanceof Error ? e.stack : e);
 		await failChatJob(admin, jobId, errorMsg, params);
 		return { processed: true, jobId, error: errorMsg };
 	}
@@ -1468,17 +1541,26 @@ const MIN_TURN_SLICE_MS = 90_000;
 export async function processNextPendingToolJob(
 	admin: SupabaseClient,
 	/** Dove accodare il turno di rientro. Vuoto = si usa quello salvato nei params del job. */
-	origin: string = ''
+	origin: string = '',
+	opts?: { mode?: 'serverless' | 'worker' }
 ): Promise<{ processed: boolean; jobId?: string; error?: string }> {
 	// Allowlist, never "everything that isn't a chat turn": chat_jobs is shared with the designer,
 	// whose motion_video / ugc_batch continuations sit pending for a worker of their own. Claiming
 	// one would run it into the executor's default case and mark a row `done` whose work never
 	// happened. reapStaleChatJobs skips those two names for the same reason.
-	const { executeChatToolJob, EXECUTABLE_TOOL_JOBS } = await import('$lib/server/chat/job-executor');
+	const { executeChatToolJob, EXECUTABLE_TOOL_JOBS, WORKER_ONLY_TOOL_JOBS } = await import(
+		'$lib/server/chat/job-executor'
+	);
+	const allow =
+		opts?.mode === 'worker'
+			? (EXECUTABLE_TOOL_JOBS as unknown as string[])
+			: (EXECUTABLE_TOOL_JOBS as unknown as string[]).filter(
+					(name) => !(WORKER_ONLY_TOOL_JOBS as readonly string[]).includes(name)
+				);
 	const { data: candidates } = await admin
 		.from('chat_jobs')
 		.select('id, brand_id, user_id, thread_id, tool_name, input_params, created_at')
-		.in('tool_name', EXECUTABLE_TOOL_JOBS as unknown as string[])
+		.in('tool_name', allow)
 		.eq('status', 'pending')
 		.order('created_at', { ascending: true })
 		.limit(10);
@@ -1647,7 +1729,7 @@ export async function drainChatQueue(opts: {
 			moreToolWork = true;
 			break;
 		}
-		const r = await processNextPendingToolJob(admin, opts.origin).catch((e) => {
+		const r = await processNextPendingToolJob(admin, opts.origin, { mode: opts.mode ?? 'serverless' }).catch((e) => {
 			console.error('[Chat Queue] tool job drain failed', e);
 			return { processed: false };
 		});

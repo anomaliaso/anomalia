@@ -22,6 +22,10 @@ _Avoid_: omni, assistant.
 A brand-hired agent built on a specialist's craft, with its own name, face and routines. Gets a team thread of its own from the moment it is hired.
 _Avoid_: scheduled agent, routine.
 
+**Agent Kit**:
+The one environment every main agent runs its turns in: a persistent session with its own tools, skills and memory, kept across all its threads. There is no second way to run a turn.
+_Avoid_: harness, bridge, kit mode, engine.
+
 ### Threads
 
 **Team thread**:
@@ -29,8 +33,12 @@ One persistent thread per main agent where it works with the user (`surface='tea
 _Avoid_: agent chat, journal (journal is the role, not the object).
 
 **DM (agent-to-agent)**:
-The private thread between exactly two main agents. Coordination only: the work that concerns the user happens in a team thread.
-_Avoid_: private chat, room.
+The private thread between exactly two main agents. Coordination only: the work that concerns the user happens in a team thread. The user can read it but not write in it.
+_Avoid_: private thread, private chat, room.
+
+**Private thread**:
+A thread where the user talks with exactly one main agent, away from the team.
+_Avoid_: DM, direct message, one-to-one chat.
 
 **Room (group chat)**:
 A thread where several agents and the user talk in turns. Behind a flag; not the default surface.

@@ -35,7 +35,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_brand_kit: tool({
       description: 'Read the full brand kit: identity, audience, colors, fonts, AI character, content pillars, visual style, and brand context brief.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { data } = await supabase.from('brand_kit').select('*').eq('brand_id', brandId).maybeSingle();
         if (!data) return { error: 'No brand kit found' };
         const { ai_context, visual_style, ...rest } = data;
@@ -338,7 +338,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_strategy: tool({
       description: 'Read the brand strategy: competitive research report, positioning, active editorial plan summary, and active GTM plan summary.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const [
           { data: strategy },
           { data: editorial },
@@ -361,7 +361,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_seo_geo_audit: tool({
       description: 'Read the latest SEO & GEO audit: technical score, top issues, on-page content summary, AI share-of-voice, and the category questions where the brand is NOT cited by AI answers (with which competitors ARE cited). Use before advising, or after run_seo_geo_audit finishes.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { data } = await supabase.from('brand_geo_audits').select('tech_score, tech, share_of_voice, citations, created_at').eq('brand_id', brandId).order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (!data) return { error: 'No audit yet. Run run_seo_geo_audit first.' };
         const tech = (data.tech ?? {}) as AnyRec;
@@ -381,7 +381,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_seo_plan: tool({
       description: 'Read the latest SEO growth plan: the qualitative evaluation (grade, strengths, weaknesses) and the recommended initiatives (blog, landing pages, free tools, comparisons) with target query, effort and impact.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { data } = await supabase.from('brand_seo_plans').select('grade, evaluation, initiatives, created_at').eq('brand_id', brandId).order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (!data) return { error: 'No SEO plan yet. Run generate_seo_plan first.' };
         const ev = (data.evaluation ?? {}) as AnyRec;
@@ -396,19 +396,19 @@ export function readTools(ctx: ChatToolCtx) {
     run_seo_geo_audit: tool({
       description: 'Run a fresh SEO & GEO audit of the brand website (technical crawl + on-page content + AI citation share-of-voice). Runs in the BACKGROUND: it returns immediately with a job id and the result comes back to you as a NEW message when it lands, so say one line and end your turn. When the result lands, call read_seo_geo_audit to read the numbers.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => startLongToolJob(supabase, brandId, userId, 'seo_geo_audit', {}, threadId, opts.abortSignal, origin, locale)
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => startLongToolJob(supabase, brandId, userId, 'seo_geo_audit', {}, threadId, opts.abortSignal, origin, locale)
     }),
 
     generate_seo_plan: tool({
       description: 'Generate the SEO growth plan: a qualitative evaluation + prioritized initiatives (blog, landing pages for specific queries, free tools, comparisons), grounded in the real search landscape. Run run_seo_geo_audit first for a site-grounded plan. Runs in the BACKGROUND: it returns immediately with a job id and the result comes back to you as a NEW message when it lands, so say one line and end your turn. Replaces the current plan.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => startLongToolJob(supabase, brandId, userId, 'seo_plan', {}, threadId, opts.abortSignal, origin, locale)
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => startLongToolJob(supabase, brandId, userId, 'seo_plan', {}, threadId, opts.abortSignal, origin, locale)
     }),
 
     add_seo_initiatives: tool({
       description: "Add MORE recommended SEO initiatives to the existing plan WITHOUT removing the current ones. Pass the user's direction if they told you what to focus on (e.g. 'target local searches', 'free tools for developers'). Runs in the BACKGROUND: it returns immediately with a job id and the result comes back to you as a NEW message when it lands, so say one line and end your turn.",
       inputSchema: z.object({ guidance: z.string().optional().describe("What the user wants to focus on, in their words. Optional.") }),
-      execute: async ({ guidance }: { guidance?: string }, opts: ToolExecutionOptions) => startLongToolJob(supabase, brandId, userId, 'seo_add_initiatives', { guidance: guidance ?? '' }, threadId, opts.abortSignal, origin, locale)
+      execute: async ({ guidance }: { guidance?: string }, opts: ToolExecutionOptions<unknown>) => startLongToolJob(supabase, brandId, userId, 'seo_add_initiatives', { guidance: guidance ?? '' }, threadId, opts.abortSignal, origin, locale)
     }),
 
     read_backlink_network: tool({
@@ -425,7 +425,7 @@ export function readTools(ctx: ChatToolCtx) {
       description:
         'Regenerate ranked give/receive backlink opportunities across the Anomalia network (partner articles to link to, and your posts partners may link). Requires Starter plan or above. Returns counts when done.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { createAdminClient } = await import('$lib/server/supabase-admin');
         const { generateBacklinkOpportunities } = await import('$lib/server/backlink-network');
         const { hasBacklinkNetwork } = await import('$lib/plans');
@@ -446,7 +446,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_editorial_plan: tool({
       description: 'Read the active editorial plan in full detail: all 4 weeks with themes, focus, content mix, and briefs.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { data } = await supabase.from('editorial_plans').select('*').eq('brand_id', brandId).eq('status', 'active').maybeSingle();
         if (!data) return { error: 'No active editorial plan found' };
         return {
@@ -462,7 +462,7 @@ export function readTools(ctx: ChatToolCtx) {
 
     read_posts: tool({
       description:
-        'Read posts filtered by status (includes media_url / media_urls, media_origin, and media_review). With status "published" (or no status) the result ALSO carries `published_on_socials`: what the brand published on its own connected accounts, which is not in the posts table — so "nothing published" is only true when both are empty. Each post is annotated with media_origin: typographic_graphic (editable HTML/TSX — patch with grep_source / read_source / replace_source; write_source only to rebuild; design_graphic for a high-level brief; new photos → generate_image then replace_source <img src>), ai_generated, user_uploaded, video, or none. media_review is ALWAYS present when the post has reviewable media: overall (0–10), verdict (ship|fix|kill), judgment (why), next_test (one change to try), issues[]. status none/pending/running/failed/ready. Honor fix/kill — do not approve as-is; apply next_test when remaking. The score is read-only in chat: when status is none/failed, look at the media yourself (read_media, or render_stills for a motion video) instead of waiting for a score. Reading is SILENT: nothing is shown to the user unless you pass show_to_user: true.',
+        'Read posts filtered by status (includes media_url / media_urls and media_origin). With status "published" (or no status) the result ALSO carries `published_on_socials`: what the brand published on its own connected accounts, which is not in the posts table — so "nothing published" is only true when both are empty. Each post is annotated with media_origin: typographic_graphic (editable HTML/TSX — patch with grep_source / read_source / replace_source; write_source only to rebuild; design_graphic for a high-level brief; new photos → generate_image then replace_source <img src>), ai_generated, user_uploaded, video, or none. Reading is SILENT: nothing is shown to the user unless you pass show_to_user: true.',
       inputSchema: z.object({
         status: z.enum(['pending_user', 'approved', 'scheduled', 'published', 'failed']).optional().describe('Filter by post status. Omit to get all recent posts.'),
         limit: z.number().min(1).max(50).optional().describe('Max posts to return (default 20). `count` nel risultato è quante ne ESISTONO col filtro chiesto, `returned` quante ne vedi qui'),
@@ -473,7 +473,7 @@ export function readTools(ctx: ChatToolCtx) {
             'Default false. When true, the posts returned by THIS call also render as PostCard previews (image + caption) under your message. Set it only when you deliberately want the user to look at these posts; leave it out when you are just reading for context.'
           )
       }),
-      execute: async ({ status, limit = 20 }: { status?: string; limit?: number }, opts: ToolExecutionOptions) => {
+      execute: async ({ status, limit = 20 }: { status?: string; limit?: number }, opts: ToolExecutionOptions<unknown>) => {
         let query = supabase
           .from('posts')
           .select(`${EDITOR_POST_COLS}, pillar, first_comment`)
@@ -519,8 +519,6 @@ export function readTools(ctx: ChatToolCtx) {
           const origin = annotatePostMedia(p, graphics.get(String(p.id)) ?? null);
           Object.assign(p, origin);
         }
-        const { attachChatMediaReviews } = await import('$lib/server/video-review-store');
-        await attachChatMediaReviews(supabase, brandId, posts);
 
         // Which of these are still waiting on a clip. Asked separately rather than added to
         // EDITOR_POST_COLS on purpose: that list warns that an unmigrated column in it breaks
@@ -647,7 +645,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_products: tool({
       description: 'Read the products and services catalog for this brand (includes page URLs and image URLs when synced from Shopify/WooCommerce).',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { data } = await supabase.from('products').select('id, title, description, pricing, kind, featured, url, images').eq('brand_id', brandId);
         return { products: data ?? [] };
       }
@@ -749,7 +747,7 @@ export function readTools(ctx: ChatToolCtx) {
     read_competitors: tool({
       description: 'Read competitor data: names, websites, rationale, benchmarks.',
       inputSchema: z.object({}),
-      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions) => {
+      execute: async (_input: Record<string, never>, opts: ToolExecutionOptions<unknown>) => {
         const { data } = await supabase.from('competitors').select('id, name, website, kind, rationale, handles, benchmark').eq('brand_id', brandId);
         return { competitors: data ?? [] };
       }
@@ -771,7 +769,7 @@ export function readTools(ctx: ChatToolCtx) {
           country,
           limit
         }: { company_name?: string; query?: string; country?: string; limit?: number },
-        opts: ToolExecutionOptions
+        opts: ToolExecutionOptions<unknown>
       ) => {
         return withBrandContext(brandId, async () => {
           const {
@@ -887,7 +885,7 @@ export function readTools(ctx: ChatToolCtx) {
       inputSchema: z.object({
         kind: z.enum(['note', 'document', 'image']).optional().describe('Filter by document kind')
       }),
-      execute: async ({ kind }: { kind?: string }, opts: ToolExecutionOptions) => {
+      execute: async ({ kind }: { kind?: string }, opts: ToolExecutionOptions<unknown>) => {
         // Prefer search tools for text; keep image listing here.
         if (kind === 'image' || !kind) {
           let query = supabase

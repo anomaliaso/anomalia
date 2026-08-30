@@ -15,7 +15,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { swallow } from '$lib/server/swallow';
-import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { Sandbox } from '@vercel/sandbox';
 import {
@@ -23,10 +22,11 @@ import {
 	oidcTokenFromRequestContext,
 	openBrandSandbox,
 	resolvePlaywrightEnv,
-	SANDBOX_MAX_LEASE_MS
+	SANDBOX_MAX_LEASE_MS,
+	type SandboxHandle
 } from '$lib/server/sandbox';
 import { createFileTools, isOverridable, OVERRIDABLE_PREFIXES, AGENT_DOCS_BUCKET } from '$lib/server/chat/agent-files';
-import { KIE_CODEX_BASE, KIE_LUNA_MODEL } from '$lib/server/kie';
+import { KIE_CODEX_BASE } from '$lib/server/kie';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,13 +34,12 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { loadMemoryEntries, writeMemory } from '$lib/server/brand-memory';
 import { chatTokenBudget, chatTurnDeadline } from '$lib/server/chat/turn-limits';
 import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
-import { MODEL_FAMILIES, TIER_DEFAULT_FAMILY } from '$lib/models/catalog';
+import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
-import { XIAOMI_MODEL } from '$lib/server/xiaomi';
+import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
 import { PostgresMemoryStore } from '@anomalia/agent-adapters/memory-postgres';
 import { VercelSandboxProvider } from '@anomalia/agent-adapters/vercel-sandbox';
-import { createModelResolver } from '@anomalia/agent-adapters/runtime/models';
 import type { ExecToolCall } from '@anomalia/agent-adapters/runtime/ai-runtime';
 import { HarnessRuntime } from '@anomalia/agent-adapters/runtime/harness-runtime';
 import { HARNESS_SETUPS, stickySessionExtension } from '@anomalia/agent-adapters/runtime/harness-runtime';
@@ -49,7 +48,7 @@ import { loadHarnessSkills, parseHarnessSkillSelection } from '$lib/server/harne
 import { skillsForAgent } from '$lib/server/brand-skills';
 import { createJustBashSandbox } from '@ai-sdk/sandbox-just-bash';
 import { createVercelSandbox } from '@ai-sdk/sandbox-vercel';
-import type { StreamTextResult, ToolSet } from 'ai';
+import type { ToolSet } from 'ai';
 import type { GraphicalBootstrapDeps } from '@anomalia/agent-adapters/graphical-bootstrap';
 
 export function createServerBrandFs(supabase: SupabaseClient, agent?: string | null): ServerBrandFs {
@@ -101,91 +100,19 @@ export async function sandboxPortUrl(name: string, port: number): Promise<string
 	return sb.domain(port);
 }
 
-export interface HarnessModelRef {
-	provider: string;
-	id: string;
-	label: string;
-}
-
 const moduleLiveSessions = new Map<string, unknown>();
-
-const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const OPENCODE_DEFAULT_BASE = 'https://opencode.ai/zen/v1';
-
-type HarnessProviderName = 'kie' | 'openrouter' | 'opencode';
-
-function providerConfigured(name: HarnessProviderName): boolean {
-	if (name === 'kie') return Boolean(env.KIE_API_KEY);
-	if (name === 'openrouter') return Boolean(env.OPENROUTER_API_KEY);
-	return Boolean(env.OPENCODE_API_KEY);
-}
-
-function providerBaseUrl(name: HarnessProviderName): string {
-	if (name === 'kie') return env.KIE_BASE_URL || KIE_CODEX_BASE;
-	if (name === 'openrouter') return env.OPENROUTER_BASE_URL || OPENROUTER_BASE;
-	return env.OPENCODE_BASE_URL || OPENCODE_DEFAULT_BASE;
-}
-
-function providerApiKey(name: HarnessProviderName): string | undefined {
-	if (name === 'kie') return env.KIE_API_KEY;
-	if (name === 'openrouter') return env.OPENROUTER_API_KEY;
-	return env.OPENCODE_API_KEY;
-}
-
-/** Ordine di caduta: HARNESS_PROVIDER esplicito, poi kie, openrouter, opencode. */
-function activeProvider(): HarnessProviderName | null {
-	const forced = (env.CHAT_PROVIDER || env.HARNESS_PROVIDER) as HarnessProviderName | undefined;
-	if (forced && providerConfigured(forced)) return forced;
-	const order: HarnessProviderName[] = ['kie', 'openrouter', 'opencode'];
-	return order.find(providerConfigured) ?? null;
-}
-
-function modelForTier(tier: string | undefined, name: HarnessProviderName): string | null {
-	const prefix = name === 'kie' ? '' : name.toUpperCase() + '_';
-	const byTier = tier === 'fast' || tier === 'pro' ? `${prefix}${tier.toUpperCase()}_MODEL` : `${prefix}AUTO_MODEL`;
-	const fromEnv = env[byTier] as string | undefined;
-	if (fromEnv) return fromEnv;
-	const generic = env[`HARNESS_MODEL_${(tier ?? 'auto').toUpperCase()}`] as string | undefined;
-	return generic || null;
-}
 
 /**
  * IL SEAM verso le superfici che chiamano `streamText` da sole invece di passare dal runtime
- * dell'harness — il motion video, che finora costruiva `google(geminiFlash())` a mano.
- *
- * Sta QUI e non da loro perche' la conoscenza del provider — base url, chiave, quale variabile
- * porta quale tier — e' gia' tutta in questo file: un secondo posto che la ricopia diverge al
- * primo provider aggiunto. Chi lo usa chiede un tier e riceve un modello, o `null` se non c'e'
- * nessun provider configurato: cadere in silenzio su un provider cablato e' come si finisce con
- * meta` del prodotto su un modello che nessuno ha scelto.
- *
- * I provider dell'harness sono tutti compatibili OpenAI, quindi il client e' uno solo.
+ * dell'harness — il motion video, le rese UGC. Un solo tubo, il centralino `$lib/server/llm.ts`:
+ * chi lo usa chiede un tier e riceve un modello, o `null` se il centralino non è configurato.
  */
 export function harnessSdkModel(
 	tier: 'fast' | 'auto' | 'pro'
-): { model: LanguageModel; modelId: string; provider: HarnessProviderName } | null {
-	const name = activeProvider();
-	if (!name) return null;
-	const wire = modelForTier(tier, name) ?? firstListModel(name);
-	if (!wire) return null;
-	const client = createOpenAI({ baseURL: providerBaseUrl(name), apiKey: providerApiKey(name), name });
-	return { model: client.chat(wire), modelId: wire, provider: name };
-}
-
-function firstListModel(name: HarnessProviderName): string | null {
-	const raw = env[`${name.toUpperCase()}_MODELS`] as string | undefined;
-	const first = raw?.split(',').map((x) => x.trim()).filter(Boolean)[0];
-	return first || null;
-}
-
-/** Lista modelli dichiarati per un provider (OPENROUTER_MODELS ecc.), con caduta sul modello auto. */
-function providerModels(name: HarnessProviderName): Array<{ id: string }> {
-	const listKey = `${name.toUpperCase()}_MODELS`;
-	const raw = env[listKey] as string | undefined;
-	const list = raw ? raw.split(',').map((x) => x.trim()).filter(Boolean) : [];
-	const auto = modelForTier('auto', name);
-	if (auto && !list.includes(auto)) list.push(auto);
-	return list.map((id) => ({ id }));
+): { model: LanguageModel; modelId: string; provider: 'llm' } | null {
+	if (!llmApiKey()) return null;
+	const id = llmModelForPicker(tier === 'pro' ? 'pro' : 'fast');
+	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }
 
 export interface HarnessModelRef {
@@ -199,32 +126,24 @@ export interface HarnessModelPreference {
 	tier?: unknown;
 }
 
-function servableWireId(family: unknown, name: HarnessProviderName): string | null {
+function servableWireId(family: unknown): string | null {
 	if (typeof family !== 'string') return null;
 	if (!(MODEL_FAMILY_IDS as readonly string[]).includes(family)) return null;
 	const def = MODEL_FAMILIES[family as keyof typeof MODEL_FAMILIES];
-	return def.provider === name ? def.wireId : null;
-}
-
-function tierDefaultFamily(tier: unknown): unknown {
-	if (typeof tier !== 'string' || !(tier in TIER_DEFAULT_FAMILY)) return null;
-	return TIER_DEFAULT_FAMILY[tier as keyof typeof TIER_DEFAULT_FAMILY];
+	return def.wireId;
 }
 
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {
-	const name = activeProvider();
-	if (!name) return null;
+	if (!llmApiKey()) return null;
 	const family = typeof pref === 'object' && pref ? pref.family : undefined;
 	const tier = typeof pref === 'string' ? pref : pref?.tier;
 
 	const wire =
-		servableWireId(family, name) ??
-		modelForTier(tier, name) ??
-		servableWireId(tierDefaultFamily(tier), name) ??
-		(name === 'kie' ? KIE_LUNA_MODEL : null) ??
-		firstListModel(name);
+		servableWireId(family) ??
+		(tier === 'pro' || tier === 'fast' ? llmModelForPicker(tier) : undefined) ??
+		(llmModels()[0] ?? null);
 	if (!wire) return null;
-	return { provider: name, id: `${name}/${wire}`, label: wire.split('/').pop() ?? wire };
+	return { provider: 'llm', id: `llm/${wire}`, label: wire.split('/').pop() ?? wire };
 }
 
 function hydrateHarnessEnv() {
@@ -252,28 +171,58 @@ export function createHarnessRuntime(execToolCall: ExecToolCall): HarnessRuntime
 export interface HarnessSandboxSession {
 	session: unknown;
 	name: string;
+	/** L'handle aperto: chi ha il turno in mano lo rilascia, o la VM corre fino al lease. */
+	handle: SandboxHandle;
 }
+
+const liveSandboxSessions = new Map<string, Promise<HarnessSandboxSession>>();
 
 /** La STESSA macchina del brand (getOrCreate per nome): i builtin Pi atterrano lì, un solo canone. */
 export async function openBrandHarnessSession(
 	brandId: string,
 	runId: string,
 	/** Chi sta girando: la macchina è sua, non del brand (vedi `sandboxName`). */
-	agentId?: string
+	agentId?: string,
+	sessionKey?: string
 ): Promise<HarnessSandboxSession> {
-	const handle = await openBrandSandbox({
-		brandId,
-		agentId,
-		mode: 'research',
-		timeoutMs: SANDBOX_MAX_LEASE_MS,
-		runId
-	});
-	const provider = createVercelSandbox({ sandbox: handle.raw as never });
-	return { session: await provider.createSession(), name: handle.name };
+	if (sessionKey) {
+		const live = liveSandboxSessions.get(sessionKey);
+		if (live) return live;
+	}
+
+	const opening = (async () => {
+		const handle = await openBrandSandbox({
+			brandId,
+			agentId,
+			mode: 'research',
+			timeoutMs: SANDBOX_MAX_LEASE_MS,
+			runId
+		});
+		try {
+			const provider = createVercelSandbox({ sandbox: handle.raw as never });
+			return { session: await provider.createSession(), name: handle.name, handle };
+		} catch (error) {
+			await handle.release().catch(() => undefined);
+			throw error;
+		}
+	})();
+
+	if (!sessionKey) return opening;
+	liveSandboxSessions.set(sessionKey, opening);
+	try {
+		const opened = await opening;
+		if (liveSandboxSessions.get(sessionKey) === opening) liveSandboxSessions.set(sessionKey, Promise.resolve(opened));
+		return opened;
+	} catch (error) {
+		if (liveSandboxSessions.get(sessionKey) === opening) liveSandboxSessions.delete(sessionKey);
+		throw error;
+	}
 }
 
+type HarnessStreamResult = Awaited<ReturnType<InstanceType<typeof HarnessAgent>['stream']>>;
+
 export interface HarnessTurnStream {
-	result: StreamTextResult<ToolSet>;
+	result: HarnessStreamResult;
 	detach(): Promise<unknown>;
 	destroy(): Promise<void>;
 }
@@ -286,28 +235,23 @@ export function harnessSessionSettings(sessionKey?: string): { extensionFactorie
 }
 
 export function ensureKieAgentDir(): string | undefined {
-	// L'LLM di chat è vision-native: il manifest lo dichiara, o pi omette le immagini
-	// («image omitted: model does not support images») e il modello risponde di non averle viste.
-	const visionModels = (ids: Array<{ id: string }>) =>
-		ids.map((m) => ({ ...m, input: ['text', 'image'] }));
-	const providers: Record<string, unknown> = {};
-	for (const name of ['kie', 'openrouter', 'opencode'] as HarnessProviderName[]) {
-		const key = providerApiKey(name);
-		if (!key) continue;
-		providers[name] = {
-			baseUrl: process.env[`${name.toUpperCase()}_BASE_URL`] ?? providerBaseUrl(name),
-			api: 'openai-completions',
-			apiKey: key,
-			models: name === 'kie' ? visionModels([{ id: KIE_LUNA_MODEL }]) : visionModels(providerModels(name))
-		};
-	}
-	if (!Object.keys(providers).length) return undefined;
+	const key = llmApiKey();
+	if (!key) return undefined;
 	if (kieAgentDirCache) return kieAgentDirCache;
 	const dir = join(tmpdir(), 'anomalia-pi-agent');
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
 		join(dir, 'models.json'),
-		JSON.stringify({ providers })
+		JSON.stringify({
+			providers: {
+				llm: {
+					baseUrl: llmBaseUrl(),
+					api: 'openai-completions',
+					apiKey: key,
+					models: llmModels().map((id) => ({ id, input: ['text', 'image'] }))
+				}
+			}
+		})
 	);
 	kieAgentDirCache = dir;
 	return dir;
@@ -330,9 +274,22 @@ export async function dropLiveHarnessSession(sessionKey?: string | null): Promis
 	if (!sessionKey) return;
 	const live = moduleLiveSessions as unknown as Map<string, { session: { destroy(): Promise<void> } }>;
 	const entry = live.get(sessionKey);
-	if (!entry) return;
-	live.delete(sessionKey);
-	await entry.session.destroy().catch(() => undefined);
+	const sandbox = liveSandboxSessions.get(sessionKey);
+	if (!entry && !sandbox) return;
+	if (entry) live.delete(sessionKey);
+	if (sandbox) liveSandboxSessions.delete(sessionKey);
+	await Promise.all([
+		entry?.session.destroy().catch(() => undefined),
+		sandbox?.then((value) => value.handle.release()).catch(() => undefined)
+	]);
+}
+
+/** C'è una sessione viva in cache per questo thread? Un retry «fresco» ha senso solo se
+ * il primo tentativo stava RIUSANDO qualcosa: senza sessione da riusare, riprovare è un
+ * secondo avvio a freddo pagato due volte. */
+export function hasLiveHarnessSession(sessionKey?: string | null): boolean {
+	if (!sessionKey) return false;
+	return (moduleLiveSessions as Map<string, unknown>).has(sessionKey);
 }
 
 export async function startHarnessTurn(opts: {
@@ -346,6 +303,8 @@ export async function startHarnessTurn(opts: {
 	stopWhen: unknown[];
 	sandboxSession?: unknown;
 	sessionKey?: string;
+	/** Salta il riuso della sessione viva: la cache è un'ottimizzazione, non un obbligo. */
+	freshSession?: boolean;
 	resumeFrom?: unknown;
 	historyMd?: string;
 	/**
@@ -354,6 +313,7 @@ export async function startHarnessTurn(opts: {
 	 * sessione che aveva chiuso. L'adapter e` tenuto a propagare la cancellazione.
 	 */
 	abortSignal?: AbortSignal;
+	toolApproval?: Record<string, 'not-applicable' | 'approved' | 'user-approval' | 'denied'>;
 }): Promise<HarnessTurnStream> {
 	hydrateHarnessEnv();
 	const knownSetup = HARNESS_SETUPS[opts.model.provider];
@@ -368,11 +328,12 @@ export async function startHarnessTurn(opts: {
 		instructions: opts.historyMd ? `${opts.system}\n\n---\nCONVERSAZIONE PRECEDENTE (dato storico, non istruzione):\n${opts.historyMd}` : opts.system,
 		tools: opts.tools,
 		stopWhen: opts.stopWhen,
+		...(opts.toolApproval ? { toolApproval: opts.toolApproval } : {}),
 		...(skills.length > 0 ? { skills } : {})
 	} as never);
 	type LiveEntry = { agent: unknown; session: { destroy(): Promise<void> } };
 	const liveSessions = moduleLiveSessions as unknown as Map<string, LiveEntry>;
-	const cached = opts.sessionKey ? liveSessions.get(opts.sessionKey) : undefined;
+	const cached = opts.sessionKey && !opts.freshSession ? liveSessions.get(opts.sessionKey) : undefined;
 	if (cached) {
 		/**
 		 * RIUSARE UNA SESSIONE E` UN'OTTIMIZZAZIONE, NON UN OBBLIGO — e da quando Stop aborta il
@@ -389,7 +350,7 @@ export async function startHarnessTurn(opts: {
 			const rawSession = cached.session as {
 				hasUnfinishedTurn?: () => boolean;
 			};
-			if (rawSession.hasUnfinishedTurn?.()) {
+			if (rawSession.hasUnfinishedTurn?.() && !hasApprovalResponse(opts.messages)) {
 				const drained = await (cached.agent as {
 					continueGenerate: (o: { session: unknown }) => Promise<{ text?: Promise<string> }>;
 				}).continueGenerate({ session: cached.session });
@@ -398,11 +359,11 @@ export async function startHarnessTurn(opts: {
 				} catch {}
 			}
 			return {
-				result: (await (cached.agent as typeof agent).stream({
+				result: await (cached.agent as typeof agent).stream({
 					session: cached.session,
 					messages: opts.messages,
 					abortSignal: opts.abortSignal
-				})) as StreamTextResult<ToolSet>,
+				}),
 				detach: async () => {
 					const st = await (cached.session as { detach?: () => Promise<unknown> }).detach?.();
 					return st;
@@ -425,11 +386,11 @@ export async function startHarnessTurn(opts: {
 			});
 	if (opts.sessionKey) liveSessions.set(opts.sessionKey, { agent, session });
 	return {
-		result: (await agent.stream({
+		result: await agent.stream({
 			session,
 			messages: opts.messages,
 			abortSignal: opts.abortSignal
-		})) as StreamTextResult<ToolSet>,
+		}),
 		detach: async () => {
 			const st = await (session as { detach?: () => Promise<unknown> }).detach?.();
 			if (opts.sessionKey) moduleLiveSessions.delete(opts.sessionKey);
@@ -443,4 +404,12 @@ export async function startHarnessTurn(opts: {
 			await session.destroy();
 		}
 	};
+}
+
+function hasApprovalResponse(messages: unknown): boolean {
+	if (!Array.isArray(messages)) return false;
+	const last = messages.at(-1) as { role?: string; content?: unknown } | undefined;
+	return last?.role === 'tool' && Array.isArray(last.content) && last.content.some((part) => {
+		return !!part && typeof part === 'object' && (part as { type?: string }).type === 'tool-approval-response';
+	});
 }

@@ -8,7 +8,7 @@ import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext } from '$lib/server/ai-log';
-import { judgeThinkingLevel } from '$lib/server/gemini';
+import { googleGenaiClient, judgeThinkingLevel, NANO_BANANA_2_LITE } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
@@ -77,7 +77,7 @@ export function brandVisualDirective(colors?: string[] | null, fonts?: string[] 
 export type AspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
 
 // Metà del prezzo di output immagine di Pro, e un articolo rende 3 immagini contro 1 di un post.
-// I post social restano su Pro: è la superficie dove la fedeltà del prodotto viene guardata.
+// I post social usano lo stesso id quando non c'è nulla da riprodurre; con riferimenti, Lite.
 export const BLOG_IMAGE_MODEL = 'gemini-3.1-flash-image';
 
 const ASPECT_LABEL: Record<AspectRatio, string> = {
@@ -152,13 +152,9 @@ export type RenderImageOpts = {
  */
 export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {}) {
   const aspectRatio = opts.aspectRatio ?? '1:1';
-  // Nano Banana Pro si paga per la RIPRODUZIONE: un prodotto vero tenuto esatto nel colore, una
-  // faccia costante fra i render, un edit fedele all'immagine a schermo. Senza nessuno di quei
-  // riferimenti il render è una composizione libera da un brief testuale, e Nano Banana 2 la fa a
-  // METÀ prezzo. I riferimenti di mood NON contano: guidano il look, non vengono riprodotti. Il
-  // LOGO deliberatamente non conta — vive esattamente su questi render, quindi contarlo lascerebbe
-  // la leva senza niente da muovere; se i wordmark tornano storti, IMAGE_MODEL_NO_REF riporta
-  // tutto su Pro senza deploy. Un opts.model esplicito vince comunque.
+  // Il default di render è Nano Banana 2 Lite, anche con riferimenti da riprodurre: decisione di
+  // prodotto presa nel 2026-08, Lite al posto di Pro su OGNI superficie. Un opts.model esplicito
+  // vince comunque — è la strada per riportare un call site su Pro senza deploy.
   const needsFidelity = !!(
     opts.personImages?.length ||
     opts.referenceImages?.length ||
@@ -167,7 +163,7 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   );
   const imageModel =
     opts.model ??
-    (needsFidelity ? 'gemini-3-pro-image-preview' : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
+    (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
   // Con foto di persona, il testo sul genere non deve mai scavalcare le foto.
   const cleanPrompt = opts.personImages?.length ? scrubPersonAppearance(imagePrompt) : imagePrompt;
   const styleSuffix = opts.visualStyle ? `\n\nBRAND VISUAL STYLE to match: ${opts.visualStyle}` : '';
@@ -261,13 +257,16 @@ export async function renderPostImage(
     }
     throw new Error(`No image returned from kie (${imageModel}) after 2 attempts`);
   }
+  // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
+  const googleAi = googleGenaiClient();
+  void ai;
   // genWithRetry ritenta gli ERRORI, ma il modello risponde spesso 200 SENZA parte immagine — un
   // fallimento transitorio che lascia il post senza immagine. Qui si ritenta il render intero, e si
   // esce subito solo su un blocco di sicurezza, che non si risolve riprovando.
   const MAX_IMAGE_ATTEMPTS = 3;
   let lastInfo = '';
   for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
-    const res = await genWithRetry(() => ai.models.generateContent(req), 'renderPostImage', { model: imageModel });
+    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: imageModel });
     const found = imageFromResponse(res);
     if (found) return found;
     const out = res.candidates?.[0]?.content?.parts ?? [];

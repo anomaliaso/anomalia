@@ -6,7 +6,6 @@
   import { Search, ExternalLink, Shuffle } from '@lucide/svelte';
   import type { LibraryAd } from './+page.server';
   import type { RemixBrief } from '$lib/server/ads-remix';
-  import VideoReviewPanel from '$lib/components/VideoReviewPanel.svelte';
   import UpgradeLink from '$lib/components/UpgradeLink.svelte';
   import { X } from '@lucide/svelte';
 
@@ -500,12 +499,6 @@
       </div>
       <!-- svelte-ignore a11y_media_has_caption -->
       <video class="vr-player" src={reviewAd.videoUrl} controls playsinline preload="metadata"></video>
-      <VideoReviewPanel
-        url={reviewAd.videoUrl}
-        brandSlug={brand.slug}
-        defaultStandard="ads"
-        caption={reviewAd.body ?? ''}
-      />
     </div>
   </div>
 {/if}
