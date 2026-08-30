@@ -167,6 +167,13 @@ export function classifyChatJob(
 	return createdAge > CHAT_RUNNING_HARD_STALE_MS ? { dead: true, reason: 'wall' } : ALIVE;
 }
 
+/**
+ * Quante volte un run kit può essere ripreso dopo che l'invocazione che lo teneva è morta.
+ * Oltre, il turno non è "sfortunato": è più grande di quanto una invocazione possa contenere,
+ * e va restituito all'utente col lavoro fatto invece di rinascere per sempre.
+ */
+export const MAX_RUN_ATTEMPTS = 3;
+
 export const KIT_RUN_WORKING_STATES = ['queued', 'running', 'waiting_input', 'waiting_takeover'] as const;
 
 /**

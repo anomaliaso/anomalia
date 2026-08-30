@@ -152,6 +152,7 @@ export async function enqueueQueuedChatTurn(
 		 * domanda, è un prefill, e la seconda voce continuerebbe la frase della prima.
 		 */
 		userMessageSaved?: boolean;
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const locale = bilingualNoticeLocale(opts.locale);
@@ -180,7 +181,8 @@ export async function enqueueQueuedChatTurn(
 				...(opts.agent ? { agent: opts.agent } : {}),
 				...(opts.customAgentId ? { custom_agent_id: opts.customAgentId } : {}),
 				...(opts.speaker ? { speaker: opts.speaker } : {}),
-				...(opts.userMessageSaved ? { user_message_saved: true } : {})
+				...(opts.userMessageSaved ? { user_message_saved: true } : {}),
+				...(opts.resumeRunId ? { resume_run_id: opts.resumeRunId } : {})
 			}
 		})
 		.select('id')
@@ -229,6 +231,12 @@ export async function enqueueTurnContinuation(
 		 * di battute. Vedi motion-video/unfinished.ts.
 		 */
 		maxDepth?: number;
+		/**
+		 * Il run da RIPRENDERE, invece di aprirne uno nuovo. Lo passa il reaper per una riga
+		 * lasciata `running` col lease scaduto: chi drena la prende col fence successivo e
+		 * continua lo stesso turno, senza un secondo messaggio in chat.
+		 */
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const depth = Math.max(0, Math.trunc(opts.depth ?? 0));
@@ -261,7 +269,8 @@ export async function enqueueTurnContinuation(
 		continuationDepth: depth + 1,
 		mode: opts.mode,
 		tier: opts.tier,
-		reasoning: opts.reasoning
+		reasoning: opts.reasoning,
+		resumeRunId: opts.resumeRunId
 	});
 }
 
@@ -774,6 +783,9 @@ await maybeCompactThread(admin, {
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model)?.family,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
+						// La ripresa di un run lasciato dal reaper: lo stesso turno continua, con il
+						// fence successivo, invece di aprirne uno nuovo accanto al lavoro a metà.
+						resumeRunId: typeof params.resume_run_id === 'string' ? params.resume_run_id : undefined,
 						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
 						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
 						escalationText: params.scheduled === true || replay || isDm ? undefined : userMessageContent,

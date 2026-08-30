@@ -143,6 +143,24 @@ dopo la chiusura, e le vede sparire se aspetti. Mossa: potare nel `finally` dell
 (lì lo specchio, che è anche l'unico a scrivere quelle righe), non dove la semantica sembra
 chiederlo — e chiedersi se l'altra chiamata non fosse codice morto: lo era.
 
+### Una migration che ELIMINA una firma rompe la produzione prima ancora del deploy
+Qui i deploy non applicano le migration, quindi fra l'apply e il deploy del codice c'è una finestra
+in cui la produzione chiama ancora la firma vecchia. `0229` toglieva `agent_kit_close_run` a cinque
+argomenti per sostituirla con quella recintata dal lease: applicata da sola avrebbe fatto fallire
+OGNI chiusura di turno finché il codice nuovo non fosse arrivato — e la chiusura è ciò che salva la
+risposta. Segnale: una migration il cui diff contiene `drop function` o un cambio di firma, su una
+funzione che il codice deployato chiama. Mossa: i parametri nuovi hanno un default e il vincolo vale
+solo quando sono valorizzati, così la chiamata vecchia continua a risolvere; renderli obbligatori è
+una migration DOPO il deploy. E la vecchia firma si elimina comunque nella stessa migration: due
+overload che accettano gli stessi nomi rendono la chiamata ambigua (`function is not unique`).
+
+### `git commit -a` non aggiunge i file NUOVI: la PR parte senza i documenti che cita
+`-a` mette in stage solo i file gia` tracciati. In una sessione sola ha lasciato fuori dalla PR #90
+due ADR, due changelog e un file di test — tutti creati in quella stessa sessione — e il corpo della
+PR rimandava a `docs/adr/0004` che nella PR non c'era. Nessun errore, nessun avviso: il commit
+riesce e il diff sembra completo. Segnale: `git status --short` dopo il commit mostra righe `??`.
+Mossa: `git add -A <percorsi>` esplicito prima del commit, e `git status --short` come ultimo gesto
+prima di aprire la PR — deve essere vuoto.
 
 ## Prodotto
 
