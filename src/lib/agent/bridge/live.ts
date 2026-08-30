@@ -92,6 +92,9 @@ const PARTIAL_FLUSH_EVENTS = new Set(['tool-input-available', 'tool-output-avail
 
 const TURN_MAX_STEPS = 75;
 
+const RUN_LEASE_TTL_MS = 300_000;
+const RUN_LEASE_LOST = 'lease_lost';
+
 /** Il turno vivo di ogni thread, per i tool che una sessione riusata ha cotto in un turno prima. */
 const liveTurnByThread = new Map<string, { stopped: boolean; closedBy: string }>();
 import { attachForChat } from './attach';
@@ -112,7 +115,18 @@ import {
 } from './adapters';
 import { reportChatError } from '$lib/server/chat/report-error';
 import { BUILTIN_TOOLS } from '../tools/builtin';
-import { createRun, transition, finish, resume, closeRunSaving, type CloseMessage, type CloseOutcome, type RunRow } from '../run-store';
+import {
+	createRun,
+	transition,
+	finish,
+	closeRunSaving,
+	claimRun,
+	renewLease,
+	type CloseMessage,
+	type CloseOutcome,
+	type RunRow,
+	type RunLease
+} from '../run-store';
 import type { ActionApprovalConfig, AdapterContext, RunStopReason, ToolResult } from '../kit/types';
 import { createMotionPlugin } from '../plugins/motion';
 import { createContentPlugin } from '../plugins/content';
@@ -187,6 +201,7 @@ export interface RunKitTurnInput {
 	 * la coda. Zero su un turno avviato da una persona.
 	 */
 	continuationDepth?: number;
+	resumeRunId?: string;
 	/**
 	 * Il tempo che questo turno può bruciare. Vuoto = il budget del muro serverless. Il drain
 	 * passa la propria fetta, che si accorcia man mano che macina job.
@@ -368,70 +383,76 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 	const { supabase, admin, brand, user, threadId, spec, messages, locale } = input;
 	const mode: ChatMode = isChatMode(input.mode) ? input.mode : 'agent';
 	const isDm = !!input.dm;
+	const owner = crypto.randomUUID();
+	const busyResponse = () =>
+		new Response(JSON.stringify({ error: 'busy', user_message_saved: true }), {
+			status: 409,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	const claimOrBusy = async (runId: string): Promise<{ run: RunRow; lease: RunLease } | Response> => {
+		const claimed = await claimRun(admin, runId, owner, { ttlMs: RUN_LEASE_TTL_MS });
+		return claimed ? { run: claimed.run, lease: { owner, fence: claimed.fence } } : busyResponse();
+	};
 
 	let run: RunRow;
-	const waiting = await currentWaitingRun(admin, threadId);
-	if (waiting) {
-		if (waiting.state === 'waiting_takeover') {
-			const response = input.approvalResponse;
-			if (!response) {
-				return new Response(JSON.stringify({ error: 'approval_required' }), {
-					status: 409,
-					headers: { 'Content-Type': 'application/json' }
-				});
-			}
-			const { data: approval } = await admin
-				.from('agent_kit_approval_requests')
-				.select('status, tool_call_id')
-				.eq('run_id', waiting.id)
-				.eq('harness_approval_id', response.approvalId)
-				.maybeSingle();
-			if (!approval || !['approved', 'denied'].includes(String(approval.status))) {
-				return new Response(JSON.stringify({ error: 'approval_not_decided' }), {
-					status: 409,
-					headers: { 'Content-Type': 'application/json' }
-				});
-			}
-			if (response.toolCallId && response.toolCallId !== approval.tool_call_id) {
-				return new Response(JSON.stringify({ error: 'approval_tool_mismatch' }), {
-					status: 409,
-					headers: { 'Content-Type': 'application/json' }
-				});
-			}
-		}
-		// DOPPIO RESUME: due dispositivi rispondono insieme a una `waiting_input`. Il primo vince
-		// il compare-and-swap di `resume()`; il secondo lo trova già spostato e riceverebbe il
-		// 500 grezzo di `run: stato cambiato sotto le mani` — un'azione legittima (ha solo perso
-		// la corsa), non un errore di sistema. Risposta pulita, stesso 409 ritentabile del busy
-		// qui sotto, con un messaggio che l'utente capisce.
-		try {
-			({ run } = await resume(admin, waiting.id));
-		} catch (e) {
-			if (e instanceof Error && e.message.includes('stato cambiato sotto le mani')) {
-			// API payload, non chat: nessuna persona la legge in un fumetto. In inglese comunque,
-			// come ogni nota che il backend consegna fuori dal proprio turno.
-			return new Response(
-				JSON.stringify({ error: 'resume_conflict', message: 'Someone else already replied in this conversation.' }),
-				{ status: 409, headers: { 'Content-Type': 'application/json' } }
-			);
-			}
-			throw e;
-		}
+	let lease: RunLease;
+	if (input.resumeRunId) {
+		const claimed = await claimOrBusy(input.resumeRunId);
+		if (claimed instanceof Response) return claimed;
+		({ run, lease } = claimed);
 	} else {
-		// Un turno alla volta per thread: 409 (ritentabile) invece di un secondo run concorrente.
-		if (await liveRunningRun(admin, threadId)) {
-			// `user_message_saved`: questo busy arriva DOPO che il POST ha già persistito il
-			// messaggio dell'utente (chat/+server.ts salva prima di chiamare qui). Il client
-			// ripiega sull'enqueue, e senza questo flag il drain non riconosce la riga già a terra
-			// — confronta solo il TAIL della history, che intanto è la risposta del run vincente —
-			// e la salva una seconda volta.
-			return new Response(JSON.stringify({ error: 'busy', user_message_saved: true }), {
-				status: 409,
-				headers: { 'Content-Type': 'application/json' }
-			});
+		const waiting = await currentWaitingRun(admin, threadId);
+		if (waiting) {
+			if (waiting.state === 'waiting_takeover') {
+				const response = input.approvalResponse;
+				if (!response) {
+					return new Response(JSON.stringify({ error: 'approval_required' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+				const { data: approval } = await admin
+					.from('agent_kit_approval_requests')
+					.select('status, tool_call_id')
+					.eq('run_id', waiting.id)
+					.eq('harness_approval_id', response.approvalId)
+					.maybeSingle();
+				if (!approval || !['approved', 'denied'].includes(String(approval.status))) {
+					return new Response(JSON.stringify({ error: 'approval_not_decided' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+				if (response.toolCallId && response.toolCallId !== approval.tool_call_id) {
+					return new Response(JSON.stringify({ error: 'approval_tool_mismatch' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+			}
+			// DOPPIO RESUME: due dispositivi rispondono insieme a una `waiting_input`. La presa È il
+			// resume — porta la riga a `running` col battito fresco e il fence successivo — quindi
+			// il secondo la trova già presa e perde. Perdere qui e trovare un turno già in corso
+			// sono la stessa cosa per chi chiama, e la coda li trattava già uguali: un codice solo.
+			const claimed = await claimOrBusy(waiting.id);
+			if (claimed instanceof Response) return claimed;
+			({ run, lease } = claimed);
+		} else {
+			// Un turno alla volta per thread: 409 (ritentabile) invece di un secondo run concorrente.
+			if (await liveRunningRun(admin, threadId)) {
+				// `user_message_saved`: questo busy arriva DOPO che il POST ha già persistito il
+				// messaggio dell'utente (chat/+server.ts salva prima di chiamare qui). Il client
+				// ripiega sull'enqueue, e senza questo flag il drain non riconosce la riga già a terra
+				// — confronta solo il TAIL della history, che intanto è la risposta del run vincente —
+				// e la salva una seconda volta.
+				return busyResponse();
+			}
+			run = await createRun(admin, { brandId: brand.id, threadId, agentId: spec.id, userId: user.id });
+			run = await transition(admin, run.id, 'queued', 'running', { heartbeat_at: new Date().toISOString() });
+			const claimed = await claimOrBusy(run.id);
+			if (claimed instanceof Response) return claimed;
+			({ run, lease } = claimed);
 		}
-		run = await createRun(admin, { brandId: brand.id, threadId, agentId: spec.id, userId: user.id });
-		run = await transition(admin, run.id, 'queued', 'running', { heartbeat_at: new Date().toISOString() });
 	}
 
 	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: run.id, locale, agentId: spec.id };
@@ -663,18 +684,23 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		};
 		const beat = async () => {
 			lastBeat = Date.now();
+			const alive = await renewLease(admin, run.id, lease, RUN_LEASE_TTL_MS).catch(() => true);
+			if (!alive) {
+				stopTurnHeartbeat();
+				noteRunState(RUN_LEASE_LOST);
+				return;
+			}
 			// `select('*')` e non i nomi delle colonne: i deploy non eseguono le migration, e
 			// nominare `partial` (0218) o `partial_saved_msg_id` (0219) dove non sono applicate
 			// prende un 42703 che azzera la lettura — cioè spegne in silenzio anche il
 			// riconoscimento dello Stop, che passa da qui. Stessa ragione di `cancelKitRun`.
 			await admin
 				.from('agent_kit_runs')
-				.update({ heartbeat_at: new Date().toISOString() })
-				.eq('id', run.id)
 				.select('*')
+				.eq('id', run.id)
+				.maybeSingle()
 				.then(async ({ data }) => {
-					const row = (data as Array<Record<string, unknown>> | null)?.[0];
-					noteRunState(row?.state);
+					const row = data as Record<string, unknown> | null;
 					// Best-effort: il turno non si ferma perché un checkpoint è inciampato.
 					await checkpointPartial(
 						(row?.partial as ChatPartialSnapshot | null) ?? null,
@@ -910,7 +936,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					admin,
 					run.id,
 					{ kind: 'finish', reason: 'aborted' },
-					closeMessageFields([{ type: 'text', text: '_(turno chiuso: il modello non ha risposto in tempo)_' }], [])
+					closeMessageFields([{ type: 'text', text: '_(turno chiuso: il modello non ha risposto in tempo)_' }], []),
+					lease
 				).catch(() => finish(admin, run.id, 'aborted').catch(() => undefined));
 				kickQueue();
 			}, HARNESS_ABORT_FORCE_CLOSE_MS);
@@ -1078,7 +1105,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					isRepeatedReply(visibleText, lastAssistantText(messages));
 				if (repeatsPreviousReplyWithoutNewWork && laps < MAX_VERDICT_LAPS) {
 					console.log(`[AGENT_KIT] risposta ripetuta senza lavoro nuovo (run ${run.id}, giro ${laps + 1}) — rilancio correttivo`);
-					const { closed } = await closeRunSaving(admin, run.id, outcome, null);
+					const { closed } = await closeRunSaving(admin, run.id, outcome, null, lease);
 					if (!closed) {
 						console.log(`[AGENT_KIT] run ${run.id} sfrattato prima della chiusura: nessun rilancio`);
 						kickQueue();
@@ -1173,7 +1200,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					admin,
 					run.id,
 					outcome,
-					content.length ? closeMessageFields(content, turnAttachments) : null
+					content.length ? closeMessageFields(content, turnAttachments) : null,
+					lease
 				);
 				if (!closed) {
 					console.log(`[AGENT_KIT] run ${run.id} sfrattato prima della chiusura: nessun messaggio salvato`);
@@ -1339,7 +1367,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						admin,
 						run.id,
 						{ kind: 'finish', reason: 'aborted' },
-						closeMessageFields([{ type: 'text', text: turnErrorText }], [])
+						closeMessageFields([{ type: 'text', text: turnErrorText }], []),
+						lease
 					);
 				} catch {}
 				reportChatError(supabase, error, {
@@ -1507,6 +1536,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 								heartbeat_at: new Date().toISOString()
 							})
 							.eq('id', run.id)
+							.eq('lease_owner', lease.owner)
+							.eq('lease_fence', lease.fence)
 					} catch {
 						// specchio best-effort: un inciampo qui non tocca il turno
 					}

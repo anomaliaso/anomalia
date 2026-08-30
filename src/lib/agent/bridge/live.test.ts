@@ -22,17 +22,6 @@ vi.mock('$lib/server/chat/model', () => ({
 // Doppio resume (caso 2): il resto di `../run-store` resta VERO (createRun/transition/askUser/
 // finish girano sopra il fakeDb come sempre) — solo `resume` diventa deviabile per un turno, per
 // pinnare la mappatura dell'errore del CAS senza dover ricostruire una vera race a due richieste.
-const resumeThrows: { current: boolean } = { current: false };
-vi.mock('../run-store', async (importOriginal) => {
-	const actual = (await importOriginal()) as typeof import('../run-store');
-	return {
-		...actual,
-		resume: async (...args: Parameters<typeof actual.resume>) => {
-			if (resumeThrows.current) throw new Error('run: stato cambiato sotto le mani (atteso waiting_input)');
-			return actual.resume(...args);
-		}
-	};
-});
 
 // `logAiCall` scrive davvero in `ai_calls` (via createAdminClient): mai nei test unitari.
 // Stesso mock di brand-fs.test.ts / agent-files.test.ts.
@@ -535,10 +524,32 @@ type Row = Record<string, unknown>;
 			}
 			return Promise.resolve({ data: { closed: true, approval_id: approval.id, harness_approval_id: approval.harness_approval_id }, error: null });
 		}
+		if (fn === 'agent_kit_claim_run') {
+			const claimable = rows.find((r) => r.id === params.p_run_id);
+			if (!claimable) return Promise.resolve({ data: null, error: null });
+			const openState = ['queued', 'waiting_input', 'waiting_takeover'].includes(claimable.state as string);
+			const expired =
+				claimable.state === 'running' &&
+				(claimable.lease_until == null || (claimable.lease_until as string) <= (params.p_now as string));
+			if (!openState && !expired) return Promise.resolve({ data: null, error: null });
+			claimable.state = 'running';
+			claimable.lease_owner = params.p_owner;
+			claimable.lease_fence = ((claimable.lease_fence as number) ?? 0) + 1;
+			claimable.attempt = ((claimable.attempt as number) ?? 0) + 1;
+			claimable.lease_until = params.p_lease_until;
+			claimable.heartbeat_at = params.p_now;
+			return Promise.resolve({ data: { ...claimable }, error: null });
+		}
 		if (fn !== 'agent_kit_close_run') {
 			return Promise.resolve({ data: null, error: { message: `rpc sconosciuta: ${fn}` } });
 		}
-		const run = rows.find((r) => r.id === params.p_run_id && r.state === 'running');
+		const run = rows.find(
+			(r) =>
+				r.id === params.p_run_id &&
+				r.state === 'running' &&
+				r.lease_owner === params.p_owner &&
+				r.lease_fence === params.p_fence
+		);
 		if (!run) return Promise.resolve({ data: { closed: false }, error: null });
 		run.state = params.p_to_state;
 		if (params.p_reason != null) run.reason = params.p_reason;
@@ -615,7 +626,6 @@ beforeEach(async () => {
 	await new Promise((r) => setTimeout(r, 12));
 	savedMessages.length = 0;
 	modelHolder.current = null;
-	resumeThrows.current = false;
 	continuations.length = 0;
 	continuationReturns.current = 'cont-job-1';
 	harnessQueue.length = 0;
@@ -1052,7 +1062,7 @@ describe('runKitTurn — il turno successivo su un run waiting_input fa resume',
 });
 
 describe('runKitTurn — doppio resume su una waiting_input (due dispositivi rispondono insieme)', () => {
-	it('il perdente della corsa riceve un 409 pulito, non il 500 grezzo del CAS', async () => {
+	it('il perdente della corsa riceve un 409 ritentabile, non il 500 grezzo del CAS', async () => {
 		toolCallModel('reply', { message: 'non dovrebbe arrivarci', delivered: [] });
 		const { db, rows } = fakeDb([
 			{
@@ -1061,14 +1071,19 @@ describe('runKitTurn — doppio resume su una waiting_input (due dispositivi ris
 				thread_id: 't1',
 				agent_id: 'content',
 				user_id: 'u1',
-				state: 'waiting_input',
+				// L'ALTRO DISPOSITIVO HA GIA` VINTO: la riga è passata a `running` col suo lease
+				// ancora valido. Non serve fingere un'eccezione — è lo stato che il perdente trova.
+				state: 'running',
+				lease_owner: 'altro-dispositivo',
+				lease_fence: 1,
+				lease_until: new Date(Date.now() + 5 * 60_000).toISOString(),
+				heartbeat_at: new Date().toISOString(),
 				reason: null,
 				question: { question: 'quale palette?' },
 				created_at: '2026-08-21T00:00:00.000Z',
 				updated_at: '2026-08-21T00:00:00.000Z'
 			}
 		]);
-		resumeThrows.current = true;
 
 		const res = await runKitTurn({
 			supabase: fakeSupabase,
@@ -1086,11 +1101,13 @@ describe('runKitTurn — doppio resume su una waiting_input (due dispositivi ris
 
 		expect(res.status).toBe(409);
 		const body = await res.json();
-		expect(body.error).toBe('resume_conflict');
-		// Payload API, non chat: in inglese, anche per una chat italiana.
-		expect(body.message).toBe('Someone else already replied in this conversation.');
-		// La riga non è stata toccata dal perdente: resta come l'ha lasciata chi ha vinto la corsa.
-		expect(rows[0].state).toBe('waiting_input');
+		expect(body.error).toBe('busy');
+		// Il messaggio dell'utente è comunque salvato: il client riaccoda, non lo perde.
+		expect(body.user_message_saved).toBe(true);
+		// La riga NON è stata toccata dal perdente: proprietario e fence restano di chi ha vinto.
+		expect(rows[0].state).toBe('running');
+		expect(rows[0].lease_owner).toBe('altro-dispositivo');
+		expect(rows[0].lease_fence).toBe(1);
 	});
 });
 
@@ -1717,6 +1734,104 @@ describe('il run sfrattato non deposita il suo messaggio (la causa radice del do
 		expect(chatMessages).toHaveLength(1);
 		expect(rows[0].state).toBe('done');
 		expect(rows[0].partial_saved_msg_id).toBe(chatMessages[0].id);
+	});
+});
+
+describe('runKitTurn — resumeRunId (il reaper lascia la riga viva, un worker nuovo la riprende)', () => {
+	it('prende in carico la riga running con lease scaduta: fence su, nessuna riga nuova, il vecchio owner non chiude più nulla', async () => {
+		const { closeRunSaving } = await import('../run-store');
+		const { db, rows } = fakeDb([
+			{
+				id: 'run-dead',
+				brand_id: 'b1',
+				thread_id: 't-reap',
+				agent_id: 'content',
+				user_id: 'u1',
+				state: 'running',
+				reason: null,
+				question: null,
+				lease_owner: 'dead-owner',
+				lease_fence: 3,
+				lease_until: '2020-01-01T00:00:00.000Z',
+				created_at: '2026-08-21T00:00:00.000Z',
+				updated_at: '2026-08-21T00:00:00.000Z'
+			}
+		]);
+		let staleClose: { closed: boolean } | undefined;
+		scriptTurns({
+			calls: [replyCall('ripreso')],
+			onStreamStart: () => {
+				void closeRunSaving(
+					db,
+					'run-dead',
+					{ kind: 'finish', reason: 'aborted' },
+					null,
+					{ owner: 'dead-owner', fence: 3 }
+				).then((r) => {
+					staleClose = r;
+				});
+			}
+		});
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-reap',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it',
+			resumeRunId: 'run-dead'
+		});
+		await res.text();
+		await new Promise((r) => setTimeout(r, 40));
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0].id).toBe('run-dead');
+		expect(rows[0].lease_fence).toBe(4);
+		expect(rows[0].lease_owner).not.toBe('dead-owner');
+		expect(rows[0].state).toBe('done');
+		expect(staleClose?.closed).toBe(false);
+	});
+
+	it('la riga già ripresa da un altro non parte una seconda volta', async () => {
+		const { db, rows } = fakeDb([
+			{
+				id: 'run-fresh',
+				brand_id: 'b1',
+				thread_id: 't-reap-fresh',
+				agent_id: 'content',
+				user_id: 'u1',
+				state: 'running',
+				reason: null,
+				question: null,
+				lease_owner: 'live-owner',
+				lease_fence: 1,
+				lease_until: new Date(Date.now() + 60_000).toISOString(),
+				created_at: '2026-08-21T00:00:00.000Z',
+				updated_at: '2026-08-21T00:00:00.000Z'
+			}
+		]);
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-reap-fresh',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it',
+			resumeRunId: 'run-fresh'
+		});
+
+		expect(res.status).toBe(409);
+		const body = await res.json();
+		expect(body.error).toBe('busy');
+		expect(rows).toHaveLength(1);
+		expect(rows[0].lease_owner).toBe('live-owner');
+		expect(rows[0].lease_fence).toBe(1);
 	});
 });
 
