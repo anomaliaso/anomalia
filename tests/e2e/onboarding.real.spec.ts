@@ -1,13 +1,20 @@
 import { test, expect } from '@playwright/test';
 
-const STACK_URL = process.env.PUBLIC_SUPABASE_URL ?? '';
+/**
+ * L'UNICO file di questa cartella che ha bisogno di un database vero. Gli altri sono deterministici
+ * per costruzione (v. README): `playwright.config.ts` avvia vite con un Supabase SEGNAPOSTO, quindi
+ * `PUBLIC_SUPABASE_URL` è SEMPRE valorizzata e non può fare da guardia — la sua presenza non dice
+ * che dietro ci sia uno stack con l'utente seminato. Serve un consenso esplicito, come per gli
+ * altri test di integrazione del repo.
+ */
+const REAL_STACK = process.env.E2E_REAL_STACK === '1';
 const SEEDED_USER = process.env.E2E_USER ?? 'test@anomalia.so';
 const SEEDED_SECRET = process.env.E2E_PASSWORD ?? '123456';
 const SEEDED_BRAND = 'demo';
 
 test.describe.configure({ mode: 'serial' });
 
-test.skip(!STACK_URL, 'richiede uno stack disposable: PUBLIC_SUPABASE_URL');
+test.skip(!REAL_STACK, 'richiede uno stack disposable con utente seminato: E2E_REAL_STACK=1');
 
 async function signIn(page: import('@playwright/test').Page) {
   await page.goto('/login');

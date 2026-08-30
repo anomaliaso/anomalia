@@ -5,6 +5,13 @@ deterministic by construction: it boots `vite dev` with **placeholder** Supabase
 (`PUBLIC_SUPABASE_URL=http://localhost:54321`, placeholder anon key — see
 `playwright.config.ts`) and only visits pages that answer without any external service.
 
+## Il file che fa eccezione
+
+`onboarding.real.spec.ts` è l'unico che vuole un database vero, con l'utente `test@anomalia.so` e il
+brand `demo` già seminati. Gira SOLO con `E2E_REAL_STACK=1`; senza, si salta. Non si protegge con
+`PUBLIC_SUPABASE_URL`: quella la mette `playwright.config.ts` come segnaposto, c'è sempre, e una
+guardia che non può scattare è una guardia che non esiste.
+
 ## What is covered
 
 | Target | Assertion style |

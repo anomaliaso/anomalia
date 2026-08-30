@@ -225,6 +225,16 @@ intercettazione.
 ### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
 `index3.js` (5,4 MB, dieci volte il secondo chunk) era `simple-icons` intero, bundlato via `ssr.noExternal` per un motivo Vercel-only (nft duplica il pacchetto per funzione) che non vale per `DEPLOY_TARGET=node`. Rimuoverlo lo porta a 295 KB (-94,5%) — ma bisecando `--max-old-space-size` (4096/4608/5120) il build muore e riesce agli stessi tetti prima e dopo: zero spostamento. Strumentando `adapter-node`'s `adapt()` (scritture sincrone `appendFileSync`, non `console.error` — l'OOM abort salta il flush dei buffer stdio e perde l'ultimo log) l'heap è già a ~3,4 GB PRIMA che `adapt()` faccia alcunché di suo, durante la sola copia/compressione asset. Segnale: bisecare il tetto di memoria prima e dopo un fix e vedere la stessa soglia di crash — il chunk grande era un difetto reale (fix corretto, va tenuto) ma non la causa del crash. Mossa: non fidarsi della dimensione di un chunk come proxy del picco di memoria; misurare il picco stesso, e quando serve isolare DOVE cresce, strumentare con scritture sincrone perché un OOM non flush-a l'output normale.
 
+### Una guardia su una variabile che l'harness mette SEMPRE non e` una guardia
+`onboarding.real.spec.ts` si proteggeva con `test.skip(!PUBLIC_SUPABASE_URL, ...)`, e in CI falliva
+sempre: quella variabile la mette `playwright.config.ts` come SEGNAPOSTO
+(`http://localhost:54321`), quindi c'e` sempre e lo skip non poteva scattare. La sua presenza non
+dice che dietro ci sia un database vero con l'utente seminato — dice solo che l'app ha di che
+partire. Segnale: un test «condizionale» che non salta mai, e che fallisce solo dove l'ambiente e`
+piu` povero. Mossa: consenso ESPLICITO come per gli altri test di integrazione del repo
+(`E2E_REAL_STACK=1`, come `SANDBOX_HOLDER_INTEGRATION=1`), e poi provare che con lo stack vero il
+test passa davvero — una guardia che nasconde un test rotto non vale niente.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
