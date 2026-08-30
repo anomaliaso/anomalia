@@ -67,6 +67,7 @@ export type ToolCallUi = {
   team?: unknown;
   routineEvent?: unknown;
   plan?: PlanProposal;
+  approval?: { approvalId: string };
 };
 
 /** Solo i tool call: i segmenti di testo vivono nello stesso JSON (chat-parts.ts). */

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decide, frozenResult, isFrozen, EFFECT_LID_NOTE } from './effects';
-import { effectKey } from './effects-store';
+import { decide, effectKey, frozenResult, isFrozen, EFFECT_LID_NOTE } from './effects';
 import type { ToolEffect } from '@anomalia/agent-kit';
 
 function effect(status: ToolEffect['status'], result?: unknown, over: Partial<ToolEffect> = {}): ToolEffect {

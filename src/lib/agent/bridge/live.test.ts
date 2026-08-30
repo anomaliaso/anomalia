@@ -3,6 +3,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { applyChatStreamEvent, emptyStreamState, readSseEvents } from '$lib/chat-stream-events';
 import { judgeTranscript, type TranscriptEvent } from '$lib/server/eval/transcript-judge';
+import type { ActionApprovalConfig } from '@anomalia/agent-kit/types';
 
 /**
  * COME `ai-runtime.test.ts` E `run-store.test.ts`: il turno arriva scripted sull'harness finto
@@ -133,6 +134,7 @@ type FakeCall = { toolCallId: string; toolName: string; input: Record<string, un
 type FakeTurn = {
 	texts?: string[];
 	calls?: FakeCall[];
+	nativeApproval?: boolean;
 	totalUsage?: Record<string, unknown>;
 	onStreamStart?: () => void;
 	/** Non produce MAI il primo evento: la sessione riusata che non parte (incidente reale). */
@@ -170,7 +172,10 @@ function teeText(payload: string): [ReadableStream<Uint8Array>, ReadableStream<U
 	return src.tee();
 }
 
-function buildFakeHarnessResult(turn: FakeTurn, opts: { tools: Record<string, { execute?: (input: unknown, options: unknown) => Promise<unknown> }> }) {
+function buildFakeHarnessResult(turn: FakeTurn, opts: {
+	tools: Record<string, { execute?: (input: unknown, options: unknown) => Promise<unknown> }>;
+	toolApproval?: Record<string, string>;
+}) {
 	const stepParts: Array<Record<string, unknown>> = [];
 	const stepToolCalls: Array<{ toolCallId: string; toolName: string; input: unknown }> = [];
 	const stepToolResults: Array<{ toolCallId: string; toolName: string; input: unknown; output: unknown }> = [];
@@ -192,6 +197,12 @@ function buildFakeHarnessResult(turn: FakeTurn, opts: { tools: Record<string, { 
 		}
 		await new Promise((r) => setTimeout(r, 8));
 		for (const call of turn.calls ?? []) {
+			if (turn.nativeApproval && opts.toolApproval?.[call.toolName] === 'user-approval') {
+				const approvalId = `approval-${call.toolCallId}`;
+				uiChunks.push({ type: 'tool-approval-request', approvalId, toolCallId: call.toolCallId, toolName: call.toolName, input: call.input });
+				stepParts.push({ type: 'tool-approval-request', approvalId, toolCallId: call.toolCallId });
+				continue;
+			}
 			const t = opts.tools?.[call.toolName];
 			if (t && typeof t.execute === 'function') {
 				let output: unknown;
@@ -276,6 +287,7 @@ vi.mock('./adapters', async (importOriginal) => {
 			tools: Record<string, { execute?: (input: unknown, options: unknown) => Promise<unknown> }>;
 			stopWhen: unknown[];
 			sessionKey?: string;
+			toolApproval?: Record<string, string>;
 		}) => {
 			const idx = Math.min(harnessServed, harnessQueue.length - 1);
 			harnessServed += 1;
@@ -297,7 +309,11 @@ vi.mock('./adapters', async (importOriginal) => {
 			}
 			harnessTurnOpts.push(opts);
 			turn.capture?.({ system: opts.system, messages: opts.messages, tools, stopWhen: opts.stopWhen });
-			return { result: buildFakeHarnessResult(turn, { ...opts, tools }), destroy: async () => {} };
+			return {
+				result: buildFakeHarnessResult(turn, { ...opts, tools }),
+				detach: async () => ({ checkpoint: 'approval' }),
+				destroy: async () => {}
+			};
 		}
 	};
 });
@@ -320,15 +336,17 @@ type Row = Record<string, unknown>;
 	function fakeDb(seed: Row[] = []) {
 	const rows: Row[] = seed.map((r) => ({ ...r }));
 	let seq = rows.length;
+	const approvals: Row[] = [];
 	// L'emulazione di `agent_kit_close_run` (migration 0222): CAS su state='running', inserimento
 	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
 	const chatMessages: Row[] = [];
 
 	function from(_table: string) {
-		const store = _table === 'chat_messages' ? chatMessages : rows;
+		const store = _table === 'chat_messages' ? chatMessages : _table === 'agent_kit_approval_requests' ? approvals : rows;
 		let op: 'select' | 'insert' | 'update' = 'select';
 		let payload: Row | undefined;
 		const eqFilters: Array<[string, unknown]> = [];
+		const inFilters: Array<[string, unknown[]]> = [];
 		let limitN: number | undefined;
 		let orderCol: string | undefined;
 		let orderAscending = true;
@@ -336,6 +354,7 @@ type Row = Record<string, unknown>;
 		function matchedRows(): Row[] {
 			let matched = store;
 			for (const [col, val] of eqFilters) matched = matched.filter((r) => r[col] === val);
+			for (const [col, values] of inFilters) matched = matched.filter((r) => values.includes(r[col]));
 			if (orderCol) {
 				const col = orderCol;
 				matched = [...matched].sort((a, b) => {
@@ -376,6 +395,10 @@ type Row = Record<string, unknown>;
 			order(col: string, opts?: { ascending?: boolean }) {
 				orderCol = col;
 				orderAscending = opts?.ascending ?? true;
+				return b;
+			},
+			in(col: string, values: unknown[]) {
+				inFilters.push([col, values]);
 				return b;
 			},
 			limit(n: number) {
@@ -436,6 +459,42 @@ type Row = Record<string, unknown>;
 	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
 	// `chatMessages` vive in testa a `fakeDb`: `from('chat_messages')` ci opera sopra.
 	function rpc(fn: string, params: Record<string, unknown>) {
+		if (fn === 'agent_kit_wait_for_approval') {
+			const run = rows.find((r) => r.id === params.p_run_id && r.state === 'running');
+			if (!run) return Promise.resolve({ data: { closed: false }, error: null });
+			run.state = 'waiting_takeover';
+			run.harness_continue_state = params.p_continue_state;
+			const approval = {
+				id: `approval-row-${approvals.length + 1}`,
+				run_id: run.id,
+				thread_id: run.thread_id,
+				status: 'pending',
+				harness_approval_id: params.p_harness_approval_id,
+				tool_call_id: params.p_tool_call_id,
+				tool_name: params.p_tool_name,
+				tool_input: params.p_tool_input
+			};
+			approvals.push(approval);
+			const message = params.p_message as Row | null;
+			if (message) {
+				const toolCalls = Array.isArray(message.tool_calls)
+					? message.tool_calls.map((part) =>
+							(part as Row).type === 'tool-approval-request' && (part as Row).approvalId === params.p_harness_approval_id
+								? { ...(part as Row), approvalId: approval.id }
+								: part
+						)
+					: message.tool_calls;
+				const id = `msg-${chatMessages.length + 1}`;
+				chatMessages.push({ id, thread_id: run.thread_id, role: 'assistant', ...message, tool_calls: toolCalls });
+				run.partial_saved_msg_id = id;
+				savedMessages.push({
+					threadId: run.thread_id as string,
+					content: (toolCalls as unknown[]) ?? [],
+					attachments: (message.attachments as string[] | null) ?? undefined
+				});
+			}
+			return Promise.resolve({ data: { closed: true, approval_id: approval.id, harness_approval_id: approval.harness_approval_id }, error: null });
+		}
 		if (fn !== 'agent_kit_close_run') {
 			return Promise.resolve({ data: null, error: { message: `rpc sconosciuta: ${fn}` } });
 		}
@@ -460,7 +519,7 @@ type Row = Record<string, unknown>;
 		return Promise.resolve({ data: { closed: true, message_id: msgId }, error: null });
 	}
 
-	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages };
+	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages, approvals };
 }
 
 /** Un turno che chiama UN tool (e unico) e basta. */
@@ -503,7 +562,7 @@ const spec = specById('content')!;
 // turno (brand_memory per l'iniezione della memoria): righe vuote, catena PostgREST minima.
 function emptyReadChain(): Record<string, unknown> {
 	const chain: Record<string, unknown> = {};
-	for (const m of ['select', 'eq', 'is', 'or', 'not', 'neq', 'order', 'limit', 'in']) {
+	for (const m of ['select', 'insert', 'update', 'delete', 'eq', 'is', 'or', 'not', 'neq', 'order', 'limit', 'in']) {
 		chain[m] = () => chain;
 	}
 	chain.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
@@ -614,6 +673,150 @@ describe('la squadra: message_agent è montato per OGNI mestiere', () => {
 		expect(prompt.text).toContain("language of the user's latest message");
 		expect(prompt.text).toContain('an English message gets an English reply');
 		expect(prompt.text).not.toMatch(/^Sei /m);
+	});
+});
+
+describe('runKitTurn — action approval', () => {
+	it('applica il judge al tool del turno prima di arrivare al plugin', async () => {
+		const checker = vi.fn(async () => 'error' as const);
+		const approval: ActionApprovalConfig = { autoReviewEnabled: true, checker };
+		toolCallModel('content_update_post', { post_id: 'p1', caption: 'nuova caption' });
+		const { db } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval
+		});
+		await res.text();
+
+		expect(checker).toHaveBeenCalledOnce();
+	});
+
+	it('un judge pass riprende il turno senza chiedere all’utente', async () => {
+		scriptTurns(
+			{
+				nativeApproval: true,
+				calls: [{ toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } }]
+			},
+			{ calls: [replyCall('aggiornato')] }
+		);
+		const checker = vi.fn(async () => 'pass' as const);
+		const { db, rows, approvals } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-pass',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval: { autoReviewEnabled: true, checker }
+		});
+		await res.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		expect(checker).toHaveBeenCalledOnce();
+		expect(harnessTurnOpts).toHaveLength(2);
+		expect(approvals).toHaveLength(0);
+		expect(rows[0].state).toBe('done');
+	});
+
+	it('un judge ask salva richiesta, card e continuation state prima di uscire', async () => {
+		scriptTurns({
+			nativeApproval: true,
+			calls: [{ toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } }]
+		});
+		const checker = vi.fn(async () => 'error' as const);
+		const { db, rows, approvals } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-ask',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval: { autoReviewEnabled: true, checker }
+		});
+		await res.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		expect(checker).toHaveBeenCalledOnce();
+		expect(rows[0].state).toBe('waiting_takeover');
+		expect(rows[0].harness_continue_state).toEqual({ checkpoint: 'approval' });
+		expect(approvals[0]?.status).toBe('pending');
+		expect(JSON.stringify(savedMessages.at(-1)?.content)).toContain('tool-approval-request');
+		expect(JSON.stringify(savedMessages.at(-1)?.content)).toContain('approval-row-1');
+	});
+
+	it('riprende dopo un reload quando l utente approva la richiesta persistita', async () => {
+		const checker = vi.fn(async () => 'error' as const);
+		scriptTurns(
+			{
+				nativeApproval: true,
+				calls: [{ toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } }]
+			},
+			{ calls: [replyCall('aggiornato')] }
+		);
+		const { db, rows, approvals } = fakeDb();
+		const approval = { autoReviewEnabled: true, checker };
+		const first = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-reload',
+			spec,
+			messages: [{ role: 'user', content: 'aggiorna il post' }],
+			locale: 'it',
+			approval
+		});
+		await first.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		approvals[0].status = 'approved';
+		const resumed = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-approval-reload',
+			spec,
+			messages: [
+				{ role: 'user', content: 'aggiorna il post' },
+				{
+					role: 'assistant',
+					content: [
+						{ type: 'tool-call', toolCallId: 'c1', toolName: 'content_update_post', input: { post_id: 'p1' } },
+						{ type: 'tool-approval-request', approvalId: 'approval-row-1', toolCallId: 'c1' }
+					]
+				},
+				{
+					role: 'tool',
+					content: [{ type: 'tool-approval-response', approvalId: 'approval-c1', approved: true }]
+				}
+			],
+			locale: 'it',
+			approval,
+			approvalResponse: { approvalId: 'approval-c1', approved: true, toolCallId: 'c1' }
+		});
+		await resumed.text();
+		await new Promise((resolve) => setTimeout(resolve, 40));
+
+		expect(rows[0].state).toBe('done');
+		expect(approvals[0]?.status).toBe('approved');
+		expect(harnessTurnOpts).toHaveLength(2);
 	});
 });
 

@@ -21,6 +21,7 @@ export type RunRow = {
 	question: unknown | null;
 	lease_until: string | null;
 	heartbeat_at: string | null;
+	harness_continue_state?: unknown;
 	created_at: string;
 	updated_at: string;
 };
@@ -152,6 +153,7 @@ export type CloseMessage = {
 	reasoning?: string;
 	toolCalls?: unknown;
 	attachments?: string[];
+	speaker?: string;
 };
 
 /**
@@ -179,7 +181,8 @@ export async function closeRunSaving(
 					content: message.content,
 					reasoning: message.reasoning ?? null,
 					tool_calls: message.toolCalls ?? null,
-					attachments: message.attachments ?? null
+					attachments: message.attachments ?? null,
+					name: message.speaker ?? null
 				}
 			: null
 	});

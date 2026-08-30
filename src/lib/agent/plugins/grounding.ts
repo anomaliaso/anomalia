@@ -34,6 +34,7 @@ export function createGroundingPlugin(deps: GroundingPluginDeps): ToolPlugin {
 	const tools: ToolSpec[] = [
 		{
 			name: SOURCE,
+			effectful: false,
 			consequential: false,
 			description: String(chatTools[SOURCE]?.description ?? SOURCE),
 			inputSchema: jsonSchemaOf(chatTools[SOURCE])

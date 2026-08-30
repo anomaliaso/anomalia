@@ -91,7 +91,7 @@ import { attachForChat } from './attach';
 import { buildTools } from '@anomalia/agent-adapters/runtime/ai-runtime';
 import { createCheckpointStorage } from '@anomalia/agent-adapters/checkpoint-storage';
 import { markComputerRunning, touchComputer } from '@anomalia/agent-core/computer';
-import { createEffectsLedger } from '@anomalia/agent-core/effects-store';
+import { createEffectsLedger } from '$lib/server/agent-kit-effects-store';
 import {
 	createServerBrandFs,
 	createPostgresMemoryStore,
@@ -106,7 +106,7 @@ import {
 import { reportChatError } from '$lib/server/chat/report-error';
 import { BUILTIN_TOOLS } from '../tools/builtin';
 import { createRun, transition, finish, resume, closeRunSaving, type CloseMessage, type CloseOutcome, type RunRow } from '../run-store';
-import type { AdapterContext, RunStopReason, ToolResult } from '../kit/types';
+import type { ActionApprovalConfig, AdapterContext, RunStopReason, ToolResult } from '../kit/types';
 import { createMotionPlugin } from '../plugins/motion';
 import { createContentPlugin } from '../plugins/content';
 import { createUgcPlugin } from '../plugins/ugc';
@@ -118,6 +118,7 @@ import { resolveChatModel } from '$lib/server/chat/model';
 import { createGoalPlugin, withKitToolNames } from '../plugins/goal';
 import { kitPluginsFor } from '../plugins/registry';
 import { GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { gateAction, planActionGate, resolveActionApprovalDetail } from '@anomalia/agent-kit/action-approval';
 import { CHAT_MAX_CONTINUATIONS } from '$lib/server/chat/turn-limits';
 import {
 	goalBriefing,
@@ -128,6 +129,8 @@ import {
 	trackGoalSettlement,
 	type ChatGoal
 } from '$lib/server/chat/goal';
+import { approvalContinuationMessage, approvalMessageParts, findToolApproval, type ToolApproval } from './approval';
+import { waitForApproval } from '$lib/server/chat/agent-kit-approvals';
 
 /**
  * La condizione pura che il ramo nel motore esistente valuta: flag ON *E* uno specialista
@@ -203,6 +206,8 @@ export interface RunKitTurnInput {
 	 * automatica. Senza, è un normale turno kit.
 	 */
 	dm?: { speaker: string; meName: string; otherName: string };
+	approval?: ActionApprovalConfig;
+	approvalResponse?: { approvalId: string; approved: boolean; reason?: string; toolCallId?: string };
 }
 
 /**
@@ -224,6 +229,20 @@ function lastToolCall(steps: readonly StepLike[]): { toolName: string; input?: u
 	return null;
 }
 
+function nativeToolApproval(
+	specs: Array<{ name: string; consequential: boolean }>,
+	config?: ActionApprovalConfig
+): Record<string, 'not-applicable' | 'approved' | 'user-approval' | 'denied'> | undefined {
+	if (!config) return undefined;
+	return Object.fromEntries(
+		specs.map((spec) => {
+			const resolved = resolveActionApprovalDetail({ toolName: spec.name, rules: config.rules ?? [] });
+			if (resolved.source === 'always_allow') return [spec.name, 'approved'];
+			return [spec.name, resolved.decision === 'ask' || spec.consequential ? 'user-approval' : 'not-applicable'];
+		})
+	);
+}
+
 /**
  * Un chunk UI message per lo specchio Realtime: piccolo così com'è (text-delta è già solo un
  * delta). L'unico caso grasso è un tool-output-available con un risultato voluminoso — lì si
@@ -243,16 +262,18 @@ function shrinkChunkForBroadcast(chunk: unknown): unknown {
  */
 function closeMessageFields(
 	content: Array<{ type: string; text?: string }>,
-	attachments: string[]
+	attachments: string[],
+	speaker?: string
 ): CloseMessage {
 	const text = content.filter((p) => p.type === 'text').map((p) => p.text ?? '').join('\n\n');
 	const reasoning = content.filter((p) => p.type === 'reasoning').map((p) => p.text ?? '').join('\n');
-	const hasToolCalls = content.some((p) => p.type === 'tool-call');
+	const hasToolCalls = content.some((p) => p.type === 'tool-call' || p.type === 'tool-approval-request');
 	return {
 		content: text,
 		reasoning: reasoning || undefined,
-		toolCalls: hasToolCalls ? content.filter((p) => p.type === 'tool-call' || p.type === 'text') : undefined,
-		attachments: attachments.length ? [...attachments] : undefined
+		toolCalls: hasToolCalls ? content.filter((p) => p.type === 'tool-call' || p.type === 'tool-approval-request' || p.type === 'text') : undefined,
+		attachments: attachments.length ? [...attachments] : undefined,
+		speaker
 	};
 }
 
@@ -264,7 +285,8 @@ function queryToolAdapter(deps: QueryToolDeps) {
 		const out = (await query.execute!(args as any, {
 			toolCallId: `query:${ctx.runId}`,
 			messages: [],
-			abortSignal: ctx.signal
+			abortSignal: ctx.signal,
+			context: undefined as never
 		})) as Record<string, unknown>;
 		return { content: [{ type: 'text', text: JSON.stringify(out) }], isError: 'error' in out };
 	};
@@ -322,16 +344,16 @@ function lastAssistantText(messages: ModelMessage[]): string {
 }
 
 /** Un run `waiting_input` per questo thread, se c'è — il turno corrente ne è la risposta. */
-async function currentWaitingRun(db: SupabaseClient, threadId: string): Promise<string | null> {
+async function currentWaitingRun(db: SupabaseClient, threadId: string): Promise<{ id: string; state: string } | null> {
 	const { data } = await db
 		.from('agent_kit_runs')
-		.select('id')
+		.select('id, state')
 		.eq('thread_id', threadId)
-		.eq('state', 'waiting_input')
+		.in('state', ['waiting_input', 'waiting_takeover'])
 		.order('created_at', { ascending: false })
 		.limit(1)
 		.maybeSingle();
-	return (data as { id: string } | null)?.id ?? null;
+	return (data as { id: string; state: string } | null) ?? null;
 }
 
 /** Fa girare UN turno sul sistema nuovo e restituisce la `Response` che il client già sa leggere. */
@@ -341,15 +363,42 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 	const isDm = !!input.dm;
 
 	let run: RunRow;
-	const waitingId = await currentWaitingRun(admin, threadId);
-	if (waitingId) {
+	const waiting = await currentWaitingRun(admin, threadId);
+	if (waiting) {
+		if (waiting.state === 'waiting_takeover') {
+			const response = input.approvalResponse;
+			if (!response) {
+				return new Response(JSON.stringify({ error: 'approval_required' }), {
+					status: 409,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			const { data: approval } = await admin
+				.from('agent_kit_approval_requests')
+				.select('status, tool_call_id')
+				.eq('run_id', waiting.id)
+				.eq('harness_approval_id', response.approvalId)
+				.maybeSingle();
+			if (!approval || !['approved', 'denied'].includes(String(approval.status))) {
+				return new Response(JSON.stringify({ error: 'approval_not_decided' }), {
+					status: 409,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			if (response.toolCallId && response.toolCallId !== approval.tool_call_id) {
+				return new Response(JSON.stringify({ error: 'approval_tool_mismatch' }), {
+					status: 409,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+		}
 		// DOPPIO RESUME: due dispositivi rispondono insieme a una `waiting_input`. Il primo vince
 		// il compare-and-swap di `resume()`; il secondo lo trova già spostato e riceverebbe il
 		// 500 grezzo di `run: stato cambiato sotto le mani` — un'azione legittima (ha solo perso
 		// la corsa), non un errore di sistema. Risposta pulita, stesso 409 ritentabile del busy
 		// qui sotto, con un messaggio che l'utente capisce.
 		try {
-			({ run } = await resume(admin, waitingId));
+			({ run } = await resume(admin, waiting.id));
 		} catch (e) {
 			if (e instanceof Error && e.message.includes('stato cambiato sotto le mani')) {
 			// API payload, non chat: nessuna persona la legge in un fumetto. In inglese comunque,
@@ -736,7 +785,11 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				)
 			: turnTools;
 		const toolNames = turnToolsFinal.map((t) => t.name);
-		const toolSet = buildTools(turnToolsFinal, applyTool, ctx);
+		const approvedToolCallIds = new Set<string>();
+		if (input.approvalResponse?.approved && input.approvalResponse.toolCallId) {
+			approvedToolCallIds.add(input.approvalResponse.toolCallId);
+		}
+		const toolSet = buildTools(turnToolsFinal, applyTool, ctx, input.approval, approvedToolCallIds);
 
 		// Il set che i worker di delega ricevono: gli STESSI oggetti tool dell'orchestratore, quindi
 		// ogni chiamata di un worker passa dall'applyTool qui sopra — battito, Stop e
@@ -744,7 +797,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		Object.assign(scopedTools, toolSet);
 		kitHubKeys.push(...toolNames.filter((n) => !(SUBAGENT_TOOL_KEYS as readonly string[]).includes(n)));
 
-		let savedResume: unknown = null;
+		let savedResume: unknown = run.harness_continue_state ?? null;
+		let turnMessages = messages;
 		// `process.env` e non il globale di Vite: questo file lo impacchetta anche il worker, che
 		// gira su Node puro dove quel globale non esiste — leggerne un campo era un TypeError che
 		// uccideva il turno prima di cominciare. Vedi `no-vite-globals.test.ts`.
@@ -755,7 +809,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				.select('harness_resume')
 				.eq('id', threadId)
 				.maybeSingle();
-			savedResume = (th as { harness_resume?: unknown } | null)?.harness_resume ?? null;
+			if (!savedResume) savedResume = (th as { harness_resume?: unknown } | null)?.harness_resume ?? null;
 		} catch {
 			savedResume = null;
 		}
@@ -776,8 +830,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
                             .join('\n')
                             .slice(-8_000),
 				resumeFrom: savedResume ?? undefined,
-			messages: stripProviderRefs(messages),
-			tools: toolSet,
+			messages: stripProviderRefs(turnMessages),
+				tools: toolSet as never,
+			toolApproval: nativeToolApproval(turnToolsFinal, input.approval),
 			abortSignal: turnAbort.signal,
 			// Un DM è un consulto fra colleghi, non una produzione: il tetto tiene il suo costo lì,
 			// come DM_REPLY_STEP_CAP fa sul motore classico.
@@ -864,6 +919,76 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				settled = true;
 				if (stoppedByUser) {
 					kickQueue();
+					return;
+				}
+				const pendingApproval = findToolApproval(steps);
+				if (pendingApproval) {
+					const content = assistantContentFromSteps(steps);
+					const approvalParts = approvalMessageParts(pendingApproval);
+					const hasCall = content.some(
+						(part) => part.type === 'tool-call' && part.toolCallId === pendingApproval.toolCallId
+					);
+					if (!hasCall) content.push(approvalParts[0]);
+					content.push(approvalParts[1]);
+					const specForApproval = turnToolsFinal.find((candidate) => candidate.name === pendingApproval.toolName);
+					const plan = input.approval && specForApproval
+						? planActionGate({
+								resolved: resolveActionApprovalDetail({ toolName: specForApproval.name, rules: input.approval.rules ?? [] }),
+								consequential: specForApproval.consequential === true,
+								autoReviewEnabled: input.approval.autoReviewEnabled,
+								checkerConfigured: input.approval.checker != null
+							})
+						: 'ask';
+					if (plan === 'judge' && specForApproval && input.approval?.checker) {
+						const gate = await gateAction({
+							spec: specForApproval,
+							call: {
+								name: pendingApproval.toolName,
+								args: (pendingApproval.input ?? {}) as Record<string, unknown>,
+								id: pendingApproval.toolCallId
+							},
+							context: ctx,
+							config: input.approval
+						});
+						if (gate.decision === 'allow') {
+							const continuationState = await turn.detach();
+							approvedToolCallIds.add(pendingApproval.toolCallId);
+							savedResume = continuationState;
+							turnMessages = [
+								...messages,
+								{ role: 'assistant', content },
+								approvalContinuationMessage({ approvalId: pendingApproval.approvalId, approved: true })
+							];
+							settled = false;
+							turn = await startTurnOnce(true);
+							const resumedResult = turn.result;
+							await resumedResult.consumeStream({
+								onError: (e) => console.error(`[AGENT_KIT] run ${run.id} judge resume error`, e)
+							});
+							await handleFinish({ steps: await resumedResult.steps, text: await resumedResult.text });
+							return;
+						}
+						if (gate.reason) pendingApproval.reason = gate.reason;
+					}
+					const continuationState = await turn.detach();
+					const waited = await waitForApproval(admin, {
+						runId: run.id,
+						harnessApprovalId: pendingApproval.approvalId,
+						toolCallId: pendingApproval.toolCallId,
+						toolName: pendingApproval.toolName,
+						toolInput: pendingApproval.input,
+						reason: pendingApproval.reason,
+						continueState: continuationState,
+						message: closeMessageFields(content, turnAttachments, input.dm?.speaker)
+					});
+					if (!waited.closed) {
+						kickQueue();
+						return;
+					}
+					try {
+						await touchThread(supabase, threadId);
+						void broadcastToBrand(brand.id, { event: 'thread-changed', payload: { threadId } });
+					} catch {}
 					return;
 				}
 				const last = lastToolCall(steps);
@@ -1216,7 +1341,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					userId: user.id,
 					threadId,
 					tier: String(input.tier ?? ''),
-					provider: modelRef.provider,
+					provider: modelRef.provider as Parameters<typeof logAiCall>[0]['provider'],
 					model: modelRef.label,
 					kind: 'agent_kit_stream',
 					detail: `run ${run.id} · agente ${spec.id}`
@@ -1238,7 +1363,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						model: modelRef ?? undefined,
 						system,
 						messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
-						tools: toolSet,
+							tools: toolSet as never,
 						stopWhen: [isStepCount(TURN_MAX_STEPS)],
 						sandboxSession: brandSandbox?.session,
 						sessionKey: threadId
@@ -1260,7 +1385,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				const usage = extractSdkUsage(await result.totalUsage);
 				logAiCall({
 					label: 'chat',
-					provider: modelRef.provider,
+					provider: modelRef.provider as Parameters<typeof logAiCall>[0]['provider'],
 					model: modelRef.id,
 					ms: Date.now() - turnT0,
 					ok: true,
@@ -1393,7 +1518,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						if (mustWrite) {
 							mustWrite = false;
 							lastWrite = now;
-							const prev = inFlight ?? Promise.resolve();
+							const prev: Promise<void> = inFlight ?? Promise.resolve();
 							inFlight = prev.then(writePartial).finally(() => {
 								inFlight = null;
 							});

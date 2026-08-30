@@ -258,11 +258,13 @@ export function createApplyTool(deps: ApplyToolDeps): ApplyTool {
 		const effect = claim.effect;
 		try {
 			const result = await execute(call, ctx);
-			await deps.effects.resolve(effect.id, result.isError ? 'failed' : 'completed', result);
+			const status = result.effectStatus ?? (result.isError ? 'failed' : 'completed');
+			await deps.effects.resolve(effect.id, status, result);
 			return result;
-		} catch (err) {
-			await deps.effects.resolve(effect.id, 'failed', { message: err instanceof Error ? err.message : String(err) });
-			throw err;
+		} catch (cause) {
+			const message = cause instanceof Error ? cause.message : String(cause);
+			await deps.effects.resolve(effect.id, 'ambiguous', err(message));
+			throw cause;
 		}
 	};
 }

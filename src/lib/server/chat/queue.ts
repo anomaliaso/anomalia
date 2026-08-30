@@ -93,6 +93,7 @@ import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { carryImagesToContinuation } from '$lib/agent/bridge/provider-refs';
+import { createChatActionApproval } from '$lib/server/chat/action-approval';
 
 export function kickChatQueueWork(origin: string): Promise<void> {
 	const headers: Record<string, string> = {};
@@ -776,6 +777,14 @@ await maybeCompactThread(admin, {
 						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
 						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
 						escalationText: params.scheduled === true || replay || isDm ? undefined : userMessageContent,
+						approval: isDm
+							? undefined
+							: createChatActionApproval({
+									messages: kitMessages,
+									brandId: brand.id,
+									userId: job.user_id as string,
+									threadId
+							  }),
 						// Il contesto del DM: chi parla, per chi. Il turno kit nasce DM (blocco in testa
 						// al prompt, firma della risposta, niente riprese) come lo nasceva quello classico.
 						dm:

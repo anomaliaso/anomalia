@@ -17,7 +17,7 @@
   import ChatTurn from './ChatTurn.svelte';
   import ChatArtifactCard from '$lib/components/ChatArtifactCard.svelte';
   import type { AgentAvatarFace } from '$lib/agent-avatars';
-  import type { ChatArtifactUi, ChatMessage, PostPreview } from './transcript';
+  import { parseToolCalls, type ChatArtifactUi, type ChatMessage, type PostPreview } from './transcript';
   import type { KitRun } from './kit-run';
 
   let {
@@ -47,7 +47,9 @@
     onresend,
     onredo,
     onfeedback,
-    onsend
+    onsend,
+    approvalStatuses,
+    onapproval
   }: {
     messages: ChatMessage[];
     artifacts?: ChatArtifactUi[];
@@ -84,6 +86,8 @@
     onredo: (index: number) => void;
     onfeedback: (messageId: string | undefined, value: 1 | -1 | null, note?: string) => void;
     onsend: (text: string) => void;
+    approvalStatuses: Record<string, string>;
+    onapproval: (approvalId: string, approved: boolean) => void;
   } = $props();
 
   // La riga in store porta anche gli avatar dei custom agent; thread copre il primo paint.
@@ -150,8 +154,8 @@
       // Il checkpoint vivo è saltato nel transcript (lo disegna la bolla): i suoi toolCallId
       // non contano come "già mostrati", o i fotogrammi sparirebbero per tutta la durata del turno.
       if (m.id && m.id === liveCheckpointId) continue;
-      for (const part of m.tool_calls ?? []) {
-        const id = (part as { toolCallId?: string }).toolCallId;
+      for (const part of parseToolCalls(m.tool_calls)) {
+        const id = part.toolCallId;
         if (id) ids.add(id);
       }
     }
@@ -240,6 +244,8 @@
         onfeedback={onfeedback}
         onsend={onsend}
         onpreview={onzoompost}
+        {approvalStatuses}
+        onapproval={onapproval}
       />
     </div>
   {/if}

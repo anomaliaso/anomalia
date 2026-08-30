@@ -159,7 +159,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
   // Close out dead rows before asking what is in flight, so a thread unblocks itself on open.
   await reapStaleChatJobs(supabase, { userId: user.id, threadId: params.thread, limit: 10 });
 
-  const [thread, messages, artifacts, activeJobResult, failedJobResult, pendingToolsResult, sessionMemoryResult, lastReads] = await Promise.all([
+  const [thread, messages, artifacts, activeJobResult, failedJobResult, pendingToolsResult, approvalRowsResult, sessionMemoryResult, lastReads] = await Promise.all([
     getThread(supabase, params.thread, brand.id, user.id),
     loadHistoryForUI(supabase, brand.id, user.id, params.thread),
     // Stessa consegna di GET /chat?thread=: i fotogrammi di motion_stills / render_stills
@@ -205,6 +205,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
       .order('created_at', { ascending: false })
       .limit(10),
     supabase
+      .from('agent_kit_approval_requests')
+      .select('id, harness_approval_id, status')
+      .eq('thread_id', params.thread),
+    supabase
       .from('brand_memory')
       .select('id, key, value, category')
       .eq('brand_id', brand.id)
@@ -220,6 +224,13 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
   ]);
   if (!thread) throw error(404, 'Thread not found');
 
+  const approvalStatuses = Object.fromEntries(
+    ((approvalRowsResult.data ?? []) as Array<{ id: string; harness_approval_id?: string | null; status: string }>).flatMap((row) => [
+      [row.id, row.status],
+      ...(row.harness_approval_id ? [[row.harness_approval_id, row.status]] : [])
+    ])
+  );
+
   // Dopo il 404: il pannello dipende da agent/custom_agent_id del thread risolto.
   const agentPanel = await loadAgentPanel(supabase, brand, thread);
 
@@ -228,6 +239,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
     agentPanel,
     agentDesktopEnabled: agentDesktopEnabled(),
     messages,
+    approvalStatuses,
     artifacts,
     brandSlug: brand.slug,
     brandId: brand.id,

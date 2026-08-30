@@ -17,11 +17,7 @@ export function isFrozen(status: EffectStatus): boolean {
 	return FROZEN_STATUSES.has(status);
 }
 
-/**
- * Decide se eseguire o congelare per il percorso legacy. `intended` NON congela: è un ripiego di sicurezza, ma corrisponde
- * a un segmento ancora vivo o appena morto — a differenza di `ambiguous` (morto confermato), il
- * run corrente è il primo e solo autore, quindi può riprovare.
- */
+/** Decide se un claim già presente può essere ritentato. Solo failed è ritentabile. */
 export function decide(effect: ToolEffect | null): { run: boolean; note: string } {
 	if (!effect) return { run: true, note: '' };
 	if (effect.status === 'failed') return { run: true, note: '' };
@@ -41,10 +37,12 @@ export function sameEffectPayload(left: unknown, right: unknown): boolean {
 export function legacyEffectKey(toolName: string, args: Record<string, unknown>): string {
 	const canonical = stableSerialize(args);
 	const bytes = new TextEncoder().encode(`${toolName}\n${canonical}`);
-	let hash = 0x811c9dc5;
+	const FNV_OFFSET = 0x811c9dc5;
+	const FNV_PRIME = 0x01000193;
+	let hash = FNV_OFFSET;
 	for (const b of bytes) {
 		hash ^= b;
-		hash = Math.imul(hash, 0x01000193);
+		hash = Math.imul(hash, FNV_PRIME);
 	}
 	return `${toolName}:${(hash >>> 0).toString(36)}:${canonical.length}`;
 }
