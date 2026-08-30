@@ -5,7 +5,8 @@
 #   INCLUDED  db (official supabase/postgres image — roles/extensions the others below assume),
 #             kong (API gateway: routes /auth, /rest, /storage, /realtime with one apikey scheme),
 #             auth (GoTrue), rest (PostgREST), storage (Storage API), realtime.
-#             meta + studio (Dashboard UI) — behind `--profile studio`, per "studio opzionale".
+#             worker (long-lived chat queue drain), meta + studio (Dashboard UI) — the latter
+#             behind `--profile studio`, per "studio opzionale".
 #
 #   NOT INCLUDED, on purpose:
 #     - imgproxy          Storage's on-the-fly image transforms. This app renders and stores its
@@ -25,7 +26,7 @@
 #
 # Usage:
 #   cp .env.example .env               # then fill every value marked "generate with"
-#   docker compose up -d               # db, kong, auth, rest, storage, realtime
+#   docker compose up -d               # db, kong, auth, rest, storage, realtime, app, worker, cron
 #   docker compose --profile studio up -d   # + the Dashboard UI at http://localhost:8000
 #   (from the repo root) DATABASE_URL=postgres://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres \
 #     npm run db:migrate && npm run db:seed
@@ -36,7 +37,6 @@ name: anomalia-selfhost
 
 services:
   db:
-    container_name: anomalia-db
     # Official Supabase Postgres image — vanilla postgres:16 does NOT have the roles
     # (authenticator, supabase_auth_admin, supabase_storage_admin, …) or extensions
     # (pgjwt, pg_graphql, …) that auth/rest/storage below assume exist. Do not swap this out.
@@ -69,7 +69,6 @@ services:
       JWT_EXP: ${JWT_EXPIRY:-3600}
 
   kong:
-    container_name: anomalia-kong
     image: kong/kong:3.9.3
     restart: unless-stopped
     depends_on:
@@ -109,7 +108,6 @@ services:
     entrypoint: ['/bin/sh', '/home/kong/kong-entrypoint.sh']
 
   auth:
-    container_name: anomalia-auth
     image: supabase/gotrue:v2.189.0
     restart: unless-stopped
     depends_on:
@@ -154,7 +152,6 @@ services:
       GOTRUE_SMS_AUTOCONFIRM: 'false'
 
   rest:
-    container_name: anomalia-rest
     image: postgrest/postgrest:v14.12
     restart: unless-stopped
     depends_on:
@@ -180,9 +177,7 @@ services:
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
 
-  realtime:
-    # Name looks inconsistent but is correct — Realtime parses its tenant id from the subdomain.
-    container_name: realtime-dev.anomalia-realtime
+  realtime-dev:
     image: supabase/realtime:v2.102.3
     restart: unless-stopped
     depends_on:
@@ -220,7 +215,6 @@ services:
 
   realtime-policies:
     profiles: ['init']
-    container_name: anomalia-realtime-policies
     image: supabase/postgres:17.6.1.136
     restart: 'no'
     depends_on:
@@ -238,7 +232,6 @@ services:
     entrypoint: ['/bin/sh', '/realtime-policies.sh']
 
   storage:
-    container_name: anomalia-storage
     image: supabase/storage-api:v1.60.4
     restart: unless-stopped
     depends_on:
@@ -269,12 +262,11 @@ services:
       # No imgproxy in this compose — see the header. On-the-fly transforms stay off.
       ENABLE_IMAGE_TRANSFORMATION: 'false'
     volumes:
-      - ./volumes/storage:/var/lib/storage
+      - storage-data:/var/lib/storage
 
   # Dashboard UI — optional: `docker compose --profile studio up -d`. Everything above works
   # without it; Studio just gives you a browser table/SQL editor instead of psql.
   meta:
-    container_name: anomalia-meta
     image: supabase/postgres-meta:v0.96.6
     restart: unless-stopped
     profiles: ['studio']
@@ -290,7 +282,6 @@ services:
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
 
   studio:
-    container_name: anomalia-studio
     image: supabase/studio:2026.08.03-sha-022b374
     restart: unless-stopped
     profiles: ['studio']
@@ -321,10 +312,10 @@ services:
       - '${STUDIO_PORT:-54323}:3000'
 
   app:
-    container_name: anomalia-app
     build:
       context: ../..
       dockerfile: infra/app/Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-anomalia}-app
     restart: unless-stopped
     depends_on:
       kong:
@@ -339,15 +330,13 @@ services:
       start_period: 20s
     ports:
       - '${APP_PORT:-3000}:3000'
-    environment:
-      PUBLIC_SUPABASE_URL: ${PUBLIC_SUPABASE_URL:-http://kong:8000}
+    environment: &app-environment
+      PUBLIC_SUPABASE_URL: ${SUPABASE_INTERNAL_URL:-http://kong:8000}
       PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:?set ANON_KEY in .env}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?set SERVICE_ROLE_KEY in .env}
+      AGENT_KIT: ${AGENT_KIT:-off}
+      BILLING_PROVIDER: ${BILLING_PROVIDER:-open}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:${APP_PORT:-3000}}
-      # Senza ORIGIN adapter-node deduce l'origine dagli header e assume **https**: ogni POST di
-      # form diventa "cross-site" (403, login incluso) e ogni richiesta interna del cron finisce
-      # sul gruppo _site (404). Vale anche come host dell'app per `reroute`: i blog dei brand su
-      # dominio proprio richiedono un reverse proxy davanti — vedi docs/SELF_HOSTING.md.
       ORIGIN: ${PUBLIC_APP_URL:-http://localhost:${APP_PORT:-3000}}
       APP_SECRET: ${APP_SECRET:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
@@ -356,13 +345,19 @@ services:
       LLM_MODELS: ${LLM_MODELS:-}
       LLM_VIDEO_REVIEWER_MODEL: ${LLM_VIDEO_REVIEWER_MODEL:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       KIE_API_KEY: ${KIE_API_KEY:-}
       CRON_SECRET: ${CRON_SECRET:-}
-      # Undocumented: HIDE_MARKETING=1 serves the app at `/` instead of the marketing site.
       HIDE_MARKETING: ${HIDE_MARKETING:-}
+      VERCEL_TOKEN: ${VERCEL_TOKEN:-}
+      VERCEL_TEAM_ID: ${VERCEL_TEAM_ID:-}
+      VERCEL_PROJECT_ID: ${VERCEL_PROJECT_ID:-}
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-}
+      SANDBOX_BROWSER_IMAGE: ${SANDBOX_BROWSER_IMAGE:-}
+      SANDBOX_BROWSERS_PATH: ${SANDBOX_BROWSERS_PATH:-}
 
   cron:
-    container_name: anomalia-cron
     build:
       context: ../../docker/cron
     restart: unless-stopped
@@ -374,6 +369,15 @@ services:
       CRON_SECRET: ${CRON_SECRET:-}
       ALLOW_INSECURE_CRON: ${ALLOW_INSECURE_CRON:-}
 
+  worker:
+    image: ${COMPOSE_PROJECT_NAME:-anomalia}-app
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    command: ['node', 'build-worker/index.js']
+    environment: *app-environment
+
 # The SvelteKit app image IS the `app` service above now: adapter-vercel remains the default
 # adapter (cloud deploy unchanged), and DEPLOY_TARGET=node inside infra/app/Dockerfile selects
 # adapter-node for this image. Outside Docker, `npm run build:node && npm run start` does the same.
@@ -381,3 +385,4 @@ services:
 
 volumes:
   db-data:
+  storage-data:

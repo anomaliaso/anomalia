@@ -221,7 +221,7 @@ services:
   ## Secure Realtime routes
   - name: realtime-v1-ws
     _comment: 'Realtime: /realtime/v1/* -> ws://realtime:4000/socket/*'
-    url: http://realtime-dev.anomalia-realtime:4000/socket
+    url: http://realtime-dev:4000/socket
     protocol: ws
     routes:
       - name: realtime-v1-ws
@@ -253,7 +253,7 @@ services:
   # Block access to /realtime/v1/api/openapi
   - name: realtime-v1-rest-openapi
     _comment: 'Realtime: /realtime/v1/api/openapi/* -> http://realtime:4000/api/openapi/* (blocked)'
-    url: http://realtime-dev.anomalia-realtime:4000/api/openapi
+    url: http://realtime-dev:4000/api/openapi
     protocol: http
     routes:
       - name: realtime-v1-rest-openapi
@@ -269,7 +269,7 @@ services:
   # Block access to /realtime/v1/api/tenants
   - name: realtime-v1-rest-tenants
     _comment: 'Realtime: /realtime/v1/api/tenants/* -> http://realtime:4000/api/tenants/* (blocked)'
-    url: http://realtime-dev.anomalia-realtime:4000/api/tenants
+    url: http://realtime-dev:4000/api/tenants
     protocol: http
     routes:
       - name: realtime-v1-rest-tenants
@@ -284,7 +284,7 @@ services:
 
   - name: realtime-v1-rest
     _comment: 'Realtime: /realtime/v1/api/* -> http://realtime:4000/api/*'
-    url: http://realtime-dev.anomalia-realtime:4000/api
+    url: http://realtime-dev:4000/api
     protocol: http
     routes:
       - name: realtime-v1-rest

@@ -21,7 +21,7 @@
  * off as ours, and `wall_state = 'hidden'` removes a row from every surface immediately.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { DEFAULT_LOCALE, type Locale } from '$lib/i18n/locale';
 import { minDesignScore } from '$lib/server/design-judge';
 import { DESIGN_TAGS, type DesignAxis, type DesignTag, type WallCard } from '$lib/wall';
@@ -118,7 +118,7 @@ export function noteFor(raw: unknown, locale: Locale): string | null {
 }
 
 /** Row → card. The whitelist in code form: anything not named here cannot reach a page. */
-export function toCard(row: AnyRec, locale: Locale, supabaseUrl = PUBLIC_SUPABASE_URL): WallCard | null {
+export function toCard(row: AnyRec, locale: Locale, supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL): WallCard | null {
   const slug = String(row.wall_slug ?? '');
   const poster = String(row.poster_path ?? '');
   const sourceUrl = String(row.url ?? '');

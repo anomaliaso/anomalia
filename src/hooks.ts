@@ -1,14 +1,14 @@
 import type { Reroute } from '@sveltejs/kit';
 import { building } from '$app/environment';
-import { PUBLIC_APP_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 
 // Multi-tenant blog hosting: any request arriving on a host that ISN'T the main Anomalia app (i.e. a
 // brand's own custom domain pointed here via CNAME) is served from the `_site` route group, which
 // resolves the brand by hostname and renders its published articles. The main app is untouched.
-const appHost = (() => { try { return new URL(PUBLIC_APP_URL).hostname; } catch { return ''; } })();
+const appHost = (() => { try { return new URL(publicEnv.PUBLIC_APP_URL).hostname; } catch { return ''; } })();
 
 function isAppHost(h: string): boolean {
-  // FAIL SAFE: if we don't know the app's own host (PUBLIC_APP_URL unset), treat EVERY host as the
+  // FAIL SAFE: if we don't know the app's own host (publicEnv.PUBLIC_APP_URL unset), treat EVERY host as the
   // app — blog hosting simply stays off rather than risk rerouting the real app domain to a 404.
   if (!appHost) return true;
   if (!h) return true;

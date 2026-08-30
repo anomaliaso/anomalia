@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -45,7 +45,7 @@ export async function authenticate(request: Request): Promise<
   }
 
   // ── Supabase JWT path (existing) ─────────────────────────────
-  const supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+  const supabase = createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => [],
       setAll: () => {}
@@ -71,7 +71,7 @@ async function authenticateApiKey(token: string) {
   if (!adminKey) {
     return { error: json({ error: 'Server misconfiguration' }, { status: 500 }) };
   }
-  const admin = createClient(PUBLIC_SUPABASE_URL, adminKey, {
+  const admin = createClient(publicEnv.PUBLIC_SUPABASE_URL, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
@@ -98,7 +98,7 @@ async function authenticateApiKey(token: string) {
   // Service-role client: it bypasses RLS, so the ownership check RLS would have done has to be
   // redone by hand. Registering the identity here is what lets loadBrandForUser do it — the alternative
   // (remembering a permission call in each of ~60 routes) is what left the tenant boundary open.
-  const supabase = createClient(PUBLIC_SUPABASE_URL, adminKey, {
+  const supabase = createClient(publicEnv.PUBLIC_SUPABASE_URL, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
   apiKeyIdentity.set(supabase, { userId: keyRow.user_id, apiKey });

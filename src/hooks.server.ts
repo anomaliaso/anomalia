@@ -2,7 +2,7 @@ import {sequence} from '@sveltejs/kit/hooks';
 import { json, redirect, text } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import type { Handle } from '@sveltejs/kit';
 import { pickLocale } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
@@ -13,7 +13,7 @@ import { marketingShellTarget } from '$lib/server/marketing-shell';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-const SESSION_COOKIE_NAME = `sb-${new URL(PUBLIC_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
+const SESSION_COOKIE_NAME = `sb-${new URL(publicEnv.PUBLIC_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
 const SESSION_COOKIE_PREFIX = `${SESSION_COOKIE_NAME}.`;
 const BASE64_COOKIE_PREFIX = 'base64-';
 const BASE64_URL = /^[A-Za-z0-9_-]*$/;
@@ -65,7 +65,7 @@ const csrf: Handle = async ({ event, resolve }) => {
 
 export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ event, resolve }) => {
   // Per-request Supabase client bound to the request cookies (SSR auth).
-  event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+  event.locals.supabase = createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => validSessionCookies(event.cookies.getAll()),
       setAll: (cookiesToSet: CookieToSet[]) => {

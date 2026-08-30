@@ -9,6 +9,10 @@ vi.mock('$env/static/public', async (originale) => ({
   PUBLIC_SUPABASE_URL: 'https://test.supabase.co'
 }));
 
+vi.mock('$env/dynamic/public', () => ({
+  env: { PUBLIC_SUPABASE_URL: 'https://test.supabase.co' }
+}));
+
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { assistantContentFromSteps, chronologicalTail, dropLeadingAssistant, messagesFromRow, snippetText } from './persistence';
 

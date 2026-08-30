@@ -1,4 +1,4 @@
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { isOwnStorageUrl as isOwnStorage } from '$lib/storage-url';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { signPersonImages, type PersonImage } from '$lib/server/people';
@@ -24,7 +24,7 @@ export async function persistChatAttachments(
         const comma = url.indexOf(',');
         contentType = url.slice(5, url.indexOf(';')) || contentType;
         bytes = Buffer.from(url.slice(comma + 1), 'base64');
-      } else if (isOwnStorage(url, PUBLIC_SUPABASE_URL)) {
+      } else if (isOwnStorage(url, publicEnv.PUBLIC_SUPABASE_URL)) {
         out.push(url); // already durable in our bucket — re-uploading a clip buys nothing
         continue;
       } else {
@@ -66,7 +66,7 @@ export async function resolveChatAttachments(
   const uploads = Array.isArray(att.uploads)
     ? (att.uploads as unknown[])
         .filter((s): s is string => typeof s === 'string')
-        .filter((s) => s.startsWith('data:image/') || isOwnStorage(s, PUBLIC_SUPABASE_URL))
+        .filter((s) => s.startsWith('data:image/') || isOwnStorage(s, publicEnv.PUBLIC_SUPABASE_URL))
         .slice(0, 4)
     : [];
   const refUrls: string[] = [...uploads];
