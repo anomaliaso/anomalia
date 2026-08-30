@@ -53,8 +53,10 @@
   import type { ChatDocument } from '$lib/chat-documents';
   import { DEFAULT_AGENT_ID, agentMetaForBrand, normalizeAgentIdForBrand } from '$lib/agent-icons';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
-  import { emptyStreamState } from '$lib/chat-stream-events';
+  import { emptyStreamState, type StreamToolCallState } from '$lib/chat-stream-events';
   import { applyLiveChunk, applyLiveSnapshot, type PendingChunk } from '$lib/chat-live-join';
+  import { emptyThreadProjection } from '@anomalia/agent-kit';
+  import { foldThreadCursor, latestRunProgress, type RawThreadEvent } from '$lib/thread-cursor';
   import '$lib/styles/chat-messages.css';
   import TranscriptList from '../components/TranscriptList.svelte';
   import ComposerDock from '../components/ComposerDock.svelte';
@@ -275,6 +277,57 @@
   let orphanStateRunId = '';
   /** I chunk del canale che non continuano dove siamo: aspettano lo snapshot che colma il buco. */
   let orphanPending: PendingChunk[] = [];
+
+  /** La proiezione durevole del thread aperto: `thread-seq` la spinge oltre `kit_stream`/poll. */
+  let threadProjection = $state(emptyThreadProjection());
+  let threadCursorFetching = false;
+
+  $effect(() => {
+    void data.thread.id;
+    threadProjection = emptyThreadProjection();
+  });
+
+  $effect(() => {
+    const threadId = data.thread.id;
+    return brandChannel.onThreadSeq(({ threadId: seqThreadId, seq }) => {
+      if (seqThreadId !== threadId || seq <= threadProjection.cursor) return;
+      void syncThreadCursor(threadId);
+    });
+  });
+
+  async function syncThreadCursor(threadId: string) {
+    if (threadCursorFetching) return;
+    threadCursorFetching = true;
+    try {
+      const after = threadProjection.cursor;
+      const res = await fetch(
+        `/app/${data.brandSlug}/chat?thread=${threadId}&events_after=${after}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok || threadId !== data.thread.id) return;
+      const { events } = (await res.json()) as { events?: RawThreadEvent[] };
+      const fold = foldThreadCursor(threadProjection, events ?? []);
+      threadProjection = fold.projection;
+
+      if (orphanRun) {
+        const progress = latestRunProgress(threadProjection, orphanRun.id);
+        if (progress) {
+          applyLiveSnapshot(
+            orphanState,
+            orphanPending,
+            progress as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+          );
+        }
+      }
+
+      // La prima sincronizzazione di un thread è una SEMINA: il cursore parte da zero e
+      // rilegge tutto l'arretrato, che la pagina ha già a schermo dal caricamento. Ricaricare
+      // lì sarebbe un lampo a ogni apertura.
+      if (fold.hasMessage && !fold.seeded) await reloadMessages();
+    } finally {
+      threadCursorFetching = false;
+    }
+  }
 
   // LE DUE SORGENTI HANNO UNA POSIZIONE SOLA. Realtime consegna INCREMENTI, il poll il testo
   // ASSOLUTO: appendere gli uni sopra l'altro produce testo mescolato carattere per carattere —

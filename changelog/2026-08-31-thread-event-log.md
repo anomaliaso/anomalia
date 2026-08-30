@@ -91,3 +91,20 @@ Finché resta così, il lettore ricade su `chat_messages` come ha sempre fatto (
 corsia al primo append fallito, dopo un solo warning: il turno gira sul mirror
 esattamente come prima. Niente di questo lavoro è visibile finché la migration
 non viene applicata a mano.
+
+## Il client legge per cursore
+
+`brandChannel.onThreadSeq` ascolta il poke; la pagina del thread tiene una
+`ThreadProjection`, e a ogni `seq` più alto del proprio cursore rilegge
+`?thread=<id>&events_after=<cursor>` — una richiesta alla volta, il fold scarta da
+solo ciò che sta sotto il cursore.
+
+L'istantanea `progress` più recente per il run finisce dentro `applyLiveSnapshot`,
+la funzione che già applicava lo snapshot assoluto del poll: il payload ha la
+stessa forma, quindi non nasce un secondo percorso di rendering. Il poll a 4s
+resta come rete, ma il testo ora arriva a 250ms invece che a 4 secondi.
+
+**La prima sincronizzazione è una semina, non una novità.** Il cursore parte da
+zero, quindi la prima lettura riporta tutto l'arretrato — inclusi gli eventi
+`message` del backfill — e ricaricare lì sarebbe un lampo a ogni apertura del
+thread. `foldThreadCursor` dichiara `seeded` e la ricarica si fa solo dopo.

@@ -57,6 +57,7 @@ class BrandChannel {
 	#turnListeners = new Set<TurnListener>();
 	#kitStreamListeners = new Set<(payload: KitStreamChunk) => void>();
 	#kitStreamDoneListeners = new Set<(payload: { runId: string; threadId: string }) => void>();
+	#threadSeqListeners = new Set<(payload: { threadId: string; seq: number }) => void>();
 	/**
 	 * Bumped on every disconnect / brand switch so an in-flight connect (paused on getSession)
 	 * cannot finish by attaching listeners to a channel another call already subscribed.
@@ -143,6 +144,14 @@ class BrandChannel {
 		};
 	}
 
+	/** The thread's durable event log advanced to `seq`. Returns an unsubscribe. */
+	onThreadSeq(fn: (payload: { threadId: string; seq: number }) => void): () => void {
+		this.#threadSeqListeners.add(fn);
+		return () => {
+			this.#threadSeqListeners.delete(fn);
+		};
+	}
+
 	disconnect(): void {
 		this.#gen += 1;
 		const channel = this.#channel;
@@ -208,6 +217,12 @@ class BrandChannel {
 			const p = payload as { runId?: unknown; threadId?: unknown } | null;
 			if (typeof p?.runId !== 'string' || typeof p?.threadId !== 'string') return;
 			for (const fn of this.#kitStreamDoneListeners) fn({ runId: p.runId, threadId: p.threadId });
+		});
+
+		channel.on('broadcast', { event: 'thread-seq' }, ({ payload }) => {
+			const p = payload as { threadId?: unknown; seq?: unknown } | null;
+			if (typeof p?.threadId !== 'string' || !p.threadId || typeof p?.seq !== 'number') return;
+			for (const fn of this.#threadSeqListeners) fn({ threadId: p.threadId, seq: p.seq });
 		});
 
 		channel.subscribe((status) => {
