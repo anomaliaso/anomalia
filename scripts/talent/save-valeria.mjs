@@ -171,7 +171,7 @@ async function main() {
         name: MODEL.name,
         gender: MODEL.gender,
         age: MODEL.age,
-        body: MODEL.body,
+        body_type: MODEL.body,
         ethnicity: MODEL.ethnicity,
         summary: MODEL.summary,
         traits: MODEL.traits,
