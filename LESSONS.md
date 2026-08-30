@@ -265,6 +265,19 @@ colonne chieste e applica gli alias `alias:colonna`, come fa PostgREST; con quel
 diventati rossi da soli, e solo dopo si corregge la query. Un finto piu` generoso del database non
 e` un finto, e` una benda.
 
+### La CI verde non dice che la produzione si COSTRUISCE: `npm ci` contro `npm install`
+Due deploy di produzione di fila in ERROR su `patch-package cannot apply`, con la CI verde sugli
+stessi commit. La CI usa `npm ci`, che CANCELLA `node_modules` prima di installare; Vercel usava
+`npm install`, che riusa l'albero ripristinato dalla cache — e su un albero gia` patchato
+patch-package si rifiuta, dicendolo esplicitamente («Try removing node_modules and trying again»).
+Segnale: build di produzione rossa su patch-package mentre `npm ci` in locale e in CI passa, e
+nessun file di patch e` cambiato nel commit incriminato. Mossa: `installCommand: "npm ci"` in
+`vercel.json`, cosi` la produzione costruisce con lo stesso comando che i test hanno provato — e un
+test che lo pinna, perche` la prossima volta il sintomo sara` di nuovo «ma la CI e` verde».
+
+E la lezione dietro la lezione: un merge in `main` che passa i check NON e` un rilascio. Il
+deployment va guardato (`state`), o si festeggia una consegna che non e` avvenuta.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
