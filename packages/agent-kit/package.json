@@ -9,6 +9,7 @@
     "./interfaces": "./src/interfaces.ts",
     "./registry": "./src/registry.ts",
     "./action-approval": "./src/action-approval.ts",
-    "./testkit": "./src/testkit.ts"
+    "./testkit": "./src/testkit.ts",
+    "./thread-events": "./src/thread-events.ts"
   }
 }

@@ -172,6 +172,54 @@ l'utente. E il caso che perde davvero è la creazione fallita a METÀ — utente
 fixture restituito, `destroyFixture(null)` che esce subito: la creazione ripulisce da sola prima
 di rilanciare.
 
+### PostgREST tiene in CACHE lo schema: la migration applicata in locale non basta
+Applicate 0226/0227/0229 allo stack locale, la chat continuava a ricadere sul percorso vecchio e la
+lettura per cursore rispondeva 503. La RLS era sana (provata a mano: l'utente leggeva i suoi eventi),
+il codice era giusto, e il colpevole era il container `rest`: PostgREST aveva la cache dello schema
+di PRIMA della migration, quindi per l'API `thread_events` non esisteva. `loadThreadEvents` cattura
+l'errore e torna `null`, e tutto scivola in silenzio sul fallback. Segnale: dopo una migration
+locale, un endpoint che nomina la tabella nuova risponde vuoto o 503 mentre psql la vede benissimo.
+Mossa: `notify pgrst, 'reload schema'` e, se non basta, `docker restart anomalia-rest`.
+
+### Il `catch` muto nel load nasconde proprio la causa che ti servirà
+`loadLiveRun(supabase, thread).catch(() => null)` sembrava prudenza: un caricamento pagina non deve
+rompersi per una lettura accessoria. Ma quando il parziale non compariva, quel catch aveva ingoiato
+l'unica informazione utile, e ho perso mezz'ora a interrogare il database invece di leggere l'errore.
+Mossa: il catch che protegge il caricamento LOGGA sempre prima di tornare `null`. Ingoiare l'errore
+e ingoiare la diagnosi sono la stessa riga.
+
+### Vite: dopo aver toccato un `package.json` di `packages/`, il browser resta su hash morti
+Aggiunta una subpath export a `@anomalia/agent-kit`, la pagina ha smesso di idratarsi con
+`Failed to fetch dynamically imported module: .../nodes/150.js`. Non era il mio modulo: era
+`/node_modules/.vite/deps/@lucide_svelte.js?v=<hash>` in 404 — l'ottimizzatore aveva rigenerato le
+dipendenze con hash nuovi. Segnale: la pagina non idrata, nessun effetto gira, e in console un
+`Failed to fetch dynamically imported module` su un nodo di rotta che via `curl` risponde 200.
+Mossa: `rm -rf node_modules/.vite .svelte-kit/generated` e riavvia il dev server.
+
+### Un turno kit reale dura ~80s: il test che asserisce a 10 secondi misura il nulla
+Il primo stress nel browser dava tutto verde in 9 secondi, e in chat non c'era nessuna risposta: il
+modello (glm-5.3-flash, con reasoning) impiega ~80s e le mie asserzioni guardavano `body.innerText`,
+che comprende la barra laterale — quindi «testo presente» era sempre vero. Segnale: un turno che
+«finisce» in pochi secondi e conteggi di caratteri a quattro cifre che non cambiano. Mossa: asserire
+sulla BOLLA (`.assistant-msg-wrap`), non sul body, e considerare finito un turno solo quando la riga
+assistant esiste in `chat_messages` — il DOM dice cosa si vede, il database dice cosa è successo.
+
+### `progress` a zero dopo un turno finito è la POTATURA che funziona, non un difetto
+Cercavo le istantanee durevoli a turno concluso e ne trovavo zero, e per un momento ho creduto che
+la corsia non scrivesse. Le scrive: guardate DURANTE il turno erano 259 in 90 secondi, la cadenza dei
+250ms. A fine turno il messaggio definitivo le supera e il `finally` dello specchio le cancella —
+esattamente il disegno della ADR 0004. Mossa: una corsia potata si osserva in volo, non a terra.
+
+### Un glob di intercettazione che prende anche il MODULO col nome dell'endpoint accusa il prodotto
+`page.route('**/kit-run**')` per provare cosa succede quando il poll fallisce: intercettava anche
+`src/routes/app/[brand]/chat/components/kit-run.ts`, cioè il modulo sorgente con lo stesso nome.
+Abortito quello, la pagina non si idrata, niente si disegna, e i tre casi provati (rete caduta, 500,
+204) risultavano TUTTI E TRE rotti — compreso quello che funzionava. Segnale: intercettando qualcosa,
+il conteggio delle richieste è 1 e non decine, e il difetto sembra colpire anche i casi che il codice
+gestisce chiaramente. Mossa: intercettare per PATHNAME esatto (una regex sull'URL), mai per un glob
+che un file sorgente può soddisfare — e prima di credere a un difetto, misurare il caso base senza
+intercettazione.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyThreadProjection } from '@anomalia/agent-kit';
-import { foldThreadCursor, latestRunProgress, type RawThreadEvent } from './thread-cursor';
+import { foldThreadCursor, latestRunProgress, seedThreadProjection, type RawThreadEvent } from './thread-cursor';
 
 const message = (seq: number, id: string): RawThreadEvent => ({
 	thread_id: 'thread-1',
@@ -72,6 +72,28 @@ describe('foldThreadCursor', () => {
 
 	it('returns null progress for a runId never seen', () => {
 		expect(latestRunProgress(emptyThreadProjection(), 'run-x')).toBeNull();
+	});
+
+	it('ignores events at or below a cursor seeded from the server', () => {
+		const seeded = seedThreadProjection({}, 5);
+
+		const result = foldThreadCursor(seeded, [progress(3, 'run-1', 'running')]);
+
+		expect(result.projection.cursor).toBe(5);
+		expect(latestRunProgress(result.projection, 'run-1')).toBeNull();
+	});
+
+	it('returns the newest snapshot for a run seeded from the server', () => {
+		const seeded = seedThreadProjection(
+			{ 'run-1': { runId: 'run-1', status: 'running', text: 'partial-3' } },
+			3
+		);
+
+		expect(latestRunProgress(seeded, 'run-1')).toEqual({
+			runId: 'run-1',
+			status: 'running',
+			text: 'partial-3'
+		});
 	});
 
 	it('marks the first fold of a thread as a seeding, not as news', () => {

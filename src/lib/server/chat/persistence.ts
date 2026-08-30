@@ -20,7 +20,8 @@ import {
 } from '$lib/media-parts';
 import { summaryBlock } from './compaction';
 import { markThreadRead } from './unread';
-import { loadThreadEvents, threadMessageRows } from './thread-events';
+import { loadThreadEvents, threadMessageRows, threadProjectionRows } from './thread-events';
+import type { ThreadProgress } from '@anomalia/agent-kit';
 
 type ChatMessageRow = {
   id: string;
@@ -1127,6 +1128,29 @@ export async function loadHistory(
   return [...summary, ...dropLeadingAssistant(messages)];
 }
 
+async function chatMessagesFallbackForUI(
+  supabase: SupabaseClient,
+  brandId: string,
+  userId: string,
+  threadId: string,
+  limit: number
+): Promise<ChatMessageUiRow[]> {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select(
+      'id, role, content, reasoning, tool_calls, tool_call_id, name, created_at, regenerated_from, duration_ms, model, tier, input_tokens, output_tokens, feedback, sources, attachments'
+    )
+    .eq('brand_id', brandId)
+    .eq('user_id', userId)
+    .eq('thread_id', threadId)
+    .eq('superseded', false)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) console.error('[loadHistoryForUI]', error.message);
+  return chronologicalTail(data ?? [], limit);
+}
+
 /** Come loadHistory, ma per la UI: include tool call e tool result. */
 export async function loadHistoryForUI(
   supabase: SupabaseClient,
@@ -1143,20 +1167,42 @@ export async function loadHistoryForUI(
     }
   }
 
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .select(
-      'id, role, content, reasoning, tool_calls, tool_call_id, name, created_at, regenerated_from, duration_ms, model, tier, input_tokens, output_tokens, feedback, sources, attachments'
-    )
-    .eq('brand_id', brandId)
-    .eq('user_id', userId)
-    .eq('thread_id', threadId)
-    .eq('superseded', false)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  return chatMessagesFallbackForUI(supabase, brandId, userId, threadId, limit);
+}
 
-  if (error) console.error('[loadHistoryForUI]', error.message);
-  return chronologicalTail(data ?? [], limit);
+export type ThreadUiHistory = {
+  messages: ChatMessageUiRow[];
+  liveProgress: Record<string, ThreadProgress>;
+  eventCursor: number;
+};
+
+export async function loadThreadUiHistory(
+  supabase: SupabaseClient,
+  brandId: string,
+  userId: string,
+  threadId: string,
+  limit: number = 100
+): Promise<ThreadUiHistory> {
+  const eventRows = await loadThreadEvents(supabase, threadId);
+  if (eventRows?.length) {
+    const projection = threadProjectionRows(eventRows);
+    if (projection) {
+      return {
+        messages: chronologicalTail(
+          projection.messages.filter((row) => row.role !== 'system' && row.role !== 'tool'),
+          limit
+        ) as ChatMessageUiRow[],
+        liveProgress: projection.progress,
+        eventCursor: projection.cursor
+      };
+    }
+  }
+
+  return {
+    messages: await chatMessagesFallbackForUI(supabase, brandId, userId, threadId, limit),
+    liveProgress: {},
+    eventCursor: 0
+  };
 }
 
 /** Tutta la storia di un brand+utente, senza filtro sul thread — per la pagina di riepilogo. */

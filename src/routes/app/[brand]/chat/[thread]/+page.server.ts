@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
-import { getThread, loadHistoryForUI } from '$lib/server/chat/persistence';
+import { getThread, loadThreadUiHistory } from '$lib/server/chat/persistence';
+import { loadLiveRun } from '$lib/server/chat/live-run';
 import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { listThreadArtifacts } from '$lib/server/chat/artifacts';
 import { chatJobFreshSince, reapStaleChatJobs } from '$lib/server/chat/job-cancel';
@@ -159,9 +160,16 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
   // Close out dead rows before asking what is in flight, so a thread unblocks itself on open.
   await reapStaleChatJobs(supabase, { userId: user.id, threadId: params.thread, limit: 10 });
 
-  const [thread, messages, artifacts, activeJobResult, failedJobResult, pendingToolsResult, approvalRowsResult, sessionMemoryResult, lastReads] = await Promise.all([
+  const [thread, threadHistory, liveRun, artifacts, activeJobResult, failedJobResult, pendingToolsResult, approvalRowsResult, sessionMemoryResult, lastReads] = await Promise.all([
     getThread(supabase, params.thread, brand.id, user.id),
-    loadHistoryForUI(supabase, brand.id, user.id, params.thread),
+    loadThreadUiHistory(supabase, brand.id, user.id, params.thread),
+    // Il run vivo arriva col primo render: seminato solo dal client, la bolla del lavoro in
+    // corso non esisteva finché il poll non rispondeva, e il testo che il log aveva già non
+    // aveva dove essere disegnato.
+    loadLiveRun(supabase, params.thread).catch((e) => {
+      console.error('[page] loadLiveRun', e);
+      return null;
+    }),
     // Stessa consegna di GET /chat?thread=: i fotogrammi di motion_stills / render_stills
     // vivono in chat_artifacts, non nel testo del messaggio. Senza questa load la pagina
     // del thread non ha niente da disegnare e l'utente vede la chip a vuoto.
@@ -238,7 +246,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
     thread,
     agentPanel,
     agentDesktopEnabled: agentDesktopEnabled(),
-    messages,
+    messages: threadHistory.messages,
+    liveProgress: threadHistory.liveProgress,
+    eventCursor: threadHistory.eventCursor,
+    liveRun,
     approvalStatuses,
     artifacts,
     brandSlug: brand.slug,

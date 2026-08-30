@@ -4,7 +4,7 @@ import {
 	type ThreadMessage,
 	type ThreadProgress,
 	type ThreadProjection
-} from '@anomalia/agent-kit';
+} from '@anomalia/agent-kit/thread-events';
 
 export type RawThreadEvent = {
 	thread_id: string;
@@ -34,6 +34,13 @@ export function foldThreadCursor(
 
 export function latestRunProgress(projection: ThreadProjection, runId: string): ThreadProgress | null {
 	return projection.progress[runId] ?? null;
+}
+
+export function seedThreadProjection(
+	progress: Readonly<Record<string, ThreadProgress>>,
+	cursor: number
+): ThreadProjection {
+	return { cursor, messages: [], progress: { ...progress }, sourceEvents: {} };
 }
 
 function toThreadEvent(raw: RawThreadEvent): ThreadEvent {

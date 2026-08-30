@@ -55,15 +55,14 @@
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
   import { emptyStreamState, type StreamToolCallState } from '$lib/chat-stream-events';
   import { applyLiveChunk, applyLiveSnapshot, type PendingChunk } from '$lib/chat-live-join';
-  import { emptyThreadProjection } from '@anomalia/agent-kit';
-  import { foldThreadCursor, latestRunProgress, type RawThreadEvent } from '$lib/thread-cursor';
+  import { foldThreadCursor, latestRunProgress, seedThreadProjection, type RawThreadEvent } from '$lib/thread-cursor';
   import '$lib/styles/chat-messages.css';
   import TranscriptList from '../components/TranscriptList.svelte';
   import ComposerDock from '../components/ComposerDock.svelte';
   import EditMessageDialog from '../components/EditMessageDialog.svelte';
   import AgentComputerDock from '../components/AgentComputerDock.svelte';
   import { consolidateMessages, mapMsg, planIdsIn, parseToolCalls, redoIdOf, type ChatArtifactUi, type ChatMessage, type PostPreview } from '../components/transcript';
-  import { LIVE_POLL_MS, IDLE_POLL_EVERY, type KitRun } from '../components/kit-run';
+  import { LIVE_POLL_MS, IDLE_POLL_EVERY, pollOutcome, type KitRun } from '../components/kit-run';
   import { createLifecycle, assistantReportOf, assistantWorkOf } from './lifecycle.svelte';
   import { dmAgents } from '$lib/chat-dm';
 
@@ -269,22 +268,30 @@
     loading || (!!session?.completedAt && hasLivePartial)
   );
 
+  function seedProjectionFromData() {
+    return seedThreadProjection(data.liveProgress ?? {}, data.eventCursor ?? 0);
+  }
+
   // Reload a metà turno: il turno CONTINUA sul server (consumeStream) e il suo stato vive in
   // agent_kit_runs. Qui lo si riaggancia (Realtime, o il poll qui sotto) e a run chiuso si
   // ricaricano i messaggi: l'utente non deve mai pensare di aver perso tutto.
-  let orphanRun = $state<KitRun | null>(null);
+  let orphanRun = $state<KitRun | null>((data.liveRun as KitRun | null) ?? null);
   let orphanState = $state(emptyStreamState());
   let orphanStateRunId = '';
   /** I chunk del canale che non continuano dove siamo: aspettano lo snapshot che colma il buco. */
   let orphanPending: PendingChunk[] = [];
 
   /** La proiezione durevole del thread aperto: `thread-seq` la spinge oltre `kit_stream`/poll. */
-  let threadProjection = $state(emptyThreadProjection());
+  let threadProjection = $state(seedProjectionFromData());
   let threadCursorFetching = false;
 
   $effect(() => {
     void data.thread.id;
-    threadProjection = emptyThreadProjection();
+    threadProjection = seedProjectionFromData();
+    // `orphanRun` nasce dal caricamento, e cambiando thread SENZA ricaricare quel valore
+    // iniziale resterebbe quello del thread precedente: va riseminato qui, dove si rifà anche
+    // la proiezione. Il poll lo aggiorna dopo; questo è ciò che si vede al primo fotogramma.
+    orphanRun = (data.liveRun as KitRun | null) ?? null;
   });
 
   $effect(() => {
@@ -350,6 +357,18 @@
     applyLiveSnapshot(orphanState, orphanPending, orphanRun.partial);
   });
 
+  $effect(() => {
+    if (!orphanRun) return;
+    const seeded = latestRunProgress(threadProjection, orphanRun.id);
+    if (seeded) {
+      applyLiveSnapshot(
+        orphanState,
+        orphanPending,
+        seeded as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+      );
+    }
+  });
+
   // Stesso reducer che usa il server per scrivere `partial` (chat-stream-events.ts): a canale
   // connesso il testo cresce token per token invece che a scatti.
   $effect(() => {
@@ -391,13 +410,11 @@
       try {
         const res = await fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`);
         if (stop) return;
-        if (res.status === 200) {
+        const esito = pollOutcome(res.status);
+        if (esito === 'run') {
           orphanRun = (await res.json()) as KitRun;
-        } else {
-          // 204: nessun run attivo. Se prima ne mostravamo uno, è appena finito.
-          if (orphanRun) {
-            void finalizeOrphanRun();
-          }
+        } else if (esito === 'finished' && orphanRun) {
+          void finalizeOrphanRun();
         }
       } catch {
         /* un poll fallito riprova al giro dopo */

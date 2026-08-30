@@ -7,7 +7,8 @@ import {
 	progressEvent,
 	pruneRunProgress,
 	supersedeEvent,
-	threadMessageRows
+	threadMessageRows,
+	threadProjectionRows
 } from './thread-events';
 
 const row = {
@@ -165,5 +166,54 @@ describe('run progress lane', () => {
 		await expect(
 			pruneRunProgress({ from } as unknown as SupabaseClient, 'thread-1', 'run-1')
 		).resolves.toBeUndefined();
+	});
+});
+
+describe('la proiezione che il carico a freddo restituisce', () => {
+	const message = (seq: number, id: string) => ({
+		thread_id: 'thread-1',
+		seq,
+		source_key: `message:${id}`,
+		kind: 'message' as const,
+		payload: { ...row, id }
+	});
+	const progress = (seq: number, runId: string, text: string) => ({
+		thread_id: 'thread-1',
+		seq,
+		source_key: `${runId}:progress:${seq}`,
+		kind: 'progress' as const,
+		payload: { runId, status: 'running', text }
+	});
+
+	it('porta il testo IN CORSO DI SCRITTURA, non solo i messaggi finiti', () => {
+		const projected = threadProjectionRows([
+			message(1, 'message-1'),
+			progress(2, 'run-1', 'sto scriv'),
+			progress(3, 'run-1', 'sto scrivendo la risposta')
+		]);
+
+		expect(projected?.messages).toHaveLength(1);
+		// L'ultima istantanea vince: sono assolute, non incrementi da sommare.
+		expect(projected?.progress['run-1']).toMatchObject({ text: 'sto scrivendo la risposta' });
+		expect(projected?.cursor).toBe(3);
+	});
+
+	it('tiene le istantanee separate per run', () => {
+		const projected = threadProjectionRows([
+			progress(1, 'run-1', 'primo turno'),
+			progress(2, 'run-2', 'secondo turno')
+		]);
+
+		expect(projected?.progress['run-1']).toMatchObject({ text: 'primo turno' });
+		expect(projected?.progress['run-2']).toMatchObject({ text: 'secondo turno' });
+	});
+
+	it('rifiuta la proiezione quando due eventi reclamano la stessa chiave', () => {
+		expect(
+			threadProjectionRows([
+				message(1, 'message-1'),
+				{ thread_id: 'thread-1', seq: 2, source_key: 'message:message-1', kind: 'message', payload: { ...row, id: 'altro' } }
+			])
+		).toBeNull();
 	});
 });
