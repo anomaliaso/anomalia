@@ -1239,7 +1239,10 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					// aperte. La riga è già a terra — un inciampo qui non vale una seconda risposta.
 					try {
 						await touchThread(supabase, threadId);
-						void broadcastToBrand(brand.id, { event: 'thread-changed', payload: { threadId } });
+						void broadcastToBrand(brand.id, {
+							event: 'thread-changed',
+							payload: { threadId, hasAssistantReply: true }
+						});
 					} catch (e) {
 						console.warn(`[AGENT_KIT] run ${run.id} post-save best-effort failed`, e);
 					}

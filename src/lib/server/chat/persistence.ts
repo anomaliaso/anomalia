@@ -950,7 +950,10 @@ export async function saveMessages(
     // senza browser attaccato arriva comunque in ogni tab aperta.
     if (inserted?.length) {
       const { broadcastToBrand } = await import('$lib/server/realtime');
-      void broadcastToBrand(brandId, { event: 'thread-changed', payload: { threadId } });
+      void broadcastToBrand(brandId, {
+        event: 'thread-changed',
+        payload: { threadId, hasAssistantReply: messages.some((m) => m.role === 'assistant') }
+      });
     }
   } catch (e) {
     console.warn('[saveMessages] post-insert best-effort failed:', e instanceof Error ? e.message : e);

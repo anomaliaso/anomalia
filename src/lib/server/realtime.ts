@@ -18,7 +18,10 @@ export function brandChannelTopic(brandId: string): string {
 /** Payloads the shell knows how to react to. Keep names stable — clients match on them. */
 export type BrandBroadcast =
   /** A message row was written to this thread by anyone (live turn, queue worker, salvage). */
-  | { event: 'thread-changed'; payload: { threadId: string } }
+  | {
+      event: 'thread-changed';
+      payload: { threadId: string; hasAssistantReply: boolean };
+    }
   /**
    * One `ai` v6 UI message chunk from a live agent-kit turn (live.ts), mirrored so a client that
    * reloads mid-turn can reattach instead of only seeing "still working". `chunk` is normally the

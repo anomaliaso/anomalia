@@ -53,7 +53,8 @@ class BrandChannel {
 	#brandId: string | null = null;
 	#slug: string | null = null;
 	#me: Me | null = null;
-	#threadListeners = new Set<(threadId: string) => void>();
+	#threadListeners = new Set<(threadId: string, hasAssistantReply: boolean) => void>();
+	#connectedListeners = new Set<() => void>();
 	#turnListeners = new Set<TurnListener>();
 	#kitStreamListeners = new Set<(payload: KitStreamChunk) => void>();
 	#kitStreamDoneListeners = new Set<(payload: { runId: string; threadId: string }) => void>();
@@ -109,10 +110,17 @@ class BrandChannel {
 	}
 
 	/** Returns an unsubscribe function. */
-	onThreadChanged(fn: (threadId: string) => void): () => void {
+	onThreadChanged(fn: (threadId: string, hasAssistantReply: boolean) => void): () => void {
 		this.#threadListeners.add(fn);
 		return () => {
 			this.#threadListeners.delete(fn);
+		};
+	}
+
+	onConnected(fn: () => void): () => void {
+		this.#connectedListeners.add(fn);
+		return () => {
+			this.#connectedListeners.delete(fn);
 		};
 	}
 
@@ -191,9 +199,11 @@ class BrandChannel {
 
 		channel.on('presence', { event: 'sync' }, () => this.#readPresence());
 		channel.on('broadcast', { event: 'thread-changed' }, ({ payload }) => {
-			const id = (payload as { threadId?: unknown } | null)?.threadId;
+			const event = payload as { threadId?: unknown; hasAssistantReply?: unknown } | null;
+			const id = event?.threadId;
 			if (typeof id === 'string' && id) {
-				for (const fn of this.#threadListeners) fn(id);
+				const hasAssistantReply = event?.hasAssistantReply === true;
+				for (const fn of this.#threadListeners) fn(id, hasAssistantReply);
 			}
 		});
 
@@ -232,6 +242,7 @@ class BrandChannel {
 			if (status === 'SUBSCRIBED') {
 				void this.#track();
 				void this.#hydrateRuns();
+				for (const fn of this.#connectedListeners) fn();
 			}
 		});
 	}
