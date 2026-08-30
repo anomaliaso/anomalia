@@ -2,6 +2,7 @@ export interface ThreadMessage {
 	id: string;
 	role: string;
 	content: unknown;
+	[key: string]: unknown;
 }
 
 export interface ThreadProgress {
@@ -23,6 +24,10 @@ export type ThreadEvent =
 	| (ThreadEventBase & {
 			kind: 'progress';
 			progress: ThreadProgress;
+		})
+	| (ThreadEventBase & {
+			kind: 'messages_superseded';
+			messageIds: readonly string[];
 		});
 
 export interface ThreadProjection {
@@ -59,7 +64,12 @@ export function reduceThreadEvents(
 	events: readonly ThreadEvent[]
 ): ThreadEventReduction {
 	const ordered = [...events].sort((left, right) => left.seq - right.seq);
-	const messages = [...projection.messages];
+	const supersededIds = new Set(
+		Object.values(projection.sourceEvents)
+			.filter((event): event is Extract<ThreadEvent, { kind: 'messages_superseded' }> => event.kind === 'messages_superseded')
+			.flatMap((event) => event.messageIds)
+	);
+	const messages = projection.messages.filter((message) => !supersededIds.has(message.id));
 	const progress = { ...projection.progress };
 	const sourceEvents = { ...projection.sourceEvents };
 	const applied: ThreadEvent[] = [];
@@ -95,6 +105,13 @@ export function reduceThreadEvents(
 			progress[event.progress.runId] = event.progress;
 		}
 
+		if (event.kind === 'messages_superseded') {
+			for (const id of event.messageIds) supersededIds.add(id);
+			for (let index = messages.length - 1; index >= 0; index--) {
+				if (supersededIds.has(messages[index].id)) messages.splice(index, 1);
+			}
+		}
+
 		sourceEvents[event.sourceKey] = event;
 		applied.push(event);
 		cursor = event.seq;
@@ -109,9 +126,9 @@ export function reduceThreadEvents(
 }
 
 function eventPayload(event: ThreadEvent): unknown {
-	return event.kind === 'message'
-		? { kind: event.kind, message: event.message }
-		: { kind: event.kind, progress: event.progress };
+	if (event.kind === 'message') return { kind: event.kind, message: event.message };
+	if (event.kind === 'progress') return { kind: event.kind, progress: event.progress };
+	return { kind: event.kind, messageIds: event.messageIds };
 }
 
 function stableSerialize(value: unknown): string {

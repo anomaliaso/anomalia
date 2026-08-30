@@ -49,6 +49,7 @@ import { handlePostAction } from './lib/post-actions';
 import { applyGoalCommand, applyTurnBriefings, buildTurnContext, buildTurnMessages, type DeadlineRef } from './lib/turn-prep';
 import { finishSuccessfulTurn } from './lib/turn-finish';
 import { createChatActionApproval } from '$lib/server/chat/action-approval';
+import { decideApproval, isApprovalDecision } from '$lib/server/chat/agent-kit-approvals';
 
 // Vercel extended max duration (Pro/Enterprise, nodejs22.x). Must stay in sync with
 // CHAT_MAX_DURATION_MS — every budget in turn-limits.ts is carved out of this number.
@@ -74,6 +75,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   const webHubEnabled = hasWebHub(brand.plan);
   const body = await request.json();
   const action = body.action as string | undefined;
+  const isApprovalResponse = action === 'approval_response';
   let threadId: string;
   // Specialized agent bound to this thread scopes prompt + tools (multi-agent chat).
   let threadAgent: string | null = null;
@@ -110,6 +112,43 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
     threadCustomAgentId = thread.custom_agent_id ?? null;
   }
 
+  type ApprovalRecord = { id: string; run_id: string; status: string; tool_call_id: string; harness_approval_id: string };
+  let approvalRecord: ApprovalRecord | null = null;
+  if (isApprovalResponse) {
+    const approvalId = typeof body.approval_id === 'string' ? body.approval_id : '';
+    const decision = body.approval_decision;
+    if (!approvalId || !isApprovalDecision(decision)) {
+      return json({ error: 'invalid_approval_decision' }, { status: 400 });
+    }
+    const { data } = await supabase
+      .from('agent_kit_approval_requests')
+      .select('id, run_id, status, tool_call_id, harness_approval_id')
+      .eq('id', approvalId)
+      .eq('thread_id', threadId)
+      .maybeSingle();
+    approvalRecord = data as unknown as ApprovalRecord | null;
+    if (!approvalRecord) return json({ error: 'approval_not_found' }, { status: 404 });
+    if (approvalRecord.status !== 'pending') {
+      if (approvalRecord.status !== decision) return json({ error: 'approval_already_decided' }, { status: 409 });
+
+      const { data: waitingRun } = await supabase
+        .from('agent_kit_runs')
+        .select('id')
+        .eq('id', approvalRecord.run_id)
+        .eq('state', 'waiting_takeover')
+        .maybeSingle();
+      if (!waitingRun) return json({ approval_id: approvalRecord.id, status: approvalRecord.status });
+    }
+    if (approvalRecord.status === 'pending') {
+      try {
+        approvalRecord = await decideApproval(supabase, approvalId, decision, typeof body.approval_reason === 'string' ? body.approval_reason : undefined);
+      } catch (e) {
+        return json({ error: 'approval_already_decided', message: e instanceof Error ? e.message : String(e) }, { status: 409 });
+      }
+    }
+    body.approval_harness_id = approvalRecord.harness_approval_id;
+  }
+
   const handledAction = await handlePostAction({
     supabase,
     brand: brand as { id: string; plan: string | null },
@@ -127,7 +166,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 
   const isRedo = action === 'redo';
   const userMessages = body.messages as ModelMessage[] | undefined;
-  if (!isRedo && !userMessages?.length) return new Response('No messages', { status: 400 });
+  if (!isRedo && !isApprovalResponse && !userMessages?.length) return new Response('No messages', { status: 400 });
 
   // Rolling chat windows (5h / week) — monthly credits still apply separately via tools / metering.
   {
@@ -147,10 +186,10 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   // già da solo (enqueueChatMessage). Prima di saveMessages, così il retry non lascia doppioni.
   {
     const { createAdminClient } = await import('$lib/server/supabase-admin');
-    if (
+    if (!isApprovalResponse && (
       (await threadHasActiveChatResponse(supabase, { userId: user.id, threadId })) ||
       (await threadHasActiveKitRun(createAdminClient(), threadId))
-    ) {
+    )) {
       return json({ error: 'busy' }, { status: 409 });
     }
   }
@@ -275,6 +314,16 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
         userId: user.id,
         threadId
       }),
+      ...(isApprovalResponse
+        ? {
+            approvalResponse: {
+              approvalId: approvalRecord?.harness_approval_id ?? String(body.approval_id ?? ''),
+              approved: body.approval_decision === 'approved',
+              toolCallId: approvalRecord?.tool_call_id,
+              ...(typeof body.approval_reason === 'string' ? { reason: body.approval_reason } : {})
+            }
+          }
+        : {}),
       waitUntil: (platform as Platform)?.context?.waitUntil
     });
   }

@@ -684,6 +684,27 @@ describe('messagesFromRow', () => {
     expect(result.output.value).not.toContain('outcome unknown');
   });
 
+  it('reconstructs a native approval request without manufacturing a tool result', () => {
+    const msgs = messagesFromRow({
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        { type: 'tool-call', toolCallId: 'a1', toolName: 'publish_post', input: { post_id: 'p1' } },
+        { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'a1' }
+      ]
+    });
+
+    expect(msgs).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool-call', toolCallId: 'a1', toolName: 'publish_post', input: { post_id: 'p1' } },
+          { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'a1' }
+        ]
+      }
+    ]);
+  });
+
   it('keeps history text-only by default — a model that cannot see must not be handed parts', () => {
     expect(messagesFromRow({ role: 'user', content: 'guarda', attachments: ['https://cdn/a.png'] })).toEqual([
       { role: 'user', content: 'guarda\n[attached urls: https://cdn/a.png]' }

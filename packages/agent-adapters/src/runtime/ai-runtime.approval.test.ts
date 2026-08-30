@@ -81,5 +81,16 @@ describe('buildTools — action approval', () => {
 
 		expect(tools.publish.needsApproval).toBeTypeOf('function');
 		expect(tools.read.needsApproval).toBeTypeOf('function');
-});
+	});
+
+	it('does not rerun the judge for a tool approved by the native harness flow', async () => {
+		const execute = vi.fn(async () => ok);
+		const checker = vi.fn(async () => 'error' as const);
+		const tools = buildTools([CONSEQUENT], execute, context, { autoReviewEnabled: true, checker }, new Set(['publish-1']));
+
+		await (tools.publish.execute as (input: Record<string, unknown>, options: { toolCallId: string }) => Promise<ToolResult>)({}, { toolCallId: 'publish-1' });
+
+		expect(checker).not.toHaveBeenCalled();
+		expect(execute).toHaveBeenCalledOnce();
+	});
 });

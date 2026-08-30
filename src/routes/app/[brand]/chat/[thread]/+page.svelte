@@ -75,6 +75,7 @@
   });
 
   let messages = $state<ChatMessage[]>([]);
+  let approvalStatuses = $state<Record<string, string>>(data.approvalStatuses ?? {});
   let artifacts = $state<ChatArtifactUi[]>([]);
   let agentSel = $state(DEFAULT_AGENT_ID);
   // `agentSel` in coda: Anomalia non è più fra le scelte ma va rimessa in lista se è l'agente
@@ -102,6 +103,7 @@
     // ri-sottoscrive l'effect e fa scattare effect_update_depth_exceeded.
     const next = consolidateMessages((data.messages ?? []).map(mapMsg));
     messages = next;
+    approvalStatuses = { ...(data.approvalStatuses ?? {}) };
     artifacts = (data.artifacts ?? []) as ChatArtifactUi[];
     // I piani già nel thread sono cronologia, non una proposta da aprire.
     autoOpenedPlans = new Set(planIdsIn(next));
@@ -600,6 +602,24 @@
     await setThreadAgent(data.brandSlug, data.thread.id, id);
   }
 
+  async function decideApproval(approvalId: string, approved: boolean) {
+    const result = await startChatSession({
+      brandSlug: data.brandSlug,
+      threadId: data.thread.id,
+      userText: '',
+      pendingUserText: '',
+      mode: chatMode,
+      tier: chatTier,
+      reasoning: chatReasoning,
+      agent: agentSel,
+      approval: { approvalId, approved }
+    });
+    if (result === 'ok') {
+      approvalStatuses = { ...approvalStatuses, [approvalId]: approved ? 'approved' : 'denied' };
+    }
+    if (result === 'error') staleError = 'chat.error';
+  }
+
   async function send(
     text?: string,
     meta?: {
@@ -927,6 +947,8 @@
       onredo={(index) => life.redoAssistant(index)}
       onfeedback={(id, value, note) => void life.sendFeedback(id, value, note)}
       onsend={(text) => send(text)}
+      {approvalStatuses}
+      onapproval={decideApproval}
     />
   </div>
 

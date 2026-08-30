@@ -15,6 +15,13 @@ const progress = (seq: number, runId: string, status: string): ThreadEvent => ({
 	progress: { runId, status }
 });
 
+const superseded = (seq: number, ids: string[]): ThreadEvent => ({
+	seq,
+	sourceKey: `superseded:${seq}`,
+	kind: 'messages_superseded',
+	messageIds: ids
+});
+
 describe('thread event reducer', () => {
 	it('orders events and projects messages and latest progress', () => {
 		const result = reduceThreadEvents(emptyThreadProjection(), [
@@ -107,5 +114,18 @@ describe('thread event reducer', () => {
 		expect(result.conflict).toBeNull();
 		expect(result.projection.cursor).toBe(1);
 		expect(result.projection.messages).toEqual([first.message]);
+	});
+
+	it('hides messages through an ordered supersede event', () => {
+		const result = reduceThreadEvents(emptyThreadProjection(), [
+			message(1, 'message-1', 'old'),
+			message(2, 'message-2', 'new'),
+			superseded(3, ['message-1'])
+		]);
+
+		expect(result.gap).toBeNull();
+		expect(result.projection.messages).toEqual([
+			{ id: 'message-2', role: 'assistant', content: 'new' }
+		]);
 	});
 });

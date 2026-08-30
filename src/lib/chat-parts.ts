@@ -16,6 +16,7 @@ export type ChatToolPart = {
   toolCallId?: string;
   toolName: string;
   input?: unknown;
+  approval?: { approvalId: string };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [k: string]: any;
 };
@@ -160,9 +161,25 @@ const isReasoning = (p: ChatPart): p is ChatReasoningPart => p.type === 'reasoni
 
 /** Just the tool calls of a turn (no text parts) — for chips, plan pointers, previews, … */
 export function toolCallsOf(raw: unknown): ChatToolPart[] {
-  return parseToolCalls(raw).filter(
+  const parts = parseToolCalls(raw);
+  const calls = parts.filter(
     (p): p is ChatToolPart => !isText(p) && !isReasoning(p) && !!(p as ChatToolPart).toolName
   );
+  const approvals = new Map(
+    parts
+      .filter((p) => {
+        const part = p as ChatToolPart & { approvalId?: unknown; toolCallId?: unknown };
+        return part.type === 'tool-approval-request' && typeof part.toolCallId === 'string' && typeof part.approvalId === 'string';
+      })
+      .map((p) => {
+        const part = p as ChatToolPart & { approvalId: string; toolCallId: string };
+        return [part.toolCallId, part.approvalId] as const;
+      })
+  );
+  return calls.map((call) => {
+    const approvalId = call.toolCallId ? approvals.get(call.toolCallId) : undefined;
+    return approvalId ? { ...call, approval: { approvalId } } : call;
+  });
 }
 
 /**
