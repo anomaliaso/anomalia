@@ -4,7 +4,7 @@ import {
 	type ThreadMessage,
 	type ThreadProgress,
 	type ThreadProjection
-} from '@anomalia/agent-kit';
+} from '@anomalia/agent-kit/thread-events';
 
 export type RawThreadEvent = {
 	thread_id: string;

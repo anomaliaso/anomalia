@@ -166,7 +166,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
     // Il run vivo arriva col primo render: seminato solo dal client, la bolla del lavoro in
     // corso non esisteva finché il poll non rispondeva, e il testo che il log aveva già non
     // aveva dove essere disegnato.
-    loadLiveRun(supabase, params.thread).catch(() => null),
+    loadLiveRun(supabase, params.thread).catch((e) => {
+      console.error('[page] loadLiveRun', e);
+      return null;
+    }),
     // Stessa consegna di GET /chat?thread=: i fotogrammi di motion_stills / render_stills
     // vivono in chat_artifacts, non nel testo del messaggio. Senza questa load la pagina
     // del thread non ha niente da disegnare e l'utente vede la chip a vuoto.

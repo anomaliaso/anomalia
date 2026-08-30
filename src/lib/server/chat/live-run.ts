@@ -21,7 +21,7 @@ export async function loadLiveRun(
 	supabase: SupabaseClient,
 	threadId: string
 ): Promise<LiveRunRow | null> {
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from('agent_kit_runs')
 		.select('id, agent_id, state, created_at, updated_at, partial, partial_saved_msg_id, heartbeat_at')
 		.eq('thread_id', threadId)
@@ -30,6 +30,7 @@ export async function loadLiveRun(
 		.limit(1)
 		.maybeSingle();
 
+	if (error) console.error('[loadLiveRun]', error.message);
 	if (!data || !kitRunIsAlive(data)) return null;
 	return data as LiveRunRow;
 }
