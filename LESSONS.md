@@ -196,6 +196,20 @@ dipendenze con hash nuovi. Segnale: la pagina non idrata, nessun effetto gira, e
 `Failed to fetch dynamically imported module` su un nodo di rotta che via `curl` risponde 200.
 Mossa: `rm -rf node_modules/.vite .svelte-kit/generated` e riavvia il dev server.
 
+### Un turno kit reale dura ~80s: il test che asserisce a 10 secondi misura il nulla
+Il primo stress nel browser dava tutto verde in 9 secondi, e in chat non c'era nessuna risposta: il
+modello (glm-5.3-flash, con reasoning) impiega ~80s e le mie asserzioni guardavano `body.innerText`,
+che comprende la barra laterale — quindi «testo presente» era sempre vero. Segnale: un turno che
+«finisce» in pochi secondi e conteggi di caratteri a quattro cifre che non cambiano. Mossa: asserire
+sulla BOLLA (`.assistant-msg-wrap`), non sul body, e considerare finito un turno solo quando la riga
+assistant esiste in `chat_messages` — il DOM dice cosa si vede, il database dice cosa è successo.
+
+### `progress` a zero dopo un turno finito è la POTATURA che funziona, non un difetto
+Cercavo le istantanee durevoli a turno concluso e ne trovavo zero, e per un momento ho creduto che
+la corsia non scrivesse. Le scrive: guardate DURANTE il turno erano 259 in 90 secondi, la cadenza dei
+250ms. A fine turno il messaggio definitivo le supera e il `finally` dello specchio le cancella —
+esattamente il disegno della ADR 0004. Mossa: una corsia potata si osserva in volo, non a terra.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema

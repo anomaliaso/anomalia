@@ -288,6 +288,10 @@
   $effect(() => {
     void data.thread.id;
     threadProjection = seedProjectionFromData();
+    // `orphanRun` nasce dal caricamento, e cambiando thread SENZA ricaricare quel valore
+    // iniziale resterebbe quello del thread precedente: va riseminato qui, dove si rifà anche
+    // la proiezione. Il poll lo aggiorna dopo; questo è ciò che si vede al primo fotogramma.
+    orphanRun = (data.liveRun as KitRun | null) ?? null;
   });
 
   $effect(() => {
