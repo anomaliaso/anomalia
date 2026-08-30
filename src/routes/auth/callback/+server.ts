@@ -42,6 +42,8 @@ export const GET: RequestHandler = async ({ url, cookies, locals: { supabase } }
       }
       throw redirect(303, '/app');
     }
+
+    throw redirect(303, '/login?error=link');
   }
 
   throw redirect(303, '/login');

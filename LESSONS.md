@@ -83,6 +83,9 @@ Il turno di setup dell'onboarding consegna la prima risposta in ~20s e continua 
 ### I rimount (`{#key}`) rendono stale i ref dell'automazione browser
 Un click su un ref catturato prima del re-render non arriva a nessuno: il carosello dell'onboarding sembrava bloccato prima del pick — era il bottone rimontato ad ogni slide. Mossa: snapshot fresco e selettori stabili (`.wide-btn`), click lenti; un "blocco" va riprodotto con click lenti e selelettori nuovi prima di chiamarlo bug. Il falso positivo costa un'ora, la prudenza tre secondi.
 
+### Un file input SSR accetta la selezione prima dell'hydration
+`waitForSelector` può vedere il file input nel markup SSR mentre `onchange` non è ancora collegato; `setInputFiles` allora perde l'immagine senza errore, la strip non nasce e il turno parte cieco. Mossa: montare il picker solo dopo `onMount`, così il selettore trova solo un input interattivo.
+
 ### Un cookie di sessione malformato abbatte il dev server
 Una curl con `sb-<host>-auth-token` corrotto produce `Invalid Base64-URL character` non gestito nella recovery della sessione e il processo muore (`curl` → 000, niente più risposte). È un finding prodotto, non rumore: la recovery non tollera input corrotto. Mossa: quando curl dà 000, guardare il log del server prima di incolpare la rete; e la richiesta che ha ucciso il server diventa un test.
 
@@ -102,6 +105,12 @@ aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio
 `npm run build` di questo repo dura ~4 minuti: lancialo in `nohup … &` e sondalo col log, il timeout del tool di shell uccide il processo (e lascia esbuild a metà: la dev server dopo parte con `write EPIPE`). La dev server del worktree ha la sua porta (`--port 5185 --strictPort`) — il 5173 è di chiunque arrivi prima. E il comando che LA VA A PROVARE con `curl` in blocco va in timeout e trascina via il process group: lancia il server staccato (`disown`), verifica con un comando successivo.
 
 ## Codice
+
+### Un dettaglio eliminato non si invalida prima di uscire
+Il reject del post cancellava la riga, poi aggiornava la pagina `/posts/:id`: il layout trovava
+correttamente un 404 prima che il callback portasse al calendario. Segnale: la pagina 404 lampeggia
+solo dopo una cancellazione dal dettaglio. Mossa: sul successo distruttivo navigare subito e lasciare
+che la nuova pagina carichi i dati; `update()` resta per errori e modifiche non distruttive.
 
 ### Markdown venduto: file veri + `?raw`, non template literal
 Skill e guide upstream restano file `.md` diffabili contro upstream, inlineati con `import x from './x.md?raw'` (pattern di `agent-files.ts`). 43KB di markdown in un template literal sono mine: backtick e `${` nel testo upstream rompono la compilazione in modo opaco.

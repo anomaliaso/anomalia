@@ -57,6 +57,7 @@ export const load: PageServerLoad = async ({ url, cookies, locals: { safeGetSess
     if (cliPort) throw redirect(303, `/cli/callback?cli_port=${cliPort}&cli_state=${cliState}`);
     if (
       url.searchParams.get('next') === 'onboarding' ||
+      sanitizeWebsiteParam(url.searchParams.get('website')) ||
       hasGuestOnboardingCookie(cookies.get(GUEST_ONBOARDING_COOKIE))
     ) {
       const qs = onboardingQs(url.searchParams);

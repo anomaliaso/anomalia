@@ -852,12 +852,16 @@
   const runAction = (name: string): SubmitFunction => () => {
     submitting = name;
     return async ({ result, update }) => {
+      if (result.type === 'success' && name === 'reject') {
+        submitting = null;
+        close();
+        return;
+      }
+
       await update();
       submitting = null;
       if (result.type === 'success') {
-        // Reject deletes the row — leave the dashboard. Other saves stay put and refresh.
-        if (name === 'reject') close();
-        else if (embedded) await invalidateAll();
+        if (embedded) await invalidateAll();
         else close();
       } else if (result.type === 'failure') {
         saveError = (result.data?.error as string) ?? get(_)('posteditor.errGeneric');
