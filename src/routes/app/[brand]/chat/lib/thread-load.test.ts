@@ -138,3 +138,38 @@ describe('pending_tools porta anche COSA sta facendo, non solo quanti sono', () 
     expect(q?.columns).toContain('partial');
   });
 });
+
+describe('lettura del log per cursore', () => {
+  const events = [
+    { thread_id: 'thread-chat', seq: 1, source_key: 'message:m1', kind: 'message', payload: { id: 'm1' } },
+    { thread_id: 'thread-chat', seq: 4, source_key: 'run-1:progress:2', kind: 'progress', payload: { runId: 'run-1' } },
+    { thread_id: 'thread-chat', seq: 5, source_key: 'message:m2', kind: 'message', payload: { id: 'm2' } },
+    { thread_id: 'altro', seq: 2, source_key: 'message:m9', kind: 'message', payload: { id: 'm9' } }
+  ];
+
+  it('restituisce solo gli eventi del thread oltre il cursore', async () => {
+    const db = createTestSupabase({ ...seed, thread_events: events });
+
+    const res = await loadThreadState(
+      db.client,
+      session(),
+      'acme',
+      new URL('http://x/app/acme/chat?thread=thread-chat&events_after=1')
+    );
+
+    expect(await res.json()).toEqual({ events: [events[1], events[2]] });
+  });
+
+  it('un cursore a zero porta tutto il thread, mai quello di un altro', async () => {
+    const db = createTestSupabase({ ...seed, thread_events: events });
+
+    const res = await loadThreadState(
+      db.client,
+      session(),
+      'acme',
+      new URL('http://x/app/acme/chat?thread=thread-chat&events_after=0')
+    );
+
+    expect(await res.json()).toEqual({ events: [events[0], events[1], events[2]] });
+  });
+});

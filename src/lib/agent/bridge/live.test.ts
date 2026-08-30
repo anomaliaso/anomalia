@@ -116,6 +116,19 @@ vi.mock('$lib/server/chat/goal', async (importOriginal) => {
 	};
 });
 
+// Lo specchio manda `thread-seq`/`thread-changed`/`kit_stream*` via Realtime davvero (fetch verso
+// Supabase): qui si cattura solo l'evento, come `queueKicks` per il drain.
+const broadcasts: Array<{ event: string; payload: unknown }> = [];
+vi.mock('$lib/server/realtime', async (importOriginal) => {
+	const actual = (await importOriginal()) as Record<string, unknown>;
+	return {
+		...actual,
+		broadcastToBrand: async (_brandId: string, msg: { event: string; payload: unknown }) => {
+			broadcasts.push(msg);
+		}
+	};
+});
+
 // La strumentazione del computer (agent_computers) qui non deve scrivere: chi la marca running e`
 // `agent-desktop.ts` quando l'utente apre il desktop, e i casi veri stanno in computer.test.ts e
 // agent-desktop.test.ts. Il turno la tocca soltanto dai tool della VM (shell/observe/act).
@@ -340,9 +353,19 @@ type Row = Record<string, unknown>;
 	// L'emulazione di `agent_kit_close_run` (migration 0222): CAS su state='running', inserimento
 	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
 	const chatMessages: Row[] = [];
+	// Gli eventi durevoli (`append_thread_event`/`thread_events`): progress dello specchio e messaggi.
+	const threadEvents: Row[] = [];
+	let eventSeq = 0;
 
 	function from(_table: string) {
-		const store = _table === 'chat_messages' ? chatMessages : _table === 'agent_kit_approval_requests' ? approvals : rows;
+		const store =
+			_table === 'chat_messages'
+				? chatMessages
+				: _table === 'agent_kit_approval_requests'
+					? approvals
+					: _table === 'thread_events'
+						? threadEvents
+						: rows;
 		let op: 'select' | 'insert' | 'update' = 'select';
 		let payload: Row | undefined;
 		const eqFilters: Array<[string, unknown]> = [];
@@ -353,7 +376,13 @@ type Row = Record<string, unknown>;
 
 		function matchedRows(): Row[] {
 			let matched = store;
-			for (const [col, val] of eqFilters) matched = matched.filter((r) => r[col] === val);
+			// `payload->>runId`: la sintassi Postgres per un campo JSON, usata da `pruneRunProgress`.
+			for (const [col, val] of eqFilters) {
+				const [jsonCol, jsonKey] = col.split('->>');
+				matched = jsonKey
+					? matched.filter((r) => (r[jsonCol] as Row | undefined)?.[jsonKey] === val)
+					: matched.filter((r) => r[col] === val);
+			}
 			for (const [col, values] of inFilters) matched = matched.filter((r) => values.includes(r[col]));
 			if (orderCol) {
 				const col = orderCol;
@@ -446,7 +475,7 @@ type Row = Record<string, unknown>;
 				}
 				if (op === 'delete') {
 					const matched = matchedRows();
-					for (const row of matched) rows.splice(rows.indexOf(row), 1);
+					for (const row of matched) store.splice(store.indexOf(row), 1);
 					return Promise.resolve({ data: matched.map((r) => ({ ...r })), error: null }).then(resolve, reject);
 				}
 				return Promise.resolve({ data: matchedRows().map((r) => ({ ...r })), error: null }).then(resolve, reject);
@@ -459,6 +488,17 @@ type Row = Record<string, unknown>;
 	// del messaggio e stato finale nella STESSA chiamata — la stessa semantica della funzione SQL.
 	// `chatMessages` vive in testa a `fakeDb`: `from('chat_messages')` ci opera sopra.
 	function rpc(fn: string, params: Record<string, unknown>) {
+		if (fn === 'append_thread_event') {
+			const row: Row = {
+				thread_id: params.p_thread_id,
+				seq: ++eventSeq,
+				source_key: params.p_source_key,
+				kind: params.p_kind,
+				payload: params.p_payload
+			};
+			threadEvents.push(row);
+			return Promise.resolve({ data: [{ ...row }], error: null });
+		}
 		if (fn === 'agent_kit_wait_for_approval') {
 			const run = rows.find((r) => r.id === params.p_run_id && r.state === 'running');
 			if (!run) return Promise.resolve({ data: { closed: false }, error: null });
@@ -519,7 +559,7 @@ type Row = Record<string, unknown>;
 		return Promise.resolve({ data: { closed: true, message_id: msgId }, error: null });
 	}
 
-	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages, approvals };
+	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages, approvals, threadEvents };
 }
 
 /** Un turno che chiama UN tool (e unico) e basta. */
@@ -591,6 +631,7 @@ beforeEach(async () => {
 		notice: null,
 		continuationPrompt: null
 	};
+	broadcasts.length = 0;
 });
 
 function openToolModel(toolName: string) {
@@ -1226,6 +1267,112 @@ describe('runKitTurn — il riaggancio dello stream (consumeSseStream, 0218)', (
 
 		expect(partialWrites()).toBeLessThanOrEqual(2);
 		expect(partialWrites()).toBeLessThan(pieces.length);
+	});
+
+	it('lo specchio scrive eventi `progress` durevoli col testo ASSOLUTO — l\'ultimo porta lo stesso testo che il client ricostruisce', async () => {
+		textThenReplyModel(['Cia', 'o mo', 'ndo', '!'], 'fatto');
+		const { db, threadEvents } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+
+		const clientState = emptyStreamState();
+		const { events } = readSseEvents(await res.text());
+		for (const evt of events) applyChatStreamEvent(clientState, evt);
+
+		const progress = threadEvents.filter((e) => e.kind === 'progress');
+		expect(progress.length).toBeGreaterThan(0);
+		const last = progress[progress.length - 1].payload as { text: string };
+		expect(last.text).toBe(clientState.text);
+	});
+
+	it('ogni evento `progress` durevole è seguito da un broadcast `thread-seq` con lo stesso seq — niente contenuto oltre thread e seq', async () => {
+		textThenReplyModel(['Cia', 'o mo', 'ndo', '!'], 'fatto');
+		const { db, threadEvents } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		const progress = threadEvents.filter((e) => e.kind === 'progress');
+		const seqBroadcasts = broadcasts.filter((b) => b.event === 'thread-seq');
+		expect(seqBroadcasts.length).toBe(progress.length);
+		seqBroadcasts.forEach((broadcast, i) => {
+			expect(broadcast.payload).toEqual({ threadId: 't1', seq: progress[i].seq });
+		});
+	});
+
+	it('gli eventi `progress` sono throttled: 12 pezzi ne scrivono MOLTI meno', async () => {
+		// Stesso ragionamento della scrittura throttled di `partial`: senza throttle 12 chunk
+		// farebbero 12 eventi durevoli, uno per RPC — qui l'evento condivide la soglia di `writePartial`.
+		const pieces = Array.from({ length: 12 }, (_, i) => `t${i} `);
+		textThenReplyModel(pieces, 'fatto');
+		const { db, threadEvents } = fakeDb();
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		const progressCount = threadEvents.filter((e) => e.kind === 'progress').length;
+		expect(progressCount).toBeLessThanOrEqual(2);
+		expect(progressCount).toBeLessThan(pieces.length);
+	});
+
+	it('a turno chiuso NESSUN `progress` di quel run sopravvive — quelli di un altro run e i `message` sì', async () => {
+		textThenReplyModel(['ciao'], 'fatto');
+		const { db, threadEvents } = fakeDb();
+		// 'run-1' è l'id che `fakeDb` assegna alla prima riga di `agent_kit_runs`. La chiave
+		// seminata NON è una che lo specchio genererebbe: così l'assenza finale prova la
+		// potatura per `runId`, non una collisione con una scrittura sua.
+		threadEvents.push(
+			{ thread_id: 't1', seq: 501, source_key: 'seminato:run-1', kind: 'progress', payload: { runId: 'run-1', status: 'running', text: 'cia' } },
+			{ thread_id: 't1', seq: 502, source_key: 'seminato:run-altro', kind: 'progress', payload: { runId: 'run-altro', status: 'running', text: 'altro' } },
+			{ thread_id: 't1', seq: 503, source_key: 'msg-1', kind: 'message', payload: { id: 'msg-1' } }
+		);
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [{ role: 'user', content: 'ciao' }],
+			locale: 'it'
+		});
+		await res.text();
+
+		// Lo specchio è un ramo che `runKitTurn` non attende, e pota nel suo `finally`, dopo
+		// l'ultima scrittura: si aspetta la CONDIZIONE, non un istante.
+		await vi.waitFor(() =>
+			expect(threadEvents.some((e) => e.kind === 'progress' && (e.payload as { runId: string }).runId === 'run-1')).toBe(false)
+		);
+		expect(threadEvents.some((e) => e.source_key === 'seminato:run-altro')).toBe(true);
+		expect(threadEvents.some((e) => e.kind === 'message' && e.source_key === 'msg-1')).toBe(true);
 	});
 
 	it('il run porta `partial` con testo e tool — quello che GET kit-run/+server.ts restituisce dopo un reload', async () => {
