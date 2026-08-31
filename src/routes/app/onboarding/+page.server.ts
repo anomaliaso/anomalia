@@ -586,7 +586,11 @@ export const actions: Actions = {
       return fail(500, { error: 'Could not create your workspace', name, website });
     }
 
-    const websiteNorm = website ?? (profile?.url as string) ?? null;
+    // L'indirizzo scritto dall'utente può non essere quello da cui il sito si legge davvero: un
+    // dominio che rimanda altrove senza il certificato per sé stesso viene risolto dall'analisi
+    // (brand-analysis.resolveEntryUrl). Vince quello ANALIZZATO, perché è l'unico che risponde:
+    // radar, SEO e ri-analisi ripartiranno da lì.
+    const websiteNorm = (profile?.url as string) ?? website ?? null;
     // Recover from a prior attempt that inserted then timed out (client brandId may have drifted).
     if (websiteNorm) {
       const { data: bySite } = await supabase
@@ -658,17 +662,21 @@ export const actions: Actions = {
     }
 
     if (!brand) {
-      const { data: inserted, error } = await insertBrandWithSlug(supabase, {
-        id: brandId,
-        org_id: orgId,
-        created_by: user.id,
-        // Left null until people → preview finishes (or the user never resumes — that's fine).
-        onboarding_completed_at: null,
-        name,
-        website: websiteNorm,
-        slug,
-        target_platforms: targetPlatforms.length ? targetPlatforms : null
-      });
+      const { data: inserted, error } = await insertBrandWithSlug(
+        supabase,
+        {
+          id: brandId,
+          org_id: orgId,
+          created_by: user.id,
+          // Left null until people → preview finishes (or the user never resumes — that's fine).
+          onboarding_completed_at: null,
+          name,
+          website: websiteNorm,
+          slug,
+          target_platforms: targetPlatforms.length ? targetPlatforms : null
+        },
+        { idSource: 'client-proposed' }
+      );
       if (error || !inserted) {
         await logOnboardingError(
           supabase,
@@ -787,12 +795,12 @@ export const actions: Actions = {
         created_by: user.id,
         onboarding_completed_at: new Date().toISOString(),
         name,
-        website: website ?? (profile?.url as string) ?? null,
+        website: (profile?.url as string) ?? website ?? null,
         slug,
         target_platforms: targetPlatforms.length ? targetPlatforms : null,
         content_prefs: contentPrefs
       },
-      'id, timezone'
+      { select: 'id, timezone', idSource: 'client-proposed' }
     );
     if (error || !brand) return fail(500, { error: error ?? 'Could not create brand', name, website });
 
@@ -814,7 +822,7 @@ export const actions: Actions = {
       pay.set('cycle', normalizeCycle(cycle));
     }
     await redeemReferralQuietly(cookies, user.id, brand.id);
-    const setupTarget = await setupChatTarget(platform, url.origin, { id: brand.id, slug }, user.id, website ?? (profile?.url as string) ?? null, name, locale);
+    const setupTarget = await setupChatTarget(platform, url.origin, { id: brand.id, slug }, user.id, (profile?.url as string) ?? website ?? null, name, locale);
     throw redirect(303, `${setupTarget}${pay.toString() ? `?${pay}` : ''}`);
   }
 };

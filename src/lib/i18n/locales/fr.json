@@ -3105,10 +3105,9 @@
       }
     },
     "pick": {
-      "title": "Par qui commencez-vous",
-      "sub": "Choisissez avec qui vous commencez. Vous pourrez écrire aux autres quand vous voulez.",
-      "start": "Démarrer la discussion",
-      "own": "Créer le mien",
+      "title": "Votre équipe autonome",
+      "sub": "Explorez votre équipe d’agents IA experts en marketing.",
+      "start": "Commencer",
       "prev": "Agent précédent",
       "next": "Agent suivant",
       "customDesc": "Un agent à vous"
