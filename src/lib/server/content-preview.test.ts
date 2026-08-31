@@ -273,6 +273,13 @@ describe('carousel guardrail config', () => {
 });
 
 describe('brandVisualDirective', () => {
+  // Un poster tipografico è tornato con "#E86A5C" e "#3B6FB6" stampati dentro: al renderer i codici
+  // sono arrivati come testo, e un design fatto di testo li ha letterizzati.
+  it('vieta di stampare i codici colore dentro l\'immagine', () => {
+    const d = brandVisualDirective(['#E86A5C', '#3B6FB6'], null);
+    expect(d).toMatch(/never (?:draw|render|letter)[^.]*code/i);
+  });
+
   it('builds a palette + typography directive', () => {
     const d = brandVisualDirective(['#0099FF', '#111111'], ['Inter', 'Söhne']);
     expect(d).toMatch(/BRAND IDENTITY/);

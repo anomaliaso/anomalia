@@ -57,7 +57,7 @@ export function brandVisualDirective(colors?: string[] | null, fonts?: string[] 
   const lines = [
     'BRAND IDENTITY — keep this unmistakably the SAME brand across every post:',
     palette.length
-      ? `- Colour palette: ${palette.join(', ')}. Any graphic elements, backgrounds, UI, charts or on-image text MUST use these brand colours; photographic scenes must harmonise with them. Never introduce an off-brand colour scheme.`
+      ? `- Colour palette: ${palette.join(', ')}. Any graphic elements, backgrounds, UI, charts or on-image text MUST use these brand colours; photographic scenes must harmonise with them. Never introduce an off-brand colour scheme. The codes are how the colours are named to you, never something to show: never draw, letter, print or label a colour code anywhere in the image.`
       : '',
     fams.length ? `- Typography: use ${fams.join(', ')} (or a very close match) for any text or graphic elements.` : ''
   ].filter(Boolean);
