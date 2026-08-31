@@ -69,12 +69,6 @@
     }
     void goto(`/app/${slug}/chat/new?agent=${encodeURIComponent(pickCurrent.key)}`);
   }
-  function createOwn() {
-    if (!slug) return;
-    track('onboarding_agent_create_own', {});
-    clearGuestOnboarding();
-    void goto(`/app/${slug}/agents?new=1`);
-  }
 </script>
 
 <h1 class="intro-title">{$_('onboarding.pick.title')}</h1>
@@ -119,7 +113,6 @@
   <button type="button" class="wide-btn" onclick={startChat} disabled={!pickCurrent}>
     {$_('onboarding.pick.start')}
   </button>
-  <button type="button" class="pick-own" onclick={createOwn}>{$_('onboarding.pick.own')}</button>
 </div>
 <button type="button" class="intro-back" onclick={onback}>{$_('onboarding.back')}</button>
 
@@ -143,10 +136,6 @@
     background: var(--ink); color: var(--paper);
   }
   .wide-btn:disabled { opacity: .5; cursor: default; }
-  .pick-own {
-    background: none; border: 0; cursor: pointer; font-size: 14px;
-    color: var(--ink-soft); padding: 8px; text-decoration: underline;
-  }
   .intro-back {
     background: none; border: 0; cursor: pointer; font-size: 14px;
     color: var(--ink-soft); padding: 8px; text-decoration: underline;

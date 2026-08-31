@@ -3105,10 +3105,9 @@
       }
     },
     "pick": {
-      "title": "Con quién empiezas",
-      "sub": "Elige con quién empiezas. A los demás puedes escribirles cuando quieras.",
-      "start": "Iniciar chat",
-      "own": "Crear el mío",
+      "title": "Tu equipo autónomo",
+      "sub": "Explora tu equipo de agentes de IA expertos en marketing.",
+      "start": "Empezar",
       "prev": "Agente anterior",
       "next": "Agente siguiente",
       "customDesc": "Un agente tuyo"
