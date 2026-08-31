@@ -62,7 +62,8 @@
   import EditMessageDialog from '../components/EditMessageDialog.svelte';
   import AgentComputerDock from '../components/AgentComputerDock.svelte';
   import { consolidateMessages, mapMsg, planIdsIn, parseToolCalls, redoIdOf, type ChatArtifactUi, type ChatMessage, type PostPreview } from '../components/transcript';
-  import { LIVE_POLL_MS, IDLE_POLL_EVERY, pollOutcome, type KitRun } from '../components/kit-run';
+  import { type KitRun } from '../components/kit-run';
+  import { startLiveRunPoll } from '../components/live-run-poll.svelte';
   import { createLifecycle, assistantReportOf, assistantWorkOf } from './lifecycle.svelte';
   import { dmAgents } from '$lib/chat-dm';
 
@@ -388,47 +389,25 @@
     };
   });
 
+  // Il ritmo del battito sta in `live-run-poll.svelte.ts`, e il run lo legge da `untrack`: qui
+  // dentro l'effetto leggeva `orphanRun` e la risposta lo riscriveva, quindi ogni risposta
+  // smontava e rimontava il battito — 840 giri al secondo, il thread principale saturo, e
+  // l'utente che ricarica a metà turno non vede più muoversi niente.
   $effect(() => {
+    void data.brandSlug;
+    void data.thread.id;
     if (loading) {
       orphanRun = null;
       return;
     }
-    let stop = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    let tick = 0;
-    const poll = async () => {
-      // Senza questi due guard ogni thread aperto chiederebbe 50 volte al minuto, per sempre,
-      // per ricevere 204. Valgono A VUOTO: un turno VIVO si continua a seguire anche con la
-      // scheda in secondo piano — fermarlo lì è ciò che l'utente legge come «cambio tab e lo
-      // stream si perde», e al ritorno trova la risposta ferma a dov'era.
-      if (!orphanRun && typeof document !== 'undefined' && document.hidden) return;
-      // Come v1 (chat-session.ts, FAST_MS=350): quando un turno e' VIVO si chiede spesso, perche'
-      // e' il ritmo con cui l'utente vede crescere la risposta dopo un refresh. Quando non c'e'
-      // niente si rallenta, o ogni thread aperto chiederebbe per sempre — ed e' lo stesso costo a
-      // vuoto di prima (350ms x 28 = ~10s fra due domande, come 1200ms x 8).
-      if (!orphanRun && tick++ % IDLE_POLL_EVERY !== 0) return;
-      try {
-        const res = await fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`);
-        if (stop) return;
-        const esito = pollOutcome(res.status);
-        if (esito === 'run') {
-          orphanRun = (await res.json()) as KitRun;
-        } else if (esito === 'finished' && orphanRun) {
-          void finalizeOrphanRun();
-        }
-      } catch {
-        /* un poll fallito riprova al giro dopo */
-      }
-    };
-    poll();
-    // 1,2s e non 4: con una rete scarsa lo stream si perde e questo poll è l'unica cosa che
-    // muove la pagina. A vuoto i guard scendono a ~10s, e a zero se la scheda è nascosta; con un
-    // turno vivo restano 1,2s comunque, scheda davanti o no. Chi lo ferma è il 204 del server.
-    timer = setInterval(poll, LIVE_POLL_MS);
-    return () => {
-      stop = true;
-      if (timer) clearInterval(timer);
-    };
+    return startLiveRunPoll({
+      isBusy: () => loading,
+      currentRun: () => orphanRun,
+      isHidden: () => typeof document !== 'undefined' && document.hidden,
+      fetchRun: () => fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`),
+      onRun: (run) => (orphanRun = run as KitRun),
+      onFinished: () => void finalizeOrphanRun()
+    });
   });
 
   // Il computer dell'agente: colonna affiancata sopra ~1100px, Sheet sotto.

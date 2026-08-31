@@ -310,3 +310,40 @@ chiesto troppo, il secondo che hai chiesto troppo poco.
 va in heap overflow a 3,4 GB, da 4608 in su la VM non alloca). Il consumo viene da `adapter-node`
 su un chunk server da 5,1 MB, non dal flag. Misura il picco con `/usr/bin/time -l` e riduci il
 bundle; alzare la memoria di Docker Desktop nasconde il problema senza risolverlo per chi installa.
+
+## Una funzione che pretende un ordine va chiamata col nome dell'ordine che pretende
+
+**Segnale.** La conversazione intera capovolta — la risposta sopra la domanda — e i messaggi più
+vecchi al posto dei più recenti quando il thread supera il limite. Non «ogni tanto disordinata»:
+sempre, e solo sulla lettura che passa dal log degli eventi.
+
+**Causa.** `chronologicalTail(newestFirst, limit)` fa `slice(0, limit).reverse()`: è corretta solo
+se l'input arriva `order('created_at', desc)`. Un secondo chiamante le ha passato la proiezione del
+log, che esce in ordine di `seq` — cioè al contrario. Il tipo era `T[]` in entrambi i casi, quindi
+il compilatore non aveva niente da dire, e il ramo di fallback restava giusto: la suite verde per
+tutti e due.
+
+**Mossa.** Il presupposto sta nel NOME, non in un commento: `chronologicalTail` per una lista
+`desc`, `newestTail` per una già cronologica. E un ramo di lettura aggiunto senza test è il posto
+dove questo ricapita: il test che ordina quattro messaggi costa tre righe.
+
+## Un `$effect` che legge lo stato che scrive è un cappio, non un poll
+
+**Segnale.** Ricaricando a metà turno la chat resta «attiva» ma non si muove più niente: il
+contatore fermo, nessun testo, nessun tool, nessun pensiero. Sembra uno stream perso; è il
+contrario, è troppo lavoro.
+
+**Causa.** Il corpo dell'effetto chiamava `poll()` in modo sincrono, e `poll()` leggeva `orphanRun`
+prima del primo `await` — quindi lettura tracciata. La risposta riscriveva `orphanRun`,
+invalidando l'effetto, che si smontava e rimontava chiamando subito `poll()`. Misurati **3378 giri
+in 10 secondi** contro uno ogni 350ms previsti: il thread principale saturo non ridipinge, e da
+fuori si legge come «lo stream si è perso».
+
+**Mossa.** Le letture che servono a decidere il ritmo passano da `untrack`. E la misura che
+distingue le due diagnosi opposte è una sola: contare le richieste. `window.fetch` avvolto per
+dieci secondi dice in un colpo se il problema è che non parte niente o che parte tutto.
+
+**E il test che non si può scrivere va dichiarato.** Il cappio è reattivo, e in questa suite gli
+effetti Svelte non vengono eseguiti (`$effect.root` + `flushSync` conta zero esecuzioni del corpo):
+un test lì passa identico con e senza il fix. Lasciarlo è peggio che non averlo — è una guardia
+finta che il prossimo leggerà come copertura. Va tolto e il buco va scritto qui.
