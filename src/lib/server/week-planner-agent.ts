@@ -137,6 +137,9 @@ async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<Wee
   let finished: { strategy: WeeklyStrategy; notes: string } | null = null;
   const stallFingerprints: string[] = [];
   let researchesUsed = 0;
+  // Le pagine che la ricerca ha DAVVERO restituito. Il gate le confronta con la fonte dichiarata:
+  // è l'unica cosa che distingue una citazione da una citazione inventata.
+  const researchedUrls = new Set<string>();
   const stepLog: import('$lib/server/agent-runs').AgentStepLog[] = [];
   let stepNum = 0;
   const t0 = Date.now();
@@ -299,6 +302,9 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
         budget.usdRemaining = Math.max(0, budget.usdRemaining - ESTIMATED_RESEARCH_USD);
         const { groundedText } = await import('$lib/server/research');
         const { text, citations } = await groundedText(null as never, question, undefined, { brandId: opts.brandId });
+        for (const c of citations) {
+          if (c.uri) researchedUrls.add(c.uri);
+        }
         return { answer: text, sources: citations.map((c) => ({ title: c.title, url: c.uri })) };
       }
     }),
@@ -318,7 +324,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       inputSchema: z.object({ seeds: z.array(z.record(z.string(), z.unknown())) }),
       execute: async ({ seeds }) => {
         const normalized = normalizeSeeds(seeds);
-        const violations = checkRubricsAndBatchFeasibility(normalized, batchCtx);
+        const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls });
         if (normalized.length) {
           working = {
             theme: working?.theme ?? '',
@@ -368,7 +374,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
           doDont: working?.doDont ?? '',
           seeds: normalized
         };
-        const violations = checkRubricsAndBatchFeasibility(normalized, batchCtx);
+        const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls });
         lastViolations = violations;
         return { ok: violations.length === 0, reason, violations };
       }
@@ -394,7 +400,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
           seeds: finalSeeds
         };
         if (!finalSeeds.length) return { error: 'No seeds to finish' };
-        const violations = checkRubricsAndBatchFeasibility(finalSeeds, batchCtx);
+        const violations = checkRubricsAndBatchFeasibility(finalSeeds, { ...batchCtx, researchedUrls });
         if (violations.length) {
           if (finalSeeds.length) working = strategy;
           lastViolations = violations;
@@ -480,7 +486,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
     });
 
     if (!finished && working?.seeds?.length) {
-      const violations = checkRubricsAndBatchFeasibility(working.seeds, batchCtx);
+      const violations = checkRubricsAndBatchFeasibility(working.seeds, { ...batchCtx, researchedUrls });
       lastViolations = violations;
       if (violations.length === 0) {
         finished = { strategy: working, notes: 'Auto-closed: seeds passed feasibility.' };

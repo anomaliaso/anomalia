@@ -188,7 +188,7 @@ describe('carousel beats', () => {
 
   it('passes a carousel whose beats match its slides', () => {
     const violations = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'carousel', slide_count: 4, beats: [{ shows: 'b1', thinks: 'x' }, { shows: 'b2', thinks: 'y' }, { shows: 'b3', thinks: 'z' }, { shows: 'b4', thinks: 'w' }] })],
+      [seed({ format: 'carousel', slide_count: 4, sourced_from: 'nota dello Studio', beats: [{ shows: 'b1', thinks: 'x' }, { shows: 'b2', thinks: 'y' }, { shows: 'b3', thinks: 'z' }, { shows: 'b4', thinks: 'w' }] })],
       ctx
     );
     expect(violations).toEqual([]);
@@ -199,7 +199,7 @@ describe('carousel beats', () => {
   // "Basta non farsi prendere dall'ansia" stampato accanto a un'icona.
   it('coglie il riquadro muto dentro una storia', () => {
     const violations = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'carousel', slide_count: 3, beats: [
+      [seed({ format: 'carousel', slide_count: 3, sourced_from: 'nota dello Studio', beats: [
         { shows: 'b1', thinks: 'ci risiamo' }, { shows: 'b2', thinks: '' }, { shows: 'b3', thinks: 'vabbè' }
       ] })],
       ctx
@@ -236,5 +236,66 @@ describe('rubrica sconosciuta', () => {
       });
     expect(run).not.toThrow();
     expect(run().some((v) => v.includes('not an approved series'))).toBe(true);
+  });
+});
+
+// L'agente ha scritto tre episodi facendo ZERO ricerche e riempiendo comunque la fonte:
+// «Linee guida CNOPD», «Procedure SPID AgID». Nessun URL, nessuna ricerca, tre citazioni
+// autorevoli inventate — peggio del campo vuoto, perché sembra che sappiamo. Una regola di prompt
+// non può creare una fonte: questo gate sì.
+describe('fonte di un episodio narrativo', () => {
+  const base = {
+    expectedSeedCount: 1,
+    selectedPlatforms: ['instagram'],
+    products: [],
+    people: [],
+    mediaIds: new Set<string>(),
+    rubrics: [],
+    weekMix: []
+  };
+  const story = (over: Record<string, unknown> = {}) =>
+    seed({
+      format: 'carousel',
+      slide_count: 3,
+      beats: [
+        { shows: 'a', thinks: 'ci risiamo' },
+        { shows: 'b', thinks: 'domani torno' },
+        { shows: 'c', thinks: 'vabbè' }
+      ],
+      ...over
+    });
+
+  it('rifiuta una storia senza fonte', () => {
+    const v = checkRubricsAndBatchFeasibility([story()], base);
+    expect(v.some((x) => x.includes('no source'))).toBe(true);
+  });
+
+  it('rifiuta una fonte che non viene da nessuna ricerca fatta', () => {
+    const v = checkRubricsAndBatchFeasibility(
+      [story({ sourced_from: 'Linee guida CNOPD e regolamenti atenei italiani.' })],
+      { ...base, researchedUrls: new Set(['https://example.org/racconto']) }
+    );
+    expect(v.some((x) => x.includes('not grounded'))).toBe(true);
+  });
+
+  it('accetta una fonte che cita una pagina davvero letta', () => {
+    const v = checkRubricsAndBatchFeasibility(
+      [story({ sourced_from: 'racconto in prima persona — https://example.org/racconto' })],
+      { ...base, researchedUrls: new Set(['https://example.org/racconto']) }
+    );
+    expect(v).toEqual([]);
+  });
+
+  it('non pretende URL dove le ricerche non esistono (percorso senza agente)', () => {
+    const v = checkRubricsAndBatchFeasibility([story({ sourced_from: 'nota dello Studio del brand' })], base);
+    expect(v).toEqual([]);
+  });
+
+  it('non chiede la fonte a una guida', () => {
+    const v = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'carousel', slide_count: 3, beats: ['p1', 'p2', 'p3'] })],
+      { ...base, researchedUrls: new Set<string>() }
+    );
+    expect(v).toEqual([]);
   });
 });

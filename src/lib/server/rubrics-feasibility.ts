@@ -49,10 +49,27 @@ export type BatchFeasibilityContext = {
   people: Array<{ name: string; images?: unknown }>;
   mediaIds: Set<string>;
   rubrics: Rubric[];
+  /**
+   * Gli URL che il tool di ricerca ha restituito in QUESTO giro. Presente solo sul percorso
+   * dell'agente: dove non c'è, la fonte di un episodio si pretende comunque ma non se ne verifica
+   * la provenienza — un percorso senza ricerca non può dimostrare niente, e fingere che possa
+   * sarebbe un gate che mente.
+   */
+  researchedUrls?: Set<string>;
   weekMix?: Array<{ type: string; count: number }>;
 };
 
 /** Validate weekly batch seeds against assets, platforms, and approved rubrics. */
+// Una fonte vale se punta a una pagina che la ricerca ha DAVVERO restituito in questo giro.
+// Confronto sull'URL: il titolo lo si può parafrasare, l'indirizzo no.
+function citesResearchedPage(sourcedFrom: string | undefined, researched: Set<string>): boolean {
+  const text = String(sourcedFrom ?? '');
+  for (const url of researched) {
+    if (url && text.includes(url)) return true;
+  }
+  return false;
+}
+
 export function checkRubricsAndBatchFeasibility(
   seeds: PostSeed[],
   ctx: BatchFeasibilityContext
@@ -102,16 +119,29 @@ export function checkRubricsAndBatchFeasibility(
       // forma va normalizzata prima di giudicarla: una battuta vecchia in forma di stringa resta
       // valida come riquadro, e senza voce di dentro la regola qui sotto la coglie.
       const beats = normalizeBeats(seed.beats) ?? [];
-      // Solo dentro una storia: se NESSUNA battuta ha la voce di dentro il carosello è una guida.
-      const voiced = beats.filter((b) => b.thinks?.trim());
-      const mute = voiced.length ? beats.filter((b) => !b.thinks?.trim()) : [];
       const slides = Number(seed.slide_count) || 0;
+      // Un carosello o è una STORIA (qualcuno la vive) o è una GUIDA (dei passi): la voce di dentro
+      // si pretende solo dentro una storia.
+      const voiced = beats.filter((b) => b.thinks?.trim());
+      const source = String(seed.sourced_from ?? '').trim();
+
       if (!beats.length) {
         violations.push(`Carousel seed "${seed.angle}" has no beats — write one concrete beat per slide, in order.`);
       } else if (slides && beats.length !== slides) {
         violations.push(`Carousel seed "${seed.angle}" has ${beats.length} beats for ${slides} slides — one beat per slide.`);
-      } else if (mute.length) {
-        violations.push(`Carousel seed "${seed.angle}" has ${mute.length} beat(s) with no inner line — a story cannot have mute panels, and the rest of this post has an inner line.`);
+      }
+
+      if (voiced.length && voiced.length !== beats.length) {
+        violations.push(`Carousel seed "${seed.angle}" has ${beats.length - voiced.length} beat(s) with no inner line — a story cannot have mute panels, and the rest of this post has an inner line.`);
+      }
+      if (voiced.length && !source) {
+        // Una storia è la vita di qualcuno: senza fonte è scritta su ciò che sembra plausibile.
+        violations.push(`Carousel seed "${seed.angle}" tells a story with no source — search for how people describe this situation in their own words, pick one, and put it in sourced_from.`);
+      }
+      if (voiced.length && source && ctx.researchedUrls && !citesResearchedPage(source, ctx.researchedUrls)) {
+        // Il gate che una regola di prompt non può essere: l'agente ha già riempito questo campo
+        // con «Linee guida CNOPD» senza aver cercato niente, e suonava autorevole.
+        violations.push(`Carousel seed "${seed.angle}" has a source that is not grounded in anything you actually read this run — cite a page the research tool returned, with its URL, or search first.`);
       }
     }
     if (seed.media_id && !ctx.mediaIds.has(seed.media_id)) {
