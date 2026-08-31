@@ -3111,10 +3111,9 @@
       }
     },
     "pick": {
-      "title": "Meet your first agent",
-      "sub": "Pick who you start with. You can talk to any of the others whenever you want.",
-      "start": "Start chat",
-      "own": "Create my own",
+      "title": "Your autonomous team",
+      "sub": "Explore your team of AI agents who know marketing.",
+      "start": "Start",
       "prev": "Previous agent",
       "next": "Next agent",
       "customDesc": "Your own agent"
@@ -9508,7 +9507,8 @@
       "label": "New reply",
       "message": "Open the chat to read it",
       "open": "Open {name}'s chat",
-      "count": "{count, plural, one {# unread reply} other {# unread replies}}"
+      "count": "{count, plural, one {# unread reply} other {# unread replies}}",
+      "dismiss": "Dismiss"
     },
     "docPanel": {
       "subtitle": "From the knowledge base",

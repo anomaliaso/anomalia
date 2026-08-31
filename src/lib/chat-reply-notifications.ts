@@ -16,15 +16,20 @@ export type ReplyNotice = {
 export function getReplyNotices(
 	threads: ReplyNoticeThread[],
 	unread: Map<string, number>,
-	activeThreadId: string | null
+	activeThreadId: string | null,
+	dismissed: Map<string, number> = new Map()
 ): ReplyNotice[] {
 	const seen = new Set<string>();
 	const notices: ReplyNotice[] = [];
 
 	for (const thread of threads) {
 		if (thread.id === activeThreadId || !unread.has(thread.id) || seen.has(thread.id)) continue;
+
+		const unreadCount = Math.max(1, unread.get(thread.id) ?? 0);
+		if ((dismissed.get(thread.id) ?? 0) >= unreadCount) continue;
+
 		seen.add(thread.id);
-		notices.push({ thread, unreadCount: Math.max(1, unread.get(thread.id) ?? 0) });
+		notices.push({ thread, unreadCount });
 	}
 
 	return notices;

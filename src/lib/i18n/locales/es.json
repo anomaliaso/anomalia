@@ -3105,10 +3105,9 @@
       }
     },
     "pick": {
-      "title": "Con quién empiezas",
-      "sub": "Elige con quién empiezas. A los demás puedes escribirles cuando quieras.",
-      "start": "Iniciar chat",
-      "own": "Crear el mío",
+      "title": "Tu equipo autónomo",
+      "sub": "Explora tu equipo de agentes de IA expertos en marketing.",
+      "start": "Empezar",
       "prev": "Agente anterior",
       "next": "Agente siguiente",
       "customDesc": "Un agente tuyo"
@@ -9391,7 +9390,8 @@
       "label": "Nueva respuesta",
       "message": "Abre el chat para leerla",
       "open": "Abrir el chat de {name}",
-      "count": "{count, plural, one {# respuesta sin leer} other {# respuestas sin leer}}"
+      "count": "{count, plural, one {# respuesta sin leer} other {# respuestas sin leer}}",
+      "dismiss": "Descartar"
     },
     "docPanel": {
       "subtitle": "Desde la base de conocimiento",

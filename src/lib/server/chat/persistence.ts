@@ -971,6 +971,19 @@ export function chronologicalTail<T>(newestFirst: T[], limit: number): T[] {
 }
 
 /**
+ * La coda di una lista GIÀ cronologica. `chronologicalTail` pretende il contrario — la query la
+ * ordina `created_at desc` — e passargli la proiezione del log, che esce in ordine di `seq`,
+ * capovolgeva l'intera conversazione: la risposta sopra la domanda a cui rispondeva.
+ */
+export function newestTail<T>(oldestFirst: T[], limit: number): T[] {
+  return limit >= oldestFirst.length ? oldestFirst : oldestFirst.slice(-limit);
+}
+
+function visibleInUi(row: { role?: unknown }): boolean {
+  return row.role !== 'system' && row.role !== 'tool';
+}
+
+/**
  * Una coda che comincia a metà conversazione può aprirsi su un turno assistant, che Gemini rifiuta
  * (gli openai-compatible lo tollerano). Costa meno ripartire sempre da un turno user che ramificare
  * per provider.
@@ -1166,7 +1179,7 @@ export async function loadHistoryForUI(
   if (eventRows?.length) {
     const eventMessages = threadMessageRows(eventRows);
     if (eventMessages) {
-      return chronologicalTail(eventMessages.filter((row) => row.role !== 'system' && row.role !== 'tool'), limit) as ChatMessageUiRow[];
+      return newestTail(eventMessages.filter(visibleInUi), limit) as ChatMessageUiRow[];
     }
   }
 
@@ -1191,10 +1204,7 @@ export async function loadThreadUiHistory(
     const projection = threadProjectionRows(eventRows);
     if (projection) {
       return {
-        messages: chronologicalTail(
-          projection.messages.filter((row) => row.role !== 'system' && row.role !== 'tool'),
-          limit
-        ) as ChatMessageUiRow[],
+        messages: newestTail(projection.messages.filter(visibleInUi), limit) as ChatMessageUiRow[],
         liveProgress: projection.progress,
         eventCursor: projection.cursor
       };

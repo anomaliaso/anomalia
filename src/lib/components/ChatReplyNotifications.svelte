@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation';
   import { _ } from 'svelte-i18n';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
-  import { getReplyNotices } from '$lib/chat-reply-notifications';
+  import { getReplyNotices, type ReplyNotice } from '$lib/chat-reply-notifications';
   import { SHELL_MOBILE_BREAKPOINT, IsMobile } from '$lib/hooks/is-mobile.svelte';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
   import {
@@ -14,10 +14,41 @@
   } from '$lib/stores/chat';
   import { threadIdentity } from '$lib/thread-identity';
 
+  const AUTO_DISMISS_MS = 6000;
+  const SWIPE_DISMISS_PX = 90;
+  const DRAG_SLOP_PX = 6;
+
   let { brandSlug }: { brandSlug: string } = $props();
 
   const isMobile = new IsMobile(SHELL_MOBILE_BREAKPOINT);
-  const notices = $derived(getReplyNotices($chatThreads, $unreadThreadIds, $chatThreadId));
+  let dismissed = $state(new Map<string, number>());
+  const notices = $derived(
+    getReplyNotices($chatThreads, $unreadThreadIds, $chatThreadId, dismissed)
+  );
+
+  let drag = $state<{ id: string; startX: number; dx: number } | null>(null);
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function dismiss(notice: ReplyNotice) {
+    clearTimeout(timers.get(notice.thread.id));
+    timers.delete(notice.thread.id);
+    dismissed = new Map(dismissed).set(notice.thread.id, notice.unreadCount);
+  }
+
+  $effect(() => {
+    for (const notice of notices) {
+      if (timers.has(notice.thread.id)) continue;
+      timers.set(
+        notice.thread.id,
+        setTimeout(() => dismiss(notice), AUTO_DISMISS_MS)
+      );
+    }
+  });
+
+  $effect(() => () => {
+    timers.forEach(clearTimeout);
+    timers.clear();
+  });
 
   $effect(() => {
     const slug = brandSlug;
@@ -36,6 +67,22 @@
     };
   });
 
+  function startDrag(event: PointerEvent, id: string) {
+    if (event.button !== 0) return;
+    drag = { id, startX: event.clientX, dx: 0 };
+  }
+
+  function moveDrag(event: PointerEvent) {
+    if (!drag) return;
+    drag = { ...drag, dx: event.clientX - drag.startX };
+  }
+
+  function endDrag(notice: ReplyNotice) {
+    const travelled = Math.abs(drag?.dx ?? 0);
+    drag = null;
+    if (travelled >= SWIPE_DISMISS_PX) dismiss(notice);
+  }
+
   function openNotice(threadId: string) {
     markThreadRead(brandSlug, threadId);
     chatThreadId.set(threadId);
@@ -53,29 +100,62 @@
   >
     {#each notices as notice (notice.thread.id)}
       {@const who = threadIdentity(notice.thread, (key) => $_(key))}
-      <a
+      {@const dx = drag?.id === notice.thread.id ? drag.dx : 0}
+      <div
         class="reply-notice"
-        href={`/app/${brandSlug}/chat/${notice.thread.id}`}
-        data-testid={`chat-reply-notification-${notice.thread.id}`}
-        aria-label={$_('chat.replyNotification.open', { values: { name: who.name } })}
-        onclick={(event) => {
-          event.preventDefault();
-          openNotice(notice.thread.id);
-        }}
+        role="group"
+        class:sliding={dx !== 0}
+        style:transform={`translateX(${dx}px)`}
+        onpointerdown={(event) => startDrag(event, notice.thread.id)}
+        onpointermove={moveDrag}
+        onpointerup={() => endDrag(notice)}
+        onpointercancel={() => endDrag(notice)}
+        onpointerleave={() => endDrag(notice)}
       >
-        <AgentAvatar face={who.face} color={who.color} size={34} />
-        <span class="reply-notice-copy">
-          <span class="reply-notice-label">{$_('chat.replyNotification.label')}</span>
-          <strong>{who.name}</strong>
-          <span class="reply-notice-preview">
-            {notice.thread.preview || $_('chat.replyNotification.message')}
+        <a
+          class="reply-notice-open"
+          href={`/app/${brandSlug}/chat/${notice.thread.id}`}
+          data-testid={`chat-reply-notification-${notice.thread.id}`}
+          aria-label={$_('chat.replyNotification.open', { values: { name: who.name } })}
+          onclick={(event) => {
+            event.preventDefault();
+            if (Math.abs(dx) > DRAG_SLOP_PX) return;
+            openNotice(notice.thread.id);
+          }}
+        >
+          <AgentAvatar face={who.face} color={who.color} size={34} />
+          <span class="reply-notice-copy">
+            <span class="reply-notice-label">{$_('chat.replyNotification.label')}</span>
+            <strong>{who.name}</strong>
+            <span class="reply-notice-preview">
+              {notice.thread.preview || $_('chat.replyNotification.message')}
+            </span>
           </span>
-        </span>
-        <span
-          class="reply-notice-count"
-          aria-label={$_('chat.replyNotification.count', { values: { count: notice.unreadCount } })}
-        >{notice.unreadCount > 9 ? '9+' : notice.unreadCount}</span>
-      </a>
+          <span
+            class="reply-notice-count"
+            aria-label={$_('chat.replyNotification.count', {
+              values: { count: notice.unreadCount }
+            })}
+          >{notice.unreadCount > 9 ? '9+' : notice.unreadCount}</span>
+        </a>
+        <button
+          type="button"
+          class="reply-notice-close"
+          data-testid={`chat-reply-notification-close-${notice.thread.id}`}
+          aria-label={$_('chat.replyNotification.dismiss')}
+          onpointerdown={(event) => event.stopPropagation()}
+          onclick={() => dismiss(notice)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M4 4l8 8M12 4l-8 8"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      </div>
     {/each}
   </div>
 {/if}
@@ -95,22 +175,63 @@
   .reply-notice {
     display: flex;
     align-items: center;
-    gap: 10px;
     min-height: 62px;
-    padding: 10px 12px;
+    padding-right: 6px;
     border: 1px solid var(--line);
     border-radius: 14px;
     background: color-mix(in srgb, var(--paper) 96%, transparent);
     box-shadow: 0 12px 30px color-mix(in srgb, var(--ink) 13%, transparent);
     color: var(--ink);
-    text-decoration: none;
     pointer-events: auto;
+    touch-action: pan-y;
+    transition: transform 160ms ease;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
 
+  .reply-notice.sliding {
+    transition: none;
+  }
+
   .reply-notice:hover {
     border-color: var(--ink-faint);
+  }
+
+  .reply-notice-open {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 4px 10px 12px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .reply-notice-close {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-faint);
+    cursor: pointer;
+  }
+
+  .reply-notice-close:hover {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+  }
+
+  .reply-notice-close svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
   }
 
   .reply-notice-copy {

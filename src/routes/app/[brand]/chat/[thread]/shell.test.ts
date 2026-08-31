@@ -93,8 +93,8 @@ describe('thread page: il turno orfano si chiude senza doppione, e lo scroll lo 
 
 	it('i due punti di completamento del run orfano passano da finalizeOrphanRun, non più da un invalidateAll disaccoppiato', () => {
 		expect(src).not.toContain('invalidateAll');
-		const calls = src.match(/void finalizeOrphanRun\(\);/g) ?? [];
-		expect(calls.length).toBe(2); // onKitStreamDone (Realtime) + il 204 del poll
+		const calls = src.match(/void finalizeOrphanRun\(\)/g) ?? [];
+		expect(calls.length).toBe(2); // onKitStreamDone (Realtime) + onFinished del poll
 	});
 
 	it('lo scroll automatico segue anche il parziale orfano (text/reasoning/tools), non solo lo stream vivo', () => {
