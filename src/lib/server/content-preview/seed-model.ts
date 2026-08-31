@@ -448,6 +448,25 @@ export function enforceFaceBrandPeople(seeds: PostSeed[], profile: BrandProfile)
 // Contro il collasso, con la scena diventata consultiva, restano: doDont/theme vincolanti,
 // l'obbligo di servire angle+pillar, e detectSceneCollapse dopo il pass 2.
 
+// I modi noti di sbagliare una STORIA, nella forma che questo repo usa già per le caption: una
+// lista numerata e dura, ognuna è una riscrittura. Nasce da un giro bocciato — un carosello sul
+// primo taglio di capelli di una persona trans, disegnato benissimo e falso dalla prima vignetta.
+//
+// Il test è quello del logo di `disruptive.ts`, spostato sulla narrativa: se avresti indovinato la
+// scena conoscendo SOLO la categoria, non è una storia, è un trope.
+//
+// Misurato A/B a parità di rubrica e brand: senza, l'episodio esce come un pezzo d'atmosfera che
+// chiude su un caffè; con, l'attrito diventa uno sportello, un errore a schermo e mezza mattinata
+// persa. Attenzione al rovescio: la regola 3 fa produrre dettagli che SEMBRANO verificabili, quindi
+// alza il rischio di inventare con sicurezza — vale insieme a una fonte, non al posto suo.
+export const STORY_FAILURE_MODES = `STORY FAILURE MODES (hard, numbered — any one of them and the episode is rewritten):
+1. THE MILESTONE: the ceremony the reader already pictures from the category alone — the haircut, the mirror, the coming out at the dinner table, the first time the name is said aloud, the document finally arriving. If someone who has never met this person could have guessed the scene from the category, it is a trope, not a story. The friction lives in an ordinary Tuesday.
+2. THE SYSTEM, NOT A VILLAIN: the discomfort worth an episode comes from a procedure, a form, a counter, an automated message, a database, a dropdown with two options — something that gets it wrong without anyone deciding to. A named cruel person is a soap opera; a system simply built wrong is the actual life, and it is what the audience recognises.
+3. CHECKABLE SPECIFICITY: every beat names something that exists — the exact document, the exact desk, the words actually printed on the screen. If a beat could be moved to another country or another decade unchanged, it was invented. Take those specifics from the brand's own material; never reach for a detail you cannot source, because a wrong one is worse than a vague one here.
+4. THE INNER LINE IS A REAL THOUGHT: what a person actually thinks in that second, in their own words, plain, six words or fewer. Never an aphorism, never a metaphor, never a line composed for the reader.
+5. NO REBIRTH, NO BATTLE: no butterfly, no mirror-as-truth, no courage, no fight, no before/after. Forbidden in the words and equally in the images.
+6. THE ARC IS ONE DEGREE: something shifts slightly. No triumph, no lesson, no moral in the last panel. The landing may be funny, flat or unresolved.`;
+
 // One planned post BEFORE the copy/image craft is written: the skeleton + its angle.
 export type PostSeed = {
   // Assegnato alla reidratazione in normalizeWeeklyStrategy (unico punto di derivazione): i seed

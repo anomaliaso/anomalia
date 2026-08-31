@@ -36,6 +36,7 @@ import {
 } from '$lib/server/strategy-agent-reads';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
 import { disruptiveBriefSection } from '$lib/disruptive';
+import { STORY_FAILURE_MODES } from '$lib/server/content-preview/seed-model';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
 import { benchmarkDigest, type Benchmark } from '$lib/server/research';
 import type { ContentPrefs, PastWinner } from '$lib/server/content-preview';
@@ -152,6 +153,8 @@ Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}.
 Platforms: ${opts.platforms.join(', ')}.
 
 ${disruptiveBriefSection()}
+${STORY_FAILURE_MODES}
+
 Una settimana di sette post corretti è una settimana invisibile: fra i seed cercane uno costruito su una leva di contrasto, e se escono tutti prudenti e intercambiabili la settimana non è buona per quanto sia corretta. Chiama read_disruptive_ideas prima di inventarne uno nuovo: se il banco ne ha una che regge su questa settimana, girala e poi chiamaci sopra mark_idea_used, sennò resta "da fare" per sempre. E se pensando questa settimana te ne viene una nuova che passa i tre test, salvala con save_disruptive_idea anche se non entra in questi sette post — non perché ce ne voglia una, ma perché lì sopravvive.`;
 
   const userPrompt = `Plan ${opts.count} post seeds for this week.

@@ -1,5 +1,5 @@
 import type { GoogleGenAI } from '@google/genai';
-import { type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
+import { STORY_FAILURE_MODES, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { logAiCall, extractGeminiUsage } from '$lib/server/ai-log';
@@ -263,7 +263,8 @@ Straight talking-head UGC only — no surreal gimmicks. EXPRESSIVE face (pain = 
   const carouselLine =
     maxCarousels > 0
       ? `CAROUSEL CONSTRAINT: AT MOST ${maxCarousels} of the ${count} seeds may use the "carousel" format, ONLY on Instagram, Facebook or LinkedIn, with a slide_count of 3-${carouselMaxSlides()}. Use a carousel ONLY when the angle genuinely sustains that many DISTINCT slides (a list, a step-by-step process, a comparison, a story arc) — never to pad a single visual idea across slides.
-CAROUSEL BEATS (hard): every carousel seed MUST arrive with "beats" filled — one concrete beat per slide, in order, exactly slide_count of them. A beat is what THAT slide says or shows in one sentence (a moment, a turn, a line someone says, a step), never a topic label like "introduzione" or "il problema". Read together they must form a real arc: a situation, something that changes, a landing that earns the last slide. A carousel that arrives without beats is a topic, not a story, and the producer will improvise ${carouselMaxSlides()} unrelated images from one line of angle.`
+CAROUSEL BEATS (hard): every carousel seed MUST arrive with "beats" filled — one concrete beat per slide, in order, exactly slide_count of them. A beat is what THAT slide says or shows in one sentence (a moment, a turn, a line someone says, a step), never a topic label like "introduzione" or "il problema". Read together they must form a real arc: a situation, something that changes, a landing that earns the last slide. A carousel that arrives without beats is a topic, not a story, and the producer will improvise ${carouselMaxSlides()} unrelated images from one line of angle.
+${STORY_FAILURE_MODES}`
       : `CAROUSEL CONSTRAINT: do NOT use the "carousel" format in this batch.`;
 
   // I piani APPROVATI dall'utente e/o il brief di ricerca: autoritativi su DOVE mirare — il batch
