@@ -25,6 +25,9 @@ import { renderPostImage, aspectRatioFor, brandVisualDirective } from '$lib/serv
 import type { PostSeed, PreviewPost } from '$lib/server/content-preview';
 
 const OUT_ROOT = resolve(import.meta.dirname, '../../eval-results/creative');
+// Nessuna chiamata al gateway ha un timeout (llm.ts: generateObject senza abortSignal), e una
+// sonda appesa per sempre è peggio di una che fallisce: dice "sta girando" quando non gira.
+const STEP_TIMEOUT_MS = 8 * 60_000;
 const MAX_RENDERED_SLIDES = 12;
 const PLATFORMS = ['instagram'];
 
@@ -68,6 +71,21 @@ const postCount = arg('posts', 6);
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = resolve(OUT_ROOT, stamp);
+
+async function step<T>(name: string, work: Promise<T>): Promise<T> {
+  const t0 = Date.now();
+  let timer: NodeJS.Timeout | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${name}: nessuna risposta in ${STEP_TIMEOUT_MS / 1000}s — il gateway è appeso, non è un verdetto sul prodotto`)), STEP_TIMEOUT_MS);
+  });
+  try {
+    const out = await Promise.race([work, expired]);
+    console.log(`  ${name} in ${Math.round((Date.now() - t0) / 1000)}s`);
+    return out;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function write(name: string, body: string) {
   writeFileSync(resolve(outDir, name), body);
@@ -163,15 +181,15 @@ async function main() {
   console.log(`sonda creativa → ${outDir}`);
 
   console.log('1/4 rubriche…');
-  const rubrics = await proposeRubrics(null as never, BRAND, {
+  const rubrics = await step('rubriche', proposeRubrics(null as never, BRAND, {
     platforms: PLATFORMS,
     outputLanguage: 'Italian'
-  });
+  }));
   write('00-rubriche.md', rubricheReport(rubrics));
   console.log(`  ${rubrics.length} serie, ${rubrics.filter((r) => r.art_direction).length} con direzione artistica`);
 
   console.log('2/4 piano…');
-  const strategy = await planStrategy(
+  const strategy = await step('piano', planStrategy(
     null as never,
     BRAND,
     PLATFORMS,
@@ -186,13 +204,13 @@ async function main() {
     rubrics,
     '',
     []
-  );
+  ));
   write('01-piano.md', pianoReport(strategy.seeds));
   write('03-piano.json', JSON.stringify({ rubrics, strategy }, null, 2));
   console.log(`  ${strategy.seeds.length} seed, ${strategy.seeds.filter((s) => (s.beats ?? []).length).length} con battute`);
 
   console.log('3/4 post…');
-  const posts = await executePlan(null as never, BRAND, strategy, { language: 'Italian' });
+  const posts = await step('post', executePlan(null as never, BRAND, strategy, { language: 'Italian' }));
   write('02-post.md', postsReport(posts));
 
   console.log(withImages ? '4/4 immagini…' : '4/4 immagini saltate (--no-images)');
