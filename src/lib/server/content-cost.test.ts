@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { creditsForPost, creditsForBatch, budgetBrief, VIDEO_CREDITS, IMAGE_CREDITS } from './content-cost';
+import { creditsForPost, creditsForBatch, budgetBrief, videoCredits, IMAGE_CREDITS } from './content-cost';
 
 describe('creditsForPost', () => {
   it('un post di testo non costa niente da produrre', () => {
@@ -20,15 +20,23 @@ describe('creditsForPost', () => {
   });
 
   it('un video costa la clip più la sua copertina', () => {
-    expect(creditsForPost({ format: 'video' })).toBe(VIDEO_CREDITS + IMAGE_CREDITS);
+    expect(creditsForPost({ format: 'video' })).toBe(videoCredits() + IMAGE_CREDITS);
   });
 
-  // Il commento nel codice diceva ~25×. Misurato su 97 render veri: ~16×. Un rapporto sbagliato
-  // nel prompt fa scegliere male all'agente, ed è il numero su cui si decide il mix.
-  it('un video vale una quindicina di immagini, non venticinque', () => {
-    const ratio = (VIDEO_CREDITS + IMAGE_CREDITS) / IMAGE_CREDITS;
-    expect(ratio).toBeGreaterThan(12);
-    expect(ratio).toBeLessThan(20);
+  // Il prezzo di una clip cambia di 17× fra i due modelli: grok (default) mediana $0.12,
+  // seedance-2-5 (ads a 22s) mediana $2.10. Un numero unico sbaglia su entrambi, e nel prompt
+  // diventa il consiglio sbagliato sulla decisione più cara che l'agente prende.
+  it('prezza la clip dal modello che gira davvero, non da una media', () => {
+    expect(videoCredits('grok-imagine-video-1-5-preview')).toBeLessThan(videoCredits('bytedance/seedance-2-5'));
+  });
+
+  it('col modello di default un video vale poche immagini, non una storia intera', () => {
+    const ratio = (videoCredits('grok-imagine-video-1-5-preview') + IMAGE_CREDITS) / IMAGE_CREDITS;
+    expect(ratio).toBeLessThan(4);
+  });
+
+  it('un modello sconosciuto si prezza al più caro: sottostimare fa partire lavori che non finiscono', () => {
+    expect(videoCredits('un-modello-mai-visto')).toBe(videoCredits('bytedance/seedance-2-5'));
   });
 });
 

@@ -7,6 +7,7 @@ import {
 import type { EditorialPlan } from './editorial-plan';
 import type { PostSeed } from './content-preview';
 import type { Rubric } from './rubrics';
+import { creditsForBatch } from './content-cost';
 
 const rubrics: Rubric[] = [
   {
@@ -322,11 +323,13 @@ describe('budget di produzione', () => {
     expect(v).toEqual([]);
   });
 
+  // Il budget si deriva dal listino invece di essere un numero fisso: i prezzi sono misurati e
+  // cambiano col modello — un test calibrato su una tariffa si rompe quando la tariffa si corregge,
+  // ed è quello che è appena successo quando il video è passato da $1.18 a $0.12.
   it('rifiuta un batch che il brand non può produrre', () => {
-    const v = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'video' }), seed({ format: 'video' })],
-      { ...base, creditBudget: 50 }
-    );
+    const posts = [seed({ format: 'video' }), seed({ format: 'video' })];
+    const cost = creditsForBatch(posts.map((p) => ({ format: p.format, slideCount: p.slide_count })));
+    const v = checkRubricsAndBatchFeasibility(posts, { ...base, creditBudget: cost - 1 });
     expect(v.some((x) => x.includes('costs'))).toBe(true);
   });
 
