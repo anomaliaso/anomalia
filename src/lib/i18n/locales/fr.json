@@ -3386,7 +3386,11 @@
     },
     "beatsPlaceholder": "Une ligne par slide : action | qui est à l’image | ce qu’elle pense | qui parle : réplique",
     "sourcePlaceholder": "La situation réelle racontée, et son lien — les noms restent ici",
-    "noSource": "Cet épisode n’a pas de source"
+    "noSource": "Cet épisode n’a pas de source",
+    "span": {
+      "label": "Planifier",
+      "weeks": "{n} semaines"
+    }
   },
   "setup": {
     "title": "Configuration du projet",

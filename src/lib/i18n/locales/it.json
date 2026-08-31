@@ -3387,7 +3387,11 @@
     "producedBeforeStop": "{n} post sono stati creati prima dello stop.",
     "beatsPlaceholder": "Una riga per slide: azione | chi è in scena | cosa pensa | chi parla: battuta",
     "sourcePlaceholder": "La situazione vera che racconta, e il link — i nomi restano qui, l'episodio è anonimo",
-    "noSource": "Questo episodio non ha una fonte"
+    "noSource": "Questo episodio non ha una fonte",
+    "span": {
+      "label": "Pianifica",
+      "weeks": "{n} settimane"
+    }
   },
   "setup": {
     "title": "Setup del progetto",

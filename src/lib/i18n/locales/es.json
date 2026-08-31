@@ -3386,7 +3386,11 @@
     },
     "beatsPlaceholder": "Una línea por diapositiva: acción | quién aparece | qué piensa | quién habla: frase",
     "sourcePlaceholder": "La situación real que cuenta, y su enlace — los nombres se quedan aquí",
-    "noSource": "Este episodio no tiene fuente"
+    "noSource": "Este episodio no tiene fuente",
+    "span": {
+      "label": "Planifica",
+      "weeks": "{n} semanas"
+    }
   },
   "setup": {
     "title": "Configuración del proyecto",

@@ -3386,7 +3386,11 @@
     },
     "beatsPlaceholder": "One line per slide: action | who is in frame | what they think | speaker: line",
     "sourcePlaceholder": "The real situation this retells, and its link — the names stay here, the episode is anonymised",
-    "noSource": "This episode has no source"
+    "noSource": "This episode has no source",
+    "span": {
+      "label": "Plan",
+      "weeks": "{n} weeks"
+    }
   },
   "setup": {
     "title": "Project setup",

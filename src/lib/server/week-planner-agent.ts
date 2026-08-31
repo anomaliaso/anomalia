@@ -81,6 +81,8 @@ export type WeekPlannerAgentOpts = {
   platforms: string[];
   count: number;
   weekIndex?: number;
+  /** Quante settimane del ciclo copre questo batch. Assente → 1, il comportamento di sempre. */
+  weeks?: number;
   prefs?: ContentPrefs;
   maxVideos?: number;
   maxCarousels?: number;
@@ -149,12 +151,14 @@ async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<Wee
       expectedSeedCount: opts.count,
       selectedPlatforms: opts.platforms,
       weekIndex: opts.weekIndex,
+      weeks: opts.weeks,
       rubrics: opts.rubrics
     })
   ]);
 
   if (opts.weekIndex != null && editorialPlan) {
-    batchCtx.weekMix = editorialPlan.weeks?.[opts.weekIndex]?.content_mix ?? batchCtx.weekMix;
+    const { weekMixForSpan } = await import('$lib/server/editorial-plan');
+    batchCtx.weekMix = weekMixForSpan(editorialPlan, opts.weekIndex, opts.weeks ?? 1);
   }
   if (!batchCtx.rubrics.length && opts.rubrics?.length) {
     batchCtx.rubrics = opts.rubrics;
@@ -199,7 +203,7 @@ NARRATIVE EPISODES — THE PROTOCOL, NOT OPTIONAL. You do not already understand
   d. Only then write the beats, and put the situation and its source in "sourced_from".
 Found nothing usable? Say so in "sourced_from" and keep the episode general. An invented life told confidently is the worst thing this system can publish.
 
-Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}.
+Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}${(opts.weeks ?? 1) > 1 ? `, and this batch covers ${opts.weeks} weeks — every seed MUST carry "week" with the week it belongs to, and each week gets its own theme and its own content mix` : ''}.
 Platforms: ${opts.platforms.join(', ')}.
 
 ${disruptiveBriefSection()}

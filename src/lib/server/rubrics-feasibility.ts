@@ -1,5 +1,6 @@
 import type { Rubric } from '$lib/server/rubrics';
 import type { EditorialPlan, PlanWeek } from '$lib/server/editorial-plan';
+import { weekMixForSpan } from '$lib/server/editorial-plan';
 import type { PostSeed } from '$lib/server/content-preview';
 import { normalizeBeats } from '$lib/server/content-preview/seed-model';
 import { creditsForBatch } from '$lib/server/content-cost';
@@ -243,6 +244,8 @@ export async function loadBatchFeasibilityContext(
     expectedSeedCount: number;
     selectedPlatforms: string[];
     weekIndex?: number;
+    /** Quante settimane copre il batch. Assente o 1 → comportamento di sempre. */
+    weeks?: number;
     editorialPlan?: EditorialPlan | null;
     rubrics?: Rubric[];
   }
@@ -257,7 +260,7 @@ export async function loadBatchFeasibilityContext(
   ]);
   const weekMix =
     opts.editorialPlan && opts.weekIndex != null
-      ? weekMixFromPlan(opts.editorialPlan, opts.weekIndex)
+      ? weekMixForSpan(opts.editorialPlan, opts.weekIndex, opts.weeks ?? 1)
       : undefined;
   return {
     expectedSeedCount: opts.expectedSeedCount,

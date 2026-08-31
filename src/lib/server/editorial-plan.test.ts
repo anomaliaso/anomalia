@@ -1,19 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  cadenceAllowed,
-  profileBlock,
-  clampCadence,
-  mondayOf,
-  stampWeekStarts,
-  currentWeekIndex,
-  prefsFromPlan,
-  weekStrategyBrief,
-  postsForWeek,
-  normalizePlan,
-  PLAN_WEEKS,
-  type EditorialPlan,
-  type PlanWeek
-} from './editorial-plan';
+import { cadenceAllowed, profileBlock, clampCadence, mondayOf, stampWeekStarts, currentWeekIndex, prefsFromPlan, weekStrategyBrief, postsForWeek, normalizePlan, PLAN_WEEKS, type EditorialPlan, type PlanWeek, postsForWeeks, weekMixForSpan } from './editorial-plan';
 
 const week = (over: Partial<PlanWeek> = {}): PlanWeek => ({
   index: 0,
@@ -286,5 +272,45 @@ describe('weekStrategyBrief su più settimane', () => {
     const brief = weekStrategyBrief(plan(), 2, [], 4);
     expect(brief).toContain('Settimana tre');
     expect(brief).not.toContain('undefined');
+  });
+});
+
+// Un batch che copre due settimane deve produrne il totale, e chiedere a ogni settimana il SUO mix.
+describe('postsForWeeks e i mix dello span', () => {
+  const plan = (): EditorialPlan => ({
+    strategy: 'S',
+    voice: { mood: '', tone: '', goal: '', personality: '' },
+    cadence: '3/week',
+    platform_mix: [],
+    gtm: null,
+    weeks: [
+      { index: 0, week_start: null, theme: 'W1', focus: '', content_mix: [{ type: 'a', count: 3 }], rationale: '', brief: null, products: null, status: 'upcoming' },
+      { index: 1, week_start: null, theme: 'W2', focus: '', content_mix: [{ type: 'b', count: 2 }], rationale: '', brief: null, products: null, status: 'upcoming' },
+      { index: 2, week_start: null, theme: 'W3', focus: '', content_mix: [{ type: 'c', count: 4 }], rationale: '', brief: null, products: null, status: 'upcoming' }
+    ]
+  });
+
+  it('somma le settimane coperte', () => {
+    expect(postsForWeeks(plan(), 0, 2)).toBe(5);
+  });
+
+  it('con una settimana sola è quello di prima', () => {
+    expect(postsForWeeks(plan(), 0, 1)).toBe(postsForWeek(plan(), 0));
+  });
+
+  it('non conta settimane che non esistono', () => {
+    expect(postsForWeeks(plan(), 2, 3)).toBe(4);
+  });
+
+  it('etichetta ogni voce di mix con la sua settimana', () => {
+    const mix = weekMixForSpan(plan(), 0, 2);
+    expect(mix).toEqual([
+      { week: 0, type: 'a', count: 3 },
+      { week: 1, type: 'b', count: 2 }
+    ]);
+  });
+
+  it('su una settimana sola non etichetta niente: il mix vale per il batch', () => {
+    expect(weekMixForSpan(plan(), 1, 1)).toEqual([{ type: 'b', count: 2 }]);
   });
 });

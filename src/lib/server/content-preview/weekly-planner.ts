@@ -55,6 +55,8 @@ type PlanPreviewOpts = {
   brandId?: string;
   userId?: string;
   weekIndex?: number;
+  /** Quante settimane del ciclo copre il batch. Assente → 1. */
+  weeks?: number;
   timezone?: string;
   agentVerbose?: boolean;
   /**
@@ -222,6 +224,7 @@ async function invokeWeekPlannerAgent(
       platforms: opts.platforms ?? [],
       count,
       weekIndex: opts.weekIndex,
+      weeks: opts.weeks,
       prefs: opts.prefs,
       maxVideos: opts.maxVideos,
       maxCarousels: opts.maxCarousels,

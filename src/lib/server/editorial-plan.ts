@@ -174,6 +174,47 @@ export function postsForWeek(plan: Pick<EditorialPlan, 'weeks' | 'cadence'>, wee
   return countForFrequency(plan.cadence);
 }
 
+/**
+ * Quanti post produce un batch che copre `weeks` settimane a partire da `weekIndex`.
+ *
+ * Il tetto `MAX_WEEK_POSTS` è PER SETTIMANA, non per batch: applicarlo alla somma taglierebbe un
+ * batch di due settimane a metà della prima e la seconda uscirebbe vuota.
+ */
+export function postsForWeeks(
+  plan: Pick<EditorialPlan, 'weeks' | 'cadence'>,
+  weekIndex: number,
+  weeks = 1
+): number {
+  const span = Math.max(1, Math.floor(weeks));
+  let total = 0;
+  for (let i = 0; i < span; i++) {
+    if (!plan.weeks?.[weekIndex + i]) break;
+    total += postsForWeek(plan, weekIndex + i);
+  }
+  return total;
+}
+
+/**
+ * Il mix atteso di un batch. Con una settimana sola le voci NON portano la settimana — valgono per
+ * il batch, che è il comportamento di sempre; con più settimane ognuna porta la sua, o due episodi
+ * nella prima e zero nella seconda farebbero comunque tornare il conto.
+ */
+export function weekMixForSpan(
+  plan: EditorialPlan | null,
+  weekIndex: number,
+  weeks = 1
+): Array<{ week?: number; type: string; count: number }> {
+  const span = Math.max(1, Math.floor(weeks));
+  if (span === 1) return (plan?.weeks?.[weekIndex]?.content_mix ?? []).map((m) => ({ ...m }));
+  const out: Array<{ week?: number; type: string; count: number }> = [];
+  for (let i = 0; i < span; i++) {
+    const w = plan?.weeks?.[weekIndex + i];
+    if (!w) break;
+    for (const m of w.content_mix ?? []) out.push({ week: weekIndex + i, type: m.type, count: m.count });
+  }
+  return out;
+}
+
 // Serialize ONE week of the plan into the strategyBrief string planStrategy() consumes, so the
 // batch the autopilot (or manual generate) produces executes the approved plan rather than
 // improvising. The user's week brief, when present, is authoritative and says so.

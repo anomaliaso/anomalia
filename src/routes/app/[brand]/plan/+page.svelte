@@ -719,6 +719,17 @@
         <div class="ab-actions">
           <form method="POST" action="?/plan" use:enhance={working('plan')}>
             <input type="hidden" name="week" value={wk} />
+            {#if data.batchWeeks && data.batchWeeks.max > data.batchWeeks.standard}
+              <label class="span-pick">
+                <span>{$_('weekPlan.span.label')}</span>
+                <select name="weeks">
+                  <option value={data.batchWeeks.standard}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.standard } })}</option>
+                  <option value={data.batchWeeks.max}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.max } })}</option>
+                </select>
+              </label>
+            {:else}
+              <input type="hidden" name="weeks" value={data.batchWeeks?.standard ?? 2} />
+            {/if}
             <button class="btn-ghost" disabled={busy !== '' || producing}>{busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.replan') + ' ↻'}</button>
           </form>
           <button
@@ -860,6 +871,8 @@
   .pillar-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .wt-fmt { font-size: 13px; text-transform: capitalize; color: var(--ink-soft, #6e6e73); }
   .wt-text { font-size: 13px; line-height: 1.4; color: var(--ink, #1d1d1f); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .span-pick { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 12.5px; color: var(--ink-soft, #6e6e73); }
+  .span-pick select { font-size: 12.5px; padding: 3px 6px; border-radius: 7px; }
   .beats-chip { margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); white-space: nowrap; }
   .nosrc-chip { margin-left: 4px; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: rgba(200, 120, 0, 0.16); color: #b26a00; }
   .st-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap;
