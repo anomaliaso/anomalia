@@ -778,6 +778,13 @@ describe('beats: la storia del carosello sopravvive al round-trip', () => {
     expect(out.seeds[0].slide_count).toBe(6);
   });
 
+  it('taglia le battute al tetto di slide invece di prometterne di più di quante se ne rendano', () => {
+    const beats = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9'];
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel({ beats })] });
+    expect(out.seeds[0].slide_count).toBe(carouselMaxSlides());
+    expect(out.seeds[0].beats).toHaveLength(carouselMaxSlides());
+  });
+
   it('scarta le battute su un seed che non è un carosello', () => {
     const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
       carousel({ format: 'single_image', beats: ['b1', 'b2'] })
