@@ -658,17 +658,21 @@ export const actions: Actions = {
     }
 
     if (!brand) {
-      const { data: inserted, error } = await insertBrandWithSlug(supabase, {
-        id: brandId,
-        org_id: orgId,
-        created_by: user.id,
-        // Left null until people → preview finishes (or the user never resumes — that's fine).
-        onboarding_completed_at: null,
-        name,
-        website: websiteNorm,
-        slug,
-        target_platforms: targetPlatforms.length ? targetPlatforms : null
-      });
+      const { data: inserted, error } = await insertBrandWithSlug(
+        supabase,
+        {
+          id: brandId,
+          org_id: orgId,
+          created_by: user.id,
+          // Left null until people → preview finishes (or the user never resumes — that's fine).
+          onboarding_completed_at: null,
+          name,
+          website: websiteNorm,
+          slug,
+          target_platforms: targetPlatforms.length ? targetPlatforms : null
+        },
+        { idSource: 'client-proposed' }
+      );
       if (error || !inserted) {
         await logOnboardingError(
           supabase,
@@ -792,7 +796,7 @@ export const actions: Actions = {
         target_platforms: targetPlatforms.length ? targetPlatforms : null,
         content_prefs: contentPrefs
       },
-      'id, timezone'
+      { select: 'id, timezone', idSource: 'client-proposed' }
     );
     if (error || !brand) return fail(500, { error: error ?? 'Could not create brand', name, website });
 
