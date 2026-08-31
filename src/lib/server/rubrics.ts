@@ -94,7 +94,7 @@ const RUBRICS_SCHEMA = {
           art_direction: {
             type: 'string' as const,
             description:
-              "How every episode LOOKS, concretely enough for an image generator: the MEDIUM first (documentary photography / ink-and-wash comic panels / flat vector editorial illustration / risograph collage / typographic poster…), then the page grammar (panels, gutters, framing), the palette, the lettering, and what is never shown. This OVERRIDES the brand's default visual style for this series, so two series of the same brand can look deliberately different. One or two sentences, no aspect ratio."
+              "How every episode LOOKS, concretely enough for an image generator: the MEDIUM first (documentary photography / ink-and-wash comic panels / flat vector editorial illustration / risograph collage / typographic poster…), then the page grammar (panels, gutters, framing), the palette, the lettering, and what is never shown. A narrative series ALSO names its recurring protagonist here — silhouette, hair, habitual clothes, one constant object — so every episode redraws the same person. This OVERRIDES the brand's default visual style for this series, so two series of the same brand can look deliberately different. Two or three sentences, no aspect ratio."
           }
         },
         required: ['name', 'promise', 'strategic_role', 'format', 'cadence', 'differentiation', 'rationale', 'art_direction']
@@ -138,6 +138,7 @@ Rules:
 - REGISTER SPREAD — a set where every series informs is a failed set. Cover at least three different registers among: educational/explanatory, narrative (stories of real people, told in episodes), artistic/expressive (the piece is worth looking at even with the copy removed), documentary, positional/opinion. At least ONE series must earn its place emotionally or aesthetically rather than informationally.
 - ART DIRECTION — each series declares its own medium and page grammar, and the set must not be uniform: if one series is photographic, another must be drawn, printed, typographic or collaged. A brand whose subject is people's lived experience deserves a series where those experiences are DRAWN — comic panels, illustrated vignettes, short visual stories — because a stock-looking photo cannot carry a first-person account.
 - A NARRATIVE series carries a real arc per episode (a situation, a turn, a landing), not a list with a story-shaped title.
+- CAST — a narrative series names its RECURRING protagonist inside art_direction, drawn concretely enough to be redrawn identically every episode: silhouette, hair, habitual clothes, one object that is always with them. Describe a character, never a demographic: no ethnicity, no body type, no age bracket. A series whose protagonist changes face between one episode and the next is not a series, and it is the single most common way a drawn series stops reading as one.
 Write ALL prose in ${opts.outputLanguage || 'English'}; keep format values unchanged.
 Return JSON.`;
 
