@@ -114,6 +114,19 @@ function seedFingerprint(seeds: PostSeed[] | null, budget: StrategyBudget): stri
   });
 }
 
+/**
+ * I seed che il modello RIMANDA, fusi su quelli che ha in mano.
+ *
+ * I tool dell'agente prendono un oggetto libero e il modello lo riscrive per intero: quello che
+ * nessuno gli ha descritto lo lascia indietro. Descritto `beats`, ha restituito seed senza angolo,
+ * pillar, giorno e ora — righe di piano vuote. Duplicare qui tutto lo schema del seed sarebbe una
+ * seconda definizione che diverge dalla prima al primo campo aggiunto: si fonde invece di
+ * sostituire, così ciò che il modello dice vince e ciò che tace resta quello che era.
+ */
+export function mergeSeeds(drafted: AnyRec[], sent: AnyRec[]): AnyRec[] {
+  return sent.map((patch, i) => ({ ...(drafted[i] ?? {}), ...(patch ?? {}) }));
+}
+
 function normalizeSeeds(raw: unknown[]): PostSeed[] {
   return (raw ?? []).map((s) => s as PostSeed);
 }
@@ -176,7 +189,7 @@ Workflow:
 7. finish with the final seeds array.
 
 NARRATIVE EPISODES — THE PROTOCOL, NOT OPTIONAL. You do not already understand this brand's subject, and what you assume about it is the most predictable thing you could write. Before ANY beat of a narrative episode:
-  a. SEARCH how people describe these situations IN THEIR OWN WORDS — forum threads, first-person posts, comments, interviews. Search for the account, not for an explanation of the topic.
+  a. SEARCH how people describe these situations IN THEIR OWN WORDS — forum threads, first-person posts, comments, interviews. Search for the ACCOUNT, not for an explanation of the topic: "quali problemi ci sono con X" returns a guide and you will end up retelling a guide. Ask the way the person would have written it — "mi è successo che", "sono andato a", "non me l'hanno dato perché" — and read what comes back looking for one incident with a place, a day and a person in it.
   b. CHOOSE ONE concrete situation that actually turned up. Not a composite, not an average of several: one.
   c. GO DEEP ON THAT ONE — what happens, in what order, who says what, which document or screen or desk is involved, and what it costs the person. Keep asking until you could answer a follow-up about it.
   d. Only then write the beats, and put the situation and its source in "sourced_from".
@@ -338,7 +351,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       description: 'Deterministic check: seed count, platforms, assets, rubrics vs week mix (free).',
       inputSchema: z.object({ seeds: z.array(SEED) }),
       execute: async ({ seeds }) => {
-        const normalized = normalizeSeeds(seeds);
+        const normalized = normalizeSeeds(mergeSeeds(working?.seeds ?? [], seeds));
         const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls });
         if (normalized.length) {
           working = {
@@ -382,7 +395,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       execute: async ({ seeds, reason }) => {
         const gate = consumeRepairBudget(budget);
         if (!gate.ok) return { error: gate.error };
-        const normalized = normalizeSeeds(seeds);
+        const normalized = normalizeSeeds(mergeSeeds(working?.seeds ?? [], seeds));
         working = {
           theme: working?.theme ?? '',
           rationale: working?.rationale ?? '',
@@ -406,7 +419,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       }),
       execute: async ({ theme, rationale, do_dont, seeds, notes }) => {
         const finalSeeds = normalizeSeeds(
-          (seeds?.length ? seeds : null) ?? working?.seeds ?? []
+          seeds?.length ? mergeSeeds(working?.seeds ?? [], seeds) : (working?.seeds ?? [])
         );
         const strategy: WeeklyStrategy = {
           theme: theme ?? working?.theme ?? '',

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Senza questo, il test leggeva il .env dello sviluppatore: con WEEK_PLANNER_AGENT_ENABLED=false
 // in locale falliva sempre, e quello che verificava non era il default ma la macchina.
 vi.mock('$env/dynamic/private', () => ({ env: {} }));
-import { MAX_WEEK_PLANNER_DRAFTS, MAX_WEEK_PLANNER_RESEARCH, weekPlannerAgentEnabled } from './week-planner-agent';
+import { MAX_WEEK_PLANNER_DRAFTS, MAX_WEEK_PLANNER_RESEARCH, mergeSeeds, weekPlannerAgentEnabled } from './week-planner-agent';
 import { consumeDraftBudget, createStrategyBudget } from './strategy-agent';
 
 describe('week planner agent', () => {
@@ -38,5 +38,40 @@ describe('tetto alle ricerche', () => {
     const CERCA = 1, SCEGLI = 1, APPROFONDISCI = 3;
     expect(MAX_WEEK_PLANNER_RESEARCH).toBeGreaterThanOrEqual(CERCA + SCEGLI + APPROFONDISCI);
     expect(MAX_WEEK_PLANNER_RESEARCH).toBeLessThanOrEqual(40);
+  });
+});
+
+// I tool dell'agente prendono i seed come oggetti liberi, e il modello li RIMANDA: quello che non
+// gli è stato descritto lo lascia indietro. Descritto solo `beats`, ha restituito seed senza
+// angolo, pillar, giorno e ora — righe di piano vuote e un produttore senza niente da eseguire.
+describe('mergeSeeds', () => {
+  const drafted = [
+    { platform: 'instagram', angle: 'la delega a se stessi', pillar: 'burocrazia', day: 'Monday', time: '09:00' },
+    { platform: 'instagram', angle: 'il badge', pillar: 'lavoro', day: 'Thursday', time: '18:00' }
+  ];
+
+  it('tiene i campi che il modello non ha rimandato', () => {
+    const out = mergeSeeds(drafted, [{ beats: [{ shows: 'a', who: 'b', thinks: 'c' }] }, {}]);
+    expect(out[0].angle).toBe('la delega a se stessi');
+    expect(out[0].day).toBe('Monday');
+    expect(out[0].beats).toHaveLength(1);
+    expect(out[1].angle).toBe('il badge');
+  });
+
+  it('lascia vincere quello che il modello manda davvero', () => {
+    const out = mergeSeeds(drafted, [{ angle: 'angolo riscritto' }]);
+    expect(out[0].angle).toBe('angolo riscritto');
+    expect(out[0].pillar).toBe('burocrazia');
+  });
+
+  it('accetta un seed in più rispetto alla bozza', () => {
+    const out = mergeSeeds(drafted, [{}, {}, { platform: 'instagram', angle: 'terzo' }]);
+    expect(out).toHaveLength(3);
+    expect(out[2].angle).toBe('terzo');
+  });
+
+  it('senza bozza restituisce quello che è arrivato', () => {
+    const out = mergeSeeds([], [{ angle: 'solo questo' }]);
+    expect(out).toEqual([{ angle: 'solo questo' }]);
   });
 });
