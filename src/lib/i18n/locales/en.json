@@ -3326,7 +3326,7 @@
       "subject": "Suggested visual",
       "beats": "Story (one beat per slide)",
       "artDirection": "Art direction (medium)",
-      "source": "Where the story comes from"
+      "source": "Where the story comes from (provenance, never published)"
     },
     "status": {
       "todo": "To produce",
@@ -3385,7 +3385,7 @@
       "body": "A week that has already gone by can't be planned. Pick the current week or a future one."
     },
     "beatsPlaceholder": "One line per slide: action | who is in frame | what they think | speaker: line",
-    "sourcePlaceholder": "The real situation this retells, and its link",
+    "sourcePlaceholder": "The real situation this retells, and its link — the names stay here, the episode is anonymised",
     "noSource": "This episode has no source"
   },
   "setup": {

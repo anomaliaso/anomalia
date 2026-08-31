@@ -3334,7 +3334,7 @@
       "subject": "Visual suggerito",
       "beats": "Storia (una battuta per slide)",
       "artDirection": "Direzione artistica (medium)",
-      "source": "Da dove viene la storia"
+      "source": "Da dove viene la storia (provenienza, non si pubblica)"
     },
     "status": {
       "todo": "Da produrre",
@@ -3386,7 +3386,7 @@
     },
     "producedBeforeStop": "{n} post sono stati creati prima dello stop.",
     "beatsPlaceholder": "Una riga per slide: azione | chi è in scena | cosa pensa | chi parla: battuta",
-    "sourcePlaceholder": "La situazione vera che racconta, e il link",
+    "sourcePlaceholder": "La situazione vera che racconta, e il link — i nomi restano qui, l'episodio è anonimo",
     "noSource": "Questo episodio non ha una fonte"
   },
   "setup": {
