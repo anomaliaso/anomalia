@@ -9390,7 +9390,8 @@
       "label": "Nouvelle réponse",
       "message": "Ouvrez le chat pour la lire",
       "open": "Ouvrir le chat de {name}",
-      "count": "{count, plural, one {# réponse non lue} other {# réponses non lues}}"
+      "count": "{count, plural, one {# réponse non lue} other {# réponses non lues}}",
+      "dismiss": "Ignorer"
     },
     "docPanel": {
       "subtitle": "Depuis la base de connaissances",
