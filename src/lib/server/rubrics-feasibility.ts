@@ -272,3 +272,29 @@ export async function loadBatchFeasibilityContext(
     weekMix
   };
 }
+
+/**
+ * Toglie la STORIA a un episodio la cui fonte non è ancorata a niente che sia stato davvero letto.
+ *
+ * Serve sul ripiego: quando l'agente esaurisce i tentativi il batch esce comunque, perché un
+ * difetto minore è meglio del niente. «La fonte è inventata» però non è un difetto minore — è la
+ * vita di qualcuno raccontata su una citazione falsa, e pubblicarla con una nota che nessuno legge
+ * è peggio che non pubblicarla. Non si butta il post: si butta la PRETESA. Restano l'angolo e il
+ * formato, sparisce il racconto, e il seed continua come un post qualunque.
+ *
+ * Senza l'insieme degli URL letti non giudica: non potrebbe dimostrare niente.
+ */
+export function stripUngroundedStories(seeds: PostSeed[], researchedUrls?: Set<string>): number {
+  if (!researchedUrls) return 0;
+  let stripped = 0;
+  for (const seed of seeds) {
+    const beats = normalizeBeats(seed.beats) ?? [];
+    const isStory = beats.some((b) => b.thinks?.trim());
+    if (!isStory) continue;
+    if (citesResearchedPage(seed.sourced_from, researchedUrls)) continue;
+    seed.beats = undefined;
+    seed.sourced_from = undefined;
+    stripped += 1;
+  }
+  return stripped;
+}

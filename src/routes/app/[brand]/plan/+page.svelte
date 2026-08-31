@@ -278,6 +278,24 @@
   }
 </script>
 
+{#snippet spanPicker()}
+  <!-- La durata del batch. Il selettore compare SOLO dove il piano tariffario la consente davvero:
+       offrire quattro settimane e produrne due in silenzio è peggio che non offrirle. -->
+  {#if data.batchWeeks && data.batchWeeks.max > data.batchWeeks.standard}
+    <label class="span-pick">
+      <span>{$_('weekPlan.span.label')}</span>
+      <select name="weeks">
+        <option value={data.batchWeeks.standard}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.standard } })}</option>
+        <option value={data.batchWeeks.max}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.max } })}</option>
+      </select>
+    </label>
+  {:else}
+    <input type="hidden" name="weeks" value={data.batchWeeks?.standard ?? 2} />
+  {/if}
+{/snippet}
+
+
+
 <svelte:head><title>Anomalia — {$_('weekPlan.title')}</title></svelte:head>
 
 <div class="content">
@@ -506,6 +524,7 @@
         <p>{$_('weekPlan.future.body')}</p>
         <form method="POST" action="?/plan" use:enhance={working('plan')}>
           <input type="hidden" name="week" value={wk} />
+          {@render spanPicker()}
           <button class="btn-primary" disabled={busy === 'plan' || data.quota.remaining <= 0}>
             {busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.future.cta', { values: { n: wk + 1 } })}
           </button>
@@ -528,6 +547,7 @@
             </button>
           </form>
           <form method="POST" action="?/plan" use:enhance={working('plan')}>
+            {@render spanPicker()}
             <button class="btn-ghost" disabled={busy !== '' || data.quota.remaining <= 0}>
               {busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.empty.cta')}
             </button>
@@ -719,17 +739,7 @@
         <div class="ab-actions">
           <form method="POST" action="?/plan" use:enhance={working('plan')}>
             <input type="hidden" name="week" value={wk} />
-            {#if data.batchWeeks && data.batchWeeks.max > data.batchWeeks.standard}
-              <label class="span-pick">
-                <span>{$_('weekPlan.span.label')}</span>
-                <select name="weeks">
-                  <option value={data.batchWeeks.standard}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.standard } })}</option>
-                  <option value={data.batchWeeks.max}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.max } })}</option>
-                </select>
-              </label>
-            {:else}
-              <input type="hidden" name="weeks" value={data.batchWeeks?.standard ?? 2} />
-            {/if}
+            {@render spanPicker()}
             <button class="btn-ghost" disabled={busy !== '' || producing}>{busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.replan') + ' ↻'}</button>
           </form>
           <button

@@ -11,7 +11,8 @@ import type { WeeklyStrategy, PostSeed } from '$lib/server/content-preview';
 import { draftWeekSeeds } from '$lib/server/content-preview';
 import {
   checkRubricsAndBatchFeasibility,
-  loadBatchFeasibilityContext
+  loadBatchFeasibilityContext,
+  stripUngroundedStories
 } from '$lib/server/rubrics-feasibility';
 import {
   addStrategyStepCost,
@@ -574,6 +575,15 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       : null);
   if (!resolved) {
     throw new Error('Week planner agent finished without seeds');
+  }
+  // Sul RIPIEGO il batch esce con le sue violazioni: un difetto minore è meglio del niente. Una
+  // fonte inventata però non è un difetto minore, ed è l'unica che non può passare di qui: si
+  // toglie la storia, non il post. Sul percorso `finished` il gate l'ha già rifiutata.
+  if (!finished) {
+    const stripped = stripUngroundedStories(resolved.strategy.seeds, researchedUrls);
+    if (stripped) {
+      console.warn(`[week-planner-agent] ${stripped} episodio/i senza fonte verificata: storia rimossa, post tenuto`);
+    }
   }
 
   return {

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   checkRubricsAndBatchFeasibility,
   checkRubricsInEditorialPlan,
-  rubricNameSet
+  rubricNameSet,
+  stripUngroundedStories
 } from './rubrics-feasibility';
 import type { EditorialPlan } from './editorial-plan';
 import type { PostSeed } from './content-preview';
@@ -391,5 +392,48 @@ describe('mix per settimana', () => {
   it('un mix senza settimana vale per tutto il batch, come prima', () => {
     const v = checkRubricsAndBatchFeasibility([ep(0), ep(1)], ctxFor([{ type: 'Giorni normali', count: 2 }]));
     expect(v).toEqual([]);
+  });
+});
+
+// Quando l'agente esaurisce i tentativi, il batch esce lo stesso: meglio un difetto minore che
+// niente. Ma «la fonte è inventata» non è un difetto minore — è una vita altrui raccontata su una
+// citazione falsa. Lì non si butta il post: si butta la PRETESA, e il post continua senza storia.
+describe('stripUngroundedStories', () => {
+  const story = (over: Record<string, unknown> = {}) =>
+    seed({
+      format: 'carousel',
+      slide_count: 3,
+      beats: [
+        { shows: 'a', thinks: 'x' },
+        { shows: 'b', thinks: 'y' },
+        { shows: 'c', thinks: 'z' }
+      ],
+      ...over
+    });
+
+  it('toglie storia e fonte a un episodio che cita una pagina mai letta', () => {
+    const seeds = [story({ sourced_from: 'Linee guida CNOPD' })];
+    const stripped = stripUngroundedStories(seeds, new Set(['https://vero.example/x']));
+    expect(stripped).toBe(1);
+    expect(seeds[0].beats).toBeUndefined();
+    expect(seeds[0].sourced_from).toBeUndefined();
+  });
+
+  it('lascia intatto un episodio ancorato davvero', () => {
+    const seeds = [story({ sourced_from: 'racconto — https://vero.example/x' })];
+    expect(stripUngroundedStories(seeds, new Set(['https://vero.example/x']))).toBe(0);
+    expect(seeds[0].beats).toHaveLength(3);
+  });
+
+  it('non tocca una guida, che una fonte non la deve avere', () => {
+    const seeds = [seed({ format: 'carousel', slide_count: 3, beats: ['p1', 'p2', 'p3'] })];
+    expect(stripUngroundedStories(seeds, new Set<string>())).toBe(0);
+    expect(seeds[0].beats).toHaveLength(3);
+  });
+
+  it('senza ricerche non giudica: non può dimostrare niente', () => {
+    const seeds = [story({ sourced_from: 'nota dello Studio' })];
+    expect(stripUngroundedStories(seeds, undefined)).toBe(0);
+    expect(seeds[0].beats).toHaveLength(3);
   });
 });
