@@ -3112,9 +3112,8 @@
     },
     "pick": {
       "title": "Da chi parti",
-      "sub": "Scegli con chi cominci. Agli altri puoi scrivere quando vuoi.",
+      "sub": "Esplora il tuo team di agenti AI esperti nel marketing.",
       "start": "Inizia la chat",
-      "own": "Creane uno mio",
       "prev": "Agente precedente",
       "next": "Agente successivo",
       "customDesc": "Un agente tuo"

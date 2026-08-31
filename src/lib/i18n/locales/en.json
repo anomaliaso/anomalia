@@ -3112,9 +3112,8 @@
     },
     "pick": {
       "title": "Meet your first agent",
-      "sub": "Pick who you start with. You can talk to any of the others whenever you want.",
+      "sub": "Explore your team of AI agents who know marketing.",
       "start": "Start chat",
-      "own": "Create my own",
       "prev": "Previous agent",
       "next": "Next agent",
       "customDesc": "Your own agent"
