@@ -17,6 +17,8 @@ import { resolve } from 'node:path';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { createFixture, destroyFixture, type Fixture } from './durability/fixture';
 import { runWeekPlannerAgent } from '$lib/server/week-planner-agent';
+import { executePlan } from '$lib/server/content-preview/caption-quality';
+import { renderPostImage, aspectRatioFor, brandVisualDirective, carouselSeriesDirective } from '$lib/server/content-preview/images';
 
 const OUT = resolve(import.meta.dirname, '../../eval-results/agent');
 
@@ -80,8 +82,51 @@ async function waitForRun(
   return null;
 }
 
+const MAX_RENDERED = 12;
+
+function inlinePart(dataUrl: string) {
+  const [head, data] = dataUrl.split(',');
+  return { inlineData: { mimeType: head.slice(5).split(';')[0], data } };
+}
+
+/** I seed dell'agente fino in fondo: caption, prompt slide, immagini. Senza, la sonda misura solo
+ *  il testo e ogni regola sulla messa in scena resta un'affermazione. */
+async function renderPosts(profile: Record<string, unknown>, strategy: Parameters<typeof executePlan>[2]) {
+  const posts = await executePlan(null as never, profile, strategy, { language: 'Italian' });
+  const brandLook = brandVisualDirective(KIT.brand_colors, null);
+  const files: string[] = [];
+  let budget = MAX_RENDERED;
+
+  for (const [i, post] of posts.entries()) {
+    const prompts = (post.image_prompts ?? []).length ? post.image_prompts! : post.image_prompt ? [post.image_prompt] : [];
+    const aspectRatio = aspectRatioFor(post.platform, post.format);
+    let anchor: ReturnType<typeof inlinePart> | undefined;
+    for (const [n, prompt] of prompts.entries()) {
+      if (budget <= 0) return { posts, files };
+      budget -= 1;
+      const full = prompts.length > 1 && n > 0 ? prompt + carouselSeriesDirective(n, prompts.length) : prompt;
+      const dataUrl = await renderPostImage(null as never, full, {
+        visualStyle: KIT.visual_style,
+        brandLook,
+        aspectRatio,
+        moodImages: anchor ? [anchor] : []
+      }).catch((e) => {
+        console.error(`  slide ${i + 1}.${n + 1} fallita: ${e instanceof Error ? e.message : e}`);
+        return undefined;
+      });
+      if (!dataUrl) continue;
+      anchor ??= inlinePart(dataUrl);
+      const file = `post-${i + 1}-slide-${n + 1}.png`;
+      writeFileSync(resolve(OUT, 'slides', file), Buffer.from(dataUrl.split(',')[1], 'base64'));
+      files.push(file);
+      console.log(`  reso ${file}`);
+    }
+  }
+  return { posts, files };
+}
+
 async function main() {
-  mkdirSync(OUT, { recursive: true });
+  mkdirSync(resolve(OUT, 'slides'), { recursive: true });
   const admin = createAdminClient();
   let fixture: Fixture | null = null;
 
@@ -151,7 +196,17 @@ async function main() {
       `## Note dell'agente\n${result.notes}`
     ].join('\n');
 
-    writeFileSync(resolve(OUT, 'agente.md'), report);
+    console.log('produco caption e immagini…');
+    const { posts, files } = await renderPosts(profile, result.strategy);
+    writeFileSync(
+      resolve(OUT, 'agente.md'),
+      `${report}\n\n## I post prodotti\n\n${posts
+        .map((p, i) => {
+          const slides = (p.image_prompts ?? []).map((sp, n) => `   ${n + 1}. ${sp}`).join('\n');
+          return `### ${i + 1}. ${p.platform} · ${p.format}\n\n${p.caption}\n\n${slides ? `**Slide:**\n${slides}` : `**Immagine:** ${p.image_prompt}`}`;
+        })
+        .join('\n\n---\n\n')}\n\n${files.length} immagini in slides/\n`
+    );
     writeFileSync(resolve(OUT, 'agente.json'), JSON.stringify({ result, steps: run?.steps }, null, 2));
     console.log(`\nricerche: ${researches.length} · seed con fonte: ${result.strategy.seeds.filter((s) => s.sourced_from).length}/${result.strategy.seeds.length}`);
     console.log(`fatto: ${OUT}/agente.md`);
