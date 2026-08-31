@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
+import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
 
 import type { Rubric } from './rubrics';
 
@@ -790,5 +790,31 @@ describe('beats: la storia del carosello sopravvive al round-trip', () => {
       carousel({ format: 'single_image', beats: ['b1', 'b2'] })
     ] });
     expect(out.seeds[0].beats).toBeUndefined();
+  });
+});
+
+// Il render riempie da solo una didascalia vuota, e la riempie in inglese: la slide 1 di un
+// carosello a fumetti è tornata con «ENTERING ATELIER RIVES — BESPOKE TAILORING» perché il prompt
+// chiedeva "hand-lettered caption box" senza dire cosa ci andasse scritto.
+describe('sealOnImageText', () => {
+  const SEAL = 'Absolutely NO text';
+
+  it('sigilla un prompt che non cita nessuna stringa esatta', () => {
+    const out = sealOnImageText('Comic panel of a person opening a shop door. Hand-lettered caption box.');
+    expect(out).toContain(SEAL);
+  });
+
+  it('lascia stare un prompt che la stringa la cita', () => {
+    const p = 'Comic panel with a speech bubble: "Accompagni la sposa?".';
+    expect(sealOnImageText(p)).toBe(p);
+  });
+
+  it('non sigilla due volte', () => {
+    const once = sealOnImageText('Un ritratto senza scritte.');
+    expect(sealOnImageText(once)).toBe(once);
+  });
+
+  it('non tocca un prompt vuoto (i post di testo non hanno immagine)', () => {
+    expect(sealOnImageText('')).toBe('');
   });
 });

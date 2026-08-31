@@ -27,7 +27,8 @@ export {
   houseVoiceFor,
   ownerCaptionEditPairs,
   ownerEditPairsBlock,
-  postQcPayload
+  postQcPayload,
+  sealOnImageText
 } from './content-preview/caption-quality';
 
 export {

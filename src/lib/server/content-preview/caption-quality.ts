@@ -196,6 +196,19 @@ export type CaptionKnowledgeCtx = {
 
 // PASS 2 — caption + image_prompt per ogni seed. I campi strutturali del seed sono autoritativi:
 // il mestiere del modello si ricuce sopra per INDICE, così la spread deliberata sopravvive.
+// Il renderer riempie da solo qualunque testo debba inventare, e lo inventa in inglese: una
+// didascalia chiesta e non scritta torna come una frase estranea impressa nell'immagine. La regola
+// («o citi la stringa esatta, o l'immagine non ha testo») viveva solo nel prompt, dove si salta —
+// qui è deterministica: nessuna stringa fra virgolette, nessun testo. La frase è la stessa del
+// percorso articoli, non una seconda formulazione che diverge alla prima modifica.
+const NO_TEXT_SEAL = 'Absolutely NO text, letters, words, captions or logos anywhere in the image.';
+
+export function sealOnImageText(prompt: string): string {
+  const p = String(prompt ?? '').trim();
+  if (!p || p.includes(NO_TEXT_SEAL)) return prompt;
+  return /"[^"]+"/.test(p) ? prompt : `${p} ${NO_TEXT_SEAL}`;
+}
+
 export async function executePlan(
   ai: GoogleGenAI,
   profile: BrandProfile,
@@ -275,7 +288,7 @@ Below are ${strategy.seeds.length} post seeds, in order. Produce EXACTLY one pos
 - Write a scroll-stopping, on-brand caption that delivers that seed's ANGLE within the theme. Match the PLATFORM PLAYBOOK above for THAT seed's platform — especially its length and hashtag count (e.g. a LinkedIn post is long-form with several short paragraphs, an X post is one tight line). Never pad a short-form network or truncate a long-form one.
 - Write an "image_prompt" describing a scroll-stopping image (for video/reel/short formats describe a strong cover frame) that matches the VISUAL STYLE above. The seed's "proposed scene" (subject/setting/props) is the strategist's PROPOSAL, not an order: use it as your default, but when you have a genuinely STRONGER scene for that seed's ANGLE, shoot yours instead — then fill "scene_deviation" with ONE line explaining why yours serves the angle better (empty string when you follow the proposal). A deviation changes the staging, never the point: it must still deliver the seed's angle and pillar and respect the DO/DON'T, and must stay DISTINCT from every other seed's scene — never converge multiple posts onto the same shot. MEDIUM: honour the visual style's GRAPHIC LANGUAGE — if the brand's style is an illustrated/graphic medium (e.g. painterly digital illustration, editorial graphics, collage), the image_prompt MUST describe an image in THAT exact medium and never a photograph; describe a photorealistic photo only when the brand's style is photographic or no style is given. Never switch a graphic-language brand to lifestyle photography for "variety" — vary subject, composition and palette within its medium instead. Do NOT specify an aspect ratio or framing like "square" — the renderer sizes the image to the platform. When the seed names a "person": describe ONLY the scene, pose energy, expression vibe, lighting, camera angle, environment and WARDROBE (clothes/accessories). CRITICAL — do NOT describe gender, age, body type, face, hair, skin, ethnicity or any physical appearance (androgenous names must never be guessed as male/female in the prompt). Identity is locked later from reference photos. EXCEPTION: when the seed's media is "text", leave "image_prompt" as an empty string. Never invent a different human than the named person; if the seed has no person, do not invent an anonymous model either — keep the scene without a stranger's face.
 - IMAGE CRAFT (single images): pick ONE focal subject and compose around it — leave roughly a third of the frame as calm negative space (sky, wall, clean surface) on one side, so the image breathes in the feed and a headline has somewhere to live. Never fill the frame edge-to-edge with competing elements.
-- ON-IMAGE TEXT: the renderer garbles any text it has to invent — this is its classic failure. If (and only if) the design needs words in the image, use AT MOST 4 words and put the EXACT string in double quotes inside the image_prompt (e.g. …with the headline "MENO SPRECHI" in bold brand type). No quoted string in the prompt = state that the image contains NO text. EXCEPTION — a seed whose ART DIRECTION is a lettered medium (comic panels, poster, editorial typography): words are part of the form, so one short lettered line per panel is allowed, still quoted VERBATIM and still short (a caption box or a balloon, never a paragraph).
+- ON-IMAGE TEXT: the renderer garbles any text it has to invent — this is its classic failure. If (and only if) the design needs words in the image, use AT MOST 4 words and put the EXACT string in double quotes inside the image_prompt (e.g. …with the headline "MENO SPRECHI" in bold brand type). No quoted string in the prompt = state that the image contains NO text. EXCEPTION — a seed whose ART DIRECTION is a lettered medium (comic panels, poster, editorial typography): words are part of the form, so one short lettered line per panel is allowed. The obligation is the SAME and it is absolute: name the balloon or caption box ONLY together with its exact words in double quotes, in the brand's language, short enough to letter (a line, never a paragraph). Asking for "a hand-lettered caption box" without the words in it is the WORST case, not a lighter one — the renderer fills the empty box with invented English.
 - LIBRARY MEDIA: when a seed carries "library_media: <uuid> (use_as_is)", the user's real photo WILL be published as the post image — set "image_prompt" to a short note like "Use library asset as-is" (it will not be rendered by AI). When mode is "(composite)", write an image_prompt that INTEGRATES that exact uploaded asset pixel-faithfully into a branded social frame (keep the subject identical; only add layout/branding around it) — never invent a replacement subject.
 - STORY BEATS: when a seed carries them, they are BINDING and they are the post. Slide k renders beat k — same order, same count, nothing merged, nothing added, nothing reordered. You write how each beat is SHOWN (framing, gesture, what is in the panel, the words lettered in it); you never rewrite what it says. The caption serves the story, it does not repeat it slide by slide.
 - ART DIRECTION: when a seed carries one, it OVERRIDES the brand's VISUAL STYLE for that post — medium, page grammar and palette come from there. A seed drawn as comic panels comes back as comic panels: never a photograph, never "photorealistic", and never softened back toward the brand's default look for consistency. Repeat the medium words verbatim in EVERY slide prompt of that post, or the renderer drifts to a photo by slide three.
@@ -310,7 +323,7 @@ Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
     post.caption = String(out[i]?.caption ?? '');
     // image_prompt solo per i post immagine, mai per text o link.
     if (out[i]?.title) post.title = String(out[i].title);
-    post.image_prompt = post.media === 'text' || post.media === 'link' ? '' : String(out[i]?.image_prompt ?? '');
+    post.image_prompt = post.media === 'text' || post.media === 'link' ? '' : sealOnImageText(String(out[i]?.image_prompt ?? ''));
     // Mai fisico sessuato in un prompt person-led: il renderer segue il testo più dei riferimenti.
     if (post.person && post.image_prompt) post.image_prompt = scrubPersonAppearance(post.image_prompt);
     // Un post immagine DEVE avere un image_prompt: il copywriter a volte lo lascia vuoto quando
@@ -326,7 +339,7 @@ Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
     // immagine singola, non si spedisce mezza serie.
     if (post.format === 'carousel') {
       const want = Math.max(CAROUSEL_MIN_SLIDES, Math.min(carouselMaxSlides(), seed.slide_count ?? 5));
-      let slides = strArr(out[i]?.slide_prompts).slice(0, want);
+      let slides = strArr(out[i]?.slide_prompts).slice(0, want).map(sealOnImageText);
       if (post.person) slides = slides.map(scrubPersonAppearance);
       if (slides.length >= 2) {
         post.image_prompts = slides;
