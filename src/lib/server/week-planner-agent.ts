@@ -46,6 +46,21 @@ import type { Rubric } from '$lib/server/rubrics';
 type AnyRec = Record<string, any>;
 type BrandProfile = AnyRec;
 
+// I tool dell'agente prendevano i seed come `z.record(z.string(), z.unknown())`, cioè senza forma.
+// Senza una forma descritta il modello ripiega sulla più semplice, e le battute tornavano stringhe:
+// riquadri senza voce, che il gate classificava come guida e lasciava passare senza fonte. Il resto
+// del seed resta libero — qui serve descrivere SOLO ciò che si stava perdendo.
+const BEAT = z.object({
+  shows: z.string().describe("L'azione: cosa succede in questo riquadro."),
+  who: z.string().describe('CHI è nell\'inquadratura, dove sta ciascuno e cosa fa la sua faccia. Il generatore disegna solo chi nomini e inventa il resto.'),
+  thinks: z.string().describe('La voce di dentro, prima persona, sei parole al massimo. Vuota solo su una guida.'),
+  says: z
+    .object({ speaker: z.string().describe('Chi parla, come compare in "who": la coda del balloon punta a lui.'), line: z.string() })
+    .optional()
+    .describe('Il parlato e chi lo dice. Assente quando nessuno apre bocca.')
+});
+const SEED = z.object({ beats: z.array(BEAT).optional() }).catchall(z.unknown());
+
 export const MAX_WEEK_PLANNER_STEPS = 40;
 export const MAX_WEEK_PLANNER_DRAFTS = 4;
 export const MAX_WEEK_PLANNER_REPAIRS = 8;
@@ -321,7 +336,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
 
     check_batch_feasibility: tool({
       description: 'Deterministic check: seed count, platforms, assets, rubrics vs week mix (free).',
-      inputSchema: z.object({ seeds: z.array(z.record(z.string(), z.unknown())) }),
+      inputSchema: z.object({ seeds: z.array(SEED) }),
       execute: async ({ seeds }) => {
         const normalized = normalizeSeeds(seeds);
         const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls });
@@ -361,7 +376,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
     repair_seeds: tool({
       description: `Patch seeds to fix feasibility violations (max ${MAX_WEEK_PLANNER_REPAIRS}/run).`,
       inputSchema: z.object({
-        seeds: z.array(z.record(z.string(), z.unknown())),
+        seeds: z.array(SEED),
         reason: z.string()
       }),
       execute: async ({ seeds, reason }) => {
@@ -386,7 +401,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
         theme: z.string().optional(),
         rationale: z.string().optional(),
         do_dont: z.string().optional(),
-        seeds: z.array(z.record(z.string(), z.unknown())).optional(),
+        seeds: z.array(SEED).optional(),
         notes: z.string()
       }),
       execute: async ({ theme, rationale, do_dont, seeds, notes }) => {

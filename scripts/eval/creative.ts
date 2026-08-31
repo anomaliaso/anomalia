@@ -103,7 +103,7 @@ function rubricheReport(rubrics: Rubric[]): string {
 function pianoReport(seeds: PostSeed[]): string {
   const rows = seeds.map((s, i) => {
     const beats = (s.beats ?? [])
-      .map((b, n) => `   ${n + 1}. ${b.shows}${b.thinks ? `\n      pensa: «${b.thinks}»` : ''}${b.says ? `\n      dice: ${b.says}` : ''}`)
+      .map((b, n) => `   ${n + 1}. ${b.shows}${b.who ? `\n      in scena: ${b.who}` : ''}${b.thinks ? `\n      pensa: «${b.thinks}»` : ''}${b.says ? `\n      ${b.says.speaker} dice: «${b.says.line}»` : ''}`)
       .join('\n');
     return [
       `### ${i + 1}. ${s.platform} · ${s.format}${s.slide_count ? ` (${s.slide_count} slide)` : ''}${s.rubric ? ` · rubrica "${s.rubric}"` : ''}`,

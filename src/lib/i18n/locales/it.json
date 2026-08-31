@@ -3385,7 +3385,7 @@
       "Sunday": "Domenica"
     },
     "producedBeforeStop": "{n} post sono stati creati prima dello stop.",
-    "beatsPlaceholder": "Una riga per slide: cosa si vede | cosa pensa | cosa dice qualcuno",
+    "beatsPlaceholder": "Una riga per slide: azione | chi è in scena | cosa pensa | chi parla: battuta",
     "sourcePlaceholder": "La situazione vera che racconta, e il link",
     "noSource": "Questo episodio non ha una fonte"
   },

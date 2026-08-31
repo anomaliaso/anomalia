@@ -59,6 +59,27 @@ const RUBRICS = [
   }
 ];
 
+type RunRow = { steps: unknown; violations: string[] | null; status: string; cost_usd_estimate: number | null };
+
+async function waitForRun(
+  admin: ReturnType<typeof createAdminClient>,
+  brandId: string,
+  attempts = 20
+): Promise<RunRow | null> {
+  for (let i = 0; i < attempts; i++) {
+    const { data } = await admin
+      .from('agent_runs')
+      .select('steps, violations, status, cost_usd_estimate')
+      .eq('brand_id', brandId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as RunRow;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return null;
+}
+
 async function main() {
   mkdirSync(OUT, { recursive: true });
   const admin = createAdminClient();
@@ -92,13 +113,10 @@ async function main() {
       deadlineMs: 900_000
     });
 
-    const { data: run } = await admin
-      .from('agent_runs')
-      .select('steps, violations, status, cost_usd_estimate')
-      .eq('brand_id', fixture.brandId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // persistAgentRun scrive senza attendere (`void admin…`): letta subito, la riga non c'è ancora e
+    // il report annuncia "0 chiamate" di un agente che ha lavorato — una sonda che mente sul nulla.
+    const run = await waitForRun(admin, fixture.brandId);
+    if (!run) console.warn('ATTENZIONE: nessuna riga agent_runs — il conteggio dei tool NON è misurato');
 
     const steps = (run?.steps ?? []) as Array<{ step: number; toolCalls?: Array<{ name: string; input?: unknown }> }>;
     const calls = steps.flatMap((s) => (s.toolCalls ?? []).map((c) => c.name));
@@ -107,17 +125,17 @@ async function main() {
     const report = [
       `# L'agente al lavoro — ${Math.round((Date.now() - t0) / 1000)}s · $${(result.costUsd ?? 0).toFixed(3)} · ${run?.status}`,
       '',
-      `## Cosa ha chiamato (${calls.length} chiamate)`,
+      `## Cosa ha chiamato (${calls.length} chiamate${run ? '' : ' — RIGA MANCANTE, non misurato'})`,
       calls.map((c, i) => `${i + 1}. ${c}`).join('\n') || '_niente_',
       '',
-      `## Le ${researches.length} ricerche`,
+      `## Le ${researches.length} ricerche${run ? '' : ' — NON MISURATE'}`,
       researches.map((r, i) => `${i + 1}. ${JSON.stringify(r)}`).join('\n') || '_nessuna — ha scritto senza cercare_',
       '',
       '## I seed',
       result.strategy.seeds
         .map((s, i) => {
           const beats = (s.beats ?? [])
-            .map((b, n) => `   ${n + 1}. ${b.shows}${b.thinks ? `\n      pensa: «${b.thinks}»` : ''}${b.says ? `\n      dice: ${b.says}` : ''}`)
+            .map((b, n) => `   ${n + 1}. ${b.shows}${b.who ? `\n      in scena: ${b.who}` : ''}${b.thinks ? `\n      pensa: «${b.thinks}»` : ''}${b.says ? `\n      ${b.says.speaker} dice: «${b.says.line}»` : ''}`)
             .join('\n');
           return [
             `### ${i + 1}. ${s.format}${s.rubric ? ` · "${s.rubric}"` : ''}`,

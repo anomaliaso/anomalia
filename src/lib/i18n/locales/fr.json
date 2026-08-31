@@ -3384,7 +3384,7 @@
       "title": "La semaine {n} est déjà passée",
       "body": "Impossible de planifier une semaine déjà passée. Choisissez la semaine en cours ou une semaine à venir."
     },
-    "beatsPlaceholder": "Une ligne par slide : ce qu’on voit | ce qu’elle pense | ce que quelqu’un dit",
+    "beatsPlaceholder": "Une ligne par slide : action | qui est à l’image | ce qu’elle pense | qui parle : réplique",
     "sourcePlaceholder": "La situation réelle racontée, et son lien",
     "noSource": "Cet épisode n’a pas de source"
   },

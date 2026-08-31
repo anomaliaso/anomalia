@@ -772,9 +772,9 @@ describe('beats: la storia del carosello sopravvive al round-trip', () => {
 
   it('porta beats e art_direction attraverso la normalizzazione', () => {
     const beats = [
-      { shows: 'lo sportello 4 del CUP', thinks: 'speriamo legga subito' },
-      { shows: 'la finestra di errore sul monitor', thinks: 'ecco, di nuovo' },
-      { shows: 'la cornetta alzata per l\'assistenza', thinks: 'mezz\'ora, minimo' }
+      { shows: 'lo sportello 4 del CUP', who: 'Sam allo sportello', thinks: 'speriamo legga subito' },
+      { shows: 'la finestra di errore sul monitor', who: 'lo schermo, di taglio', thinks: 'ecco, di nuovo' },
+      { shows: 'la cornetta alzata', who: "l'operatrice", thinks: 'mezz\'ora, minimo' }
     ];
     const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
       carousel({ beats, art_direction: 'fumetto a due colori' })
@@ -790,21 +790,32 @@ describe('beats: la storia del carosello sopravvive al round-trip', () => {
       carousel({ beats: ['a', 'b', 'c'] })
     ] });
     expect(out.seeds[0].beats).toEqual([
-      { shows: 'a', thinks: '' }, { shows: 'b', thinks: '' }, { shows: 'c', thinks: '' }
+      { shows: 'a', who: '', thinks: '' }, { shows: 'b', who: '', thinks: '' }, { shows: 'c', who: '', thinks: '' }
     ]);
   });
 
-  it('tiene il dialogo quando c\'è e non lo inventa quando manca', () => {
+  // La coda del balloon è finita addosso alla protagonista perché nessuno diceva CHI parla: una
+  // domanda rivolta a lei è tornata come parole sue, e il senso si è invertito.
+  it('tiene il dialogo con chi lo dice, e non lo inventa quando manca', () => {
     const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
       carousel({ beats: [
-        { shows: 'a', thinks: 'b', says: 'Come li facciamo?' },
-        { shows: 'c', thinks: 'd' },
-        { shows: 'e', thinks: 'f', says: '   ' }
+        { shows: 'a', who: 'x', thinks: 'b', says: { speaker: 'il corriere', line: 'Ma qui c\'è un altro nome.' } },
+        { shows: 'c', who: 'y', thinks: 'd' },
+        { shows: 'e', who: 'z', thinks: 'f', says: { speaker: '  ', line: 'orfana' } }
       ] })
     ] });
-    expect(out.seeds[0].beats?.[0].says).toBe('Come li facciamo?');
+    expect(out.seeds[0].beats?.[0].says).toEqual({ speaker: 'il corriere', line: 'Ma qui c\'è un altro nome.' });
     expect(out.seeds[0].beats?.[1].says).toBeUndefined();
     expect(out.seeds[0].beats?.[2].says).toBeUndefined();
+  });
+
+  // Il generatore riceveva l'azione e indovinava chi mettere in scena: nel riquadro del corriere ha
+  // disegnato la protagonista che suona il proprio citofono.
+  it('porta chi è nell\'inquadratura', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: [{ shows: 'a', who: 'il corriere di spalle, Elia sulla porta', thinks: 'b' }] })
+    ] });
+    expect(out.seeds[0].beats?.[0].who).toBe('il corriere di spalle, Elia sulla porta');
   });
 
   it('scarta una battuta che non mostra niente', () => {
@@ -933,9 +944,9 @@ describe('applySeedFix scrive le battute mancanti', () => {
   it('accetta le battute scritte dal revisore', () => {
     const out = applySeedFix(seed(), {
       beats: [
-        { shows: 'il corriere legge il vecchio nome', thinks: 'ci risiamo', says: '' },
-        { shows: 'la firma sul palmare', thinks: 'firmo e basta', says: '' },
-        { shows: 'la porta che si chiude', thinks: 'domani chiamo', says: '' }
+        { shows: 'il corriere legge il vecchio nome', who: 'il corriere sulla soglia', thinks: 'ci risiamo' },
+        { shows: 'la firma sul palmare', who: 'le mani di Elia', thinks: 'firmo e basta' },
+        { shows: 'la porta che si chiude', who: 'Elia di spalle', thinks: 'domani chiamo' }
       ]
     }, new Set(), [rubric]);
     expect(out.beats).toHaveLength(3);
@@ -945,9 +956,9 @@ describe('applySeedFix scrive le battute mancanti', () => {
 
   it('non tocca le battute quando il revisore non ne manda', () => {
     const before = seed();
-    before.beats = [{ shows: 'x', thinks: 'y' }];
+    before.beats = [{ shows: 'x', who: 'w', thinks: 'y' }];
     const out = applySeedFix(before, { angle: 'nuovo' }, new Set(), [rubric]);
-    expect(out.beats).toEqual([{ shows: 'x', thinks: 'y' }]);
+    expect(out.beats).toEqual([{ shows: 'x', who: 'w', thinks: 'y' }]);
   });
 });
 

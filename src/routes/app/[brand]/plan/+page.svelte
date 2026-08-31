@@ -643,10 +643,12 @@
                 {#if s.format === 'carousel'}
                   <label class="f wide"><span class="fl">{$_('weekPlan.col.beats')}</span>
                     <textarea rows={Math.max(3, (s.beats ?? []).length)} placeholder={$_('weekPlan.beatsPlaceholder')}
-                      value={(s.beats ?? []).map((b: { shows: string; thinks: string; says?: string }) => [b.shows, b.thinks, b.says].filter(Boolean).join(' | ')).join('\n')}
+                      value={(s.beats ?? []).map((b: { shows: string; who?: string; thinks: string; says?: { speaker: string; line: string } }) => [b.shows, b.who, b.thinks, b.says ? `${b.says.speaker}: ${b.says.line}` : ''].join(' | ').replace(/(\s*\|)+$/, '')).join('\n')}
                       oninput={(e) => (s.beats = e.currentTarget.value.split('\n').map((line) => {
-                        const [shows = '', thinks = '', says = ''] = line.split('|').map((x) => x.trim());
-                        return { shows, thinks, ...(says ? { says } : {}) };
+                        const [shows = '', who = '', thinks = '', said = ''] = line.split('|').map((x) => x.trim());
+                        const i = said.indexOf(':');
+                        const says = i > 0 ? { speaker: said.slice(0, i).trim(), line: said.slice(i + 1).trim() } : null;
+                        return { shows, who, thinks, ...(says?.speaker && says.line ? { says } : {}) };
                       }).filter((b) => b.shows))}></textarea>
                   </label>
                 {/if}

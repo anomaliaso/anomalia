@@ -3384,7 +3384,7 @@
       "title": "Week {n} has already passed",
       "body": "A week that has already gone by can't be planned. Pick the current week or a future one."
     },
-    "beatsPlaceholder": "One line per slide: what is seen | what they think | what someone says",
+    "beatsPlaceholder": "One line per slide: action | who is in frame | what they think | speaker: line",
     "sourcePlaceholder": "The real situation this retells, and its link",
     "noSource": "This episode has no source"
   },

@@ -3384,7 +3384,7 @@
       "title": "La semana {n} ya ha pasado",
       "body": "No puedes planificar una semana que ya ha pasado. Elige la semana actual o una futura."
     },
-    "beatsPlaceholder": "Una línea por diapositiva: qué se ve | qué piensa | qué dice alguien",
+    "beatsPlaceholder": "Una línea por diapositiva: acción | quién aparece | qué piensa | quién habla: frase",
     "sourcePlaceholder": "La situación real que cuenta, y su enlace",
     "noSource": "Este episodio no tiene fuente"
   },

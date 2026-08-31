@@ -460,12 +460,21 @@ export function enforceFaceBrandPeople(seeds: PostSeed[], profile: BrandProfile)
 // persa. Attenzione al rovescio: la regola 3 fa produrre dettagli che SEMBRANO verificabili, quindi
 // alza il rischio di inventare con sicurezza — vale insieme a una fonte, non al posto suo.
 export type Beat = {
-  /** Cosa si vede nel riquadro. */
+  /** L'azione: cosa succede in questo riquadro. */
   shows: string;
+  /**
+   * CHI è nell'inquadratura e cosa fa la sua faccia. Senza, il generatore indovina — e in un
+   * riquadro dove suonava il corriere ha disegnato la protagonista che suona il proprio citofono.
+   */
+  who: string;
   /** La voce di dentro, prima persona, poche parole: la didascalia letterizzata nel riquadro. */
   thinks: string;
-  /** Il parlato, quando qualcuno parla davvero. Assente quando nessuno apre bocca. */
-  says?: string;
+  /**
+   * Il parlato e CHI lo dice. Il nome dell'emittente è separato perché la coda del balloon lo
+   * segue: infilato dentro la battuta veniva ignorato, e una domanda rivolta alla protagonista
+   * tornava come parole sue, col senso rovesciato.
+   */
+  says?: { speaker: string; line: string };
 };
 
 // Le battute arrivano dal modello, dal DB e dalla griglia di editing, e la forma vecchia era una
@@ -474,13 +483,19 @@ export function normalizeBeats(raw: unknown): Beat[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const beats = raw
     .map((b) => {
-      if (typeof b === 'string') return { shows: b.trim(), thinks: '' };
+      if (typeof b === 'string') return { shows: b.trim(), who: '', thinks: '' };
       const rec = (b ?? {}) as Record<string, unknown>;
-      const says = String(rec.says ?? '').trim();
+      const raw = (rec.says ?? {}) as Record<string, unknown>;
+      // La forma vecchia era una stringa sola con dentro il nome di chi parla: si legge come
+      // battuta senza emittente, invece di sparire o di fingere di saperlo.
+      const said = typeof rec.says === 'string' ? { speaker: '', line: rec.says } : raw;
+      const speaker = String(said.speaker ?? '').trim();
+      const line = String(said.line ?? '').trim();
       return {
         shows: String(rec.shows ?? '').trim(),
+        who: String(rec.who ?? '').trim(),
         thinks: String(rec.thinks ?? '').trim(),
-        ...(says ? { says } : {})
+        ...(speaker && line ? { says: { speaker, line } } : {})
       };
     })
     .filter((b) => b.shows);
@@ -491,10 +506,11 @@ export const STORY_FAILURE_MODES = `STORY FAILURE MODES (hard, numbered — any 
 1. THE MILESTONE: the ceremony the reader already pictures from the category alone — the haircut, the mirror, the coming out at the dinner table, the first time the name is said aloud, the document finally arriving. If someone who has never met this person could have guessed the scene from the category, it is a trope, not a story. The friction lives in an ordinary Tuesday.
 2. THE SYSTEM, NOT A VILLAIN: the discomfort worth an episode comes from a procedure, a form, a counter, an automated message, a database, a dropdown with two options — something that gets it wrong without anyone deciding to. A named cruel person is a soap opera; a system simply built wrong is the actual life, and it is what the audience recognises.
 3. CHECKABLE SPECIFICITY: every beat names something that exists — the exact document, the exact desk, the words actually printed on the screen. If a beat could be moved to another country or another decade unchanged, it was invented. Take those specifics from the brand's own material; never reach for a detail you cannot source, because a wrong one is worse than a vague one here.
-4. THE INNER LINE IS A REAL THOUGHT: what a person actually thinks in that second, in their own words, plain, six words or fewer. Never an aphorism, never a metaphor, never a line composed for the reader.
+4. THE INNER LINE IS A REAL THOUGHT: what a person actually thinks in that second, in their own words, plain, six words or fewer. Never an aphorism, never a metaphor, never a line composed for the reader. And it is the fear, not the errand: at a door where a stranger has just read a name that is not hers, the thought is "si sta chiedendo se è mio?", not "devo rifare la targhetta". A to-do is what you write when you have not asked what the person is actually afraid of.
 5. NO REBIRTH, NO BATTLE: no butterfly, no mirror-as-truth, no courage, no fight, no before/after. Forbidden in the words and equally in the images.
 6. THE ARC IS ONE DEGREE, AND THE DEGREE COSTS SOMETHING: something shifts slightly — no triumph, no lesson, no moral in the last panel, and the landing may be funny, flat or unresolved. But it is not nothing: the person PAYS the shift in time, in an explanation they had to give, in a thing they now have to redo, in a plan they had to change. A courier who asks and is answered in two seconds is an anecdote, not an episode. Name the cost.
-7. YOU DO NOT ALREADY KNOW THIS LIFE: never write from what you assume about the category. Find how people describe the situation in their own words, choose ONE, and understand THAT one — what actually happens, in what order, and what it costs — before writing a single beat.`;
+7. STAGE THE PANEL, DO NOT LEAVE IT TO THE RENDERER: every beat names who is in frame, where each of them is, and who the camera is on. The renderer draws whoever it is told about and invents the rest, so a beat that says only what happens gets the wrong person doing it — the courier rings, she answers, and both must be named or the panel shows her ringing her own bell.
+8. YOU DO NOT ALREADY KNOW THIS LIFE: never write from what you assume about the category. Find how people describe the situation in their own words, choose ONE, and understand THAT one — what actually happens, in what order, and what it costs — before writing a single beat.`;
 
 // One planned post BEFORE the copy/image craft is written: the skeleton + its angle.
 export type PostSeed = {
@@ -627,7 +643,12 @@ export const STRATEGY_SCHEMA = {
               properties: {
                 shows: {
                   type: 'string' as const,
-                  description: 'What is SEEN in that panel, one concrete sentence — a moment, a turn, a step. Never a topic label.'
+                  description: 'The ACTION: what happens in that panel, one concrete sentence — a moment, a turn, a step. Never a topic label.'
+                },
+                who: {
+                  type: 'string' as const,
+                  description:
+                    "WHO is in frame and what their face is doing — name them and say where each one is, because the renderer draws exactly whoever you name and invents whoever you do not (a panel where a courier rang the bell came back with the protagonist ringing her own doorbell). Say who the camera is on. On a panel with no people, describe what is framed instead."
                 },
                 thinks: {
                   type: 'string' as const,
@@ -635,11 +656,16 @@ export const STRATEGY_SCHEMA = {
                     "The inner line: what the person actually thinks in that second, first person, plain, SIX WORDS OR FEWER — it is lettered into the panel as a caption box, and it is the half that makes a STORY readable at all. Never an aphorism or a metaphor. A carousel is either a story someone lives or a guide of steps: in a story EVERY beat carries this, in a guide NONE does — an explanatory card with a thought printed next to an icon is neither."
                 },
                 says: {
-                  type: 'string' as const,
-                  description: 'Spoken words, only when someone actually speaks, with WHO says them. Empty string when nobody talks.'
+                  type: 'object' as const,
+                  properties: {
+                    speaker: { type: 'string' as const, description: 'WHO says it, named as they appear in "who". The balloon tail points at them.' },
+                    line: { type: 'string' as const, description: 'The words, as spoken, short enough to letter.' }
+                  },
+                  required: ['speaker', 'line'],
+                  description: 'Spoken words and their speaker. Both empty when nobody talks in this panel.'
                 }
               },
-              required: ['shows', 'thinks', 'says']
+              required: ['shows', 'who', 'thinks', 'says']
             },
             description:
               "ONLY for carousel seeds: the STORY, one beat per slide, in order — exactly slide_count entries. Together they form a real arc: a situation, something that changes, a landing. Written here, at plan time, so the client reads the story before approving it. Empty array for every non-carousel seed.",
