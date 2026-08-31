@@ -100,6 +100,10 @@ export function normalizeWeeklyStrategy(raw: any): WeeklyStrategy {
         // mapped onto the enum here, the single rehydration point. Unknown values → single_image.
         format,
         slide_count: Number(s?.slide_count) || undefined,
+        // La storia e il medium sopravvivono al giro in DB e alla griglia di editing: senza,
+        // l'utente approva un racconto e il produttore riceve una riga di angle.
+        beats: Array.isArray(s?.beats) ? s.beats.map((b: unknown) => String(b ?? '').trim()).filter(Boolean) : undefined,
+        art_direction: String(s?.art_direction ?? '').trim() || undefined,
         // Rubric linkage survives store/edit round-trips untouched (resolution happened at plan time).
         rubric: typeof s?.rubric === 'string' && s.rubric ? s.rubric : undefined,
         rubric_id: typeof s?.rubric_id === 'string' && s.rubric_id ? s.rubric_id : undefined,

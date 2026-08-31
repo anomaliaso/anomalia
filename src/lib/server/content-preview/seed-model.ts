@@ -261,7 +261,7 @@ function syncFormatMedia<T extends { format: ContentFormat; media: 'image' | 'te
   return seed;
 }
 
-export function clampMediaCapabilities<T extends { platform: string; platforms?: string[]; format: ContentFormat; slide_count?: number; media: 'image' | 'text' | 'video' | 'link'; link_url?: string }>(seed: T): T {
+export function clampMediaCapabilities<T extends { platform: string; platforms?: string[]; format: ContentFormat; slide_count?: number; beats?: string[]; media: 'image' | 'text' | 'video' | 'link'; link_url?: string }>(seed: T): T {
   // Un seed text/link non può vivere (né fare cross-post) su una piattaforma visual-only.
   // 'video' È un visual: farlo cadere qui lo riscriverebbe a 'image', spogliando il reel.
   if (seed.media !== 'image' && seed.media !== 'video') {
@@ -296,10 +296,19 @@ export function clampMediaCapabilities<T extends { platform: string; platforms?:
   }
   syncFormatMedia(seed);
   // Slide-count invariant: a carousel always carries a clamped slide count; nothing else does.
+  // Le BATTUTE, quando ci sono, sono la misura della storia: lo slide_count le segue invece di
+  // contraddirle, o si renderizzano tre slide di un racconto lungo sei.
   if (seed.format === 'carousel') {
-    seed.slide_count = Math.max(CAROUSEL_MIN_SLIDES, Math.min(carouselMaxSlides(), Math.round(Number(seed.slide_count) || 5)));
+    const beats = (seed.beats ?? []).map((b) => String(b ?? '').trim()).filter(Boolean);
+    seed.beats = beats.length ? beats : undefined;
+    seed.slide_count = Math.max(
+      CAROUSEL_MIN_SLIDES,
+      Math.min(carouselMaxSlides(), Math.round(beats.length || Number(seed.slide_count) || 5))
+    );
+    if (seed.beats && seed.beats.length > seed.slide_count) seed.beats = seed.beats.slice(0, seed.slide_count);
   } else {
     seed.slide_count = undefined;
+    seed.beats = undefined;
   }
   return seed;
 }
@@ -451,8 +460,17 @@ export type PostSeed = {
   pillar: string;
   format: ContentFormat;
   // Carousel seeds only: how many slides the series needs (clamped 3..CAROUSEL_MAX_SLIDES).
-  // undefined for every other format.
+  // undefined for every other format. Quando ci sono le BATTUTE, le seguono: sono loro a dire
+  // quanto è lunga la storia.
   slide_count?: number;
+  // SOLO CAROSELLI — la storia, una battuta per slide, decisa nel PIANO. LIVELLO VINCOLANTE (vedi
+  // il contratto sopra): senza, il produttore riceve una riga di `angle` e improvvisa N immagini,
+  // che è esattamente il motivo per cui un carosello narrativo non arrivava mai in fondo. Vuoto →
+  // comportamento di prima, il produttore compone lui la serie.
+  beats?: string[];
+  // Il MEDIUM di questo post: fumetto, illustrazione, collage, reportage. Arriva dalla rubrica
+  // (applyRubricToSeed) o dal planner per un one-off, e BATTE il visual_style del brand.
+  art_direction?: string;
   // Approved-rubric linkage (brands with rubrics only): the series NAME the planner picked and
   // the resolved rubric row id. Absent when the brand has no approved rubrics.
   rubric?: string;
@@ -544,6 +562,17 @@ export const STRATEGY_SCHEMA = {
             type: 'integer' as const,
             description:
               'ONLY for carousel seeds: how many slides the series needs (3-8; prefer 4-6). The angle must genuinely sustain that many DISTINCT slides (a list, a process, a comparison, a story arc). 0 for every non-carousel seed.'
+          },
+          beats: {
+            type: 'array' as const,
+            items: { type: 'string' as const },
+            description:
+              "ONLY for carousel seeds: the STORY, one beat per slide, in order — exactly slide_count entries. A beat is what THAT slide says or shows in one concrete sentence (a moment, a turn, a line of dialogue, a step), never a topic label. Together they must form a real arc: a situation, something that changes, a landing. Write them here, at plan time, so the client reads the story before approving it. Empty array for every non-carousel seed.",
+          },
+          art_direction: {
+            type: 'string' as const,
+            description:
+              "The MEDIUM this post is drawn/shot in, when it must differ from the brand's default visual style: ink-and-wash comic panels, flat vector illustration, risograph collage, typographic poster, documentary photography… Include the page grammar (panels, gutters, lettering) and palette. When the seed belongs to a rubric that declares an art direction, copy that rubric's art direction VERBATIM. Empty string when the brand's default visual style is the right medium.",
           },
           media: {
             type: 'string' as const,

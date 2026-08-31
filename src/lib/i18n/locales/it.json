@@ -3331,7 +3331,9 @@
       "actions": "Azioni",
       "product": "Prodotto",
       "person": "Persona",
-      "subject": "Visual suggerito"
+      "subject": "Visual suggerito",
+      "beats": "Storia (una battuta per slide)",
+      "artDirection": "Direzione artistica (medium)"
     },
     "status": {
       "todo": "Da produrre",
@@ -3381,7 +3383,8 @@
       "Saturday": "Sabato",
       "Sunday": "Domenica"
     },
-    "producedBeforeStop": "{n} post sono stati creati prima dello stop."
+    "producedBeforeStop": "{n} post sono stati creati prima dello stop.",
+    "beatsPlaceholder": "Una riga per slide: cosa mostra o dice quella slide"
   },
   "setup": {
     "title": "Setup del progetto",
@@ -9047,6 +9050,7 @@
       "format": "Formato",
       "cadence": "Cadenza",
       "differentiation": "Perché è diversa dai competitor",
+      "art_direction": "Direzione artistica (come si vede ogni episodio)",
       "rationale": "Perché per il tuo brand"
     },
     "formats": {

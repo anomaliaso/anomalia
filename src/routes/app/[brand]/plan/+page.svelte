@@ -606,7 +606,7 @@
               </span>
               <span>{#if s.pillar}<span class="pillar-chip" style={`color:${pillarColor(s.pillar)};background:${pillarColor(s.pillar)}1a`}>● {s.pillar}</span>{/if}</span>
               <span class="wt-fmt">{s.format}</span>
-              <span class="wt-text">{s.angle}</span>
+              <span class="wt-text">{s.angle}{#if s.beats?.length}<span class="beats-chip" title={s.beats.join(' · ')}>{s.beats.length} ⧉</span>{/if}</span>
               <span><span class="st-chip" data-s="todo"><span class="st-dot"></span>{$_('weekPlan.status.todo')}</span></span>
               <span class="wt-actions">
                 <button type="button" class="mini-btn gen" onclick={() => produceRow(r.i)} disabled={producing || producingRow != null || data.quota.remaining <= 0}>
@@ -640,6 +640,16 @@
                 <label class="f"><span class="fl">{$_('weekPlan.col.product')}</span><input list="wp-products" bind:value={s.product} placeholder="—" /></label>
                 <label class="f"><span class="fl">{$_('weekPlan.col.person')}</span><input list="wp-people" bind:value={s.person} placeholder="—" /></label>
                 <label class="f"><span class="fl">{$_('weekPlan.col.subject')}</span><input bind:value={s.subject} placeholder={$_('weekPlan.subjectPlaceholder')} /></label>
+                {#if s.format === 'carousel'}
+                  <label class="f wide"><span class="fl">{$_('weekPlan.col.beats')}</span>
+                    <textarea rows={Math.max(3, (s.beats ?? []).length)} placeholder={$_('weekPlan.beatsPlaceholder')}
+                      value={(s.beats ?? []).join('\n')}
+                      oninput={(e) => (s.beats = e.currentTarget.value.split('\n').map((b) => b.trim()).filter(Boolean))}></textarea>
+                  </label>
+                {/if}
+                <label class="f wide"><span class="fl">{$_('weekPlan.col.artDirection')}</span>
+                  <textarea rows="2" bind:value={s.art_direction} placeholder="—"></textarea>
+                </label>
               </div>
             {/if}
           {/if}
@@ -840,6 +850,7 @@
   .pillar-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .wt-fmt { font-size: 13px; text-transform: capitalize; color: var(--ink-soft, #6e6e73); }
   .wt-text { font-size: 13px; line-height: 1.4; color: var(--ink, #1d1d1f); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .beats-chip { margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); white-space: nowrap; }
   .st-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap;
     background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); }
   .st-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }

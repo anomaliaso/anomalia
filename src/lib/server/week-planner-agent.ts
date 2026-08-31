@@ -144,8 +144,9 @@ Workflow:
 1. read_* tools are FREE — start with read_rubrics, read_leads, read_editorial_plan, read_brand_studio, read_media, read_post_history as needed.
 2. draft_seeds (max ${MAX_WEEK_PLANNER_DRAFTS}/run) generates seeds from your brief.
 3. check_batch_feasibility before finish — repair_seeds or draft again if violations remain.
-4. When approved rubrics exist (${rubricNames}), every seed MUST carry rubric = exact series name and match the week's content_mix counts.
-5. finish with the final seeds array.
+4. When approved rubrics exist (${rubricNames}), every seed MUST carry rubric = exact series name and match the week's content_mix counts, and it inherits that series' art_direction verbatim.
+5. Every CAROUSEL seed carries "beats": one concrete beat per slide, in order, as many as slide_count — the story, decided here. check_batch_feasibility rejects a carousel without them; repair_seeds writes them.
+6. finish with the final seeds array.
 
 Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}.
 Platforms: ${opts.platforms.join(', ')}.

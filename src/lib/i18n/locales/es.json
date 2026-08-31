@@ -3318,7 +3318,9 @@
       "actions": "Acciones",
       "product": "Producto",
       "person": "Persona",
-      "subject": "Visual sugerido"
+      "subject": "Visual sugerido",
+      "beats": "Historia (un momento por diapositiva)",
+      "artDirection": "Dirección artística (medio)"
     },
     "status": {
       "todo": "Por producir",
@@ -3380,7 +3382,8 @@
     "past": {
       "title": "La semana {n} ya ha pasado",
       "body": "No puedes planificar una semana que ya ha pasado. Elige la semana actual o una futura."
-    }
+    },
+    "beatsPlaceholder": "Una línea por diapositiva: qué muestra o dice"
   },
   "setup": {
     "title": "Configuración del proyecto",
@@ -9654,6 +9657,7 @@
       "format": "Formato",
       "cadence": "Cadencia",
       "differentiation": "Por qué se diferencia de los competidores",
+      "art_direction": "Dirección artística (cómo se ve cada episodio)",
       "rationale": "Por qué para tu marca"
     },
     "formats": {

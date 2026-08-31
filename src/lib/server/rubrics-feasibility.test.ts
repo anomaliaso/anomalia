@@ -159,3 +159,42 @@ describe('rubrics feasibility', () => {
     expect(violations.some((v) => v.includes('Week mix wants'))).toBe(false);
   });
 });
+
+// Le battute erano una riga di prompt, e una riga di prompt si salta. Qui diventano un vincolo:
+// un carosello senza storia torna indietro all'agente prima di costare un render.
+describe('carousel beats', () => {
+  const ctx = {
+    expectedSeedCount: 1,
+    selectedPlatforms: ['instagram'],
+    products: [],
+    people: [],
+    mediaIds: new Set<string>(),
+    rubrics: [],
+    weekMix: []
+  };
+
+  it('flags a carousel that arrives without its beats', () => {
+    const violations = checkRubricsAndBatchFeasibility([seed({ format: 'carousel', slide_count: 5 })], ctx);
+    expect(violations.some((v) => v.includes('beats'))).toBe(true);
+  });
+
+  it('flags a beat count that does not match the slides', () => {
+    const violations = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'carousel', slide_count: 5, beats: ['b1', 'b2', 'b3'] })],
+      ctx
+    );
+    expect(violations.some((v) => v.includes('beats'))).toBe(true);
+  });
+
+  it('passes a carousel whose beats match its slides', () => {
+    const violations = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'carousel', slide_count: 4, beats: ['b1', 'b2', 'b3', 'b4'] })],
+      ctx
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it('never asks a non-carousel seed for beats', () => {
+    expect(checkRubricsAndBatchFeasibility([seed({ format: 'single_image' })], ctx)).toEqual([]);
+  });
+});

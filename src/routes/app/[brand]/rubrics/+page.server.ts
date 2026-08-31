@@ -101,7 +101,8 @@ export const actions: Actions = {
           strategic_role: String(form.get(`role_${id}`) ?? ''),
           format: (CONTENT_FORMATS as readonly string[]).includes(fmt) ? fmt : undefined,
           cadence: String(form.get(`cadence_${id}`) ?? ''),
-          differentiation: String(form.get(`diff_${id}`) ?? '')
+          differentiation: String(form.get(`diff_${id}`) ?? ''),
+          art_direction: String(form.get(`art_${id}`) ?? '')
         }
       };
     });

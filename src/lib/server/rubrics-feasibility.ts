@@ -94,6 +94,17 @@ export function checkRubricsAndBatchFeasibility(
     if (product && prodRow && (!Array.isArray(prodRow.images) || prodRow.images.length === 0)) {
       violations.push(`Seed features product "${product}" but it has no photos.`);
     }
+    // Un carosello è una storia o è padding: le battute sono la storia, e senza il produttore
+    // improvvisa N immagini da una riga di angle.
+    if (seed.format === 'carousel') {
+      const beats = (seed.beats ?? []).filter((b) => String(b ?? '').trim());
+      const slides = Number(seed.slide_count) || 0;
+      if (!beats.length) {
+        violations.push(`Carousel seed "${seed.angle}" has no beats — write one concrete beat per slide, in order.`);
+      } else if (slides && beats.length !== slides) {
+        violations.push(`Carousel seed "${seed.angle}" has ${beats.length} beats for ${slides} slides — one beat per slide.`);
+      }
+    }
     if (seed.media_id && !ctx.mediaIds.has(seed.media_id)) {
       violations.push(`Seed media_id "${seed.media_id}" is not in the brand media library.`);
     }

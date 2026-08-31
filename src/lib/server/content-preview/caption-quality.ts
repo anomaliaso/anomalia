@@ -223,7 +223,11 @@ export async function executePlan(
       const scene = [s.subject ? `subject: ${s.subject}` : '', s.setting ? `setting: ${s.setting}` : '', s.props ? `props: ${s.props}` : '']
         .filter(Boolean)
         .join(' · ');
-      return `${i + 1}. [${meta}] angle: ${s.angle}${scene ? `\n   proposed scene → ${scene}` : ''}`;
+      const beats = (s.beats ?? []).length
+        ? `\n   STORY BEATS (binding — one slide each, in this order):\n${(s.beats ?? []).map((b, n) => `     ${n + 1}. ${b}`).join('\n')}`
+        : '';
+      const art = s.art_direction ? `\n   ART DIRECTION (binding — this post's medium, it OVERRIDES the brand visual style): ${s.art_direction}` : '';
+      return `${i + 1}. [${meta}] angle: ${s.angle}${scene ? `\n   proposed scene → ${scene}` : ''}${beats}${art}`;
     })
     .join('\n');
 
@@ -273,6 +277,8 @@ Below are ${strategy.seeds.length} post seeds, in order. Produce EXACTLY one pos
 - IMAGE CRAFT (single images): pick ONE focal subject and compose around it — leave roughly a third of the frame as calm negative space (sky, wall, clean surface) on one side, so the image breathes in the feed and a headline has somewhere to live. Never fill the frame edge-to-edge with competing elements.
 - ON-IMAGE TEXT: the renderer garbles any text it has to invent — this is its classic failure. If (and only if) the design needs words in the image, use AT MOST 4 words and put the EXACT string in double quotes inside the image_prompt (e.g. …with the headline "MENO SPRECHI" in bold brand type). No quoted string in the prompt = state that the image contains NO text.
 - LIBRARY MEDIA: when a seed carries "library_media: <uuid> (use_as_is)", the user's real photo WILL be published as the post image — set "image_prompt" to a short note like "Use library asset as-is" (it will not be rendered by AI). When mode is "(composite)", write an image_prompt that INTEGRATES that exact uploaded asset pixel-faithfully into a branded social frame (keep the subject identical; only add layout/branding around it) — never invent a replacement subject.
+- STORY BEATS: when a seed carries them, they are BINDING and they are the post. Slide k renders beat k — same order, same count, nothing merged, nothing added, nothing reordered. You write how each beat is SHOWN (framing, gesture, what is in the panel, the words lettered in it); you never rewrite what it says. The caption serves the story, it does not repeat it slide by slide.
+- ART DIRECTION: when a seed carries one, it OVERRIDES the brand's VISUAL STYLE for that post — medium, page grammar and palette come from there. A seed drawn as comic panels comes back as comic panels: never a photograph, never "photorealistic", and never softened back toward the brand's default look for consistency. Repeat the medium words verbatim in EVERY slide prompt of that post, or the renderer drifts to a photo by slide three.
 - CAROUSEL seeds (meta says "carousel of N slides"): fill "slide_prompts" with EXACTLY N prompts forming one coherent visual series — same medium, palette, lighting and art direction across all slides, grounded in the scene you chose (the seed's proposal, or your justified deviation); slide 1 is the hook/cover, each later slide advances the angle one concrete step, and every prompt describes its slide standalone. CAROUSEL CRAFT (hard): the COVER must read at THUMBNAIL size — one subject, large simple shapes, high contrast, at most 4 quoted words of text; each later slide carries exactly ONE idea (a slide that needs two sentences to describe is two slides); and repeat the SAME 2-3 continuity tokens (palette words, recurring motif, lighting phrase) verbatim in EVERY slide prompt so the rendered series reads as one object, not N unrelated images. Set "image_prompt" to the slide-1 prompt. Non-carousel seeds get an empty "slide_prompts" array.
 - Add complementary copy: 1-2 "alt_captions" (a different angle on the same post), a "first_comment" (extra hashtags or a CTA/question; empty string if not useful), and 1-2 "hook_variants" (alternative opening lines).
 - SHORT-NETWORK CUTS: also write "x_caption" (the same post, max 280 characters, one tight line, 0-2 hashtags) and "threads_caption" (the same post, max 500 characters, conversational) so the post can be cross-posted without being cut off. Same angle and facts as the main caption — compress, never invent. If the seed's own platform IS X (or Threads), leave that field empty. When the seed carries a link, keep the EXACT url in these cuts too and count it in the character budget.
@@ -313,7 +319,8 @@ Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
     if (post.media === 'image' && !post.image_prompt.trim()) {
       const scene = [seed.subject, seed.setting, seed.props].map((s) => String(s ?? '').trim()).filter(Boolean).join(', ');
       const productBit = seed.product ? `the product "${seed.product}"` : 'the subject';
-      post.image_prompt = `Photorealistic, scroll-stopping product photo of ${productBit}${scene ? `: ${scene}` : ''}. ${seed.angle ? `Convey: ${seed.angle}.` : ''}`.trim();
+      const medium = seed.art_direction?.trim() ? seed.art_direction.trim() : 'Photorealistic, scroll-stopping product photo';
+      post.image_prompt = `${medium}${medium.endsWith('.') ? '' : '.'} Subject: ${productBit}${scene ? `: ${scene}` : ''}. ${seed.angle ? `Convey: ${seed.angle}.` : ''}`.trim();
     }
     // Cover = slide 1. Un carosello con meno di 2 slide usabili non è un carosello: si degrada a
     // immagine singola, non si spedisce mezza serie.

@@ -752,3 +752,36 @@ describe('postQcPayload', () => {
     expect(postQcPayload({ sceneDeviation: 'why' } as PreviewPost)).toEqual({ scene_deviation: 'why' });
   });
 });
+
+// Un carosello che racconta una storia ha una battuta per slide, decise al piano — non una riga di
+// angle da cui il produttore improvvisa N immagini. Le battute devono sopravvivere al giro in DB e
+// alla griglia di editing, o l'utente approva una storia che poi nessuno rende.
+describe('beats: la storia del carosello sopravvive al round-trip', () => {
+  const carousel = (over: Record<string, unknown> = {}) => ({
+    platform: 'instagram', platforms: ['instagram'], format: 'carousel', media: 'image',
+    day: 'Monday', time: '09:00', product: '', person: '', angle: 'a', subject: 's', setting: '', props: '',
+    ...over
+  });
+
+  it('porta beats e art_direction attraverso la normalizzazione', () => {
+    const beats = ['il primo giorno in ufficio col nome vecchio', 'il collega che chiede scusa', 'la firma cambiata'];
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats, art_direction: 'fumetto a due colori' })
+    ] });
+    expect(out.seeds[0].beats).toEqual(beats);
+    expect(out.seeds[0].art_direction).toBe('fumetto a due colori');
+  });
+
+  it('lo slide_count segue le battute: una storia di 6 battute è un carosello di 6 slide', () => {
+    const beats = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6'];
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel({ beats, slide_count: 3 })] });
+    expect(out.seeds[0].slide_count).toBe(6);
+  });
+
+  it('scarta le battute su un seed che non è un carosello', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ format: 'single_image', beats: ['b1', 'b2'] })
+    ] });
+    expect(out.seeds[0].beats).toBeUndefined();
+  });
+});
