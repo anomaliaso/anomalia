@@ -832,7 +832,7 @@ export function ladderContextFrom(
 
 // Downgrade every carousel past the cap to a single image — the COST guardrail (an N-slide
 // carousel renders ~N images). Mirrors clampVideos; maxCarousels 0 = the kill switch.
-export function clampCarousels<T extends { format: ContentFormat; slide_count?: number }>(items: T[], maxCarousels: number): void {
+export function clampCarousels<T extends { format: ContentFormat; slide_count?: number; beats?: string[] }>(items: T[], maxCarousels: number): void {
   let kept = 0;
   for (const item of items) {
     if (item.format !== 'carousel') continue;
@@ -842,6 +842,10 @@ export function clampCarousels<T extends { format: ContentFormat; slide_count?: 
     }
     item.format = 'single_image';
     item.slide_count = undefined;
+    // Le battute vivono solo su un carosello. Questo declassamento gira DOPO
+    // clampMediaCapabilities, che è il posto dove quella regola sta scritta: senza toglierle qui,
+    // l'immagine singola si porta dietro una storia che nessuno renderà.
+    item.beats = undefined;
   }
 }
 

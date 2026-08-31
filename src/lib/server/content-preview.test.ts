@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
+import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, clampCarousels, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
 
 import type { Rubric } from './rubrics';
 
@@ -816,5 +816,25 @@ describe('sealOnImageText', () => {
 
   it('non tocca un prompt vuoto (i post di testo non hanno immagine)', () => {
     expect(sealOnImageText('')).toBe('');
+  });
+});
+
+// clampCarousels declassa un carosello oltre il tetto del batch, e girava DOPO
+// clampMediaCapabilities — l'unico posto che sapeva che le battute vivono solo su un carosello.
+// Risultato: un'immagine singola che si porta dietro una storia che nessuno renderà mai.
+describe('clampCarousels e le battute', () => {
+  const carousel = (over: Record<string, unknown> = {}) => ({
+    format: 'carousel' as const,
+    slide_count: 4,
+    beats: ['b1', 'b2', 'b3', 'b4'],
+    ...over
+  });
+
+  it('porta via la storia insieme al formato', () => {
+    const seeds = [carousel(), carousel()];
+    clampCarousels(seeds, 1);
+    expect(seeds[0].beats).toHaveLength(4);
+    expect(seeds[1].format).toBe('single_image');
+    expect(seeds[1].beats).toBeUndefined();
   });
 });

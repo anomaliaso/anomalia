@@ -2,6 +2,7 @@ export {
   CAROUSEL_PLATFORMS,
   carouselMaxPerBatch,
   carouselMaxSlides,
+  clampCarousels,
   enforceHookComponents,
   faceBrandMode,
   ladderContextFrom,
