@@ -341,3 +341,55 @@ describe('budget di produzione', () => {
     expect(v).toEqual([]);
   });
 });
+
+// Con un batch che copre due settimane, un mix solo per tutto il batch non dice niente: due post
+// "narrativo" possono stare entrambi nella prima settimana e lasciare la seconda senza. Il conto va
+// fatto settimana per settimana, che è il motivo per cui il seed porta la sua.
+describe('mix per settimana', () => {
+  const rubs: Rubric[] = [
+    { name: 'Giorni normali', promise: 'p', strategic_role: 'r', format: 'carousel', cadence: '1/week', differentiation: 'd', rationale: 'r' }
+  ];
+  const ctxFor = (mix: Array<{ week?: number; type: string; count: number }>) => ({
+    expectedSeedCount: 2,
+    selectedPlatforms: ['instagram'],
+    products: [],
+    people: [],
+    mediaIds: new Set<string>(),
+    rubrics: rubs,
+    weekMix: mix
+  });
+  const ep = (week: number) =>
+    seed({
+      week,
+      rubric: 'Giorni normali',
+      format: 'carousel',
+      slide_count: 3,
+      sourced_from: 'nota',
+      beats: [
+        { shows: 'a', thinks: 'x' },
+        { shows: 'b', thinks: 'y' },
+        { shows: 'c', thinks: 'z' }
+      ]
+    });
+
+  it('accetta un episodio per settimana quando ognuna ne chiede uno', () => {
+    const v = checkRubricsAndBatchFeasibility([ep(0), ep(1)], ctxFor([
+      { week: 0, type: 'Giorni normali', count: 1 },
+      { week: 1, type: 'Giorni normali', count: 1 }
+    ]));
+    expect(v).toEqual([]);
+  });
+
+  it('rifiuta due episodi nella stessa settimana e nessuno nell\'altra', () => {
+    const v = checkRubricsAndBatchFeasibility([ep(0), ep(0)], ctxFor([
+      { week: 0, type: 'Giorni normali', count: 1 },
+      { week: 1, type: 'Giorni normali', count: 1 }
+    ]));
+    expect(v.some((x) => x.includes('Week mix wants'))).toBe(true);
+  });
+
+  it('un mix senza settimana vale per tutto il batch, come prima', () => {
+    const v = checkRubricsAndBatchFeasibility([ep(0), ep(1)], ctxFor([{ type: 'Giorni normali', count: 2 }]));
+    expect(v).toEqual([]);
+  });
+});

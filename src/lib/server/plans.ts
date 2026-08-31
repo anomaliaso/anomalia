@@ -1,4 +1,4 @@
-import { isPaidPlan, RADAR_SOURCE_LIMITS } from '$lib/plans';
+import { isPaidPlan, PLAN_WEEKS, RADAR_SOURCE_LIMITS } from '$lib/plans';
 import { isPlanGoEnabled } from '$lib/server/feature-flags';
 
 // Free / absent plan matches Go quotas for blog + radar (capabilities parity, not credits).
@@ -222,4 +222,24 @@ export function plansAbove(plan: string | null | undefined): UpgradeOption[] {
 // True only when the brand is already on the highest tier (offer a custom plan instead).
 export function isTopPlan(plan: string | null | undefined): boolean {
   return PLAN_ORDER.indexOf((plan ?? '') as PlanTier) === PLAN_ORDER.length - 1;
+}
+
+/**
+ * Quante settimane del ciclo editoriale copre UN batch di pianificazione.
+ *
+ * Ne copriva una, e una settimana è poco per due ragioni diverse: l'utente deve approvare quattro
+ * volte al mese, e una serie non può costruire un arco fra un episodio e il successivo se chi
+ * pianifica vede solo sette giorni. Due è il default per tutti. Quattro — il ciclo intero in un
+ * colpo — è per il piano pro: non è un limite tecnico, è la cosa che si vende.
+ *
+ * Il ciclo non si supera mai: oltre `PLAN_WEEKS` non ci sono settimane da pianificare.
+ */
+export const BATCH_WEEKS_DEFAULT = 2;
+const BATCH_WEEKS_MAX_BY_PLAN: Record<string, number> = { pro: 4 };
+
+export function batchWeeks(plan: string | null | undefined, wanted?: number): number {
+  const max = BATCH_WEEKS_MAX_BY_PLAN[plan ?? ''] ?? BATCH_WEEKS_DEFAULT;
+  const asked = Number(wanted);
+  if (!Number.isFinite(asked) || asked < 1) return BATCH_WEEKS_DEFAULT;
+  return Math.min(Math.floor(asked), max, PLAN_WEEKS);
 }

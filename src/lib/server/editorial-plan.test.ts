@@ -249,3 +249,42 @@ describe('profileBlock (the brand half of every plan prompt)', () => {
     expect(block).not.toContain('undefined');
   });
 });
+
+// Un batch che copre due settimane deve vedere ENTRAMBE, con il tema e il mix di ciascuna: con il
+// brief di una sola, i post della seconda nascono sul tema della prima.
+describe('weekStrategyBrief su più settimane', () => {
+  const plan = (): EditorialPlan => ({
+    strategy: 'S',
+    voice: { mood: '', tone: '', goal: '', personality: '' },
+    cadence: '3/week',
+    platform_mix: [],
+    gtm: null,
+    weeks: [
+      { index: 0, week_start: null, theme: 'Settimana uno', focus: 'F1', content_mix: [{ type: 'educational', count: 3 }], rationale: 'R1', brief: null, products: null, status: 'upcoming' },
+      { index: 1, week_start: null, theme: 'Settimana due', focus: 'F2', content_mix: [{ type: 'narrativo', count: 2 }], rationale: 'R2', brief: null, products: null, status: 'upcoming' },
+      { index: 2, week_start: null, theme: 'Settimana tre', focus: 'F3', content_mix: [], rationale: '', brief: null, products: null, status: 'upcoming' }
+    ]
+  });
+
+  it('porta il tema e il mix di ogni settimana coperta', () => {
+    const brief = weekStrategyBrief(plan(), 0, [], 2);
+    expect(brief).toContain('Settimana uno');
+    expect(brief).toContain('Settimana due');
+    expect(brief).toContain('3× educational');
+    expect(brief).toContain('2× narrativo');
+  });
+
+  it('non tira dentro settimane fuori dal batch', () => {
+    expect(weekStrategyBrief(plan(), 0, [], 2)).not.toContain('Settimana tre');
+  });
+
+  it('con una settimana sola resta quello di prima', () => {
+    expect(weekStrategyBrief(plan(), 0, [], 1)).toBe(weekStrategyBrief(plan(), 0));
+  });
+
+  it('non sfora la fine del ciclo', () => {
+    const brief = weekStrategyBrief(plan(), 2, [], 4);
+    expect(brief).toContain('Settimana tre');
+    expect(brief).not.toContain('undefined');
+  });
+});

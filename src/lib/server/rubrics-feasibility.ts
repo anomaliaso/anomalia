@@ -63,7 +63,13 @@ export type BatchFeasibilityContext = {
    * caso dei percorsi che il budget non lo conoscono.
    */
   creditBudget?: number;
-  weekMix?: Array<{ type: string; count: number }>;
+  /**
+   * Il mix atteso. Una voce con `week` vale per QUELLA settimana del batch, una senza vale per
+   * tutto il batch — che è il comportamento di prima, e resta quello dei batch di una settimana.
+   * Su due settimane un mix unico non dice niente: due episodi possono stare entrambi nella prima
+   * e lasciare la seconda vuota, e il conto tornerebbe lo stesso.
+   */
+  weekMix?: Array<{ week?: number; type: string; count: number }>;
 };
 
 /** Validate weekly batch seeds against assets, platforms, and approved rubrics. */
@@ -96,6 +102,7 @@ export function checkRubricsAndBatchFeasibility(
   const rubricMap = rubricByName(ctx.rubrics);
 
   const rubricCounts = new Map<string, number>();
+  const rubricCountsByWeek = new Map<number, Map<string, number>>();
   for (const seed of seeds) {
     const plat = String(seed.platform ?? '').toLowerCase();
     if (plat && platforms.size > 0 && !platforms.has(plat)) {
@@ -174,7 +181,14 @@ export function checkRubricsAndBatchFeasibility(
             `Seed rubric "${hit.name}" requires format ${hit.format} but seed has ${seed.format}.`
           );
         }
-        rubricCounts.set(hit.name.toLowerCase(), (rubricCounts.get(hit.name.toLowerCase()) ?? 0) + 1);
+        const key = hit.name.toLowerCase();
+        rubricCounts.set(key, (rubricCounts.get(key) ?? 0) + 1);
+        if (Number.isFinite(Number(seed.week))) {
+          const w = Math.floor(Number(seed.week));
+          const perWeek = rubricCountsByWeek.get(w) ?? new Map<string, number>();
+          perWeek.set(key, (perWeek.get(key) ?? 0) + 1);
+          rubricCountsByWeek.set(w, perWeek);
+        }
       }
     }
   }
@@ -187,7 +201,7 @@ export function checkRubricsAndBatchFeasibility(
     );
     if (cost > ctx.creditBudget) {
       violations.push(
-        `This batch costs ${cost} credits and the brand has ${Math.round(ctx.creditBudget)} — drop a video (worth about 16 single images), shorten a carousel, or plan fewer posts.`
+        `This batch costs ${cost} credits and the brand has ${Math.round(ctx.creditBudget)} — drop a video, shorten a carousel, or plan fewer posts. The prices are in the budget brief; do not assume which format is the expensive one.`
       );
     }
   }
@@ -201,10 +215,15 @@ export function checkRubricsAndBatchFeasibility(
       for (const entry of ctx.weekMix) {
         const type = String(entry.type ?? '').trim().toLowerCase();
         const want = Number(entry.count) || 0;
-        const got = rubricCounts.get(type) ?? 0;
+        const scoped = entry.week != null && Number.isFinite(Number(entry.week));
+        const counts = scoped
+          ? (rubricCountsByWeek.get(Math.floor(Number(entry.week))) ?? new Map<string, number>())
+          : rubricCounts;
+        const got = counts.get(type) ?? 0;
         if (want > 0 && got !== want) {
           const display = ctx.rubrics.find((r) => r.name.toLowerCase() === type)?.name ?? entry.type;
-          violations.push(`Week mix wants ${want}× "${display}" but seeds have ${got}.`);
+          const where = scoped ? ` in week ${Math.floor(Number(entry.week)) + 1}` : '';
+          violations.push(`Week mix wants ${want}× "${display}"${where} but seeds have ${got}.`);
         }
       }
     }

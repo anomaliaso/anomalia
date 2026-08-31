@@ -1001,3 +1001,33 @@ describe('carouselMaxPerBatch', () => {
     expect(typeof carouselMaxPerBatch()).toBe('number');
   });
 });
+
+// Un batch che copre due settimane ha bisogno che ogni post sappia in quale delle due sta: il seed
+// portava solo il giorno della settimana, quindi tutto sarebbe finito nella prima.
+describe('la settimana del seed', () => {
+  const s = (over: Record<string, unknown> = {}) => ({
+    platform: 'instagram', platforms: ['instagram'], format: 'single_image', media: 'image',
+    day: 'Monday', time: '09:00', product: '', person: '', angle: 'a', subject: '', setting: '', props: '',
+    ...over
+  });
+
+  it('sopravvive al round-trip', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s({ week: 2 })] });
+    expect(out.seeds[0].week).toBe(2);
+  });
+
+  it('la settimana zero non si perde per strada', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s({ week: 0 })] });
+    expect(out.seeds[0].week).toBe(0);
+  });
+
+  it('senza settimana resta indefinita invece di diventare la prima', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s()] });
+    expect(out.seeds[0].week).toBeUndefined();
+  });
+
+  it('una settimana non numerica si scarta', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s({ week: 'lunedì' })] });
+    expect(out.seeds[0].week).toBeUndefined();
+  });
+});

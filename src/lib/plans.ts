@@ -5,6 +5,15 @@
 
 import { PLATFORM_IDS } from './platforms';
 
+/**
+ * Quante settimane dura un ciclo di piano editoriale.
+ *
+ * Sta qui e non in `editorial-plan.ts` perché la usano due livelli — il piano che le contiene e la
+ * durata di un batch di pianificazione, che è gated dal piano tariffario — e `editorial-plan`
+ * importa già `plans`: la costante di traverso avrebbe fatto un ciclo.
+ */
+export const PLAN_WEEKS = 4;
+
 export type PlanKey = 'go' | 'starter' | 'pro';
 export type Cycle = 'month' | 'year';
 // Valuta di fatturazione. EUR di default; USD è la valuta parallela esplicita per chi sta fuori

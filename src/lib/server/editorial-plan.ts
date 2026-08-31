@@ -4,6 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { aiStructured, parallelVariants, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GEMINI } from '$lib/server/xiaomi';
 import { countForFrequency } from '$lib/server/plans';
+import { PLAN_WEEKS } from '$lib/plans';
+export { PLAN_WEEKS };
 import type { ContentPrefs, PastWinner } from '$lib/server/content-preview';
 import { rubricsBrief, type Rubric } from '$lib/server/rubrics';
 
@@ -21,7 +23,6 @@ type BrandProfile = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
 
-export const PLAN_WEEKS = 4;
 
 export type PlanVoice = { mood: string; tone: string; goal: string; personality: string };
 export type PlatformMixEntry = { platform: string; share: string; role: string };
@@ -176,22 +177,50 @@ export function postsForWeek(plan: Pick<EditorialPlan, 'weeks' | 'cadence'>, wee
 // Serialize ONE week of the plan into the strategyBrief string planStrategy() consumes, so the
 // batch the autopilot (or manual generate) produces executes the approved plan rather than
 // improvising. The user's week brief, when present, is authoritative and says so.
-export function weekStrategyBrief(plan: EditorialPlan, weekIndex: number, rubrics: Rubric[] = []): string {
+/**
+ * Il brief del piano per il batch che sta per partire.
+ *
+ * `weeks` è quante settimane copre il batch: con 1 il testo è identico a quello di sempre, con più
+ * di una ognuna porta il SUO tema, focus e mix, e ogni seed deve dichiarare a quale appartiene.
+ * Senza, i post della seconda settimana nascono sul tema della prima e la cadenza delle rubriche
+ * non ha modo di essere rispettata.
+ */
+export function weekStrategyBrief(
+  plan: EditorialPlan,
+  weekIndex: number,
+  rubrics: Rubric[] = [],
+  weeks = 1
+): string {
   const week = plan.weeks?.[weekIndex];
   if (!week) return '';
+  const span = plan.weeks.slice(weekIndex, weekIndex + Math.max(1, Math.floor(weeks)));
   // '' when the brand has no approved rubrics → the brief is identical to the pre-rubric one.
   const rubricsLine = rubricsBrief(rubrics);
-  const mix = (week.content_mix ?? [])
-    .map((m) => `${m.count}× ${m.type}`)
-    .join(', ');
+  const mixOf = (w: PlanWeek) => (w.content_mix ?? []).map((m) => `${m.count}× ${m.type}`).join(', ');
+  const mix = mixOf(week);
+  const multi = span.length > 1;
+  const weekBlock = (w: PlanWeek, i: number) =>
+    [
+      `WEEK ${weekIndex + i + 1} — theme: ${w.theme}`,
+      w.focus ? `  Focus: ${w.focus}` : '',
+      mixOf(w) ? `  Content mix target: ${mixOf(w)}.` : '',
+      w.rationale ? `  Why this week: ${w.rationale}` : ''
+    ]
+      .filter(Boolean)
+      .join('\n');
   const lines = [
-    `EDITORIAL PLAN (user-approved — this batch executes week ${weekIndex + 1} of ${plan.weeks.length}):`,
+    multi
+      ? `EDITORIAL PLAN (user-approved — this batch executes weeks ${weekIndex + 1}–${weekIndex + span.length} of ${plan.weeks.length}):`
+      : `EDITORIAL PLAN (user-approved — this batch executes week ${weekIndex + 1} of ${plan.weeks.length}):`,
     plan.strategy ? `Strategy: ${plan.strategy}` : '',
     plan.voice?.personality ? `Brand personality: ${plan.voice.personality}` : '',
-    `This week's theme: ${week.theme}`,
-    week.focus ? `Focus: ${week.focus}` : '',
-    mix ? `Content mix target for the week: ${mix}.` : '',
-    week.rationale ? `Why this week: ${week.rationale}` : '',
+    multi ? '' : `This week's theme: ${week.theme}`,
+    multi ? '' : week.focus ? `Focus: ${week.focus}` : '',
+    multi ? '' : mix ? `Content mix target for the week: ${mix}.` : '',
+    multi ? '' : week.rationale ? `Why this week: ${week.rationale}` : '',
+    multi
+      ? `WEEK BRIEF — every seed carries "week" with the number of the week it belongs to, and each week must get its own theme and its own content mix. Spreading them evenly is not the same as honouring each week's mix.\n${span.map(weekBlock).join('\n')}`
+      : '',
     plan.gtm?.stage === 'zero_to_one' && plan.gtm.summary
       ? `GO-TO-MARKET CONTEXT (organic 0→1 — the brand is building its audience from scratch): ${plan.gtm.summary}`
       : '',

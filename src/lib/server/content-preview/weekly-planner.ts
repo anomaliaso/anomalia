@@ -99,6 +99,7 @@ export function normalizeWeeklyStrategy(raw: any): WeeklyStrategy {
         // Stored rows carry legacy free-form formats ('reel', 'story', 'short video'…) — always
         // mapped onto the enum here, the single rehydration point. Unknown values → single_image.
         format,
+        week: Number.isFinite(Number(s?.week)) ? Math.max(0, Math.floor(Number(s.week))) : undefined,
         slide_count: Number(s?.slide_count) || undefined,
         // La storia e il medium sopravvivono al giro in DB e alla griglia di editing: senza,
         // l'utente approva un racconto e il produttore riceve una riga di angle.

@@ -585,6 +585,15 @@ export type PostSeed = {
   ugc_ad?: boolean;
   day: string;
   time: string;
+  /**
+   * A quale settimana del ciclo editoriale appartiene questo post (0-based, assoluta).
+   *
+   * Un batch copriva una settimana sola, quindi bastava il giorno; da quando ne copre due o
+   * quattro, senza questo campo finiscono tutti nella prima — il giorno della settimana da solo non
+   * distingue il lunedì della prima dal lunedì della seconda. Assente sui batch di una settimana e
+   * sui percorsi che non la conoscono: lì la settimana è quella del batch.
+   */
+  week?: number;
   // Reddit post title (required for Reddit, max 300 chars; empty for other platforms).
   title?: string;
   // URL for Reddit link posts (sharing a blog article/resource). Empty for non-link posts.
@@ -643,6 +652,11 @@ export const STRATEGY_SCHEMA = {
             enum: [...CONTENT_FORMATS] as const,
             description:
               "How this post is PRODUCED — one of the engine's REAL formats, never invented: 'single_image' = one visual (the default for most posts); 'carousel' = a multi-slide visual sequence (Instagram/Facebook/LinkedIn ONLY, and only within the batch's carousel budget); 'text_post' = text-only (X/Threads/Reddit only — matches media 'text'); 'link_post' = a Reddit link post (matches media 'link'); 'video' = a reel/short (only when the video constraint allows it). Never a story — the engine does not produce stories."
+          },
+          week: {
+            type: 'integer' as const,
+            description:
+              "Which week of the batch this post belongs to, as the WEEK BRIEF numbers them. A batch spanning more than one week must spread its posts across all of them and honour each week's own theme and content mix — the day of the week alone cannot tell the first Monday from the second."
           },
           slide_count: {
             type: 'integer' as const,

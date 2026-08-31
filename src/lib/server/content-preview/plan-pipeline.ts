@@ -337,6 +337,7 @@ Return JSON.`;
       platforms: [primary, ...new Set(cross)].filter(Boolean),
       pillar: String(s?.pillar ?? ''),
       format: normalizeContentFormat(s?.format),
+      week: Number.isFinite(Number(s?.week)) ? Math.max(0, Math.floor(Number(s.week))) : undefined,
       slide_count: Number(s?.slide_count) || undefined,
       beats: normalizeBeats(s?.beats),
       art_direction: String(s?.art_direction ?? '').trim() || undefined,
