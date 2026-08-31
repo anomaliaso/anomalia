@@ -237,9 +237,21 @@ export const CAROUSEL_PLATFORMS: Set<string> = new Set([
 ]);
 export const CAROUSEL_MIN_SLIDES = 3;
 const CAROUSEL_HARD_MAX_SLIDES = 8;
+/**
+ * Quanti caroselli può contenere un batch.
+ *
+ * Era 1, e quel numero decideva il mix al posto di chi pianifica: una rubrica narrativa a fumetti
+ * usciva una volta ogni tanto perché il tetto le stava davanti, non perché costasse troppo. Ora il
+ * vincolo vero è il budget — un carosello costa quante sono le sue slide, un video ne vale sedici —
+ * e la scelta è dell'agente. Questo resta un freno d'emergenza: si abbassa da `CAROUSEL_MAX_PER_BATCH`
+ * quando serve fermare tutto, non per fare art direction da una variabile d'ambiente.
+ */
+const CAROUSEL_NO_EDITORIAL_CAP = 99;
 export function carouselMaxPerBatch(): number {
-  const n = Number(env.CAROUSEL_MAX_PER_BATCH ?? '1');
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1;
+  const raw = env.CAROUSEL_MAX_PER_BATCH;
+  if (raw == null || raw === '') return CAROUSEL_NO_EDITORIAL_CAP;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : CAROUSEL_NO_EDITORIAL_CAP;
 }
 export function carouselMaxSlides(): number {
   const n = Number(env.CAROUSEL_MAX_SLIDES ?? '6');

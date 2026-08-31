@@ -266,8 +266,12 @@ describe('resolveSeedWithRubrics (rubric format is AUTHORITATIVE over Pass 1)', 
 });
 
 describe('carousel guardrail config', () => {
-  it('defaults to 1 carousel per batch and 6 slides max (env unset)', () => {
-    expect(carouselMaxPerBatch()).toBe(1);
+  // Il tetto per batch era 1 e faceva la scelta editoriale al posto di chi pianifica: una rubrica a
+  // fumetti usciva di rado perché il numero le stava davanti, non perché costasse troppo. Il vincolo
+  // vero ora è il budget (un carosello costa quante slide ha, un video ne vale sedici) e questo resta
+  // un freno d'emergenza. Il tetto alle SLIDE invece è fisico: oltre non si pubblica.
+  it('non decide più quanti caroselli, ma tiene il tetto fisico alle slide', () => {
+    expect(carouselMaxPerBatch()).toBeGreaterThan(1);
     expect(carouselMaxSlides()).toBe(6);
   });
 });
@@ -982,5 +986,18 @@ describe('sourced_from', () => {
   it('non inventa una fonte quando non ce n\'è', () => {
     const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel()] });
     expect(out.seeds[0].sourced_from).toBeUndefined();
+  });
+});
+
+// Il tetto ai caroselli era 1 per batch, un numero d'ambiente che nessuno aveva scelto guardando
+// niente. Era anche la ragione per cui la rubrica narrativa usciva una volta ogni tanto: con il
+// budget come vincolo vero, il tetto non deve più fare la scelta editoriale al posto dell'agente.
+describe('carouselMaxPerBatch', () => {
+  it('di default non decide più il mix', () => {
+    expect(carouselMaxPerBatch()).toBeGreaterThan(1);
+  });
+
+  it('resta un freno d\'emergenza da variabile d\'ambiente', () => {
+    expect(typeof carouselMaxPerBatch()).toBe('number');
   });
 });

@@ -35,6 +35,7 @@ import {
   readStrategyReportForAgent
 } from '$lib/server/strategy-agent-reads';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
+import { budgetBrief } from '$lib/server/content-cost';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { STORY_FAILURE_MODES } from '$lib/server/content-preview/seed-model';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
@@ -137,6 +138,9 @@ export async function runWeekPlannerAgent(opts: WeekPlannerAgentOpts): Promise<W
 
 async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<WeekPlannerAgentResult> {
   const usdBudget = await fetchUsdBudget(opts.brandId);
+  // Il budget del brand in crediti, l'unità del listino. Serve a due cose diverse: il brief con cui
+  // l'agente SCEGLIE il mix, e il gate che rifiuta un batch che non si potrebbe produrre.
+  const creditBudget = Number.isFinite(usdBudget) ? Math.max(0, Math.round(usdBudget * 100)) : undefined;
   const budget = createStrategyBudget({ drafts: MAX_WEEK_PLANNER_DRAFTS, repairs: MAX_WEEK_PLANNER_REPAIRS, usdRemaining: usdBudget });
 
   const [editorialPlan, batchCtx] = await Promise.all([
@@ -200,6 +204,7 @@ Platforms: ${opts.platforms.join(', ')}.
 
 ${disruptiveBriefSection()}
 ${STORY_FAILURE_MODES}
+${budgetBrief(creditBudget)}
 
 Una settimana di sette post corretti è una settimana invisibile: fra i seed cercane uno costruito su una leva di contrasto, e se escono tutti prudenti e intercambiabili la settimana non è buona per quanto sia corretta. Chiama read_disruptive_ideas prima di inventarne uno nuovo: se il banco ne ha una che regge su questa settimana, girala e poi chiamaci sopra mark_idea_used, sennò resta "da fare" per sempre. E se pensando questa settimana te ne viene una nuova che passa i tre test, salvala con save_disruptive_idea anche se non entra in questi sette post — non perché ce ne voglia una, ma perché lì sopravvive.`;
 
@@ -352,7 +357,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       inputSchema: z.object({ seeds: z.array(SEED) }),
       execute: async ({ seeds }) => {
         const normalized = normalizeSeeds(mergeSeeds(working?.seeds ?? [], seeds));
-        const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls });
+        const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls, creditBudget });
         if (normalized.length) {
           working = {
             theme: working?.theme ?? '',
@@ -402,7 +407,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
           doDont: working?.doDont ?? '',
           seeds: normalized
         };
-        const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls });
+        const violations = checkRubricsAndBatchFeasibility(normalized, { ...batchCtx, researchedUrls, creditBudget });
         lastViolations = violations;
         return { ok: violations.length === 0, reason, violations };
       }
@@ -428,7 +433,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
           seeds: finalSeeds
         };
         if (!finalSeeds.length) return { error: 'No seeds to finish' };
-        const violations = checkRubricsAndBatchFeasibility(finalSeeds, { ...batchCtx, researchedUrls });
+        const violations = checkRubricsAndBatchFeasibility(finalSeeds, { ...batchCtx, researchedUrls, creditBudget });
         if (violations.length) {
           if (finalSeeds.length) working = strategy;
           lastViolations = violations;
@@ -514,7 +519,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
     });
 
     if (!finished && working?.seeds?.length) {
-      const violations = checkRubricsAndBatchFeasibility(working.seeds, { ...batchCtx, researchedUrls });
+      const violations = checkRubricsAndBatchFeasibility(working.seeds, { ...batchCtx, researchedUrls, creditBudget });
       lastViolations = violations;
       if (violations.length === 0) {
         finished = { strategy: working, notes: 'Auto-closed: seeds passed feasibility.' };

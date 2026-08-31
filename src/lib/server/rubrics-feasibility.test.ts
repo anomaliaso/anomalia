@@ -299,3 +299,42 @@ describe('fonte di un episodio narrativo', () => {
     expect(v).toEqual([]);
   });
 });
+
+// Il mix di formati lo decideva un tetto fisso (`CAROUSEL_MAX_PER_BATCH`, default 1) e una
+// percentuale della quota. Nessuno dei due sa quanto costa quello che sceglie: un video vale ~16
+// immagini, cioè un'intera storia illustrata. Ora il budget è un vincolo, e questo lo fa rispettare.
+describe('budget di produzione', () => {
+  const base = {
+    expectedSeedCount: 2,
+    selectedPlatforms: ['instagram'],
+    products: [],
+    people: [],
+    mediaIds: new Set<string>(),
+    rubrics: [],
+    weekMix: []
+  };
+
+  it('lascia passare un batch che ci sta dentro', () => {
+    const v = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'single_image' }), seed({ format: 'single_image' })],
+      { ...base, creditBudget: 1000 }
+    );
+    expect(v).toEqual([]);
+  });
+
+  it('rifiuta un batch che il brand non può produrre', () => {
+    const v = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'video' }), seed({ format: 'video' })],
+      { ...base, creditBudget: 50 }
+    );
+    expect(v.some((x) => x.includes('costs'))).toBe(true);
+  });
+
+  it('senza budget noto non inventa un vincolo', () => {
+    const v = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'video' }), seed({ format: 'video' })],
+      base
+    );
+    expect(v).toEqual([]);
+  });
+});

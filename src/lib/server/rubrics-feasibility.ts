@@ -2,6 +2,7 @@ import type { Rubric } from '$lib/server/rubrics';
 import type { EditorialPlan, PlanWeek } from '$lib/server/editorial-plan';
 import type { PostSeed } from '$lib/server/content-preview';
 import { normalizeBeats } from '$lib/server/content-preview/seed-model';
+import { creditsForBatch } from '$lib/server/content-cost';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Approved recurring series (rubriche) — named, format-bound content series. */
@@ -56,6 +57,12 @@ export type BatchFeasibilityContext = {
    * sarebbe un gate che mente.
    */
   researchedUrls?: Set<string>;
+  /**
+   * I crediti che il brand ha davvero per produrre questo batch. Presente → il mix di formati è una
+   * SCELTA con un prezzo, e questo la fa rispettare; assente → nessun vincolo inventato, che è il
+   * caso dei percorsi che il budget non lo conoscono.
+   */
+  creditBudget?: number;
   weekMix?: Array<{ type: string; count: number }>;
 };
 
@@ -169,6 +176,19 @@ export function checkRubricsAndBatchFeasibility(
         }
         rubricCounts.set(hit.name.toLowerCase(), (rubricCounts.get(hit.name.toLowerCase()) ?? 0) + 1);
       }
+    }
+  }
+
+  // Un batch che non si può produrre è peggio di uno più piccolo che si può: qui si scopre PRIMA
+  // di spendere il primo render, non a metà con nove post fatti e sei vuoti.
+  if (ctx.creditBudget != null && Number.isFinite(ctx.creditBudget)) {
+    const cost = creditsForBatch(
+      seeds.map((s) => ({ format: s.format, slideCount: s.slide_count }))
+    );
+    if (cost > ctx.creditBudget) {
+      violations.push(
+        `This batch costs ${cost} credits and the brand has ${Math.round(ctx.creditBudget)} — drop a video (worth about 16 single images), shorten a carousel, or plan fewer posts.`
+      );
     }
   }
 
