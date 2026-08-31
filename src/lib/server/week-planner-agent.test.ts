@@ -32,8 +32,11 @@ describe('tetto alle ricerche', () => {
     expect(results[MAX_WEEK_PLANNER_RESEARCH]).toBe(false);
   });
 
-  it('è un tetto piccolo: la ricerca serve a verificare, non a documentarsi', () => {
-    expect(MAX_WEEK_PLANNER_RESEARCH).toBeGreaterThan(0);
-    expect(MAX_WEEK_PLANNER_RESEARCH).toBeLessThanOrEqual(8);
+  // Il tetto deve reggere il protocollo narrativo — cerca i racconti, scegline uno, approfondisci
+  // QUELLO — e restare comunque un tetto: ogni chiamata costa e il budget è del batch, non suo.
+  it('regge il protocollo senza diventare illimitato', () => {
+    const CERCA = 1, SCEGLI = 1, APPROFONDISCI = 3;
+    expect(MAX_WEEK_PLANNER_RESEARCH).toBeGreaterThanOrEqual(CERCA + SCEGLI + APPROFONDISCI);
+    expect(MAX_WEEK_PLANNER_RESEARCH).toBeLessThanOrEqual(40);
   });
 });

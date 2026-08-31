@@ -340,6 +340,7 @@ Return JSON.`;
       slide_count: Number(s?.slide_count) || undefined,
       beats: normalizeBeats(s?.beats),
       art_direction: String(s?.art_direction ?? '').trim() || undefined,
+      sourced_from: String(s?.sourced_from ?? '').trim() || undefined,
       ...(rubrics.length ? { rubric: String(s?.rubric ?? '') } : {}),
       // Derivato dal FORMAT e non preso dal modello: il renderer segue il format, quindi un
       // disaccordo fra i due consegna uno still a un seed che chiedeva un reel.

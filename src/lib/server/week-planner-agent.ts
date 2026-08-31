@@ -54,7 +54,7 @@ const ESTIMATED_DRAFT_USD = 0.06;
 // battuta — il nome di un modulo, la dicitura a schermo, cosa serve davvero a uno sportello — era
 // inventato, e la regola sulla specificità lo faceva sembrare pure verificabile. Il tetto è piccolo
 // di proposito: qui si VERIFICA quello che si sta per affermare, non ci si documenta da zero.
-export const MAX_WEEK_PLANNER_RESEARCH = 6;
+export const MAX_WEEK_PLANNER_RESEARCH = 30;
 const ESTIMATED_RESEARCH_USD = 0.008;
 
 export type WeekPlannerAgentOpts = {
@@ -156,6 +156,13 @@ Workflow:
 5. Every CAROUSEL seed carries "beats": one concrete beat per slide, in order, as many as slide_count — the story, decided here. check_batch_feasibility rejects a carousel without them; repair_seeds writes them.
 6. research (max ${MAX_WEEK_PLANNER_RESEARCH}/run, it costs) — NOTHING here reaches the open web except this tool, so any date, form name, legal wording or on-screen message a seed asserts is invented unless you checked it. Check before you assert; if you cannot check it, write the beat without the detail rather than with a plausible one. A wrong specific is worse than a vague one.
 7. finish with the final seeds array.
+
+NARRATIVE EPISODES — THE PROTOCOL, NOT OPTIONAL. You do not already understand this brand's subject, and what you assume about it is the most predictable thing you could write. Before ANY beat of a narrative episode:
+  a. SEARCH how people describe these situations IN THEIR OWN WORDS — forum threads, first-person posts, comments, interviews. Search for the account, not for an explanation of the topic.
+  b. CHOOSE ONE concrete situation that actually turned up. Not a composite, not an average of several: one.
+  c. GO DEEP ON THAT ONE — what happens, in what order, who says what, which document or screen or desk is involved, and what it costs the person. Keep asking until you could answer a follow-up about it.
+  d. Only then write the beats, and put the situation and its source in "sourced_from".
+Found nothing usable? Say so in "sourced_from" and keep the episode general. An invented life told confidently is the worst thing this system can publish.
 
 Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}.
 Platforms: ${opts.platforms.join(', ')}.
@@ -278,7 +285,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
 
     research: tool({
       description:
-        `Check a fact on the open web before a seed states it (max ${MAX_WEEK_PLANNER_RESEARCH}/run, costs money). Use it for what the brand's own material cannot confirm: the real name of a form, the wording that actually appears on a screen, what a procedure actually requires, a date. Returns an answer with its sources.`,
+        `Search and read the open web (max ${MAX_WEEK_PLANNER_RESEARCH}/run, costs money). TWO uses: (1) find how people describe a situation in their OWN words, then go deeper on the single situation you pick; (2) verify a specific a seed is about to assert — the real name of a form, the wording that actually appears on a screen, what a procedure actually requires, a date. Returns an answer with its sources.`,
       inputSchema: z.object({
         question: z.string().describe('One precise question, in the brand\'s language. Not a topic — a question with a checkable answer.')
       }),

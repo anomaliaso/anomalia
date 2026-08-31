@@ -950,3 +950,26 @@ describe('applySeedFix scrive le battute mancanti', () => {
     expect(out.beats).toEqual([{ shows: 'x', thinks: 'y' }]);
   });
 });
+
+// Una battuta narrativa senza fonte è la vita di qualcun altro scritta da un modello su ciò che
+// sembra plausibile. La fonte viaggia col seed, si legge nella griglia e si controlla prima di
+// approvare — è l'unica cosa che distingue un episodio raccolto da uno inventato.
+describe('sourced_from', () => {
+  const carousel = (over: Record<string, unknown> = {}) => ({
+    platform: 'instagram', platforms: ['instagram'], format: 'carousel', media: 'image',
+    day: 'Monday', time: '09:00', product: '', person: '', angle: 'a', subject: 's', setting: '', props: '',
+    ...over
+  });
+
+  it('sopravvive al round-trip', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ sourced_from: 'racconto su r/italyinformatica del 12/03 — https://example.org/post' })
+    ] });
+    expect(out.seeds[0].sourced_from).toBe('racconto su r/italyinformatica del 12/03 — https://example.org/post');
+  });
+
+  it('non inventa una fonte quando non ce n\'è', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel()] });
+    expect(out.seeds[0].sourced_from).toBeUndefined();
+  });
+});

@@ -493,7 +493,8 @@ export const STORY_FAILURE_MODES = `STORY FAILURE MODES (hard, numbered — any 
 3. CHECKABLE SPECIFICITY: every beat names something that exists — the exact document, the exact desk, the words actually printed on the screen. If a beat could be moved to another country or another decade unchanged, it was invented. Take those specifics from the brand's own material; never reach for a detail you cannot source, because a wrong one is worse than a vague one here.
 4. THE INNER LINE IS A REAL THOUGHT: what a person actually thinks in that second, in their own words, plain, six words or fewer. Never an aphorism, never a metaphor, never a line composed for the reader.
 5. NO REBIRTH, NO BATTLE: no butterfly, no mirror-as-truth, no courage, no fight, no before/after. Forbidden in the words and equally in the images.
-6. THE ARC IS ONE DEGREE: something shifts slightly. No triumph, no lesson, no moral in the last panel. The landing may be funny, flat or unresolved.`;
+6. THE ARC IS ONE DEGREE, AND THE DEGREE COSTS SOMETHING: something shifts slightly — no triumph, no lesson, no moral in the last panel, and the landing may be funny, flat or unresolved. But it is not nothing: the person PAYS the shift in time, in an explanation they had to give, in a thing they now have to redo, in a plan they had to change. A courier who asks and is answered in two seconds is an anecdote, not an episode. Name the cost.
+7. YOU DO NOT ALREADY KNOW THIS LIFE: never write from what you assume about the category. Find how people describe the situation in their own words, choose ONE, and understand THAT one — what actually happens, in what order, and what it costs — before writing a single beat.`;
 
 // One planned post BEFORE the copy/image craft is written: the skeleton + its angle.
 export type PostSeed = {
@@ -522,6 +523,11 @@ export type PostSeed = {
   // Il MEDIUM di questo post: fumetto, illustrazione, collage, reportage. Arriva dalla rubrica
   // (applyRubricToSeed) o dal planner per un one-off, e BATTE il visual_style del brand.
   art_direction?: string;
+  // Da DOVE viene la situazione che l'episodio racconta: la fonte in una riga, con l'URL quando
+  // c'è. Un racconto senza fonte è la vita di qualcun altro scritta su ciò che sembra plausibile —
+  // e su una comunità reale "plausibile" significa luogo comune. Si legge nella griglia e si
+  // controlla PRIMA di approvare.
+  sourced_from?: string;
   // Approved-rubric linkage (brands with rubrics only): the series NAME the planner picked and
   // the resolved rubric row id. Absent when the brand has no approved rubrics.
   rubric?: string;
@@ -637,6 +643,11 @@ export const STRATEGY_SCHEMA = {
             },
             description:
               "ONLY for carousel seeds: the STORY, one beat per slide, in order — exactly slide_count entries. Together they form a real arc: a situation, something that changes, a landing. Written here, at plan time, so the client reads the story before approving it. Empty array for every non-carousel seed.",
+          },
+          sourced_from: {
+            type: 'string' as const,
+            description:
+              "REQUIRED on a narrative episode: the real situation it retells and where it came from, one line with the URL when there is one (e.g. 'racconto in prima persona su <forum>, 12/03 — https://…'). You may only write an episode about a situation you actually FOUND and then researched; if the research tool turned nothing up, say so here and keep the episode general rather than inventing a specific life. Empty string on a guide, a poster or anything that retells nobody.",
           },
           art_direction: {
             type: 'string' as const,

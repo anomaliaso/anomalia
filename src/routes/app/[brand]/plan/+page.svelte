@@ -606,7 +606,7 @@
               </span>
               <span>{#if s.pillar}<span class="pillar-chip" style={`color:${pillarColor(s.pillar)};background:${pillarColor(s.pillar)}1a`}>● {s.pillar}</span>{/if}</span>
               <span class="wt-fmt">{s.format}</span>
-              <span class="wt-text">{s.angle}{#if s.beats?.length}<span class="beats-chip" title={s.beats.map((b: { shows: string }) => b.shows).join(' · ')}>{s.beats.length} ⧉</span>{/if}</span>
+              <span class="wt-text">{s.angle}{#if s.beats?.length}<span class="beats-chip" title={s.beats.map((b: { shows: string }) => b.shows).join(' · ')}>{s.beats.length} ⧉</span>{/if}{#if s.beats?.length && !s.sourced_from}<span class="nosrc-chip" title={$_('weekPlan.noSource')}>?</span>{/if}</span>
               <span><span class="st-chip" data-s="todo"><span class="st-dot"></span>{$_('weekPlan.status.todo')}</span></span>
               <span class="wt-actions">
                 <button type="button" class="mini-btn gen" onclick={() => produceRow(r.i)} disabled={producing || producingRow != null || data.quota.remaining <= 0}>
@@ -653,6 +653,11 @@
                 <label class="f wide"><span class="fl">{$_('weekPlan.col.artDirection')}</span>
                   <textarea rows="2" bind:value={s.art_direction} placeholder="—"></textarea>
                 </label>
+                {#if s.beats?.length}
+                  <label class="f wide"><span class="fl">{$_('weekPlan.col.source')}</span>
+                    <textarea rows="2" bind:value={s.sourced_from} placeholder={$_('weekPlan.sourcePlaceholder')}></textarea>
+                  </label>
+                {/if}
               </div>
             {/if}
           {/if}
@@ -854,6 +859,7 @@
   .wt-fmt { font-size: 13px; text-transform: capitalize; color: var(--ink-soft, #6e6e73); }
   .wt-text { font-size: 13px; line-height: 1.4; color: var(--ink, #1d1d1f); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .beats-chip { margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); white-space: nowrap; }
+  .nosrc-chip { margin-left: 4px; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: rgba(200, 120, 0, 0.16); color: #b26a00; }
   .st-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap;
     background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); }
   .st-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }

@@ -3325,7 +3325,8 @@
       "person": "Personne",
       "subject": "Visuel suggéré",
       "beats": "Histoire (un temps par slide)",
-      "artDirection": "Direction artistique (médium)"
+      "artDirection": "Direction artistique (médium)",
+      "source": "D’où vient l’histoire"
     },
     "status": {
       "todo": "À produire",
@@ -3383,7 +3384,9 @@
       "title": "La semaine {n} est déjà passée",
       "body": "Impossible de planifier une semaine déjà passée. Choisissez la semaine en cours ou une semaine à venir."
     },
-    "beatsPlaceholder": "Une ligne par slide : ce qu’on voit | ce qu’elle pense | ce que quelqu’un dit"
+    "beatsPlaceholder": "Une ligne par slide : ce qu’on voit | ce qu’elle pense | ce que quelqu’un dit",
+    "sourcePlaceholder": "La situation réelle racontée, et son lien",
+    "noSource": "Cet épisode n’a pas de source"
   },
   "setup": {
     "title": "Configuration du projet",

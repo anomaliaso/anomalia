@@ -104,6 +104,7 @@ export function normalizeWeeklyStrategy(raw: any): WeeklyStrategy {
         // l'utente approva un racconto e il produttore riceve una riga di angle.
         beats: normalizeBeats(s?.beats),
         art_direction: String(s?.art_direction ?? '').trim() || undefined,
+        sourced_from: String(s?.sourced_from ?? '').trim() || undefined,
         // Rubric linkage survives store/edit round-trips untouched (resolution happened at plan time).
         rubric: typeof s?.rubric === 'string' && s.rubric ? s.rubric : undefined,
         rubric_id: typeof s?.rubric_id === 'string' && s.rubric_id ? s.rubric_id : undefined,
