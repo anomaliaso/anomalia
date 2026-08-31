@@ -30,6 +30,7 @@
     "db:seed": "node --env-file-if-exists=.env scripts/db-seed.mjs",
     "tool-e2e": "vite-node --config scripts/vite-node.config.ts scripts/tool-e2e/run.ts",
     "eval:ux": "node scripts/eval/ux-run.mjs",
+    "eval:creative": "vite-node --config scripts/vite-node.config.ts scripts/eval/creative.ts",
     "oss:export": "node scripts/export-oss.mjs",
     "test:durability": "npm run eval:durability",
     "postinstall": "patch-package",
