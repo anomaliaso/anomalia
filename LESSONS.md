@@ -72,6 +72,9 @@ La stack Docker porta un'app pronta (`anomalia-app`, immagine `anomalia-selfhost
 ### Le env del repo puntano all'hosted; la stack locale porta le sue chiavi in kong.yml
 Il `.env` del repo punta a un progetto Supabase hosted, mentre la compose gira da un altro checkout con le chiavi veramente valide dentro `anomalia-kong:/usr/local/kong/kong.yml`. Il seed (`scripts/db-seed.mjs`) pretende `DATABASE_URL` e fallisce con parse error leggendo `.env` a mano (contiene valori con `<...>`). Mossa: overlay env a parte — `PUBLIC_SUPABASE_URL=http://localhost:8000`, chiavi estratte da kong.yml, `DATABASE_URL` dalla compose — e avviare il dev con quello; mai puntare all'hosted "per comodità".
 
+### Una colonna aggiunta a mano al DB locale non esiste per PostgREST finché non ricarichi lo schema
+`alter table ... add column` via `psql` non risveglia la cache di schema di PostgREST: ogni `.update()` che nomina la colonna nuova viene rifiutato (PGRST204), e il codice che scarta l'errore (`const { data } = await supabase...`) prosegue come se non fosse successo niente — nel caso pagato, l'approvazione di una rubrica non ha scritto la modifica e ha marcato la riga `rejected`. Segnale: una scrittura che tocca SOLO la colonna nuova non ha effetto, mentre le letture della stessa tabella funzionano. Mossa: `docker exec anomalia-db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"` subito dopo ogni migration applicata a mano, prima di aprire il browser.
+
 ### La porta 5173 può appartenere al vite di un altro worktree
 Un `vite dev` di un altro worktree risponde 404 a tutto e resta lì in ascolto; il CLI ci si punta da solo. Mossa: `lsof -nP -iTCP:5173 -sTCP:LISTEN` e `ps` sul PID prima di `npm run dev`; se occupata, porta esplicita (`npm run dev -- --port 5175`).
 
