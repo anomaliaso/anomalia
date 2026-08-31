@@ -18,7 +18,7 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { createFixture, destroyFixture, type Fixture } from './durability/fixture';
 import { runWeekPlannerAgent } from '$lib/server/week-planner-agent';
 import { executePlan } from '$lib/server/content-preview/caption-quality';
-import { renderPostImage, aspectRatioFor, brandVisualDirective, carouselSeriesDirective } from '$lib/server/content-preview/images';
+import { renderWithQC, aspectRatioFor, brandVisualDirective, carouselSeriesDirective } from '$lib/server/content-preview/images';
 
 const OUT = resolve(import.meta.dirname, '../../eval-results/agent');
 
@@ -105,14 +105,17 @@ async function renderPosts(profile: Record<string, unknown>, strategy: Parameter
       if (budget <= 0) return { posts, files };
       budget -= 1;
       const full = prompts.length > 1 && n > 0 ? prompt + carouselSeriesDirective(n, prompts.length) : prompt;
-      const dataUrl = await renderPostImage(null as never, full, {
-        visualStyle: KIT.visual_style,
-        brandLook,
-        aspectRatio,
-        moodImages: anchor ? [anchor] : []
-      }).catch((e) => {
+      // Con il QC, come in produzione: il critico rilegge il testo lettera per lettera e ritenta.
+      // Senza, la sonda mostrava render grezzi — «È la cariera alias» sarebbe uscita così com'è.
+      const { dataUrl } = await renderWithQC(
+        null as never,
+        full,
+        { visualStyle: KIT.visual_style, brandLook, aspectRatio, moodImages: anchor ? [anchor] : [] },
+        { visualStyle: KIT.visual_style },
+        false
+      ).catch((e) => {
         console.error(`  slide ${i + 1}.${n + 1} fallita: ${e instanceof Error ? e.message : e}`);
-        return undefined;
+        return { dataUrl: undefined };
       });
       if (!dataUrl) continue;
       anchor ??= inlinePart(dataUrl);
