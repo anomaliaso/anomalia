@@ -9508,7 +9508,8 @@
       "label": "New reply",
       "message": "Open the chat to read it",
       "open": "Open {name}'s chat",
-      "count": "{count, plural, one {# unread reply} other {# unread replies}}"
+      "count": "{count, plural, one {# unread reply} other {# unread replies}}",
+      "dismiss": "Dismiss"
     },
     "docPanel": {
       "subtitle": "From the knowledge base",

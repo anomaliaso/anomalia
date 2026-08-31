@@ -9509,7 +9509,8 @@
       "label": "Nuova risposta",
       "message": "Apri la chat per leggerla",
       "open": "Apri la chat di {name}",
-      "count": "{count, plural, one {# risposta non letta} other {# risposte non lette}}"
+      "count": "{count, plural, one {# risposta non letta} other {# risposte non lette}}",
+      "dismiss": "Chiudi"
     },
     "docPanel": {
       "subtitle": "Dalla knowledge base",
