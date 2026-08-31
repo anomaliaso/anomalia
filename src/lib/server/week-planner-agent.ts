@@ -50,6 +50,12 @@ export const MAX_WEEK_PLANNER_STEPS = 40;
 export const MAX_WEEK_PLANNER_DRAFTS = 4;
 export const MAX_WEEK_PLANNER_REPAIRS = 8;
 const ESTIMATED_DRAFT_USD = 0.06;
+// Il planner ha sempre letto solo dentro il brand, quindi ogni fatto procedurale che entrava in una
+// battuta — il nome di un modulo, la dicitura a schermo, cosa serve davvero a uno sportello — era
+// inventato, e la regola sulla specificità lo faceva sembrare pure verificabile. Il tetto è piccolo
+// di proposito: qui si VERIFICA quello che si sta per affermare, non ci si documenta da zero.
+export const MAX_WEEK_PLANNER_RESEARCH = 6;
+const ESTIMATED_RESEARCH_USD = 0.008;
 
 export type WeekPlannerAgentOpts = {
   supabase: SupabaseClient;
@@ -130,6 +136,7 @@ async function runWeekPlannerAgentInner(opts: WeekPlannerAgentOpts): Promise<Wee
   let working: WeeklyStrategy | null = null;
   let finished: { strategy: WeeklyStrategy; notes: string } | null = null;
   const stallFingerprints: string[] = [];
+  let researchesUsed = 0;
   const stepLog: import('$lib/server/agent-runs').AgentStepLog[] = [];
   let stepNum = 0;
   const t0 = Date.now();
@@ -147,7 +154,8 @@ Workflow:
 3. check_batch_feasibility before finish — repair_seeds or draft again if violations remain.
 4. When approved rubrics exist (${rubricNames}), every seed MUST carry rubric = exact series name and match the week's content_mix counts, and it inherits that series' art_direction verbatim.
 5. Every CAROUSEL seed carries "beats": one concrete beat per slide, in order, as many as slide_count — the story, decided here. check_batch_feasibility rejects a carousel without them; repair_seeds writes them.
-6. finish with the final seeds array.
+6. research (max ${MAX_WEEK_PLANNER_RESEARCH}/run, it costs) — NOTHING here reaches the open web except this tool, so any date, form name, legal wording or on-screen message a seed asserts is invented unless you checked it. Check before you assert; if you cannot check it, write the beat without the detail rather than with a plausible one. A wrong specific is worse than a vague one.
+7. finish with the final seeds array.
 
 Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}.
 Platforms: ${opts.platforms.join(', ')}.
@@ -266,6 +274,26 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       description: 'Strategy research report summary (free).',
       inputSchema: z.object({}),
       execute: async () => readStrategyReportForAgent(opts.supabase, opts.brandId)
+    }),
+
+    research: tool({
+      description:
+        `Check a fact on the open web before a seed states it (max ${MAX_WEEK_PLANNER_RESEARCH}/run, costs money). Use it for what the brand's own material cannot confirm: the real name of a form, the wording that actually appears on a screen, what a procedure actually requires, a date. Returns an answer with its sources.`,
+      inputSchema: z.object({
+        question: z.string().describe('One precise question, in the brand\'s language. Not a topic — a question with a checkable answer.')
+      }),
+      execute: async ({ question }) => {
+        if (researchesUsed >= MAX_WEEK_PLANNER_RESEARCH) {
+          return { error: `Research budget spent (${MAX_WEEK_PLANNER_RESEARCH}/run). Write only what the brand's material or an answer you already got supports.` };
+        }
+        if (budget.usdRemaining < ESTIMATED_RESEARCH_USD) return { error: 'USD budget too low for research' };
+        researchesUsed += 1;
+        budget.usdSpent += ESTIMATED_RESEARCH_USD;
+        budget.usdRemaining = Math.max(0, budget.usdRemaining - ESTIMATED_RESEARCH_USD);
+        const { groundedText } = await import('$lib/server/research');
+        const { text, citations } = await groundedText(null as never, question, undefined, { brandId: opts.brandId });
+        return { answer: text, sources: citations.map((c) => ({ title: c.title, url: c.uri })) };
+      }
     }),
 
     read_leads: tool({
