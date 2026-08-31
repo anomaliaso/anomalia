@@ -80,6 +80,10 @@ export default defineConfig({
     test: {
     testTimeout: TEST_TIMEOUT_MS,
     hookTimeout: 30_000,
+    // I file `*.svelte.test.ts` girano su jsdom: un `$effect` esiste solo nella build client di
+    // Svelte, e `exports.default` del pacchetto punta a `index-server.js`, dove è un no-op. Senza
+    // questo un test sugli effetti passa identico col fix e senza — una guardia che non guarda.
+    environmentMatchGlobs: [['**/*.svelte.test.ts', 'jsdom']],
     include: [
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',

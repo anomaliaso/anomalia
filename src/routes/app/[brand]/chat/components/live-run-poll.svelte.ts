@@ -1,8 +1,13 @@
-import { untrack } from 'svelte';
 import { IDLE_POLL_EVERY, LIVE_POLL_MS, pollOutcome } from './kit-run';
 
 export type LiveRunPollPorts = {
   isBusy: () => boolean;
+  /**
+   * DEVE leggere una copia NON reattiva del run. Chi la aggancia allo stato che la pagina
+   * disegna rimette il cappio: la risposta del poll riscrive quello stato, l'effetto che ha
+   * avviato il battito si invalida, si smonta e riparte. Lo tiene onesto il test
+   * «non si rimonta quando il run cambia», non questo commento.
+   */
   currentRun: () => { id: string } | null;
   fetchRun: () => Promise<Response>;
   onRun: (run: unknown) => void;
@@ -17,10 +22,10 @@ export type LiveRunPollPorts = {
  * `$effect` questo è un cappio: la lettura diventa una dipendenza, la scrittura la invalida, e
  * l'effetto si smonta e rimonta a ogni risposta — 840 giri al secondo misurati, non uno ogni
  * 350ms. Il thread principale saturo è ciò che l'utente vede come «ricarico e non si muove più
- * niente». Le letture passano da `untrack`: il ritmo lo detta l'intervallo, non il grafo.
+ * niente». Il ritmo lo detta l'intervallo, non il grafo di reattività.
  */
 export function startLiveRunPoll(ports: LiveRunPollPorts): () => void {
-  if (untrack(ports.isBusy)) {
+  if (ports.isBusy()) {
     return () => {};
   }
 
@@ -28,7 +33,7 @@ export function startLiveRunPoll(ports: LiveRunPollPorts): () => void {
   let tick = 0;
 
   const poll = async () => {
-    const run = untrack(ports.currentRun);
+    const run = ports.currentRun();
     if (!run && ports.isHidden()) return;
     if (!run && tick++ % IDLE_POLL_EVERY !== 0) return;
     try {
@@ -39,7 +44,7 @@ export function startLiveRunPoll(ports: LiveRunPollPorts): () => void {
         ports.onRun(await res.json());
         return;
       }
-      if (esito === 'finished' && untrack(ports.currentRun)) ports.onFinished();
+      if (esito === 'finished' && ports.currentRun()) ports.onFinished();
     } catch {
       /* un poll fallito riprova al giro dopo */
     }

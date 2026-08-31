@@ -281,6 +281,15 @@
   let orphanStateRunId = '';
   /** I chunk del canale che non continuano dove siamo: aspettano lo snapshot che colma il buco. */
   let orphanPending: PendingChunk[] = [];
+  /**
+   * La copia NON reattiva del run vivo, e l'unica che il battito legge. `orphanRun` è ciò che la
+   * pagina disegna: leggerlo dentro l'effetto del battito lo rendeva dipendente da ciò che la
+   * risposta del poll riscrive, quindi l'effetto si smontava e ripartiva a ogni giro.
+   */
+  let liveRunRef: KitRun | null = null;
+  $effect(() => {
+    liveRunRef = orphanRun;
+  });
 
   /** La proiezione durevole del thread aperto: `thread-seq` la spinge oltre `kit_stream`/poll. */
   let threadProjection = $state(seedProjectionFromData());
@@ -402,7 +411,7 @@
     }
     return startLiveRunPoll({
       isBusy: () => loading,
-      currentRun: () => orphanRun,
+      currentRun: () => liveRunRef,
       isHidden: () => typeof document !== 'undefined' && document.hidden,
       fetchRun: () => fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`),
       onRun: (run) => (orphanRun = run as KitRun),

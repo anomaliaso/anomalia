@@ -339,11 +339,36 @@ invalidando l'effetto, che si smontava e rimontava chiamando subito `poll()`. Mi
 in 10 secondi** contro uno ogni 350ms previsti: il thread principale saturo non ridipinge, e da
 fuori si legge come «lo stream si è perso».
 
-**Mossa.** Le letture che servono a decidere il ritmo passano da `untrack`. E la misura che
-distingue le due diagnosi opposte è una sola: contare le richieste. `window.fetch` avvolto per
-dieci secondi dice in un colpo se il problema è che non parte niente o che parte tutto.
+**Mossa.** L'effetto che possiede un intervallo non deve dipendere da ciò che l'intervallo
+riscrive. La copia NON reattiva è la soluzione strutturale: `orphanRun` resta lo stato che la
+pagina disegna, `liveRunRef` è una `let` semplice tenuta allineata da un effetto separato, ed è
+quella che il battito legge. Una variabile normale non è un segnale: non c'è niente a cui
+iscriversi, quindi il cappio non può riformarsi.
 
-**E il test che non si può scrivere va dichiarato.** Il cappio è reattivo, e in questa suite gli
-effetti Svelte non vengono eseguiti (`$effect.root` + `flushSync` conta zero esecuzioni del corpo):
-un test lì passa identico con e senza il fix. Lasciarlo è peggio che non averlo — è una guardia
-finta che il prossimo leggerà come copertura. Va tolto e il buco va scritto qui.
+**`untrack` non basta, e sembra bastare.** Il primo fix avvolgeva le letture in `untrack` e nel
+browser i numeri crollavano — sembrava risolto. Misurato, `untrack` NON impedisce il re-run quando
+il valore si legge attraverso una port `() => stato`:
+
+    nothing=1  direct=2  untrackPort=2  untrackArrow=2  inAsyncFn=1
+
+Solo la lettura DOPO un `await` esce davvero dal contesto. Una misura nel browser che migliora non
+prova che la causa scritta nel commento sia quella giusta: prova solo che qualcosa è cambiato.
+
+**E la misura che distingue le due diagnosi opposte** è una sola: contare le richieste.
+`window.fetch` avvolto per dieci secondi dice in un colpo se il problema è che non parte niente o
+che parte tutto.
+
+## Gli `$effect` di Svelte SONO testabili: manca una riga di config, non il seam
+
+**Segnale.** Un test sugli effetti passa identico con e senza il fix, e una sonda che conta le
+esecuzioni del corpo dice zero. La conclusione facile — «qui gli effetti non si testano» — è
+sbagliata, e costa il test di regressione proprio dove serviva.
+
+**Causa.** `$effect` esiste solo nella build client di Svelte. L'export map del pacchetto è
+`{ browser: './src/index-client.js', default: './src/index-server.js' }`: in ambiente node vince
+`default`, cioè la build SSR, dove l'effetto è un no-op.
+
+**Mossa.** `environmentMatchGlobs: [['**/*.svelte.test.ts', 'jsdom']]` in `vite.config.ts` —
+jsdom era già installato, non serve una dipendenza nuova. E una seconda trappola sopra: dentro
+`$effect.root` gli effetti si svuotano su **microtask**, quindi `flushSync()` da solo conta zero
+esecuzioni; ci vuole `await tick()`. Due dettagli, e il seam c'è.

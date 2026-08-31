@@ -1,17 +1,50 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { tick } from 'svelte';
 import { startLiveRunPoll } from './live-run-poll.svelte';
 import { LIVE_POLL_MS } from './kit-run';
 
 afterEach(() => vi.useRealTimers());
 
-/**
- * Il cappio reattivo che ha causato il difetto — l'effetto che legge il run e lo riscrive — QUI
- * non è verificabile: in questo ambiente di test gli effetti Svelte non vengono eseguiti
- * (`$effect.root` + `flushSync` non fa girare il corpo). Un test che passa in entrambi i sensi
- * è peggio di nessun test, quindi non c'è: la garanzia è `untrack` in `live-run-poll.svelte.ts`
- * e la misura dal browser nel changelog. Quello che resta qui è il ritmo, che è testabile.
- */
 describe('il battito che segue un turno vivo', () => {
+  it('non si rimonta quando il run cambia', async () => {
+    let starts = 0;
+    let setRun: (next: { id: string }) => void = () => {};
+
+    const cleanup = $effect.root(() => {
+      let run = $state<{ id: string } | null>({ id: 'r1' });
+      // La stessa copia non reattiva che tiene la pagina del thread: è questa che il battito
+      // legge. Agganciare `currentRun` direttamente a `run` rimette il cappio, e questo test
+      // torna rosso.
+      let ref: { id: string } | null = null;
+      setRun = (next) => (run = next);
+      $effect(() => {
+        ref = run;
+      });
+      $effect(() => {
+        starts++;
+        return startLiveRunPoll({
+          isBusy: () => false,
+          currentRun: () => ref,
+          isHidden: () => false,
+          // Non si risolve mai: qui interessa il grafo di reattività, non la rete.
+          fetchRun: () => new Promise<Response>(() => {}),
+          onRun: () => {},
+          onFinished: () => {}
+        });
+      });
+    });
+
+    await tick();
+    setRun({ id: 'r2' });
+    await tick();
+    cleanup();
+
+    // Il difetto: `poll()` leggeva il run in modo TRACCIATO, quindi la risposta che lo riscrive
+    // invalidava l'effetto — smontato e rimontato a ogni giro, col poll immediato ogni volta.
+    // Misurati ~840 giri al secondo, il thread principale saturo e la pagina ferma.
+    expect(starts).toBe(1);
+  });
+
   it('non parte affatto mentre questa scheda sta già streammando il turno', async () => {
     vi.useFakeTimers();
     let fetches = 0;

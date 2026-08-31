@@ -26,15 +26,33 @@ subito `poll()`. Non è un poll ogni 350ms: sono **3378 giri misurati in 10 seco
 secondo, con il thread principale saturo. Da fuori: la chat resta «attiva», il contatore non si
 muove, non arriva più né testo né tool né pensiero.
 
-Il battito sta ora in `live-run-poll.svelte.ts` e le letture del run passano da `untrack`: il
-ritmo lo detta l'intervallo, non il grafo di reattività. Dopo il fix, stesso scenario: 17 poll in
-11 secondi, `orphanState.reasoning` a 17k caratteri, il piano editoriale che continua a scriversi
-in pagina dopo il ricaricamento.
+Il battito sta ora in `live-run-poll.svelte.ts`, e la pagina gli passa una copia NON reattiva del
+run (`liveRunRef`, tenuta allineata da un effetto separato e a costo zero). È la copia che rompe
+il cappio: `orphanRun` resta ciò che la pagina disegna, e nessun effetto che possiede un intervallo
+dipende più da ciò che la risposta del poll riscrive. Dopo il fix, stesso scenario: 10 poll in 10
+secondi e il testo che continua a crescere in pagina dopo il ricaricamento.
 
-### Il test che NON c'è, e perché
+### `untrack` non bastava, e per poco non se ne accorgeva nessuno
 
-Il cappio reattivo non è verificabile in questa suite: gli effetti Svelte non vengono eseguiti
-nell'ambiente di test attuale (una sonda `$effect.root` + `flushSync` conta zero esecuzioni del
-corpo). Un test che passa identico con e senza il fix è peggio di nessun test, quindi è stato
-tolto invece che lasciato a fare da guardia finta. Restano i due test sul ritmo, che si reggono
-senza scheduler. Il seam manca davvero: sta in [`LESSONS.md`](../LESSONS.md).
+Il primo tentativo avvolgeva le letture in `untrack` e sembrava funzionare: nel browser i numeri
+crollavano. Misurato nel test, `untrack` NON impedisce il re-run in questa forma — un effetto che
+legge un `$state` tramite una port `() => run` si invalida lo stesso, con o senza. Il fix
+funzionava per un'altra ragione, non per quella scritta nel commento. Una copia semplice, invece,
+non è un segnale: non c'è niente a cui iscriversi.
+
+La sonda che lo dice, tenuta corta:
+
+    nothing=1  direct=2  untrackPort=2  untrackArrow=2  inAsyncFn=1
+
+### Il seam c'era, mancava una riga di config
+
+`$effect` esiste solo nella build client di Svelte, e `exports.default` del pacchetto punta a
+`index-server.js`, dove è un no-op: in ambiente node il corpo dell'effetto non gira e un test lì
+passa identico col fix e senza. Non è un limite della suite, è la condizione di risoluzione —
+`environmentMatchGlobs: [['**/*.svelte.test.ts', 'jsdom']]` la sistema, e jsdom era già installato.
+
+Una seconda trappola sopra: dentro `$effect.root` gli effetti si svuotano su microtask, quindi
+`flushSync()` da solo conta zero. Ci vuole `await tick()`.
+
+Il test ora c'è ed è stato visto rosso ricollegando la port allo stato reattivo:
+`expected 2 to be 1`.
