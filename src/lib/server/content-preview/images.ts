@@ -500,6 +500,12 @@ export async function renderWithQC(
 // LEGGERO (solo fedeltà prodotto, un ritentativo, niente best-of-N). Tenere leggeri i seguiti è ciò
 // che tiene un carosello a ~N render invece di N pipeline di QC complete. Una slide fallita si
 // scarta, non blocca il post.
+// La regola di serie che tiene N slide un oggetto solo, non N immagini: vive qui, in un posto solo,
+// così la sonda creativa misura lo stesso prompt che la produzione manda.
+export function carouselSeriesDirective(slideIndex: number, totalSlides: number): string {
+  return `\n\nCAROUSEL SLIDE ${slideIndex + 1} of ${totalSlides} — this image is ONE SLIDE of a single carousel post. The FIRST attached style/mood reference is SLIDE 1 of the same carousel: match its medium, palette, lighting, styling and art direction EXACTLY so the whole set reads as one coherent series. Compose THIS slide's own subject as described above — never copy slide 1's composition or subject.`;
+}
+
 export async function renderCarouselSlide(
   ai: GoogleGenAI,
   supabase: SupabaseClient,
@@ -511,7 +517,7 @@ export async function renderCarouselSlide(
   slideOneAnchor: ImagePart | undefined,
   critiqueOpts: CritiqueOpts
 ): Promise<string | undefined> {
-  const seriesDirective = `\n\nCAROUSEL SLIDE ${slideIndex + 1} of ${totalSlides} — this image is ONE SLIDE of a single carousel post. The FIRST attached style/mood reference is SLIDE 1 of the same carousel: match its medium, palette, lighting, styling and art direction EXACTLY so the whole set reads as one coherent series. Compose THIS slide's own subject as described above — never copy slide 1's composition or subject.`;
+  const seriesDirective = carouselSeriesDirective(slideIndex, totalSlides);
   // La slide 1 precede i mood del brand, così domina l'ancoraggio estetico.
   const opts = { ...renderOpts, moodImages: [...(slideOneAnchor ? [slideOneAnchor] : []), ...(renderOpts.moodImages ?? [])] };
   try {

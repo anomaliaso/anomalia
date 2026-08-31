@@ -21,7 +21,7 @@ import { resolve } from 'node:path';
 import { proposeRubrics, type Rubric } from '$lib/server/rubrics';
 import { planStrategy } from '$lib/server/content-preview/plan-pipeline';
 import { executePlan } from '$lib/server/content-preview/caption-quality';
-import { renderPostImage, aspectRatioFor, brandVisualDirective } from '$lib/server/content-preview/images';
+import { renderPostImage, aspectRatioFor, brandVisualDirective, carouselSeriesDirective } from '$lib/server/content-preview/images';
 import type { PostSeed, PreviewPost } from '$lib/server/content-preview';
 
 const OUT_ROOT = resolve(import.meta.dirname, '../../eval-results/creative');
@@ -147,7 +147,10 @@ async function renderSeries(posts: PreviewPost[]): Promise<string[]> {
       if (budget <= 0) return files;
       budget -= 1;
       // La slide 1 finita fa da ancora estetica alle successive, come in produzione.
-      const dataUrl = await renderPostImage(null as never, prompt, {
+      // La stessa direttiva di serie della produzione, non una riscritta a mano: senza, la sonda
+      // misurerebbe un carosello più slegato di quello che il prodotto spedisce davvero.
+      const full = prompts.length > 1 && n > 0 ? prompt + carouselSeriesDirective(n, prompts.length) : prompt;
+      const dataUrl = await renderPostImage(null as never, full, {
         visualStyle,
         brandLook,
         aspectRatio,
