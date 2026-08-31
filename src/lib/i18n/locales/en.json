@@ -3111,9 +3111,9 @@
       }
     },
     "pick": {
-      "title": "Meet your first agent",
+      "title": "Your autonomous team",
       "sub": "Explore your team of AI agents who know marketing.",
-      "start": "Start chat",
+      "start": "Start",
       "prev": "Previous agent",
       "next": "Next agent",
       "customDesc": "Your own agent"
