@@ -261,7 +261,7 @@ function syncFormatMedia<T extends { format: ContentFormat; media: 'image' | 'te
   return seed;
 }
 
-export function clampMediaCapabilities<T extends { platform: string; platforms?: string[]; format: ContentFormat; slide_count?: number; beats?: string[]; media: 'image' | 'text' | 'video' | 'link'; link_url?: string }>(seed: T): T {
+export function clampMediaCapabilities<T extends { platform: string; platforms?: string[]; format: ContentFormat; slide_count?: number; beats?: Beat[]; media: 'image' | 'text' | 'video' | 'link'; link_url?: string }>(seed: T): T {
   // Un seed text/link non può vivere (né fare cross-post) su una piattaforma visual-only.
   // 'video' È un visual: farlo cadere qui lo riscriverebbe a 'image', spogliando il reel.
   if (seed.media !== 'image' && seed.media !== 'video') {
@@ -299,7 +299,7 @@ export function clampMediaCapabilities<T extends { platform: string; platforms?:
   // Le BATTUTE, quando ci sono, sono la misura della storia: lo slide_count le segue invece di
   // contraddirle, o si renderizzano tre slide di un racconto lungo sei.
   if (seed.format === 'carousel') {
-    const beats = (seed.beats ?? []).map((b) => String(b ?? '').trim()).filter(Boolean);
+    const beats = normalizeBeats(seed.beats) ?? [];
     seed.beats = beats.length ? beats : undefined;
     seed.slide_count = Math.max(
       CAROUSEL_MIN_SLIDES,
@@ -459,6 +459,34 @@ export function enforceFaceBrandPeople(seeds: PostSeed[], profile: BrandProfile)
 // chiude su un caffè; con, l'attrito diventa uno sportello, un errore a schermo e mezza mattinata
 // persa. Attenzione al rovescio: la regola 3 fa produrre dettagli che SEMBRANO verificabili, quindi
 // alza il rischio di inventare con sicurezza — vale insieme a una fonte, non al posto suo.
+export type Beat = {
+  /** Cosa si vede nel riquadro. */
+  shows: string;
+  /** La voce di dentro, prima persona, poche parole: la didascalia letterizzata nel riquadro. */
+  thinks: string;
+  /** Il parlato, quando qualcuno parla davvero. Assente quando nessuno apre bocca. */
+  says?: string;
+};
+
+// Le battute arrivano dal modello, dal DB e dalla griglia di editing, e la forma vecchia era una
+// stringa sola: una stringa resta leggibile come un riquadro senza voce, invece di sparire.
+export function normalizeBeats(raw: unknown): Beat[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const beats = raw
+    .map((b) => {
+      if (typeof b === 'string') return { shows: b.trim(), thinks: '' };
+      const rec = (b ?? {}) as Record<string, unknown>;
+      const says = String(rec.says ?? '').trim();
+      return {
+        shows: String(rec.shows ?? '').trim(),
+        thinks: String(rec.thinks ?? '').trim(),
+        ...(says ? { says } : {})
+      };
+    })
+    .filter((b) => b.shows);
+  return beats.length ? beats : undefined;
+}
+
 export const STORY_FAILURE_MODES = `STORY FAILURE MODES (hard, numbered — any one of them and the episode is rewritten):
 1. THE MILESTONE: the ceremony the reader already pictures from the category alone — the haircut, the mirror, the coming out at the dinner table, the first time the name is said aloud, the document finally arriving. If someone who has never met this person could have guessed the scene from the category, it is a trope, not a story. The friction lives in an ordinary Tuesday.
 2. THE SYSTEM, NOT A VILLAIN: the discomfort worth an episode comes from a procedure, a form, a counter, an automated message, a database, a dropdown with two options — something that gets it wrong without anyone deciding to. A named cruel person is a soap opera; a system simply built wrong is the actual life, and it is what the audience recognises.
@@ -482,11 +510,15 @@ export type PostSeed = {
   // undefined for every other format. Quando ci sono le BATTUTE, le seguono: sono loro a dire
   // quanto è lunga la storia.
   slide_count?: number;
+  // Una battuta è un RIQUADRO, e un riquadro ha due metà. `shows` è quello che si vede; `thinks` è
+  // la voce di dentro in prima persona, che diventa la didascalia letterizzata — senza, esce un
+  // fumetto muto in cui si capisce cosa succede e niente di chi lo attraversa (il difetto che ha
+  // bocciato il primo carosello). `says` è il parlato, e solo quando qualcuno parla davvero.
   // SOLO CAROSELLI — la storia, una battuta per slide, decisa nel PIANO. LIVELLO VINCOLANTE (vedi
   // il contratto sopra): senza, il produttore riceve una riga di `angle` e improvvisa N immagini,
   // che è esattamente il motivo per cui un carosello narrativo non arrivava mai in fondo. Vuoto →
   // comportamento di prima, il produttore compone lui la serie.
-  beats?: string[];
+  beats?: Beat[];
   // Il MEDIUM di questo post: fumetto, illustrazione, collage, reportage. Arriva dalla rubrica
   // (applyRubricToSeed) o dal planner per un one-off, e BATTE il visual_style del brand.
   art_direction?: string;
@@ -584,9 +616,27 @@ export const STRATEGY_SCHEMA = {
           },
           beats: {
             type: 'array' as const,
-            items: { type: 'string' as const },
+            items: {
+              type: 'object' as const,
+              properties: {
+                shows: {
+                  type: 'string' as const,
+                  description: 'What is SEEN in that panel, one concrete sentence — a moment, a turn, a step. Never a topic label.'
+                },
+                thinks: {
+                  type: 'string' as const,
+                  description:
+                    "The inner line: what the person actually thinks in that second, first person, plain, SIX WORDS OR FEWER — it is lettered into the panel as a caption box, and it is the half that makes a STORY readable at all. Never an aphorism or a metaphor. A carousel is either a story someone lives or a guide of steps: in a story EVERY beat carries this, in a guide NONE does — an explanatory card with a thought printed next to an icon is neither."
+                },
+                says: {
+                  type: 'string' as const,
+                  description: 'Spoken words, only when someone actually speaks, with WHO says them. Empty string when nobody talks.'
+                }
+              },
+              required: ['shows', 'thinks', 'says']
+            },
             description:
-              "ONLY for carousel seeds: the STORY, one beat per slide, in order — exactly slide_count entries. A beat is what THAT slide says or shows in one concrete sentence (a moment, a turn, a line of dialogue, a step), never a topic label. Together they must form a real arc: a situation, something that changes, a landing. Write them here, at plan time, so the client reads the story before approving it. Empty array for every non-carousel seed.",
+              "ONLY for carousel seeds: the STORY, one beat per slide, in order — exactly slide_count entries. Together they form a real arc: a situation, something that changes, a landing. Written here, at plan time, so the client reads the story before approving it. Empty array for every non-carousel seed.",
           },
           art_direction: {
             type: 'string' as const,
@@ -851,7 +901,7 @@ export function ladderContextFrom(
 
 // Downgrade every carousel past the cap to a single image — the COST guardrail (an N-slide
 // carousel renders ~N images). Mirrors clampVideos; maxCarousels 0 = the kill switch.
-export function clampCarousels<T extends { format: ContentFormat; slide_count?: number; beats?: string[] }>(items: T[], maxCarousels: number): void {
+export function clampCarousels<T extends { format: ContentFormat; slide_count?: number; beats?: Beat[] }>(items: T[], maxCarousels: number): void {
   let kept = 0;
   for (const item of items) {
     if (item.format !== 'carousel') continue;

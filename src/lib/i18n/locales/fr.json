@@ -3383,7 +3383,7 @@
       "title": "La semaine {n} est déjà passée",
       "body": "Impossible de planifier une semaine déjà passée. Choisissez la semaine en cours ou une semaine à venir."
     },
-    "beatsPlaceholder": "Une ligne par slide : ce qu’elle montre ou dit"
+    "beatsPlaceholder": "Une ligne par slide : ce qu’on voit | ce qu’elle pense | ce que quelqu’un dit"
   },
   "setup": {
     "title": "Configuration du projet",

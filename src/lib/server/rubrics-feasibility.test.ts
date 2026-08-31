@@ -180,7 +180,7 @@ describe('carousel beats', () => {
 
   it('flags a beat count that does not match the slides', () => {
     const violations = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'carousel', slide_count: 5, beats: ['b1', 'b2', 'b3'] })],
+      [seed({ format: 'carousel', slide_count: 5, beats: [{ shows: 'b1', thinks: 'x' }, { shows: 'b2', thinks: 'y' }, { shows: 'b3', thinks: 'z' }] })],
       ctx
     );
     expect(violations.some((v) => v.includes('beats'))).toBe(true);
@@ -188,7 +188,28 @@ describe('carousel beats', () => {
 
   it('passes a carousel whose beats match its slides', () => {
     const violations = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'carousel', slide_count: 4, beats: ['b1', 'b2', 'b3', 'b4'] })],
+      [seed({ format: 'carousel', slide_count: 4, beats: [{ shows: 'b1', thinks: 'x' }, { shows: 'b2', thinks: 'y' }, { shows: 'b3', thinks: 'z' }, { shows: 'b4', thinks: 'w' }] })],
+      ctx
+    );
+    expect(violations).toEqual([]);
+  });
+
+  // Un carosello o è una STORIA (qualcuno la vive) o è una GUIDA (dei passi). Il riquadro muto è un
+  // difetto solo dentro una storia: pretendere la voce di dentro su una scheda esplicativa produce
+  // "Basta non farsi prendere dall'ansia" stampato accanto a un'icona.
+  it('coglie il riquadro muto dentro una storia', () => {
+    const violations = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'carousel', slide_count: 3, beats: [
+        { shows: 'b1', thinks: 'ci risiamo' }, { shows: 'b2', thinks: '' }, { shows: 'b3', thinks: 'vabbè' }
+      ] })],
+      ctx
+    );
+    expect(violations.some((v) => v.includes('inner line'))).toBe(true);
+  });
+
+  it('lascia in pace una guida, che di voce di dentro non ne ha nessuna', () => {
+    const violations = checkRubricsAndBatchFeasibility(
+      [seed({ format: 'carousel', slide_count: 3, beats: ['passo 1', 'passo 2', 'passo 3'] })],
       ctx
     );
     expect(violations).toEqual([]);
@@ -196,5 +217,24 @@ describe('carousel beats', () => {
 
   it('never asks a non-carousel seed for beats', () => {
     expect(checkRubricsAndBatchFeasibility([seed({ format: 'single_image' })], ctx)).toEqual([]);
+  });
+});
+
+// `hit` veniva usato DOPO il ramo che gestisce la sua assenza: un seed che nomina una rubrica non
+// approvata non produceva una violazione, faceva esplodere il controllo.
+describe('rubrica sconosciuta', () => {
+  it('non fa esplodere il controllo', () => {
+    const run = () =>
+      checkRubricsAndBatchFeasibility([seed({ rubric: 'Una serie che non esiste' })], {
+        expectedSeedCount: 1,
+        selectedPlatforms: ['instagram'],
+        products: [],
+        people: [],
+        mediaIds: new Set<string>(),
+        rubrics,
+        weekMix: []
+      });
+    expect(run).not.toThrow();
+    expect(run().some((v) => v.includes('not an approved series'))).toBe(true);
   });
 });

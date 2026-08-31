@@ -18,7 +18,7 @@ export type {
   WeeklyStrategy
 } from './content-preview/seed-model';
 
-export { detectSceneCollapse, seedToPost } from './content-preview/plan-pipeline';
+export { applySeedFix, detectSceneCollapse, seedToPost } from './content-preview/plan-pipeline';
 
 export {
   CAPTION_FAILURE_MODES,

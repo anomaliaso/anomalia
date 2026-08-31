@@ -1,6 +1,7 @@
 import type { Rubric } from '$lib/server/rubrics';
 import type { EditorialPlan, PlanWeek } from '$lib/server/editorial-plan';
 import type { PostSeed } from '$lib/server/content-preview';
+import { normalizeBeats } from '$lib/server/content-preview/seed-model';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Approved recurring series (rubriche) — named, format-bound content series. */
@@ -97,12 +98,20 @@ export function checkRubricsAndBatchFeasibility(
     // Un carosello è una storia o è padding: le battute sono la storia, e senza il produttore
     // improvvisa N immagini da una riga di angle.
     if (seed.format === 'carousel') {
-      const beats = (seed.beats ?? []).filter((b) => String(b ?? '').trim());
+      // I seed arrivano qui grezzi dal modello (l'agente passa il suo array così com'è), quindi la
+      // forma va normalizzata prima di giudicarla: una battuta vecchia in forma di stringa resta
+      // valida come riquadro, e senza voce di dentro la regola qui sotto la coglie.
+      const beats = normalizeBeats(seed.beats) ?? [];
+      // Solo dentro una storia: se NESSUNA battuta ha la voce di dentro il carosello è una guida.
+      const voiced = beats.filter((b) => b.thinks?.trim());
+      const mute = voiced.length ? beats.filter((b) => !b.thinks?.trim()) : [];
       const slides = Number(seed.slide_count) || 0;
       if (!beats.length) {
         violations.push(`Carousel seed "${seed.angle}" has no beats — write one concrete beat per slide, in order.`);
       } else if (slides && beats.length !== slides) {
         violations.push(`Carousel seed "${seed.angle}" has ${beats.length} beats for ${slides} slides — one beat per slide.`);
+      } else if (mute.length) {
+        violations.push(`Carousel seed "${seed.angle}" has ${mute.length} beat(s) with no inner line — a story cannot have mute panels, and the rest of this post has an inner line.`);
       }
     }
     if (seed.media_id && !ctx.mediaIds.has(seed.media_id)) {
@@ -121,7 +130,9 @@ export function checkRubricsAndBatchFeasibility(
         const hit = rubricMap.get(rubricName.toLowerCase());
         if (!hit) {
           violations.push(`Seed rubric "${rubricName}" is not an approved series.`);
-        } else if (seed.format && hit.format && seed.format !== hit.format) {
+          continue;
+        }
+        if (seed.format && hit.format && seed.format !== hit.format) {
           violations.push(
             `Seed rubric "${hit.name}" requires format ${hit.format} but seed has ${seed.format}.`
           );

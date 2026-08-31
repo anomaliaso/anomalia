@@ -606,7 +606,7 @@
               </span>
               <span>{#if s.pillar}<span class="pillar-chip" style={`color:${pillarColor(s.pillar)};background:${pillarColor(s.pillar)}1a`}>● {s.pillar}</span>{/if}</span>
               <span class="wt-fmt">{s.format}</span>
-              <span class="wt-text">{s.angle}{#if s.beats?.length}<span class="beats-chip" title={s.beats.join(' · ')}>{s.beats.length} ⧉</span>{/if}</span>
+              <span class="wt-text">{s.angle}{#if s.beats?.length}<span class="beats-chip" title={s.beats.map((b: { shows: string }) => b.shows).join(' · ')}>{s.beats.length} ⧉</span>{/if}</span>
               <span><span class="st-chip" data-s="todo"><span class="st-dot"></span>{$_('weekPlan.status.todo')}</span></span>
               <span class="wt-actions">
                 <button type="button" class="mini-btn gen" onclick={() => produceRow(r.i)} disabled={producing || producingRow != null || data.quota.remaining <= 0}>
@@ -643,8 +643,11 @@
                 {#if s.format === 'carousel'}
                   <label class="f wide"><span class="fl">{$_('weekPlan.col.beats')}</span>
                     <textarea rows={Math.max(3, (s.beats ?? []).length)} placeholder={$_('weekPlan.beatsPlaceholder')}
-                      value={(s.beats ?? []).join('\n')}
-                      oninput={(e) => (s.beats = e.currentTarget.value.split('\n').map((b) => b.trim()).filter(Boolean))}></textarea>
+                      value={(s.beats ?? []).map((b: { shows: string; thinks: string; says?: string }) => [b.shows, b.thinks, b.says].filter(Boolean).join(' | ')).join('\n')}
+                      oninput={(e) => (s.beats = e.currentTarget.value.split('\n').map((line) => {
+                        const [shows = '', thinks = '', says = ''] = line.split('|').map((x) => x.trim());
+                        return { shows, thinks, ...(says ? { says } : {}) };
+                      }).filter((b) => b.shows))}></textarea>
                   </label>
                 {/if}
                 <label class="f wide"><span class="fl">{$_('weekPlan.col.artDirection')}</span>

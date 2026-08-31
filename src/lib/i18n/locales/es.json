@@ -3383,7 +3383,7 @@
       "title": "La semana {n} ya ha pasado",
       "body": "No puedes planificar una semana que ya ha pasado. Elige la semana actual o una futura."
     },
-    "beatsPlaceholder": "Una línea por diapositiva: qué muestra o dice"
+    "beatsPlaceholder": "Una línea por diapositiva: qué se ve | qué piensa | qué dice alguien"
   },
   "setup": {
     "title": "Configuración del proyecto",

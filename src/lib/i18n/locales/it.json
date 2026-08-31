@@ -3384,7 +3384,7 @@
       "Sunday": "Domenica"
     },
     "producedBeforeStop": "{n} post sono stati creati prima dello stop.",
-    "beatsPlaceholder": "Una riga per slide: cosa mostra o dice quella slide"
+    "beatsPlaceholder": "Una riga per slide: cosa si vede | cosa pensa | cosa dice qualcuno"
   },
   "setup": {
     "title": "Setup del progetto",

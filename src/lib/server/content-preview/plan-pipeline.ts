@@ -1,5 +1,5 @@
 import type { GoogleGenAI } from '@google/genai';
-import { STORY_FAILURE_MODES, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
+import { STORY_FAILURE_MODES, normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { logAiCall, extractGeminiUsage } from '$lib/server/ai-log';
@@ -338,7 +338,7 @@ Return JSON.`;
       pillar: String(s?.pillar ?? ''),
       format: normalizeContentFormat(s?.format),
       slide_count: Number(s?.slide_count) || undefined,
-      beats: Array.isArray(s?.beats) ? s.beats.map((b: unknown) => String(b ?? '').trim()).filter(Boolean) : undefined,
+      beats: normalizeBeats(s?.beats),
       art_direction: String(s?.art_direction ?? '').trim() || undefined,
       ...(rubrics.length ? { rubric: String(s?.rubric ?? '') } : {}),
       // Derivato dal FORMAT e non preso dal modello: il renderer segue il format, quindi un
@@ -420,7 +420,7 @@ Return JSON.`;
   };
 
   // Pass 1.5: un secondo modello riscrive in loco i seed deboli. Best-effort.
-  const reviewed = await reviewSeeds(ai, profile, strategy, plats);
+  const reviewed = await reviewSeeds(ai, profile, strategy, plats, rubrics);
   // Pass 1.6 — panel sui copioni UGC PRIMA di spendere un frame: il renderer rende bellissimi
   // anche i copioni deboli, ed è esattamente la trappola. Best-effort.
   const { reviewUgcScripts } = await import('$lib/server/ugc-script-review');
@@ -455,9 +455,23 @@ const SEED_REVIEW_SCHEMA = {
           media: { type: 'string' as const, enum: ['image', 'text', 'keep'] as const, description: '"image" or "text" to override, "keep" to leave unchanged.' },
           format: { type: 'string' as const, enum: ['single_image', 'carousel', 'keep'] as const, description: '"single_image" to demote a carousel whose angle cannot sustain distinct slides (or vice versa, "carousel" only if the angle clearly is a list/process/comparison); "keep" to leave unchanged.' },
           angle: { type: 'string' as const, description: 'Rewritten one-line angle, or "" to keep.' },
-          subject: { type: 'string' as const, description: 'Rewritten visual subject, or "" to keep.' }
+          subject: { type: 'string' as const, description: 'Rewritten visual subject, or "" to keep.' },
+          beats: {
+            type: 'array' as const,
+            items: {
+              type: 'object' as const,
+              properties: {
+                shows: { type: 'string' as const, description: 'What is seen in that panel, one concrete sentence.' },
+                thinks: { type: 'string' as const, description: 'The inner line, first person, six words or fewer. Empty on a guide panel that has no protagonist.' },
+                says: { type: 'string' as const, description: 'Spoken words with WHO says them, or "" when nobody speaks.' }
+              },
+              required: ['shows', 'thinks', 'says']
+            },
+            description:
+              'ONLY to repair a CAROUSEL that arrived without its story: write one beat per slide, in order, exactly slide_count of them. Prefer this over demoting — a series whose format is a carousel must stay one. Empty array for every other fix.'
+          }
         },
-        required: ['index', 'reason', 'product', 'media', 'format', 'angle', 'subject']
+        required: ['index', 'reason', 'product', 'media', 'format', 'angle', 'subject', 'beats']
       }
     }
   },
@@ -468,11 +482,36 @@ const SEED_REVIEW_SCHEMA = {
 // lista People vera) e col batch nel suo insieme, e riscrive solo le righe deboli: prodotto visivo
 // lasciato text-only, angolo che promette ciò che il prodotto non fa, batch collassato su una
 // categoria. Non lancia mai — al fallimento restano i seed sanificati.
+// Un fix del pass 1.5 applicato al seed. Puro ed esportato perché qui si è persa un'invariante che
+// altrove è legge: il formato della RUBRICA è autoritativo, e il revisore lo scavalcava in silenzio
+// declassando a immagine singola l'unico episodio narrativo del batch. resolveSeedWithRubrics
+// ristabilisce rubrica + capacità di piattaforma, e logga la degradazione quando è fisica.
+export function applySeedFix<T extends PostSeed>(
+  seed: T,
+  fix: AnyRec,
+  validProducts: Set<string>,
+  rubrics: Rubric[]
+): T {
+  const newProduct = String(fix?.product ?? '').trim();
+  if (newProduct && validProducts.has(newProduct.toLowerCase())) seed.product = newProduct;
+  else if (newProduct) seed.product = '';
+  if (fix?.media === 'image' || fix?.media === 'text' || fix?.media === 'link') seed.media = fix.media;
+  if (fix?.format === 'single_image' || fix?.format === 'carousel') seed.format = fix.format;
+  if (String(fix?.angle ?? '').trim()) seed.angle = String(fix.angle).trim();
+  if (String(fix?.subject ?? '').trim()) seed.subject = String(fix.subject).trim();
+  // Un carosello senza storia si RIPARA scrivendola, non declassando: declassare era il modo in cui
+  // l'unica rubrica narrativa del batch spariva ogni settimana.
+  const written = normalizeBeats(fix?.beats);
+  if (written) seed.beats = written;
+  return resolveSeedWithRubrics(seed, rubrics) as T;
+}
+
 async function reviewSeeds(
   ai: GoogleGenAI,
   profile: BrandProfile,
   strategy: WeeklyStrategy,
-  plats: string[]
+  plats: string[],
+  rubrics: Rubric[]
 ): Promise<WeeklyStrategy> {
   try {
     if (!strategy.seeds.length) return strategy;
@@ -501,7 +540,7 @@ async function reviewSeeds(
         : '';
 
     const seedList = strategy.seeds
-      .map((s, i) => `${i}. platform:${s.platform} format:${s.format}${s.format === 'carousel' ? `(${s.slide_count ?? 5} slides)` : ''} media:${s.media} product:"${s.product || ''}" person:"${s.person || ''}" angle:"${s.angle}"`)
+      .map((s, i) => `${i}. platform:${s.platform} format:${s.format}${s.format === 'carousel' ? `(${s.slide_count ?? 5} slides)` : ''} media:${s.media} product:"${s.product || ''}" person:"${s.person || ''}" angle:"${s.angle}"${(s.beats ?? []).length ? `\n   story: ${(s.beats ?? []).map((b) => b.shows).join(' → ')}` : ''}`)
       .join('\n');
 
     const prompt = `You are a strict senior creative director reviewing the post plan a junior strategist proposed for this brand. Audit each seed against the REAL brand facts below and list ONLY the seeds that need fixing.
@@ -524,7 +563,7 @@ Flag and fix a seed when:
 - Its ANGLE promises something the product can't deliver (e.g. a "thock"/sound/typing-feel angle on a MONITOR, DESK or CHAIR) — rewrite the angle to fit what that product actually is.
 - It names a PERSON not in the People list — the person should already be blank; if the angle leans on that person, rewrite it to be product/lifestyle instead.
 - The batch is monotonous (multiple seeds on the same product category) when other categories are available — rewrite one seed's product/angle to a different category.
-- It is a CAROUSEL whose angle cannot genuinely sustain that many DISTINCT slides (no list, process, comparison or story arc — just one visual idea padded out) — set format "single_image". A carousel must promise a sequence, not stretch a single shot.
+- It is a CAROUSEL whose angle cannot genuinely sustain that many DISTINCT slides (no list, process, comparison or story arc — just one visual idea padded out) — set format "single_image". A carousel must promise a sequence, not stretch a single shot. A seed that shows a "story:" line already HAS its sequence, one beat per slide: judge those beats, and never demote it for lacking a list. And a carousel with NO "story:" line is repaired by WRITING one — fill "beats", one per slide — not by demoting it; demote only when the angle genuinely has no sequence in it at all.
 Leave good seeds out of "fixes". Return JSON.`;
 
     const parsed: AnyRec = await structured(ai, prompt, SEED_REVIEW_SCHEMA, undefined, { label: 'reviewSeeds' });
@@ -536,15 +575,7 @@ Leave good seeds out of "fixes". Return JSON.`;
       const i = Number(fix?.index);
       const seed = strategy.seeds[i];
       if (!seed) continue;
-      const newProduct = String(fix?.product ?? '').trim();
-      if (newProduct && validProducts.has(newProduct.toLowerCase())) seed.product = newProduct;
-      if (fix?.media === 'image' || fix?.media === 'text' || fix?.media === 'link') seed.media = fix.media;
-      if (fix?.format === 'single_image' || fix?.format === 'carousel') seed.format = fix.format;
-      if (String(fix?.angle ?? '').trim()) seed.angle = String(fix.angle).trim();
-      if (String(fix?.subject ?? '').trim()) seed.subject = String(fix.subject).trim();
-      // Ripristina ogni invariante che un fix può aver rotto; una promozione a carosello conta
-      // comunque contro il tetto del batch qui sotto.
-      clampMediaCapabilities(seed);
+      applySeedFix(seed, fix, validProducts, rubrics);
       console.warn(`[reviewSeeds] fixed seed ${i}: ${String(fix?.reason ?? '')}`);
     }
     return strategy;

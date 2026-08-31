@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, clampCarousels, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
+import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, clampCarousels, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, applySeedFix, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
 
 import type { Rubric } from './rubrics';
 
@@ -771,12 +771,47 @@ describe('beats: la storia del carosello sopravvive al round-trip', () => {
   });
 
   it('porta beats e art_direction attraverso la normalizzazione', () => {
-    const beats = ['il primo giorno in ufficio col nome vecchio', 'il collega che chiede scusa', 'la firma cambiata'];
+    const beats = [
+      { shows: 'lo sportello 4 del CUP', thinks: 'speriamo legga subito' },
+      { shows: 'la finestra di errore sul monitor', thinks: 'ecco, di nuovo' },
+      { shows: 'la cornetta alzata per l\'assistenza', thinks: 'mezz\'ora, minimo' }
+    ];
     const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
       carousel({ beats, art_direction: 'fumetto a due colori' })
     ] });
     expect(out.seeds[0].beats).toEqual(beats);
     expect(out.seeds[0].art_direction).toBe('fumetto a due colori');
+  });
+
+  // Una battuta senza voce di dentro produce un fumetto muto: si vede cosa succede e non si sa
+  // niente di chi lo attraversa. È il difetto che ha bocciato il primo carosello.
+  it('legge la vecchia forma a stringa come una battuta senza voce', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: ['a', 'b', 'c'] })
+    ] });
+    expect(out.seeds[0].beats).toEqual([
+      { shows: 'a', thinks: '' }, { shows: 'b', thinks: '' }, { shows: 'c', thinks: '' }
+    ]);
+  });
+
+  it('tiene il dialogo quando c\'è e non lo inventa quando manca', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: [
+        { shows: 'a', thinks: 'b', says: 'Come li facciamo?' },
+        { shows: 'c', thinks: 'd' },
+        { shows: 'e', thinks: 'f', says: '   ' }
+      ] })
+    ] });
+    expect(out.seeds[0].beats?.[0].says).toBe('Come li facciamo?');
+    expect(out.seeds[0].beats?.[1].says).toBeUndefined();
+    expect(out.seeds[0].beats?.[2].says).toBeUndefined();
+  });
+
+  it('scarta una battuta che non mostra niente', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: [{ shows: 'a', thinks: 'x' }, { shows: '  ', thinks: 'y' }, { shows: 'c', thinks: 'z' }] })
+    ] });
+    expect(out.seeds[0].beats).toHaveLength(2);
   });
 
   it('lo slide_count segue le battute: una storia di 6 battute è un carosello di 6 slide', () => {
@@ -843,5 +878,75 @@ describe('clampCarousels e le battute', () => {
     expect(seeds[0].beats).toHaveLength(4);
     expect(seeds[1].format).toBe('single_image');
     expect(seeds[1].beats).toBeUndefined();
+  });
+});
+
+// Il pass 1.5 ha declassato a immagine singola un episodio di una rubrica CAROSELLO, e nessuno se
+// n'è accorto: l'invariante «il formato della rubrica è autoritativo» era applicata nella mappa del
+// pass 1 e non dopo la revisione. È costata l'unica rubrica narrativa del batch.
+describe('applySeedFix', () => {
+  const rubric: Rubric = {
+    id: 'r-1', name: 'Cose che succedono davvero', promise: 'p', strategic_role: 'r',
+    format: 'carousel', cadence: '1/week', differentiation: 'd', rationale: 'r'
+  };
+  const seed = (over: Partial<PostSeed> = {}): PostSeed => ({
+    platform: 'instagram', platforms: ['instagram'], pillar: 'p', format: 'carousel', slide_count: 4,
+    media: 'image', day: 'Mon', time: '10:00', product: '', person: '', angle: 'a', subject: 's',
+    setting: '', props: '', rubric: 'Cose che succedono davvero', ...over
+  });
+
+  it('la rubrica batte il revisore sul formato', () => {
+    const out = applySeedFix(seed(), { format: 'single_image' }, new Set(), [rubric]);
+    expect(out.format).toBe('carousel');
+  });
+
+  it('senza rubriche il fix del revisore passa', () => {
+    const out = applySeedFix(seed({ rubric: undefined }), { format: 'single_image' }, new Set(), []);
+    expect(out.format).toBe('single_image');
+  });
+
+  it('scarta un prodotto che il brand non ha', () => {
+    const out = applySeedFix(seed(), { product: 'Inventato' }, new Set(['reale']), [rubric]);
+    expect(out.product).toBe('');
+  });
+
+  it('tiene angolo e soggetto riscritti', () => {
+    const out = applySeedFix(seed(), { angle: 'nuovo angolo', subject: 'nuovo soggetto' }, new Set(), [rubric]);
+    expect(out.angle).toBe('nuovo angolo');
+    expect(out.subject).toBe('nuovo soggetto');
+  });
+});
+
+// Il revisore poteva solo DECLASSARE un carosello senza storia, e così l'unica rubrica narrativa
+// del batch usciva come immagine singola. Ora può scriverla, la storia.
+describe('applySeedFix scrive le battute mancanti', () => {
+  const rubric: Rubric = {
+    id: 'r-1', name: 'Cose che succedono davvero', promise: 'p', strategic_role: 'r',
+    format: 'carousel', cadence: '1/week', differentiation: 'd', rationale: 'r'
+  };
+  const seed = (): PostSeed => ({
+    platform: 'instagram', platforms: ['instagram'], pillar: 'p', format: 'carousel', slide_count: 3,
+    media: 'image', day: 'Mon', time: '10:00', product: '', person: '', angle: 'a', subject: 's',
+    setting: '', props: '', rubric: 'Cose che succedono davvero'
+  });
+
+  it('accetta le battute scritte dal revisore', () => {
+    const out = applySeedFix(seed(), {
+      beats: [
+        { shows: 'il corriere legge il vecchio nome', thinks: 'ci risiamo', says: '' },
+        { shows: 'la firma sul palmare', thinks: 'firmo e basta', says: '' },
+        { shows: 'la porta che si chiude', thinks: 'domani chiamo', says: '' }
+      ]
+    }, new Set(), [rubric]);
+    expect(out.beats).toHaveLength(3);
+    expect(out.beats?.[0].thinks).toBe('ci risiamo');
+    expect(out.format).toBe('carousel');
+  });
+
+  it('non tocca le battute quando il revisore non ne manda', () => {
+    const before = seed();
+    before.beats = [{ shows: 'x', thinks: 'y' }];
+    const out = applySeedFix(before, { angle: 'nuovo' }, new Set(), [rubric]);
+    expect(out.beats).toEqual([{ shows: 'x', thinks: 'y' }]);
   });
 });

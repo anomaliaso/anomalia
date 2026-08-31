@@ -237,7 +237,9 @@ export async function executePlan(
         .filter(Boolean)
         .join(' · ');
       const beats = (s.beats ?? []).length
-        ? `\n   STORY BEATS (binding — one slide each, in this order):\n${(s.beats ?? []).map((b, n) => `     ${n + 1}. ${b}`).join('\n')}`
+        ? `\n   STORY BEATS (binding — one slide each, in this order; "pensa" is lettered as a caption box, "dice" as a balloon from the named speaker):\n${(s.beats ?? [])
+            .map((b, n) => `     ${n + 1}. mostra: ${b.shows}${b.thinks ? ` · pensa: "${b.thinks}"` : ''}${b.says ? ` · dice: ${b.says}` : ''}`)
+            .join('\n')}`
         : '';
       const art = s.art_direction ? `\n   ART DIRECTION (binding — this post's medium, it OVERRIDES the brand visual style): ${s.art_direction}` : '';
       return `${i + 1}. [${meta}] angle: ${s.angle}${scene ? `\n   proposed scene → ${scene}` : ''}${beats}${art}`;

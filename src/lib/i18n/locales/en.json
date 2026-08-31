@@ -3383,7 +3383,7 @@
       "title": "Week {n} has already passed",
       "body": "A week that has already gone by can't be planned. Pick the current week or a future one."
     },
-    "beatsPlaceholder": "One line per slide: what that slide shows or says"
+    "beatsPlaceholder": "One line per slide: what is seen | what they think | what someone says"
   },
   "setup": {
     "title": "Project setup",
