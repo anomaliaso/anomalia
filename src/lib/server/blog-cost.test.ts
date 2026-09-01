@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estimateBlogMonth } from './blog-cost';
+import { estimateBlogMonth, articlesAffordable } from './blog-cost';
 import { creditQuota } from './credits';
 
 // This estimate decides whether a month job is allowed to start. Two properties matter more than the
@@ -68,5 +68,33 @@ describe('estimateBlogMonth', () => {
 
   it('treats a negative translation count as none', () => {
     expect(estimateBlogMonth({ articles: 5, translationsPerArticle: -2 }).translations).toBe(0);
+  });
+});
+
+// `estimateBlogMonth` esisteva per non far partire un mese che non può finire, ma era collegato al
+// solo bottone manuale: il percorso automatico pianificava per quota, senza guardare il costo. È
+// esattamente il guasto che questo file dice di voler impedire — 14 articoli scritti e 16 vuoti.
+describe('articlesAffordable', () => {
+  it('taglia il mese a quello che i crediti coprono', () => {
+    const perArticle = estimateBlogMonth({ articles: 1 }).credits;
+    expect(articlesAffordable(10, perArticle * 4)).toBe(4);
+  });
+
+  it('non pianifica più di quanti ne sono richiesti', () => {
+    const perArticle = estimateBlogMonth({ articles: 1 }).credits;
+    expect(articlesAffordable(3, perArticle * 100)).toBe(3);
+  });
+
+  it('con crediti insufficienti per uno solo, zero', () => {
+    expect(articlesAffordable(10, 0)).toBe(0);
+  });
+
+  it('senza budget noto non taglia niente: nessun vincolo inventato', () => {
+    expect(articlesAffordable(10, null)).toBe(10);
+  });
+
+  it('tiene conto delle traduzioni, che si pagano per articolo', () => {
+    const budget = estimateBlogMonth({ articles: 4 }).credits;
+    expect(articlesAffordable(10, budget, { translationsPerArticle: 3 })).toBeLessThan(4);
   });
 });

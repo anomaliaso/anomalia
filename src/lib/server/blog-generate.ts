@@ -266,7 +266,19 @@ export async function planBlogMonth(admin: SupabaseClient, brand: AnyRec): Promi
   // fails the cap check, so the plan is trimmed to what's actually available.
   const { remaining } = await blogMonthlyUsage(admin, brand.id as string, b?.plan as string | null);
   if (remaining <= 0) return 0;
-  const topics = await proposeBlogTopics(admin, brand, Math.min(perWeek * 4, remaining));
+  // La quota dice a quanti ha diritto, i crediti dicono quanti se ne possono davvero scrivere. Il
+  // preventivo esisteva già ma era collegato al solo bottone manuale: qui, dove il mese parte da
+  // solo, un piano più grande del budget muore a metà e lascia segnaposto vuoti sul blog.
+  const { articlesAffordable } = await import('$lib/server/blog-cost');
+  const { getCreditsUsage } = await import('$lib/server/credits');
+  const credits = await getCreditsUsage(admin, { id: brand.id, plan: b?.plan ?? null } as Parameters<typeof getCreditsUsage>[1])
+    .then((u) => u.remaining)
+    .catch(() => null);
+  const wanted = articlesAffordable(Math.min(perWeek * 4, remaining), credits, {
+    translationsPerArticle: ((b?.blog_config as AnyRec)?.locales?.length ?? 0) as number
+  });
+  if (!wanted) return 0;
+  const topics = await proposeBlogTopics(admin, brand, wanted);
   if (!topics.length) return 0;
 
   // Spread at the weekly cadence, 10:00 brand time, starting tomorrow, skipping days that already

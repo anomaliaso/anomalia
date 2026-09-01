@@ -4,7 +4,7 @@ import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/ser
 import { approveRubrics, loadApprovedRubrics } from '$lib/server/rubrics';
 
 // Client approval of a proposed batch. Body:
-//   { picks: [{ id, edits?: { name?, promise?, strategic_role?, format?, cadence?, differentiation? } }] }
+//   { picks: [{ id, edits?: { name?, promise?, strategic_role?, format?, cadence?, differentiation?, art_direction? } }] }
 // The selected proposals (with the client's edits) become the brand's NEW approved set; the
 // previous approved set is superseded; unselected proposals are rejected.
 export const POST: RequestHandler = async ({ request, params }) => {

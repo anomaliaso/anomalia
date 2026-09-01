@@ -7,7 +7,7 @@ import { swallow } from '$lib/server/swallow';
 import { PRODUCT_REF_IMAGES, aspectRatioFor, brandOfferings, brandVisualDirective, extractVisualPlaybook, fetchLogoPart, loadMoodRefs, loadProductRefs, markProduceApproved, personImageMap, personReference, referenceModeFor, renderCarouselSlide, renderWithQC, resolveOffering, uploadPostImage } from './images';
 import { type CaptionKnowledgeCtx, executePlan } from './caption-quality';
 import { client, planStrategy, warnOnSceneCollapse } from './plan-pipeline';
-import { type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, type PastWinner, type PostSeed, type PreviewPost, type Progress, VISUAL_REQUIRED, type WeeklyStrategy, carouselMaxPerBatch, clampCarousels, clampMediaCapabilities, clampVideos, platformKey } from './seed-model';
+import { normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, type PastWinner, type PostSeed, type PreviewPost, type Progress, VISUAL_REQUIRED, type WeeklyStrategy, carouselMaxPerBatch, clampCarousels, clampMediaCapabilities, clampVideos, platformKey } from './seed-model';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { synthesizeVisualStyle } from '$lib/server/brand-context';
@@ -55,6 +55,8 @@ type PlanPreviewOpts = {
   brandId?: string;
   userId?: string;
   weekIndex?: number;
+  /** Quante settimane del ciclo copre il batch. Assente → 1. */
+  weeks?: number;
   timezone?: string;
   agentVerbose?: boolean;
   /**
@@ -99,7 +101,13 @@ export function normalizeWeeklyStrategy(raw: any): WeeklyStrategy {
         // Stored rows carry legacy free-form formats ('reel', 'story', 'short video'…) — always
         // mapped onto the enum here, the single rehydration point. Unknown values → single_image.
         format,
+        week: Number.isFinite(Number(s?.week)) ? Math.max(0, Math.floor(Number(s.week))) : undefined,
         slide_count: Number(s?.slide_count) || undefined,
+        // La storia e il medium sopravvivono al giro in DB e alla griglia di editing: senza,
+        // l'utente approva un racconto e il produttore riceve una riga di angle.
+        beats: normalizeBeats(s?.beats),
+        art_direction: String(s?.art_direction ?? '').trim() || undefined,
+        sourced_from: String(s?.sourced_from ?? '').trim() || undefined,
         // Rubric linkage survives store/edit round-trips untouched (resolution happened at plan time).
         rubric: typeof s?.rubric === 'string' && s.rubric ? s.rubric : undefined,
         rubric_id: typeof s?.rubric_id === 'string' && s.rubric_id ? s.rubric_id : undefined,
@@ -216,6 +224,7 @@ async function invokeWeekPlannerAgent(
       platforms: opts.platforms ?? [],
       count,
       weekIndex: opts.weekIndex,
+      weeks: opts.weeks,
       prefs: opts.prefs,
       maxVideos: opts.maxVideos,
       maxCarousels: opts.maxCarousels,

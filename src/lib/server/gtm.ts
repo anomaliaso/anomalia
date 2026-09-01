@@ -11,8 +11,6 @@ import { clampFunnelSpec, funnelBrief, stampFunnelGoals, ratesLabel, DEFAULT_RAT
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
 
-console.log(`[GTM] provider: ${AI_PROVIDER} (${AI_PROVIDER === 'xiaomi' ? XIAOMI_MODEL : AI_PROVIDER === 'kie' ? (env.KIE_MODEL || 'grok-4-5') : geminiFlash()})`);
-
 // The GTM (go-to-market) engine — the TIME-AXIS strategy layer above the editorial plan. It
 // decides where the brand is going phase by phase: platform weights that evolve over time,
 // pillars/CTAs to anchor, and honest targets calibrated on the brand's real starting data.
