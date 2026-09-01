@@ -1,3 +1,4 @@
+import { LLM_TIMEOUT_MS } from './llm';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -131,4 +132,15 @@ describe('nessun SDK Google nei call site app', () => {
 		}
 		expect(hits, hits.join('\n')).toEqual([]);
 	});
+});
+
+// Una chiamata al gateway non scadeva mai. Misurato: lo stesso modello risponde in 2s a un prompt
+// semplice e resta aperto 180s senza contenuto in modalità strutturata — 200, solo spazi di
+// keep-alive. Senza scadenza la pagina che aspetta non torna, e l'agente brucia il suo deadline
+// dentro una chiamata sola invece di ripiegare.
+describe('LLM_TIMEOUT_MS', () => {
+  it('esiste ed è una scadenza, non un numero simbolico', () => {
+    expect(LLM_TIMEOUT_MS).toBeGreaterThan(30_000);
+    expect(LLM_TIMEOUT_MS).toBeLessThanOrEqual(300_000);
+  });
 });

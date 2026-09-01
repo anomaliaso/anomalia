@@ -136,6 +136,19 @@ function userContent(
 }
 
 /** JSON vincolato sul gateway. Sostituisce structuredGemini / responseSchema Google. */
+/**
+ * Quanto si aspetta una risposta dal centralino prima di considerarla persa.
+ *
+ * Non c'era. Misurato il 31/08/2026: lo stesso modello risponde in 2 secondi a un prompt semplice e
+ * resta aperto 180 secondi SENZA contenuto in modalità strutturata — HTTP 200 e soli spazi di
+ * keep-alive. Senza scadenza la pagina che aspetta non torna mai, e un agente brucia tutto il suo
+ * deadline dentro una chiamata invece di ripiegare su un altro modello.
+ *
+ * Generoso di proposito: una richiesta strutturata grossa può legittimamente prendere minuti, e una
+ * scadenza troppo corta trasformerebbe la lentezza in un guasto.
+ */
+export const LLM_TIMEOUT_MS = Number(env.LLM_TIMEOUT_MS) > 0 ? Number(env.LLM_TIMEOUT_MS) : 240_000;
+
 export async function llmStructured<T>(opts: {
 	prompt: string;
 	schema: Record<string, unknown>;
@@ -155,6 +168,7 @@ export async function llmStructured<T>(opts: {
 			schema: jsonSchema(opts.schema as never),
 			system: opts.system,
 			temperature: opts.temperature,
+			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }]
 		});
 		logAiCall({
@@ -199,6 +213,7 @@ export async function llmText(opts: {
 		const result = await generateText({
 			model: llmLanguageModel(modelId),
 			system: opts.system,
+			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
 			...(extra ? { providerOptions: { openai: extra } } : {})
 		});
