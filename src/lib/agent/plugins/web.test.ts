@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createTestSupabase } from '$lib/testkit/supabase';
-import { fakeContext } from '../testkit';
+import { aDateInTheFuture, fakeContext } from '../testkit';
 
 // Ogni tool sugli articoli passa da `blogAdmin()` (chat/tools.ts), che apre l'admin client VERO:
 // senza mockarlo ogni test colpirebbe Supabase di produzione (stesso motivo di
@@ -74,7 +74,7 @@ describe('web_schedule_article — solo "approved" pubblica (regola non riscritt
 		const rls = seed([{ id: 'art-1', brand_id: BRAND_ID, title: 'Guida', status: 'draft' }]);
 		const plugin = createWebPlugin({ supabase: rls.client, brandId: BRAND_ID, userId: USER_ID });
 		const res = await plugin.execute(
-			{ name: 'web_schedule_article', args: { article_id: 'art-1', scheduled_for: '2026-09-01T10:00' } },
+			{ name: 'web_schedule_article', args: { article_id: 'art-1', scheduled_for: aDateInTheFuture() } },
 			fakeContext()
 		);
 		expect(res.isError).toBeFalsy();
@@ -89,7 +89,7 @@ describe('web_schedule_article — solo "approved" pubblica (regola non riscritt
 		const rls = seed([{ id: 'art-2', brand_id: BRAND_ID, title: 'Vecchio', status: 'published' }]);
 		const plugin = createWebPlugin({ supabase: rls.client, brandId: BRAND_ID, userId: USER_ID });
 		const res = await plugin.execute(
-			{ name: 'web_schedule_article', args: { article_id: 'art-2', scheduled_for: '2026-09-01T10:00' } },
+			{ name: 'web_schedule_article', args: { article_id: 'art-2', scheduled_for: aDateInTheFuture() } },
 			fakeContext()
 		);
 		expect(res.isError).toBe(true);

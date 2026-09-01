@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createTestSupabase } from '$lib/testkit/supabase';
-import { fakeContext } from '../testkit';
+import { aDateInTheFuture, fakeContext } from '../testkit';
 
 // `content_create_post` avvolge `create_post` di chat/tools.ts, che a sua volta chiama
 // `createSingleContent` (rendering AI vero) e `remaining`/`addUsage` (crediti/quota, dietro
@@ -319,7 +319,7 @@ describe('le scritture di dominio che il kit non aveva', () => {
 		});
 		const plugin = createContentPlugin({ supabase: kit.client, brandId: BRAND_ID, userId: USER_ID });
 		const res = await plugin.execute(
-			{ name: 'content_reschedule_post', args: { post_id: 'post-10', scheduled_for: '2026-09-01T10:00' } },
+			{ name: 'content_reschedule_post', args: { post_id: 'post-10', scheduled_for: aDateInTheFuture() } },
 			fakeContext()
 		);
 		expect(res.isError).toBe(true);
