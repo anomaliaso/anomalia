@@ -53,8 +53,15 @@ Controllato, il difetto è nostro. `llmStructured` non ha MAI mandato il campo
 Non è velocità, è **correttezza**: senza istruzioni il modello spende dodicimila token e
 restituisce comunque la cosa sbagliata. Su questo modello il reasoning non si può
 nemmeno spegnere (`{enabled:false}` → 400, «Reasoning is mandatory for this endpoint»),
-quindi ogni chiamata ora dichiara il suo sforzo — `high` di default, abbassabile con
-`LLM_REASONING_EFFORT`.
+quindi ogni chiamata ora dichiara il suo sforzo, regolabile con `LLM_REASONING_EFFORT`.
+
+Il valore di partenza è `low`, e ci si arriva per misura, non per prudenza. Con `high` il
+planner settimanale resta appeso 900 secondi sul passo che scrive i seed e finisce senza
+produrre niente; la revisione delle caption — un verdetto su tre testi — ha impiegato 420
+secondi la prima volta e ha sfondato i 900 la seconda. Con `low` entrambi lavorano. E nessuna
+prova ha mai mostrato `high` migliore: nella misura di partenza `low`, `medium` e `high` erano
+pari, ed era il campo ASSENTE a essere patologico. La correzione era dichiarare lo sforzo;
+alzarlo era un'aggiunta senza dati sotto.
 
 E «ogni chiamata» andava preso alla lettera: la correzione in `llmStructured` copriva metà
 del prodotto. I cicli d'agente chiamano `generateText` per conto loro (`harness/run.ts`) e
