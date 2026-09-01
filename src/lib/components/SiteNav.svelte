@@ -122,7 +122,7 @@
     <!-- Left: brand -->
     <div class="nav-left">
       <a href={lp('/')} class="brand" aria-label={$_('landing.nav.brandAria')}>
-        <BrandMark size={28} />
+        <BrandMark size={28} tone="negative" />
         <span class="logo logo-text" aria-hidden="true">Anomalia</span>
       </a>
     </div>
