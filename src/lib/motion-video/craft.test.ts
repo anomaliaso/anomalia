@@ -19,6 +19,14 @@ describe('MOTION_CRAFT_SPECS', () => {
 		expect(MOTION_CRAFT_SPECS).toContain('<Img src=');
 	});
 
+	it('non fissa il numero di beat: l’arco sono i mestieri, il conto lo decide chi scrive', () => {
+		// «5 beats è il pattern stabilito» era una regola letta dall’elenco dei cinque mestieri:
+		// l’agente ci si ancorava anche su un 8s e su un 45s.
+		expect(MOTION_CRAFT_SPECS).toMatch(/JOBS, not a fixed count/);
+		expect(MOTION_CRAFT_SPECS).toMatch(/never from a template/);
+		expect(MOTION_CRAFT_SPECS).not.toMatch(/Not five statements/);
+	});
+
 	it('mandates expo in-out and names the trap that actually ships linear motion', () => {
 		// La regola "mai linear" c'era già e non bastava: il modo comune di scrivere movimento
 		// lineare è OMETTERE l'easing, che in Remotion è lineare per default.
