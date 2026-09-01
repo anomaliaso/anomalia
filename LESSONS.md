@@ -38,6 +38,16 @@ patch-package non aggiorna uno stato già patchato: dopo un merge/rebase che toc
 ### Una sessione precedente uccisa lascia una `vite build` orfana che scrive nella STESSA `build/`
 Una sessione (agente o terminale) chiusa a metà `npm run build` non porta via il processo: il trap del genitore non lo tocca, e `vite build` resta parente di `init`, vivo per decine di minuti, a scrivere in `build/`. Rilanciare il build nello stesso worktree fa gareggiare due `vite build` sulla stessa cartella d'output — corruzione silenziosa, non un errore chiaro. Segnale: `ps -ef | grep "vite build"` mostra più di un processo con lo stesso `cwd`, uno con `PPID 1` e un'ora di avvio molto più vecchia. Mossa: prima di rilanciare un build lungo in un worktree, cerca ed elimina (`kill -9`) ogni `vite build`/`npm run build` orfano di QUEL worktree — non toccare processi di altri worktree che condividono la macchina.
 
+### Una PR «Merged» su GitHub può non essere MAI arrivata su `dev`
+La #52 («Run custom-agent turns on the Agent Kit») risulta `MERGED` su GitHub, con tanto di merge commit, e il task su Notion diceva «In production». In produzione non c'è mai stata: era aperta **contro `feat/kit-private-threads`**, non contro `dev`, e quel branch intermedio in `dev` non è mai entrato. Il merge commit è reale e irraggiungibile — un ramo staccato che nessuno ha più tirato. Il codice su `dev` continuava a portare il gate vecchio (`!personaId`) mentre tutti lo davano per migrato.
+Segnale: una feature che «è stata mergiata» ma il cui codice sul branch vivo non c'è — e `gh pr view` che mostra `baseRefName` diverso da `dev`/`main`. Il sospetto va acceso da `gh pr list --state merged` con un base branch che non è quello di destinazione: una PR impilata è mergiata nella sua pila, non nel prodotto.
+Mossa, due comandi, prima di credere a «merged»:
+```bash
+gh pr view <n> --json baseRefName,mergeCommit
+git merge-base --is-ancestor <merge-commit> origin/dev && echo LANDED || echo NEVER LANDED
+```
+Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: vanno riportate a mano sul branch di destinazione (cherry-pick del merge commit, che essendo squash ha un solo genitore), e la risoluzione dei conflitti è il prezzo di averlo scoperto tardi.
+
 ## Test: distinguere il tuo difetto dal rumore
 
 ### La suite completa fallisce da sola: confronta run-per-run con dev puro

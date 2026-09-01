@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 const BRIDGE = readFileSync('src/lib/agent/bridge/live.ts', 'utf8');
 const QUEUE = readFileSync('src/lib/server/chat/queue.ts', 'utf8');
 const PAGE = readFileSync('src/routes/app/[brand]/chat/[thread]/+page.svelte', 'utf8');
+const CHAT = readFileSync('src/routes/app/[brand]/chat/+server.ts', 'utf8');
 // Il ritmo del poll vive ora nel modulo estratto col resto del run orfano.
 const KIT_RUN = readFileSync('src/routes/app/[brand]/chat/components/kit-run.ts', 'utf8');
 
@@ -42,5 +43,17 @@ describe('il kit ha le protezioni che il motore classico aveva già', () => {
 	it('il client chiede lo stato di un turno vivo al ritmo di v1, non tre volte più lento', () => {
 		expect(KIT_RUN).toMatch(/LIVE_POLL_MS = 350/);
 		expect(PAGE).not.toMatch(/setInterval\(poll, 1_200\)/);
+	});
+
+	it('il ramo interattivo porta il persona del custom agent al bridge, come la coda', () => {
+		// Il classico montava customAgentSystemBlock nel prompt; il ramo kit buttava via systemPrompt
+		// e con lui il brief dell'utente: meno parità della coda, che l'overlay lo porta già (26/8).
+		const bivio = CHAT.indexOf('const kitSpec = shouldUseKit');
+		const fine = CHAT.indexOf('--- fine AGENT_KIT ---', bivio);
+		const ramo = CHAT.slice(bivio, fine);
+		expect(bivio).toBeGreaterThan(-1);
+		expect(fine).toBeGreaterThan(bivio);
+		expect(ramo).toContain('persona: kitPersona');
+		expect(ramo).toMatch(/kitPersonaOverlay\(persona, bilingualNoticeLocale\(locale\)\)/);
 	});
 });
