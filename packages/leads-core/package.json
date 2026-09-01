@@ -1,0 +1,13 @@
+{
+  "name": "@anomalia/leads-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./intent": "./src/intent.ts",
+    "./match": "./src/match.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.46.1"
+  }
+}

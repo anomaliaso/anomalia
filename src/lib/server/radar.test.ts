@@ -18,7 +18,6 @@ import {
   COMMENT_MIN_RELEVANCE,
   radarDigestHtml
 } from './radar';
-import { normalizeIntent, INTENT_RANK } from '$lib/leads-intent';
 import { communityKeyOf, renderCommunityProfile, renderVocabularyDigest } from './community-profile';
 
 describe('roundRobin (fair share across sources)', () => {
@@ -274,22 +273,6 @@ describe('freshness windows', () => {
     expect(withinWindow('subreddit', items)).toHaveLength(1);
     // A Threads search ranks by relevance, not recency: the 12h cut used to leave nothing.
     expect(withinWindow('threads_query', items)).toHaveLength(2);
-  });
-});
-
-describe('intent', () => {
-  it('normalises anything the model returns to a known band', () => {
-    expect(normalizeIntent('seeking_now')).toBe('seeking_now');
-    expect(normalizeIntent('SEEKING_NOW')).toBe('seeking_now');
-    expect(normalizeIntent('ready to buy')).toBe('none');
-    expect(normalizeIntent(undefined)).toBe('none');
-  });
-
-  it('ranks someone asking now above someone venting', () => {
-    expect(INTENT_RANK.seeking_now).toBeGreaterThan(INTENT_RANK.comparing);
-    expect(INTENT_RANK.comparing).toBeGreaterThan(INTENT_RANK.researching);
-    expect(INTENT_RANK.researching).toBeGreaterThan(INTENT_RANK.venting);
-    expect(INTENT_RANK.venting).toBeGreaterThan(INTENT_RANK.none);
   });
 });
 

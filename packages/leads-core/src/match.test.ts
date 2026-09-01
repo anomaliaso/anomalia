@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchScore, pickMatch, shingles, normalizeForMatch, isCheckable, MATCH_THRESHOLD } from './lead-outcomes';
+import { matchScore, pickMatch, shingles, normalizeForMatch, isCheckable, MATCH_THRESHOLD } from './match';
 
 const draft =
   'Most founders overcomplicate this. Forget paid ads when you have zero traction. For the first ten users it is pure unscalable grind, search for people complaining about the exact bottleneck you solve and reply with actual help.';

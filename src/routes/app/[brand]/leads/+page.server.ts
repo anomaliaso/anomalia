@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { withBrandContext } from '$lib/server/ai-log';
 import { hasProRadarLeads } from '$lib/server/plans';
-import { INTENT_RANK, normalizeIntent } from '$lib/leads-intent';
+import { INTENT_RANK, normalizeIntent } from '@anomalia/leads-core/intent';
 import { cachedBrandPage } from '$lib/server/page-cache';
 
 // Leads — the AI-drafted reply suggestions (Reddit/Threads/X conversations worth joining), split

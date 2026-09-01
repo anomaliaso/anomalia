@@ -32,7 +32,7 @@ import { ALT_CAPTION_PLATFORMS, ensureShortNetworkCuts } from '$lib/platform-lim
 import { contactGate, dmWithOptOut, gateVerdict, platformOf, suppressAuthor } from './lead-contact';
 // Re-exported: Settings → Radar imports the type from here, next to the functions that use it.
 export type { RadarPlatformKey } from './plans';
-import { INTENT_RANK, normalizeIntent, type LeadIntent } from '$lib/leads-intent';
+import { INTENT_RANK, normalizeIntent, type LeadIntent } from '@anomalia/leads-core/intent';
 import {
   communityKeyOf,
   loadCommunityProfiles,
@@ -581,11 +581,6 @@ export type RadarVerdictItem = {
   // How close this person is to buying — see LEAD_INTENTS. Feed items are always 'none'.
   intent: LeadIntent;
 };
-
-// Intent lives in `$lib/leads-intent` so the Leads page can rank and label without importing the
-// server-side Radar module; re-exported here because every server caller reaches for it via radar.
-export { LEAD_INTENTS, INTENT_RANK, normalizeIntent } from '$lib/leads-intent';
-export type { LeadIntent } from '$lib/leads-intent';
 
 const VERDICT_SCHEMA = {
   type: 'object' as const,

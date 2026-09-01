@@ -5,9 +5,8 @@
  * shopping". They diverge constantly: a thread asking *which tool do you use for X* and one ranting
  * about X earn the same relevance and are not the same lead.
  *
- * Client-safe on purpose (same split as `$lib/plans`): the Leads page ranks and labels by it
- * without pulling the whole Radar server module — and `$lib/server/radar` re-exports it, so there
- * is one ladder, not two.
+ * Zero dependencies on purpose: it ranks the queue in the browser and scores the verdict on the
+ * server, so it may never reach for a client, an env var or a plan.
  */
 export const LEAD_INTENTS = ['seeking_now', 'comparing', 'researching', 'venting', 'none'] as const;
 export type LeadIntent = (typeof LEAD_INTENTS)[number];
