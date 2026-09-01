@@ -2156,6 +2156,18 @@
           "cardSub": "revisionata: ship · caption pronta"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "LIVE",
+        "today": "OGGI",
+        "tue": "MAR",
+        "wed": "MER",
+        "launchStory": "Storia del lancio",
+        "behindScenes": "Dietro le quinte",
+        "customerNote": "Nota cliente",
+        "calendarChecked": "Calendario controllato · {count} bozze da rivedere",
+        "nextPost": "Prossimo post in coda per martedì alle 09:00"
+      },
       "foot": "I lavori lunghi continuano anche a scheda chiusa, e l’agente ti scrive quando ha finito. Pubblicare è l’unico passo che non fa mai da solo."
     }
   },

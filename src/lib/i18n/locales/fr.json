@@ -2029,6 +2029,18 @@
           "cardSub": "revue : ship · légende prête"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "EN DIRECT",
+        "today": "AUJOURD’HUI",
+        "tue": "MAR.",
+        "wed": "MER.",
+        "launchStory": "Récit du lancement",
+        "behindScenes": "Dans les coulisses",
+        "customerNote": "Note client",
+        "calendarChecked": "Calendrier vérifié · {count} brouillons à relire",
+        "nextPost": "Prochain post en file pour mardi à 09:00"
+      },
       "foot": "Les tâches longues continuent même l’onglet fermé, et l’agent vous écrit quand il a fini. Publier est la seule étape qu’il ne franchit jamais seul."
     },
     "problems": {

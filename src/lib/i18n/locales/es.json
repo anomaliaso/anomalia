@@ -2029,6 +2029,18 @@
           "cardSub": "revisada: ship · texto listo"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "EN VIVO",
+        "today": "HOY",
+        "tue": "MAR",
+        "wed": "MIÉ",
+        "launchStory": "Historia del lanzamiento",
+        "behindScenes": "Entre bastidores",
+        "customerNote": "Nota de cliente",
+        "calendarChecked": "Calendario revisado · {count} borradores listos para revisar",
+        "nextPost": "Siguiente publicación programada para el martes a las 09:00"
+      },
       "foot": "Los trabajos largos siguen aunque cierres la pestaña, y el agente te escribe cuando termina. Publicar es el único paso que nunca da solo."
     },
     "problems": {
