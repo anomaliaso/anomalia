@@ -3129,6 +3129,15 @@
       "prev": "Previous agent",
       "next": "Next agent",
       "customDesc": "Your own agent"
+    },
+    "guestPreview": {
+      "title": "Your first post",
+      "sub": "Made from your site. No account needed to look at it.",
+      "working": "Reading your site and making your first post…",
+      "failed": "We could not make a post from that site.",
+      "retry": "Try another site",
+      "cta": "Save it and see more",
+      "ctaHint": "Create your account to keep this post and get the rest."
     }
   },
   "editorialPlan": {

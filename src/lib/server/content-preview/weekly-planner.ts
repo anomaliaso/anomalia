@@ -73,6 +73,10 @@ type RenderPreviewOpts = {
   supabase: SupabaseClient;
   userId: string;
   brandId?: string;
+  // Force one image model for the whole batch. Absent → buildImageRequest picks as it always has.
+  // The guest preview passes the cheapest model here; a UGC cover still overrides it, because its
+  // look is the point of that format.
+  imageModel?: string;
   onProgress?: Progress;
   onPost: (post: PreviewPost) => void;
 };
@@ -498,11 +502,12 @@ export async function renderPreviewImages(
           const isUgc = post.format === 'video' && post.ugc !== false;
           const { UGC_VISUAL_STYLE, UGC_COVER_MODEL } = await import('$lib/server/ugc');
           const effectiveStyle = isUgc ? UGC_VISUAL_STYLE : visualStyle;
+          const forcedModel = isUgc ? UGC_COVER_MODEL : opts.imageModel;
           const renderOpts = {
             referenceImages,
             personImages: personRefs,
             // Nano Banana Pro — MASTER UGC look is enforced in the prompt, not by a cheaper model.
-            ...(isUgc ? { model: UGC_COVER_MODEL } : {}),
+            ...(forcedModel ? { model: forcedModel } : {}),
             // A curated brand moodboard would drag a UGC frame back toward the polished look.
             moodImages: isUgc ? undefined : moodImages,
             visualStyle: effectiveStyle,

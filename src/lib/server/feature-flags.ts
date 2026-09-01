@@ -60,3 +60,13 @@ export function isGeoCausalWinEnabled(): boolean {
 export function isSfbBadgeEnabled(): boolean {
   return env.FEATURE_SFB_BADGE !== 'false';
 }
+
+/**
+ * The pre-login guest preview: one post, from a website URL, before any account exists.
+ * Default ON; set FEATURE_GUEST_PREVIEW=false to close the public path without a code deploy.
+ * It is the only switch that stops an unauthenticated, money-spending endpoint, so it is read
+ * BEFORE the rate-limit guard and before anything is generated.
+ */
+export function isGuestPreviewEnabled(): boolean {
+  return env.FEATURE_GUEST_PREVIEW !== 'false';
+}

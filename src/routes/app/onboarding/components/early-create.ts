@@ -1,5 +1,6 @@
 import { deserialize } from '$app/forms';
 import type { ActionResult } from '@sveltejs/kit';
+import type { GuestPost } from '$lib/guest-onboarding';
 
 export type EarlyCreateSnapshot = {
   profile: unknown;
@@ -9,6 +10,8 @@ export type EarlyCreateSnapshot = {
   handleList: { platform: string; username: string | null; profileUrl: string | null }[];
   brandId: string | null;
   draftId: string | null;
+  /** The post the visitor was shown before signing up, to adopt rather than regenerate. */
+  guestPost?: GuestPost | null;
 };
 
 // FormData dallo stato vivo: i valori DOM di un form nascosto restano stantii per un tick
@@ -25,6 +28,7 @@ export function earlyCreateFormData(s: EarlyCreateSnapshot, name: string): FormD
   }
   fd.set('platforms', JSON.stringify(s.selectedPlatforms));
   fd.set('handles', JSON.stringify(s.handleList));
+  if (s.guestPost) fd.set('guest_post', JSON.stringify(s.guestPost));
   return fd;
 }
 
