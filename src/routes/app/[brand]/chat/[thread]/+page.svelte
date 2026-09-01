@@ -850,15 +850,7 @@
       await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
     }
 
-    try {
-      const res = await fetch(`/app/${data.brandSlug}/chat?thread=${data.thread.id}&pending_tools=1`);
-      if (res.ok) {
-        const { jobs } = await res.json();
-        if (jobs?.length) life.startToolPolling();
-      }
-    } catch {
-      /* best-effort */
-    }
+    await life.checkPendingTools();
   }
 
   /** Legge il transcript senza scriverlo: serve separato perché riga salvata e smontaggio della
