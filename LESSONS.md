@@ -116,6 +116,17 @@ aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio
 
 ## Codice
 
+### Una regola chiusa su una superficie sola resta aperta su tutte le altre
+La migration `0187` dichiarava chiuso il buco del consenso all'immagine, e sul browser lo era:
+`addPersonReal` rifiuta senza la spunta e timbra `consent_at`/`consent_source`. L'endpoint gemello
+(`POST /api/v1/.../studio/people`, la porta di CLI e MCP) continuava a scrivere `consent: true`
+incondizionatamente — e il gate a valle si fida di quella colonna, quindi passava. Nessun test era
+rosso: la regola non stava in nessun posto, stava in due call site, e uno solo è stato aggiornato.
+Segnale: una migration o un changelog che dice «da qui in poi si fa X», e un `grep` del valore che
+X scrive che trova più di un punto che lo scrive. Mossa: la decisione diventa una funzione pura che
+tutti chiamano (qui `people-consent.ts`), e il test sta sulla funzione — non su ciascuna superficie,
+che è come si è arrivati a due.
+
 ### Un dettaglio eliminato non si invalida prima di uscire
 Il reject del post cancellava la riga, poi aggiornava la pagina `/posts/:id`: il layout trovava
 correttamente un 404 prima che il callback portasse al calendario. Segnale: la pagina 404 lampeggia

@@ -170,13 +170,15 @@ Imposta colori brand.
 
 Crea persona (reale o AI).
 
-**Body (persona reale):**
+**Body (persona reale):** `consent: true` è obbligatorio — è l'attestazione di chi chiama, senza
+la quale la persona non viene creata (`400`).
 ```json
 {
   "name": "Marco",
   "role": "CEO",
   "description": "...",
-  "kind": "real"
+  "kind": "real",
+  "consent": true
 }
 ```
 
