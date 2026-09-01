@@ -61,8 +61,16 @@ fa fallire un test invece di spegnere una sorgente in silenzio.
 
 ## Difetti visti e non toccati
 
-Due difetti trovati leggendo, non toccati per non mescolare spostamento e comportamento:
-`radar.ts` importava `suppressAuthor` senza chiamarlo mai (rimosso, era import morto), e il
-tipo di ritorno di `pendingOutcomeChecks` omette `author_handle`/`author_platform` che il
-mapper restituisce davvero — quindi il ramo opt-out di `checkLeadOutcome` non parte mai da
-`runOutcomeChecks`. Quello è un difetto vero e vuole il suo test, prima del suo fix.
+`radar.ts` importava `suppressAuthor` senza chiamarlo mai: import morto, rimosso.
+
+Il tipo di ritorno di `pendingOutcomeChecks` ometteva `author_handle`/`author_platform` che il
+mapper restituisce davvero. Leggendolo sembrava un difetto vivo — il ramo opt-out di
+`checkLeadOutcome` che non parte mai — e invece **il test ha detto di no**: a runtime i campi
+ci sono e la soppressione scatta. Il difetto era solo il tipo che mente, e vale comunque,
+perché chi avesse rimosso quelle due righe dal mapper avrebbe spento la soppressione senza un
+solo errore di compilazione. Ora il tipo li dichiara e due test coprono il giro completo
+(`runOutcomeChecks` → thread con ritiro del consenso → riga in `lead_suppressions`), che prima
+non aveva copertura alcuna.
+
+Vale la pena registrare l'ordine: la diagnosi a vista era sbagliata, e a correggerla è stato il
+test scritto prima del fix — non una rilettura più attenta.

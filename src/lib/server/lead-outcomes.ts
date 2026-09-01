@@ -125,11 +125,24 @@ export async function checkLeadOutcome(
   };
 }
 
-/** I lead maturi e mai controllati. */
+/**
+ * I lead maturi e mai controllati.
+ *
+ * I campi autore fanno parte del contratto, non sono un extra: sono l'unica cosa che permette a
+ * `checkLeadOutcome` di sopprimere chi ha chiesto di non essere ricontattato. Il tipo li ometteva
+ * pur restituendoli, quindi rimuoverli dal mapper non avrebbe rotto niente in compilazione.
+ */
 export async function pendingOutcomeChecks(
   admin: SupabaseClient,
   limit = MAX_CHECKS_PER_RUN
-): Promise<Array<{ id: string; brand_id: string; url: string; suggestion: string | null }>> {
+): Promise<Array<{
+  id: string;
+  brand_id: string;
+  url: string;
+  suggestion: string | null;
+  author_handle: string | null;
+  author_platform: string | null;
+}>> {
   const from = new Date(Date.now() - CHECK_BEFORE_DAYS * 24 * 3600 * 1000).toISOString();
   const to = new Date(Date.now() - CHECK_AFTER_HOURS * 3600 * 1000).toISOString();
 
