@@ -5,6 +5,7 @@
  * voce restano su Kie; i motori di ricerca restano i loro.
  */
 import { createOpenAI } from '@ai-sdk/openai';
+import { Agent } from 'undici';
 import { embedMany, generateObject, generateText, jsonSchema } from 'ai';
 import { env } from '$env/dynamic/private';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
@@ -77,6 +78,19 @@ export function llmModelForPicker(choice: string | null | undefined): string {
 	return llmDefaultModel();
 }
 
+/**
+ * Il fetch di Node molla il socket dopo 300 secondi di silenzio, e un modello che ragiona sta
+ * zitto molto di più: headers 200 subito, poi niente. L'errore che ne esce
+ * ("Failed to process successful response", `terminated`, ETIMEDOUT) sembra un guasto del
+ * modello, e per questo ha portato fuori strada due volte. LLM_TIMEOUT_MS non bastava: valeva
+ * per l'abort dell'AI SDK, mentre a chiudere era lo strato sotto.
+ */
+export function makeLlmFetch(timeoutMs: number) {
+	const dispatcher = new Agent({ headersTimeout: timeoutMs, bodyTimeout: timeoutMs });
+	return (input: string | URL | Request, init?: RequestInit) =>
+		globalThis.fetch(input, { ...init, dispatcher } as RequestInit);
+}
+
 let cached: ReturnType<typeof createOpenAI> | null = null;
 let cachedSig = '';
 
@@ -88,7 +102,8 @@ export function llmClient(): ReturnType<typeof createOpenAI> {
 	cached = createOpenAI({
 		baseURL: llmBaseUrl(),
 		apiKey: key,
-		name: 'llm'
+		name: 'llm',
+		fetch: makeLlmFetch(LLM_TIMEOUT_MS) as typeof globalThis.fetch
 	});
 	cachedSig = sig;
 	return cached;
@@ -385,7 +400,7 @@ export async function llmChatCompletions(opts: {
 }): Promise<unknown> {
 	const key = llmApiKey();
 	if (!key) throw new Error('LLM_API_KEY is not configured');
-	const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
+	const res = await makeLlmFetch(opts.timeoutMs)(`${llmBaseUrl()}/chat/completions`, {
 		method: 'POST',
 		headers: {
 			authorization: `Bearer ${key}`,
