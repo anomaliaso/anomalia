@@ -9,7 +9,10 @@ import { assistantContentFromSteps, saveMessages } from './persistence';
 
 export type ChatPartialSnapshot = {
 	text?: string;
+	/** Il motore v1 e i job di chat scrivono ancora il ragionamento come una stringa sola. */
 	reasoning?: string;
+	/** Lo specchio kit scrive i pensieri uno per uno, ognuno con la sua posizione nel turno. */
+	reasoningSegments?: Array<{ text?: string }>;
 	tools?: Array<{
 		toolCallId?: string;
 		toolName?: string;
@@ -36,7 +39,14 @@ export function assistantContentFromPartial(partial: ChatPartialSnapshot | null 
 	if (!partial || typeof partial !== 'object') return [];
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const content: any[] = [];
-	const reasoning = String(partial.reasoning ?? '').replace(/^\u200b$/, '').trim();
+	const segments = Array.isArray(partial.reasoningSegments) ? partial.reasoningSegments : [];
+	const reasoning = (
+		segments.length
+			? segments.map((s) => String(s?.text ?? '')).filter(Boolean).join('\n\n')
+			: String(partial.reasoning ?? '')
+	)
+		.replace(/^\u200b$/, '')
+		.trim();
 	if (reasoning) content.push({ type: 'reasoning', text: reasoning });
 
 	const text = String(partial.text ?? '');

@@ -1,4 +1,4 @@
-import type { StreamToolCallState } from '$lib/chat-stream-events';
+import type { LiveSnapshot } from '$lib/chat-live-join';
 
 export type KitRun = {
   id: string;
@@ -6,7 +6,7 @@ export type KitRun = {
   state: string;
   created_at: string;
   /** Riscritto dal server ogni ~1s mentre il run è vivo. */
-  partial?: { text?: string; reasoning?: string; tools?: StreamToolCallState[]; updatedAt?: string } | null;
+  partial?: (LiveSnapshot & { updatedAt?: string }) | null;
   /**
    * La riga assistant che il server riscrive a ogni battito col parziale (il checkpoint vivo).
    * Esiste perché ricaricando si veda il lavoro senza dipendere dal riaggancio — e proprio per

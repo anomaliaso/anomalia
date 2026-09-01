@@ -19,8 +19,9 @@ import {
   busyThreadIds,
   clearRemoteBusyThreads,
   setThreadRemoteBusy,
-  foldReasoningEvent
+  takeLiveHandoff
 } from './chat-session';
+import { applyChatStreamEvent, emptyStreamState } from '$lib/chat-stream-events';
 
 function mockSessionStorage() {
   const map = new Map<string, string>();
@@ -556,41 +557,52 @@ describe('chat-session store', () => {
   });
 });
 
-describe('foldReasoningEvent', () => {
-  const empty = { segments: [], open: false };
+describe('i segmenti del ragionamento, dal reducer condiviso', () => {
+  const fold = (events: unknown[]) => {
+    const state = emptyStreamState();
+    for (const e of events) applyChatStreamEvent(state, e);
+    return state;
+  };
 
   it('opens a segment before the first delta (placeholder), then accumulates into it', () => {
-    let fold = foldReasoningEvent(empty, { type: 'reasoning-start' }, 0, 0);
-    expect(fold).toEqual({ segments: [{ text: '', textLen: 0, toolsBefore: 0 }], open: true });
-    fold = foldReasoningEvent(fold, { type: 'reasoning-delta', delta: 'sto ' }, 0, 0);
-    fold = foldReasoningEvent(fold, { type: 'reasoning-delta', delta: 'pensando' }, 0, 0);
-    expect(fold.segments).toEqual([{ text: 'sto pensando', textLen: 0, toolsBefore: 0 }]);
+    const state = fold([
+      { type: 'reasoning-start' },
+      { type: 'reasoning-delta', delta: 'sto ' },
+      { type: 'reasoning-delta', delta: 'pensando' }
+    ]);
+    expect(state.reasoningSegments).toEqual([{ text: 'sto pensando', textLen: 0, toolsBefore: 0 }]);
+    expect(state.reasoningOpen).toBe(true);
   });
 
   it('a text delta closes the open segment; the next reasoning delta opens a NEW one', () => {
-    let fold = foldReasoningEvent(empty, { type: 'reasoning-delta', delta: 'uno' }, 0, 0);
-    fold = foldReasoningEvent(fold, { type: 'text-delta', delta: 'Ciao.' }, 5, 0);
+    const closed = fold([
+      { type: 'reasoning-delta', delta: 'uno' },
+      { type: 'text-delta', delta: 'Ciao.' }
+    ]);
     // still just one segment — text does not touch it, only closes it
-    expect(fold.segments).toHaveLength(1);
-    expect(fold.open).toBe(false);
-    fold = foldReasoningEvent(fold, { type: 'reasoning-delta', delta: 'due' }, 5, 0);
-    expect(fold.segments).toEqual([
+    expect(closed.reasoningSegments).toHaveLength(1);
+    expect(closed.reasoningOpen).toBe(false);
+
+    applyChatStreamEvent(closed, { type: 'reasoning-delta', delta: 'due' });
+    expect(closed.reasoningSegments).toEqual([
       { text: 'uno', textLen: 0, toolsBefore: 0 },
       { text: 'due', textLen: 5, toolsBefore: 0 }
     ]);
   });
 
   it('a tool call closes the open segment too, and records how many tools existed before it', () => {
-    let fold = foldReasoningEvent(empty, { type: 'reasoning-delta', delta: 'decido' }, 0, 0);
-    fold = foldReasoningEvent(fold, { type: 'tool-input-start' }, 0, 1);
-    expect(fold.open).toBe(false);
-    fold = foldReasoningEvent(fold, { type: 'reasoning-delta', delta: 'continuo' }, 0, 1);
-    expect(fold.segments[1]).toEqual({ text: 'continuo', textLen: 0, toolsBefore: 1 });
+    const state = fold([
+      { type: 'reasoning-delta', delta: 'decido' },
+      { type: 'tool-input-start', toolCallId: 't1', toolName: 'shell' },
+      { type: 'reasoning-delta', delta: 'continuo' }
+    ]);
+    expect(state.reasoningSegments[1]).toEqual({ text: 'continuo', textLen: 0, toolsBefore: 1 });
   });
 
   it('ignores events unrelated to reasoning/text/tools (finish, error, …)', () => {
-    const fold = foldReasoningEvent(empty, { type: 'finish' }, 0, 0);
-    expect(fold).toBe(empty);
+    const state = fold([{ type: 'reasoning-delta', delta: 'uno' }, { type: 'finish' }]);
+    expect(state.reasoningSegments).toEqual([{ text: 'uno', textLen: 0, toolsBefore: 0 }]);
+    expect(state.reasoningOpen).toBe(true);
   });
 });
 
@@ -767,6 +779,47 @@ describe('chat-session — turni kit e race del client (23-24/8)', () => {
     expect(await p).toBe('ok');
     expect(getSession('th-drop')).toBeNull();
     expect(readPersistedSession('th-drop')).toBeNull();
+  });
+
+  /**
+   * La sessione si dimette, ma quello che sapeva NO. Chi la sostituisce è il riaggancio dal
+   * poll, e lo snapshot del server è lossy per costruzione: payload dei tool tagliati a duemila
+   * caratteri. La scheda quei payload li ha interi — buttarli e poi rileggerli mozzati è l'unico
+   * motivo per cui una chip riagganciata mostrava meno di quella viva un istante prima.
+   */
+  it('la sessione dimessa lascia i buffer interi a chi riaggancia', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const whole = 'r'.repeat(9_000);
+    let pulls = 0;
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          pull(c) {
+            if (pulls++ === 0) {
+              c.enqueue(
+                sseChunk([
+                  { type: 'reasoning-delta', delta: 'valuto' },
+                  { type: 'text-delta', delta: 'ci penso ' },
+                  { type: 'tool-input-available', toolCallId: 'd1', toolName: 'delegate_task', input: { brief: 'lungo' } },
+                  { type: 'tool-output-available', toolCallId: 'd1', output: whole }
+                ])
+              );
+            } else c.error(new TypeError('Failed to fetch'));
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    );
+    const p = startChatSession({ brandSlug: 'acme', threadId: 'th-hand', userText: 'vai' });
+    await vi.runAllTimersAsync();
+    await p;
+
+    const handoff = takeLiveHandoff('th-hand');
+    expect(handoff?.text).toBe('ci penso ');
+    expect(handoff?.tools[0].output).toBe(whole);
+    expect(handoff?.reasoningSegments).toEqual([{ text: 'valuto', textLen: 0, toolsBefore: 0 }]);
+    // Si consuma una volta sola: il turno dopo non deve ereditare quello di prima.
+    expect(takeLiveHandoff('th-hand')).toBeNull();
   });
 
   it('POST mai atterrato (zero byte ricevuti): resta il percorso errore', async () => {

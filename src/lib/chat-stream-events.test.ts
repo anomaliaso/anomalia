@@ -232,3 +232,39 @@ describe('reply è IL messaggio, anche in diretta', () => {
 		expect(state.text).toBe('Fatto: post 42.');
 	});
 });
+
+/**
+ * Un turno riagganciato deve essere indistinguibile da uno vivo, e il ragionamento era la metà che
+ * si perdeva: `reasoning` è UNA stringa, quindi un pensiero chiuso dieci minuti fa e quello in
+ * corso adesso arrivano alla UI come lo stesso blocco — che la bolla viva disegna «sta pensando».
+ * I segmenti stanno nel reducer condiviso, così il browser e lo specchio ne producono gli stessi e
+ * lo snapshot può portarli.
+ */
+describe('i segmenti del ragionamento stanno nel reducer condiviso', () => {
+	it('pensa → scrive → agisce → pensa: due segmenti, ognuno al suo posto', () => {
+		const state = feed([
+			{ type: 'reasoning-start' },
+			{ type: 'reasoning-delta', delta: 'Guardo i post esistenti.' },
+			{ type: 'text-delta', delta: 'Controllo prima. ' },
+			{ type: 'tool-input-start', toolCallId: 't1', toolName: 'list_posts' },
+			{ type: 'tool-output-available', toolCallId: 't1', output: { ok: true } },
+			{ type: 'reasoning-delta', delta: 'Ora scrivo la risposta.' },
+			{ type: 'text-delta', delta: 'Fatto.' }
+		]);
+
+		expect(state.reasoningSegments).toEqual([
+			{ text: 'Guardo i post esistenti.', textLen: 0, toolsBefore: 0 },
+			{ text: 'Ora scrivo la risposta.', textLen: 'Controllo prima. '.length, toolsBefore: 1 }
+		]);
+	});
+
+	it('la stringa piatta resta la concatenazione dei segmenti', () => {
+		const state = feed([
+			{ type: 'reasoning-delta', delta: 'uno' },
+			{ type: 'text-delta', delta: 'x' },
+			{ type: 'reasoning-delta', delta: 'due' }
+		]);
+
+		expect(state.reasoningSegments.map((s) => s.text).join('')).toBe(state.reasoning);
+	});
+});

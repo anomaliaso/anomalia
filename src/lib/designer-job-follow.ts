@@ -75,6 +75,7 @@ export async function followDesignerJobChain(opts: {
 					const reasoning = String(job.partial?.reasoning ?? '');
 					const merged: ChatStreamState = isFirst
 						? {
+								...emptyStreamState(),
 								text: text.length >= prefixText.length ? text : prefixText,
 								tools: tools.length >= prefixTools.length ? tools : prefixTools,
 								reasoning:
@@ -82,6 +83,7 @@ export async function followDesignerJobChain(opts: {
 								failed: job.status === 'failed'
 							}
 						: {
+								...emptyStreamState(),
 								text: prefixText + text,
 								tools: [...prefixTools, ...offsetTools(tools, prefixText.length)],
 								reasoning: prefixReasoning + (reasoning === '\u200b' ? '' : reasoning),

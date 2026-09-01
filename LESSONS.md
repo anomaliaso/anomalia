@@ -48,6 +48,14 @@ git merge-base --is-ancestor <merge-commit> origin/dev && echo LANDED || echo NE
 ```
 Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: vanno riportate a mano sul branch di destinazione (cherry-pick del merge commit, che essendo squash ha un solo genitore), e la risoluzione dei conflitti è il prezzo di averlo scoperto tardi.
 
+### `npx vitest` con la dev server accesa ricarica la pagina che stavi verificando
+`vitest` fa girare `svelte-kit sync`, che riscrive `.svelte-kit/generated/`: la dev server lo vede
+e manda un full reload a ogni scheda aperta. In mezzo a una verifica nel browser questo ammazza lo
+stream SSE del turno vivo e azzera lo stato del client — sembra che la feature perda il turno, ed è
+il tuo `vitest`. Segnale: nel log della dev server righe `[vite] page reload
+.svelte-kit/generated/...` che non corrispondono a nessun file toccato da te. Mossa: la suite gira
+PRIMA o DOPO la sessione nel browser, mai durante.
+
 ## Test: distinguere il tuo difetto dal rumore
 
 ### La suite completa fallisce da sola: confronta run-per-run con dev puro
@@ -151,6 +159,15 @@ Segnale: una migration o un changelog che dice «da qui in poi si fa X», e un `
 X scrive che trova più di un punto che lo scrive. Mossa: la decisione diventa una funzione pura che
 tutti chiamano (qui `people-consent.ts`), e il test sta sulla funzione — non su ciascuna superficie,
 che è come si è arrivati a due.
+
+### Il commento che dice il CONTRARIO del codice manda la diagnosi dalla parte sbagliata
+`mergeStreamToolCalls` era commentato «il merge tiene i payload interi che il canale ha già
+portato», e faceva `input: t.input ?? had.input` — cioè preferiva la copia TRONCATA dello snapshot
+a quella intera che la scheda aveva. Il difetto è vissuto mesi perché chi leggeva si fermava al
+commento, e chi ha aperto il caso è partito da una diagnosi presa dal commento invece che dal
+codice. Segnale: un comportamento che il commento accanto esclude — lì il commento va verificato
+per primo, non creduto. Mossa: la preferenza sta nei NOMI dei parametri (`held` / `snapshot`), non
+in una riga di prosa che nessun test fa fallire quando invecchia.
 
 ### Un dettaglio eliminato non si invalida prima di uscire
 Il reject del post cancellava la riga, poi aggiornava la pagina `/posts/:id`: il layout trovava

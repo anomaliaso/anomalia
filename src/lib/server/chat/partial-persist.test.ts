@@ -58,6 +58,19 @@ describe('assistantContentFromPartial', () => {
 		expect(content[0]).toMatchObject({ type: 'reasoning', text: 'sto pensando' });
 		expect(content[1]).toMatchObject({ type: 'text', text: 'ok' });
 	});
+
+	// Lo specchio kit scrive i segmenti al posto della stringa piatta: il checkpoint di un turno
+	// salvato a metà non deve perdere il ragionamento solo perché ora arriva a pezzi.
+	it('legge il ragionamento anche quando lo snapshot porta i segmenti', () => {
+		const content = assistantContentFromPartial({
+			text: 'ok',
+			reasoningSegments: [
+				{ text: 'valuto', textLen: 0, toolsBefore: 0 },
+				{ text: 'decido', textLen: 0, toolsBefore: 0 }
+			]
+		});
+		expect(content[0]).toMatchObject({ type: 'reasoning', text: 'valuto\n\ndecido' });
+	});
 });
 
 describe('contentFromFailedTurn', () => {

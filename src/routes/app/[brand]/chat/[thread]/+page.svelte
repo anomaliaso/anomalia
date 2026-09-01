@@ -34,6 +34,7 @@
     watchToolJobs,
     detachToolJobMessages,
     isWatchingToolJobs,
+    takeLiveHandoff,
     type QueuedChatItem
   } from '$lib/stores/chat-session';
   import { isClearCommand } from '$lib/chat-commands';
@@ -53,8 +54,8 @@
   import type { ChatDocument } from '$lib/chat-documents';
   import { DEFAULT_AGENT_ID, agentMetaForBrand, normalizeAgentIdForBrand } from '$lib/agent-icons';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
-  import { emptyStreamState, type StreamToolCallState } from '$lib/chat-stream-events';
-  import { applyLiveChunk, applyLiveSnapshot, type PendingChunk } from '$lib/chat-live-join';
+  import { emptyStreamState } from '$lib/chat-stream-events';
+  import { applyLiveChunk, applyLiveSnapshot, type LiveSnapshot, type PendingChunk } from '$lib/chat-live-join';
   import { foldThreadCursor, latestRunProgress, seedThreadProjection, type RawThreadEvent } from '$lib/thread-cursor';
   import '$lib/styles/chat-messages.css';
   import TranscriptList from '../components/TranscriptList.svelte';
@@ -358,7 +359,7 @@
           applyLiveSnapshot(
             orphanState,
             orphanPending,
-            progress as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+            progress as LiveSnapshot
           );
         }
       }
@@ -387,7 +388,7 @@
     }
     if (orphanRun.id !== orphanStateRunId) {
       orphanStateRunId = orphanRun.id;
-      orphanState = emptyStreamState();
+      orphanState = takeLiveHandoff(data.thread.id) ?? emptyStreamState();
       orphanPending = [];
     }
     applyLiveSnapshot(orphanState, orphanPending, orphanRun.partial);
@@ -400,7 +401,7 @@
       applyLiveSnapshot(
         orphanState,
         orphanPending,
-        seeded as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+        seeded as LiveSnapshot
       );
     }
   });

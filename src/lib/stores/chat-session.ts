@@ -28,48 +28,28 @@ import type { ChatReasoningSegment } from '$lib/chat-parts';
 export type StreamToolCall = StreamToolCallState;
 
 /**
- * Folds raw SSE events into ordered reasoning segments, live.
- *
- * `applyChatStreamEvent` (chat-stream-events.ts, shared with other surfaces) still accumulates
- * `reasoning` as one flat string — that reducer is not this task's to touch, and callers like
- * AgentComputerPanel and the maker workbenches still want that single legacy blob. This is the
- * parallel, chat-only view: a segment CLOSES the moment something else (a text delta or a tool
- * call) arrives after its deltas, and the next reasoning delta opens a fresh one — so a turn that
- * thinks → writes → acts → thinks → writes leaves two thought blocks, in order, instead of one.
- *
- * Position is tracked the same way tool calls already are, but on the tool-call axis instead of
- * the text axis (`toolsBefore` instead of `textLen`): a segment records how many tool calls existed
- * when it opened, which is exactly the slot `streamBlocks` needs to interleave it correctly even
- * when it opened at the same text length as a neighboring tool call.
+ * Quello che la sessione sapeva, per chi la sostituisce: il riaggancio ricostruisce dallo
+ * snapshot del server, che porta i payload dei tool tagliati a `MAX_MIRRORED_PAYLOAD_CHARS`.
+ * Interi li ha solo la scheda, che li ha letti dallo stream — e passarglieli costa zero byte.
  */
-export function foldReasoningEvent(
-  fold: { segments: ChatReasoningSegment[]; open: boolean },
-  evt: { type?: string; delta?: string } | null | undefined,
-  textLen: number,
-  toolsSoFar: number
-): { segments: ChatReasoningSegment[]; open: boolean } {
-  const type = evt?.type;
-  if (type === 'reasoning-start' || type === 'reasoning-delta') {
-    const delta = type === 'reasoning-delta' ? String(evt?.delta ?? '') : '';
-    if (!fold.open) {
-      if (!delta && type === 'reasoning-delta') return fold;
-      return {
-        segments: [...fold.segments, { text: delta, textLen, toolsBefore: toolsSoFar }],
-        open: true
-      };
-    }
-    if (!delta) return fold;
-    const last = fold.segments[fold.segments.length - 1];
-    return {
-      segments: [...fold.segments.slice(0, -1), { ...last, text: last.text + delta }],
-      open: true
-    };
-  }
-  // Anything else that actually happened — real text, or a tool call — closes the open segment.
-  if (fold.open && ((type === 'text-delta' && evt?.delta) || (typeof type === 'string' && type.startsWith('tool-')))) {
-    return { ...fold, open: false };
-  }
-  return fold;
+const liveHandoffs = new Map<string, ChatStreamState>();
+
+function leaveLiveHandoff(s: InternalSession) {
+  liveHandoffs.set(s.threadId, {
+    text: s.streamBuf,
+    tools: s.streamToolCalls,
+    reasoning: s.streamReasoning,
+    reasoningSegments: s.streamReasoningSegments,
+    reasoningOpen: s.reasoningOpen,
+    failed: false
+  });
+}
+
+/** Si consuma una volta sola: un turno nuovo non eredita i buffer di quello prima. */
+export function takeLiveHandoff(threadId: string): ChatStreamState | null {
+  const handoff = liveHandoffs.get(threadId) ?? null;
+  liveHandoffs.delete(threadId);
+  return handoff;
 }
 
 export type ChatSessionSnapshot = {
@@ -552,6 +532,7 @@ export async function startChatSession(opts: {
     sessions.delete(opts.threadId);
     clearStorage(opts.threadId);
   }
+  takeLiveHandoff(opts.threadId);
 
   const abort = new AbortController();
   const session: InternalSession = {
@@ -713,31 +694,23 @@ export async function startChatSession(opts: {
         text: cur.streamBuf,
         tools: cur.streamToolCalls,
         reasoning: cur.streamReasoning,
+        reasoningSegments: cur.streamReasoningSegments,
+        reasoningOpen: cur.reasoningOpen,
         failed: false
       };
       let changed = false;
-      let reasoningFold = { segments: cur.streamReasoningSegments, open: cur.reasoningOpen };
       for (const evt of events) {
         changed = applyChatStreamEvent(state, evt) || changed;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const nextFold = foldReasoningEvent(reasoningFold, evt as any, state.text.length, state.tools.length);
-        if (nextFold !== reasoningFold) {
-          reasoningFold = nextFold;
-          changed = true;
-        }
       }
       if (state.failed) streamFailed = true;
-      const buf = state.text;
-      const tools = state.tools;
-      const reasoning = state.reasoning;
-      cur.reasoningOpen = reasoningFold.open;
+      cur.reasoningOpen = state.reasoningOpen;
 
       if (changed) {
         patch(opts.threadId, {
-          streamBuf: buf,
-          streamToolCalls: tools,
-          streamReasoning: reasoning,
-          streamReasoningSegments: reasoningFold.segments
+          streamBuf: state.text,
+          streamToolCalls: state.tools,
+          streamReasoning: state.reasoning,
+          streamReasoningSegments: state.reasoningSegments
         });
       }
     }
@@ -800,6 +773,7 @@ export async function startChatSession(opts: {
       isBenignDisconnect(e) &&
       (cur.streamBuf || cur.streamToolCalls.length || cur.streamReasoning)
     ) {
+      leaveLiveHandoff(cur);
       sessions.delete(opts.threadId);
       clearStorage(opts.threadId);
       publish();
@@ -1269,6 +1243,7 @@ export function __resetChatSessionForTests(): void {
   for (const w of toolWatches.values()) clearInterval(w.timer);
   toolWatches.clear();
   sessions.clear();
+  liveHandoffs.clear();
   chatSessions.set({});
   backgroundToolThreads.set(new Set());
 }

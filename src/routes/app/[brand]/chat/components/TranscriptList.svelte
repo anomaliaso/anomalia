@@ -106,7 +106,7 @@
             text: orphanState.text,
             tools: orphanState.tools,
             reasoning: orphanState.reasoning,
-            reasoningSegments: [] as ChatReasoningSegment[]
+            reasoningSegments: orphanState.reasoningSegments
           }
         : null
   );

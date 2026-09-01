@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyStreamState } from './chat-stream-events';
+import { emptyStreamState, toolsForMirror } from './chat-stream-events';
 import { applyLiveChunk, applyLiveSnapshot, type PendingChunk } from './chat-live-join';
 
 /**
@@ -162,5 +162,56 @@ describe('chat live join — due sorgenti, una sola posizione', () => {
 		});
 
 		expect(state.tools.map((t) => t.toolCallId)).toEqual(['t1', 't2']);
+	});
+});
+
+/**
+ * IL RIAGGANCIO È FEDELE O NON È. La scheda che va in background perde il canale, il turno kit
+ * lascia la sessione viva e il poll ricostruisce la bolla dallo snapshot: da lì in poi ciò che si
+ * vede è ciò che lo snapshot sa dire. Se sa dire meno del turno vivo, il riaggancio è una perdita
+ * — chip con payload mozzato e ogni pensiero chiuso ridipinto come «sta pensando».
+ */
+describe('un turno riagganciato è indistinguibile da uno vivo', () => {
+	it('lo snapshot porta i segmenti del ragionamento, e i chiusi restano chiusi', () => {
+		const state = emptyStreamState();
+		const pending: PendingChunk[] = [];
+
+		applyLiveSnapshot(state, pending, {
+			text: 'Controllo prima. ',
+			reasoningSegments: [
+				{ text: 'Guardo i post.', textLen: 0, toolsBefore: 0 },
+				{ text: 'Ora rispondo.', textLen: 17, toolsBefore: 1 }
+			],
+			tools: [{ toolCallId: 't1', toolName: 'list_posts', status: 'done', textLen: 17 }]
+		});
+
+		expect(state.reasoningSegments).toEqual([
+			{ text: 'Guardo i post.', textLen: 0, toolsBefore: 0 },
+			{ text: 'Ora rispondo.', textLen: 17, toolsBefore: 1 }
+		]);
+		expect(state.reasoning).toBe('Guardo i post.Ora rispondo.');
+	});
+
+	it('lo snapshot non declassa a troncato un payload che la scheda ha intero', () => {
+		const whole = 'r'.repeat(9_000);
+		const state = emptyStreamState();
+		const pending: PendingChunk[] = [];
+		applyLiveChunk(
+			state,
+			pending,
+			{ type: 'tool-input-available', toolCallId: 'd1', toolName: 'delegate_task', input: { brief: whole } },
+			{ text: 0, reasoning: 0 }
+		);
+		applyLiveChunk(
+			state,
+			pending,
+			{ type: 'tool-output-available', toolCallId: 'd1', output: whole },
+			{ text: 0, reasoning: 0 }
+		);
+
+		applyLiveSnapshot(state, pending, { text: '', tools: toolsForMirror(state.tools) });
+
+		expect(state.tools[0].output).toBe(whole);
+		expect((state.tools[0].input as { brief: string }).brief).toBe(whole);
 	});
 });

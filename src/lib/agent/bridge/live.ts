@@ -1531,7 +1531,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							runId: run.id,
 							status: 'running',
 							text: state.text,
-							reasoning: state.reasoning || undefined,
+							reasoningSegments: state.reasoningSegments,
 							tools: toolsForMirror(state.tools)
 						});
 						void broadcastToBrand(brand.id, { event: 'thread-seq', payload: { threadId, seq } });
@@ -1548,9 +1548,11 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						await admin
 							.from('agent_kit_runs')
 							.update({
+								// I segmenti al posto della stringa piatta: stesso testo, stessi byte su una
+								// riga riscritta ogni 100ms, ma con la posizione di ogni pensiero.
 								partial: {
 									text: state.text,
-									reasoning: state.reasoning || undefined,
+									reasoningSegments: state.reasoningSegments,
 									tools: toolsForMirror(state.tools),
 									updatedAt: new Date().toISOString()
 								},

@@ -144,7 +144,27 @@ describe('thread page: il turno orfano non mescola canale e poll', () => {
 	});
 
 	it('cambiando run si azzerano anche i chunk in attesa', () => {
-		expect(src).toMatch(/orphanState = emptyStreamState\(\);\s*\n\s*orphanPending = \[\];/);
+		expect(src).toMatch(/orphanPending = \[\];/);
+	});
+});
+
+/**
+ * Il difetto segnalato dal proprietario: scheda in background → il canale muore, il turno kit
+ * dimette la sua sessione (deliberato, PR #119) e il poll ricostruisce la bolla dallo snapshot.
+ * Da lì in poi si vedeva MENO di un attimo prima: payload dei tool tagliati a duemila caratteri e
+ * ogni pensiero, anche chiuso da dieci minuti, ridipinto come «sta pensando».
+ */
+describe('thread page: il turno riagganciato è fedele a quello vivo', () => {
+	const src = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
+	const transcript = readFileSync(new URL('../components/TranscriptList.svelte', import.meta.url), 'utf8');
+
+	it('la sessione dimessa passa i suoi buffer interi al riaggancio', () => {
+		expect(src).toContain('takeLiveHandoff(');
+	});
+
+	it('la bolla riagganciata riceve i segmenti del ragionamento, non una lista vuota', () => {
+		expect(transcript).toContain('reasoningSegments: orphanState.reasoningSegments');
+		expect(transcript).not.toMatch(/reasoningSegments: \[\] as ChatReasoningSegment\[\]/);
 	});
 });
 

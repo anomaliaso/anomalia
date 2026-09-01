@@ -7,6 +7,8 @@
  * ripreso identico a quello perso.
  */
 
+import type { ChatReasoningSegment } from './chat-parts';
+
 export type StreamToolCallState = {
   toolCallId: string;
   toolName: string;
@@ -25,7 +27,12 @@ export type StreamToolCallState = {
 export type ChatStreamState = {
   text: string;
   tools: StreamToolCallState[];
+  /** Ogni pensiero di seguito all'altro. Legacy: chi non sa dei segmenti legge ancora questa. */
   reasoning: string;
+  /** Gli stessi pensieri, ma uno per volta e ciascuno al suo posto fra testo e tool. */
+  reasoningSegments: ChatReasoningSegment[];
+  /** L'ultimo segmento accetta ancora delta: chiuso, il prossimo delta ne apre uno nuovo. */
+  reasoningOpen: boolean;
   /** Provider/stream failure seen in the events. */
   failed: boolean;
 };
@@ -34,12 +41,52 @@ export const emptyStreamState = (): ChatStreamState => ({
   text: '',
   tools: [],
   reasoning: '',
+  reasoningSegments: [],
+  reasoningOpen: false,
   failed: false
 });
 
 /** Fold one parsed SSE event into `state`. Returns true when something visible changed. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyChatStreamEvent(state: ChatStreamState, evt: any): boolean {
+  const changed = foldStreamEvent(state, evt);
+  return foldReasoningSegments(state, evt) || changed;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function foldReasoningSegments(state: ChatStreamState, evt: any): boolean {
+  const type = evt && typeof evt === 'object' ? String(evt.type ?? '') : '';
+
+  if (type === 'reasoning-start' || type === 'reasoning-delta') {
+    const delta = type === 'reasoning-delta' ? String(evt.delta ?? '') : '';
+    if (!state.reasoningOpen) {
+      if (!delta && type === 'reasoning-delta') return false;
+      state.reasoningSegments = [
+        ...state.reasoningSegments,
+        { text: delta, textLen: state.text.length, toolsBefore: state.tools.length }
+      ];
+      state.reasoningOpen = true;
+      return true;
+    }
+    if (!delta) return false;
+    const last = state.reasoningSegments[state.reasoningSegments.length - 1];
+    state.reasoningSegments = [
+      ...state.reasoningSegments.slice(0, -1),
+      { ...last, text: last.text + delta }
+    ];
+    return true;
+  }
+
+  if (state.reasoningOpen && ((type === 'text-delta' && evt.delta) || type.startsWith('tool-'))) {
+    state.reasoningOpen = false;
+    return false;
+  }
+
+  return false;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function foldStreamEvent(state: ChatStreamState, evt: any): boolean {
   if (!evt || typeof evt !== 'object') return false;
 
   switch (evt.type) {
@@ -196,23 +243,20 @@ export function closeDanglingToolCalls(state: ChatStreamState): boolean {
   return changed;
 }
 
-/**
- * Piega la lista di tool di uno snapshot su quella che questa scheda ha già, tenendo i payload che
- * lo snapshot ha buttato: senza, il primo poll dopo una disconnessione chiuderebbe ogni chip aperta.
- */
+/** Lo snapshot decide lo STATO di ogni chip; i payload interi li tiene chi li ha già letti. */
 export function mergeStreamToolCalls(
-  prev: StreamToolCallState[],
-  next: StreamToolCallState[]
+  held: StreamToolCallState[],
+  snapshot: StreamToolCallState[]
 ): StreamToolCallState[] {
-  const known = new Map(prev.map((t) => [t.toolCallId, t]));
-  return next.map((t) => {
-    const had = known.get(t.toolCallId);
-    if (!had) return t;
+  const byId = new Map(held.map((t) => [t.toolCallId, t]));
+  return snapshot.map((fromSnapshot) => {
+    const mine = byId.get(fromSnapshot.toolCallId);
+    if (!mine) return fromSnapshot;
     return {
-      ...t,
-      input: t.input ?? had.input,
-      output: t.output ?? had.output,
-      errorText: t.errorText ?? had.errorText
+      ...fromSnapshot,
+      input: mine.input ?? fromSnapshot.input,
+      output: mine.output ?? fromSnapshot.output,
+      errorText: mine.errorText ?? fromSnapshot.errorText
     };
   });
 }

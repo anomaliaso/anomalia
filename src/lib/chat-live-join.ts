@@ -9,6 +9,7 @@
  * continua esattamente dove siamo; altrimenti aspetta lo snapshot che colma il buco.
  */
 import { applyChatStreamEvent, mergeStreamToolCalls, type ChatStreamState, type StreamToolCallState } from '$lib/chat-stream-events';
+import type { ChatReasoningSegment } from '$lib/chat-parts';
 
 /** Lunghezze del testo e del ragionamento sul server PRIMA che il chunk fosse applicato. */
 export type ChunkPosition = { text: number; reasoning: number };
@@ -67,11 +68,21 @@ export function applyLiveChunk(
   return false;
 }
 
+export type LiveSnapshot = {
+  text?: string;
+  reasoning?: string;
+  reasoningSegments?: ChatReasoningSegment[];
+  tools?: StreamToolCallState[];
+};
+
+const reasoningLength = (segments: ChatReasoningSegment[]) =>
+  segments.reduce((n, s) => n + s.text.length, 0);
+
 /** Lo snapshot assoluto del poll: va avanti, mai indietro, e fa entrare i chunk in attesa. */
 export function applyLiveSnapshot(
   state: ChatStreamState,
   pending: PendingChunk[],
-  snapshot: { text?: string; reasoning?: string; tools?: StreamToolCallState[] } | null | undefined
+  snapshot: LiveSnapshot | null | undefined
 ): boolean {
   let changed = false;
   if (snapshot) {
@@ -80,7 +91,14 @@ export function applyLiveSnapshot(
       state.text = text;
       changed = true;
     }
-    const reasoning = String(snapshot.reasoning ?? '');
+    // I segmenti sono il ragionamento POSIZIONATO: senza, un pensiero chiuso e quello in corso
+    // tornano a essere lo stesso blocco, e la bolla viva li disegna tutti come «sta pensando».
+    const segments = Array.isArray(snapshot.reasoningSegments) ? snapshot.reasoningSegments : [];
+    if (reasoningLength(segments) > reasoningLength(state.reasoningSegments)) {
+      state.reasoningSegments = segments;
+      changed = true;
+    }
+    const reasoning = String(snapshot.reasoning ?? '') || state.reasoningSegments.map((s) => s.text).join('');
     if (reasoning.length > state.reasoning.length) {
       state.reasoning = reasoning;
       changed = true;
@@ -88,9 +106,8 @@ export function applyLiveSnapshot(
     const tools = Array.isArray(snapshot.tools) ? snapshot.tools : [];
     // Anche a lunghezza invariata lo snapshot può dire qualcosa di nuovo: la chiusura di una chip
     // persa dal canale (realtime best-effort, stream morto a metà tool) è una transizione di
-    // stato, non un'aggiunta. Il merge tiene i payload interi che il canale ha già portato.
+    // stato, non un'aggiunta.
     if (tools.length > 0 && tools.length >= state.tools.length) {
-      // Lo snapshot ha payload troncati: il merge tiene quelli interi che il canale ha già portato.
       state.tools = mergeStreamToolCalls(state.tools, tools);
       changed = true;
     }
