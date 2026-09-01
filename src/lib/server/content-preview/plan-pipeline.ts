@@ -1,5 +1,5 @@
 import type { GoogleGenAI } from '@google/genai';
-import { STORY_FAILURE_MODES, normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
+import { STORY_FAILURE_MODES, normalizeBeats, weekFromModel, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { logAiCall, extractGeminiUsage } from '$lib/server/ai-log';
@@ -337,7 +337,7 @@ Return JSON.`;
       platforms: [primary, ...new Set(cross)].filter(Boolean),
       pillar: String(s?.pillar ?? ''),
       format: normalizeContentFormat(s?.format),
-      week: Number.isFinite(Number(s?.week)) ? Math.max(0, Math.floor(Number(s.week))) : undefined,
+      week: weekFromModel(s?.week),
       slide_count: Number(s?.slide_count) || undefined,
       beats: normalizeBeats(s?.beats),
       art_direction: String(s?.art_direction ?? '').trim() || undefined,

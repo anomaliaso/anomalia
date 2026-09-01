@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Senza questo, il test leggeva il .env dello sviluppatore: con WEEK_PLANNER_AGENT_ENABLED=false
 // in locale falliva sempre, e quello che verificava non era il default ma la macchina.
 vi.mock('$env/dynamic/private', () => ({ env: {} }));
-import { MAX_WEEK_PLANNER_DRAFTS, MAX_WEEK_PLANNER_RESEARCH, mergeSeeds, weekPlannerAgentEnabled } from './week-planner-agent';
+import { MAX_WEEK_PLANNER_DRAFTS, MAX_WEEK_PLANNER_RESEARCH, mergeSeeds, normalizeSeeds, weekPlannerAgentEnabled } from './week-planner-agent';
 import { consumeDraftBudget, createStrategyBudget } from './strategy-agent';
 
 describe('week planner agent', () => {
@@ -74,4 +74,18 @@ describe('mergeSeeds', () => {
     const out = mergeSeeds([], [{ angle: 'solo questo' }]);
     expect(out).toEqual([{ angle: 'solo questo' }]);
   });
+});
+
+describe('la settimana che il modello scrive', () => {
+	it('arriva contata da uno e viene riportata a zero, come la vuole tutto il resto', () => {
+		const seeds = normalizeSeeds([
+			{ title: "L'albo pretorio", week: 1 },
+			{ title: 'La busta paga', week: 2 }
+		]);
+		expect(seeds.map((s) => s.week)).toEqual([0, 1]);
+	});
+
+	it('non inventa una settimana per chi non la porta', () => {
+		expect(normalizeSeeds([{ title: 'senza settimana' }])[0].week).toBeUndefined();
+	});
 });

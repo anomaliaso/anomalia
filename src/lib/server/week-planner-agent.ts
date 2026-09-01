@@ -44,6 +44,7 @@ import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
 import { benchmarkDigest, type Benchmark } from '$lib/server/research';
 import type { ContentPrefs, PastWinner } from '$lib/server/content-preview';
 import type { Rubric } from '$lib/server/rubrics';
+import { weekFromModel } from '$lib/server/content-preview/seed-model';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -132,8 +133,21 @@ export function mergeSeeds(drafted: AnyRec[], sent: AnyRec[]): AnyRec[] {
   return sent.map((patch, i) => ({ ...(drafted[i] ?? {}), ...(patch ?? {}) }));
 }
 
-function normalizeSeeds(raw: unknown[]): PostSeed[] {
-  return (raw ?? []).map((s) => s as PostSeed);
+/**
+ * Il modello conta le settimane da UNO, perché è così che gliele mostriamo ("WEEK 1") ed è così
+ * che le dice chiunque. Tutto il resto — il mix per settimana, i controlli di cadenza — le conta
+ * da zero. Chiedere al modello di fare la sottrazione è ciò che è già fallito: senza un piano
+ * editoriale in giro, la sola istruzione che dava la convenzione non veniva nemmeno emessa, e
+ * un batch di due settimane usciva con week 1 e 2, lasciando vuota la prima e la seconda fuori
+ * intervallo. La sottrazione la facciamo qui, una volta, dove i seed entrano.
+ */
+export function normalizeSeeds(raw: unknown[]): PostSeed[] {
+  return (raw ?? []).map((s) => {
+    const seed = s as PostSeed & { week?: unknown };
+    if (seed?.week == null) return seed as PostSeed;
+
+    return { ...seed, week: weekFromModel(seed.week) } as PostSeed;
+  });
 }
 
 export async function runWeekPlannerAgent(opts: WeekPlannerAgentOpts): Promise<WeekPlannerAgentResult> {
@@ -205,7 +219,7 @@ NARRATIVE EPISODES — THE PROTOCOL, NOT OPTIONAL. You do not already understand
   d. Only then write the beats, and put the situation and its source in "sourced_from".
 Found nothing usable? Say so in "sourced_from" and keep the episode general. An invented life told confidently is the worst thing this system can publish.
 
-Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}${(opts.weeks ?? 1) > 1 ? `, and this batch covers ${opts.weeks} weeks — every seed MUST carry "week" with the week it belongs to, and each week gets its own theme and its own content mix` : ''}.
+Week index: ${opts.weekIndex != null ? opts.weekIndex + 1 : 'unspecified'}${(opts.weeks ?? 1) > 1 ? `, and this batch covers ${opts.weeks} weeks — every seed MUST carry "week" with the week it belongs to, counted from 1 like the labels above, and each week gets its own theme and its own content mix` : ''}.
 Platforms: ${opts.platforms.join(', ')}.
 
 ${disruptiveBriefSection()}

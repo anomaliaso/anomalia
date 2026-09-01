@@ -247,7 +247,7 @@ export function weekStrategyBrief(
     [
       // L'etichetta resta leggibile (WEEK 1), il numero da SCRIVERE è accanto: il modello aveva
       // copiato l'etichetta in un campo che è un indice, e il batch slittava di una settimana.
-      `WEEK ${weekIndex + i + 1} (write week=${weekIndex + i}) — theme: ${w.theme}`,
+      `WEEK ${weekIndex + i + 1} — theme: ${w.theme}`,
       w.focus ? `  Focus: ${w.focus}` : '',
       mixOf(w) ? `  Content mix target: ${mixOf(w)}.` : '',
       w.rationale ? `  Why this week: ${w.rationale}` : ''

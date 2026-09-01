@@ -987,3 +987,19 @@ export function clampCarousels<T extends { format: ContentFormat; slide_count?: 
 export type ImagePart = { inlineData: { mimeType: string; data: string } };
 
 export const MAX_COMPETITOR_MOOD_IMAGES = 4;
+
+/**
+ * La settimana come la scrive il modello, riportata a come la legge tutto il resto.
+ *
+ * Il modello conta da UNO — è così che gliele mostriamo ("WEEK 1") ed è così che le dice
+ * chiunque; il mix per settimana e i controlli di cadenza contano da zero. Chiedere al modello
+ * la sottrazione è ciò che è già fallito: l'unica riga che dava la convenzione viveva nel brief
+ * del piano editoriale, e senza un piano non veniva nemmeno emessa — un batch di due settimane
+ * usciva con week 1 e 2, lasciando vuota la prima e la seconda fuori intervallo.
+ */
+export function weekFromModel(raw: unknown): number | undefined {
+	const week = Number(raw);
+	if (raw == null || raw === '' || !Number.isFinite(week)) return undefined;
+
+	return Math.max(0, Math.floor(week) - 1);
+}

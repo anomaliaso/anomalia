@@ -325,7 +325,7 @@ describe('postsForWeeks e i mix dello span', () => {
 // Il brief numerava le settimane 1-based per chi legge, e il modello ha scritto quei numeri in un
 // campo che è un INDICE 0-based: l'intero batch slittava di uno e la prima settimana restava vuota.
 // Il numero da usare ora è scritto accanto all'etichetta, così l'etichetta resta leggibile.
-describe('il brief dice quale numero scrivere', () => {
+describe('il brief numera le settimane da uno, e non chiede altro', () => {
   const plan = (): EditorialPlan => ({
     strategy: 'S',
     voice: { mood: '', tone: '', goal: '', personality: '' },
@@ -338,10 +338,12 @@ describe('il brief dice quale numero scrivere', () => {
     ]
   });
 
-  it('affianca l\'indice da scrivere all\'etichetta leggibile', () => {
+  // Chiedere al modello di scrivere un indice diverso dall'etichetta che legge è ciò che è
+  // fallito: la conversione ora la fa weekFromModel, una volta, dove i seed entrano.
+  it('etichetta le settimane come le conta chiunque, senza chiedere una sottrazione', () => {
     const brief = weekStrategyBrief(plan(), 0, [], 2);
     expect(brief).toContain('WEEK 1');
-    expect(brief).toMatch(/week\s*=\s*0/);
-    expect(brief).toMatch(/week\s*=\s*1/);
+    expect(brief).toContain('WEEK 2');
+    expect(brief).not.toMatch(/write\s+week\s*=/);
   });
 });
