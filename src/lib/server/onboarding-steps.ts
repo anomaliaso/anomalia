@@ -69,6 +69,44 @@ const STALL_MS = 6 * 60 * 1000;
 
 const TABLE = 'onboarding_step_jobs';
 
+/**
+ * What one attempt of the market study costs, kept so the next attempt does not pay it again.
+ * `planInputs` is what the editorial plan needs from the study once the study itself is gone.
+ */
+export type MarketStudy = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  report: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  buyerPersonas: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  researchData: any;
+  planInputs: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    aiContext: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    visualStyle: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    topPosts: any;
+    zeroToOne: boolean;
+  };
+};
+
+/**
+ * A re-queued attempt starts the pipeline over from `handles`. Scraping, benchmark, personas and
+ * the strategy report cost minutes and real money, and the platform kills the invocation at 300s:
+ * without this, an attempt that dies inside the editorial plan pays for the whole study again, and
+ * dies at the same wall — three times, then `failed`, and the user never sees a post.
+ *
+ * Returns the study only when every piece the plan needs survived. A half-written one is worth
+ * nothing: the plan would run on a study missing its own inputs.
+ */
+export function resumableStudy(prior: unknown): MarketStudy | null {
+  if (!prior || typeof prior !== 'object') return null;
+  const { report, buyerPersonas, researchData, planInputs } = prior as Record<string, unknown>;
+  if (!report || !researchData || !buyerPersonas || !planInputs) return null;
+  return { report, buyerPersonas, researchData, planInputs } as MarketStudy;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseHandles(raw: any): ScrapeTarget[] {
   if (!Array.isArray(raw)) return [];
@@ -557,165 +595,192 @@ async function processResearch(
     try {
       const ai = genaiClient();
 
-      // Phase 1 (parallel): scrape the brand's own posts while resolving competitor social handles.
-      await pushProgress('handles', 'Finding competitor profiles…');
-      const [brandScrape, handleMap] = await Promise.all([
-        brandHandles.length
-          ? scrapeForOnboarding(brandHandles).catch((error) => { swallow('scrape onboarding profile', error); return ({ posts: [], errors: [] }); })
-          : Promise.resolve({ posts: [], errors: [] }),
-        competitors.length
-          ? resolveCompetitorHandles(ai, competitors, platforms)
-          : Promise.resolve(new Map<string, ScrapeTarget[]>())
-      ]);
-      const brandPosts = brandScrape.posts;
-      if (competitors.length) {
-        await attachStepResult('handles', {
-          competitors: competitors.map((c) => ({
-            name: c.name,
-            handles: (handleMap.get(c.name) ?? []).map((h) => ({
-              platform: h.platform,
-              username: h.username
-            }))
-          }))
-        });
-      }
-      if (brandPosts.length) {
-        await pushProgress(
-          'brandHistory',
-          `Retrieved ${brandPosts.length} of your posts with their stats — saved to your brand…`
-        );
-      }
-
-      // Phase 2: scrape competitor posts WHILE brand-only LLM work runs.
-      await pushProgress('scraping', 'Reading your competitors’ posts…');
-      const topThumbs = [...brandPosts]
-        .sort(
-          (a, b) =>
-            (b.metrics?.likes ?? 0) +
-            (b.metrics?.comments ?? 0) -
-            ((a.metrics?.likes ?? 0) + (a.metrics?.comments ?? 0))
-        )
-        .map((p) => p.thumbnailUrl)
-        .filter((u): u is string => !!u);
-
-      const brandWork = Promise.all([
-        brandPosts.length
-          ? synthesizeBrandContext(ai, {
-              name: profile?.name ?? '',
-              kit: {
-                about: profile?.about,
-                category: profile?.category,
-                target_audience: profile?.target_audience
-              },
-              documents: [],
-              posts: brandPosts.map((p) => ({
-                content: p.content,
-                platform: p.platform,
-                metrics: p.metrics
+      const runMarketStudy = async (): Promise<MarketStudy> => {
+        // Phase 1 (parallel): scrape the brand's own posts while resolving competitor social handles.
+        await pushProgress('handles', 'Finding competitor profiles…');
+        const [brandScrape, handleMap] = await Promise.all([
+          brandHandles.length
+            ? scrapeForOnboarding(brandHandles).catch((error) => { swallow('scrape onboarding profile', error); return ({ posts: [], errors: [] }); })
+            : Promise.resolve({ posts: [], errors: [] }),
+          competitors.length
+            ? resolveCompetitorHandles(ai, competitors, platforms)
+            : Promise.resolve(new Map<string, ScrapeTarget[]>())
+        ]);
+        const brandPosts = brandScrape.posts;
+        if (competitors.length) {
+          await attachStepResult('handles', {
+            competitors: competitors.map((c) => ({
+              name: c.name,
+              handles: (handleMap.get(c.name) ?? []).map((h) => ({
+                platform: h.platform,
+                username: h.username
               }))
-            }).catch((error) => { swallow('brandPosts.map failed', error); return ''; })
-          : Promise.resolve(''),
-        brandPosts.length ? synthesizeVisualStyle(ai, topThumbs).catch((error) => { swallow('synthesize visual style', error); return ''; }) : Promise.resolve(''),
-        brandPosts.length
-          ? synthesizeVisualPlaybook(ai, topThumbs).catch((error) => { swallow('synthesize visual playbook', error); return ''; })
-          : Promise.resolve(''),
-        generateBuyerPersonas(ai, profile, competitors, platforms, outputLanguage).catch((error) => { swallow('generate buyer personas', error); return [] as BuyerPersona[]; })
-      ]);
+            }))
+          });
+        }
+        if (brandPosts.length) {
+          await pushProgress(
+            'brandHistory',
+            `Retrieved ${brandPosts.length} of your posts with their stats — saved to your brand…`
+          );
+        }
 
-      const [competitorPosts, [brandCtx, brandStyle, visualPlaybook, buyerPersonas]] =
-        await Promise.all([scrapeCompetitors(handleMap), brandWork]);
+        // Phase 2: scrape competitor posts WHILE brand-only LLM work runs.
+        await pushProgress('scraping', 'Reading your competitors’ posts…');
+        const topThumbs = [...brandPosts]
+          .sort(
+            (a, b) =>
+              (b.metrics?.likes ?? 0) +
+              (b.metrics?.comments ?? 0) -
+              ((a.metrics?.likes ?? 0) + (a.metrics?.comments ?? 0))
+          )
+          .map((p) => p.thumbnailUrl)
+          .filter((u): u is string => !!u);
 
-      if (competitorPosts.size) {
-        await attachStepResult('scraping', {
-          counts: [...competitorPosts.entries()].map(([name, posts]) => ({
-            name,
-            posts: posts.length
+        const brandWork = Promise.all([
+          brandPosts.length
+            ? synthesizeBrandContext(ai, {
+                name: profile?.name ?? '',
+                kit: {
+                  about: profile?.about,
+                  category: profile?.category,
+                  target_audience: profile?.target_audience
+                },
+                documents: [],
+                posts: brandPosts.map((p) => ({
+                  content: p.content,
+                  platform: p.platform,
+                  metrics: p.metrics
+                }))
+              }).catch((error) => { swallow('brandPosts.map failed', error); return ''; })
+            : Promise.resolve(''),
+          brandPosts.length ? synthesizeVisualStyle(ai, topThumbs).catch((error) => { swallow('synthesize visual style', error); return ''; }) : Promise.resolve(''),
+          brandPosts.length
+            ? synthesizeVisualPlaybook(ai, topThumbs).catch((error) => { swallow('synthesize visual playbook', error); return ''; })
+            : Promise.resolve(''),
+          generateBuyerPersonas(ai, profile, competitors, platforms, outputLanguage).catch((error) => { swallow('generate buyer personas', error); return [] as BuyerPersona[]; })
+        ]);
+
+        const [competitorPosts, [brandCtx, brandStyle, visualPlaybook, buyerPersonas]] =
+          await Promise.all([scrapeCompetitors(handleMap), brandWork]);
+
+        if (competitorPosts.size) {
+          await attachStepResult('scraping', {
+            counts: [...competitorPosts.entries()].map(([name, posts]) => ({
+              name,
+              posts: posts.length
+            }))
+          });
+        }
+        if (brandStyle) profile.visual_style = brandStyle;
+
+        // Phase 3: quantitative benchmark + qualitative field read.
+        await pushProgress('benchmark', 'Comparing engagement across the field…');
+        const benchmark = benchmarkCompetitors(brandPosts, competitorPosts);
+        await attachStepResult('benchmark', {
+          market: benchmark.market,
+          brand: benchmark.brand
+            ? {
+                count: benchmark.brand.count,
+                medianEngagement: benchmark.brand.medianEngagement,
+                postsPerWeek: benchmark.brand.postsPerWeek
+              }
+            : null,
+          competitors: benchmark.competitors.map((c) => ({
+            name: c.name,
+            count: c.stats.count,
+            medianEngagement: c.stats.medianEngagement,
+            postsPerWeek: c.stats.postsPerWeek
           }))
         });
-      }
-      if (brandStyle) profile.visual_style = brandStyle;
 
-      // Phase 3: quantitative benchmark + qualitative field read.
-      await pushProgress('benchmark', 'Comparing engagement across the field…');
-      const benchmark = benchmarkCompetitors(brandPosts, competitorPosts);
-      await attachStepResult('benchmark', {
-        market: benchmark.market,
-        brand: benchmark.brand
-          ? {
-              count: benchmark.brand.count,
-              medianEngagement: benchmark.brand.medianEngagement,
-              postsPerWeek: benchmark.brand.postsPerWeek
-            }
-          : null,
-        competitors: benchmark.competitors.map((c) => ({
-          name: c.name,
-          count: c.stats.count,
-          medianEngagement: c.stats.medianEngagement,
-          postsPerWeek: c.stats.postsPerWeek
-        }))
-      });
+        await pushProgress('analysis', 'Studying what wins in your category…');
+        const qualitative = await analyzeCompetitorContent(ai, benchmark, outputLanguage);
+        if (qualitative) {
+          await attachStepResult('analysis', { text: qualitative });
+        }
 
-      await pushProgress('analysis', 'Studying what wins in your category…');
-      const qualitative = await analyzeCompetitorContent(ai, benchmark, outputLanguage);
-      if (qualitative) {
-        await attachStepResult('analysis', { text: qualitative });
-      }
+        // Phase 4: strategy report — onboarding uses ultraspeed + a single variant so this doesn't stall.
+        await pushProgress('strategy', 'Mapping your white space…');
+        let baseContext = brandCtx || profile?.ai_context || '';
+        if (additionalContext) {
+          baseContext = [baseContext, `ADDITIONAL CONTEXT FROM USER:\n${additionalContext}`]
+            .filter(Boolean)
+            .join('\n\n');
+        }
+        const histDigest = historyInsightsDigest(analyzePostHistory(brandPosts));
+        if (histDigest) baseContext = [baseContext, histDigest].filter(Boolean).join('\n\n');
+        if (visualPlaybook) baseContext = [baseContext, visualPlaybook].filter(Boolean).join('\n\n');
+        profile.ai_context = baseContext;
 
-      // Phase 4: strategy report — onboarding uses ultraspeed + a single variant so this doesn't stall.
-      await pushProgress('strategy', 'Mapping your white space…');
-      let baseContext = brandCtx || profile?.ai_context || '';
-      if (additionalContext) {
-        baseContext = [baseContext, `ADDITIONAL CONTEXT FROM USER:\n${additionalContext}`]
-          .filter(Boolean)
-          .join('\n\n');
-      }
-      const histDigest = historyInsightsDigest(analyzePostHistory(brandPosts));
-      if (histDigest) baseContext = [baseContext, histDigest].filter(Boolean).join('\n\n');
-      if (visualPlaybook) baseContext = [baseContext, visualPlaybook].filter(Boolean).join('\n\n');
-      profile.ai_context = baseContext;
+        const { XIAOMI_ULTRASPEED_MODEL, AI_PROVIDER } = await import('$lib/server/xiaomi');
+        const fastModel = AI_PROVIDER === 'xiaomi' ? XIAOMI_ULTRASPEED_MODEL : undefined;
 
-      const { XIAOMI_ULTRASPEED_MODEL, AI_PROVIDER } = await import('$lib/server/xiaomi');
-      const fastModel = AI_PROVIDER === 'xiaomi' ? XIAOMI_ULTRASPEED_MODEL : undefined;
+        const report = await synthesizeStrategyReport(
+          ai,
+          profile,
+          benchmark,
+          qualitative,
+          platforms,
+          outputLanguage,
+          { model: fastModel, variants: 1 }
+        );
 
-      const report = await synthesizeStrategyReport(
-        ai,
-        profile,
-        benchmark,
-        qualitative,
-        platforms,
-        outputLanguage,
-        { model: fastModel, variants: 1 }
-      );
+        profile.ai_context = buildCompetitiveContext(baseContext, report);
+        const strategyBrief = strategyBriefFromReport(report);
 
-      profile.ai_context = buildCompetitiveContext(baseContext, report);
-      const strategyBrief = strategyBriefFromReport(report);
+        await mergeResult({ report, buyerPersonas });
 
-      await mergeResult({ report, buyerPersonas });
-
-      const resolvedCompetitors = competitors.map((c) => {
-        const cb = benchmark.competitors.find((b) => b.name === c.name);
-        return {
-          ...c,
-          handles: handleMap.get(c.name) ?? [],
-          top_posts: cb?.stats.topPosts ?? [],
-          benchmark: cb?.stats ?? null
+        const resolvedCompetitors = competitors.map((c) => {
+          const cb = benchmark.competitors.find((b) => b.name === c.name);
+          return {
+            ...c,
+            handles: handleMap.get(c.name) ?? [],
+            top_posts: cb?.stats.topPosts ?? [],
+            benchmark: cb?.stats ?? null
+          };
+        });
+        const researchData = {
+          competitors: resolvedCompetitors,
+          report,
+          benchmark,
+          positioning: qualitative,
+          personas: buyerPersonas
         };
-      });
-      const researchData = {
-        competitors: resolvedCompetitors,
-        report,
-        benchmark,
-        positioning: qualitative,
-        personas: buyerPersonas
+        const planInputs = {
+          aiContext: profile.ai_context ?? null,
+          visualStyle: profile.visual_style ?? null,
+          topPosts: brandPosts.map((p) => ({
+            content: p.content,
+            platform: p.platform,
+            metrics: p.metrics
+          })) as PastWinner[],
+          zeroToOne: brandPosts.length < 10
+        };
+        await mergeResult({ researchData, planInputs });
+        // Durable progress refunds the retry budget: the attempts spent reaching the study must not
+        // be charged against the plan, which now restarts cheap.
+        await patchJob(admin, jobId, { attempts: 0 });
+
+        return { report, buyerPersonas, researchData, planInputs };
       };
-      await mergeResult({ researchData });
+
+      // A resumed attempt inherits the timeline it already earned, or the wizard would redraw
+      // itself as if the market study had never happened.
+      const resumed = resumableStudy(job.result);
+      const priorSteps = (job.result as { steps?: unknown } | null)?.steps;
+      if (resumed && Array.isArray(priorSteps)) steps.push(...(priorSteps as typeof steps));
+      const study = resumed ?? (await runMarketStudy());
+      const { report, buyerPersonas, researchData, planInputs } = study;
+      profile.ai_context = planInputs.aiContext ?? profile.ai_context;
+      if (planInputs.visualStyle) profile.visual_style = planInputs.visualStyle;
+      const strategyBrief = strategyBriefFromReport(report);
+      const benchmark = researchData?.benchmark ?? null;
+      const { XIAOMI_ULTRASPEED_MODEL: ULTRASPEED, AI_PROVIDER: PROVIDER } = await import('$lib/server/xiaomi');
+      const planModel = PROVIDER === 'xiaomi' ? ULTRASPEED : undefined;
 
       await pushProgress('editorialPlan', 'Drafting your editorial plan…');
-      const topPosts: PastWinner[] = brandPosts.map((p) => ({
-        content: p.content,
-        platform: p.platform,
-        metrics: p.metrics
-      }));
+      const topPosts = planInputs.topPosts;
       const calendarHooks = await upcomingTimelyHooks({
         category: profile?.category,
         archetype: profile?.site_type,
@@ -729,9 +794,9 @@ async function processResearch(
         strategyBrief,
         benchmark,
         topPosts,
-        zeroToOne: brandPosts.length < 10,
+        zeroToOne: planInputs.zeroToOne,
         calendarHooks,
-        model: fastModel,
+        model: planModel,
         variants: 1,
         supabase: admin,
         brandId: brandId ?? undefined,
