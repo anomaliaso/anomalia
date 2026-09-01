@@ -160,8 +160,15 @@ export const LLM_REASONING_EFFORT = (() => {
   return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'high';
 })();
 
-/** Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT. */
-const reasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+/**
+ * Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT.
+ *
+ * Esportato perché i cicli d'agente chiamano `generateText` per conto loro (harness/run.ts) e non
+ * passano di qui: senza, la correzione coprirebbe metà del prodotto e l'altra metà — quella con
+ * venti turni di modello — resterebbe al default patologico.
+ */
+export const llmReasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+const reasoningOptions = llmReasoningOptions;
 
 /**
  * Quanto si aspetta una risposta dal centralino prima di considerarla persa.

@@ -56,6 +56,14 @@ nemmeno spegnere (`{enabled:false}` → 400, «Reasoning is mandatory for this e
 quindi ogni chiamata ora dichiara il suo sforzo — `high` di default, abbassabile con
 `LLM_REASONING_EFFORT`.
 
+E «ogni chiamata» andava preso alla lettera: la correzione in `llmStructured` copriva metà
+del prodotto. I cicli d'agente chiamano `generateText` per conto loro (`harness/run.ts`) e
+non passano da lì, quindi il planner settimanale — venti turni di modello di fila, il
+percorso dove dodicimila token sprecati per turno si moltiplicano — era rimasto al default
+patologico. `llmReasoningOptions` è esportata e il ciclo la dichiara. La lezione qui non è
+sul reasoning: è che una correzione «globale» messa in una funzione vale solo per chi quella
+funzione la chiama, e va verificato chi non lo fa.
+
 I tempi in quelle prove oscillavano troppo per concluderne altro (glm fra 68s e 113s,
 gemini fra 4s e 27s, con OpenRouter che può instradare la stessa richiesta su provider
 diversi), e la scadenza resta larga apposta: stretta, trasformerebbe la lentezza in un

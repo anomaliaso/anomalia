@@ -37,6 +37,7 @@ import {
 } from '$lib/server/strategy-agent-reads';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
 import { budgetBrief } from '$lib/server/content-cost';
+import { llmReasoningOptions } from '$lib/server/llm';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { STORY_FAILURE_MODES } from '$lib/server/content-preview/seed-model';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
@@ -475,6 +476,11 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
       }, {
         // Gemini 3.7 Flash by default, DeepSeek as fallback — see agentModel().
         model: loopModel.model,
+        // Quanto ragionare va DICHIARATO anche qui: il ciclo dell'agente non passa da
+        // llmStructured, quindi la correzione fatta lì non lo copriva. Senza il campo, misurato,
+        // questo modello spende dodicimila token di ragionamento per turno e restituisce comunque
+        // la cosa sbagliata — e un ciclo ha una ventina di turni.
+        providerOptions: { openai: llmReasoningOptions() },
         maxOutputTokens: maxOutputTokensFor(loopModel.provider),
         system,
         prompt: `${userPrompt}\n\nStart with read_rubrics and read_editorial_plan before drafting.`,
