@@ -61,6 +61,10 @@ describe('il composer usa QUESTA regola, non una copia', () => {
   });
 
   it('il thread nasce con l’agente selezionato, non con una costante', () => {
-    expect(src).toMatch(/createThread\(brandSlug, undefined, agentSel, roomSel\)/);
+    expect(src).toMatch(/createThread\(brandSlug, undefined, agentSel, roomSel, /);
+  });
+
+  it('l’agente custom scelto viaggia con la CREAZIONE del thread, non con una PATCH dopo', () => {
+    expect(src).toMatch(/createThread\(brandSlug, undefined, agentSel, roomSel, roomSel\.length \? null : customAgentSel\)/);
   });
 });

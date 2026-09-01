@@ -82,7 +82,8 @@ export function roomMemberAvatar(
  * Risolve nome + avatar di un thread. Il nome è SEMPRE l'agente, mai il titolo/riassunto: come in
  * una lista di messaggi l'identità è il contatto.
  * - `agent = 'job:<key>'` (LEGACY) → nome della routine con la faccia dell'agente PROPRIETARIO.
- * - thread con custom agent → il suo nome e il suo avatar salvati.
+ * - thread con custom agent → il suo nome e il suo avatar salvati; finché non è risolto resta
+ *   "Anomalia", mai l'etichetta dello specialista che gli sta sotto.
  * - specialista builtin → la sua etichetta i18n e il suo avatar fisso.
  * - thread semplice → "Anomalia" con l'avatar neutro a tema. Il nome è un letterale, non una
  *   chiave i18n: non si traduce.
@@ -128,10 +129,9 @@ export function threadIdentity(
     };
   }
 
-  const custom =
-    (thread.custom_agent_id
-      ? thread.agents?.find((a) => a.id === thread.custom_agent_id)
-      : null) ?? (thread.agents?.length ? thread.agents[0] : null);
+  const custom = thread.custom_agent_id
+    ? (thread.agents?.find((a) => a.id === thread.custom_agent_id) ?? null)
+    : (thread.agents?.[0] ?? null);
   if (custom) {
     return {
       name: custom.name || title || 'Anomalia',
@@ -141,7 +141,7 @@ export function threadIdentity(
     };
   }
 
-  if (agent && agent !== 'auto' && BUILTIN_AGENT_AVATARS[agent]) {
+  if (!thread.custom_agent_id && agent && agent !== 'auto' && BUILTIN_AGENT_AVATARS[agent]) {
     const builtin = BUILTIN_AGENT_AVATARS[agent];
     // `.label`, non la chiave nuda: `chat.agents.<id>` è un OGGETTO {label, desc}, e svelte-i18n su
     // una chiave-oggetto restituisce l'oggetto → "[object Object]" in sidebar.

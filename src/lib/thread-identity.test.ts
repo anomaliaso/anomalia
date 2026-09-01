@@ -50,6 +50,27 @@ describe('threadIdentity', () => {
     expect(who.color).toBe('#2563eb');
   });
 
+  it('custom agent non ancora risolto → mai il nome dello specialista sotto', () => {
+    const who = threadIdentity(
+      { title: 'Nuova chat', agent: 'content', custom_agent_id: 'b', agents: [] },
+      t
+    );
+    expect(who.name).toBe('Anomalia');
+  });
+
+  it('custom agent legato → mai il nome di un altro agente passato per la stessa chat', () => {
+    const who = threadIdentity(
+      {
+        title: 'Nuova chat',
+        agent: 'content',
+        custom_agent_id: 'b',
+        agents: [{ id: 'a', name: 'Primo', face: 'dot', color: '#ef4444' }]
+      },
+      t
+    );
+    expect(who.name).toBe('Anomalia');
+  });
+
   it('specialista builtin → etichetta e avatar dell’hub, mai il titolo', () => {
     const who = threadIdentity({ title: 'Riassunto', agent: 'content' }, t);
     expect(who.name).toBe('Content Creator');
