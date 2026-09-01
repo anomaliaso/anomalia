@@ -798,8 +798,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		// l'intero prompt di brand (il modello salutava l'utente per nome).
 		let system =
 			(input.dm ? `${dmBrief(input.dm.meName, input.dm.otherName, locale)}\n\n` : '') +
+			(input.persona ? `${input.persona.systemBlock.trim()}\n\n` : '') +
 			buildSystemPrompt(spec, { memoryMd, fileIndex: filesIndexFor(spec.id) }) +
-			(input.persona ? input.persona.systemBlock : '') +
 			`\n\n${chatReplyLanguageBlock(locale)}` +
 			(peer ? `\n\n${teamBlock(peer)}` : '') +
 			`\n\n${modeBlock(mode)}`;

@@ -126,6 +126,18 @@ aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio
 
 ## Codice
 
+### Un blocco che dichiara CHI è l'agente va in TESTA, o perde contro il prompt che lo precede
+Il brief del DM lo aveva già pagato — in coda il modello salutava l'utente per nome — e per questo
+sta in testa in `live.ts` e in `queue.ts`. Il blocco del custom agent, che è la stessa cosa (una
+dichiarazione d'identità, non un compito in più), è rimasto in coda: dopo
+`You are Content Creator (…), an Anomalia agent.`, le istruzioni del mestiere, fino a 32 KB di
+memoria e l'indice dei file. Segnale: un agente custom con una voce molto caratterizzata che **a
+volte** si presenta col nome dello specialista sottostante — intermittente, perché fra le due
+identità ci sono decine di migliaia di caratteri e vince chi capita. Mossa: ogni blocco che
+dichiara identità o cornice va prima di `buildSystemPrompt`, non appeso in fondo; e quando ne
+sposti uno, chiediti quali ALTRI blocchi hanno la stessa natura e sono rimasti indietro. Il
+motore classico ha ancora la stessa forma in due punti (`chat/queue.ts`, `chat/lib/turn-prep.ts`).
+
 ### Una regola chiusa su una superficie sola resta aperta su tutte le altre
 La migration `0187` dichiarava chiuso il buco del consenso all'immagine, e sul browser lo era:
 `addPersonReal` rifiuta senza la spunta e timbra `consent_at`/`consent_source`. L'endpoint gemello
