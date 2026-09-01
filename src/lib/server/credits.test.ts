@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { productionCredits } from './plan-budget';
 import {
   creditQuota,
   currentBillingPeriod,
@@ -8,20 +9,22 @@ import {
 } from './credits';
 
 describe('creditQuota', () => {
-  it('returns 5500 for starter', () => {
-    expect(creditQuota('starter')).toBe(5500);
+  // Le cifre non si fissano più a mano: derivano da prezzo × (1 − margine) e cambiano col listino.
+  // Fissarle qui obbligava a modificare i test a ogni ritocco di prezzo, e un test che si aggiorna
+  // per abitudine smette di accorgersi di un errore.
+  it('è il budget di produzione del piano', () => {
+    for (const key of ['go', 'starter', 'pro'] as const) {
+      expect(creditQuota(key)).toBe(productionCredits(key));
+    }
   });
 
-  it('returns 12000 for pro', () => {
-    expect(creditQuota('pro')).toBe(12000);
+  it('cresce col prezzo del piano', () => {
+    expect(creditQuota('pro')).toBeGreaterThan(creditQuota('starter'));
+    expect(creditQuota('starter')).toBeGreaterThan(creditQuota('go'));
   });
 
-  it('returns 2100 for go', () => {
-    expect(creditQuota('go')).toBe(2100);
-  });
-
-  it('returns 12000 for legacy scale (grandfathered, same as pro)', () => {
-    expect(creditQuota('scale')).toBe(12000);
+  it('legacy scale resta agganciato a pro (grandfathered)', () => {
+    expect(creditQuota('scale')).toBe(creditQuota('pro'));
   });
 
   it('defaults to 400 for free/unknown plan', () => {
@@ -131,11 +134,13 @@ describe('CreditsExhaustedError', () => {
 
 describe('quota with bonus', () => {
   it('plan + bonus is what remaining is computed against', () => {
+    // Nessuna cifra fissa: il punto è che il bonus si SOMMA alla quota del piano e che quello che
+    // resta si conta su entrambi. Fissare 6000 legava il test al prezzo di Starter.
     const plan = creditQuota('starter');
     const bonus = 500;
     const used = 1600;
     const quota = plan + bonus;
-    expect(quota).toBe(6000);
-    expect(Math.max(0, quota - used)).toBe(4400);
+    expect(quota).toBe(plan + bonus);
+    expect(Math.max(0, quota - used)).toBe(plan + bonus - used);
   });
 });

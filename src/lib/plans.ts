@@ -63,7 +63,15 @@ export type Plan = {
   a: number; // effective €/mo when billed annually (12× upfront)
   mUsd: number; // $/mo billed monthly
   aUsd: number; // effective $/mo when billed annually
-  credits: number; // AI credits included per month (metering: 100 credits = $1 cost_usd)
+  /**
+   * Crediti di produzione inclusi ogni mese (100 crediti = $1 di `cost_usd`).
+   *
+   * NON è un numero scelto a mano: è prezzo × (1 − margine), con i margini dichiarati in
+   * `plan-budget.ts` — 50%, 40% su Go. Prima erano tre cifre con margini impliciti diversi (28% /
+   * 38% / 47%) che nessuno aveva deciso, e un cambio di listino li lasciava indietro in silenzio.
+   * Un test li tiene allineati: la pagina prezzi e l'entitlement leggono questo stesso campo.
+   */
+  credits: number;
   /**
    * English fallback tagline. UI copy is localized via `pricing.plans.{key}.tagline`
    * (PlanCards, chat upgrade) — keep in sync with `en.json`.
@@ -122,7 +130,7 @@ export const PLANS: Plan[] = [
     a: 21,
     mUsd: 29,
     aUsd: 24,
-    credits: 2100,
+    credits: 1740,
     tagline: 'You publish. We prepare.',
     popular: false,
     highlights: [
@@ -202,7 +210,7 @@ export const PLANS: Plan[] = [
     a: 66,
     mUsd: 89,
     aUsd: 74,
-    credits: 5500,
+    credits: 4450,
     tagline: 'For one brand getting consistent.',
     popular: true,
     highlights: [
@@ -281,7 +289,7 @@ export const PLANS: Plan[] = [
     a: 166,
     mUsd: 225,
     aUsd: 188,
-    credits: 12000,
+    credits: 11250,
     tagline: 'The full autonomous manager.',
     popular: false,
     highlights: [

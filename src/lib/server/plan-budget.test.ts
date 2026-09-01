@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_MARGIN, productionCredits, weeklyCredits } from './plan-budget';
+import { PLANS } from '$lib/plans';
 
 // I crediti di ogni piano erano tre numeri scritti a mano, con margini che nessuno aveva scelto:
 // 28% su Go, 38% su Starter, 47% su Pro. Ora derivano dal prezzo e da un margine dichiarato, così
@@ -44,5 +45,17 @@ describe('weeklyCredits', () => {
 
   it('non scende sotto zero', () => {
     expect(weeklyCredits('go', 4, -50)).toBe(0);
+  });
+});
+
+// I crediti mostrati nella pagina prezzi e quelli concessi sono la STESSA fonte (`PLANS[].credits`,
+// v. credits.ts). Se qualcuno cambia un prezzo o un margine e non i crediti, l'utente vede un
+// numero e ne riceve un altro: questo test è la cosa che se ne accorge.
+describe('i crediti dichiarati sono quelli che il margine produce', () => {
+  it('nessun piano è fuori sincrono', () => {
+    for (const key of ['go', 'starter', 'pro'] as const) {
+      const shown = PLANS.find((p) => p.key === key)!.credits;
+      expect(shown).toBe(productionCredits(key));
+    }
   });
 });
