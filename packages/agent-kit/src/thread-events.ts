@@ -63,7 +63,7 @@ export function reduceThreadEvents(
 			.filter((event): event is Extract<ThreadEvent, { kind: 'messages_superseded' }> => event.kind === 'messages_superseded')
 			.flatMap((event) => event.messageIds)
 	);
-	const messages = projection.messages.filter((message) => !supersededIds.has(message.id));
+	const messages = [...projection.messages.filter((message) => !supersededIds.has(message.id))];
 	const progress = { ...projection.progress };
 	const sourceEvents = { ...projection.sourceEvents };
 	const applied: ThreadEvent[] = [];
@@ -85,7 +85,7 @@ export function reduceThreadEvents(
 		}
 
 		if (event.kind === 'message') {
-			messages.push(event.message);
+			putMessage(messages, event.message, supersededIds);
 		}
 
 		if (event.kind === 'progress') {
@@ -109,6 +109,27 @@ export function reduceThreadEvents(
 		applied,
 		conflict
 	};
+}
+
+/**
+ * Il messaggio si SOSTITUISCE al suo posto, non si accoda: la riga dell'assistente nasce vuota e
+ * viene riscritta a ogni checkpoint del battito, quindi un secondo evento sullo stesso id è la
+ * stessa bolla più avanti nel lavoro — non una bolla nuova, e non una bolla in fondo al thread.
+ */
+function putMessage(
+	messages: ThreadMessage[],
+	message: ThreadMessage,
+	supersededIds: ReadonlySet<string>
+): void {
+	if (supersededIds.has(message.id)) return;
+
+	const at = messages.findIndex((existing) => existing.id === message.id);
+	if (at < 0) {
+		messages.push(message);
+		return;
+	}
+
+	messages[at] = message;
 }
 
 function eventPayload(event: ThreadEvent): unknown {

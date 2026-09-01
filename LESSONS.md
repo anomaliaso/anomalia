@@ -277,6 +277,25 @@ chokepoint**, cioè sulla funzione che tutti devono attraversare per ottenere la
 e prende la riga intera invece del campo già estratto; se sta più in alto, prima di dirlo chiuso
 conta i chiamanti del chokepoint e verifica ciascuno.
 
+### Un trigger `after insert` su una riga che poi viene AGGIORNATA perde tutto ciò che viene dopo
+`thread_events` — il log da cui la UI della chat proietta il thread — si riempiva da
+`chat_messages_capture_event`, un trigger `after insert`. Ma il checkpoint del battito
+(`bridge/live.ts`) INSERISCE la riga dell'assistente vuota e poi la AGGIORNA a ogni battito: nel log
+restava la fotografia del primo istante. Un thread reale in produzione aveva 60.700 caratteri di
+reasoning e 10.236 di tool_calls nella riga di `chat_messages`, e `0` e `0` nell'evento — con
+`loadThreadUiHistory` che ricade su `chat_messages` solo quando gli eventi sono ZERO, quindi non ci
+ricadeva mai. Per l'utente il turno era sparito; nel database non mancava niente.
+
+Segnale: un turno che «è scomparso» ma di cui il modello ha memoria, o due messaggi identici di
+salvataggio in coda a un lavoro lungo. Confronto che chiude la diagnosi in una query:
+`length(payload->>'content')` dell'evento contro `length(content)` della riga, sullo stesso id.
+
+Mossa, e vale oltre questo caso: **prima di scrivere un trigger `after insert`, chiedi se qualcuno
+aggiorna quella riga.** Se sì, o il trigger copre anche l'UPDATE, o il log è una bugia dal secondo
+battito in poi. Qui l'evento resta immutabile (`append_thread_event` solleva sul payload diverso, ed
+è giusto): l'aggiornamento entra come evento NUOVO con la sua `source_key`, di cui se ne tiene UNA
+sola, e il reducer sostituisce il messaggio con lo stesso id invece di accodarlo.
+
 ## Build e bundle
 
 ### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
