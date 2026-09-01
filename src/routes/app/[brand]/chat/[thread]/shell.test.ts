@@ -147,3 +147,23 @@ describe('thread page: il turno orfano non mescola canale e poll', () => {
 		expect(src).toMatch(/orphanState = emptyStreamState\(\);\s*\n\s*orphanPending = \[\];/);
 	});
 });
+
+/**
+ * Il difetto dell'1/9: la bolla viva stava in DUE blocchi `{#if}` distinti — uno per il run
+ * orfano, uno per lo stream della sessione — ciascuno con il suo `<ChatLiveStatus>`. Su una
+ * disconnessione benigna di un turno kit la sessione viene dismessa di proposito
+ * (`chat-session.ts`) e il poll riaggancia il run entro `LIVE_POLL_MS`: il passaggio fra i due
+ * rami SMONTAVA il componente e ne montava un altro, e l'utente vedeva lo stream sparire e la
+ * pagina saltare. I dati erano già durevoli: a rompersi era il montaggio.
+ */
+describe('thread page: la bolla viva non si smonta passando da sessione a orfano', () => {
+	const src = readFileSync(new URL('../components/TranscriptList.svelte', import.meta.url), 'utf8');
+
+	it('monta un solo ChatLiveStatus: due istanze in rami esclusivi si rimontano a vicenda', () => {
+		expect(src.match(/<ChatLiveStatus\b/g) ?? []).toHaveLength(1);
+	});
+
+	it('sceglie la sorgente in un posto solo, non ripetendo la condizione su ogni prop', () => {
+		expect(src.match(/showLivePartial\s*\?/g) ?? []).not.toHaveLength(6);
+	});
+});
