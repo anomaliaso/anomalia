@@ -91,6 +91,26 @@
   } = $props();
 
   // La riga in store porta anche gli avatar dei custom agent; thread copre il primo paint.
+  const live = $derived(
+    showLivePartial
+      ? {
+          loading,
+          text: streamBuf,
+          tools: streamToolCalls,
+          reasoning: streamReasoning,
+          reasoningSegments: streamReasoningSegments
+        }
+      : orphanRun
+        ? {
+            loading: true,
+            text: orphanState.text,
+            tools: orphanState.tools,
+            reasoning: orphanState.reasoning,
+            reasoningSegments: [] as ChatReasoningSegment[]
+          }
+        : null
+  );
+
   const threadWho = $derived(
     threadIdentity($chatThreads.find((t) => t.id === thread.id) ?? thread, (k) => $_(k))
   );
@@ -267,27 +287,14 @@
      bolla viva, nello stesso punto. `ChatLiveStatus` a buffer vuoto mostra gia' «sta pensando»,
      quindi non serve nessuna riga di stato accanto — e un pulsante da solo, senza il testo che
      sta arrivando, era peggio del silenzio: diceva che c'era un turno senza mostrarlo. -->
-{#if orphanRun && !showLivePartial}
+{#if live}
   <div class="assistant-msg-wrap chat-turn">
     <ChatLiveStatus
-      loading
-      streamBuf={orphanState.text}
-      streamToolCalls={orphanState.tools}
-      streamReasoning={orphanState.reasoning}
-      {brandSlug}
-      face={liveWho.face}
-      color={liveWho.color}
-    />
-  </div>
-{/if}
-{#if showLivePartial}
-  <div class="assistant-msg-wrap chat-turn">
-    <ChatLiveStatus
-      {loading}
-      {streamBuf}
-      {streamToolCalls}
-      {streamReasoning}
-      {streamReasoningSegments}
+      loading={live.loading}
+      streamBuf={live.text}
+      streamToolCalls={live.tools}
+      streamReasoning={live.reasoning}
+      streamReasoningSegments={live.reasoningSegments}
       {brandSlug}
       face={liveWho.face}
       color={liveWho.color}
