@@ -84,6 +84,19 @@ function citesResearchedPage(sourcedFrom: string | undefined, researched: Set<st
   return false;
 }
 
+/**
+ * Come si chiama un seed in un rilievo. Nella prima bozza il modello non ha ancora scritto
+ * l'angle, e un messaggio che dice `seed "undefined"` non dice all'agente quale riparare.
+ * Si ripiega su ciò che a quel punto esiste davvero.
+ */
+function seedLabel(seed: Record<string, unknown>, index: number): string {
+	const named = [seed.angle, seed.title, seed.hook].map((v) => String(v ?? '').trim()).find(Boolean);
+	if (named) return named;
+
+	const day = String(seed.day ?? '').trim();
+	return day ? `${day} ${String(seed.format ?? 'post')}` : `#${index + 1}`;
+}
+
 export function checkRubricsAndBatchFeasibility(
   seeds: PostSeed[],
   ctx: BatchFeasibilityContext
@@ -104,7 +117,7 @@ export function checkRubricsAndBatchFeasibility(
 
   const rubricCounts = new Map<string, number>();
   const rubricCountsByWeek = new Map<number, Map<string, number>>();
-  for (const seed of seeds) {
+  for (const [index, seed] of seeds.entries()) {
     const plat = String(seed.platform ?? '').toLowerCase();
     if (plat && platforms.size > 0 && !platforms.has(plat)) {
       violations.push(`Seed on platform "${seed.platform}" is not in selected platforms (${[...platforms].join(', ')}).`);
@@ -141,22 +154,22 @@ export function checkRubricsAndBatchFeasibility(
       const source = String(seed.sourced_from ?? '').trim();
 
       if (!beats.length) {
-        violations.push(`Carousel seed "${seed.angle}" has no beats — write one concrete beat per slide, in order.`);
+        violations.push(`Carousel seed "${seedLabel(seed, index)}" has no beats — write one concrete beat per slide, in order.`);
       } else if (slides && beats.length !== slides) {
-        violations.push(`Carousel seed "${seed.angle}" has ${beats.length} beats for ${slides} slides — one beat per slide.`);
+        violations.push(`Carousel seed "${seedLabel(seed, index)}" has ${beats.length} beats for ${slides} slides — one beat per slide.`);
       }
 
       if (voiced.length && voiced.length !== beats.length) {
-        violations.push(`Carousel seed "${seed.angle}" has ${beats.length - voiced.length} beat(s) with no inner line — a story cannot have mute panels, and the rest of this post has an inner line.`);
+        violations.push(`Carousel seed "${seedLabel(seed, index)}" has ${beats.length - voiced.length} beat(s) with no inner line — a story cannot have mute panels, and the rest of this post has an inner line.`);
       }
       if (voiced.length && !source) {
         // Una storia è la vita di qualcuno: senza fonte è scritta su ciò che sembra plausibile.
-        violations.push(`Carousel seed "${seed.angle}" tells a story with no source — search for how people describe this situation in their own words, pick one, and put it in sourced_from.`);
+        violations.push(`Carousel seed "${seedLabel(seed, index)}" tells a story with no source — search for how people describe this situation in their own words, pick one, and put it in sourced_from.`);
       }
       if (voiced.length && source && ctx.researchedUrls && !citesResearchedPage(source, ctx.researchedUrls)) {
         // Il gate che una regola di prompt non può essere: l'agente ha già riempito questo campo
         // con «Linee guida CNOPD» senza aver cercato niente, e suonava autorevole.
-        violations.push(`Carousel seed "${seed.angle}" has a source that is not grounded in anything you actually read this run — cite a page the research tool returned, with its URL, or search first.`);
+        violations.push(`Carousel seed "${seedLabel(seed, index)}" has a source that is not grounded in anything you actually read this run — cite a page the research tool returned, with its URL, or search first.`);
       }
     }
     if (seed.media_id && !ctx.mediaIds.has(seed.media_id)) {

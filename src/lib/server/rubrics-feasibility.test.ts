@@ -54,7 +54,7 @@ function editorialPlan(weekMix: EditorialPlan['weeks'][0]['content_mix']): Edito
   };
 }
 
-function seed(overrides: Partial<PostSeed>): PostSeed {
+function seed(overrides: Omit<Partial<PostSeed>, 'beats'> & { beats?: unknown }): PostSeed {
   return {
     platform: 'instagram',
     platforms: ['instagram'],
@@ -70,7 +70,7 @@ function seed(overrides: Partial<PostSeed>): PostSeed {
     setting: 'studio',
     props: '',
     ...overrides
-  };
+  } as PostSeed;
 }
 
 describe('rubrics feasibility', () => {
@@ -182,7 +182,7 @@ describe('carousel beats', () => {
 
   it('flags a beat count that does not match the slides', () => {
     const violations = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'carousel', slide_count: 5, beats: [{ shows: 'b1', thinks: 'x' }, { shows: 'b2', thinks: 'y' }, { shows: 'b3', thinks: 'z' }] })],
+      [seed({ format: 'carousel', slide_count: 5, beats: [{ shows: 'b1', who: 'Sam', thinks: 'x' }, { shows: 'b2', who: 'Sam', thinks: 'y' }, { shows: 'b3', who: 'Sam', thinks: 'z' }] })],
       ctx
     );
     expect(violations.some((v) => v.includes('beats'))).toBe(true);
@@ -190,7 +190,7 @@ describe('carousel beats', () => {
 
   it('passes a carousel whose beats match its slides', () => {
     const violations = checkRubricsAndBatchFeasibility(
-      [seed({ format: 'carousel', slide_count: 4, sourced_from: 'nota dello Studio', beats: [{ shows: 'b1', thinks: 'x' }, { shows: 'b2', thinks: 'y' }, { shows: 'b3', thinks: 'z' }, { shows: 'b4', thinks: 'w' }] })],
+      [seed({ format: 'carousel', slide_count: 4, sourced_from: 'nota dello Studio', beats: [{ shows: 'b1', who: 'Sam', thinks: 'x' }, { shows: 'b2', who: 'Sam', thinks: 'y' }, { shows: 'b3', who: 'Sam', thinks: 'z' }, { shows: 'b4', who: 'Sam', thinks: 'w' }] })],
       ctx
     );
     expect(violations).toEqual([]);
@@ -202,7 +202,7 @@ describe('carousel beats', () => {
   it('coglie il riquadro muto dentro una storia', () => {
     const violations = checkRubricsAndBatchFeasibility(
       [seed({ format: 'carousel', slide_count: 3, sourced_from: 'nota dello Studio', beats: [
-        { shows: 'b1', thinks: 'ci risiamo' }, { shows: 'b2', thinks: '' }, { shows: 'b3', thinks: 'vabbè' }
+        { shows: 'b1', who: 'Sam', thinks: 'ci risiamo' }, { shows: 'b2', who: 'Sam', thinks: '' }, { shows: 'b3', who: 'Sam', thinks: 'vabbè' }
       ] })],
       ctx
     );
@@ -260,9 +260,9 @@ describe('fonte di un episodio narrativo', () => {
       format: 'carousel',
       slide_count: 3,
       beats: [
-        { shows: 'a', thinks: 'ci risiamo' },
-        { shows: 'b', thinks: 'domani torno' },
-        { shows: 'c', thinks: 'vabbè' }
+        { shows: 'a', who: 'Sam', thinks: 'ci risiamo' },
+        { shows: 'b', who: 'Sam', thinks: 'domani torno' },
+        { shows: 'c', who: 'Sam', thinks: 'vabbè' }
       ],
       ...over
     });
@@ -367,9 +367,9 @@ describe('mix per settimana', () => {
       slide_count: 3,
       sourced_from: 'nota',
       beats: [
-        { shows: 'a', thinks: 'x' },
-        { shows: 'b', thinks: 'y' },
-        { shows: 'c', thinks: 'z' }
+        { shows: 'a', who: 'Sam', thinks: 'x' },
+        { shows: 'b', who: 'Sam', thinks: 'y' },
+        { shows: 'c', who: 'Sam', thinks: 'z' }
       ]
     });
 
@@ -404,9 +404,9 @@ describe('stripUngroundedStories', () => {
       format: 'carousel',
       slide_count: 3,
       beats: [
-        { shows: 'a', thinks: 'x' },
-        { shows: 'b', thinks: 'y' },
-        { shows: 'c', thinks: 'z' }
+        { shows: 'a', who: 'Sam', thinks: 'x' },
+        { shows: 'b', who: 'Sam', thinks: 'y' },
+        { shows: 'c', who: 'Sam', thinks: 'z' }
       ],
       ...over
     });
@@ -436,4 +436,23 @@ describe('stripUngroundedStories', () => {
     expect(stripUngroundedStories(seeds, undefined)).toBe(0);
     expect(seeds[0].beats).toHaveLength(3);
   });
+});
+
+describe('un rilievo indica sempre QUALE seed', () => {
+	it('usa il giorno e il formato quando il modello non ha ancora scritto un angle', () => {
+		const violations = checkRubricsAndBatchFeasibility(
+			[{ format: 'carousel', slide_count: 3, day: 'tuesday', beats: [], sourced_from: '' } as never],
+			{
+				expectedSeedCount: 1,
+				selectedPlatforms: ['instagram'],
+				products: [],
+				people: [],
+				mediaIds: new Set<string>(),
+				rubrics: [],
+				weekMix: []
+			}
+		);
+		expect(violations.join(' ')).not.toContain('undefined');
+		expect(violations.join(' ')).toContain('tuesday');
+	});
 });
