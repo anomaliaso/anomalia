@@ -243,3 +243,4 @@ export function batchWeeks(plan: string | null | undefined, wanted?: number): nu
   if (!Number.isFinite(asked) || asked < 1) return BATCH_WEEKS_DEFAULT;
   return Math.min(Math.floor(asked), max, PLAN_WEEKS);
 }
+

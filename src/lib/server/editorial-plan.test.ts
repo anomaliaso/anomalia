@@ -25,11 +25,13 @@ const plan = (over: Partial<EditorialPlan> = {}): EditorialPlan => ({
 });
 
 describe('cadenceAllowed / clampCadence', () => {
-  it('bounds go to 3/week; starter (and unknown) below daily; pro gets everything', () => {
-    expect(cadenceAllowed('go')).toEqual(['3/week']);
-    expect(cadenceAllowed('starter')).toEqual(['3/week', '5/week']);
-    expect(cadenceAllowed(null)).toEqual(['3/week', '5/week']);
-    expect(cadenceAllowed('pro')).toContain('daily');
+  // La cadenza era gated dal piano — go poteva SOLO 3/settimana — e legava il volume al ritmo: il
+  // mix doveva sommare alla cadenza, quindi un tetto sul ritmo era un tetto sui post. Ora il volume
+  // lo decide il budget, e il ritmo è una scelta editoriale che ogni piano può fare.
+  it('non è più il piano a decidere il ritmo', () => {
+    expect(cadenceAllowed('go')).toEqual(cadenceAllowed('pro'));
+    expect(cadenceAllowed(null)).toEqual(cadenceAllowed('pro'));
+    expect(cadenceAllowed('go')).toContain('daily');
   });
 
   it('clamps a disallowed LLM cadence to the top allowed one', () => {
@@ -136,12 +138,17 @@ describe('postsForWeek', () => {
     expect(postsForWeek(p, 1)).toBe(4);
   });
 
+  // Il tetto per settimana non è più il volume: quello lo dice il piano pagato (weeklyPostTarget).
+  // Qui resta solo la rete di sicurezza contro una somma assurda, alzata perché con la vecchia a 14
+  // un Pro che paga 90 post al mese ne vedeva pianificati 28.
   it('falls back to the cadence when the mix is empty, and clamps absurd sums', () => {
     const p = plan({ cadence: '3/week' });
     p.weeks[0].content_mix = [];
     expect(postsForWeek(p, 0)).toBe(3);
-    p.weeks[2].content_mix = [{ type: 'spam', count: 99 }];
-    expect(postsForWeek(p, 2)).toBe(14);
+    p.weeks[2].content_mix = [{ type: 'spam', count: 999 }];
+    expect(postsForWeek(p, 2)).toBe(30);
+    p.weeks[1].content_mix = [{ type: 'reale', count: 22 }];
+    expect(postsForWeek(p, 1)).toBe(22);
   });
 });
 

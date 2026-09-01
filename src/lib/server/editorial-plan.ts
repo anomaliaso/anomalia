@@ -66,16 +66,18 @@ export type EditorialPlan = {
   changes_summary?: string[];
 };
 
-// ── Cadence ↔ plan-tier bounds ───────────────────────────────────────────────
-// The AI proposes the cadence, but the subscription tier bounds it: 'daily' (~30 posts/mo)
-// would consume Starter's whole monthly quota (30) on autopilot alone, leaving nothing for
-// manual generation — so Starter tops out at 5/week. Clamped server-side post-parse; the
-// LLM's choice is never trusted.
+// ── Cadence ─────────────────────────────────────────────────────────────────
+// La cadenza dice come una settimana è SPARSA sui giorni, non quanta ce n'è. Il volume lo decide
+// il budget contro il listino dei formati (plan-budget.ts + content-cost.ts), e il gate rifiuta un
+// batch che non ci sta.
+//
+// Era gated dal piano — go poteva solo '3/week' — perché il mix doveva sommare alla cadenza: un
+// tetto sul ritmo era quindi un tetto sui post, e un Pro da 90 post al mese ne vedeva pianificati
+// 28. Tolto quel legame, limitare il ritmo per piano non protegge più niente: toglie solo a un
+// brand piccolo la possibilità di postare spesso e corto, che è una scelta editoriale legittima.
 export const CADENCES = ['3/week', '5/week', 'daily'] as const;
-export function cadenceAllowed(planTier: string | null | undefined): string[] {
-  if (planTier === 'pro') return [...CADENCES];
-  if (planTier === 'go') return ['3/week'];
-  return ['3/week', '5/week'];
+export function cadenceAllowed(_planTier?: string | null): string[] {
+  return [...CADENCES];
 }
 export function clampCadence(cadence: string | null | undefined, allowed: string[]): string {
   const c = String(cadence ?? '').trim();
@@ -166,7 +168,8 @@ export function prefsFromPlan(plan: EditorialPlan, existing: ContentPrefs = {}):
 // number the user saw and approved on the plan — clamped to a sane ceiling. Falls back to the
 // plan's cadence when the mix is empty/malformed. The plan's number is authoritative: if the
 // approved week says 4 posts, the batch is 4 posts, never a hardcoded count.
-const MAX_WEEK_POSTS = 14;
+/** Tetto di sicurezza per settimana. Non è il volume: quello lo dice il piano del brand. */
+const MAX_WEEK_POSTS = 30;
 export function postsForWeek(plan: Pick<EditorialPlan, 'weeks' | 'cadence'>, weekIndex: number): number {
   const mix = plan.weeks?.[weekIndex]?.content_mix ?? [];
   const sum = mix.reduce((acc, m) => acc + (Number(m?.count) || 0), 0);
@@ -374,7 +377,7 @@ const WEEK_SCHEMA = {
         type: 'object' as const,
         properties: {
           type: { type: 'string' as const, description: "Content type, e.g. 'educational', 'product', 'behind the scenes', 'social proof', 'launch'." },
-          count: { type: 'number' as const, description: 'How many posts of this type this week. The counts must sum to the weekly cadence.' }
+          count: { type: 'number' as const, description: "How many posts of this type this week. The counts must sum to the week's stated volume — the cadence says how they are spread across days, never how many there are." }
         },
         required: ['type', 'count']
       }
@@ -466,6 +469,15 @@ function planSchema(allowedCadences: string[], withChanges = false) {
 export type ProposePlanOpts = {
   platforms: string[];
   allowedCadences: string[];
+  /**
+   * I crediti che una settimana può spendere in produzione. QUANTI post entrino non lo dice
+   * nessuno: lo decide questo budget contro il listino dei formati. Legare il volume alla cadenza
+   * faceva pianificare 28 post al mese a un Pro che ne paga 90 — un tetto che nessuno aveva scelto.
+   * Assente → si torna al vecchio comportamento (il mix somma alla cadenza).
+   */
+  weeklyCredits?: number;
+  /** Il listino, come lo legge chi pianifica. Vuoto quando il budget non si sa. */
+  costBrief?: string;
   // Language for ALL user-facing prose in the plan (it's a document the client reads — follows
   // the UI locale, like the strategy report).
   outputLanguage?: string;
@@ -581,7 +593,8 @@ export function buildProposeSeedBrief(opts: ProposePlanOpts): string {
     proposeGtmLine(opts.zeroToOne),
     evidenceBlock(opts),
     `Platforms the user selected: ${opts.platforms.join(', ') || 'n/a'}.`,
-    `Cadence: choose ONE of [${opts.allowedCadences.join(', ')}] — grounded in market data and what the brand can sustain.`,
+    `Cadence: choose ONE of [${opts.allowedCadences.join(', ')}] — how the week is spread, not how much of it there is.`,
+    opts.weeklyCredits ? `Weekly budget: ${opts.weeklyCredits} credits of production a week — the content_mix is what they buy, not a fixed count.` : '',
     rubricNote,
     languageLine(opts.outputLanguage)
   ]
@@ -665,9 +678,13 @@ ${profileBlock(profile)}
 ${evidenceBlock(opts)}
 
 Platforms the user selected: ${opts.platforms.join(', ') || 'n/a'}.
-Cadence: choose ONE of [${opts.allowedCadences.join(', ')}] — grounded in the market's real cadence and what this brand can sustain; do not default to the maximum.${gtmLine}
+Cadence: choose ONE of [${opts.allowedCadences.join(', ')}] — it says how the week is SPREAD across days, never how much of it there is; ground it in the market's real rhythm.${opts.weeklyCredits ? `
+
+WEEKLY BUDGET — how many posts a week holds is not a number anyone wrote down: it is what this budget buys. Each week has ${opts.weeklyCredits} credits of production.
+${opts.costBrief ?? ''}
+Size every week's content_mix to what those credits buy, and spend them where the week deserves it rather than splitting them evenly — a week carrying one long illustrated story and two short posts can be worth more than six interchangeable ones. Planning far under the budget quietly gives the brand less than it pays for; planning over it makes a week that cannot be produced.` : ''}${gtmLine}
 ${lens ? `\nSTRATEGIC LENS (this proposal deliberately explores ONE direction — commit to it where the data allows, but never against the data): ${lens}\n` : ''}
-Produce: the strategy statement, the voice you PROPOSE for this brand (mood, tone, goal, one-line personality — inferred from their context, not asked), the cadence, the platform mix (share + each platform's role), the gtm section, and exactly ${PLAN_WEEKS} weeks. Each week MUST have a non-empty theme, focus, content_mix (counts summing to the weekly cadence), and rationale. The 4 themes must form a deliberate arc — never 4 interchangeable labels or empty strings.
+Produce: the strategy statement, the voice you PROPOSE for this brand (mood, tone, goal, one-line personality — inferred from their context, not asked), the cadence, the platform mix (share + each platform's role), the gtm section, and exactly ${PLAN_WEEKS} weeks. Each week MUST have a non-empty theme, focus, content_mix (sized to ${opts.weeklyCredits ? "the week's budget" : 'the weekly cadence'}), and rationale. The 4 themes must form a deliberate arc — never 4 interchangeable labels or empty strings.
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 

@@ -190,3 +190,4 @@ describe('batchWeeks', () => {
     expect(batchWeeks('pro', 0)).toBe(2);
   });
 });
+
