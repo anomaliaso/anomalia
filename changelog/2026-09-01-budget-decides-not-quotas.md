@@ -33,7 +33,30 @@ state riconciliate perché i prezzi sbagliati nascondevano lo scarto. Togliere l
 del tutto — «il budget è il limite» — moltiplicherebbe la spesa fino a quel fattore: è
 una decisione di listino, non di codice, e va presa guardando questi numeri.
 
-Chiuso anche il guasto che rendeva tutto questo teorico: `generateObject` e
-`generateText` non avevano scadenza. Il modello di default risponde in 2 secondi a un
-prompt semplice e tiene la connessione aperta 180 secondi senza contenuto in modalità
-strutturata — 200, soli spazi di keep-alive. Ora scadono a quattro minuti.
+Chiuso anche un guasto che rendeva tutto questo teorico: `generateObject` e
+`generateText` non avevano scadenza, quindi una chiamata appesa non tornava mai e la
+pagina che l'aspettava nemmeno. Ora scadono.
+
+**E una diagnosi sbagliata, corretta due volte prima che facesse danni.** Avevo concluso
+che il modello di default (`z-ai/glm-5.3-flash`) fosse rotto in modalità strutturata: un
+test con `curl` in `response_format: json_schema` strict rispondeva 200 e restava aperto
+180 secondi con soli spazi. Ma l'app non usa quel percorso, usa l'AI SDK — e lì il
+modello risponde. Seconda conclusione, «è lento»: anche quella fragile, perché non avevo
+controllato il reasoning dei due modelli.
+
+Controllato, il difetto è nostro. `llmStructured` non ha MAI mandato il campo
+`reasoning`, e il default non impostato del provider è patologico:
+
+    campo assente (come faceva l'app)   12.134 token di ragionamento   1 elemento su 3 richiesti
+    effort low / medium / high             123-214 token               3 su 3
+
+Non è velocità, è **correttezza**: senza istruzioni il modello spende dodicimila token e
+restituisce comunque la cosa sbagliata. Su questo modello il reasoning non si può
+nemmeno spegnere (`{enabled:false}` → 400, «Reasoning is mandatory for this endpoint»),
+quindi ogni chiamata ora dichiara il suo sforzo — `high` di default, abbassabile con
+`LLM_REASONING_EFFORT`.
+
+I tempi in quelle prove oscillavano troppo per concluderne altro (glm fra 68s e 113s,
+gemini fra 4s e 27s, con OpenRouter che può instradare la stessa richiesta su provider
+diversi), e la scadenza resta larga apposta: stretta, trasformerebbe la lentezza in un
+guasto — l'errore da cui questa nota nasce.
