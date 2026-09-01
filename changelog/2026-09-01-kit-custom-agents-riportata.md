@@ -46,3 +46,12 @@ non può fallire non è una guardia: entrambe le guardie sono state rimesse ross
 chiudere. Rimettendo il gate a `!personaId`, `queue-kit-custom-agent.test` cade su 3 test su 4;
 togliendo `persona: kitPersona` dal ramo interattivo, il pin di parità in `kit-parity.test` cade.
 Nessun test è stato cancellato o riscritto: nessun comportamento su `dev` li ha resi obsoleti.
+
+## Il changelog pubblico, ridatato
+
+Le due entry pubbliche che la #52 portava con sé erano datate `2026-08-29` e non sono mai uscite.
+Il loader ordina dal più recente: lasciate lì sarebbero finite sotto le sette entry già pubblicate
+fra il 31 agosto e oggi, cioè annunciate nel passato e invisibili a chi apre la pagina. Il testo
+resta identico; cambia solo la data, che per un changelog pubblico è la data di USCITA, non quella
+in cui il codice è stato scritto. I file interni restano al 29 agosto: lì la data giusta è quando
+il lavoro è stato fatto, ed è proprio quel disallineamento che questa pagina racconta.

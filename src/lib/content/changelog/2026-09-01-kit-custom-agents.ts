@@ -1,7 +1,7 @@
 import type { ChangelogEntry } from './index';
 
 export default {
-  date: '2026-08-29',
+  date: '2026-09-01',
   title: 'Your custom agents now work on the same engine as your chats',
   items: [
     'Custom agents keep their name, standing brief and preferred model when they work in the background — the same identity you chose in the composer.',

@@ -1,7 +1,7 @@
 import type { ChangelogEntry } from './index';
 
 export default {
-  date: '2026-08-29',
+  date: '2026-09-01',
   title: 'Your agents can now write to your custom agents',
   items: [
     'Agents can send DMs to your custom agents by name — no ids to look up.',
