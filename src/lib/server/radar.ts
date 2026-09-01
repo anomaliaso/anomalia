@@ -197,7 +197,17 @@ const fetchViaBrowser = async (url: string): Promise<string | null> => {
 
 // Le credenziali si leggono a OGNI chiamata, non qui: `$env/dynamic/private` è vivo, e congelarlo
 // alla costruzione vorrebbe dire che un cambio d'ambiente non arriva mai.
-const sources = createSources({
+// Destrutturate e non tenute come oggetto: `sources` qui dentro è già il nome delle righe di
+// `brand_news_sources` lette dal database, in tre funzioni diverse — un oggetto con quel nome
+// verrebbe ombreggiato da ognuna, in silenzio.
+const {
+  fetchSourceFeed,
+  fetchRedditSearch,
+  fetchThreadsSearch,
+  fetchLinkedInSearch,
+  fetchRedditText,
+  redditRssAuth
+} = createSources({
   scrape: scrapeCreatorsGet,
   redditAuth: () => ({ token: env.REDDIT_FEED_TOKEN, user: env.REDDIT_FEED_USER }),
   fetchViaBrowser
@@ -350,7 +360,7 @@ export async function buildRadarFeedCache(admin: SupabaseClient, brandIds: strin
   const fetched = await Promise.all(
     [...uniq.entries()].map(async ([key, s]) => {
       try {
-        return { source_key: key, items: await sources.fetchSourceFeed(s), fetched_at: now };
+        return { source_key: key, items: await fetchSourceFeed(s), fetched_at: now };
       } catch (e) {
         // A FAILED fetch is never cached. Caching it as an empty list would hand the per-brand
         // scan a clean cache hit with zero items, and the error would vanish exactly the way the
@@ -395,7 +405,7 @@ export async function radarDiagnose(
       };
     }
     try {
-      const items = await sources.fetchSourceFeed({ kind, value: String(s.value), lang: s.lang ?? null });
+      const items = await fetchSourceFeed({ kind, value: String(s.value), lang: s.lang ?? null });
       return { ...base, items: items.length, windowHours: maxAgeHoursFor(kind), sample: items.slice(0, 3).map((i) => ({ title: i.title.slice(0, 120), url: i.url })) };
     } catch (e) {
       return { ...base, items: 0, error: e instanceof Error ? e.message.slice(0, 300) : String(e) };
@@ -498,7 +508,7 @@ export async function radarScan(
         return tag(hit);
       }
       try {
-        const items = await sources.fetchSourceFeed(s);
+        const items = await fetchSourceFeed(s);
         searchLog.push({ kind: s.kind, value: s.value, items: items.length, fromCache: false, ok: true });
         return tag(items);
       } catch (e) {
@@ -526,13 +536,13 @@ export async function radarScan(
     if (ctx.length > 10) {
       const searchers: Array<{ kind: 'reddit_query' | 'threads_query' | 'linkedin_query'; prefix: string; run: (q: string) => Promise<RedditItem[]> }> = [];
       if (radarPlatformEnabled(prefs, 'reddit', brand.plan)) {
-        searchers.push({ kind: 'reddit_query', prefix: 'rq', run: sources.fetchRedditSearch });
+        searchers.push({ kind: 'reddit_query', prefix: 'rq', run: fetchRedditSearch });
       }
       if (radarPlatformEnabled(prefs, 'threads', brand.plan)) {
-        searchers.push({ kind: 'threads_query', prefix: 'tq', run: sources.fetchThreadsSearch });
+        searchers.push({ kind: 'threads_query', prefix: 'tq', run: fetchThreadsSearch });
       }
       if (radarPlatformEnabled(prefs, 'linkedin', brand.plan)) {
-        searchers.push({ kind: 'linkedin_query', prefix: 'lq', run: sources.fetchLinkedInSearch });
+        searchers.push({ kind: 'linkedin_query', prefix: 'lq', run: fetchLinkedInSearch });
       }
       if (searchers.length) {
         const platformsLabel = searchers.map((s) => (s.kind === 'reddit_query' ? 'Reddit' : s.kind === 'threads_query' ? 'Threads' : 'LinkedIn')).join(', ');
@@ -798,7 +808,7 @@ export async function radarEngage(
       // <threads|x|linkedin url>/.rss, got nothing back, and then overwrote the body and the top
       // comments ScrapeCreators had just returned with the empty result.
       if (isReddit && !postBody) {
-        const xml = await sources.fetchRedditText(sources.redditRssAuth(`${it.url.replace(/\/$/, '').replace('://www.', '://old.')}/.rss`));
+        const xml = await fetchRedditText(redditRssAuth(`${it.url.replace(/\/$/, '').replace('://www.', '://old.')}/.rss`));
         const entries = xml ? parseFeed(xml) : [];
         postBody = entries[0]?.snippet ?? '';
         topComments = entries.slice(1, 6)
