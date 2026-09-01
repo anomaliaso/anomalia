@@ -96,3 +96,37 @@ describe('renderMd images', () => {
     }
   });
 });
+
+/**
+ * Misurato l'1/9 su un thread da 100 turni: rifare il markdown dell'intera cronologia costa ~40 ms
+ * di main thread, identici a ogni passata, perché niente veniva ricordato. E la cronologia si
+ * ridisegna a ogni poll mentre un lavoro gira in background: lo stesso testo, immutato, macinato
+ * di nuovo venti volte al minuto.
+ */
+describe('renderMd non rimacina lo stesso testo', () => {
+  const sample = '## Titolo\n\n' + 'Testo con **grassetto** e `codice`. '.repeat(40) + '\n\n- uno\n- due\n';
+
+  it('lo stesso testo torna identico senza ricalcolo', () => {
+    const first = renderMd(sample);
+    const second = renderMd(sample);
+    expect(second).toBe(first);
+
+    const corpus = Array.from({ length: 100 }, (_, i) => `Risposta ${i}\n\n${sample}`);
+    for (const t of corpus) renderMd(t);
+    const cold = process.hrtime.bigint();
+    for (const t of corpus) renderMd(t);
+    const warmNs = Number(process.hrtime.bigint() - cold);
+
+    const fresh = corpus.map((t) => `${t}\n\nnuovo`);
+    const start = cold && process.hrtime.bigint();
+    for (const t of fresh) renderMd(t);
+    const freshNs = Number(process.hrtime.bigint() - start);
+
+    // Una seconda passata sullo stesso corpus deve costare una frazione della prima.
+    expect(warmNs).toBeLessThan(freshNs / 2);
+  });
+
+  it('un testo diverso resta diverso: la cache è sul contenuto, non sulla posizione', () => {
+    expect(renderMd('**a**')).not.toBe(renderMd('**b**'));
+  });
+});

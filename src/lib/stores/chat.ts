@@ -115,16 +115,29 @@ export function markThreadRead(brandSlug: string, threadId: string): void {
 }
 
 /**
- * Refresh the thread list from the server.
+ * La lista dei thread, chiesta UNA volta anche quando la chiedono in sette.
+ *
+ * `/chat/threads` non è una lettura leggera: elenca tutti i thread del brand e ci monta sopra
+ * avatar, anteprime, soglie di lettura e conteggi — sei query. Sette chiamanti indipendenti la
+ * facevano partire tre volte nello stesso secondo all'apertura di un thread. Chi arriva mentre
+ * una è in volo aspetta quella; la prossima, dopo, riparte davvero.
  */
-export async function refreshThreads(brandSlug: string): Promise<void> {
+const threadsInFlight = new Map<string, Promise<void>>();
+
+export function refreshThreads(brandSlug: string): Promise<void> {
+  const running = threadsInFlight.get(brandSlug);
+  if (running) return running;
+
+  const call = fetchThreads(brandSlug).finally(() => threadsInFlight.delete(brandSlug));
+  threadsInFlight.set(brandSlug, call);
+  return call;
+}
+
+async function fetchThreads(brandSlug: string): Promise<void> {
   try {
-    console.log('[refreshThreads] Fetching:', `/app/${brandSlug}/chat/threads`);
     const res = await fetch(`/app/${brandSlug}/chat/threads`);
-    console.log('[refreshThreads] Status:', res.status);
     if (res.ok) {
       const data = await res.json();
-      console.log('[refreshThreads] Threads:', data.threads?.length ?? 0);
       const threads: ChatThread[] = data.threads ?? [];
       chatThreads.set(threads);
       // Il thread aperto non è mai non letto: il server può averlo marcato tale per il messaggio
