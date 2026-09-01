@@ -376,3 +376,21 @@ Mossa: fai il cron a mano prima di diagnosticare, e tienilo acceso per tutta la 
 http://localhost:5220/api/v1/onboarding/steps/work; sleep 60; done`.
 Vale per ogni `*/N` in `vercel.json` (radar, knowledge, chat queue, designer, webhooks): in locale
 nessuno di quei lavori parte da solo, e ciò che sembra un blocco è una coda che nessuno drena.
+
+### Una data «futura» scritta a mano in un test è una bomba a orologeria
+`web_schedule_article` e `content_reschedule_post` passavano `scheduled_for: '2026-09-01T10:00'`, e
+il test la chiamava «una data futura». L'1/9/2026 alle 10:00 quella data è diventata passato: i due
+tool l'hanno rifiutata, giustamente, e i test sono diventati rossi **su ogni branch nello stesso
+istante**, per sempre. La suite completa era verde alle 08:43 e alle 08:59 dello stesso giorno.
+
+Il danno peggiore non è il rosso, è il verde che c'era prima: `content_reschedule_post` asserisce
+`isError === true`, quindi ha continuato a "passare" mentre l'errore arrivava da un'altra causa —
+un test che non verificava più la regola che dichiara di verificare, e che senza l'asserzione sul
+messaggio non avrebbe mai detto niente.
+
+Segnale: **«era verde stamattina e non ho toccato niente»**, con i file rossi lontanissimi dal tuo
+diff. Prima di cercare il colpevole nel codice, guarda l'orologio e cerca date scritte a mano.
+Mossa: la data si deriva da `Date.now()`, mai si scrive — `aDateInTheFuture()` in
+`packages/agent-kit/src/testkit.ts`. Restano della stessa forma quattro `periodEnd: new
+Date('2026-09-01')` (credit-warning, tool-policy, brand-studio-tools, content/ugc plugins): oggi
+innocui perché nessuno li confronta con l'orologio, domani no.
