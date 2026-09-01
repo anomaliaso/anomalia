@@ -1,7 +1,7 @@
 // Il formato lo definisce ./index.ts (PR changelog-entry-files): qui solo i dati.
 // Finché il loader non è merged il file è inerte — nessun conflitto in arrivo.
 const entry = {
-  date: 'August 28, 2026',
+  date: '2026-08-28',
   title: 'One repository for everything Anomalia',
   items: [
     'The CLI, the MCP server and the agent skills now live in this repository — releases, installs and updates all come from here.',
