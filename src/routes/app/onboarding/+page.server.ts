@@ -23,6 +23,7 @@ import { latestOnboardingStepJob } from '$lib/server/onboarding-steps';
 import { seedOnboardingChat } from '$lib/server/onboarding-chat';
 import { kickChatQueueWork } from '$lib/server/chat/queue';
 import { insertBrandWithSlug } from '$lib/server/brand-create';
+import { guestPostRow, parseGuestPost } from '$lib/guest-onboarding';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Cookies } from '@sveltejs/kit';
 
@@ -276,6 +277,28 @@ async function persistHandlesAndContext(
       await rebuildBrandContext(supabase, brandId, undefined, delta);
     }
   } catch (error) { swallow('rebuild brand context', error); }
+}
+
+/**
+ * Adopt the post the visitor was shown BEFORE signing up.
+ *
+ * Not a regeneration: the image is the object already rendered and stored under `guest/<uuid>/`,
+ * so what earned the signup is exactly what they find in the account. Silent when the form
+ * carries no post — every path through `create` also serves visitors who never saw one.
+ */
+async function adoptGuestPost(
+  supabase: SupabaseClient,
+  brandId: string,
+  data: FormData
+): Promise<void> {
+  const raw = String(data.get('guest_post') ?? '');
+  if (!raw) return;
+
+  const post = parseGuestPost(parseJson<unknown>(raw, null));
+  if (!post) return;
+
+  const { error } = await supabase.from('posts').insert(guestPostRow(post, brandId));
+  if (error) swallow('adopt guest post', error);
 }
 
 async function persistSecondHalf(
@@ -606,6 +629,7 @@ export const actions: Actions = {
           syncHistory: false
         });
         if (draftId) await supabase.from('onboarding_drafts').delete().eq('id', draftId).eq('user_id', user.id);
+        await adoptGuestPost(supabase, bySite.id, data);
         scheduleSocialHistory(platform, url.origin, bySite.id);
         await redeemReferralQuietly(cookies, user.id, bySite.id);
         throw redirect(
@@ -700,6 +724,7 @@ export const actions: Actions = {
 
     if (draftId) await supabase.from('onboarding_drafts').delete().eq('id', draftId).eq('user_id', user.id);
 
+    await adoptGuestPost(supabase, brand.id, data);
     scheduleSocialHistory(platform, url.origin, brand.id);
     await redeemReferralQuietly(cookies, user.id, brand.id);
     throw redirect(

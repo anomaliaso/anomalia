@@ -76,6 +76,9 @@ Il mock scritto nell'era della PR non dichiara gli export nuovi di dev (`createS
 
 ## Testare la piattaforma nel browser: worker locale ed ambiente
 
+### Il websocket Realtime non si collega dalla stack locale: quello che arriva per broadcast non lo verifichi qui
+Il broadcast HTTP del server risponde 202 e il container lo logga, ma il browser non apre mai il canale: `channel(...).subscribe()` non risolve, e in `read_network_requests` non c'è una sola richiesta verso `localhost:8000`. Tutto quello che il prodotto consegna via `thread-changed` / `turn-state` / `kit_stream` — il turno scritto dal worker che deve comparire da solo, il pallino in sidebar, il riaggancio a uno stream partito altrove — nella stack locale non si vede, e la tentazione è di dichiararlo rotto nel codice. Segnale: il POST `/api/broadcast/...` esce 202, i log di `realtime-dev.anomalia-realtime` non mostrano nessun join di canale, e la UI resta ferma. Mossa: verifica quel percorso dal lato che NON dipende dal socket — scrivi la riga in `chat_messages` mentre la scheda è nascosta e torna sulla scheda: se il ricontrollo al focus la porta a schermo, il difetto non è lì. E dillo nel PR invece di far passare per verificato ciò che la macchina non poteva provare.
+
 ### Il worker locale è un build vecchio che compete per la stessa coda
 La stack Docker porta un'app pronta (`anomalia-app`, immagine `anomalia-selfhost-app`) che prosciuga `chat_jobs` dallo stesso DB del dev server: il cron chiama `app:3000`, non la tua porta. Con l'immagine più vecchia del checkout, il codice nuovo **non gira mai** (il team contact post-onboarding non parte) e i due reaper si contendono i turni: `chat turn died mid-flight (heartbeat lost)` su turni vivi, `Failed to load url credits.ts` da moduli che nel checkout esistono. Segnale: `chat_jobs` failed con errori che il codice attuale non può produrre. Mossa: identificare chi prosciuga la coda prima di giudicare il flusso — `docker logs anomalia-app`, data dell'immagine (`docker images`) contro `git log -1` — e fermare o ricostruire il container stantio (ricordarsi di riaccenderlo).
 
@@ -262,6 +265,18 @@ gestisce chiaramente. Mossa: intercettare per PATHNAME esatto (una regex sull'UR
 che un file sorgente può soddisfare — e prima di credere a un difetto, misurare il caso base senza
 intercettazione.
 
+### Un cancello messo un livello sopra il chokepoint non è un cancello: è una delle porte
+Il consenso alla likeness era controllato in `resolvePeopleVisualRefsDetailed` — un livello sopra
+`signPersonImages`, che è il punto dove la foto di una persona reale diventa davvero un URL
+firmato. Otto chiamanti firmano quelle foto; uno solo passava dal cancello. `media-refs` non
+selezionava nemmeno la colonna `consent`, e il workbench renderizzava una persona che la chat
+rifiutava per nome: stessa regola, due risposte secondo la porta. Segnale: una regola che vale su
+un percorso e non su un altro, e un `select` che non nomina la colonna su cui la regola decide —
+la regola non è stata aggirata, non è mai stata chiamata. Mossa: il cancello sta **sul
+chokepoint**, cioè sulla funzione che tutti devono attraversare per ottenere la cosa pericolosa,
+e prende la riga intera invece del campo già estratto; se sta più in alto, prima di dirlo chiuso
+conta i chiamanti del chokepoint e verifica ciascuno.
+
 ### Un trigger `after insert` su una riga che poi viene AGGIORNATA perde tutto ciò che viene dopo
 `thread_events` — il log da cui la UI della chat proietta il thread — si riempiva da
 `chat_messages_capture_event`, un trigger `after insert`. Ma il checkpoint del battito
@@ -357,6 +372,25 @@ Motion prende `remotion-best-practices` perché è l'unico che scrive sorgente R
 ### La continuazione senza testo per il modello muore due volte
 Una ripresa accodata con `user_message` vuoto è morta due volte prima di chiamare il modello: prima col gate `Missing user_message`, poi — superato il gate — col prompt vuoto, perché il provider rifiuta una conversazione che non apre con un turno `user` e `dropLeadingAssistant` mangia l'apertura firmata. Il segnale: `chat_jobs.status='failed'` con errori diversi per lo stesso job. La mossa: una continuazione porta SEMPRE un testo solo-per-il-modello (mai salvato, mai mostrato), come `enqueueTurnContinuation`; `open_session_with_user` era nata rotta così ed è sopravvissuta mesi perché la coda è buio per i test unitari — è la verifica nel browser che l'ha vista.
 
+### Una media di produzione non dice che quel percorso sia ancora vivo
+`onboarding_step_jobs` dava medie perfettamente credibili — research 301s, competitors 31s — e su
+quelle stava per partire una PR che accorciava il wizard. Ma l'ultima riga di QUALUNQUE tipo era
+del 12 agosto, e la diagnosi era del 1 settembre: il percorso era morto da tre settimane, staccato
+dal flusso critico quando l'early-create ha portato l'utente dritto in chat. Una `avg()` non ha
+data; sembra viva per sempre. Segnale: numeri che descrivono un percorso che nel codice non ha
+nessun ingresso — cerca chi linka la rotta prima di crederci. Mossa: con la media chiedi SEMPRE
+`max(created_at)` e un conteggio a finestra (`count(*) filter (where created_at > now() - '7
+days')`), e incrocia con lo stato che il percorso lascia (qui: zero `onboarding_completed_at` dal
+3 agosto, mentre i piani editoriali continuavano a nascere — dalla chat).
+
+### I selettori di una pagina pubblica sono un contratto con l'eval, che in CI non gira
+Riscrivere la seconda fase di `/start` ha tolto `button.scard`, e `scripts/eval/ux/walk.ts` ci
+clicca sopra. `npm run eval:ux` costa soldi e si lancia a mano: la rottura non sarebbe diventata
+rossa in nessuna PR, sarebbe marcita fino alla prossima run manuale, che è il modo più lento
+possibile di scoprirla. Segnale: tocchi il markup di `/`, `/start`, `/login` o dell'onboarding.
+Mossa: `grep` dei selettori che cambi dentro `scripts/eval/` PRIMA di considerare finito il
+lavoro — la camminata è codice che nessun test protegge, quindi la protezione sei tu.
+
 ## L'immagine del self-host non entra in un builder Docker da 8 GB
 
 **Segnale.** `docker compose build` sull'immagine app fallisce in due modi diversi, e vanno
@@ -436,3 +470,28 @@ Mossa: la data si deriva da `Date.now()`, mai si scrive — `aDateInTheFuture()`
 `packages/agent-kit/src/testkit.ts`. Restano della stessa forma quattro `periodEnd: new
 Date('2026-09-01')` (credit-warning, tool-policy, brand-studio-tools, content/ugc plugins): oggi
 innocui perché nessuno li confronta con l'orologio, domani no.
+
+### `npm run check` esce 0 con centinaia di errori: il verde è finto, conta la DIFFERENZA
+Il typecheck di questo repo non è pulito — 346 errori su 171 file, tutti pre-esistenti — e
+`svelte-check` **esce comunque 0**. Quindi «il check passa» non significa niente: né in locale né
+in CI, dove un gate costruito sull'exit code sarebbe cieco per definizione.
+
+È già costato un difetto vero, sfuggito a una suite di 6102 test verdi. Estraendo i fetcher in
+`@anomalia/leads-core/feed` il factory era stato legato a `const sources = createSources(...)` a
+livello di modulo, ma `sources` è già il nome delle righe di `brand_news_sources` lette dal
+database in TRE funzioni di `radar.ts`: ognuna lo ombreggiava, e `sources.fetchSourceFeed(...)`
+risolveva sull'array del database. I test non l'hanno visto perché quei percorsi
+(`buildRadarFeedCache`, `radarDiagnose`, `radarScan`) toccano il DB e non hanno unit test — cioè
+proprio la forma di guasto che i commenti di quel file raccontano: una sorgente che smette di
+funzionare in silenzio e riporta «0 item».
+
+Segnale: nessuno. Non c'è un rosso da cercare — la suite è verde e l'exit code è 0. L'unico
+segnale è il **conteggio**: `COMPLETED <n> FILES <m> ERRORS` nell'ultima riga dell'output.
+Mossa: prima di dire che il typecheck regge, confronta `m` con quello della base e cerca i tuoi
+file per nome fra le righe `ERROR` (`grep ERROR out.txt | grep <i tuoi file>`). E l'output va
+rediretto su un file tuo: quello del task in background viene troncato alla coda, quindi ci leggi
+gli ultimi 40 errori e concludi il falso.
+
+Corollario di progettazione: legando in un modulo grande le funzioni che arrivano da un factory,
+**destrutturale** invece di tenere l'oggetto. Un oggetto con un nome generico (`sources`, `items`,
+`data`) prima o poi lo ombreggia una locale, e TypeScript è l'unica cosa che te lo dice.

@@ -3129,6 +3129,15 @@
       "body": "Anomalia va analyser votre site et vos réseaux sociaux, puis construire votre stratégie et vos premiers posts. Fermer ou rafraîchir cette page peut interrompre le processus et vous perdrez votre progression.",
       "confirm": "Compris — continuer",
       "cancel": "Pas maintenant"
+    },
+    "guestPreview": {
+      "title": "Votre premier post",
+      "sub": "Créé depuis votre site. Aucun compte requis pour le voir.",
+      "working": "Je lis votre site et prépare votre premier post…",
+      "failed": "Nous n'avons pas pu créer de post depuis ce site.",
+      "retry": "Essayer un autre site",
+      "cta": "L'enregistrer et voir la suite",
+      "ctaHint": "Créez votre compte pour garder ce post et recevoir les autres."
     }
   },
   "editorialPlan": {

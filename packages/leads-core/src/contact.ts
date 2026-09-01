@@ -1,5 +1,14 @@
+/**
+ * Una persona, un tocco.
+ *
+ * Il frequency cap è GLOBALE per istanza, non per brand: il prospect che ha già ricevuto un
+ * messaggio da UN cliente non viene mai più proposto a nessun altro. È la ragione per cui
+ * `lead_suppressions` non ha `brand_id` — chi lo aggiunge rompe la promessa.
+ *
+ * L'errore non si riporta da qui: il package non conosce il reporter dell'app, quindi `report`
+ * entra come dipendenza e di default finisce solo in console.
+ */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { swallow } from './swallow';
 
 export type LeadPlatform = 'reddit' | 'threads' | 'x' | 'linkedin' | 'web';
 
@@ -7,8 +16,12 @@ export type ContactGate = { suppressed: boolean; contacted: boolean };
 
 export type SuppressSource = 'reply' | 'manual' | 'thread_scan';
 
-// Una persona, un tocco: il frequency cap è globale per istanza, non per brand. Il prospect che
-// ha già ricevuto un messaggio da UN cliente non viene mai più proposto a nessun altro.
+export type ReportError = (reason: string, err: unknown) => void;
+
+const reportToConsole: ReportError = (reason, err) => {
+  console.error(`[swallowed] ${reason}:`, err instanceof Error ? err.message : String(err));
+};
+
 export async function contactGate(
   admin: SupabaseClient,
   platform: string,
@@ -40,7 +53,8 @@ export function gateVerdict(gate: ContactGate): 'suppressed' | 'contacted' | 'ok
 
 export async function suppressAuthor(
   admin: SupabaseClient,
-  input: { platform: string; handle: string; source: SuppressSource; reason?: string }
+  input: { platform: string; handle: string; source: SuppressSource; reason?: string },
+  report: ReportError = reportToConsole
 ): Promise<boolean> {
   try {
     const { error } = await admin
@@ -55,9 +69,19 @@ export async function suppressAuthor(
     }
     return true;
   } catch (e) {
-    swallow('suppress author', e);
+    report('suppress author', e);
     return false;
   }
+}
+
+/** Dove si raggiunge l'autore, per piattaforma: l'umano apre l'URL e manda il DM a mano. */
+export function authorProfileUrl(url: string, author: string): string {
+  if (!author) return '';
+  if (url.includes('threads.net')) return `https://www.threads.net/@${author.replace(/^@/, '')}`;
+  if (url.includes('x.com') || url.includes('twitter.com')) return `https://x.com/${author.replace(/^@/, '')}`;
+  // LinkedIn authors are display names, not handles → no derivable profile URL; open the post itself.
+  if (url.includes('linkedin.com')) return url;
+  return `https://www.reddit.com/user/${author.replace(/^u\//, '')}`;
 }
 
 export function platformOf(url: string): LeadPlatform {
@@ -69,7 +93,7 @@ export function platformOf(url: string): LeadPlatform {
   return 'web';
 }
 
-// Setaccio stretto di proposito: "stop" da solocompare in mezzo a frasi normali ("stop wasting
+// Setaccio stretto di proposito: "stop" da solo compare in mezzo a frasi normali ("stop wasting
 // time"), quindi ogni regola vuole il verbo di contatto accanto al segnale.
 const OPT_OUT_RULES: RegExp[] = [
   /\b(?:do\s?not|don'?t)\s+(?:contact|message|dm|write|email)\b/i,
@@ -103,14 +127,17 @@ const OUTCOME_RETENTION_DAYS = 365;
 const SCAN_TELEMETRY_DAYS = 90;
 const UNCONVERTED_STATUSES = ['proposed', 'suggested', 'skipped', 'dismissed'];
 
-export async function sweepLeadRetention(admin: SupabaseClient): Promise<void> {
+export async function sweepLeadRetention(
+  admin: SupabaseClient,
+  report: ReportError = reportToConsole
+): Promise<void> {
   const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
   // I builder Supabase sono thenable ma non promesse: niente .catch — il try sta qua.
   const quiet = async (what: string, run: () => unknown) => {
     try {
       await run();
     } catch (e) {
-      swallow(`lead retention: ${what}`, e);
+      report(`lead retention: ${what}`, e);
     }
   };
 

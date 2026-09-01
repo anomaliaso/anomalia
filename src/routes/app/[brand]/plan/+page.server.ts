@@ -419,11 +419,11 @@ export const actions: Actions = {
   // publish_logs.post_id è ON DELETE SET NULL, quindi la riga di audit sopravvive.
   // La REVOCA su Zernio viene PRIMA della cancellazione: senza, un post scheduled/approved usciva
   // lo stesso. Se la revoca fallisce, il post resta.
-  deletePost: async ({ request, params, locals: { supabase } }) => {
+  deletePost: async ({ request, params, locals: { supabase, user } }) => {
     const brand = await requireBrand(supabase, params.brand);
     const id = String((await request.formData()).get('id') ?? '');
     if (!id) return fail(400, { error: 'missing_id' });
-    const res = await deletePostCancellingZernio(supabase, id, brand.id);
+    const res = await deletePostCancellingZernio(supabase, id, brand.id, user?.id);
     if (!res.ok) return fail(res.status, { error: res.message });
     return { deleted: true };
   },

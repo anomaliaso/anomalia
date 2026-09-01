@@ -526,7 +526,7 @@ function localeForLanguage(language: string | null): string {
 
 // ── Approve ─────────────────────────────────────────────────────────────
 
-export async function approvePost(supabase: SupabaseClient, brandId: string, postId: string, brandTimezone: string) {
+export async function approvePost(supabase: SupabaseClient, brandId: string, postId: string, brandTimezone: string, actorId?: string) {
   const { data: post, error } = await supabase
     .from('posts').select('*').eq('id', postId).eq('brand_id', brandId).maybeSingle();
   if (error || !post) return { error: 'Post not found' };
@@ -536,7 +536,7 @@ export async function approvePost(supabase: SupabaseClient, brandId: string, pos
   // Import publish logic dynamically
   const { publishApprovedPost } = await import('$lib/server/publish');
   try {
-    const res = await publishApprovedPost(supabase, post, brandTimezone);
+    const res = await publishApprovedPost(supabase, post, brandTimezone, { by: actorId });
     // Nothing scheduled but something failed → over-limit caption or Zernio rejection. Surface the
     // reason instead of a false "published" so the CLI/AI don't think it worked.
     if (res.scheduled === 0 && res.failed > 0) {
@@ -554,7 +554,7 @@ export async function approvePost(supabase: SupabaseClient, brandId: string, pos
   }
 }
 
-export async function approveAllPosts(supabase: SupabaseClient, brandId: string, brandTimezone: string) {
+export async function approveAllPosts(supabase: SupabaseClient, brandId: string, brandTimezone: string, actorId?: string) {
   // Never bulk-publish Director-flagged posts (needs_attention) — same rule as the token page.
   const { data: pending } = await supabase
     .from('posts').select('*').eq('brand_id', brandId).eq('status', 'pending_user')
@@ -568,7 +568,7 @@ export async function approveAllPosts(supabase: SupabaseClient, brandId: string,
 
   for (const post of pending) {
     try {
-      const res = await publishApprovedPost(supabase, post, brandTimezone);
+      const res = await publishApprovedPost(supabase, post, brandTimezone, { by: actorId });
       if (res.scheduled === 0 && res.failed > 0) {
         results.push({ id: post.id, ok: false, error: res.error ?? 'Did not meet platform requirements' });
       } else {

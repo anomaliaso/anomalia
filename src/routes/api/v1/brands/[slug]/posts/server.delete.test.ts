@@ -21,7 +21,7 @@ vi.mock('$lib/server/post-editing', () => ({
 import { DELETE } from './+server';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
 
-type Op = { table: string; kind: string };
+type Op = { table: string; kind: string; payload?: unknown };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fakeSupabase(rows: Record<string, unknown[]>): { client: any; ops: Op[] } {
@@ -33,6 +33,7 @@ function fakeSupabase(rows: Record<string, unknown[]>): { client: any; ops: Op[]
       const q: any = {
         select: () => q,
         delete: () => { kind = 'delete'; ops.push({ table, kind }); return q; },
+        insert: (payload: unknown) => { ops.push({ table, kind: 'insert', payload }); return { then: (resolve: (v: unknown) => void) => resolve({ error: null }) }; },
         eq: () => q,
         then(resolve: (v: unknown) => void) {
           return Promise.resolve(resolve({ data: rows[table] ?? [], error: null }));
@@ -49,7 +50,7 @@ beforeEach(() => vi.clearAllMocks());
 describe('DELETE /api/v1/brands/:slug/posts?status=scheduled', () => {
   it('cancels Zernio per post, keeps the uncancellable ones and answers 502 with the survivors', async () => {
     const { client, ops } = fakeSupabase({ posts: [{ id: 'p1' }, { id: 'p2' }] });
-    vi.mocked(authenticate).mockResolvedValue({ supabase: client, apiKey: null, error: null } as never);
+    vi.mocked(authenticate).mockResolvedValue({ supabase: client, user: { id: 'u1' }, apiKey: null, error: null } as never);
     vi.mocked(loadBrandForUser).mockResolvedValue({ brand: { id: 'brand-1' }, error: null } as never);
     deletePostCancellingZernio
       .mockResolvedValueOnce({ ok: true, wasScheduled: true })
@@ -63,7 +64,7 @@ describe('DELETE /api/v1/brands/:slug/posts?status=scheduled', () => {
     const body = await res.json();
 
     expect(deletePostCancellingZernio).toHaveBeenCalledTimes(2);
-    expect(deletePostCancellingZernio).toHaveBeenNthCalledWith(1, client, 'p1', 'brand-1');
+    expect(deletePostCancellingZernio).toHaveBeenNthCalledWith(1, client, 'p1', 'brand-1', 'u1');
     expect(res.status).toBe(502);
     expect(body.deleted).toBe(1);
     expect(body.failed).toEqual([{ id: 'p2', error: expect.stringContaining('NOT deleted') }]);
@@ -73,7 +74,7 @@ describe('DELETE /api/v1/brands/:slug/posts?status=scheduled', () => {
 
   it('still bulk-deletes pending_user directly (draft-only, no live schedule to revoke)', async () => {
     const { client, ops } = fakeSupabase({ posts: [{ id: 'p1' }] });
-    vi.mocked(authenticate).mockResolvedValue({ supabase: client, apiKey: null, error: null } as never);
+    vi.mocked(authenticate).mockResolvedValue({ supabase: client, user: { id: 'u1' }, apiKey: null, error: null } as never);
     vi.mocked(loadBrandForUser).mockResolvedValue({ brand: { id: 'brand-1' }, error: null } as never);
 
     const res = await (DELETE as (event: unknown) => Promise<Response>)({
@@ -85,6 +86,9 @@ describe('DELETE /api/v1/brands/:slug/posts?status=scheduled', () => {
 
     expect(deletePostCancellingZernio).not.toHaveBeenCalled();
     expect(ops.filter((o) => o.kind === 'delete')).toEqual([{ table: 'posts', kind: 'delete' }]);
+    expect(ops.find((o) => o.table === 'post_verdicts')?.payload).toEqual([
+      { post_id: 'p1', brand_id: 'brand-1', user_id: 'u1', verdict: 'discarded', caption_before: null, caption_after: null }
+    ]);
     expect(body).toEqual({ ok: true, deleted: 1 });
   });
 });
