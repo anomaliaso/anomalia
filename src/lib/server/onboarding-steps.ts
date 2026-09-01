@@ -66,6 +66,12 @@ const MAX_ATTEMPTS = 3;
  * waiting after a kill. 300s + 60s of slack for clock skew and the final status write.
  */
 const STALL_MS = 6 * 60 * 1000;
+/**
+ * The worker's `maxDuration` (api/v1/onboarding/steps/work). The study runs first and the plan
+ * runs on what is left, so the plan step is told how much of this is already gone instead of
+ * assuming it owns a fresh request.
+ */
+const INVOCATION_BUDGET_MS = 300_000;
 
 const TABLE = 'onboarding_step_jobs';
 
@@ -556,6 +562,7 @@ async function processResearch(
 
   const brandId = (job.brand_id as string | null) ?? null;
   const userId = job.user_id as string;
+  const startedAt = Date.now();
   let lastStep = 'start';
 
   // Accumulate timeline steps + partial payloads so the poll UI can render progress live.
@@ -800,7 +807,8 @@ async function processResearch(
         variants: 1,
         supabase: admin,
         brandId: brandId ?? undefined,
-        planTier
+        planTier,
+        remainingMs: INVOCATION_BUDGET_MS - (Date.now() - startedAt)
       });
       const planVisualStyle = profile?.visual_style ?? null;
       await mergeResult({
