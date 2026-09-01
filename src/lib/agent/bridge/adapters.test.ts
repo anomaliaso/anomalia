@@ -107,11 +107,20 @@ describe('resolveHarnessModelRef — la catena preferenza → tier → lista, tu
 		expect(resolveHarnessModelRef({ tier: 'pro' })).toBeNull();
 	});
 
-	it('la preferenza famiglia mappa il wireId del catalogo attraverso il centralino', () => {
+	it('la preferenza famiglia vale quando il centralino serve quel modello', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,x-ai/grok-4-6';
 		const ref = resolveHarnessModelRef({ family: 'grok', tier: 'fast' });
-		expect(ref).toEqual({ provider: 'llm', id: 'llm/grok-4-6', label: 'grok-4-6' });
+		expect(ref).toEqual({ provider: 'llm', id: 'llm/x-ai/grok-4-6', label: 'grok-4-6' });
+	});
+
+	it('una famiglia che il centralino non serve degrada sul tier, mai sul wireId nudo', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
+		expect(resolveHarnessModelRef({ family: 'luna', tier: 'fast' })?.id).toBe('llm/z-ai/glm-5.3-flash');
+		expect(resolveHarnessModelRef({ family: 'luna', tier: 'pro' })?.id).toBe('llm/openai/gpt-5.6-sol');
 	});
 
 	it('una famiglia che non esiste degrada sul tier del picker', () => {
