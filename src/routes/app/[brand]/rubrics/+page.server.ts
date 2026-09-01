@@ -72,7 +72,8 @@ export const actions: Actions = {
           platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
           outputLanguage: localeLanguageName(locale),
           strategyBrief: [gtmBrief, evidence.strategyBrief].filter(Boolean).join('\n\n'),
-          benchmark: evidence.benchmark
+          benchmark: evidence.benchmark,
+          topPosts: evidence.topPosts
         });
         if (!candidates.length) throw new Error('no candidates');
         await saveProposedRubrics(supabase, brand.id, candidates);

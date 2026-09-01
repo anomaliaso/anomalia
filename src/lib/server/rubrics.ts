@@ -2,6 +2,8 @@ import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { CONTENT_FORMATS, normalizeContentFormat, mediaForFormat, type ContentFormat } from '$lib/content-formats';
+import { disruptiveBriefSection } from '$lib/disruptive';
+import { winningPatternsBlock, type HygieneWinner } from '$lib/server/platform-hygiene';
 
 // The RUBRIC engine — recurring, recognisable content SERIES as a first-class domain object.
 // A rubric is NOT a pillar: the pillar is the strategic theme, the rubric is the named,
@@ -109,12 +111,24 @@ export type ProposeRubricsOpts = {
   outputLanguage?: string;
   strategyBrief?: string; // market strategy brief + GTM phase brief, when available
   benchmark?: Benchmark | null;
+  /**
+   * I post che hanno funzionato davvero per QUESTO brand.
+   *
+   * Chi progetta le serie partiva cieco ogni volta: il benchmark gli diceva cosa fanno i
+   * concorrenti, niente gli diceva cosa ha funzionato qui. Il planner settimanale queste cose le
+   * legge già; il progettista di rubriche — che decide il formato di tutto ciò che verrà dopo — no.
+   * Chi le carica ce le ha già in mano (planEvidence), non costa una query in più.
+   */
+  topPosts?: HygieneWinner[];
 };
 
 // Propose 5-8 candidate rubrics for the client to edit/approve. Pure generation — persistence is
 // the caller's job (saveProposedRubrics).
 export async function proposeRubrics(ai: GoogleGenAI, profile: BrandProfile, opts: ProposeRubricsOpts): Promise<Rubric[]> {
   const pillars = Array.isArray(profile?.content_pillars) ? profile.content_pillars.filter(Boolean) : [];
+  // Cosa ha funzionato QUI, e le leve di contrasto che il repo conosce già: senza, una serie nasce
+  // dalla sola idea che il modello si è fatto della categoria — cioè dal luogo comune.
+  const winners = winningPatternsBlock(opts.topPosts ?? [], { limit: 6 });
   const prompt = `Design this brand's RUBRICHE — 5-8 recurring, recognisable content SERIES the brand will publish as repeated episodes. A rubric is a named series with one recurring promise and ONE production format, not a generic content category. The client will read these, edit them, and approve the ones to adopt; approved rubrics then drive all content planning.
 
 Brand: ${profile?.name ?? ''}
@@ -126,6 +140,8 @@ ${pillars.length ? `Content pillars (the strategic THEMES the series must serve 
 ${profile?.ai_context ? `\nBRAND CONTEXT & HISTORY (authoritative on voice and what performs):\n${String(profile.ai_context).slice(0, 6000)}` : ''}
 ${opts.benchmark ? `\nMARKET BENCHMARK (real competitor numbers — ground each rubric's differentiation in these):\n${benchmarkDigest(opts.benchmark)}` : ''}
 ${opts.strategyBrief?.trim() ? `\nSTRATEGY DIRECTIVES (the approved plans this set of series must execute):\n${opts.strategyBrief.trim()}` : ''}
+${winners ? `\nWHAT HAS ALREADY WORKED HERE (this brand's own posts, best first — a series that repeats a pattern this audience already rewarded starts ahead; one that ignores all of them needs a reason):\n${winners}` : ''}
+${disruptiveBriefSection()}
 
 Platforms the brand publishes on: ${opts.platforms.join(', ') || 'instagram'}.
 
