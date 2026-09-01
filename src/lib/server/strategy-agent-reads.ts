@@ -251,6 +251,7 @@ export async function readRubricsForAgent(
     strategic_role: clip(r.strategic_role, 200),
     cadence: r.cadence,
     differentiation: clip(r.differentiation, 200),
+    art_direction: clip(r.art_direction ?? '', 400),
     status: r.status
   });
   return {

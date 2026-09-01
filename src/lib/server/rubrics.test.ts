@@ -3,7 +3,7 @@ import { normalizeRubric, rubricsBrief, applyRubricToSeed, type Rubric } from '.
 import { weekStrategyBrief, type EditorialPlan } from './editorial-plan';
 import type { ContentFormat } from '$lib/content-formats';
 
-type SeedLike = { rubric?: string; rubric_id?: string; format: ContentFormat };
+type SeedLike = { rubric?: string; rubric_id?: string; format: ContentFormat; art_direction?: string };
 
 const rubric = (over: Partial<Rubric> = {}): Rubric => ({
   id: 'r-1',
@@ -96,5 +96,30 @@ describe('weekStrategyBrief rubric block (opt-in)', () => {
     const brief = weekStrategyBrief(plan(), 0, [rubric()]);
     expect(brief).toContain('APPROVED RUBRICS');
     expect(brief).toContain('Dietro le quinte del lab');
+  });
+});
+
+// Una rubrica senza direzione artistica è solo un nome: l'episodio finisce renderizzato nello
+// stile unico del brand, e "carosello a fumetti" resta una parola nel titolo della serie.
+describe('art_direction (la grammatica visiva della serie)', () => {
+  it('sopravvive alla normalizzazione', () => {
+    const r = normalizeRubric({ name: 'Storie', format: 'carousel', art_direction: '  fumetto a due colori, lettering a mano  ' });
+    expect(r.art_direction).toBe('fumetto a due colori, lettering a mano');
+  });
+
+  it('finisce nel brief che ogni planner legge', () => {
+    const out = rubricsBrief([rubric({ art_direction: 'fumetto a due colori, vignette squadrate' })]);
+    expect(out).toContain('fumetto a due colori, vignette squadrate');
+  });
+
+  it('viene stampata sull\'episodio, così arriva al renderer', () => {
+    const seed: SeedLike = { rubric: 'Dietro le quinte del lab', format: 'single_image' };
+    const out = applyRubricToSeed(seed, [rubric({ art_direction: 'illustrazione a china' })]);
+    expect(out.art_direction).toBe('illustrazione a china');
+  });
+
+  it('non inventa una direzione artistica quando la rubrica non ne ha', () => {
+    const seed: SeedLike = { rubric: 'Dietro le quinte del lab', format: 'single_image' };
+    expect(applyRubricToSeed(seed, [rubric()]).art_direction).toBeUndefined();
   });
 });

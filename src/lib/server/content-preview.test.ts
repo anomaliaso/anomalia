@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
+import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, clampCarousels, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, applySeedFix, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
 
 import type { Rubric } from './rubrics';
 
@@ -266,13 +266,24 @@ describe('resolveSeedWithRubrics (rubric format is AUTHORITATIVE over Pass 1)', 
 });
 
 describe('carousel guardrail config', () => {
-  it('defaults to 1 carousel per batch and 6 slides max (env unset)', () => {
-    expect(carouselMaxPerBatch()).toBe(1);
+  // Il tetto per batch era 1 e faceva la scelta editoriale al posto di chi pianifica: una rubrica a
+  // fumetti usciva di rado perché il numero le stava davanti, non perché costasse troppo. Il vincolo
+  // vero ora è il budget (un carosello costa quante slide ha, un video ne vale sedici) e questo resta
+  // un freno d'emergenza. Il tetto alle SLIDE invece è fisico: oltre non si pubblica.
+  it('non decide più quanti caroselli, ma tiene il tetto fisico alle slide', () => {
+    expect(carouselMaxPerBatch()).toBeGreaterThan(1);
     expect(carouselMaxSlides()).toBe(6);
   });
 });
 
 describe('brandVisualDirective', () => {
+  // Un poster tipografico è tornato con "#E86A5C" e "#3B6FB6" stampati dentro: al renderer i codici
+  // sono arrivati come testo, e un design fatto di testo li ha letterizzati.
+  it('vieta di stampare i codici colore dentro l\'immagine', () => {
+    const d = brandVisualDirective(['#E86A5C', '#3B6FB6'], null);
+    expect(d).toMatch(/never (?:draw|render|letter)[^.]*code/i);
+  });
+
   it('builds a palette + typography directive', () => {
     const d = brandVisualDirective(['#0099FF', '#111111'], ['Inter', 'Söhne']);
     expect(d).toMatch(/BRAND IDENTITY/);
@@ -750,5 +761,273 @@ describe('postQcPayload', () => {
     expect(postQcPayload(post)).toEqual({ score: 7 });
     expect(postQcPayload({} as PreviewPost)).toBeNull();
     expect(postQcPayload({ sceneDeviation: 'why' } as PreviewPost)).toEqual({ scene_deviation: 'why' });
+  });
+});
+
+// Un carosello che racconta una storia ha una battuta per slide, decise al piano — non una riga di
+// angle da cui il produttore improvvisa N immagini. Le battute devono sopravvivere al giro in DB e
+// alla griglia di editing, o l'utente approva una storia che poi nessuno rende.
+describe('beats: la storia del carosello sopravvive al round-trip', () => {
+  const carousel = (over: Record<string, unknown> = {}) => ({
+    platform: 'instagram', platforms: ['instagram'], format: 'carousel', media: 'image',
+    day: 'Monday', time: '09:00', product: '', person: '', angle: 'a', subject: 's', setting: '', props: '',
+    ...over
+  });
+
+  it('porta beats e art_direction attraverso la normalizzazione', () => {
+    const beats = [
+      { shows: 'lo sportello 4 del CUP', who: 'Sam allo sportello', thinks: 'speriamo legga subito' },
+      { shows: 'la finestra di errore sul monitor', who: 'lo schermo, di taglio', thinks: 'ecco, di nuovo' },
+      { shows: 'la cornetta alzata', who: "l'operatrice", thinks: 'mezz\'ora, minimo' }
+    ];
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats, art_direction: 'fumetto a due colori' })
+    ] });
+    expect(out.seeds[0].beats).toEqual(beats);
+    expect(out.seeds[0].art_direction).toBe('fumetto a due colori');
+  });
+
+  // Una battuta senza voce di dentro produce un fumetto muto: si vede cosa succede e non si sa
+  // niente di chi lo attraversa. È il difetto che ha bocciato il primo carosello.
+  it('legge la vecchia forma a stringa come una battuta senza voce', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: ['a', 'b', 'c'] })
+    ] });
+    expect(out.seeds[0].beats).toEqual([
+      { shows: 'a', who: '', thinks: '' }, { shows: 'b', who: '', thinks: '' }, { shows: 'c', who: '', thinks: '' }
+    ]);
+  });
+
+  // La coda del balloon è finita addosso alla protagonista perché nessuno diceva CHI parla: una
+  // domanda rivolta a lei è tornata come parole sue, e il senso si è invertito.
+  it('tiene il dialogo con chi lo dice, e non lo inventa quando manca', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: [
+        { shows: 'a', who: 'x', thinks: 'b', says: { speaker: 'il corriere', line: 'Ma qui c\'è un altro nome.' } },
+        { shows: 'c', who: 'y', thinks: 'd' },
+        { shows: 'e', who: 'z', thinks: 'f', says: { speaker: '  ', line: 'orfana' } }
+      ] })
+    ] });
+    expect(out.seeds[0].beats?.[0].says).toEqual({ speaker: 'il corriere', line: 'Ma qui c\'è un altro nome.' });
+    expect(out.seeds[0].beats?.[1].says).toBeUndefined();
+    expect(out.seeds[0].beats?.[2].says).toBeUndefined();
+  });
+
+  // Il generatore riceveva l'azione e indovinava chi mettere in scena: nel riquadro del corriere ha
+  // disegnato la protagonista che suona il proprio citofono.
+  it('porta chi è nell\'inquadratura', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: [{ shows: 'a', who: 'il corriere di spalle, Elia sulla porta', thinks: 'b' }] })
+    ] });
+    expect(out.seeds[0].beats?.[0].who).toBe('il corriere di spalle, Elia sulla porta');
+  });
+
+  it('scarta una battuta che non mostra niente', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ beats: [{ shows: 'a', thinks: 'x' }, { shows: '  ', thinks: 'y' }, { shows: 'c', thinks: 'z' }] })
+    ] });
+    expect(out.seeds[0].beats).toHaveLength(2);
+  });
+
+  it('lo slide_count segue le battute: una storia di 6 battute è un carosello di 6 slide', () => {
+    const beats = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6'];
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel({ beats, slide_count: 3 })] });
+    expect(out.seeds[0].slide_count).toBe(6);
+  });
+
+  it('taglia le battute al tetto di slide invece di prometterne di più di quante se ne rendano', () => {
+    const beats = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9'];
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel({ beats })] });
+    expect(out.seeds[0].slide_count).toBe(carouselMaxSlides());
+    expect(out.seeds[0].beats).toHaveLength(carouselMaxSlides());
+  });
+
+  it('scarta le battute su un seed che non è un carosello', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ format: 'single_image', beats: ['b1', 'b2'] })
+    ] });
+    expect(out.seeds[0].beats).toBeUndefined();
+  });
+});
+
+// Il render riempie da solo una didascalia vuota, e la riempie in inglese: la slide 1 di un
+// carosello a fumetti è tornata con «ENTERING ATELIER RIVES — BESPOKE TAILORING» perché il prompt
+// chiedeva "hand-lettered caption box" senza dire cosa ci andasse scritto.
+describe('sealOnImageText', () => {
+  const SEAL = 'Absolutely NO text';
+
+  it('sigilla un prompt che non cita nessuna stringa esatta', () => {
+    const out = sealOnImageText('Comic panel of a person opening a shop door. Hand-lettered caption box.');
+    expect(out).toContain(SEAL);
+  });
+
+  it('lascia stare un prompt che la stringa la cita', () => {
+    const p = 'Comic panel with a speech bubble: "Accompagni la sposa?".';
+    expect(sealOnImageText(p)).toBe(p);
+  });
+
+  it('non sigilla due volte', () => {
+    const once = sealOnImageText('Un ritratto senza scritte.');
+    expect(sealOnImageText(once)).toBe(once);
+  });
+
+  it('non tocca un prompt vuoto (i post di testo non hanno immagine)', () => {
+    expect(sealOnImageText('')).toBe('');
+  });
+});
+
+// clampCarousels declassa un carosello oltre il tetto del batch, e girava DOPO
+// clampMediaCapabilities — l'unico posto che sapeva che le battute vivono solo su un carosello.
+// Risultato: un'immagine singola che si porta dietro una storia che nessuno renderà mai.
+describe('clampCarousels e le battute', () => {
+  const carousel = (over: Record<string, unknown> = {}) => ({
+    format: 'carousel' as const,
+    slide_count: 4,
+    beats: ['b1', 'b2', 'b3', 'b4'],
+    ...over
+  });
+
+  it('porta via la storia insieme al formato', () => {
+    const seeds = [carousel(), carousel()];
+    clampCarousels(seeds, 1);
+    expect(seeds[0].beats).toHaveLength(4);
+    expect(seeds[1].format).toBe('single_image');
+    expect(seeds[1].beats).toBeUndefined();
+  });
+});
+
+// Il pass 1.5 ha declassato a immagine singola un episodio di una rubrica CAROSELLO, e nessuno se
+// n'è accorto: l'invariante «il formato della rubrica è autoritativo» era applicata nella mappa del
+// pass 1 e non dopo la revisione. È costata l'unica rubrica narrativa del batch.
+describe('applySeedFix', () => {
+  const rubric: Rubric = {
+    id: 'r-1', name: 'Cose che succedono davvero', promise: 'p', strategic_role: 'r',
+    format: 'carousel', cadence: '1/week', differentiation: 'd', rationale: 'r'
+  };
+  const seed = (over: Partial<PostSeed> = {}): PostSeed => ({
+    platform: 'instagram', platforms: ['instagram'], pillar: 'p', format: 'carousel', slide_count: 4,
+    media: 'image', day: 'Mon', time: '10:00', product: '', person: '', angle: 'a', subject: 's',
+    setting: '', props: '', rubric: 'Cose che succedono davvero', ...over
+  });
+
+  it('la rubrica batte il revisore sul formato', () => {
+    const out = applySeedFix(seed(), { format: 'single_image' }, new Set(), [rubric]);
+    expect(out.format).toBe('carousel');
+  });
+
+  it('senza rubriche il fix del revisore passa', () => {
+    const out = applySeedFix(seed({ rubric: undefined }), { format: 'single_image' }, new Set(), []);
+    expect(out.format).toBe('single_image');
+  });
+
+  it('scarta un prodotto che il brand non ha', () => {
+    const out = applySeedFix(seed(), { product: 'Inventato' }, new Set(['reale']), [rubric]);
+    expect(out.product).toBe('');
+  });
+
+  it('tiene angolo e soggetto riscritti', () => {
+    const out = applySeedFix(seed(), { angle: 'nuovo angolo', subject: 'nuovo soggetto' }, new Set(), [rubric]);
+    expect(out.angle).toBe('nuovo angolo');
+    expect(out.subject).toBe('nuovo soggetto');
+  });
+});
+
+// Il revisore poteva solo DECLASSARE un carosello senza storia, e così l'unica rubrica narrativa
+// del batch usciva come immagine singola. Ora può scriverla, la storia.
+describe('applySeedFix scrive le battute mancanti', () => {
+  const rubric: Rubric = {
+    id: 'r-1', name: 'Cose che succedono davvero', promise: 'p', strategic_role: 'r',
+    format: 'carousel', cadence: '1/week', differentiation: 'd', rationale: 'r'
+  };
+  const seed = (): PostSeed => ({
+    platform: 'instagram', platforms: ['instagram'], pillar: 'p', format: 'carousel', slide_count: 3,
+    media: 'image', day: 'Mon', time: '10:00', product: '', person: '', angle: 'a', subject: 's',
+    setting: '', props: '', rubric: 'Cose che succedono davvero'
+  });
+
+  it('accetta le battute scritte dal revisore', () => {
+    const out = applySeedFix(seed(), {
+      beats: [
+        { shows: 'il corriere legge il vecchio nome', who: 'il corriere sulla soglia', thinks: 'ci risiamo' },
+        { shows: 'la firma sul palmare', who: 'le mani di Elia', thinks: 'firmo e basta' },
+        { shows: 'la porta che si chiude', who: 'Elia di spalle', thinks: 'domani chiamo' }
+      ]
+    }, new Set(), [rubric]);
+    expect(out.beats).toHaveLength(3);
+    expect(out.beats?.[0].thinks).toBe('ci risiamo');
+    expect(out.format).toBe('carousel');
+  });
+
+  it('non tocca le battute quando il revisore non ne manda', () => {
+    const before = seed();
+    before.beats = [{ shows: 'x', who: 'w', thinks: 'y' }];
+    const out = applySeedFix(before, { angle: 'nuovo' }, new Set(), [rubric]);
+    expect(out.beats).toEqual([{ shows: 'x', who: 'w', thinks: 'y' }]);
+  });
+});
+
+// Una battuta narrativa senza fonte è la vita di qualcun altro scritta da un modello su ciò che
+// sembra plausibile. La fonte viaggia col seed, si legge nella griglia e si controlla prima di
+// approvare — è l'unica cosa che distingue un episodio raccolto da uno inventato.
+describe('sourced_from', () => {
+  const carousel = (over: Record<string, unknown> = {}) => ({
+    platform: 'instagram', platforms: ['instagram'], format: 'carousel', media: 'image',
+    day: 'Monday', time: '09:00', product: '', person: '', angle: 'a', subject: 's', setting: '', props: '',
+    ...over
+  });
+
+  it('sopravvive al round-trip', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [
+      carousel({ sourced_from: 'racconto su r/italyinformatica del 12/03 — https://example.org/post' })
+    ] });
+    expect(out.seeds[0].sourced_from).toBe('racconto su r/italyinformatica del 12/03 — https://example.org/post');
+  });
+
+  it('non inventa una fonte quando non ce n\'è', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [carousel()] });
+    expect(out.seeds[0].sourced_from).toBeUndefined();
+  });
+});
+
+// Il tetto ai caroselli era 1 per batch, un numero d'ambiente che nessuno aveva scelto guardando
+// niente. Era anche la ragione per cui la rubrica narrativa usciva una volta ogni tanto: con il
+// budget come vincolo vero, il tetto non deve più fare la scelta editoriale al posto dell'agente.
+describe('carouselMaxPerBatch', () => {
+  it('di default non decide più il mix', () => {
+    expect(carouselMaxPerBatch()).toBeGreaterThan(1);
+  });
+
+  it('resta un freno d\'emergenza da variabile d\'ambiente', () => {
+    expect(typeof carouselMaxPerBatch()).toBe('number');
+  });
+});
+
+// Un batch che copre due settimane ha bisogno che ogni post sappia in quale delle due sta: il seed
+// portava solo il giorno della settimana, quindi tutto sarebbe finito nella prima.
+describe('la settimana del seed', () => {
+  const s = (over: Record<string, unknown> = {}) => ({
+    platform: 'instagram', platforms: ['instagram'], format: 'single_image', media: 'image',
+    day: 'Monday', time: '09:00', product: '', person: '', angle: 'a', subject: '', setting: '', props: '',
+    ...over
+  });
+
+  it('sopravvive al round-trip', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s({ week: 2 })] });
+    expect(out.seeds[0].week).toBe(2);
+  });
+
+  it('la settimana zero non si perde per strada', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s({ week: 0 })] });
+    expect(out.seeds[0].week).toBe(0);
+  });
+
+  it('senza settimana resta indefinita invece di diventare la prima', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s()] });
+    expect(out.seeds[0].week).toBeUndefined();
+  });
+
+  it('una settimana non numerica si scarta', () => {
+    const out = normalizeWeeklyStrategy({ theme: 't', rationale: 'r', do_dont: '', seeds: [s({ week: 'lunedì' })] });
+    expect(out.seeds[0].week).toBeUndefined();
   });
 });

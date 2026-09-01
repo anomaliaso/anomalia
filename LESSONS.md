@@ -72,6 +72,12 @@ La stack Docker porta un'app pronta (`anomalia-app`, immagine `anomalia-selfhost
 ### Le env del repo puntano all'hosted; la stack locale porta le sue chiavi in kong.yml
 Il `.env` del repo punta a un progetto Supabase hosted, mentre la compose gira da un altro checkout con le chiavi veramente valide dentro `anomalia-kong:/usr/local/kong/kong.yml`. Il seed (`scripts/db-seed.mjs`) pretende `DATABASE_URL` e fallisce con parse error leggendo `.env` a mano (contiene valori con `<...>`). Mossa: overlay env a parte — `PUBLIC_SUPABASE_URL=http://localhost:8000`, chiavi estratte da kong.yml, `DATABASE_URL` dalla compose — e avviare il dev con quello; mai puntare all'hosted "per comodità".
 
+### Misurare fuori dal percorso dell'app e concludere sull'app
+`curl` con `response_format: json_schema` strict su `z-ai/glm-5.3-flash` risponde 200 e resta aperto 180s con soli spazi di keep-alive: sembra un modello rotto. L'app però non usa quel percorso — usa `generateObject` dell'AI SDK, che negozia diversamente — e sullo stesso schema quel modello risponde in 107s (gemini in 15s). Lento, non rotto. Segnale: una conclusione su un componente tratta da una prova che quel componente non esegue mai. Mossa: misurare chiamando la FUNZIONE che il prodotto chiama (`llmStructured`), non l'endpoint a mano; e diffidare di «rotto» quando l'unico sintomo è «non è ancora tornato».
+
+### Una colonna aggiunta a mano al DB locale non esiste per PostgREST finché non ricarichi lo schema
+`alter table ... add column` via `psql` non risveglia la cache di schema di PostgREST: ogni `.update()` che nomina la colonna nuova viene rifiutato (PGRST204), e il codice che scarta l'errore (`const { data } = await supabase...`) prosegue come se non fosse successo niente — nel caso pagato, l'approvazione di una rubrica non ha scritto la modifica e ha marcato la riga `rejected`. Segnale: una scrittura che tocca SOLO la colonna nuova non ha effetto, mentre le letture della stessa tabella funzionano. Mossa: `docker exec anomalia-db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"` subito dopo ogni migration applicata a mano, prima di aprire il browser.
+
 ### La porta 5173 può appartenere al vite di un altro worktree
 Un `vite dev` di un altro worktree risponde 404 a tutto e resta lì in ascolto; il CLI ci si punta da solo. Mossa: `lsof -nP -iTCP:5173 -sTCP:LISTEN` e `ps` sul PID prima di `npm run dev`; se occupata, porta esplicita (`npm run dev -- --port 5175`).
 
@@ -347,3 +353,16 @@ dieci secondi dice in un colpo se il problema è che non parte niente o che part
 effetti Svelte non vengono eseguiti (`$effect.root` + `flushSync` conta zero esecuzioni del corpo):
 un test lì passa identico con e senza il fix. Lasciarlo è peggio che non averlo — è una guardia
 finta che il prossimo leggerà come copertura. Va tolto e il buco va scritto qui.
+
+### In locale non gira nessun cron: il wizard che «pensa» per sempre non è un difetto del prodotto
+L'onboarding resta a *«Drafting your editorial plan…»* all'infinito sullo stack locale, e sembra un
+hang del piano editoriale. Non lo è: i job di `onboarding_step_jobs` vengono ripresi dal cron
+`*/2 * * * *` su `/api/v1/onboarding/steps/work`, che in locale **non esiste**. Il job stalla dopo
+`STALL_MS` (6 minuti), nessuno lo rimette in coda, e la pagina continua a pollare una riga
+`running` che non avanzerà più. Il `[swallowed] fetch failed` nel log è il kick fire-and-forget del
+worker che non ha risposto entro il timeout di undici — sintomo, non causa.
+Mossa: fai il cron a mano prima di diagnosticare, e tienilo acceso per tutta la camminata:
+`for i in $(seq 1 45); do curl -s --max-time 4 -X POST -H "x-autopilot-secret: $AUTOPILOT_SECRET" \
+http://localhost:5220/api/v1/onboarding/steps/work; sleep 60; done`.
+Vale per ogni `*/N` in `vercel.json` (radar, knowledge, chat queue, designer, webhooks): in locale
+nessuno di quei lavori parte da solo, e ciò che sembra un blocco è una coda che nessuno drena.

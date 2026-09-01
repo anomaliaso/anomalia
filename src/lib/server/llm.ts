@@ -136,6 +136,51 @@ function userContent(
 }
 
 /** JSON vincolato sul gateway. Sostituisce structuredGemini / responseSchema Google. */
+/**
+ * Quanto ragiona il modello, DICHIARATO sempre.
+ *
+ * Il campo non veniva mandato mai, e il default non impostato del provider è patologico. Misurato
+ * l'1/09/2026 su `z-ai/glm-5.3-flash`, stesso prompt e stesso schema:
+ *
+ *   campo assente (quello che l'app faceva)   12.134 token   1 elemento su 3 richiesti
+ *   effort: low / medium / high                123-214 token   3 su 3
+ *
+ * Quello che conta è la colonna di destra: senza istruzioni il modello spende dodicimila token di
+ * ragionamento e restituisce comunque la cosa sbagliata. È CORRETTEZZA, non velocità — i tempi in
+ * quelle prove oscillavano troppo (glm fra 68s e 113s, gemini fra 4s e 27s) per dire altro, e su
+ * OpenRouter la stessa richiesta può finire su provider diversi. Un effort QUALUNQUE, anche 'high',
+ * riporta la risposta a essere giusta, ed è la ragione per cui questa costante non ha un valore
+ * "non impostato".
+ *
+ * Su questo modello il reasoning non si può nemmeno spegnere: `{enabled:false}` risponde 400,
+ * «Reasoning is mandatory for this endpoint».
+ */
+export const LLM_REASONING_EFFORT = (() => {
+  const raw = env.LLM_REASONING_EFFORT?.trim().toLowerCase();
+  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'high';
+})();
+
+/** Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT. */
+const reasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+
+/**
+ * Quanto si aspetta una risposta dal centralino prima di considerarla persa.
+ *
+ * Non c'era: una chiamata appesa non tornava mai, e la pagina che l'aspettava nemmeno.
+ *
+ * IL NUMERO È GENEROSO PERCHÉ L'OUTPUT STRUTTURATO È LENTO, NON ROTTO. Misurato l'1/09/2026 sul
+ * percorso vero (llmStructured → generateObject), stesso schema e stesso prompt:
+ *
+ *   z-ai/glm-5.3-flash        107s      (il default configurato)
+ *   google/gemini-3.7-flash    15s
+ *
+ * Sette volte più lento, su uno schema PICCOLO. Quelli veri del planner — seed con battute,
+ * venti campi — sono molto più grandi, quindi la scadenza deve stare larga o trasforma la
+ * lentezza in un guasto: è l'errore che ho già fatto una volta leggendo una chiamata lunga come
+ * un modello rotto. Si abbassa con LLM_TIMEOUT_MS quando si sa cosa si sta facendo.
+ */
+export const LLM_TIMEOUT_MS = Number(env.LLM_TIMEOUT_MS) > 0 ? Number(env.LLM_TIMEOUT_MS) : 900_000;
+
 export async function llmStructured<T>(opts: {
 	prompt: string;
 	schema: Record<string, unknown>;
@@ -155,6 +200,8 @@ export async function llmStructured<T>(opts: {
 			schema: jsonSchema(opts.schema as never),
 			system: opts.system,
 			temperature: opts.temperature,
+			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+			providerOptions: { openai: reasoningOptions() },
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }]
 		});
 		logAiCall({
@@ -199,8 +246,9 @@ export async function llmText(opts: {
 		const result = await generateText({
 			model: llmLanguageModel(modelId),
 			system: opts.system,
+			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
-			...(extra ? { providerOptions: { openai: extra } } : {})
+			providerOptions: { openai: { ...reasoningOptions(), ...(extra ?? {}) } }
 		});
 		const citations: Array<{ uri: string; title: string }> = [];
 		const seen = new Set<string>();

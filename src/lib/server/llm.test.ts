@@ -1,3 +1,4 @@
+import { LLM_TIMEOUT_MS, LLM_REASONING_EFFORT } from './llm';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -131,4 +132,23 @@ describe('nessun SDK Google nei call site app', () => {
 		}
 		expect(hits, hits.join('\n')).toEqual([]);
 	});
+});
+
+// Una chiamata al gateway non scadeva mai, e la pagina che l'aspettava nemmeno. La scadenza però
+// deve stare LARGA: misurato sul percorso vero, il modello di default impiega 107s dove gemini ne
+// impiega 15 — su uno schema piccolo. Una scadenza stretta trasformerebbe la lentezza in un guasto,
+// che è esattamente la diagnosi sbagliata da cui questo commento nasce.
+describe('LLM_TIMEOUT_MS', () => {
+  it('lascia spazio a un modello lento invece di scambiarlo per rotto', () => {
+    expect(LLM_TIMEOUT_MS).toBeGreaterThanOrEqual(600_000);
+  });
+});
+
+// Il campo `reasoning` non veniva mandato mai, e il default non impostato è patologico: misurato su
+// z-ai/glm-5.3-flash, 113s e 12.134 token per un risultato SBAGLIATO (1 elemento su 3 chiesti).
+// Con un effort qualunque — anche 'high' — sono 7s e il risultato giusto.
+describe('LLM_REASONING_EFFORT', () => {
+  it('è sempre uno sforzo dichiarato, mai il default del provider', () => {
+    expect(['low', 'medium', 'high']).toContain(LLM_REASONING_EFFORT);
+  });
 });

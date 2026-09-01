@@ -175,12 +175,15 @@ import EntryInput from './components/EntryInput.svelte';
   function applyResearchResult(result: Record<string, any> | null | undefined) {
     if (!result) return;
     if (Array.isArray(result.steps)) {
+      // Rows written before the timeline became a registry can repeat a step, and the timeline is
+      // rendered keyed by it: one duplicate and the whole strategy step is torn down.
+      const byStep = new Map<string, { step: string; message: string; result?: unknown }>();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      researchSteps = result.steps.map((s: any) => ({
-        step: String(s.step ?? ''),
-        message: String(s.message ?? ''),
-        result: s.result
-      }));
+      for (const s of result.steps as any[]) {
+        const step = String(s.step ?? '');
+        byStep.set(step, { ...byStep.get(step), step, message: String(s.message ?? ''), result: s.result });
+      }
+      researchSteps = [...byStep.values()];
     }
     if (result.report) report = result.report;
     if (result.researchData) researchData = result.researchData;

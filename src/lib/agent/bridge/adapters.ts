@@ -126,11 +126,17 @@ export interface HarnessModelPreference {
 	tier?: unknown;
 }
 
+/**
+ * Il `wireId` del catalogo e` il nome NATIVO del modello (`gpt-5-6-luna`), non un id del
+ * centralino (`openai/gpt-5-6-luna`): passarlo cosi` com'e` chiede al gateway un modello che
+ * non esiste, e il turno muore senza mai cominciare — «Stream ended without finish_reason».
+ * Vale solo se la lista dichiarata lo serve davvero; altrimenti null, e decide il tier.
+ */
 function servableWireId(family: unknown): string | null {
 	if (typeof family !== 'string') return null;
 	if (!(MODEL_FAMILY_IDS as readonly string[]).includes(family)) return null;
-	const def = MODEL_FAMILIES[family as keyof typeof MODEL_FAMILIES];
-	return def.wireId;
+	const wire = MODEL_FAMILIES[family as keyof typeof MODEL_FAMILIES].wireId;
+	return llmModels().find((id) => id === wire || id.endsWith(`/${wire}`)) ?? null;
 }
 
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {

@@ -46,7 +46,8 @@ export const POST: RequestHandler = async ({ request, params }) => {
         platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
         outputLanguage,
         strategyBrief: [gtmBrief, evidence.strategyBrief].filter(Boolean).join('\n\n'),
-        benchmark: evidence.benchmark
+        benchmark: evidence.benchmark,
+        topPosts: evidence.topPosts
       });
       if (!candidates.length) throw new Error('No rubric candidates generated');
       return saveProposedRubrics(supabase, brand.id, candidates);

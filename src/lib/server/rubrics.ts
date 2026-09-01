@@ -2,6 +2,8 @@ import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { CONTENT_FORMATS, normalizeContentFormat, mediaForFormat, type ContentFormat } from '$lib/content-formats';
+import { disruptiveBriefSection } from '$lib/disruptive';
+import { winningPatternsBlock, type HygieneWinner } from '$lib/server/platform-hygiene';
 
 // The RUBRIC engine — recurring, recognisable content SERIES as a first-class domain object.
 // A rubric is NOT a pillar: the pillar is the strategic theme, the rubric is the named,
@@ -27,6 +29,10 @@ export type Rubric = {
   cadence: string;
   differentiation: string;
   rationale: string;
+  // Come si VEDE la serie: medium, grammatica della pagina, palette, lettering. È la sola cosa che
+  // permette a due rubriche dello stesso brand di avere due registri visivi diversi — un reportage
+  // fotografico e un fumetto illustrato. Vuota → la serie eredita il visual_style del brand.
+  art_direction?: string;
 };
 
 // ── Normalisation (never trust LLM output shape) ─────────────────────────────
@@ -42,7 +48,8 @@ export function normalizeRubric(raw: AnyRec): Rubric {
     format: normalizeContentFormat(raw?.format),
     cadence: String(raw?.cadence ?? '').trim(),
     differentiation: String(raw?.differentiation ?? '').trim(),
-    rationale: String(raw?.rationale ?? '').trim()
+    rationale: String(raw?.rationale ?? '').trim(),
+    art_direction: String(raw?.art_direction ?? '').trim() || undefined
   };
 }
 
@@ -56,9 +63,9 @@ export function rubricsBrief(rubrics: Rubric[]): string {
   if (!valid.length) return '';
   const lines = valid.map(
     (r) =>
-      `- "${r.name}" [format: ${r.format}${r.cadence ? `, cadence: ${r.cadence}` : ''}]${r.promise ? ` — ${r.promise}` : ''}${r.strategic_role ? ` (role: ${r.strategic_role})` : ''}`
+      `- "${r.name}" [format: ${r.format}${r.cadence ? `, cadence: ${r.cadence}` : ''}]${r.promise ? ` — ${r.promise}` : ''}${r.strategic_role ? ` (role: ${r.strategic_role})` : ''}${r.art_direction ? `\n    art direction: ${r.art_direction}` : ''}`
   );
-  return `APPROVED RUBRICS (the brand's recurring content series, approved by the client — an AUTHORITATIVE constraint): plan and produce content as EPISODES of these series. Express any weekly content mix as counts of these rubric NAMES (e.g. '2× ${valid[0].name}'), never as generic categories. A seed belonging to a rubric inherits its format. Respect each rubric's cadence; content outside every rubric is allowed only when something timely genuinely doesn't fit any series.\n${lines.join('\n')}`;
+  return `APPROVED RUBRICS (the brand's recurring content series, approved by the client — an AUTHORITATIVE constraint): plan and produce content as EPISODES of these series. Express any weekly content mix as counts of these rubric NAMES (e.g. '2× ${valid[0].name}'), never as generic categories. A seed belonging to a rubric inherits its format. Respect each rubric's cadence; content outside every rubric is allowed only when something timely genuinely doesn't fit any series. When a series declares an ART DIRECTION, every episode of it is rendered in THAT medium — it OVERRIDES the brand's default visual style, and a series drawn as a comic never comes back as a photograph.\n${lines.join('\n')}`;
 }
 
 // ── Proposal generation ──────────────────────────────────────────────────────
@@ -85,9 +92,14 @@ const RUBRICS_SCHEMA = {
           },
           cadence: { type: 'string' as const, description: "Expected rhythm, e.g. '1/week', '2/month'. The sum across rubrics must be sustainable at the brand's posting cadence." },
           differentiation: { type: 'string' as const, description: 'The competitor gap that justifies this series — what nobody else in the field is doing, grounded in the benchmark/strategy brief when given.' },
-          rationale: { type: 'string' as const, description: 'Why THIS series for THIS brand, 1-2 sentences the client reads to decide. Concrete, never generic agency filler.' }
+          rationale: { type: 'string' as const, description: 'Why THIS series for THIS brand, 1-2 sentences the client reads to decide. Concrete, never generic agency filler.' },
+          art_direction: {
+            type: 'string' as const,
+            description:
+              "How every episode LOOKS, concretely enough for an image generator: the MEDIUM first (documentary photography / ink-and-wash comic panels / flat vector editorial illustration / risograph collage / typographic poster…), then the page grammar (panels, gutters, framing), the palette, the lettering, and what is never shown. A narrative series ALSO names its recurring protagonist here — silhouette, hair, habitual clothes, one constant object — so every episode redraws the same person. This OVERRIDES the brand's default visual style for this series, so two series of the same brand can look deliberately different. Two or three sentences, no aspect ratio."
+          }
         },
-        required: ['name', 'promise', 'strategic_role', 'format', 'cadence', 'differentiation', 'rationale']
+        required: ['name', 'promise', 'strategic_role', 'format', 'cadence', 'differentiation', 'rationale', 'art_direction']
       }
     }
   },
@@ -99,12 +111,24 @@ export type ProposeRubricsOpts = {
   outputLanguage?: string;
   strategyBrief?: string; // market strategy brief + GTM phase brief, when available
   benchmark?: Benchmark | null;
+  /**
+   * I post che hanno funzionato davvero per QUESTO brand.
+   *
+   * Chi progetta le serie partiva cieco ogni volta: il benchmark gli diceva cosa fanno i
+   * concorrenti, niente gli diceva cosa ha funzionato qui. Il planner settimanale queste cose le
+   * legge già; il progettista di rubriche — che decide il formato di tutto ciò che verrà dopo — no.
+   * Chi le carica ce le ha già in mano (planEvidence), non costa una query in più.
+   */
+  topPosts?: HygieneWinner[];
 };
 
 // Propose 5-8 candidate rubrics for the client to edit/approve. Pure generation — persistence is
 // the caller's job (saveProposedRubrics).
 export async function proposeRubrics(ai: GoogleGenAI, profile: BrandProfile, opts: ProposeRubricsOpts): Promise<Rubric[]> {
   const pillars = Array.isArray(profile?.content_pillars) ? profile.content_pillars.filter(Boolean) : [];
+  // Cosa ha funzionato QUI, e le leve di contrasto che il repo conosce già: senza, una serie nasce
+  // dalla sola idea che il modello si è fatto della categoria — cioè dal luogo comune.
+  const winners = winningPatternsBlock(opts.topPosts ?? [], { limit: 6 });
   const prompt = `Design this brand's RUBRICHE — 5-8 recurring, recognisable content SERIES the brand will publish as repeated episodes. A rubric is a named series with one recurring promise and ONE production format, not a generic content category. The client will read these, edit them, and approve the ones to adopt; approved rubrics then drive all content planning.
 
 Brand: ${profile?.name ?? ''}
@@ -116,6 +140,8 @@ ${pillars.length ? `Content pillars (the strategic THEMES the series must serve 
 ${profile?.ai_context ? `\nBRAND CONTEXT & HISTORY (authoritative on voice and what performs):\n${String(profile.ai_context).slice(0, 6000)}` : ''}
 ${opts.benchmark ? `\nMARKET BENCHMARK (real competitor numbers — ground each rubric's differentiation in these):\n${benchmarkDigest(opts.benchmark)}` : ''}
 ${opts.strategyBrief?.trim() ? `\nSTRATEGY DIRECTIVES (the approved plans this set of series must execute):\n${opts.strategyBrief.trim()}` : ''}
+${winners ? `\nWHAT HAS ALREADY WORKED HERE (this brand's own posts, best first — a series that repeats a pattern this audience already rewarded starts ahead; one that ignores all of them needs a reason):\n${winners}` : ''}
+${disruptiveBriefSection()}
 
 Platforms the brand publishes on: ${opts.platforms.join(', ') || 'instagram'}.
 
@@ -125,6 +151,10 @@ Rules:
 - Cadences must ADD UP to something sustainable for this brand — not every rubric is weekly.
 - Every rubric must cite a real differentiation vs the field, not a platitude.
 - Names in the brand's language, memorable, specific to THIS brand.
+- REGISTER SPREAD — a set where every series informs is a failed set. Cover at least three different registers among: educational/explanatory, narrative (stories of real people, told in episodes), artistic/expressive (the piece is worth looking at even with the copy removed), documentary, positional/opinion. At least ONE series must earn its place emotionally or aesthetically rather than informationally.
+- ART DIRECTION — each series declares its own medium and page grammar, and the set must not be uniform: if one series is photographic, another must be drawn, printed, typographic or collaged. A brand whose subject is people's lived experience deserves a series where those experiences are DRAWN — comic panels, illustrated vignettes, short visual stories — because a stock-looking photo cannot carry a first-person account.
+- A NARRATIVE series carries a real arc per episode (a situation, a turn, a landing), not a list with a story-shaped title.
+- CAST — a narrative series names its RECURRING protagonist inside art_direction, drawn concretely enough to be redrawn identically every episode: silhouette, hair, habitual clothes, one object that is always with them. Describe a character, never a demographic: no ethnicity, no body type, no age bracket. A series whose protagonist changes face between one episode and the next is not a series, and it is the single most common way a drawn series stops reading as one. Fix only what never changes: if an episode is ABOUT a change to the character (a haircut, a scar, a new coat), the story wins over the description, so do not pin the very trait the stories are likely to turn on. Describe the FACE — brow, eyes, mouth, how it rests — because a cast with no face comes back with no face: the word "silhouette" was taken literally and the protagonist was drawn as a solid black shape in every panel. Never a word the renderer can draw instead of interpret.
 Write ALL prose in ${opts.outputLanguage || 'English'}; keep format values unchanged.
 Return JSON.`;
 
@@ -137,7 +167,7 @@ Return JSON.`;
 
 // ── DB lifecycle (mirrors editorial_plans' pattern) ──────────────────────────
 
-const RUBRIC_COLS = 'id, batch_id, status, name, promise, strategic_role, format, cadence, differentiation, rationale, created_at, approved_at';
+const RUBRIC_COLS = 'id, batch_id, status, name, promise, strategic_role, format, cadence, differentiation, rationale, art_direction, created_at, approved_at';
 
 // The brand's currently APPROVED rubric set ('' brief when empty — the opt-in switch).
 export async function loadApprovedRubrics(supabase: SupabaseClient, brandId: string): Promise<Rubric[]> {
@@ -183,7 +213,8 @@ export async function saveProposedRubrics(supabase: SupabaseClient, brandId: str
       format: r.format,
       cadence: r.cadence || null,
       differentiation: r.differentiation || null,
-      rationale: r.rationale || null
+      rationale: r.rationale || null,
+      art_direction: r.art_direction || null
     })))
     .select(RUBRIC_COLS);
   if (error) throw new Error(error.message);
@@ -197,7 +228,7 @@ export async function approveRubrics(
   supabase: SupabaseClient,
   brandId: string,
   // The client's picks: each id must be a 'proposed' rubric of this brand; edits override fields.
-  picks: Array<{ id: string; edits?: Partial<Pick<Rubric, 'name' | 'promise' | 'strategic_role' | 'format' | 'cadence' | 'differentiation'>> }>
+  picks: Array<{ id: string; edits?: Partial<Pick<Rubric, 'name' | 'promise' | 'strategic_role' | 'format' | 'cadence' | 'differentiation' | 'art_direction'>> }>
 ): Promise<{ approved: number }> {
   if (!picks.length) return { approved: 0 };
   const now = new Date().toISOString();
@@ -214,6 +245,7 @@ export async function approveRubrics(
     if (typeof e.format === 'string') patch.format = normalizeContentFormat(e.format);
     if (typeof e.cadence === 'string') patch.cadence = e.cadence.trim() || null;
     if (typeof e.differentiation === 'string') patch.differentiation = e.differentiation.trim() || null;
+    if (typeof e.art_direction === 'string') patch.art_direction = e.art_direction.trim() || null;
     const { data } = await supabase.from('rubrics').update(patch)
       .eq('id', pick.id).eq('brand_id', brandId).eq('status', 'proposed')
       .select('id');
@@ -227,7 +259,7 @@ export async function approveRubrics(
 
 // Resolve a seed's rubric NAME (the LLM picks by name) to the approved rubric, stamping the
 // authoritative format. Pure — exported for tests. No rubrics / no match → seed untouched.
-export function applyRubricToSeed<T extends { rubric?: string; rubric_id?: string; format: ContentFormat; media?: 'image' | 'text' | 'link' | 'video' }>(
+export function applyRubricToSeed<T extends { rubric?: string; rubric_id?: string; format: ContentFormat; media?: 'image' | 'text' | 'link' | 'video'; art_direction?: string }>(
   seed: T,
   rubrics: Rubric[]
 ): T {
@@ -248,5 +280,7 @@ export function applyRubricToSeed<T extends { rubric?: string; rubric_id?: strin
   // on Instagram) — that degradation is platform physics, never Pass 1's preference winning.
   seed.format = hit.format;
   if (seed.media !== undefined) seed.media = mediaForFormat(hit.format);
+  // La direzione artistica viaggia col seed: il produttore e il renderer non leggono le rubriche.
+  if (hit.art_direction) seed.art_direction = hit.art_direction;
   return seed;
 }
