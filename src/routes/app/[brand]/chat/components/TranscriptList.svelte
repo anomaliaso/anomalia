@@ -184,6 +184,20 @@
   const looseArtifacts = $derived(
     artifacts.filter((a) => !a.tool_call_id || !renderedCallIds.has(a.tool_call_id))
   );
+
+  /**
+   * L'ultimo messaggio dell'utente, cercato UNA volta.
+   *
+   * Ogni riga se lo chiedeva scorrendo la coda della lista (`messages.slice(i + 1).some(...)`):
+   * su cento turni sono cinquemila passi e cento array nuovi a ogni ridisegno, per un indice che
+   * è lo stesso per tutti.
+   */
+  const lastUserIndex = $derived.by(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return i;
+    }
+    return -1;
+  });
 </script>
 
 <div class="chat-column">
@@ -195,6 +209,10 @@
   </div>
 {/if}
 
+<!-- La chiave resta la POSIZIONE, e non è una svista. `consolidateMessages` può emettere due
+     righe con lo stesso `id` (misurato l'1/9: 100 righe, un id ripetuto su una cronologia vera),
+     e Svelte su una chiave duplicata non disegna la lista: transcript vuoto, nessun errore a
+     schermo. Chiavare sull'id si può solo dopo che il consolidamento produce una chiave sua. -->
 {#each messages as msg, i (i)}
   {#if msg.role === 'user' && isDmReplyBackMessage(msg.content)}
     <!-- La risposta di un DM non sta in questa chat: vive nel thread privato (chip). -->
@@ -220,9 +238,7 @@
   {#if dayLines[i]}<ChatDivider label={dayLines[i]} />{/if}
   {#if i === unreadIndex}<ChatDivider label={$_('chat.newMessages')} tone="accent" />{/if}
   {#if msg.role === 'user'}
-    {@const isLastUser =
-      i === messages.length - 1 ||
-      !messages.slice(i + 1).some((m) => m.role === 'user')}
+    {@const isLastUser = i === lastUserIndex}
     <div class="self-end flex flex-col gap-1.5 items-end w-[80%] max-w-[80%] min-w-0 box-border">
       {#if msg.attachments?.length || msg.documents?.length}
         <ChatAttStrip urls={msg.attachments} docs={msg.documents} />
@@ -258,7 +274,11 @@
         {speakerLabel}
         {speakerAvatar}
         {artifactsByCall}
-        followingUserTexts={messages.slice(i + 1).filter((m) => m.role === 'user' && !isDmReplyBackMessage(m.content)).map((m) => m.content)}
+        followingUserTexts={() =>
+          messages
+            .slice(i + 1)
+            .filter((m) => m.role === 'user' && !isDmReplyBackMessage(m.content))
+            .map((m) => m.content)}
         oncopy={oncopy}
         onredo={onredo}
         onfeedback={onfeedback}

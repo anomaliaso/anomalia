@@ -111,7 +111,7 @@ export function escapeChatText(text: string): string {
 // modello che può averlo copiato dalla pagina appena letta: incorporarlo significa consegnare a
 // un terzo l'IP e il referrer di chi guarda. Quindi si incorpora solo ciò che è NOSTRO (stessa
 // regola di `show_media`), e tutto il resto resta un link — visibile, cliccabile, non caricato.
-export function renderMd(text: string): string {
+function renderMarkdown(text: string): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const inline = (s: string) =>
     esc(s)
@@ -265,4 +265,28 @@ export function renderMd(text: string): string {
   flushTable();
   if (inCode) out.push(esc(codeBuf.join('\n')) + '</code></pre>');
   return decorateColorCodes(out.join(''));
+}
+
+/**
+ * Il markdown di un messaggio già reso non si rifà.
+ *
+ * Un turno immutato veniva rimacinato a ogni ridisegno della cronologia: misurato l'1/9, 40 ms di
+ * main thread per 100 turni, ripetuti a ogni poll mentre un lavoro gira in background. La funzione
+ * è pura — stesso testo, stesso HTML — quindi il testo È la chiave.
+ *
+ * Il tetto tiene la mappa più larga di una cronologia intera (il caricamento ne porta 100) senza
+ * crescere per sempre in una scheda lasciata aperta: superato, si butta l'ingresso più vecchio,
+ * che l'ordine di inserimento della Map rende gratis.
+ */
+const RENDERED_LIMIT = 400;
+const rendered = new Map<string, string>();
+
+export function renderMd(text: string): string {
+  const hit = rendered.get(text);
+  if (hit !== undefined) return hit;
+
+  const html = renderMarkdown(text);
+  if (rendered.size >= RENDERED_LIMIT) rendered.delete(rendered.keys().next().value as string);
+  rendered.set(text, html);
+  return html;
 }

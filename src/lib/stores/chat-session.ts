@@ -1256,8 +1256,12 @@ type ToolWatch = {
   brandSlug: string;
   threadId: string;
   timer: ReturnType<typeof setInterval>;
-  /** Page-mounted callback to fold fresh messages into the UI. */
-  onMessages: ((msgs: unknown[]) => void) | null;
+  /**
+   * Il battito passato alla pagina, che da lì avanza il proprio cursore sul registro del thread.
+   * Prima qui c'era `onMessages` e il tick si portava dietro l'intera cronologia a ogni giro:
+   * 202 KB e 176 ms per cento messaggi, venti volte al minuto, per un testo quasi sempre identico.
+   */
+  onTick: (() => void) | null;
   /** Fired once when no pending tool jobs remain (sidebar / list refresh). */
   onIdle: (() => void) | null;
 };
@@ -1284,13 +1288,13 @@ export function isWatchingToolJobs(threadId: string): boolean {
 export function watchToolJobs(opts: {
   brandSlug: string;
   threadId: string;
-  onMessages?: (msgs: unknown[]) => void;
+  onTick?: () => void;
   onIdle?: () => void;
 }): void {
   const existing = toolWatches.get(opts.threadId);
   if (existing) {
     existing.brandSlug = opts.brandSlug;
-    if (opts.onMessages) existing.onMessages = opts.onMessages;
+    if (opts.onTick) existing.onTick = opts.onTick;
     if (opts.onIdle) existing.onIdle = opts.onIdle;
     setThreadToolBackground(opts.threadId, true);
     return;
@@ -1300,7 +1304,7 @@ export function watchToolJobs(opts: {
   const watch: ToolWatch = {
     brandSlug: opts.brandSlug,
     threadId: opts.threadId,
-    onMessages: opts.onMessages ?? null,
+    onTick: opts.onTick ?? null,
     onIdle: opts.onIdle ?? null,
     timer: setInterval(() => {
       void tickToolWatch(opts.threadId);
@@ -1311,11 +1315,11 @@ export function watchToolJobs(opts: {
   void tickToolWatch(opts.threadId);
 }
 
-/** Detach the page callback without stopping the watcher (user left the chat). */
-export function detachToolJobMessages(threadId: string): void {
+/** Detach the page callbacks without stopping the watcher (user left the chat). */
+export function detachToolJobCallbacks(threadId: string): void {
   const w = toolWatches.get(threadId);
   if (w) {
-    w.onMessages = null;
+    w.onTick = null;
     w.onIdle = null;
   }
 }
@@ -1344,17 +1348,15 @@ async function tickToolWatch(threadId: string): Promise<void> {
   if (!w) return;
 
   try {
-    const [jobsRes, msgRes] = await Promise.all([
-      fetch(`/app/${w.brandSlug}/chat?thread=${threadId}&pending_tools=1`),
-      w.onMessages
-        ? fetch(`/app/${w.brandSlug}/chat?thread=${threadId}`)
-        : Promise.resolve(null)
-    ]);
-
-    if (msgRes?.ok && w.onMessages) {
-      const body = await msgRes.json();
-      if (Array.isArray(body.messages)) w.onMessages(body.messages);
+    // Il battito arriva alla pagina PRIMA della risposta: chi sincronizza il cursore non deve
+    // aspettare la lista dei lavori per accorgersi che è atterrato un messaggio.
+    try {
+      w.onTick?.();
+    } catch {
+      /* una pagina che inciampa non spegne il watcher */
     }
+
+    const jobsRes = await fetch(`/app/${w.brandSlug}/chat?thread=${threadId}&pending_tools=1`);
 
     if (jobsRes.ok) {
       const { jobs } = await jobsRes.json();

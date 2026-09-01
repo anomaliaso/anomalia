@@ -32,7 +32,7 @@
     readPersistedSession,
     hydrateSessionFromStorage,
     watchToolJobs,
-    detachToolJobMessages,
+    detachToolJobCallbacks,
     isWatchingToolJobs,
     type QueuedChatItem
   } from '$lib/stores/chat-session';
@@ -98,6 +98,7 @@
     handled: () => handledCompletionAt,
     touchHandled: (at) => (handledCompletionAt = at),
     finalize: (at) => finalizeCompletedSession(at),
+    syncCursor: () => void syncThreadCursor(data.thread.id),
     send
   });
 
@@ -648,7 +649,7 @@
   onDestroy(() => {
     // SSE e watcher restano vivi nello store di modulo (il pulse in sidebar deve spegnersi anche
     // dopo aver lasciato la pagina): si stacca solo la callback che tocca questo componente.
-    detachToolJobMessages(data.thread.id);
+    detachToolJobCallbacks(data.thread.id);
   });
 
   /** Incollati in fondo solo finché l'utente ci sta: chi ha scrollato indietro sta LEGGENDO, e
