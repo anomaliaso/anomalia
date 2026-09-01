@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./contact": "./src/contact.ts",
+    "./feed": "./src/feed.ts",
     "./intent": "./src/intent.ts",
     "./match": "./src/match.ts",
     "./prompts": "./src/prompts.ts"
