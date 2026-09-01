@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { scrapeCreatorsGet } from '$lib/server/scrapecreators';
-import { isOptOutSignal, platformOf, suppressAuthor } from './lead-contact';
+import { isOptOutSignal, platformOf, suppressAuthor } from '@anomalia/leads-core/contact';
 import {
   CHECK_AFTER_HOURS,
   CHECK_BEFORE_DAYS,
@@ -100,7 +100,7 @@ export async function checkLeadOutcome(
       handle: lead.author_handle,
       source: 'thread_scan',
       reason: 'opt-out signal in the thread'
-    });
+    }, swallow);
   }
 
   const hit = pickMatch(lead.suggestion, comments, { handle });

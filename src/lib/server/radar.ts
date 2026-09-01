@@ -29,7 +29,7 @@ import { brandContacts } from './scheduler';
 import { generateBlogFromNews } from './blog-generate';
 import { hasProRadarLeads, isRadarKindAllowed, leadEngagePlatforms, radarSourceLimit, type RadarPlatformKey, RADAR_PLATFORM_KEYS } from './plans';
 import { ALT_CAPTION_PLATFORMS, ensureShortNetworkCuts } from '$lib/platform-limits';
-import { contactGate, dmWithOptOut, gateVerdict, platformOf, suppressAuthor } from './lead-contact';
+import { contactGate, dmWithOptOut, gateVerdict, platformOf } from '@anomalia/leads-core/contact';
 // Re-exported: Settings → Radar imports the type from here, next to the functions that use it.
 export type { RadarPlatformKey } from './plans';
 import { INTENT_RANK, normalizeIntent, type LeadIntent } from '@anomalia/leads-core/intent';

@@ -153,13 +153,14 @@ async function suppressLead(
     .maybeSingle();
   const handle = lead?.author_handle || lead?.dm_target;
   if (lead && handle) {
-    const { suppressAuthor, platformOf } = await import('$lib/server/lead-contact');
+    const { suppressAuthor, platformOf } = await import('@anomalia/leads-core/contact');
+    const { swallow } = await import('$lib/server/swallow');
     await suppressAuthor(admin, {
       platform: lead.author_platform ?? platformOf(String(lead.url ?? '')),
       handle: String(handle),
       source: 'manual',
       reason: 'marked by the brand in /leads'
-    });
+    }, swallow);
   }
   const { error } = await admin.from('brand_news_items').update({ status: 'dismissed' }).eq('id', id).eq('brand_id', brand.id);
   if (error) return fail(500, { error: error.message });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { platformOf, isOptOutSignal, dmWithOptOut, gateVerdict, contactGate, suppressAuthor, sweepLeadRetention } from './lead-contact';
+import { platformOf, isOptOutSignal, dmWithOptOut, gateVerdict, contactGate, suppressAuthor, sweepLeadRetention } from './contact';
 
 describe('platformOf (una sola fonte di verità per la piattaforma di un lead)', () => {
   it('riconosce le quattro piattaforme di engage e manda il resto a web', () => {
@@ -164,5 +164,17 @@ describe('sweepLeadRetention (il contenuto scade, la riga minima e gli esiti no)
       from: () => { throw new Error('boom'); }
     } as unknown as SupabaseClient;
     await expect(sweepLeadRetention(client)).resolves.toBeUndefined();
+  });
+
+  it('consegna ogni scadenza fallita al reporter iniettato: è così che l\'app ci mette Sentry', async () => {
+    const client = { from: () => { throw new Error('boom'); } } as unknown as SupabaseClient;
+    const seen: string[] = [];
+    await sweepLeadRetention(client, (reason) => seen.push(reason));
+    expect(seen).toEqual([
+      'lead retention: gist purge',
+      'lead retention: unconverted rows',
+      'lead retention: outcomes',
+      'lead retention: scan telemetry'
+    ]);
   });
 });
