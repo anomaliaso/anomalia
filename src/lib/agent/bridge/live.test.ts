@@ -2779,3 +2779,49 @@ describe('runKitTurn — DM fra agenti', () => {
 		expect(continuations).toHaveLength(0);
 	});
 });
+
+/**
+ * Un agente custom non ha uno spec suo: indossa il mestiere del thread con la sua consegna
+ * sopra. «Sopra» è letterale — la consegna dichiara CHI è, e una dichiarazione d'identità in
+ * coda ha già perso una volta contro l'intero prompt del mestiere (il DM, `chat-dm.ts`). Fra
+ * `You are Content Creator` e la coda del prompt ci stanno la memoria (fino a 32 KB) e l'indice
+ * dei file: la persona letta là in fondo è la seconda voce che il modello sente, non la prima.
+ */
+describe('runKitTurn — la consegna del custom agent', () => {
+	const SCRIBA = '## Agente custom — "Scriba Fischietto"\nSei un notaio teatrale.';
+
+	function personaTurnInput(extra: Record<string, unknown> = {}) {
+		return {
+			supabase: fakeSupabase,
+			admin: fakeDb().db,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't-persona',
+			spec: specById('content')!,
+			messages: [{ role: 'user' as const, content: 'presentati' }],
+			locale: 'it' as const,
+			persona: { id: 'ca-1', memoryKey: 'custom:ca-1', systemBlock: `\n\n${SCRIBA}` },
+			...extra
+		};
+	}
+
+	it('apre il prompt, davanti al mestiere che indossa', async () => {
+		const prompt = { text: '' };
+		toolCatalogModel([], prompt);
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...personaTurnInput(), admin: db });
+		await res.text();
+		expect(prompt.text).toContain(SCRIBA);
+		expect(prompt.text.indexOf(SCRIBA)).toBeLessThan(prompt.text.indexOf('You are Content Creator'));
+	});
+
+	it('in un DM il brief resta in testa e la consegna lo segue, sempre prima del mestiere', async () => {
+		const prompt = { text: '' };
+		toolCatalogModel([], prompt);
+		const { db } = fakeDb();
+		const res = await runKitTurn({ ...personaTurnInput({ dm: dmContext }), admin: db });
+		await res.text();
+		expect(prompt.text.startsWith('## CHAT PRIVATA TRA AGENTI')).toBe(true);
+		expect(prompt.text.indexOf(SCRIBA)).toBeLessThan(prompt.text.indexOf('You are Content Creator'));
+	});
+});
