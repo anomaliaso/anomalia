@@ -26,7 +26,6 @@ vi.mock('./render-tools', async () => {
 // il percorso sbagliato.
 vi.mock('$lib/server/sandbox', () => ({ isSandboxConfigured: () => true }));
 import {
-	MAX_MUSIC_PER_TURN,
 	MAX_VIDEO_RENDERS_PER_DAY,
 	MAX_VIDEO_RENDERS_PER_TURN,
 	createMotionOutputTools,
@@ -269,8 +268,68 @@ describe('cut_voiceover attraverso le slice', () => {
 	});
 });
 
-describe('generate_music — permanente chiude il budget, passeggero no', () => {
-	it('dopo un 404 il secondo slot non si spende su un retry condannato', async () => {
+describe('audio senza tetto — provare non si paga a slot', () => {
+	it('voce e musica si generano quante volte servono', async () => {
+		vi.doMock(import('$lib/server/gemini-audio'), async (importOriginal) => ({
+			...(await importOriginal()),
+			generateVoiceOver: (async () => ({
+				voice: 'calm',
+				fullUrl: 'https://cdn.test/voiceover/take.wav',
+				fullDurationSeconds: 4,
+				gaps: []
+			})) as never,
+			generateMusicBed: (async () => ({ url: 'https://cdn.test/music/bed.wav', durationSeconds: 30 })) as never
+		}));
+		vi.resetModules();
+		const { createMotionOutputTools: make } = await import('./output-tools');
+		const tools = make({ supabase: {} as never, brandId: 'b1', fps: () => 30 });
+
+		for (let attempt = 1; attempt <= 3; attempt++) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const voice = await (tools.generate_voiceover as any).execute(
+				{ lines: [`riga ${attempt}`] },
+				{ toolCallId: 't', messages: [] }
+			);
+			expect(voice.error, `voce ${attempt}`).toBeUndefined();
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const music = await (tools.generate_music as any).execute(
+				{ prompt: `pads ${attempt}`, seconds: 10 },
+				{ toolCallId: 't', messages: [] }
+			);
+			expect(music.error, `musica ${attempt}`).toBeUndefined();
+		}
+
+		vi.doUnmock('$lib/server/gemini-audio');
+		vi.resetModules();
+	});
+
+	it('un fallimento passeggero non toglie niente: il tentativo dopo parte', async () => {
+		let calls = 0;
+		vi.doMock(import('$lib/server/gemini-audio'), async (importOriginal) => ({
+			...(await importOriginal()),
+			generateVoiceOver: (async () => {
+				calls += 1;
+				if (calls < 3) throw new Error('kie timed out');
+				return { voice: 'calm', fullUrl: 'https://cdn.test/voiceover/take.wav', fullDurationSeconds: 4, gaps: [] };
+			}) as never
+		}));
+		vi.resetModules();
+		const { createMotionOutputTools: make } = await import('./output-tools');
+		const tools = make({ supabase: {} as never, brandId: 'b1', fps: () => 30 });
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const run = () => (tools.generate_voiceover as any).execute({ lines: ['ciao'] }, { toolCallId: 't', messages: [] });
+		expect((await run()).error).toBe('voiceover_failed');
+		expect((await run()).error).toBe('voiceover_failed');
+		expect((await run()).url).toBe('https://cdn.test/voiceover/take.wav');
+
+		vi.doUnmock('$lib/server/gemini-audio');
+		vi.resetModules();
+	});
+});
+
+describe('generate_music — il permanente spegne la musica, il passeggero no', () => {
+	it('dopo un 404 il tentativo successivo non ricompra lo stesso errore', async () => {
 		vi.doMock(import('$lib/server/gemini-audio'), async (importOriginal) => ({
 			...(await importOriginal()),
 			generateMusicBed: (async () => {
@@ -293,8 +352,7 @@ describe('generate_music — permanente chiude il budget, passeggero no', () => 
 			{ prompt: 'different pads', seconds: 10 },
 			{ toolCallId: 't', messages: [] }
 		);
-		expect(second.error).toBe('music_budget_spent');
-		expect(MAX_MUSIC_PER_TURN).toBeGreaterThan(1); // il blocco è la chiusura, non il tetto normale
+		expect(second.error).toBe('music_unavailable');
 		vi.doUnmock('$lib/server/gemini-audio');
 		vi.resetModules();
 	});
