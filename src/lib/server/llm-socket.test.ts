@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
-import { makeLlmFetch } from './llm';
+import { LLM_REASONING_EFFORT, llmDispatcher, llmReasoningOptions, makeLlmFetch } from './llm';
 
 // Un modello che "pensa" non manda byte: headers 200 subito, corpo dopo un silenzio lungo.
 // È il comportamento che ammazzava il planner — undici chiude il socket e l'AI SDK riporta
@@ -44,5 +44,22 @@ describe('il fetch del client LLM', () => {
 		} finally {
 			server.close();
 		}
+	});
+});
+
+describe('il dispatcher', () => {
+	it('è lo stesso per la stessa attesa: un pool per timeout, non uno per chiamata', () => {
+		expect(llmDispatcher(1_000)).toBe(llmDispatcher(1_000));
+		expect(llmDispatcher(1_000)).not.toBe(llmDispatcher(2_000));
+	});
+});
+
+describe('lo sforzo di ragionamento', () => {
+	it('è dichiarato, perché il campo assente fa ragionare a vuoto', () => {
+		expect(llmReasoningOptions()).toEqual({ reasoning: { effort: LLM_REASONING_EFFORT } });
+	});
+
+	it('parte basso: misurato, alto costa quindici minuti per un verdetto', () => {
+		expect(LLM_REASONING_EFFORT).toBe('low');
 	});
 });

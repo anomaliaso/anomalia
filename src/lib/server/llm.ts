@@ -6,6 +6,8 @@
  */
 import { createOpenAI } from '@ai-sdk/openai';
 import { Agent } from 'undici';
+
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 import { embedMany, generateObject, generateText, jsonSchema } from 'ai';
 import { env } from '$env/dynamic/private';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
@@ -85,8 +87,23 @@ export function llmModelForPicker(choice: string | null | undefined): string {
  * modello, e per questo ha portato fuori strada due volte. LLM_TIMEOUT_MS non bastava: valeva
  * per l'abort dell'AI SDK, mentre a chiudere era lo strato sotto.
  */
+const dispatchers = new Map<number, Agent>();
+
+/**
+ * Un pool di connessioni per attesa, non uno per chiamata: un `Agent` tiene socket aperti e
+ * nessuno lo chiude, quindi crearne uno a ogni richiesta li accumula finché il processo vive.
+ */
+export function llmDispatcher(timeoutMs: number): Agent {
+	const existing = dispatchers.get(timeoutMs);
+	if (existing) return existing;
+
+	const agent = new Agent({ headersTimeout: timeoutMs, bodyTimeout: timeoutMs });
+	dispatchers.set(timeoutMs, agent);
+	return agent;
+}
+
 export function makeLlmFetch(timeoutMs: number) {
-	const dispatcher = new Agent({ headersTimeout: timeoutMs, bodyTimeout: timeoutMs });
+	const dispatcher = llmDispatcher(timeoutMs);
 	return (input: string | URL | Request, init?: RequestInit) =>
 		globalThis.fetch(input, { ...init, dispatcher } as RequestInit);
 }
@@ -169,10 +186,17 @@ function userContent(
  *
  * Su questo modello il reasoning non si può nemmeno spegnere: `{enabled:false}` risponde 400,
  * «Reasoning is mandatory for this endpoint».
+ *
+ * Parte BASSO, e la misura che lo decide è successiva a quella qui sopra: con 'high' il planner
+ * settimanale resta appeso 900 secondi sul passo che scrive i seed e non produce niente, e la
+ * revisione delle caption — un verdetto su tre testi — ha impiegato 420 secondi la prima volta e
+ * ha sfondato i 900 la seconda. Con 'low' entrambi lavorano. Nessuna prova ha mai mostrato 'high'
+ * migliore di 'low' sul risultato: la prova originale li vedeva pari, ed era il campo ASSENTE a
+ * essere patologico. Chi vuole rialzarlo ha LLM_REASONING_EFFORT.
  */
 export const LLM_REASONING_EFFORT = (() => {
   const raw = env.LLM_REASONING_EFFORT?.trim().toLowerCase();
-  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'high';
+  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'low';
 })();
 
 /**
@@ -182,7 +206,9 @@ export const LLM_REASONING_EFFORT = (() => {
  * passano di qui: senza, la correzione coprirebbe metà del prodotto e l'altra metà — quella con
  * venti turni di modello — resterebbe al default patologico.
  */
-export const llmReasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+export const llmReasoningOptions = (effort?: ReasoningEffort) => ({
+	reasoning: { effort: effort ?? LLM_REASONING_EFFORT }
+});
 const reasoningOptions = llmReasoningOptions;
 
 /**
