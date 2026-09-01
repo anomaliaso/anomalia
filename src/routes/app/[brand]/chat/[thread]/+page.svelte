@@ -303,6 +303,41 @@
     });
   });
 
+  /**
+   * Un turno può essere scritto da qualcuno che non è questa scheda: il worker della coda che
+   * riporta un lavoro finito in background, un compagno, un altro dispositivo. Qui non c'è nessuno
+   * stream a cui appoggiarsi — `thread-seq` muove la proiezione degli eventi, non il transcript —
+   * e senza questo la risposta atterrava nel database mentre a schermo restava la chat di prima.
+   * È lo stesso riaggancio che `ChatColumn` ha da sempre: il server notifica, il transcript si
+   * rifà dall'endpoint autorizzato, quindi niente qui deve fidarsi di quello che arriva.
+   */
+  $effect(() => {
+    const threadId = data.thread.id;
+    return brandChannel.onThreadChanged((changed) => {
+      if (changed !== threadId) return;
+      void life.checkPendingTools();
+      // Il nostro turno sta già scorrendo: piegare il database a metà stream litigherebbe coi
+      // buffer vivi. Ci pensa la chiusura del turno.
+      if (loading) return;
+      void reloadMessages();
+    });
+  });
+
+  /**
+   * Il canale Realtime può cadere mentre la scheda è nascosta, e al ritorno la pagina resterebbe
+   * ferma su una fotografia vecchia — proprio quando l'utente torna a vedere se il lavoro lungo
+   * è finito. Al rientro si richiede quello che conta.
+   */
+  $effect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || loading) return;
+      void life.checkPendingTools();
+      void reloadMessages();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
+
   async function syncThreadCursor(threadId: string) {
     if (threadCursorFetching) return;
     threadCursorFetching = true;
@@ -823,6 +858,9 @@
         await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
         await refreshQueue();
       }
+      // Un turno fermato può aver già avviato un render: il lavoro resta vivo anche quando la
+      // risposta non c'è più, e questa è l'unica riga che lo dice.
+      await life.checkPendingTools();
       return;
     }
 
@@ -835,6 +873,7 @@
         dismissSession(data.thread.id);
         await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
       }
+      await life.checkPendingTools();
       return;
     }
 
@@ -850,15 +889,7 @@
       await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
     }
 
-    try {
-      const res = await fetch(`/app/${data.brandSlug}/chat?thread=${data.thread.id}&pending_tools=1`);
-      if (res.ok) {
-        const { jobs } = await res.json();
-        if (jobs?.length) life.startToolPolling();
-      }
-    } catch {
-      /* best-effort */
-    }
+    await life.checkPendingTools();
   }
 
   /** Legge il transcript senza scriverlo: serve separato perché riga salvata e smontaggio della
