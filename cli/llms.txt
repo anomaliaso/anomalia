@@ -56,7 +56,7 @@ Editing a SCHEDULED post re-syncs it to Zernio automatically, so what goes out i
 - `anomalia studio <slug> colors --colors "#hex,#hex"` — Set brand colors
 - `anomalia studio <slug> add-note --title "..." --text "..."` — Add knowledge note
 - `anomalia studio <slug> delete-doc --id <uuid>` — Delete document
-- `anomalia studio <slug> people-add --name "..." [--role "..."]` — Add real person
+- `anomalia studio <slug> people-add --name "..." --consent [--role "..."]` — Add real person (`--consent` attests you have their consent; without it the API refuses)
 - `anomalia studio <slug> people-generate --name "..." [--gender female] [--vibe professional]` — Generate AI person
 - `anomalia studio <slug> people-delete --id <uuid>` — Delete person
 - `anomalia studio <slug> add-competitor --name "..." [--website "..."]` — Add competitor

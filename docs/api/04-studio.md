@@ -338,6 +338,7 @@ Aggiunge una persona allo studio: reale (`kind` omesso) o AI (`kind: 'ai'`, gene
 | `role` | string | no | Ruolo |
 | `description` | string | no | Descrizione |
 | `kind` | string | no | `ai` per generare i ritratti, altrimenti `real` |
+| `consent` | boolean | sì se `real` | Attestazione di chi chiama: `true` solo se hai il consenso di quella persona all'uso della sua immagine. Registrata con timestamp e provenienza (`owner_attested`); una persona AI non la richiede (`ai_generated`) |
 | `gender` | string | no | Genere (usato dal generatore) |
 | `ageRange` | string | no | Fascia d'età |
 | `ethnicity` | string | no | Etnia |
@@ -354,6 +355,7 @@ Aggiunge una persona allo studio: reale (`kind` omesso) o AI (`kind: 'ai'`, gene
 | Status | Body |
 |---|---|
 | `400` | `{"error":"name is required"}` |
+| `400` | `{"error":"Confirm you have this person’s consent before adding them."}` — persona reale senza `consent: true`. Finché il consenso non è registrato quel volto resta escluso da ogni generatore |
 | `500` | `{"error":"AI generation failed: <dettaglio>"}` |
 | `500` | `{"error":"<messaggio Supabase>"}` |
 

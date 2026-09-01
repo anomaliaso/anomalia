@@ -9,6 +9,7 @@ import { withBrandContext } from '$lib/server/ai-log';
 import { syncBrandPostHistoryFromSocials, type ScrapeSyncResult } from '$lib/server/scrapecreators';
 import { signKnowledgePaths, archiveImageToBucket } from '$lib/server/media-archive';
 import { extractText, isSupportedDoc } from '$lib/server/documents';
+import { personConsentColumns, CONSENT_NOT_ATTESTED } from '$lib/server/people-consent';
 import {
   uploadPersonFile,
   uploadPersonDataUrls,
@@ -670,11 +671,12 @@ export const studioActions: Actions = {
       }
       if (!images.length) return fail(400, { error: 'No valid images uploaded' });
 
-      // Consent for a real person is an act by the brand owner, not a default. Refuse rather than
-      // store an unearned `true`: the column is what the likeness gate trusts.
-      if (String(fd.get('consent') ?? '') !== 'on') {
-        return fail(400, { error: 'Confirm you have this person\u2019s consent before adding them.' });
-      }
+      const consent = personConsentColumns(
+        'real',
+        String(fd.get('consent') ?? '') === 'on' ? 'owner_attested' : 'none'
+      );
+      if (!consent) return fail(400, { error: CONSENT_NOT_ATTESTED });
+
       const { error } = await supabase.from('people').insert({
         brand_id: brand.id,
         name,
@@ -682,9 +684,7 @@ export const studioActions: Actions = {
         kind: 'real',
         description: String(fd.get('description') ?? '').trim() || null,
         images,
-        consent: true,
-        consent_at: new Date().toISOString(),
-        consent_source: 'owner_attested'
+        ...consent
       });
       if (error) return fail(400, { error: error.message });
       return { saved: true };
@@ -727,8 +727,7 @@ export const studioActions: Actions = {
         description: description || null,
         attributes,
         images,
-        consent: true,
-        consent_source: 'ai_generated'
+        ...personConsentColumns('ai', 'none')
       });
       if (error) return fail(400, { error: error.message });
       return { saved: true };
