@@ -64,6 +64,15 @@ patologico. `llmReasoningOptions` è esportata e il ciclo la dichiara. La lezion
 sul reasoning: è che una correzione «globale» messa in una funzione vale solo per chi quella
 funzione la chiama, e va verificato chi non lo fa.
 
+E sotto il reasoning c'era un difetto più banale e più grave, che ha portato fuori strada due
+volte. `fetch` di Node chiude il socket dopo 300 secondi di silenzio; un modello che ragiona
+manda `200 OK` e poi niente per minuti. Quello che si vede è `terminated` / `ETIMEDOUT`, che
+somiglia a un guasto del provider — ed è il motivo per cui prima ho accusato il modello e poi
+la mia stessa modifica. `LLM_TIMEOUT_MS` non proteggeva: governava l'abort dell'AI SDK, mentre
+a chiudere era lo strato sotto. Ora il client porta un dispatcher i cui timeout di socket
+seguono quel valore, e lo stesso vale per `llmChatCompletions`, che accettava un `timeoutMs`
+esplicito che il socket ignorava allo stesso modo.
+
 I tempi in quelle prove oscillavano troppo per concluderne altro (glm fra 68s e 113s,
 gemini fra 4s e 27s, con OpenRouter che può instradare la stessa richiesta su provider
 diversi), e la scadenza resta larga apposta: stretta, trasformerebbe la lentezza in un
