@@ -153,7 +153,8 @@ export async function createThread(
   brandSlug: string,
   title?: string,
   agent?: string,
-  agents?: string[]
+  agents?: string[],
+  customAgentId?: string | null
 ): Promise<string | null> {
   try {
     console.log('[createThread] Creating thread for:', brandSlug);
@@ -163,6 +164,7 @@ export async function createThread(
       body: JSON.stringify({
         title: title ?? undefined,
         agent: agent ?? undefined,
+        custom_agent_id: customAgentId ?? undefined,
         ...(agents && agents.length >= 2 ? { agents } : {})
       })
     });
