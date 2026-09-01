@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('$lib/server/feature-flags', () => ({ isGuestPreviewEnabled: vi.fn(() => true) }));
-vi.mock('$lib/server/tool-guard', () => ({ guardTool: vi.fn(async () => ({ ok: true })) }));
+vi.mock('$lib/server/tool-guard', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  guardTool: vi.fn(async () => ({ ok: true }))
+}));
+// Resolve-then-check is the whole point of the boundary guard, so DNS is the thing to fake:
+// an address literal resolves to itself, every other host to a public address unless a test says
+// otherwise.
+const lookupMock = vi.fn(async (host: string) => {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return [{ address: host, family: 4 }];
+  return [{ address: '93.184.216.34', family: 4 }];
+});
+vi.mock('node:dns/promises', () => ({ lookup: (host: string) => lookupMock(host) }));
 vi.mock('$lib/server/supabase-admin', () => ({ createAdminClient: vi.fn(() => ({})) }));
 vi.mock('$lib/server/gemini', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -26,6 +37,7 @@ import { POST } from './+server';
 import { isGuestPreviewEnabled } from '$lib/server/feature-flags';
 import { guardTool } from '$lib/server/tool-guard';
 import { planPreviewPosts, renderPreviewImages } from '$lib/server/content-preview/weekly-planner';
+import { runBrandAnalysis } from '$lib/server/brand-analysis';
 
 function call(url: unknown, ip = '203.0.113.9') {
   return (POST as (e: unknown) => Promise<Response>)({
@@ -78,6 +90,25 @@ describe('POST /start/preview', () => {
       expect(res.status).toBe(400);
     }
     expect(planPreviewPosts).not.toHaveBeenCalled();
+  });
+
+  it('refuses a public hostname whose DNS points inside the network', async () => {
+    // The attack the hostname-pattern guard cannot see: nothing about "rebind.example.com" looks
+    // private until you resolve it.
+    lookupMock.mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+
+    const res = await call('rebind.example.com');
+
+    expect(res.status).toBe(400);
+    expect(planPreviewPosts).not.toHaveBeenCalled();
+    expect(runBrandAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('refuses a host that does not resolve at all', async () => {
+    lookupMock.mockResolvedValueOnce([]);
+
+    expect((await call('nowhere.example.com')).status).toBe(400);
+    expect(runBrandAnalysis).not.toHaveBeenCalled();
   });
 
   it('refuses a missing url', async () => {

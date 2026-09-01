@@ -165,8 +165,13 @@ export function isPrivateAddress(ip: string): boolean {
   return false;
 }
 
-/** Reject anything that isn't a public http(s) host. Throws with a user-safe message. */
-async function assertPublicUrl(url: URL): Promise<void> {
+/**
+ * Reject anything that isn't a public http(s) host. Throws with a user-safe message.
+ *
+ * Exported because /start/preview is the same shape of caller as the tools above — an
+ * anonymous stranger's URL — and must not fall back to the hostname-pattern check.
+ */
+export async function assertPublicUrl(url: URL): Promise<void> {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Only http(s) URLs are supported');
   const host = url.hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
