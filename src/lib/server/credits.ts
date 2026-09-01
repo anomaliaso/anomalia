@@ -33,8 +33,9 @@ export type CreditsUsage = {
 const CREDIT_QUOTAS: Record<string, number> = {
   '': FREE_CREDITS,
   ...Object.fromEntries(PLANS.map((p) => [p.key, p.credits])),
-  // Legacy grandfathered tier — same quota as Pro (scale pays Pro-level pricing).
-  scale: 12000
+  // Legacy grandfathered tier — stessa quota di Pro (scale paga come Pro). Agganciato alla voce di
+  // Pro e non a una cifra copiata: quando il prezzo di Pro cambia, questa lo segue.
+  scale: PLANS.find((p) => p.key === 'pro')?.credits ?? FREE_CREDITS
 };
 
 export function creditQuota(plan: string | null | undefined): number {

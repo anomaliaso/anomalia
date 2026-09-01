@@ -237,9 +237,21 @@ export const CAROUSEL_PLATFORMS: Set<string> = new Set([
 ]);
 export const CAROUSEL_MIN_SLIDES = 3;
 const CAROUSEL_HARD_MAX_SLIDES = 8;
+/**
+ * Quanti caroselli può contenere un batch.
+ *
+ * Era 1, e quel numero decideva il mix al posto di chi pianifica: una rubrica narrativa a fumetti
+ * usciva una volta ogni tanto perché il tetto le stava davanti, non perché costasse troppo. Ora il
+ * vincolo vero è il budget — un carosello costa quante sono le sue slide, un video ne vale sedici —
+ * e la scelta è dell'agente. Questo resta un freno d'emergenza: si abbassa da `CAROUSEL_MAX_PER_BATCH`
+ * quando serve fermare tutto, non per fare art direction da una variabile d'ambiente.
+ */
+const CAROUSEL_NO_EDITORIAL_CAP = 99;
 export function carouselMaxPerBatch(): number {
-  const n = Number(env.CAROUSEL_MAX_PER_BATCH ?? '1');
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1;
+  const raw = env.CAROUSEL_MAX_PER_BATCH;
+  if (raw == null || raw === '') return CAROUSEL_NO_EDITORIAL_CAP;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : CAROUSEL_NO_EDITORIAL_CAP;
 }
 export function carouselMaxSlides(): number {
   const n = Number(env.CAROUSEL_MAX_SLIDES ?? '6');
@@ -261,7 +273,7 @@ function syncFormatMedia<T extends { format: ContentFormat; media: 'image' | 'te
   return seed;
 }
 
-export function clampMediaCapabilities<T extends { platform: string; platforms?: string[]; format: ContentFormat; slide_count?: number; media: 'image' | 'text' | 'video' | 'link'; link_url?: string }>(seed: T): T {
+export function clampMediaCapabilities<T extends { platform: string; platforms?: string[]; format: ContentFormat; slide_count?: number; beats?: Beat[]; media: 'image' | 'text' | 'video' | 'link'; link_url?: string }>(seed: T): T {
   // Un seed text/link non può vivere (né fare cross-post) su una piattaforma visual-only.
   // 'video' È un visual: farlo cadere qui lo riscriverebbe a 'image', spogliando il reel.
   if (seed.media !== 'image' && seed.media !== 'video') {
@@ -296,10 +308,19 @@ export function clampMediaCapabilities<T extends { platform: string; platforms?:
   }
   syncFormatMedia(seed);
   // Slide-count invariant: a carousel always carries a clamped slide count; nothing else does.
+  // Le BATTUTE, quando ci sono, sono la misura della storia: lo slide_count le segue invece di
+  // contraddirle, o si renderizzano tre slide di un racconto lungo sei.
   if (seed.format === 'carousel') {
-    seed.slide_count = Math.max(CAROUSEL_MIN_SLIDES, Math.min(carouselMaxSlides(), Math.round(Number(seed.slide_count) || 5)));
+    const beats = normalizeBeats(seed.beats) ?? [];
+    seed.beats = beats.length ? beats : undefined;
+    seed.slide_count = Math.max(
+      CAROUSEL_MIN_SLIDES,
+      Math.min(carouselMaxSlides(), Math.round(beats.length || Number(seed.slide_count) || 5))
+    );
+    if (seed.beats && seed.beats.length > seed.slide_count) seed.beats = seed.beats.slice(0, seed.slide_count);
   } else {
     seed.slide_count = undefined;
+    seed.beats = undefined;
   }
   return seed;
 }
@@ -439,6 +460,71 @@ export function enforceFaceBrandPeople(seeds: PostSeed[], profile: BrandProfile)
 // Contro il collasso, con la scena diventata consultiva, restano: doDont/theme vincolanti,
 // l'obbligo di servire angle+pillar, e detectSceneCollapse dopo il pass 2.
 
+// I modi noti di sbagliare una STORIA, nella forma che questo repo usa già per le caption: una
+// lista numerata e dura, ognuna è una riscrittura. Nasce da un giro bocciato — un carosello sul
+// primo taglio di capelli di una persona trans, disegnato benissimo e falso dalla prima vignetta.
+//
+// Il test è quello del logo di `disruptive.ts`, spostato sulla narrativa: se avresti indovinato la
+// scena conoscendo SOLO la categoria, non è una storia, è un trope.
+//
+// Misurato A/B a parità di rubrica e brand: senza, l'episodio esce come un pezzo d'atmosfera che
+// chiude su un caffè; con, l'attrito diventa uno sportello, un errore a schermo e mezza mattinata
+// persa. Attenzione al rovescio: la regola 3 fa produrre dettagli che SEMBRANO verificabili, quindi
+// alza il rischio di inventare con sicurezza — vale insieme a una fonte, non al posto suo.
+export type Beat = {
+  /** L'azione: cosa succede in questo riquadro. */
+  shows: string;
+  /**
+   * CHI è nell'inquadratura e cosa fa la sua faccia. Senza, il generatore indovina — e in un
+   * riquadro dove suonava il corriere ha disegnato la protagonista che suona il proprio citofono.
+   */
+  who: string;
+  /** La voce di dentro, prima persona, poche parole: la didascalia letterizzata nel riquadro. */
+  thinks: string;
+  /**
+   * Il parlato e CHI lo dice. Il nome dell'emittente è separato perché la coda del balloon lo
+   * segue: infilato dentro la battuta veniva ignorato, e una domanda rivolta alla protagonista
+   * tornava come parole sue, col senso rovesciato.
+   */
+  says?: { speaker: string; line: string };
+};
+
+// Le battute arrivano dal modello, dal DB e dalla griglia di editing, e la forma vecchia era una
+// stringa sola: una stringa resta leggibile come un riquadro senza voce, invece di sparire.
+export function normalizeBeats(raw: unknown): Beat[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const beats = raw
+    .map((b) => {
+      if (typeof b === 'string') return { shows: b.trim(), who: '', thinks: '' };
+      const rec = (b ?? {}) as Record<string, unknown>;
+      const raw = (rec.says ?? {}) as Record<string, unknown>;
+      // La forma vecchia era una stringa sola con dentro il nome di chi parla: si legge come
+      // battuta senza emittente, invece di sparire o di fingere di saperlo.
+      const said = typeof rec.says === 'string' ? { speaker: '', line: rec.says } : raw;
+      const speaker = String(said.speaker ?? '').trim();
+      const line = String(said.line ?? '').trim();
+      return {
+        shows: String(rec.shows ?? '').trim(),
+        who: String(rec.who ?? '').trim(),
+        thinks: String(rec.thinks ?? '').trim(),
+        ...(speaker && line ? { says: { speaker, line } } : {})
+      };
+    })
+    .filter((b) => b.shows);
+  return beats.length ? beats : undefined;
+}
+
+export const STORY_FAILURE_MODES = `STORY FAILURE MODES (hard, numbered — any one of them and the episode is rewritten):
+1. THE MILESTONE: the ceremony the reader already pictures from the category alone — the haircut, the mirror, the coming out at the dinner table, the first time the name is said aloud, the document finally arriving. If someone who has never met this person could have guessed the scene from the category, it is a trope, not a story. The friction lives in an ordinary Tuesday.
+2. THE SYSTEM, NOT A VILLAIN: the discomfort worth an episode comes from a procedure, a form, a counter, an automated message, a database, a dropdown with two options — something that gets it wrong without anyone deciding to. A named cruel person is a soap opera; a system simply built wrong is the actual life, and it is what the audience recognises.
+3. CHECKABLE SPECIFICITY: every beat names something that exists — the exact document, the exact desk, the words actually printed on the screen. If a beat could be moved to another country or another decade unchanged, it was invented. Take those specifics from the brand's own material; never reach for a detail you cannot source, because a wrong one is worse than a vague one here.
+4. THE INNER LINE IS A REAL THOUGHT: what a person actually thinks in that second, in their own words, plain, six words or fewer. Never an aphorism, never a metaphor, never a line composed for the reader. And it is the fear, not the errand: at a door where a stranger has just read a name that is not hers, the thought is "si sta chiedendo se è mio?", not "devo rifare la targhetta". A to-do is what you write when you have not asked what the person is actually afraid of.
+5. NO REBIRTH, NO BATTLE: no butterfly, no mirror-as-truth, no courage, no fight, no before/after. Forbidden in the words and equally in the images.
+6. THE ARC IS ONE DEGREE, AND THE DEGREE COSTS SOMETHING: something shifts slightly — no triumph, no lesson, no moral in the last panel, and the landing may be funny, flat or unresolved. But it is not nothing: the person PAYS the shift in time, in an explanation they had to give, in a thing they now have to redo, in a plan they had to change. A courier who asks and is answered in two seconds is an anecdote, not an episode. Name the cost.
+7. STAGE THE PANEL, DO NOT LEAVE IT TO THE RENDERER: every beat names who is in frame, where each of them is, and who the camera is on. The renderer draws whoever it is told about and invents the rest, so a beat that says only what happens gets the wrong person doing it — the courier rings, she answers, and both must be named or the panel shows her ringing her own bell.
+8. ANONYMISE THE PEOPLE, KEEP THE SITUATION: the source is provenance, never cast. Whoever it names — the person it happened to, the town, the employer, the office, the date that pins them, the outlet that reported it — none of that enters the episode. The protagonist is the series' own recurring character and nobody else; everyone else is their role ("l'impiegata", "il corriere", "il collega"), never a name. What you take is what HAPPENED and what it cost; what you leave is the identity of the person it happened to. A real person, redrawn recognisably, did not agree to become a comic.
+9. YOU DO NOT ALREADY KNOW THIS LIFE: never write from what you assume about the category. Find how people describe the situation in their own words, choose ONE, and understand THAT one — what actually happens, in what order, and what it costs — before writing a single beat.`;
+
 // One planned post BEFORE the copy/image craft is written: the skeleton + its angle.
 export type PostSeed = {
   // Assegnato alla reidratazione in normalizeWeeklyStrategy (unico punto di derivazione): i seed
@@ -451,8 +537,26 @@ export type PostSeed = {
   pillar: string;
   format: ContentFormat;
   // Carousel seeds only: how many slides the series needs (clamped 3..CAROUSEL_MAX_SLIDES).
-  // undefined for every other format.
+  // undefined for every other format. Quando ci sono le BATTUTE, le seguono: sono loro a dire
+  // quanto è lunga la storia.
   slide_count?: number;
+  // Una battuta è un RIQUADRO, e un riquadro ha due metà. `shows` è quello che si vede; `thinks` è
+  // la voce di dentro in prima persona, che diventa la didascalia letterizzata — senza, esce un
+  // fumetto muto in cui si capisce cosa succede e niente di chi lo attraversa (il difetto che ha
+  // bocciato il primo carosello). `says` è il parlato, e solo quando qualcuno parla davvero.
+  // SOLO CAROSELLI — la storia, una battuta per slide, decisa nel PIANO. LIVELLO VINCOLANTE (vedi
+  // il contratto sopra): senza, il produttore riceve una riga di `angle` e improvvisa N immagini,
+  // che è esattamente il motivo per cui un carosello narrativo non arrivava mai in fondo. Vuoto →
+  // comportamento di prima, il produttore compone lui la serie.
+  beats?: Beat[];
+  // Il MEDIUM di questo post: fumetto, illustrazione, collage, reportage. Arriva dalla rubrica
+  // (applyRubricToSeed) o dal planner per un one-off, e BATTE il visual_style del brand.
+  art_direction?: string;
+  // Da DOVE viene la situazione che l'episodio racconta: la fonte in una riga, con l'URL quando
+  // c'è. Un racconto senza fonte è la vita di qualcun altro scritta su ciò che sembra plausibile —
+  // e su una comunità reale "plausibile" significa luogo comune. Si legge nella griglia e si
+  // controlla PRIMA di approvare.
+  sourced_from?: string;
   // Approved-rubric linkage (brands with rubrics only): the series NAME the planner picked and
   // the resolved rubric row id. Absent when the brand has no approved rubrics.
   rubric?: string;
@@ -481,6 +585,15 @@ export type PostSeed = {
   ugc_ad?: boolean;
   day: string;
   time: string;
+  /**
+   * A quale settimana del ciclo editoriale appartiene questo post (0-based, assoluta).
+   *
+   * Un batch copriva una settimana sola, quindi bastava il giorno; da quando ne copre due o
+   * quattro, senza questo campo finiscono tutti nella prima — il giorno della settimana da solo non
+   * distingue il lunedì della prima dal lunedì della seconda. Assente sui batch di una settimana e
+   * sui percorsi che non la conoscono: lì la settimana è quella del batch.
+   */
+  week?: number;
   // Reddit post title (required for Reddit, max 300 chars; empty for other platforms).
   title?: string;
   // URL for Reddit link posts (sharing a blog article/resource). Empty for non-link posts.
@@ -540,10 +653,59 @@ export const STRATEGY_SCHEMA = {
             description:
               "How this post is PRODUCED — one of the engine's REAL formats, never invented: 'single_image' = one visual (the default for most posts); 'carousel' = a multi-slide visual sequence (Instagram/Facebook/LinkedIn ONLY, and only within the batch's carousel budget); 'text_post' = text-only (X/Threads/Reddit only — matches media 'text'); 'link_post' = a Reddit link post (matches media 'link'); 'video' = a reel/short (only when the video constraint allows it). Never a story — the engine does not produce stories."
           },
+          week: {
+            type: 'integer' as const,
+            description:
+              "Which week of the batch this post belongs to: copy the number the WEEK BRIEF shows in brackets as `write week=N`, never the WEEK label next to it. A batch spanning more than one week must spread its posts across all of them and honour each week's own theme and content mix — the day of the week alone cannot tell the first Monday from the second."
+          },
           slide_count: {
             type: 'integer' as const,
             description:
               'ONLY for carousel seeds: how many slides the series needs (3-8; prefer 4-6). The angle must genuinely sustain that many DISTINCT slides (a list, a process, a comparison, a story arc). 0 for every non-carousel seed.'
+          },
+          beats: {
+            type: 'array' as const,
+            items: {
+              type: 'object' as const,
+              properties: {
+                shows: {
+                  type: 'string' as const,
+                  description: 'The ACTION: what happens in that panel, one concrete sentence — a moment, a turn, a step. Never a topic label.'
+                },
+                who: {
+                  type: 'string' as const,
+                  description:
+                    "WHO is in frame and what their face is doing — name them and say where each one is, because the renderer draws exactly whoever you name and invents whoever you do not (a panel where a courier rang the bell came back with the protagonist ringing her own doorbell). Say who the camera is on. On a panel with no people, describe what is framed instead."
+                },
+                thinks: {
+                  type: 'string' as const,
+                  description:
+                    "The inner line: what the person actually thinks in that second, first person, plain, SIX WORDS OR FEWER — it is lettered into the panel as a caption box, and it is the half that makes a STORY readable at all. Never an aphorism or a metaphor. A carousel is either a story someone lives or a guide of steps: in a story EVERY beat carries this, in a guide NONE does — an explanatory card with a thought printed next to an icon is neither."
+                },
+                says: {
+                  type: 'object' as const,
+                  properties: {
+                    speaker: { type: 'string' as const, description: 'WHO says it, named as they appear in "who". The balloon tail points at them.' },
+                    line: { type: 'string' as const, description: 'The words, as spoken, short enough to letter.' }
+                  },
+                  required: ['speaker', 'line'],
+                  description: 'Spoken words and their speaker. Both empty when nobody talks in this panel.'
+                }
+              },
+              required: ['shows', 'who', 'thinks', 'says']
+            },
+            description:
+              "ONLY for carousel seeds: the STORY, one beat per slide, in order — exactly slide_count entries. Together they form a real arc: a situation, something that changes, a landing. Written here, at plan time, so the client reads the story before approving it. Empty array for every non-carousel seed.",
+          },
+          sourced_from: {
+            type: 'string' as const,
+            description:
+              "REQUIRED on a narrative episode: the real situation it retells and where it came from, one line with the URL when there is one (e.g. 'racconto in prima persona su <forum>, 12/03 — https://…'). You may only write an episode about a situation you actually FOUND and then researched; if the research tool turned nothing up, say so here and keep the episode general rather than inventing a specific life. This field is PROVENANCE, read by the team before approving and never published: the names it contains stay in it — the episode itself is anonymised, cast with the series' own character and roles. Empty string on a guide, a poster or anything that retells nobody.",
+          },
+          art_direction: {
+            type: 'string' as const,
+            description:
+              "The MEDIUM this post is drawn/shot in, when it must differ from the brand's default visual style: ink-and-wash comic panels, flat vector illustration, risograph collage, typographic poster, documentary photography… Include the page grammar (panels, gutters, lettering) and palette. When the seed belongs to a rubric that declares an art direction, copy that rubric's art direction VERBATIM. Empty string when the brand's default visual style is the right medium.",
           },
           media: {
             type: 'string' as const,
@@ -803,7 +965,7 @@ export function ladderContextFrom(
 
 // Downgrade every carousel past the cap to a single image — the COST guardrail (an N-slide
 // carousel renders ~N images). Mirrors clampVideos; maxCarousels 0 = the kill switch.
-export function clampCarousels<T extends { format: ContentFormat; slide_count?: number }>(items: T[], maxCarousels: number): void {
+export function clampCarousels<T extends { format: ContentFormat; slide_count?: number; beats?: Beat[] }>(items: T[], maxCarousels: number): void {
   let kept = 0;
   for (const item of items) {
     if (item.format !== 'carousel') continue;
@@ -813,6 +975,10 @@ export function clampCarousels<T extends { format: ContentFormat; slide_count?: 
     }
     item.format = 'single_image';
     item.slide_count = undefined;
+    // Le battute vivono solo su un carosello. Questo declassamento gira DOPO
+    // clampMediaCapabilities, che è il posto dove quella regola sta scritta: senza toglierle qui,
+    // l'immagine singola si porta dietro una storia che nessuno renderà.
+    item.beats = undefined;
   }
 }
 

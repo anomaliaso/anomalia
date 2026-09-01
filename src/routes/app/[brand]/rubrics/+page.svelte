@@ -51,6 +51,7 @@
             {#if r.promise}<p class="rpromise">{r.promise}</p>{/if}
             {#if r.strategic_role}<p class="rmeta"><b>{$_('rubrics.fields.role')}:</b> {r.strategic_role}</p>{/if}
             {#if r.differentiation}<p class="rmeta"><b>{$_('rubrics.fields.differentiation')}:</b> {r.differentiation}</p>{/if}
+            {#if r.art_direction}<p class="rmeta"><b>{$_('rubrics.fields.art_direction')}:</b> {r.art_direction}</p>{/if}
           </article>
         {/each}
       </div>
@@ -98,6 +99,10 @@
                 <label class="field wide">
                   <span>{$_('rubrics.fields.differentiation')}</span>
                   <textarea name={`diff_${r.id}`} rows="2">{r.differentiation}</textarea>
+                </label>
+                <label class="field wide">
+                  <span>{$_('rubrics.fields.art_direction')}</span>
+                  <textarea name={`art_${r.id}`} rows="2">{r.art_direction ?? ''}</textarea>
                 </label>
               </div>
               {#if r.rationale}

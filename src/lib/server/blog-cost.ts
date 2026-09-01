@@ -129,3 +129,25 @@ export function estimateBlogMonth(opts: {
     }
   };
 }
+
+/**
+ * Quanti articoli il brand può PERMETTERSI, dato quanti ne vuole e quanti crediti gli restano.
+ *
+ * Il preventivo qui sopra esisteva già per non far partire un mese che non può finire, ma era
+ * collegato al solo bottone manuale: `planBlogMonth` — il percorso che gira da solo, autopilot e
+ * scheduler — pianificava per quota e ignorava il costo. Cioè proprio il guasto descritto in cima
+ * a questo file, lasciato aperto sul percorso dove nessuno guarda.
+ *
+ * Budget sconosciuto → non taglia niente: un vincolo inventato è peggio di un vincolo assente.
+ */
+export function articlesAffordable(
+  wanted: number,
+  remainingCredits: number | null | undefined,
+  opts: { mode?: 'batch' | 'fast'; translationsPerArticle?: number } = {}
+): number {
+  const want = Math.max(0, Math.floor(wanted));
+  if (remainingCredits == null || !Number.isFinite(remainingCredits)) return want;
+  const perArticle = estimateBlogMonth({ articles: 1, ...opts }).credits;
+  if (perArticle <= 0) return want;
+  return Math.max(0, Math.min(want, Math.floor(remainingCredits / perArticle)));
+}

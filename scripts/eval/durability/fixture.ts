@@ -47,6 +47,10 @@ export async function createFixture(tag: string): Promise<Fixture> {
 export async function destroyFixture(fixture: Fixture | null): Promise<void> {
   if (!fixture) return;
   const admin = createAdminClient();
+  // `ai_calls` punta al brand con una FK SENZA cascata: un fixture che ha speso una chiamata al
+  // modello non si lascia cancellare, e il brand usa e getta resta a terra per sempre. Le righe di
+  // log se ne vanno per prime — è il brand a essere usa e getta, non la contabilità di qualcun altro.
+  await admin.from('ai_calls').delete().eq('brand_id', fixture.brandId);
   const { error } = await admin.from('organizations').delete().eq('id', fixture.orgId);
   if (error) throw new Error(`fixture: teardown organizzazione fallito — ${error.message}`);
   await deleteEvalUser(fixture.userId);
