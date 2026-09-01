@@ -316,9 +316,16 @@ export function wallDigestSection(digest: WallDigest | null, now = Date.now()): 
   return `\n\nCURRENT VIRAL MECHANICS (distilled ${dated} from clips that beat their own account's median — ambient floor; the brief and any studied reference stay the ceiling):\n${digest.text}\n`;
 }
 
+const digestReadOncePerProcess = new Map<WallDigestKind, Promise<WallDigest | null>>();
+
 async function digestSection(kind: WallDigestKind): Promise<string> {
   try {
-    return wallDigestSection(await readWallDigest(createAdminClient(), kind));
+    let read = digestReadOncePerProcess.get(kind);
+    if (!read) {
+      read = readWallDigest(createAdminClient(), kind);
+      digestReadOncePerProcess.set(kind, read);
+    }
+    return wallDigestSection(await read);
   } catch {
     return '';
   }

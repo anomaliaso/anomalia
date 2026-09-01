@@ -283,7 +283,7 @@ ${STORY_FAILURE_MODES}`
     ? ((await Promise.all(competitorThumbUrls.slice(0, MAX_COMPETITOR_MOOD_IMAGES).map(fetchImagePart))).filter(Boolean) as ImagePart[])
     : [];
   const competitorBlock = competitorParts.length
-    ? `\nCOMPETITOR VISUAL FIELD (the ${competitorParts.length} attached image(s) are top-performing posts from this brand's COMPETITORS — an ANTI-moodboard): read the visual clichés this field repeats (subjects, compositions, backdrops, styling, on-image text) and make every seed's SUBJECT/SETTING deliberately DIFFERENT from them — claim the visual white space. NEVER imitate or echo these images' style, layouts or ideas.\n`
+    ? `\nCOMPETITOR VISUAL FIELD (the ${competitorParts.length} attached image(s) are top-performing posts from this brand's COMPETITORS — an ANTI-moodboard): read the visual clichés this field repeats (subjects, compositions, backdrops, styling, on-image text) and make every seed's SUBJECT/SETTING deliberately DIFFERENT from them — claim the visual white space. NEVER reuse their subjects, ideas or on-image copy. This is about WHAT a post shows, never about how well it is made: differentiating never licenses executing below this field — composition, type hierarchy, light, colour and finish must match or beat it.\n`
     : '';
 
   const marketBlock = marketBrief.trim() ? `\n${marketBrief.trim()}\n` : '';
