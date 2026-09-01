@@ -29,6 +29,7 @@ import { disruptiveSystemSection } from '$lib/disruptive';
 import { renderBrandStudioFile, renderBrandStrategyFile } from '$lib/server/chat/brand-file';
 import { DEFAULT_SKILLS } from '$lib/server/default-skills';
 import VIDEO_PROMPTS_GUIDE from '$lib/agent-docs/how/WRITE-VIDEO-PROMPTS.md?raw';
+import IMAGE_PROMPTS_GUIDE from '$lib/agent-docs/how/WRITE-IMAGE-PROMPTS.md?raw';
 import { AGENTS, type AgentId } from '$lib/server/chat/agents';
 import { logAiCall } from '$lib/server/ai-log';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -64,6 +65,9 @@ export type AgentFile = {
   /** Pigro: il corpo si compone solo quando qualcuno legge davvero. */
   body: () => string;
 };
+
+/** I mestieri che possono mintare una still con `generate_image`. */
+const IMAGE_MINTERS = ['content', 'motion', 'ugc'] as const satisfies readonly AgentId[];
 
 /** Gli unici due mestieri che scrivono TSX Remotion — gli stessi di `MOTION_WRITERS`. */
 const MOTION_WRITERS = ['motion', 'content'] as const satisfies readonly AgentId[];
@@ -123,6 +127,25 @@ export const AGENT_FILES: Record<string, AgentFile> = {
     summary:
       'come si scrive un prompt per Seedance 2.5: struttura, i lock numerici, le note per genere — e perché il testo non si chiede MAI dentro il prompt',
     body: () => VIDEO_PROMPTS_GUIDE
+  },
+  /**
+   * NESSUN CANCELLO QUI, e la differenza con la guida video sta nei numeri, non nel gusto.
+   *
+   * Là il cancello se lo è guadagnato con una misura: 131 prompt su 340 chiedevano testo dentro il
+   * frame, il 16,8% delle review lo ritrovava corrotto. Sulle immagini quella misura non l'abbiamo
+   * ancora, e `unlocks` su `generate_image` costerebbe un giro di tool in più a ogni still per un
+   * difetto di cui non conosciamo la frequenza. Si legge perché è nell'indice; diventa cancello
+   * quando un numero lo chiede.
+   *
+   * L'image agent NON passa di qui — non ha `read_file` — e la stessa guida ce l'ha inline nel suo
+   * prompt di sistema (`IMAGE_PROMPT_GUIDE`). Il file markdown è uno solo: due lettori, una fonte.
+   */
+  'how/WRITE-IMAGE-PROMPTS.md': {
+    agents: IMAGE_MINTERS,
+    unlocks: [],
+    summary:
+      'come si scrive un prompt per Nano Banana: la forma, la terminologia fotografica che toglie il look da render generico, e le quattro regole che qui non si violano (niente testo, niente aspect ratio, niente descrizione fisica di una persona, il medium del brand)',
+    body: () => IMAGE_PROMPTS_GUIDE
   },
     /**
      * `agents: null` e nessun `unlocks`: vale per tutti (anche l'Analyst propone angoli) e non blocca
