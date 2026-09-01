@@ -506,6 +506,8 @@ export type ProposePlanOpts = {
   timezone?: string;
   /** Log each agent step to stdout (scripts / debugging). */
   agentVerbose?: boolean;
+  /** Wall clock left in the caller's invocation. Absent → the caller owns its own time. */
+  remainingMs?: number;
 };
 
 /** Exported for tests: the brand half of every plan prompt, pure over the profile. */
@@ -614,6 +616,29 @@ export function buildNextCycleSeedBrief(opts: ProposePlanOpts): string {
     .join('\n\n');
 }
 
+/**
+ * Wall clock the strategy agent may spend, from what is left of the caller's invocation.
+ *
+ * `AGENT_PLAN_MAX_MS` is what the agent takes when it runs alone in its own request. Inside the
+ * onboarding worker it does not: the market study ran first, and the legacy pipeline still has to
+ * fit afterwards if the agent ends without a plan. Production said the ceiling was already being
+ * touched — research jobs finishing at 299s, 278s, 225s against a 300s cap, and the one that died
+ * died at `editorialPlan`.
+ *
+ * `null` → do not start the agent: what is left cannot hold it AND the pipeline it must degrade
+ * into, so starting it buys a killed invocation instead of a plan.
+ */
+export const AGENT_PLAN_MAX_MS = 280_000;
+/** `return_editorial_plan` took at most 87s over 206 production calls; round up. */
+export const LEGACY_PLAN_RESERVE_MS = 90_000;
+/** Under this the agent cannot close a loop — its fastest production run was 28s, its median 52s. */
+export const MIN_AGENT_PLAN_MS = 60_000;
+
+export function agentPlanBudget(remainingMs: number): number | null {
+  const forAgent = Math.min(remainingMs - LEGACY_PLAN_RESERVE_MS, AGENT_PLAN_MAX_MS);
+  return forAgent >= MIN_AGENT_PLAN_MS ? forAgent : null;
+}
+
 async function invokeEditorialAgent(
   profile: BrandProfile,
   opts: ProposePlanOpts,
@@ -624,6 +649,13 @@ async function invokeEditorialAgent(
 ): Promise<EditorialPlan | null> {
   const { strategyAgentEnabled, runStrategyAgent } = await import('$lib/server/strategy-agent');
   if (!strategyAgentEnabled() || !opts.supabase || !opts.brandId) return null;
+  const deadlineMs = opts.remainingMs == null ? undefined : agentPlanBudget(opts.remainingMs);
+  if (deadlineMs === null) {
+    console.warn(
+      `[editorial-plan] ${Math.round(opts.remainingMs! / 1000)}s left: too little for the agent and the fallback, going legacy`
+    );
+    return null;
+  }
   // null → the caller falls through to the legacy pipeline. The guard lives HERE, in the one place
   // all four call sites (propose / revise / replan_week / next_cycle) route through: an agent that
   // ends without a plan must degrade to the pipeline that still works, never take onboarding down.
@@ -645,7 +677,8 @@ async function invokeEditorialAgent(
       weekIndex,
       outputLanguage: opts.outputLanguage,
       planOpts: opts,
-      verbose: opts.agentVerbose
+      verbose: opts.agentVerbose,
+      deadlineMs
     });
     return result.plan;
   } catch (e) {

@@ -66,6 +66,30 @@ const MAX_ATTEMPTS = 3;
  * waiting after a kill. 300s + 60s of slack for clock skew and the final status write.
  */
 const STALL_MS = 6 * 60 * 1000;
+/**
+ * The worker's `maxDuration` (api/v1/onboarding/steps/work). The study runs first and the plan
+ * runs on what is left, so the plan step is told how much of this is already gone instead of
+ * assuming it owns a fresh request.
+ */
+const INVOCATION_BUDGET_MS = 300_000;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ResearchStep = { step: string; message: string; result?: any };
+
+/**
+ * The wizard's timeline is a registry keyed by step, not a log. It is rendered with a keyed
+ * `{#each ... (s.step)}`, so a repeated key is not a cosmetic duplicate: Svelte throws
+ * `each_key_duplicate` and tears the whole step down — the user stays on the spinner while the
+ * plan lands behind it. A resumed attempt inherits the timeline it already earned and then
+ * announces the step it restarts at, which is exactly where the two meet.
+ */
+export function putStep(steps: ResearchStep[], entry: ResearchStep): ResearchStep[] {
+  const at = steps.findIndex((s) => s.step === entry.step);
+  if (at < 0) return [...steps, entry];
+  const merged = steps.slice();
+  merged[at] = { ...steps[at], ...entry };
+  return merged;
+}
 
 const TABLE = 'onboarding_step_jobs';
 
@@ -556,17 +580,17 @@ async function processResearch(
 
   const brandId = (job.brand_id as string | null) ?? null;
   const userId = job.user_id as string;
+  const startedAt = Date.now();
   let lastStep = 'start';
 
   // Accumulate timeline steps + partial payloads so the poll UI can render progress live.
+  let steps: ResearchStep[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const steps: Array<{ step: string; message: string; result?: any }> = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let accumulated: Record<string, any> = { steps };
+  let accumulated: Record<string, any> = { steps: [...steps] };
 
   const pushProgress = async (step: string, message: string) => {
     lastStep = step;
-    steps.push({ step, message });
+    steps = putStep(steps, { step, message });
     accumulated = { ...accumulated, steps: [...steps] };
     await note(admin, jobId, step, message);
     await patchPartialResult(admin, jobId, { steps: [...steps] });
@@ -769,7 +793,9 @@ async function processResearch(
       // itself as if the market study had never happened.
       const resumed = resumableStudy(job.result);
       const priorSteps = (job.result as { steps?: unknown } | null)?.steps;
-      if (resumed && Array.isArray(priorSteps)) steps.push(...(priorSteps as typeof steps));
+      if (resumed && Array.isArray(priorSteps)) {
+        for (const prior of priorSteps as ResearchStep[]) steps = putStep(steps, prior);
+      }
       const study = resumed ?? (await runMarketStudy());
       const { report, buyerPersonas, researchData, planInputs } = study;
       profile.ai_context = planInputs.aiContext ?? profile.ai_context;
@@ -800,7 +826,8 @@ async function processResearch(
         variants: 1,
         supabase: admin,
         brandId: brandId ?? undefined,
-        planTier
+        planTier,
+        remainingMs: INVOCATION_BUDGET_MS - (Date.now() - startedAt)
       });
       const planVisualStyle = profile?.visual_style ?? null;
       await mergeResult({

@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { cadenceAllowed, profileBlock, clampCadence, mondayOf, stampWeekStarts, currentWeekIndex, prefsFromPlan, weekStrategyBrief, postsForWeek, normalizePlan, PLAN_WEEKS, type EditorialPlan, type PlanWeek, postsForWeeks, weekMixForSpan } from './editorial-plan';
+import {
+  cadenceAllowed,
+  profileBlock,
+  clampCadence,
+  mondayOf,
+  stampWeekStarts,
+  currentWeekIndex,
+  prefsFromPlan,
+  weekStrategyBrief,
+  postsForWeek,
+  postsForWeeks,
+  weekMixForSpan,
+  normalizePlan,
+  agentPlanBudget,
+  AGENT_PLAN_MAX_MS,
+  LEGACY_PLAN_RESERVE_MS,
+  MIN_AGENT_PLAN_MS,
+  PLAN_WEEKS,
+  type EditorialPlan,
+  type PlanWeek
+} from './editorial-plan';
 
 const week = (over: Partial<PlanWeek> = {}): PlanWeek => ({
   index: 0,
@@ -240,6 +260,26 @@ describe('profileBlock (the brand half of every plan prompt)', () => {
     const block = profileBlock({ name: 'Nuovo', about: 'Solo questo' });
     expect(block).toContain('Nuovo');
     expect(block).not.toContain('undefined');
+  });
+});
+
+describe('agentPlanBudget', () => {
+  it('leaves the legacy pipeline its own time, and gives the agent the rest', () => {
+    expect(agentPlanBudget(300_000)).toBe(300_000 - LEGACY_PLAN_RESERVE_MS);
+  });
+
+  it('never claims more than the standalone budget, however much is left', () => {
+    expect(agentPlanBudget(3_600_000)).toBe(AGENT_PLAN_MAX_MS);
+  });
+
+  it('gives up the agent when what is left cannot hold it and the fallback too', () => {
+    expect(agentPlanBudget(LEGACY_PLAN_RESERVE_MS + MIN_AGENT_PLAN_MS - 1)).toBeNull();
+    expect(agentPlanBudget(LEGACY_PLAN_RESERVE_MS)).toBeNull();
+    expect(agentPlanBudget(0)).toBeNull();
+  });
+
+  it('keeps the agent when what is left holds both', () => {
+    expect(agentPlanBudget(LEGACY_PLAN_RESERVE_MS + MIN_AGENT_PLAN_MS)).toBe(MIN_AGENT_PLAN_MS);
   });
 });
 
