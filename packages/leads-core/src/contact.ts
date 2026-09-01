@@ -74,6 +74,16 @@ export async function suppressAuthor(
   }
 }
 
+/** Dove si raggiunge l'autore, per piattaforma: l'umano apre l'URL e manda il DM a mano. */
+export function authorProfileUrl(url: string, author: string): string {
+  if (!author) return '';
+  if (url.includes('threads.net')) return `https://www.threads.net/@${author.replace(/^@/, '')}`;
+  if (url.includes('x.com') || url.includes('twitter.com')) return `https://x.com/${author.replace(/^@/, '')}`;
+  // LinkedIn authors are display names, not handles → no derivable profile URL; open the post itself.
+  if (url.includes('linkedin.com')) return url;
+  return `https://www.reddit.com/user/${author.replace(/^u\//, '')}`;
+}
+
 export function platformOf(url: string): LeadPlatform {
   const u = (url ?? '').toLowerCase();
   if (u.includes('reddit.com')) return 'reddit';

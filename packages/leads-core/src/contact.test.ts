@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { platformOf, isOptOutSignal, dmWithOptOut, gateVerdict, contactGate, suppressAuthor, sweepLeadRetention } from './contact';
+import { platformOf, authorProfileUrl, isOptOutSignal, dmWithOptOut, gateVerdict, contactGate, suppressAuthor, sweepLeadRetention } from './contact';
 
 describe('platformOf (una sola fonte di verità per la piattaforma di un lead)', () => {
   it('riconosce le quattro piattaforme di engage e manda il resto a web', () => {
@@ -10,6 +10,23 @@ describe('platformOf (una sola fonte di verità per la piattaforma di un lead)',
     expect(platformOf('https://twitter.com/pippo/status/1')).toBe('x');
     expect(platformOf('https://www.linkedin.com/posts/pippo-123')).toBe('linkedin');
     expect(platformOf('https://news.google.com/rss/articolo')).toBe('web');
+  });
+});
+
+describe('authorProfileUrl (dove l\'umano apre il DM, per piattaforma)', () => {
+  it('deriva il profilo dall\'handle su reddit, threads e x', () => {
+    expect(authorProfileUrl('https://www.reddit.com/r/SaaS/comments/a/b/', 'u/pippo')).toBe('https://www.reddit.com/user/pippo');
+    expect(authorProfileUrl('https://www.threads.net/@tizio/post/1', '@tizio')).toBe('https://www.threads.net/@tizio');
+    expect(authorProfileUrl('https://x.com/caio/status/1', '@caio')).toBe('https://x.com/caio');
+  });
+
+  it('su LinkedIn l\'autore è un nome, non un handle: si apre il post', () => {
+    const post = 'https://www.linkedin.com/posts/abc';
+    expect(authorProfileUrl(post, 'Mario Rossi')).toBe(post);
+  });
+
+  it('senza autore non inventa un URL', () => {
+    expect(authorProfileUrl('https://www.reddit.com/r/SaaS/comments/a/b/', '')).toBe('');
   });
 });
 
