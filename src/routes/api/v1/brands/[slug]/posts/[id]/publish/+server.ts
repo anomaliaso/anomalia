@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 
 export const POST: RequestHandler = async ({ request, params }) => {
-  const { supabase, error, apiKey } = await authenticate(request);
+  const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
@@ -19,7 +19,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (!post) return json({ error: 'Post not found' }, { status: 404 });
 
   try {
-    await publishApprovedPost(supabase, post, brand.timezone as string);
+    await publishApprovedPost(supabase, post, brand.timezone as string, { by: user.id });
     return json({ ok: true, status: 'published' });
   } catch (e) {
     return json({ error: `Publish failed: ${String(e)}` }, { status: 500 });

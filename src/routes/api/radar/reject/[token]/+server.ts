@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
+import { brandOwnerId, recordPostVerdict } from '$lib/server/post-verdict';
 
 // One-click reject from the Radar digest email: deletes the proposed post (same semantics as the
 // editor's "reject"). Single-use, expiring token; deleting a proposal is the worst it can do.
@@ -13,7 +14,7 @@ export const GET: RequestHandler = async ({ params }) => {
   const admin = createAdminClient();
   const { data: post } = await admin
     .from('posts')
-    .select('id, status, approval_token_expires_at')
+    .select('id, brand_id, status, approval_token_expires_at')
     .eq('approval_token', params.token)
     .maybeSingle();
   if (!post) return page('Link non valido', 'Questo link è già stato usato o non esiste.');
@@ -22,5 +23,16 @@ export const GET: RequestHandler = async ({ params }) => {
   }
   if (post.status !== 'pending_user') return page('Non più in bozza', 'Il post è già stato gestito dall’app.');
   await admin.from('posts').delete().eq('id', post.id);
+
+  const owner = await brandOwnerId(admin, post.brand_id as string);
+  if (owner) {
+    await recordPostVerdict(admin, {
+      postId: post.id as string,
+      brandId: post.brand_id as string,
+      actorId: owner,
+      verdict: 'discarded'
+    });
+  }
+
   return page('Scartato', 'La proposta è stata eliminata.');
 };

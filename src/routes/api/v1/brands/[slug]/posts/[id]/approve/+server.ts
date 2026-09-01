@@ -4,7 +4,7 @@ import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/ser
 import { approvePost } from '$lib/server/cli-queries';
 
 export const POST: RequestHandler = async ({ request, params }) => {
-  const { supabase, error, apiKey } = await authenticate(request);
+  const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
@@ -12,7 +12,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
   const writeDenied = checkApiKeyWriteAccess(apiKey);
   if (writeDenied) return writeDenied;
 
-  const result = await approvePost(supabase, brand.id, params.id, brand.timezone as string);
+  const result = await approvePost(supabase, brand.id, params.id, brand.timezone as string, user.id);
   if (result.error) return json(result, { status: 400 });
   return json(result);
 };

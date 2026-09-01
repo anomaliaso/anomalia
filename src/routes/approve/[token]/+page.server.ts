@@ -4,6 +4,7 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
 import { EDITOR_POST_COLS } from '$lib/server/post-editing';
 import { nextOccurrence } from '$lib/server/schedule';
+import { brandOwnerId } from '$lib/server/post-verdict';
 
 // One-tap email approval — no session. The signed token IS the authorization;
 // we use the service-role client to approve + schedule the brand's pending posts.
@@ -80,6 +81,7 @@ export const actions: Actions = {
       .eq('status', 'pending_user')
       .eq('needs_attention', true);
 
+    const owner = await brandOwnerId(admin, brand.id);
     let approved = 0;
     let noAccount = false;
 
@@ -99,7 +101,7 @@ export const actions: Actions = {
         await admin.from('posts').update({ scheduled_for: when }).eq('id', p.id);
         p.scheduled_for = when;
       }
-      const r = await publishApprovedPost(admin, p, tz);
+      const r = await publishApprovedPost(admin, p, tz, { by: owner ?? undefined });
       approved++;
       if (r.noAccount) noAccount = true;
     }
