@@ -140,6 +140,14 @@ export function checkRubricsAndBatchFeasibility(
     if (product && prodRow && (!Array.isArray(prodRow.images) || prodRow.images.length === 0)) {
       violations.push(`Seed features product "${product}" but it has no photos.`);
     }
+    // Un seed senza piattaforma o senza giorno non si può programmare: resta un titolo. L'agente
+    // può saltare draft_seeds e scriverseli da sé, e allora esce con il solo titolo — il prompt
+    // che glieli chiede non basta, perché non è mai passato di lì.
+    const missing = ['platform', 'day'].filter((f) => !String(seed[f as keyof typeof seed] ?? '').trim());
+    if (missing.length) {
+      violations.push(`Seed "${seedLabel(seed, index)}" cannot be scheduled — it is missing ${missing.join(' and ')}.`);
+    }
+
     // Un carosello è una storia o è padding: le battute sono la storia, e senza il produttore
     // improvvisa N immagini da una riga di angle.
     if (seed.format === 'carousel') {

@@ -63,7 +63,16 @@ const BEAT = z.object({
     .optional()
     .describe('Il parlato e chi lo dice. Assente quando nessuno apre bocca.')
 });
-const SEED = z.object({ beats: z.array(BEAT).optional() }).catchall(z.unknown());
+const SEED = z
+  .object({
+    beats: z.array(BEAT).optional(),
+    // Non decorazione: senza questi il seed è un titolo che nessuno può mettere in calendario, e
+    // saltando draft_seeds il modello li ometteva tutti. check_batch_feasibility li pretende.
+    platform: z.string().optional().describe('La piattaforma su cui esce.'),
+    day: z.string().optional().describe('Il giorno della settimana in cui esce.'),
+    pillar: z.string().optional().describe('Il pilastro di contenuto a cui appartiene.')
+  })
+  .catchall(z.unknown());
 
 export const MAX_WEEK_PLANNER_STEPS = 40;
 export const MAX_WEEK_PLANNER_DRAFTS = 4;

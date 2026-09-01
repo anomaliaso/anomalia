@@ -456,3 +456,31 @@ describe('un rilievo indica sempre QUALE seed', () => {
 		expect(violations.join(' ')).toContain('tuesday');
 	});
 });
+
+// L'agente ha saltato draft_seeds e ha scritto i seed da sé: sono usciti col solo titolo, senza
+// niente con cui programmarli. Un piano che non si può mettere in calendario non è un piano.
+describe('un seed deve poter essere messo in calendario', () => {
+	const ctx = () => ({
+		expectedSeedCount: 1,
+		selectedPlatforms: ['instagram'],
+		products: [],
+		people: [],
+		mediaIds: new Set<string>(),
+		rubrics: [],
+		weekMix: []
+	});
+
+	it('rifiuta un seed senza piattaforma né giorno', () => {
+		const violations = checkRubricsAndBatchFeasibility(
+			[{ title: "L'albo pretorio", format: 'carousel', slide_count: 1, beats: [{ shows: 'x', who: 'Sam', thinks: 'y' }], sourced_from: '' } as never],
+			ctx()
+		);
+		expect(violations.join(' ')).toContain('platform');
+		expect(violations.join(' ')).toContain('day');
+	});
+
+	it('tace quando il seed li porta', () => {
+		const violations = checkRubricsAndBatchFeasibility([seed({ format: 'single_image' })], ctx());
+		expect(violations.join(' ')).not.toContain('cannot be scheduled');
+	});
+});
