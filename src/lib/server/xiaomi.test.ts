@@ -79,7 +79,8 @@ const M = vi.hoisted(() => ({
 }));
 const env = M.env;
 vi.mock('$env/dynamic/private', () => ({ env: M.env }));
-vi.mock('$lib/server/llm', () => ({
+vi.mock('$lib/server/llm', async () => ({
+  ...(await vi.importActual<typeof import('$lib/server/llm')>('$lib/server/llm')),
   llmStructured: M.llmStructured,
   llmText: M.llmText,
   llmImagesFromInline: M.llmImagesFromInline
@@ -201,5 +202,35 @@ describe('satisfiesSchema (xiaomi/kie fall-through guard)', () => {
         brandProfile
       )
     ).toBe(false);
+  });
+});
+
+
+/**
+ * La riga stampata al boot è la prima cosa che si legge quando qualcosa non torna, e per mesi ha
+ * detto `gemini (gemini-3.7-flash)` mentre la chiamata andava al gateway: manda la diagnosi dalla
+ * parte sbagliata prima ancora che cominci. Dica chi serve il testo DAVVERO, o taccia.
+ */
+describe('textRouteLabel — chi serve il testo, per il log di boot', () => {
+  beforeEach(() => {
+    for (const k of Object.keys(env)) delete env[k];
+    vi.resetModules();
+  });
+
+  it('senza rotte forzate nomina il gateway e i suoi modelli, mai un id Gemini', async () => {
+    Object.assign(env, { LLM_API_KEY: 'k', LLM_DEFAULT_MODEL: 'z-ai/glm-5.3-flash' });
+    const { textRouteLabel } = await import('./xiaomi');
+    expect(textRouteLabel()).toBe('openrouter.ai (z-ai/glm-5.3-flash)');
+  });
+
+  it('una rotta deviata su kie lo dice, col modello che kie riceverà', async () => {
+    Object.assign(env, { LLM_API_KEY: 'k', AI_ROUTE_TEXT: 'grok@kie', KIE_API_KEY: 'k' });
+    const { textRouteLabel } = await import('./xiaomi');
+    expect(textRouteLabel()).toBe('kie (grok-4-5)');
+  });
+
+  it('senza la chiave del centralino annuncia il guasto, non un modello', async () => {
+    const { textRouteLabel } = await import('./xiaomi');
+    expect(textRouteLabel()).toBe('not configured (LLM_API_KEY missing)');
   });
 });
