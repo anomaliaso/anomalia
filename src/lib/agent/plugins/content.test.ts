@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createTestSupabase } from '$lib/testkit/supabase';
 import { fakeContext } from '../testkit';
 
+const A_YEAR_AHEAD = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+
 // `content_create_post` avvolge `create_post` di chat/tools.ts, che a sua volta chiama
 // `createSingleContent` (rendering AI vero) e `remaining`/`addUsage` (crediti/quota, dietro
 // `billingProvider`/`getCreditsUsage` — terreno del conflitto billing attivo, vedi CLAUDE.md:
@@ -319,7 +321,7 @@ describe('le scritture di dominio che il kit non aveva', () => {
 		});
 		const plugin = createContentPlugin({ supabase: kit.client, brandId: BRAND_ID, userId: USER_ID });
 		const res = await plugin.execute(
-			{ name: 'content_reschedule_post', args: { post_id: 'post-10', scheduled_for: '2026-09-01T10:00' } },
+			{ name: 'content_reschedule_post', args: { post_id: 'post-10', scheduled_for: A_YEAR_AHEAD } },
 			fakeContext()
 		);
 		expect(res.isError).toBe(true);

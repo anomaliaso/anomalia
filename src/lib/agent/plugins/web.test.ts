@@ -69,12 +69,14 @@ describe('web plugin — mount', () => {
 	});
 });
 
+const A_YEAR_AHEAD = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+
 describe('web_schedule_article — solo "approved" pubblica (regola non riscritta, importata)', () => {
 	it('con una data futura: scheduled_for + status approved, MAI published (mutazione 1)', async () => {
 		const rls = seed([{ id: 'art-1', brand_id: BRAND_ID, title: 'Guida', status: 'draft' }]);
 		const plugin = createWebPlugin({ supabase: rls.client, brandId: BRAND_ID, userId: USER_ID });
 		const res = await plugin.execute(
-			{ name: 'web_schedule_article', args: { article_id: 'art-1', scheduled_for: '2026-09-01T10:00' } },
+			{ name: 'web_schedule_article', args: { article_id: 'art-1', scheduled_for: A_YEAR_AHEAD } },
 			fakeContext()
 		);
 		expect(res.isError).toBeFalsy();
@@ -89,7 +91,7 @@ describe('web_schedule_article — solo "approved" pubblica (regola non riscritt
 		const rls = seed([{ id: 'art-2', brand_id: BRAND_ID, title: 'Vecchio', status: 'published' }]);
 		const plugin = createWebPlugin({ supabase: rls.client, brandId: BRAND_ID, userId: USER_ID });
 		const res = await plugin.execute(
-			{ name: 'web_schedule_article', args: { article_id: 'art-2', scheduled_for: '2026-09-01T10:00' } },
+			{ name: 'web_schedule_article', args: { article_id: 'art-2', scheduled_for: A_YEAR_AHEAD } },
 			fakeContext()
 		);
 		expect(res.isError).toBe(true);
