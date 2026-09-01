@@ -36,6 +36,7 @@
   import { siGoogledrive } from 'simple-icons';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import AgentAvatarStack from '$lib/components/AgentAvatarStack.svelte';
+  import HomeAgentPanel from '$lib/components/HomeAgentPanel.svelte';
   import { BUILTIN_AGENT_AVATARS, DEFAULT_CHAT_AGENT_AVATAR } from '$lib/agent-avatars';
 
   type Card = { img: string; title: string; sub: string; more?: string };
@@ -377,6 +378,8 @@
           {/each}
         </div>
       </div>
+
+      <div class="cm-agent-panel"><HomeAgentPanel /></div>
     </div>
 
     <p class="chat-foot reveal">{$_('landing.chat.foot')}</p>
@@ -396,7 +399,7 @@
   /* La finestra: sidebar + conversazione, come l'app. */
   .cm {
     margin: 44px auto 0;
-    max-width: 940px;
+    max-width: 1200px;
     /* Altezza FISSA, uguale per tutti e otto i casi: cambiando thread la pagina sotto non si
        deve muovere di un pixel. Era 560px con cinque righe in sidebar; con otto la lista da
        sola chiede ~390px e a 560 sarebbe la SIDEBAR a dover scorrere — cioè tre casi su otto
@@ -406,7 +409,7 @@
        conversazione, come prima. */
     height: 640px;
     display: grid;
-    grid-template-columns: 252px minmax(0, 1fr);
+    grid-template-columns: 252px minmax(0, 1fr) 318px;
     border: 1px solid var(--line);
     border-radius: 20px;
     background: var(--paper);
@@ -538,6 +541,7 @@
   /* ── Conversazione ───────────────────────────────────────────────────────── */
   /* min-height:0 o il figlio scorrevole gonfia la griglia invece di scorrere. */
   .cm-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .cm-agent-panel { display: flex; min-width: 0; min-height: 0; }
   .cm-top {
     display: flex;
     align-items: center;
@@ -763,6 +767,7 @@
        riquadro sborderebbe. Il tetto a 560px tiene la finestra uguale a quella desktop sui
        tablet alti; il pavimento a 380px la salva sui telefoni bassi in orizzontale. */
     .cm { grid-template-columns: minmax(0, 1fr); height: clamp(380px, 76dvh, 560px); }
+    .cm-agent-panel { display: none; }
     .cm-side {
       flex-direction: row;
       align-items: center;

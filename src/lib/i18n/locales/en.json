@@ -2156,6 +2156,18 @@
           "cardSub": "reviewed: ship · caption ready"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "LIVE",
+        "today": "TODAY",
+        "tue": "TUE",
+        "wed": "WED",
+        "launchStory": "Launch story",
+        "behindScenes": "Behind the scenes",
+        "customerNote": "Customer note",
+        "calendarChecked": "Calendar checked · {count} drafts ready for review",
+        "nextPost": "Next post queued for Tuesday at 09:00"
+      },
       "foot": "Long jobs keep running after you close the tab, and the agent writes to you when it is done. Publishing is the one step it never takes on its own."
     }
   },
