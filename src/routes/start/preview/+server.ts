@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { isGuestPreviewEnabled } from '$lib/server/feature-flags';
-import { guardTool } from '$lib/server/tool-guard';
-import { isUrlSafe, runBrandAnalysis } from '$lib/server/brand-analysis';
+import { assertPublicUrl, guardTool } from '$lib/server/tool-guard';
+import { runBrandAnalysis } from '$lib/server/brand-analysis';
 import { planPreviewPosts, renderPreviewImages } from '$lib/server/content-preview/weekly-planner';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { NANO_BANANA_2_LITE } from '$lib/server/gemini';
@@ -25,8 +25,14 @@ import { localeLanguageName } from '$lib/i18n/locale';
  *
  * This is the only unauthenticated endpoint that spends real money, and no credit gate stands
  * behind it — `renderPostImage` gates on a brand context a guest does not have. The three guards
- * at the top (kill switch, per-IP cap, SSRF) ARE the spending limit, in that order: refuse before
- * counting, count before generating.
+ * at the top (kill switch, per-IP cap, resolve-then-check SSRF) ARE the spending limit, in that
+ * order: refuse before counting, count before generating.
+ *
+ * Known gap, deliberately not widened here: runBrandAnalysis still fetches internally behind
+ * brand-analysis.ts's pattern-only isUrlSafe (:788), which fetchPage (:813) applies at :815 and
+ * re-checks on each redirect hop at :846 — all string comparisons, so a hostname resolving to a
+ * private address passes. Fine while every caller was authenticated; now that an anonymous one
+ * exists, it is real debt, tracked in the PR rather than widened here.
  */
 export const config = { maxDuration: 300 };
 
@@ -56,9 +62,16 @@ export const POST: RequestHandler = async ({ request, getClientAddress, locals: 
   }
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(host)) return new Response('Invalid URL', { status: 400 });
 
-  // The guard that makes an open endpoint stop being a request forger. It already runs inside
-  // fetchPage; it runs HERE too because this is the boundary that made it necessary.
-  if (!isUrlSafe(url)) return new Response('Invalid URL', { status: 400 });
+  // The guard that makes an open endpoint stop being a request forger — and it has to be the
+  // RESOLVING one. brand-analysis's isUrlSafe compares hostname patterns, which is enough for a
+  // URL we already trust (a brand's own site) but blind to a perfectly public hostname whose DNS
+  // record points at 127.0.0.1. This caller is an anonymous stranger, so it gets the same
+  // resolve-then-check the public /api/tools endpoints get.
+  try {
+    await assertPublicUrl(new URL(url));
+  } catch {
+    return new Response('Invalid URL', { status: 400 });
+  }
 
   const enc = new TextEncoder();
   const stream = new ReadableStream({
