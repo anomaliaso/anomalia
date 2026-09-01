@@ -31,6 +31,18 @@ import { hasProRadarLeads, isRadarKindAllowed, leadEngagePlatforms, radarSourceL
 import { ALT_CAPTION_PLATFORMS, ensureShortNetworkCuts } from '$lib/platform-limits';
 import { authorProfileUrl, contactGate, dmWithOptOut, gateVerdict, platformOf } from '@anomalia/leads-core/contact';
 import { COMMENT_MIN_RELEVANCE, COMMENT_SCHEMA, buildEngagePrompt, selectTopComments } from '@anomalia/leads-core/prompts';
+import {
+  createSources,
+  maxAgeHoursFor,
+  normalizeRedditUrl,
+  parseFeed,
+  roundRobin,
+  sourceKey,
+  withinWindow,
+  type FeedItem,
+  type RedditItem,
+  type SourceRef
+} from '@anomalia/leads-core/feed';
 // Re-exported: Settings → Radar imports the type from here, next to the functions that use it.
 export type { RadarPlatformKey } from './plans';
 import { INTENT_RANK, normalizeIntent, type LeadIntent } from '@anomalia/leads-core/intent';
@@ -162,334 +174,34 @@ export function radarPrefsOf(contentPrefs: AnyRec | null | undefined): RadarPref
   };
 }
 
-// ── Feed fetching (zero dependencies) ───────────────────────────────────────────────────────────
 
-export type FeedItem = { title: string; url: string; snippet: string; sourceName: string; publishedAt: string | null };
-
-const strip = (s: string) =>
-  s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const tag = (xml: string, name: string) => {
-  const m = xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'));
-  return m ? strip(m[1]) : '';
+// ── Le sorgenti, con dentro quello che il package non può procurarsi ────────────────────────────
+//
+// Reddit dà 403 ai client HTTP da server (Node/undici) anche con auth valida, mentre i browser
+// veri passano: il ripiego è Chrome vero via Browserless. Il package non lo sa — riceve solo "una
+// funzione che dato un URL torna il testo", e qui dentro c'è l'unico posto che conosce lo script
+// di pagina. ~1 unità Browserless a chiamata; il traffico reddit è una manciata di richieste al giorno.
+const fetchViaBrowser = async (url: string): Promise<string | null> => {
+  const { isBrowserlessConfigured, browserlessFunction } = await import('./browserless');
+  if (!isBrowserlessConfigured()) return null;
+  const out = await browserlessFunction(
+    `export default async ({ page, context }) => {
+      const res = await page.goto(context.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      if (!res || res.status() >= 400) return null;
+      return await res.text();
+    }`,
+    { url }
+  );
+  return typeof out === 'string' && out.trim() ? out : null;
 };
 
-// Reddit's rising RSS is fetched from old.reddit.com (less fingerprint-blocked), but those feeds
-// emit old.reddit.com permalinks. Always rewrite to www so /leads and digest emails open the
-// current Reddit UI — never the classic old.reddit skin.
-export function normalizeRedditUrl(url: string): string {
-  const u = (url ?? '').trim();
-  if (!u) return u;
-  if (u.startsWith('/r/') || u.startsWith('/user/') || u.startsWith('/u/')) return `https://www.reddit.com${u}`;
-  return u.replace(/^https?:\/\/(old\.|new\.|www\.)?reddit\.com/i, 'https://www.reddit.com');
-}
-
-// Tolerant RSS 2.0 + Atom parser: enough for Google News, standard RSS and Reddit's Atom feeds.
-// ponytail: regex XML parsing — fine for well-formed feeds; swap for a real parser if a needed
-// source ever breaks it.
-export function parseFeed(xml: string): FeedItem[] {
-  const out: FeedItem[] = [];
-  const blocks = [...xml.matchAll(/<item[\s>][\s\S]*?<\/item>/gi), ...xml.matchAll(/<entry[\s>][\s\S]*?<\/entry>/gi)].map((m) => m[0]);
-  for (const b of blocks) {
-    const title = tag(b, 'title');
-    // RSS: <link>url</link>. Atom/Reddit: <link href="url"/>.
-    let url = tag(b, 'link');
-    if (!url) url = b.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1] ?? '';
-    if (!title || !url) continue;
-    const snippet = (tag(b, 'description') || tag(b, 'summary') || tag(b, 'content')).slice(0, 1000);
-    const sourceName = tag(b, 'source') || tag(b, 'author') || '';
-    const dateRaw = tag(b, 'pubDate') || tag(b, 'published') || tag(b, 'updated');
-    const t = dateRaw ? Date.parse(dateRaw) : NaN;
-    const cleaned = strip(url);
-    out.push({
-      title,
-      url: /reddit\.com/i.test(cleaned) || cleaned.startsWith('/r/') ? normalizeRedditUrl(cleaned) : cleaned,
-      snippet,
-      sourceName,
-      publishedAt: Number.isNaN(t) ? null : new Date(t).toISOString()
-    });
-  }
-  return out;
-}
-
-const FEED_TIMEOUT_MS = 10_000;
-const ITEMS_PER_FEED = 15;
-
-function feedUrlFor(source: { kind: string; value: string; lang?: string | null }): string {
-  if (source.kind === 'gnews_query') {
-    const lang = (source.lang ?? 'auto').toLowerCase();
-    if (lang === 'auto') {
-      // Auto: no locale params — Google decides based on query
-      return `https://news.google.com/rss/search?q=${encodeURIComponent(source.value)}`;
-    }
-    // Map language code → Google News hl/gl/ceid
-    const LANG_MAP: Record<string, [string, string, string]> = {
-      en: ['en-US', 'US', 'US:en'], it: ['it', 'IT', 'IT:it'], es: ['es', 'ES', 'ES:es'],
-      fr: ['fr', 'FR', 'FR:fr'], de: ['de', 'DE', 'DE:de'], pt: ['pt-BR', 'BR', 'BR:pt'],
-      nl: ['nl', 'NL', 'NL:nl'], pl: ['pl', 'PL', 'PL:pl'], ro: ['ro', 'RO', 'RO:ro'],
-      sv: ['sv', 'SE', 'SE:sv'], no: ['no', 'NO', 'NO:no'], da: ['da', 'DK', 'DK:da'],
-      fi: ['fi', 'FI', 'FI:fi'], cs: ['cs', 'CZ', 'CZ:cs'], sk: ['sk', 'SK', 'SK:sk'],
-      hu: ['hu', 'HU', 'HU:hu'], hr: ['hr', 'HR', 'HR:hr'], sr: ['sr', 'RS', 'RS:sr'],
-      sl: ['sl', 'SI', 'SI:sl'], bg: ['bg', 'BG', 'BG:bg'], uk: ['uk', 'UA', 'UA:uk'],
-      ru: ['ru', 'RU', 'RU:ru'], tr: ['tr', 'TR', 'TR:tr'], el: ['el', 'GR', 'GR:el'],
-      ar: ['ar', 'SA', 'SA:ar'], he: ['he', 'IL', 'IL:he'], fa: ['fa', 'IR', 'IR:fa'],
-      hi: ['hi', 'IN', 'IN:hi'], th: ['th', 'TH', 'TH:th'], vi: ['vi', 'VN', 'VN:vi'],
-      id: ['id', 'ID', 'ID:id'], ms: ['ms', 'MY', 'MY:ms'], zh: ['zh-CN', 'CN', 'CN:zh'],
-      ja: ['ja', 'JP', 'JP:ja'], ko: ['ko', 'KR', 'KR:ko'],
-    };
-    const [hl, gl, ceid] = LANG_MAP[lang] ?? ['en-US', 'US', 'US:en'];
-    return `https://news.google.com/rss/search?q=${encodeURIComponent(source.value)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
-  }
-  if (source.kind === 'subreddit') return redditRssAuth(`https://www.reddit.com/r/${source.value.replace(/^r\//, '')}/.rss`);
-  return source.value; // plain RSS url
-}
-
-async function fetchFeed(source: { kind: string; value: string; lang?: string | null; name?: string }): Promise<FeedItem[]> {
-  try {
-    const res = await fetch(feedUrlFor(source), {
-      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AnomaliaRadar/1.0)', Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml' }
-    });
-    if (!res.ok) return [];
-    return parseFeed(await res.text()).slice(0, ITEMS_PER_FEED);
-  } catch {
-    return []; // a dead feed never breaks the scan
-  }
-}
-
-// ── Reddit engage sources (timing-aware) ────────────────────────────────────────────────────────
-// A good comment lands on a thread that's RISING right now. Reddit's unauthenticated JSON API is
-// gone (403), but the RSS endpoints still serve: /r/{sub}/rising/.rss for the timing signal and
-// {permalink}/.rss for a thread's body + comments. READ-ONLY by design: Anomalia never posts or
-// comments; it only drafts a suggestion for the human. ponytail: on a 429 the catch returns [].
-const ENGAGE_MAX_AGE_HOURS = 12;
-// Threads / X / LinkedIn are a different clock. Their search endpoints rank by relevance, not
-// recency (Threads has no date filter at all), and a post there stays live for days instead of
-// falling off a rising list in hours. Cutting them at 12h threw away nearly every result — the
-// scan logged "0 items" and looked like an empty feed rather than a window that was too narrow.
-const CONVERSATION_MAX_AGE_HOURS = 48;
-type RedditItem = FeedItem & { createdUtc: number };
-
-const REDDIT_UA = 'AnomaliaRadar/1.0 (read-only; instant-marketing suggestions)';
-
-// Personal-feed auth for Reddit RSS: since 2026 the anonymous feeds are fingerprint-blocked from
-// servers, but every account has a private feed token (reddit.com/prefs/feeds) — appending
-// ?feed=TOKEN&user=USERNAME turns the request into the user's own authenticated feed and passes.
-// Simpler than OAuth and read-only by construction. '' when the env isn't set.
-function redditRssAuth(url: string): string {
-  const feed = env.REDDIT_FEED_TOKEN;
-  const user = env.REDDIT_FEED_USER;
-  if (!feed || !user) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}feed=${encodeURIComponent(feed)}&user=${encodeURIComponent(user)}`;
-}
-
-// Fetch a Reddit URL's raw body, dodging the TLS-fingerprint wall: Reddit 403s server HTTP clients
-// (Node/undici) even with valid feed auth, while real browsers pass. Chain: plain fetch (in case
-// this network passes) → Browserless (REAL Chrome, real fingerprint — verified: curl/browser 200
-// where Node 403). null when both fail. ~1 Browserless unit per call; reddit traffic is a handful
-// of requests per day.
-async function fetchRedditText(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(FEED_TIMEOUT_MS), headers: { 'User-Agent': REDDIT_UA } });
-    if (res.ok) return await res.text();
-  } catch { /* fall through to browserless */ }
-  try {
-    const { isBrowserlessConfigured, browserlessFunction } = await import('./browserless');
-    if (!isBrowserlessConfigured()) return null;
-    const out = await browserlessFunction(
-      `export default async ({ page, context }) => {
-        const res = await page.goto(context.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        if (!res || res.status() >= 400) return null;
-        return await res.text();
-      }`,
-      { url }
-    );
-    return typeof out === 'string' && out.trim() ? out : null;
-  } catch {
-    return null;
-  }
-}
-
-// NOTE (verified live 2026-07-03): Exa (exa.ai) is NOT an option for Reddit — the API rejects
-// includeDomains:['reddit.com'] ("domain not available") and its index contains zero reddit URLs
-// (Reddit's data is exclusively licensed). For server-side Reddit reads the paths are
-// ScrapeCreators and the RSS feeds.
-// Fair-share selection: round-robin one item per origin per pass, up to `cap`. Guarantees every
-// source with fresh content contributes before any single source takes a second slot — so a
-// high-volume source can't starve the others (see radarScan). Pure + exported for tests.
-export function roundRobin<T>(byOrigin: Map<string, T[]>, cap: number): T[] {
-  const qList = [...byOrigin.values()];
-  const out: T[] = [];
-  while (out.length < cap && qList.some((q) => q.length)) {
-    for (const q of qList) {
-      if (!q.length) continue;
-      out.push(q.shift()!);
-      if (out.length >= cap) break;
-    }
-  }
-  return out;
-}
-
-async function fetchSubredditRising(sub: string): Promise<RedditItem[]> {
-  const clean = sub.replace(/^r\//, '').replace(/\/+$/, '');
-  // PRIMARY: ScrapeCreators' Reddit endpoint — same key/gateway the whole app already uses for
-  // IG/TikTok/etc., with real `rising` sort and full post fields. The RSS chain below stays as
-  // fallback.
-  try {
-    const data = await scrapeCreatorsGet(`/v1/reddit/subreddit?subreddit=${encodeURIComponent(clean)}&sort=rising&trim=true`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw: AnyRec[] = Array.isArray(data?.posts) ? data.posts : Array.isArray(data?.data?.children) ? data.data.children.map((c: any) => c?.data ?? c) : [];
-    const mapped = raw
-      .map((d) => ({
-        title: String(d?.title ?? ''),
-        url: d?.permalink ? `https://www.reddit.com${String(d.permalink).startsWith('/') ? d.permalink : `/${d.permalink}`}` : String(d?.url ?? ''),
-        snippet: String(d?.selftext ?? '').slice(0, 1000),
-        sourceName: `r/${clean}`,
-        publishedAt: d?.created_utc ? new Date(Number(d.created_utc) * 1000).toISOString() : null,
-        createdUtc: Number(d?.created_utc) || 0
-      }))
-      .filter((i) => i.title && i.url.includes('/comments/'));
-    if (mapped.length) return mapped;
-  } catch (e) {
-    console.warn(`[radar] scrapecreators reddit r/${clean} failed:`, e instanceof Error ? e.message.slice(0, 120) : e);
-  }
-  // Fallback: the RSS endpoint, which works from some networks (curl-like clients) but is
-  // fingerprint-blocked from most servers.
-  const xml = await fetchRedditText(redditRssAuth(`https://old.reddit.com/r/${encodeURIComponent(clean)}/rising/.rss`));
-  if (!xml) {
-    console.warn(`[radar] reddit r/${clean} unavailable — set REDDIT_FEED_TOKEN/USER (prefs/feeds)`);
-    return [];
-  }
-  return parseFeed(xml)
-    .filter((i) => i.url.includes('/comments/'))
-    .map((i) => ({ ...i, sourceName: `r/${clean}`, createdUtc: i.publishedAt ? Date.parse(i.publishedAt) / 1000 : 0 }));
-}
-
-// Conversation searches (Threads / Reddit / LinkedIn / X) all go through ScrapeCreators.
-//
-// Errors PROPAGATE on purpose. These used to `catch { return [] }`, so a wrong parameter or an
-// expired key was logged in radar_searches as "0 items" — indistinguishable from "no conversation
-// worth joining today". That is how the X source stayed silently dead: it was called with `id=`
-// where the endpoint wants `url=`, and every scan reported a clean, empty success.
-
-// Threads keyword search (/v1/threads/search): up to 10 posts per query (Threads' own ceiling),
-// with engagement counts and taken_at for the freshness cut.
-async function fetchThreadsSearch(query: string): Promise<RedditItem[]> {
-  // NB: the endpoint's start_date filter returns 0 results (verified live) — fetch unfiltered
-  // and let the caller's createdUtc cutoff do the freshness cut.
-  const data = await scrapeCreatorsGet(`/v1/threads/search?query=${encodeURIComponent(query)}&trim=true`);
-  return ((data?.posts ?? []) as AnyRec[])
-    .map((post) => ({
-      title: String(post?.caption?.text ?? '').replace(/\s+/g, ' ').slice(0, 200),
-      url: post?.code && post?.user?.username ? `https://www.threads.net/@${post.user.username}/post/${post.code}` : '',
-      snippet: String(post?.caption?.text ?? '').slice(0, 1000),
-      sourceName: `threads${post?.user?.username ? ` · @${post.user.username}` : ''}`,
-      publishedAt: post?.taken_at ? new Date(Number(post.taken_at) * 1000).toISOString() : null,
-      createdUtc: Number(post?.taken_at) || 0
-    }))
-    .filter((i) => i.title && i.url);
-}
-
-// Global Reddit keyword search (/v1/reddit/search): finds conversations across ALL of Reddit,
-// not just the brand's own subreddits — same shape as fetchThreadsSearch.
-async function fetchRedditSearch(query: string): Promise<RedditItem[]> {
-  const data = await scrapeCreatorsGet(`/v1/reddit/search?query=${encodeURIComponent(query)}&sort=new&timeframe=day&trim=true`);
-  return ((data?.posts ?? []) as AnyRec[])
-    .map((post) => ({
-      title: String(post?.title ?? ''),
-      url: post?.permalink ? `https://www.reddit.com${String(post.permalink).startsWith('/') ? post.permalink : `/${post.permalink}`}` : String(post?.url ?? ''),
-      snippet: String(post?.selftext ?? '').slice(0, 1000),
-      // Keep the `r/` prefix: the verdict prompt's Reddit conversation ruler and the UI both key
-      // off it to treat these like subreddit items.
-      sourceName: `r/${post?.subreddit ?? ''}`,
-      publishedAt: post?.created_utc ? new Date(Number(post.created_utc) * 1000).toISOString() : null,
-      createdUtc: Number(post?.created_utc) || 0
-    }))
-    .filter((i) => i.title && i.url.includes('/comments/'));
-}
-
-/**
- * LinkedIn's search says "nessun post corrisponde" with a **404 `not_found`** and charges zero
- * credits — un risultato vuoto vestito da errore. Verificato in produzione: due query hanno preso
- * 404 mentre il catalogo globale aveva 15 post LinkedIn presi dallo stesso endpoint quel mattino,
- * e il giorno prima la stessa query dinamica ne aveva restituiti 2.
- *
- * Il riconoscimento è volutamente stretto — solo il corpo documentato del no-match — perché ogni
- * altro 404 (path sbagliato, endpoint rimosso) resta un errore vero e deve continuare a urlare.
- */
-export function isNoMatch404(e: unknown): boolean {
-  const m = e instanceof Error ? e.message : String(e);
-  return m.startsWith('scrapecreators 404') && m.includes('"not_found"');
-}
-
-// Global LinkedIn keyword search (/v1/linkedin/search/posts): the B2B lead surface.
-// `date_posted=last-day` keeps it fresh; the post's full text rides in `snippet`, so the comment
-// drafter can work off it without a second fetch (LinkedIn has no comments endpoint here).
-async function fetchLinkedInSearch(query: string): Promise<RedditItem[]> {
-  let data: AnyRec | null;
-  try {
-    data = await scrapeCreatorsGet(`/v1/linkedin/search/posts?query=${encodeURIComponent(query)}&date_posted=last-day`);
-  } catch (e) {
-    // "Nessun post" non è un guasto: segnarlo rosso nella cronologia scan sarebbe l'errore opposto
-    // a quello che abbiamo appena tolto — gridare al lupo invece di tacere. Resta nei log.
-    if (isNoMatch404(e)) {
-      console.warn(`[radar] linkedin search: nessun risultato per "${query.slice(0, 60)}"`);
-      return [];
-    }
-    throw e;
-  }
-  return ((data?.posts ?? []) as AnyRec[])
-    .map((post) => {
-      const text = String(post?.description ?? '').replace(/\s+/g, ' ').trim();
-      const ts = post?.datePublished ? Date.parse(String(post.datePublished)) : NaN;
-      return {
-        title: text.slice(0, 200),
-        url: String(post?.url ?? ''),
-        snippet: text.slice(0, 1000),
-        sourceName: `linkedin${post?.author?.name ? ` · ${post.author.name}` : ''}`,
-        publishedAt: Number.isNaN(ts) ? null : new Date(ts).toISOString(),
-        createdUtc: Number.isNaN(ts) ? 0 : ts / 1000
-      };
-    })
-    .filter((i) => i.title && i.url);
-}
-
-// Settings asks for the X community ID, but people paste the whole URL — accept either and hand
-// the endpoint the URL it actually documents.
-export function xCommunityUrl(value: string): string {
-  const v = String(value ?? '').trim();
-  const id = v.match(/communities\/(\d+)/)?.[1] ?? v.replace(/\D/g, '');
-  return id ? `https://x.com/i/communities/${id}` : '';
-}
-
-// X Community tweets (X sells keyword search only via its paid API — niche communities are the
-// engage surface there). Value = the community id from its URL.
-async function fetchXCommunityTweets(communityId: string): Promise<RedditItem[]> {
-  const url = xCommunityUrl(communityId);
-  if (!url) throw new Error(`x_community: "${communityId}" has no community id in it`);
-  // The endpoint takes `url`, NOT `id` — see docs.scrapecreators.com/v1/twitter/community/tweets.
-  const data = await scrapeCreatorsGet(`/v1/twitter/community/tweets?url=${encodeURIComponent(url)}&trim=true`);
-  const raw: AnyRec[] = Array.isArray(data?.tweets) ? data.tweets : Array.isArray(data?.data) ? data.data : [];
-  return raw
-    .map((t) => {
-      const ts = t?.created_at ? Date.parse(String(t.created_at)) : NaN;
-      const id = String(t?.id_str ?? t?.rest_id ?? t?.id ?? '');
-      return {
-        title: String(t?.full_text ?? t?.text ?? '').replace(/\s+/g, ' ').slice(0, 200),
-        url: id ? `https://x.com/i/status/${id}` : '',
-        snippet: String(t?.full_text ?? t?.text ?? '').slice(0, 1000),
-        sourceName: 'x community',
-        publishedAt: Number.isNaN(ts) ? null : new Date(ts).toISOString(),
-        createdUtc: Number.isNaN(ts) ? 0 : ts / 1000
-      };
-    })
-    .filter((i) => i.title && i.url);
-}
+// Le credenziali si leggono a OGNI chiamata, non qui: `$env/dynamic/private` è vivo, e congelarlo
+// alla costruzione vorrebbe dire che un cambio d'ambiente non arriva mai.
+const sources = createSources({
+  scrape: scrapeCreatorsGet,
+  redditAuth: () => ({ token: env.REDDIT_FEED_TOKEN, user: env.REDDIT_FEED_USER }),
+  fetchViaBrowser
+});
 
 // ── Source seeding (once, at onboarding — user-editable in the Studio) ──────────────────────────
 
@@ -611,35 +323,6 @@ const VERDICT_SCHEMA = {
 
 const MAX_ITEMS_PER_SCAN = 40;
 
-// A source is brand-AGNOSTIC to fetch: r/marketing's rising threads are the same for every brand
-// watching it. Key by (kind, value, lang) so identical sources across brands dedup to ONE fetch.
-type SourceRef = { kind: string; value: string; lang?: string | null };
-export const sourceKey = (s: SourceRef): string => `${s.kind}|${s.value}|${s.lang ?? ''}`;
-
-/** How old a conversation may be, per platform. Reddit rising = now; the rest = a couple of days. */
-export function maxAgeHoursFor(kind: string): number {
-  return kind === 'subreddit' || kind === 'reddit_query' ? ENGAGE_MAX_AGE_HOURS : CONVERSATION_MAX_AGE_HOURS;
-}
-
-/** Drop conversations older than their platform's window. Applied to stored AND dynamic searches. */
-export function withinWindow(kind: string, items: RedditItem[]): RedditItem[] {
-  const cutoff = Date.now() / 1000 - maxAgeHoursFor(kind) * 3600;
-  return items.filter((i) => i.createdUtc >= cutoff);
-}
-
-// Fetch ONE source's feed (already time-filtered where timing matters). The unit of the shared cache.
-async function fetchSourceFeed(s: SourceRef): Promise<FeedItem[]> {
-  if (s.kind === 'threads_query') return withinWindow(s.kind, await fetchThreadsSearch(s.value));
-  if (s.kind === 'x_community') return withinWindow(s.kind, await fetchXCommunityTweets(s.value));
-  // linkedin_query was missing here: the source fell through to fetchFeed(), which fetched the
-  // KEYWORDS as if they were an RSS url. Every LinkedIn source returned nothing, forever.
-  if (s.kind === 'linkedin_query') return withinWindow(s.kind, await fetchLinkedInSearch(s.value));
-  if (s.kind === 'reddit_query') return withinWindow(s.kind, await fetchRedditSearch(s.value));
-  if (s.kind !== 'subreddit') return fetchFeed(s);
-  // TIMING: only RISING (momentum right now), hard-cut at ENGAGE_MAX_AGE_HOURS — a comment on a
-  // stale thread is wasted breath.
-  return withinWindow(s.kind, await fetchSubredditRising(s.value));
-}
 
 // How long a cached feed is considered fresh. Ticks run every ~4h; 3h TTL covers the gap so
 // workers processing brands minutes after the orchestrator always read valid data.
@@ -667,7 +350,7 @@ export async function buildRadarFeedCache(admin: SupabaseClient, brandIds: strin
   const fetched = await Promise.all(
     [...uniq.entries()].map(async ([key, s]) => {
       try {
-        return { source_key: key, items: await fetchSourceFeed(s), fetched_at: now };
+        return { source_key: key, items: await sources.fetchSourceFeed(s), fetched_at: now };
       } catch (e) {
         // A FAILED fetch is never cached. Caching it as an empty list would hand the per-brand
         // scan a clean cache hit with zero items, and the error would vanish exactly the way the
@@ -712,7 +395,7 @@ export async function radarDiagnose(
       };
     }
     try {
-      const items = await fetchSourceFeed({ kind, value: String(s.value), lang: s.lang ?? null });
+      const items = await sources.fetchSourceFeed({ kind, value: String(s.value), lang: s.lang ?? null });
       return { ...base, items: items.length, windowHours: maxAgeHoursFor(kind), sample: items.slice(0, 3).map((i) => ({ title: i.title.slice(0, 120), url: i.url })) };
     } catch (e) {
       return { ...base, items: 0, error: e instanceof Error ? e.message.slice(0, 300) : String(e) };
@@ -815,7 +498,7 @@ export async function radarScan(
         return tag(hit);
       }
       try {
-        const items = await fetchSourceFeed(s);
+        const items = await sources.fetchSourceFeed(s);
         searchLog.push({ kind: s.kind, value: s.value, items: items.length, fromCache: false, ok: true });
         return tag(items);
       } catch (e) {
@@ -843,13 +526,13 @@ export async function radarScan(
     if (ctx.length > 10) {
       const searchers: Array<{ kind: 'reddit_query' | 'threads_query' | 'linkedin_query'; prefix: string; run: (q: string) => Promise<RedditItem[]> }> = [];
       if (radarPlatformEnabled(prefs, 'reddit', brand.plan)) {
-        searchers.push({ kind: 'reddit_query', prefix: 'rq', run: fetchRedditSearch });
+        searchers.push({ kind: 'reddit_query', prefix: 'rq', run: sources.fetchRedditSearch });
       }
       if (radarPlatformEnabled(prefs, 'threads', brand.plan)) {
-        searchers.push({ kind: 'threads_query', prefix: 'tq', run: fetchThreadsSearch });
+        searchers.push({ kind: 'threads_query', prefix: 'tq', run: sources.fetchThreadsSearch });
       }
       if (radarPlatformEnabled(prefs, 'linkedin', brand.plan)) {
-        searchers.push({ kind: 'linkedin_query', prefix: 'lq', run: fetchLinkedInSearch });
+        searchers.push({ kind: 'linkedin_query', prefix: 'lq', run: sources.fetchLinkedInSearch });
       }
       if (searchers.length) {
         const platformsLabel = searchers.map((s) => (s.kind === 'reddit_query' ? 'Reddit' : s.kind === 'threads_query' ? 'Threads' : 'LinkedIn')).join(', ');
@@ -1115,7 +798,7 @@ export async function radarEngage(
       // <threads|x|linkedin url>/.rss, got nothing back, and then overwrote the body and the top
       // comments ScrapeCreators had just returned with the empty result.
       if (isReddit && !postBody) {
-        const xml = await fetchRedditText(redditRssAuth(`${it.url.replace(/\/$/, '').replace('://www.', '://old.')}/.rss`));
+        const xml = await sources.fetchRedditText(sources.redditRssAuth(`${it.url.replace(/\/$/, '').replace('://www.', '://old.')}/.rss`));
         const entries = xml ? parseFeed(xml) : [];
         postBody = entries[0]?.snippet ?? '';
         topComments = entries.slice(1, 6)

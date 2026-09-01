@@ -15,10 +15,12 @@ primo `$lib` o `$env` che entra qui dentro.
 | `@anomalia/leads-core/match` | Ritrovare la nostra bozza in un thread pubblicato da un umano: shingle di tre parole, contenimento, soglia | nessuna |
 | `@anomalia/leads-core/contact` | "Una persona, un tocco": gate globale, soppressione, setaccio dell'opt-out, riga di opt-out nel DM, scadenze di retention | client Supabase iniettato |
 | `@anomalia/leads-core/prompts` | Il drafter (commento pubblico + DM) e la selezione degli N lead migliori del giorno | `./intent` |
+| `@anomalia/leads-core/feed` | Dove si trovano le conversazioni: RSS, Google News, subreddit in rising, ricerche su Reddit/Threads/X Communities/LinkedIn. Più parsing, finestre di freschezza e round-robin | gateway di scraping iniettato |
 
-## Le due dipendenze invertite
+## Le dipendenze invertite
 
-Il package non conosce né il database né il reporter dell'app: entrambi entrano dall'esterno.
+Il package non conosce il database, il reporter dell'app, il gateway di scraping né le
+credenziali: entrano tutti dall'esterno.
 
 ```ts
 // Il client Supabase è un parametro, mai un import: il package non legge env e non crea client.
@@ -27,7 +29,24 @@ await contactGate(admin, 'reddit', 'pippo');
 // L'errore va dove decide l'app. Il default stampa in console; Anomalia passa `swallow`,
 // che aggiunge Sentry.
 await sweepLeadRetention(admin, swallow);
+
+const sources = createSources({
+  scrape,                                // il gateway di scraping
+  redditAuth: () => ({ token, user }),   // funzione, NON oggetto — v. sotto
+  fetchViaBrowser                        // Chrome vero, per i feed che bloccano i client da server
+});
+await sources.fetchSourceFeed({ kind: 'subreddit', value: 'saas' });
 ```
+
+`redditAuth` è una **funzione** perché le credenziali vanno lette al momento della chiamata:
+congelarle quando si costruisce il factory vorrebbe dire che un cambio d'ambiente non arriva mai.
+C'è un test che lo pinna.
+
+`scrape` deve lanciare errori nella forma `scrapecreators <status> <body>`: `isNoMatch404` ci
+riconosce il "nessun risultato" di LinkedIn, che arriva come 404 ma è un insieme vuoto, non un
+guasto. Le ricerche di conversazioni **propagano** gli errori di proposito — prima li
+inghiottivano, e una chiave scaduta finiva nei log come "0 item", indistinguibile da "nessuna
+conversazione degna oggi".
 
 ## Contratto di schema
 
