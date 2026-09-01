@@ -7,6 +7,7 @@ import { withBrandContext } from './ai-log';
 import { platformLimit, platformLabel, captionFor, ensureShortNetworkCuts, mediaUrlsForPublish, VIDEO_ONLY_PLATFORMS, youtubeTitleFrom, type PlatformCaptions } from '$lib/platform-limits';
 import { isVideoUrl } from '$lib/content-formats';
 import { mediaUrlsForCheck, requiresVisualMedia } from './prepublish-check';
+import { recordPostVerdict } from './post-verdict';
 
 const PROVIDER_REFUSAL = 'No social publishing provider is configured on this instance.';
 
@@ -180,7 +181,7 @@ export async function publishApprovedPost(
   supabase: SupabaseClient,
   post: ApprovablePost,
   timezone: string,
-  opts: { now?: boolean } = {}
+  opts: { now?: boolean; by?: string } = {}
 ): Promise<PublishResult> {
   // A clip rendering out-of-band leaves the cover frame in media_url, so publishing now would ship
   // a photo where a video was promised. The guard belongs HERE, not only in the chat's
@@ -190,9 +191,10 @@ export async function publishApprovedPost(
   // whose migration may be pending, and a failure here must not block ordinary publishing.
   const { data: renderState } = await supabase
     .from('posts')
-    .select('video_render_status')
+    .select('video_render_status, status')
     .eq('id', post.id)
     .maybeSingle();
+  const wasDraft = (renderState as { status?: string | null } | null)?.status === 'pending_user';
   if ((renderState as { video_render_status?: string | null } | null)?.video_render_status === 'rendering') {
     return {
       scheduled: 0,
@@ -219,6 +221,15 @@ export async function publishApprovedPost(
       error:
         'This post has no image or video. Give it a visual (or make it a text post) before approving — a visual post with no media publishes as an empty post.'
     };
+  }
+
+  if (opts.by && wasDraft) {
+    await recordPostVerdict(supabase, {
+      postId: post.id,
+      brandId: post.brand_id,
+      actorId: opts.by,
+      verdict: 'approved'
+    });
   }
 
   const targets = (post.platforms && post.platforms.length ? post.platforms : [post.platform])

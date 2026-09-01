@@ -53,7 +53,7 @@ function post(action: unknown, fields: Record<string, string>, supabase: unknown
   return (action as (event: unknown) => Promise<unknown>)({
     request: new Request('https://example.test/app/b/calendar', { method: 'POST', body: form }),
     params: { brand: 'b' },
-    locals: { supabase }
+    locals: { supabase, user: { id: 'u1' } }
   });
 }
 
@@ -68,7 +68,7 @@ describe('calendar deletePost', () => {
     const res = await post(actions.deletePost, { id: 'post-1' }, fakeSupabase({})) as
       { status: number; data: { error: string } };
 
-    expect(deletePostCancellingZernio).toHaveBeenCalledWith(expect.anything(), 'post-1');
+    expect(deletePostCancellingZernio).toHaveBeenCalledWith(expect.anything(), 'post-1', undefined, 'u1');
     expect(res.status).toBe(502);
     expect(res.data.error).toContain('NOT deleted');
   });
@@ -88,7 +88,7 @@ describe('calendar deleteSelected', () => {
       { status: number; data: { error: string; deletedSelected: number } };
 
     expect(deletePostCancellingZernio).toHaveBeenCalledTimes(2);
-    expect(deletePostCancellingZernio).toHaveBeenNthCalledWith(1, expect.anything(), 'p1', 'brand-1');
+    expect(deletePostCancellingZernio).toHaveBeenNthCalledWith(1, expect.anything(), 'p1', 'brand-1', 'u1');
     expect(res.status).toBe(502);
     expect(res.data.deletedSelected).toBe(1);
     expect(res.data.error).toContain('NOT deleted');

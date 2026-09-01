@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 import { getPosts } from '$lib/server/cli-queries';
 import { deletePostCancellingZernio } from '$lib/server/post-editing';
+import { recordPostVerdicts } from '$lib/server/post-verdict';
 
 export const GET: RequestHandler = async ({ request, params, url }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -19,7 +20,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
 // Bulk-delete posts by status (default: pending_user). Lets the CLI clear a stale queue without
 // rejecting posts one by one. Refuses to bulk-delete published posts.
 export const DELETE: RequestHandler = async ({ request, params, url }) => {
-  const { supabase, error, apiKey } = await authenticate(request);
+  const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
@@ -42,7 +43,7 @@ export const DELETE: RequestHandler = async ({ request, params, url }) => {
     let deleted = 0;
     const failed: { id: string; error: string }[] = [];
     for (const row of rows ?? []) {
-      const res = await deletePostCancellingZernio(supabase, row.id, brand.id);
+      const res = await deletePostCancellingZernio(supabase, row.id, brand.id, user.id);
       if (res.ok) deleted++;
       else failed.push({ id: row.id, error: res.message });
     }
@@ -58,5 +59,10 @@ export const DELETE: RequestHandler = async ({ request, params, url }) => {
     .select('id');
 
   if (delErr) return json({ error: delErr.message }, { status: 500 });
+
+  await recordPostVerdicts(
+    supabase,
+    (deleted ?? []).map((row) => ({ postId: row.id, brandId: brand.id, actorId: user.id, verdict: 'discarded' as const }))
+  );
   return json({ ok: true, deleted: deleted?.length ?? 0 });
 };

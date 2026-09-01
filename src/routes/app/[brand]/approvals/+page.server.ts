@@ -15,7 +15,7 @@ export const actions: Actions = {
   // Shared editor actions: updatePost, reschedule, cancelSchedule, repost, reject, approve.
   ...editorActions,
 
-  approveAll: async ({ params, locals: { supabase } }) => {
+  approveAll: async ({ params, locals: { supabase, user } }) => {
     const { data: brand } = await supabase
       .from('brands')
       .select('id, timezone')
@@ -31,7 +31,7 @@ export const actions: Actions = {
 
     let noAccount = false;
     for (const post of pending ?? []) {
-      const res = await publishApprovedPost(supabase, post as ApprovablePost, brand.timezone ?? 'Europe/Rome');
+      const res = await publishApprovedPost(supabase, post as ApprovablePost, brand.timezone ?? 'Europe/Rome', { by: user?.id });
       if (res.noAccount) noAccount = true;
     }
     return { ok: true, noAccount };

@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
-import { applyPostEdits } from '$lib/server/post-editing';
+import { applyPostEdits, deletePostCancellingZernio } from '$lib/server/post-editing';
 import { reschedIfNeeded } from '$lib/server/chat/post-editor-tools';
 import { isContentFormat } from '$lib/content-formats';
 
@@ -14,7 +14,7 @@ const FIELDS = [
 ] as const;
 
 export const PUT: RequestHandler = async ({ request, params }) => {
-  const { supabase, error, apiKey } = await authenticate(request);
+  const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
@@ -43,7 +43,8 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 
   // Shared with the web editor: learns the brand's voice from a caption diff before overwriting.
   const { error: updateError } = await applyPostEdits(supabase, params.id, updates, {
-    origin: new URL(request.url).origin
+    origin: new URL(request.url).origin,
+    by: user.id
   });
   if (updateError) return json({ error: updateError.message }, { status: 500 });
 
@@ -54,7 +55,7 @@ export const PUT: RequestHandler = async ({ request, params }) => {
 };
 
 export const DELETE: RequestHandler = async ({ request, params }) => {
-  const { supabase, error, apiKey } = await authenticate(request);
+  const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
@@ -71,9 +72,7 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
     return json({ error: 'Can only delete pending posts' }, { status: 400 });
   }
 
-  const { error: deleteError } = await supabase
-    .from('posts').delete().eq('id', params.id);
-
-  if (deleteError) return json({ error: deleteError.message }, { status: 500 });
+  const res = await deletePostCancellingZernio(supabase, params.id, brand.id, user.id);
+  if (!res.ok) return json({ error: res.message }, { status: res.status });
   return json({ ok: true });
 };

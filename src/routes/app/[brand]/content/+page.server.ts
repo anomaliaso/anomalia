@@ -4,7 +4,7 @@ import { fail } from '@sveltejs/kit';
 import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
 import { signApproveToken } from '$lib/server/token';
 import { sendEmail, approvalEmailHtml, approvalEmailText, approvalEmailSubject } from '$lib/server/email';
-import { EDITOR_POST_COLS, deletePostCancellingZernio, editorActions } from '$lib/server/post-editing';
+import { EDITOR_POST_COLS, applyPostEdits, deletePostCancellingZernio, editorActions } from '$lib/server/post-editing';
 
 /**
  * Queue UI merged into Calendar. Keep this route as a redirect so old links
@@ -17,13 +17,13 @@ export const load: PageServerLoad = async ({ params, url }) => {
 };
 
 export const actions: Actions = {
-  updateCaption: async ({ request, locals: { supabase } }) => {
+  updateCaption: async ({ request, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     const caption = String(data.get('caption') ?? '').trim();
     if (!id) return fail(400, { error: 'Missing post' });
     if (!caption) return fail(400, { error: 'Caption cannot be empty' });
-    const { error } = await supabase.from('posts').update({ caption }).eq('id', id);
+    const { error } = await applyPostEdits(supabase, id, { caption }, { by: user?.id });
     if (error) return fail(500, { error: error.message });
     return { updated: id };
   },
@@ -31,16 +31,16 @@ export const actions: Actions = {
   // Prima scriveva un publish_log 'canceled' e cancellava la riga SENZA mai revocare Zernio:
   // il log dichiarava una cancellazione inesistente e il post usciva comunque (classe incidente
   // scheduling luglio 2026). Ora la revoca viene prima; se fallisce, il post resta visibile.
-  deletePost: async ({ request, locals: { supabase } }) => {
+  deletePost: async ({ request, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400, { error: 'Missing post' });
-    const res = await deletePostCancellingZernio(supabase, id);
+    const res = await deletePostCancellingZernio(supabase, id, undefined, user?.id);
     if (!res.ok) return fail(res.status, { error: res.message });
     return { deleted: id, wasScheduled: res.wasScheduled };
   },
 
-  approveWeek: async ({ request, params, locals: { supabase } }) => {
+  approveWeek: async ({ request, params, locals: { supabase, user } }) => {
     const form = await request.formData();
     const ids = String(form.get('ids') ?? '')
       .split(',')
@@ -64,14 +64,15 @@ export const actions: Actions = {
       const res = await publishApprovedPost(
         supabase,
         post as ApprovablePost,
-        brand.timezone ?? 'Europe/Rome'
+        brand.timezone ?? 'Europe/Rome',
+        { by: user?.id }
       );
       if (res.noAccount) noAccount = true;
     }
     return { ok: true, noAccount };
   },
 
-  approveAll: async ({ params, locals: { supabase } }) => {
+  approveAll: async ({ params, locals: { supabase, user } }) => {
     const { data: brand } = await supabase
       .from('brands')
       .select('id, timezone')
@@ -88,7 +89,8 @@ export const actions: Actions = {
       const res = await publishApprovedPost(
         supabase,
         post as ApprovablePost,
-        brand.timezone ?? 'Europe/Rome'
+        brand.timezone ?? 'Europe/Rome',
+        { by: user?.id }
       );
       if (res.noAccount) noAccount = true;
     }
