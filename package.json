@@ -6,7 +6,8 @@
   "exports": {
     "./contact": "./src/contact.ts",
     "./intent": "./src/intent.ts",
-    "./match": "./src/match.ts"
+    "./match": "./src/match.ts",
+    "./prompts": "./src/prompts.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.46.1"
