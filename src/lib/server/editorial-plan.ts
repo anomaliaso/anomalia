@@ -242,7 +242,9 @@ export function weekStrategyBrief(
   const multi = span.length > 1;
   const weekBlock = (w: PlanWeek, i: number) =>
     [
-      `WEEK ${weekIndex + i + 1} — theme: ${w.theme}`,
+      // L'etichetta resta leggibile (WEEK 1), il numero da SCRIVERE è accanto: il modello aveva
+      // copiato l'etichetta in un campo che è un indice, e il batch slittava di una settimana.
+      `WEEK ${weekIndex + i + 1} (write week=${weekIndex + i}) — theme: ${w.theme}`,
       w.focus ? `  Focus: ${w.focus}` : '',
       mixOf(w) ? `  Content mix target: ${mixOf(w)}.` : '',
       w.rationale ? `  Why this week: ${w.rationale}` : ''
@@ -260,7 +262,7 @@ export function weekStrategyBrief(
     multi ? '' : mix ? `Content mix target for the week: ${mix}.` : '',
     multi ? '' : week.rationale ? `Why this week: ${week.rationale}` : '',
     multi
-      ? `WEEK BRIEF — every seed carries "week" with the number of the week it belongs to, and each week must get its own theme and its own content mix. Spreading them evenly is not the same as honouring each week's mix.\n${span.map(weekBlock).join('\n')}`
+      ? `WEEK BRIEF — every seed carries "week" with the number in brackets for the week it belongs to (write that number, not the label), and each week must get its own theme and its own content mix. Spreading them evenly is not the same as honouring each week's mix.\n${span.map(weekBlock).join('\n')}`
       : '',
     plan.gtm?.stage === 'zero_to_one' && plan.gtm.summary
       ? `GO-TO-MARKET CONTEXT (organic 0→1 — the brand is building its audience from scratch): ${plan.gtm.summary}`

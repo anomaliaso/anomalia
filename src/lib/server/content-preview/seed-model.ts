@@ -656,7 +656,7 @@ export const STRATEGY_SCHEMA = {
           week: {
             type: 'integer' as const,
             description:
-              "Which week of the batch this post belongs to, as the WEEK BRIEF numbers them. A batch spanning more than one week must spread its posts across all of them and honour each week's own theme and content mix — the day of the week alone cannot tell the first Monday from the second."
+              "Which week of the batch this post belongs to: copy the number the WEEK BRIEF shows in brackets as `write week=N`, never the WEEK label next to it. A batch spanning more than one week must spread its posts across all of them and honour each week's own theme and content mix — the day of the week alone cannot tell the first Monday from the second."
           },
           slide_count: {
             type: 'integer' as const,

@@ -154,7 +154,10 @@ async function main() {
       brandId: fixture.brandId,
       profile,
       platforms: ['instagram'],
-      count: 3,
+      count: 4,
+      // Due settimane: la verifica è che i seed si distribuiscano invece di finire tutti nella prima.
+      weekIndex: 0,
+      weeks: 2,
       maxCarousels: 2,
       prefs: { language: 'Italian' },
       verbose: true,
@@ -186,7 +189,7 @@ async function main() {
             .map((b, n) => `   ${n + 1}. ${b.shows}${b.who ? `\n      in scena: ${b.who}` : ''}${b.thinks ? `\n      pensa: «${b.thinks}»` : ''}${b.says ? `\n      ${b.says.speaker} dice: «${b.says.line}»` : ''}`)
             .join('\n');
           return [
-            `### ${i + 1}. ${s.format}${s.rubric ? ` · "${s.rubric}"` : ''}`,
+            `### ${i + 1}. ${s.format}${s.rubric ? ` · "${s.rubric}"` : ''} · settimana ${s.week ?? '—'}`,
             `- angolo: ${s.angle}`,
             `- fonte: ${s.sourced_from || '**NESSUNA**'}`,
             beats ? `- battute:\n${beats}` : ''
