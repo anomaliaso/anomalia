@@ -39,6 +39,11 @@ const DFS_LABS: ToolCap = { perIp: 5, globalPerDay: 400, costPerRun: 0.03 };
 const DFS_BACKLINKS: ToolCap = { perIp: 2, globalPerDay: 60, costPerRun: 0.06 };
 
 const TOOL_CAPS: Record<string, ToolCap> = {
+  // The pre-login guest preview (/start/preview): site analysis + one caption pass + one image,
+  // for anyone on the internet with no session. It is the most expensive unauthenticated call we
+  // make, and no credit gate stands behind it (renderPostImage gates on a brand context a guest
+  // does not have), so this cap IS the spending limit: 200 x $0.08 = ~$16/day worst case.
+  'guest-preview': { perIp: 3, globalPerDay: 200, costPerRun: 0.08 },
   // Existing tools (previously unguarded).
   'keyword-research': AI_BACKED,
   // Site fetch + grounded AI discovery + DataForSEO overview (+ optional Reddit samples).

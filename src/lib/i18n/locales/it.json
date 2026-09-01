@@ -3129,6 +3129,15 @@
       "prev": "Agente precedente",
       "next": "Agente successivo",
       "customDesc": "Un agente tuo"
+    },
+    "guestPreview": {
+      "title": "Il tuo primo post",
+      "sub": "Fatto dal tuo sito. Per guardarlo non serve un account.",
+      "working": "Leggo il tuo sito e preparo il primo post…",
+      "failed": "Non sono riuscito a creare un post da quel sito.",
+      "retry": "Prova un altro sito",
+      "cta": "Salvalo e vedi il resto",
+      "ctaHint": "Crea l'account per tenere questo post e ricevere gli altri."
     }
   },
   "editorialPlan": {

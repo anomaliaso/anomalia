@@ -338,6 +338,25 @@ Motion prende `remotion-best-practices` perché è l'unico che scrive sorgente R
 ### La continuazione senza testo per il modello muore due volte
 Una ripresa accodata con `user_message` vuoto è morta due volte prima di chiamare il modello: prima col gate `Missing user_message`, poi — superato il gate — col prompt vuoto, perché il provider rifiuta una conversazione che non apre con un turno `user` e `dropLeadingAssistant` mangia l'apertura firmata. Il segnale: `chat_jobs.status='failed'` con errori diversi per lo stesso job. La mossa: una continuazione porta SEMPRE un testo solo-per-il-modello (mai salvato, mai mostrato), come `enqueueTurnContinuation`; `open_session_with_user` era nata rotta così ed è sopravvissuta mesi perché la coda è buio per i test unitari — è la verifica nel browser che l'ha vista.
 
+### Una media di produzione non dice che quel percorso sia ancora vivo
+`onboarding_step_jobs` dava medie perfettamente credibili — research 301s, competitors 31s — e su
+quelle stava per partire una PR che accorciava il wizard. Ma l'ultima riga di QUALUNQUE tipo era
+del 12 agosto, e la diagnosi era del 1 settembre: il percorso era morto da tre settimane, staccato
+dal flusso critico quando l'early-create ha portato l'utente dritto in chat. Una `avg()` non ha
+data; sembra viva per sempre. Segnale: numeri che descrivono un percorso che nel codice non ha
+nessun ingresso — cerca chi linka la rotta prima di crederci. Mossa: con la media chiedi SEMPRE
+`max(created_at)` e un conteggio a finestra (`count(*) filter (where created_at > now() - '7
+days')`), e incrocia con lo stato che il percorso lascia (qui: zero `onboarding_completed_at` dal
+3 agosto, mentre i piani editoriali continuavano a nascere — dalla chat).
+
+### I selettori di una pagina pubblica sono un contratto con l'eval, che in CI non gira
+Riscrivere la seconda fase di `/start` ha tolto `button.scard`, e `scripts/eval/ux/walk.ts` ci
+clicca sopra. `npm run eval:ux` costa soldi e si lancia a mano: la rottura non sarebbe diventata
+rossa in nessuna PR, sarebbe marcita fino alla prossima run manuale, che è il modo più lento
+possibile di scoprirla. Segnale: tocchi il markup di `/`, `/start`, `/login` o dell'onboarding.
+Mossa: `grep` dei selettori che cambi dentro `scripts/eval/` PRIMA di considerare finito il
+lavoro — la camminata è codice che nessun test protegge, quindi la protezione sei tu.
+
 ## L'immagine del self-host non entra in un builder Docker da 8 GB
 
 **Segnale.** `docker compose build` sull'immagine app fallisce in due modi diversi, e vanno

@@ -2,6 +2,9 @@ import type { Browser } from './browser';
 
 const WAIT_URL_TIMEOUT_MS = 30_000;
 const PICK_TIMEOUT_MS = 120_000;
+// /start now reads the site and renders one post before login: site analysis plus a caption pass
+// plus an image, inline in one request. That is minutes, not seconds.
+const GUEST_POST_TIMEOUT_MS = 300_000;
 
 export type WalkResult = {
   steps: string[];
@@ -9,6 +12,8 @@ export type WalkResult = {
   urls: Record<string, string>;
   website: string | null;
   selectedAgent: string;
+  /** A post was rendered and shown BEFORE any account existed. False on the no-website branch. */
+  guestPostShown: boolean;
 };
 
 const BRAND_NAME = 'Eval UX Brand';
@@ -26,6 +31,7 @@ export async function walkOnboarding(
 ): Promise<WalkResult> {
   const steps: string[] = [];
   const urls: Record<string, string> = {};
+  let guestPostShown = false;
 
   await browser.open(`${appUrl}/`);
   if (Number(await browser.run('count', 'header.nav a.nav-login')) !== 1) {
@@ -59,9 +65,10 @@ export async function walkOnboarding(
     await browser.run('wait', '--url', '/start', '--timeout', String(WAIT_URL_TIMEOUT_MS));
     urls.start = (await browser.run('get', 'url')).trim();
     assertWebsite(urls.start, website);
-    await browser.run('wait', '--selector', 'button.scard', '--timeout', String(WAIT_URL_TIMEOUT_MS));
+    // The guest post is the whole point of this step: wait for the card, not for a form.
+    await browser.run('wait', '--selector', '.post-card img.post-img', '--timeout', String(GUEST_POST_TIMEOUT_MS));
+    guestPostShown = true;
     await browser.captureEvidence('03-start');
-    await browser.run('click', 'button.scard');
     await browser.run('click', '.cta-row-setup button.primary');
     await browser.run('wait', '--url', '/login', '--timeout', String(WAIT_URL_TIMEOUT_MS));
     urls.login = (await browser.run('get', 'url')).trim();
@@ -108,7 +115,7 @@ export async function walkOnboarding(
   await browser.captureEvidence('06-chat');
   steps.push('pick → setup chat');
 
-  return { steps, chatUrl, urls, website, selectedAgent };
+  return { steps, chatUrl, urls, website, selectedAgent, guestPostShown };
 }
 
 /**
