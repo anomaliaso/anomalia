@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
+    "./contact": "./src/contact.ts",
     "./intent": "./src/intent.ts",
     "./match": "./src/match.ts"
   },
