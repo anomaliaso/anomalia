@@ -451,3 +451,28 @@ Mossa: la data si deriva da `Date.now()`, mai si scrive — `aDateInTheFuture()`
 `packages/agent-kit/src/testkit.ts`. Restano della stessa forma quattro `periodEnd: new
 Date('2026-09-01')` (credit-warning, tool-policy, brand-studio-tools, content/ugc plugins): oggi
 innocui perché nessuno li confronta con l'orologio, domani no.
+
+### `npm run check` esce 0 con centinaia di errori: il verde è finto, conta la DIFFERENZA
+Il typecheck di questo repo non è pulito — 346 errori su 171 file, tutti pre-esistenti — e
+`svelte-check` **esce comunque 0**. Quindi «il check passa» non significa niente: né in locale né
+in CI, dove un gate costruito sull'exit code sarebbe cieco per definizione.
+
+È già costato un difetto vero, sfuggito a una suite di 6102 test verdi. Estraendo i fetcher in
+`@anomalia/leads-core/feed` il factory era stato legato a `const sources = createSources(...)` a
+livello di modulo, ma `sources` è già il nome delle righe di `brand_news_sources` lette dal
+database in TRE funzioni di `radar.ts`: ognuna lo ombreggiava, e `sources.fetchSourceFeed(...)`
+risolveva sull'array del database. I test non l'hanno visto perché quei percorsi
+(`buildRadarFeedCache`, `radarDiagnose`, `radarScan`) toccano il DB e non hanno unit test — cioè
+proprio la forma di guasto che i commenti di quel file raccontano: una sorgente che smette di
+funzionare in silenzio e riporta «0 item».
+
+Segnale: nessuno. Non c'è un rosso da cercare — la suite è verde e l'exit code è 0. L'unico
+segnale è il **conteggio**: `COMPLETED <n> FILES <m> ERRORS` nell'ultima riga dell'output.
+Mossa: prima di dire che il typecheck regge, confronta `m` con quello della base e cerca i tuoi
+file per nome fra le righe `ERROR` (`grep ERROR out.txt | grep <i tuoi file>`). E l'output va
+rediretto su un file tuo: quello del task in background viene troncato alla coda, quindi ci leggi
+gli ultimi 40 errori e concludi il falso.
+
+Corollario di progettazione: legando in un modulo grande le funzioni che arrivano da un factory,
+**destrutturale** invece di tenere l'oggetto. Un oggetto con un nome generico (`sources`, `items`,
+`data`) prima o poi lo ombreggia una locale, e TypeScript è l'unica cosa che te lo dice.
