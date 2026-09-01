@@ -80,7 +80,8 @@ import {
   NANO_BANANA_PRO_LIST_RENDER_USD,
   PER_RUN_USD_CAP,
   STALL_STEP_THRESHOLD,
-  estimatedRenderCostUsd
+  estimatedRenderCostUsd,
+  IMAGE_PROMPT_GUIDE
 } from './image-agent';
 import { llmDefaultModel } from './llm';
 
@@ -257,5 +258,43 @@ describe('image-agent inspect budget', () => {
     expect(consumeInspectBudget(budget).ok).toBe(true);
     expect(consumeInspectBudget(budget).ok).toBe(true);
     expect(consumeInspectBudget(budget).ok).toBe(false);
+  });
+});
+
+/**
+ * LA GUIDA AI PROMPT IMMAGINE, e le due regole che upstream non può conoscere.
+ *
+ * Il guide di Nano Banana da cui è condensata (NikiforovAll/claude-code-rules, Apache-2.0) insegna
+ * a chiedere il testo dentro l'immagine (Tecnica 5, 7, 16) e a dichiarare l'aspect ratio nel prompt
+ * (Tecnica 11). Qui sono due difetti misurati, non due tecniche: il diffusore scrive «Social
+ * growts», e il rapporto lo decide `aspectRatioFor(platform)`, non la frase. Se qualcuno ricopia
+ * quelle tecniche dall'originale, questo test cade.
+ */
+describe('la guida ai prompt immagine', () => {
+  it('vieta il testo leggibile e l\'aspect ratio dentro il prompt', () => {
+    expect(IMAGE_PROMPT_GUIDE).toContain('Never ask for readable text');
+    expect(IMAGE_PROMPT_GUIDE).toContain('Never state an aspect ratio');
+  });
+
+  it('arriva al modello a ogni passo, non solo alla prima chiamata', async () => {
+    let stepSystem = '';
+    generateText.mockImplementation(async ({ prepareStep, tools }) => {
+      stepSystem = prepareStep?.({ stepNumber: 3, steps: [] })?.system ?? '';
+      await tools.finish.execute({ imagePrompt: 'x', notes: 'n', imageUrl: 'https://cdn.example/img.png' });
+      return { text: '', totalUsage: { inputTokens: 10, outputTokens: 5 } };
+    });
+
+    await runImageAgent({
+      supabase: stubSupabase,
+      userId: 'u1',
+      brandId: 'b1',
+      brief: 'Product hero shot',
+      platform: 'instagram',
+      budget: { renders: 1, inspects: 0 },
+      deadlineMs: 30_000
+    });
+
+    expect(stepSystem).toContain('How to write an image prompt');
+    expect(stepSystem).toContain('PRODUCT FIDELITY');
   });
 });
