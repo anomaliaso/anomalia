@@ -736,6 +736,39 @@
     pointer-events: none;
     transform: none;
   }
+  .page-topbar-actions :global(.topbar-cta.neutral) {
+    gap: 6px;
+    border: 1px solid var(--line);
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 550;
+    color: var(--ink-soft);
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+  .page-topbar-actions :global(.topbar-cta.neutral:hover:not(:disabled)) {
+    color: var(--ink);
+    background: var(--paper-2);
+    border-color: var(--line-2);
+    box-shadow: none;
+    transform: none;
+  }
+  .page-topbar-actions :global(.topbar-cta.neutral:active:not(:disabled)) {
+    background: var(--paper-3);
+    box-shadow: none;
+    transform: none;
+  }
+  .page-topbar-actions :global(.topbar-cta.neutral:focus-visible) {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  .page-topbar-actions :global(.topbar-cta.neutral:disabled) {
+    opacity: 0.72;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+  }
   .page-topbar-actions :global(.topbar-cta-spin),
   .page-topbar-actions :global(.spin) {
     width: 14px;

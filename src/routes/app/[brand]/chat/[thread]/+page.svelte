@@ -939,7 +939,7 @@
 {#snippet agentPanelTopAction()}
   <TopbarCta
     type="button"
-    variant="ghost"
+    variant="neutral"
     Icon={Monitor}
     title={$_('chat.computer.toggle')}
     onclick={() => (agentPanelOpen = !agentPanelOpen)}
