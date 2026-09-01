@@ -262,6 +262,18 @@ gestisce chiaramente. Mossa: intercettare per PATHNAME esatto (una regex sull'UR
 che un file sorgente può soddisfare — e prima di credere a un difetto, misurare il caso base senza
 intercettazione.
 
+### Un cancello messo un livello sopra il chokepoint non è un cancello: è una delle porte
+Il consenso alla likeness era controllato in `resolvePeopleVisualRefsDetailed` — un livello sopra
+`signPersonImages`, che è il punto dove la foto di una persona reale diventa davvero un URL
+firmato. Otto chiamanti firmano quelle foto; uno solo passava dal cancello. `media-refs` non
+selezionava nemmeno la colonna `consent`, e il workbench renderizzava una persona che la chat
+rifiutava per nome: stessa regola, due risposte secondo la porta. Segnale: una regola che vale su
+un percorso e non su un altro, e un `select` che non nomina la colonna su cui la regola decide —
+la regola non è stata aggirata, non è mai stata chiamata. Mossa: il cancello sta **sul
+chokepoint**, cioè sulla funzione che tutti devono attraversare per ottenere la cosa pericolosa,
+e prende la riga intera invece del campo già estratto; se sta più in alto, prima di dirlo chiuso
+conta i chiamanti del chokepoint e verifica ciascuno.
+
 ## Build e bundle
 
 ### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
