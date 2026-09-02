@@ -2368,10 +2368,10 @@
     "creditsDocsLink": "Comment fonctionnent crédits et limites →"
   },
   "waitlist": {
-    "title": "Vous êtes sur la liste 🎉",
-    "sub": "Nous vous préviendrons dès qu'Anomalia ouvrira pour {email}.",
-    "ahead": "{count, plural, one {person devant vous} other {personnes devant vous}}",
-    "note": "Vous voulez passer en tête ? Parrainez un ami (bientôt disponible)."
+    "title": "Une dernière étape",
+    "sub": "Anomalia s'ouvre après un court appel avec Marco. Choisissez le moment qui vous convient : votre accès s'active juste après.",
+    "note": "Le calendrier ne se charge pas ?",
+    "fallback": "Ouvrez-le ici"
   },
   "login": {
     "reset": {
@@ -2519,7 +2519,7 @@
       "description": "Découvrez comment Anomalia gère les réseaux sociaux pour les créateurs, agences, e-commerce, marques, SaaS, commerces locaux, coachs, immobilier et événements."
     },
     "waitlist": {
-      "title": "Anomalia — Vous êtes sur la liste"
+      "title": "Anomalia — Réservez votre appel"
     },
     "login": {
       "titleWaitlist": "Anomalia — Rejoindre la liste d'attente",

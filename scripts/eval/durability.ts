@@ -50,6 +50,57 @@ const SCENARIOS: Scenario[] = [
 		}
 	},
 	{
+		id: 'la-porta-chiusa-lascia-entrare-solo-chi-deve',
+		what: 'il predicato di accesso, contro il plpgsql vero: approvato, invitato, nessuno dei due',
+		async run(fixture) {
+			const admin = createAdminClient();
+			const { data: profile } = await admin
+				.from('profiles')
+				.select('email')
+				.eq('id', fixture.userId)
+				.maybeSingle();
+			const email = String(profile?.email ?? '');
+
+			// Si interroga `is_approved(uuid)` e non `can_enter()`: quest'ultima dipende dal flag
+			// GLOBALE, e un eval che per girare deve chiudere il prodotto chiude fuori i clienti veri.
+			const approved = async () => {
+				const { data } = await admin.rpc('is_approved', { p_user: fixture.userId });
+				return data === true;
+			};
+
+			await admin.from('profiles').update({ approved_at: null }).eq('id', fixture.userId);
+			const iscrittoEBasta = await approved();
+
+			const { data: invite } = await admin
+				.from('brand_invites')
+				.insert({
+					brand_id: fixture.brandId,
+					email,
+					brand_name: 'Eval',
+					invited_by: fixture.userId
+				})
+				.select('id')
+				.single();
+			const invitato = await approved();
+
+			// Un invito scaduto non deve lasciare un limbo: dentro, senza niente da accettare.
+			const scaduto = new Date(Date.now() - 8 * 24 * 3.6e6).toISOString();
+			await admin.from('brand_invites').update({ created_at: scaduto }).eq('id', invite!.id);
+			const invitoScaduto = await approved();
+
+			await admin.from('brand_invites').delete().eq('id', invite!.id);
+			await admin.from('profiles').update({ approved_at: new Date().toISOString() }).eq('id', fixture.userId);
+			const dopoApprovazione = await approved();
+
+			return [
+				fact('iscritto-non-basta', iscrittoEBasta === false, `is_approved=${iscrittoEBasta}`),
+				fact('invitato-entra', invitato === true, `is_approved=${invitato}`),
+				fact('invito-scaduto-non-entra', invitoScaduto === false, `is_approved=${invitoScaduto}`),
+				fact('approvato-entra', dopoApprovazione === true, `is_approved=${dopoApprovazione}`)
+			];
+		}
+	},
+	{
 		id: 'finiti-i-tentativi-il-lavoro-non-sparisce',
 		what: 'alla resa il parziale diventa un messaggio — il difetto che ha perso 25 turni veri',
 		async run(fixture) {

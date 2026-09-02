@@ -91,3 +91,40 @@ export async function brandStage(
   };
   return { stage, nextPath: path[stage] };
 }
+
+/**
+ * Chi è in attesa da abbastanza e non ha ancora ricevuto il sollecito per la call.
+ *
+ * Il drip di lifecycle pende dai brand, e chi aspetta non ne ha uno: senza questa lista si
+ * registra, vede un calendario, non prenota, e nessuno gli scrive mai — prodotto chiuso e
+ * recupero spento nello stesso momento.
+ */
+const NUDGE_AFTER_H = 2;
+
+export async function pendingToNudge(
+  admin: SupabaseClient,
+  now: Date = new Date()
+): Promise<{ userId: string; email: string }[]> {
+  const cutoff = new Date(now.getTime() - NUDGE_AFTER_H * 3.6e6).toISOString();
+
+  const { data: waiting } = await admin
+    .from('waitlist')
+    .select('user_id')
+    .is('nudged_at', null)
+    .lt('created_at', cutoff);
+
+  const ids = (waiting ?? []).map((w) => String(w.user_id));
+  if (!ids.length) return [];
+
+  // L'approvazione si rilegge ADESSO, non si assume dalla coda: chi è stato approvato fra
+  // l'iscrizione e il giro non deve ricevere "prenota la call" quando è già dentro.
+  const { data: profiles } = await admin
+    .from('profiles')
+    .select('id, email')
+    .in('id', ids)
+    .is('approved_at', null);
+
+  return (profiles ?? [])
+    .filter((p) => !!p.email)
+    .map((p) => ({ userId: String(p.id), email: String(p.email) }));
+}

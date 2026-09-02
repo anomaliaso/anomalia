@@ -6,15 +6,20 @@ export const load: PageServerLoad = async ({ locals: { supabase, safeGetSession 
   const { session, user } = await safeGetSession();
   if (!session || !user) throw redirect(303, '/login');
 
-  // Admins go to the real product, not the waitlist.
+  // Approvato (o admin) va nel prodotto: questa pagina esiste solo per chi non lo è ancora.
   if (await canEnter(supabase)) throw redirect(303, '/app');
 
-  // Login == joining the waitlist: insert once, do nothing on repeat visits.
-  // ignoreDuplicates → INSERT ... ON CONFLICT DO NOTHING (no UPDATE, so RLS insert policy suffices).
+  // Registrarsi vale come mettersi in coda: si inserisce una volta, le visite dopo non fanno nulla.
+  // ignoreDuplicates → INSERT ... ON CONFLICT DO NOTHING (nessun UPDATE, basta la policy di insert).
   await supabase
     .from('waitlist')
     .upsert({ user_id: user.id }, { onConflict: 'user_id', ignoreDuplicates: true });
 
-  const { data: ahead } = await supabase.rpc('waitlist_position');
-  return { email: user.email, ahead: ahead ?? 99 };
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  return { email: user.email ?? '', fullName: profile?.full_name ?? '' };
 };
