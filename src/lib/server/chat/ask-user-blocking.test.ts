@@ -79,7 +79,7 @@ describe('ask_user_questions chiude il turno', () => {
    * il modello le legge con la stessa frequenza di prima — con una copia in meno da tenere allineata.
    */
   it("il divieto di chiedere il permesso sta dove l'obiettivo si apre e si chiude", () => {
-    const src = readFileSync('src/lib/server/chat/goal-tools.ts', 'utf8');
+    const src = readFileSync('src/lib/agent/tools/goal-tools.ts', 'utf8');
     expect(src).toContain('YOU DO NOT ASK PERMISSION TO CARRY ON');
     expect(src).toContain('CLOSING IS A CALL, NOT A LABEL');
     // E non e` rimasta una seconda copia nel prompt: e` da li` che diverge.
@@ -107,7 +107,7 @@ describe('ask_user_questions chiude il turno', () => {
    * dove l'obiettivo nasce: il blocco permanente e la descrizione del tool.
    */
   it('la provenienza di un criterio è scritta dove l’obiettivo nasce', () => {
-    const tools = readFileSync('src/lib/server/chat/goal-tools.ts', 'utf8');
+    const tools = readFileSync('src/lib/agent/tools/goal-tools.ts', 'utf8');
     // Le fonti sono DUE, non zero. La versione precedente diceva «MAI dal tuo mestiere», e
     // contraddiceva la riga READY in cima alle CAPABILITIES di ogni specialista («drafts sitting
     // in pending with caption AND visual», «RENDERED to MP4»): quella riga È uno standard di

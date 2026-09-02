@@ -29,7 +29,7 @@ vi.mock('./system-prompt', () => ({
 	buildTurnVolatileBlock: vi.fn(async () => ''),
 	wrapTurnMessage: (_block: string, message: unknown) => message
 }));
-vi.mock('./tools', () => ({ createChatTools: () => ({}) }));
+vi.mock('$lib/agent/tools/index', () => ({ createChatTools: () => ({}) }));
 vi.mock('$env/dynamic/private', async (importOriginal) => {
 	const original = (await importOriginal()) as { env: Record<string, string> };
 	return { ...original, env: { ...original.env, AGENT_KIT: 'off' } };
@@ -42,10 +42,10 @@ vi.mock('./subagents', async (orig) => {
 		createSubagentTools: () => ({})
 	};
 });
-vi.mock('./sandbox-tools', () => ({
+vi.mock('$lib/agent/tools/sandbox-tools', () => ({
 	withSandboxTools: (t: unknown) => ({ tools: t, close: async () => undefined })
 }));
-vi.mock('./strategist-tools', () => ({ withStrategistTools: (t: unknown) => t }));
+vi.mock('$lib/agent/tools/strategist-tools', () => ({ withStrategistTools: (t: unknown) => t }));
 vi.mock('$lib/server/custom-agent-persona', () => ({
 	getCustomAgentPersona: vi.fn(async () => null),
 	customAgentSystemBlock: () => ''
@@ -157,7 +157,7 @@ vi.mock('./persistence', () => ({
 
 const { env } = await import('$env/dynamic/private');
 const { sendPushToUser } = await import('$lib/server/web-push');
-const { createAgentDmTools } = await import('./agent-dm-tools');
+const { createAgentDmTools } = await import('$lib/agent/tools/agent-dm-tools');
 const { processNextQueuedChatJob } = await import('./queue');
 
 /**

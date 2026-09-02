@@ -5,7 +5,7 @@ import { withBrandContext } from '$lib/server/ai-log';
 import {
   loadEditorContext, readPostState, regeneratePostImage, editCarouselSlide, restructureCarouselSlides,
   renderPostVideo, isAspectRatio, type EditorTarget
-} from '$lib/server/chat/post-editor-tools';
+} from '$lib/agent/tools/post-editor-tools';
 
 // Image refinement + carousel slide renders — same budget the web editor gets.
 export const config = { maxDuration: 300 };

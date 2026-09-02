@@ -15,14 +15,14 @@ import { buildSystemPrompt, buildTurnVolatileBlock, wrapTurnMessage } from '$lib
 import { attachmentParts, withoutVideo } from '$lib/media-parts';
 import { resolveAgentForPlan, pickTools, stripWebHubTools } from '$lib/server/chat/agents';
 import { withSubagentTools } from '$lib/server/chat/subagents';
-import { withSandboxTools } from '$lib/server/chat/sandbox-tools';
+import { withSandboxTools } from '$lib/agent/tools/sandbox-tools';
 import { computerOwner } from '$lib/agent-computer';
 import { listThreadArtifacts, formatArtifactsForPrompt } from '$lib/server/chat/artifacts';
 import { resolveChatModel, modelSeesImages, modelSeesVideo } from '$lib/server/chat/model';
 import { roomBeat, roomSystemBlock, stripRoomPeerTools, type RoomMember } from '$lib/server/chat/room';
 import { filterToolsForMode, isChatMode, modeSystemBlock, type ChatMode } from '$lib/chat-modes';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import {
   CHAT_HISTORY_DOC_CAP,
   formatAttachedDocsBlock,

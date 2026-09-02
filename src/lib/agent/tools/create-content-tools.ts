@@ -1090,7 +1090,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           .eq('brand_id', brandId)
           .maybeSingle();
         if (!post) return { error: 'Post not found' };
-        const { loadEditorContext, designPostGraphic } = await import('$lib/server/chat/post-editor-tools');
+        const { loadEditorContext, designPostGraphic } = await import('$lib/agent/tools/post-editor-tools');
         const ctx = await loadEditorContext(supabase, brandId);
         return compactGraphicPersist(
           await designPostGraphic(

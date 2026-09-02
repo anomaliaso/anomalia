@@ -12,20 +12,20 @@ const createThread = vi.fn(async (_s: unknown, _b: string, _u: string, title: st
 	title,
 	agent
 }));
-vi.mock('./persistence', () => ({ saveMessages, getThread, createThread }));
+vi.mock('$lib/server/chat/persistence', () => ({ saveMessages, getThread, createThread }));
 const markThreadRead = vi.fn(async () => undefined);
-vi.mock('./unread', () => ({ markThreadRead }));
+vi.mock('$lib/server/chat/unread', () => ({ markThreadRead }));
 const kickChatQueueWork = vi.fn(async () => undefined);
 const threadHasActiveChatResponse = vi.fn(async () => false);
-vi.mock('./queue', () => ({ kickChatQueueWork, threadHasActiveChatResponse }));
+vi.mock('$lib/server/chat/queue', () => ({ kickChatQueueWork, threadHasActiveChatResponse }));
 // Il goal è mockato, non il database: il test decide se il thread ha un obiettivo aperto.
 const loadOpenGoal = vi.fn(async () => null);
-vi.mock('./goal', () => ({ loadOpenGoal }));
+vi.mock('$lib/server/chat/goal', () => ({ loadOpenGoal }));
 
 const { createAgentDmTools, getOrCreateDmThread, DM_SENDS_PER_TURN } = await import('./agent-dm-tools');
-const { ROOM_MAX_MEMBERS } = await import('./room');
-const { claimQueuedFollowUps } = await import('./mid-turn-mailbox');
-const { subagentToolNames } = await import('./subagents');
+const { ROOM_MAX_MEMBERS } = await import('$lib/server/chat/room');
+const { claimQueuedFollowUps } = await import('$lib/server/chat/mid-turn-mailbox');
+const { subagentToolNames } = await import('$lib/server/chat/subagents');
 
 // ── Supabase finto: chat_threads con .contains sul marcatore, chat_jobs come lista ────────────
 type ThreadRow = { id: string; brand_id: string; user_id: string; title: string; room_agents: unknown; created_at: string };

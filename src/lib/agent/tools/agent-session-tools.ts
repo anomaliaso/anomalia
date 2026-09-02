@@ -1,7 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { resolveDmInitiator } from '$lib/server/chat/agent-dm-tools';
+import { resolveDmInitiator } from '$lib/agent/tools/agent-dm-tools';
 import { getThread, saveMessages } from '$lib/server/chat/persistence';
 import { enqueueQueuedChatTurn, kickChatQueueWork, threadHasActiveChatResponse } from '$lib/server/chat/queue';
 import { getOrCreateTeamThread } from '$lib/server/team-ignition';

@@ -38,7 +38,7 @@ describe('il tool delega e il turno può chiudersi', () => {
 			brands: [{ id: 'b1', plan: 'pro', slug: 'acme', name: 'Acme' }],
 			chat_jobs: []
 		});
-		const { createChatTools } = await import('./tools');
+		const { createChatTools } = await import('$lib/agent/tools/index');
 		const tools = createChatTools(
 			kit.client,
 			'b1',
@@ -70,7 +70,7 @@ describe('il tool delega e il turno può chiudersi', () => {
 
 	it('Stop premuto prima della delega non lascia niente in coda', async () => {
 		const kit = createTestSupabase({ brands: [{ id: 'b1', plan: 'pro' }], chat_jobs: [] });
-		const { createChatTools } = await import('./tools');
+		const { createChatTools } = await import('$lib/agent/tools/index');
 		const tools = createChatTools(kit.client, 'b1', 'Europe/Rome', 'u1', '', 'it', 'thread-1') as Record<
 			string,
 			{ execute: (i: unknown, o: unknown) => Promise<Row> }

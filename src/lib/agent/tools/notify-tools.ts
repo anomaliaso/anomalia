@@ -19,7 +19,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env as publicEnv } from '$env/dynamic/public';
-import { resolveWorkbenchPath } from './workbench-path';
+import { resolveWorkbenchPath } from '$lib/server/chat/workbench-path';
 
 /** Quante notifiche può far partire un singolo turno di chat. */
 const MAX_PER_TURN = 2;

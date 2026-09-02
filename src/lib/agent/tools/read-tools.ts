@@ -8,7 +8,7 @@ import { resolveWorkbenchPath } from '$lib/server/chat/workbench-path';
 import { readPostsResult } from '$lib/server/chat/read-posts-count';
 import type { ChatToolCtx } from './shared';
 import { startLongToolJob, type AnyRec } from './shared';
-import { noteRead } from '../read-guards';
+import { noteRead } from '$lib/server/chat/read-guards';
 
 // ── READ tools ──────────────────────────────────────────────────────────
 

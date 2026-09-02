@@ -15,8 +15,8 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
-import { createAgentDmTools } from '$lib/server/chat/agent-dm-tools';
-import { createAgentSessionTools } from '$lib/server/chat/agent-session-tools';
+import { createAgentDmTools } from '$lib/agent/tools/agent-dm-tools';
+import { createAgentSessionTools } from '$lib/agent/tools/agent-session-tools';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
 
 export interface TeamPluginDeps {

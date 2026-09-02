@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { LIBRARY_DOCS_PROMPT } from '$lib/server/chat/motion-video-tools';
+import { LIBRARY_DOCS_PROMPT } from '$lib/agent/tools/motion-video-tools';
 import { REPLY_CONTRACT_BLOCK } from '$lib/server/chat/reply-contract';
 import { chatReplyLanguageBlock, localeLanguageName } from '$lib/i18n/locale';
 
