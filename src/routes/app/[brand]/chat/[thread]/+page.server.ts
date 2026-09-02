@@ -1,4 +1,5 @@
 import { error, fail } from '@sveltejs/kit';
+import { chatModelChoices } from '$lib/server/chat-models';
 import { getThread, loadThreadUiHistory } from '$lib/server/chat/persistence';
 import { loadLiveRun } from '$lib/server/chat/live-run';
 import { agentDesktopEnabled } from '$lib/server/agent-desktop';
@@ -244,6 +245,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
 
   return {
     thread,
+    // Il menu dei modelli lo serve anche il layout, ma la pagina lo DICHIARA: il guardiano di
+    // shell.test.ts controlla che ogni `data.<campo>` letto qui dentro esista nel payload, e un
+    // campo che arriva solo dal layout è un campo che sparisce senza che nessun test se ne accorga.
+    chatModels: await chatModelChoices().catch(() => []),
     agentPanel,
     agentDesktopEnabled: agentDesktopEnabled(),
     messages: threadHistory.messages,

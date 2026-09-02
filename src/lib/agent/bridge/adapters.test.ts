@@ -115,6 +115,31 @@ describe('resolveHarnessModelRef — la catena preferenza → tier → lista, tu
 		expect(ref).toEqual({ provider: 'llm', id: 'llm/x-ai/grok-4-6', label: 'grok-4-6' });
 	});
 
+	/**
+	 * Il picker offre il catalogo del gateway e il tier PUÒ essere un id di modello. Qui veniva
+	 * ignorato e si finiva sul primo di LLM_MODELS: il menu diceva un nome e rispondeva un altro
+	 * modello — visto nel browser, non nei test, con il default di brand su qwen e il turno su
+	 * deepseek.
+	 */
+	it('un id del catalogo scelto dall\'utente arriva al gateway', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
+		expect(resolveHarnessModelRef({ tier: 'openai/gpt-5.6-sol' })?.id).toBe('llm/openai/gpt-5.6-sol');
+		// La preferenza salvata sul thread porta l'id nel campo `model`: vince sulla famiglia, che
+		// lì dentro dice solo la scala di ragionamento.
+		expect(resolveHarnessModelRef({ family: 'luna', model: 'openai/gpt-5.6-sol', tier: 'fast' })?.id).toBe(
+			'llm/openai/gpt-5.6-sol'
+		);
+	});
+
+	it('un id che il gateway non serve non diventa una chiamata persa', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash';
+		expect(resolveHarnessModelRef({ tier: 'vendor/mai-visto' })?.id).toBe('llm/z-ai/glm-5.3-flash');
+	});
+
 	it('una famiglia che il centralino non serve degrada sul tier, mai sul wireId nudo', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';

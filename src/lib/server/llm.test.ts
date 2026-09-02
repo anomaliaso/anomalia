@@ -65,6 +65,45 @@ describe('llm — catalogo e fallback', () => {
 		expect(llmModelForPicker('anthropic/claude-sonnet-4')).toBe('anthropic/claude-sonnet-4');
 	});
 
+	/**
+	 * Il picker offre il catalogo del gateway, non solo i due id di LLM_MODELS: un modello scelto
+	 * dall'utente deve arrivare INTATTO al gateway. Prima cadeva sul default in silenzio — cioè
+	 * "GPT Terra" nel menu e DeepSeek nella risposta.
+	 */
+	it('un id del catalogo passa intatto, anche fuori da LLM_MODELS', async () => {
+		setEnv({
+			LLM_API_KEY: 'k',
+			LLM_DEFAULT_MODEL: 'google/gemini-2.5-flash',
+			LLM_MODELS: 'google/gemini-2.5-flash'
+		});
+		const { llmModelForPicker } = await import('./llm');
+		const { __resetGatewayModels, ensureGatewayModels } = await import('./openrouter-models');
+		__resetGatewayModels();
+		await ensureGatewayModels({
+			baseUrl: 'https://openrouter.ai/api/v1',
+			fetchImpl: (async () => ({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					data: [
+						{
+							id: 'anthropic/claude-opus-5',
+							name: 'Claude Opus 5',
+							context_length: 1000,
+							supported_parameters: ['tools'],
+							architecture: { input_modalities: ['text', 'image'] },
+							pricing: { prompt: '0.000001', completion: '0.000002' }
+						}
+					]
+				})
+			})) as unknown as typeof fetch
+		});
+		expect(llmModelForPicker('anthropic/claude-opus-5')).toBe('anthropic/claude-opus-5');
+		// Un id che il gateway non serve non diventa una chiamata persa: si torna al default.
+		expect(llmModelForPicker('vendor/mai-visto')).toBe('google/gemini-2.5-flash');
+		__resetGatewayModels();
+	});
+
 	it('GEO Gemini search vuole un id google/gemini-*', async () => {
 		setEnv({ LLM_API_KEY: 'k', LLM_DEFAULT_MODEL: 'anthropic/claude-sonnet-4' });
 		const { llmGeminiSearchModel } = await import('./llm');

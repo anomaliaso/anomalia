@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { coerceChatTier, DEFAULT_CHAT_TIER, CHAT_TIERS, type ChatTier } from './chat-tiers';
+import { defaultReasoningFor, reasoningLevelsFor } from './chat-reasoning';
 import {
   coerceReasoning,
   DEFAULT_REASONING,
@@ -193,5 +194,23 @@ describe('coerceChatTier', () => {
     expect(coerceChatTier('gpt-sol')).toBe('gpt-sol');
     expect(coerceChatTier(null)).toBe(DEFAULT_CHAT_TIER);
     expect(coerceChatTier('gpt-9')).toBe('auto');
+  });
+});
+
+
+/**
+ * Con il catalogo del gateway il tier può essere un id qualunque: `REASONING_LEVELS[tier]` e
+ * `DEFAULT_REASONING[tier]` erano mappe con sei chiavi, e su un id nuovo restituivano undefined —
+ * cioè il picker si schiantava su `.length` alla prima apertura del menu.
+ */
+describe('un tier che è un id di modello', () => {
+  it('ha comunque una scala di ragionamento', () => {
+    expect(reasoningLevelsFor('anthropic/claude-opus-5').length).toBeGreaterThan(0);
+    expect(defaultReasoningFor('anthropic/claude-opus-5')).toBeTruthy();
+  });
+
+  it('i preset restano quelli di prima', () => {
+    expect(defaultReasoningFor('pro')).toBe(DEFAULT_REASONING.pro);
+    expect(reasoningLevelsFor('fast')).toEqual(REASONING_LEVELS.fast);
   });
 });

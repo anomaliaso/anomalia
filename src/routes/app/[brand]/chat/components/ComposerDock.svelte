@@ -21,6 +21,7 @@
   type SubmitMeta = {
     mode: ChatMode;
     tier?: ChatTier;
+    chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>;
     reasoning?: ChatReasoning;
     command?: string;
     attachments?: ChatAttachmentsPayload;
@@ -41,6 +42,7 @@
     mode = $bindable('agent' as ChatMode),
     tier = $bindable('auto' as ChatTier),
     reasoning = $bindable(),
+    chatModels = [],
     agentOptions,
     agentLocked,
     agent,
@@ -139,6 +141,7 @@
     bind:mode={mode}
     bind:tier={tier}
     bind:reasoning={reasoning}
+    chatModels={chatModels}
     {brandSlug}
     draftKey={`anomalia:chat-draft:${threadId}`}
     {loading}

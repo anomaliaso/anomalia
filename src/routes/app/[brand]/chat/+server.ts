@@ -304,6 +304,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       mode,
       tier: body.tier,
       modelFamily: modelPref?.family,
+      modelId: modelPref?.model,
       reasoning: body.reasoning,
       escalationText,
       persona: kitPersona,

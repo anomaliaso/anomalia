@@ -19,7 +19,13 @@ export type ModelFamilyId = (typeof MODEL_FAMILY_IDS)[number];
  */
 export const AgentModelPolicy = z.object({
 	family: z.enum(MODEL_FAMILY_IDS),
-	thinking: z.enum(['off', 'low', 'medium', 'high', 'max']).default('medium')
+	thinking: z.enum(['off', 'low', 'medium', 'high', 'max']).default('medium'),
+	/**
+	 * L'id del modello sul gateway (`anthropic/claude-opus-5`), quando l'utente ne ha scelto uno dal
+	 * catalogo invece di un preset. `family` resta a dire quali gradini di ragionamento offrire: le
+	 * righe salvate prima di questo campo non ce l'hanno e continuano a valere.
+	 */
+	model: z.string().min(1).max(120).optional()
 });
 export type AgentModelPolicy = z.infer<typeof AgentModelPolicy>;
 
