@@ -18,7 +18,7 @@ import { startLongToolJob, type AnyRec } from './shared';
 // ── CONTENT CREATION tools ────────────────────────────────────────────────
 
 export function createContentTools(ctx: ChatToolCtx) {
-  const { supabase, brandId, tz, userId, threadId, turnRefUrls } = ctx;
+  const { supabase, brandId, tz, userId, threadId, turnRefUrls, origin, locale } = ctx;
 
   /**
    * Il corpo dei due tool che partono da un video: risolvere la sorgente, gatare i crediti,
@@ -118,12 +118,27 @@ export function createContentTools(ctx: ChatToolCtx) {
         prefs
       });
       if (!out) return { error: 'The render returned nothing. Nothing was billed for a job that did not finish.' };
+
+      // In libreria, o la clip e' un file pagato che nessun tool sa raggiungere. L'id e' cio' che
+      // `create_post_from_asset` accetta: senza, questo tool sarebbe un vicolo cieco.
+      const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
+      const saved = await saveRenderedVideoToLibrary(supabase, {
+        brandId,
+        userId,
+        url: out.url,
+        title: args.prompt?.trim().slice(0, 80) || (role === 'refine' ? 'Refined clip' : 'Motion control clip')
+      });
+
       return {
         success: true,
         video_url: out.url,
+        ...('mediaId' in saved ? { media_id: saved.mediaId } : { library_error: saved.error }),
         model: out.model,
         did_not_change_post: true,
-        hint: 'This did NOT change any post. Show it with show_media, or attach it where you need it.'
+        hint:
+          'mediaId' in saved
+            ? 'This changed no post. The clip is in the Media library — pass media_id to create_post_from_asset(type:"video") to publish it, or show_media to show it first.'
+            : 'This changed no post, and the clip could NOT be saved to the library — it lives only at video_url. Say so instead of promising it is reusable.'
       };
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'transform_failed' };
@@ -1136,6 +1151,154 @@ export function createContentTools(ctx: ChatToolCtx) {
           reference_image_url: args.image_url,
           mode: args.quality
         })
+    }),
+
+    create_post_from_asset: tool({
+      description:
+        'Turn media that ALREADY EXISTS into a post draft: a clip you just made with refine_video / motion_control_video / generate_video, or anything in the brand Media library (read_media for the ids). Generating and posting are two steps on purpose — if the post fails to write you do not pay the render again, and nothing is minted behind your back. type "video" takes one clip, "image" one photo, "carousel" two or more photos in slide order. A typographic graphic is NOT an asset: it is editable source, so it stays on create_post(graphic_brief) / design_graphic. Costs no credits — nothing is generated here.',
+      inputSchema: z.object({
+        type: z.enum(['image', 'video', 'carousel']).describe('What kind of post this asset becomes. The library is asked for the matching kind, so a photo cannot become a reel.'),
+        media_ids: z.array(z.string()).describe('Brand Media library ids, from read_media or returned by a generate/refine tool. One for image and video, two or more for a carousel, in slide order.'),
+        caption: z.string().describe('The caption to publish.'),
+        platform: z.string().optional().describe('Target platform. Defaults to the brand primary.'),
+        first_comment: z.string().optional().describe('Optional first comment.')
+      }),
+      execute: async (
+        { type, media_ids, caption, platform, first_comment }:
+          { type: string; media_ids: string[]; caption: string; platform?: string; first_comment?: string },
+        _opts: ToolExecutionOptions<unknown>
+      ) => {
+        const { postAssetShape, checkAssetCount, CAROUSEL_MIN_SLIDES } = await import('$lib/post-from-asset');
+        const shape = postAssetShape(type);
+        const problem = checkAssetCount(type, media_ids?.length ?? 0);
+        if (problem) {
+          return {
+            error: problem,
+            message: {
+              unknown_type: 'type must be image, video or carousel. A typographic graphic is editable source, not an asset: use create_post(graphic_brief) or design_graphic.',
+              none: 'Pass at least one media id — read_media lists them, and the generate/refine tools return one.',
+              too_few: `A carousel needs at least ${CAROUSEL_MIN_SLIDES} slides. With one asset make an image post instead.`,
+              too_many: `type "${type}" takes exactly one asset. You passed ${media_ids.length} — say which one, or make it a carousel.`
+            }[problem]
+          };
+        }
+
+        const { data: brandRow } = await supabase
+          .from('brands')
+          .select('target_platforms')
+          .eq('id', brandId)
+          .maybeSingle();
+        const targetPlatform =
+          platform?.trim() ||
+          (Array.isArray(brandRow?.target_platforms) ? String(brandRow!.target_platforms[0] ?? '') : '') ||
+          'instagram';
+
+        // Ogni asset viene copiato dove un post puo' puntarlo, e il `kind` del tipo e' il filtro:
+        // un id che non e' di quel tipo non torna, e il rifiuto dice quale.
+        const { publishLibraryMediaAsPostMedia } = await import('$lib/server/brand-media');
+        const urls: string[] = [];
+        for (const id of media_ids) {
+          const pub = await publishLibraryMediaAsPostMedia(supabase, {
+            brandId,
+            userId,
+            mediaId: id,
+            kind: shape!.mediaKind,
+            platform: targetPlatform
+          });
+          if ('error' in pub) {
+            return {
+              error: 'asset_unusable',
+              message: `Media ${id} could not be used as a ${type} post: ${pub.error}. Check it exists in this brand's library and is a ${shape!.mediaKind}.`
+            };
+          }
+          urls.push(pub.publicUrl);
+        }
+
+        const { data: row, error: insErr } = await supabase
+          .from('posts')
+          .insert({
+            brand_id: brandId,
+            platform: targetPlatform,
+            source: 'manual',
+            caption: caption?.trim() || null,
+            first_comment: first_comment?.trim() || null,
+            media_url: urls[0],
+            ...(shape!.multiple ? { media_urls: urls } : {}),
+            content_type: shape!.contentType,
+            format: shape!.format,
+            status: 'pending_user'
+          })
+          .select('id')
+          .single();
+        if (insErr || !row) return { error: insErr?.message ?? 'insert_failed' };
+
+        return {
+          success: true,
+          post_id: row.id,
+          type,
+          platform: targetPlatform,
+          slides: urls.length,
+          status: 'pending_user',
+          hint: 'Draft created from media that already existed — nothing was generated and no credits were spent.'
+        };
+      }
+    }),
+
+    generate_video: tool({
+      description:
+        'Generate a video from a brief, with NO post: the clip lands in the brand Media library and you get a media_id back. Use it when the user wants a video to look at, to reuse, or to place later — not a draft in the calendar. Rendering takes minutes, so this QUEUES the job and returns a job_id straight away: read where it got to with check_job_status, do not poll it in a loop. To publish it afterwards call create_post_from_asset(type:"video", media_ids:[media_id]). For a video that IS a post from the start, create_post(content_type:"video") is one step instead of two. Bills the video budget when the render runs.',
+      inputSchema: z.object({
+        brief: z.string().describe('What the clip must show and do, in prose. Scene, motion, tone.'),
+        image_url: z.string().optional().describe('An https still to animate instead of writing from text. Use a generate_image result or a library asset.'),
+        duration: z.number().optional().describe('Seconds. Clamped to what the chosen model actually serves.'),
+        aspect_ratio: z.enum(['9:16', '1:1', '16:9']).optional().describe('Default 9:16.'),
+        model: z.string().optional().describe('Override the brand video model for this clip only.')
+      }),
+      execute: async (
+        args: { brief: string; image_url?: string; duration?: number; aspect_ratio?: string; model?: string },
+        opts: ToolExecutionOptions<unknown>
+      ) => {
+        if (!args.brief?.trim()) return { error: 'generate_video needs a brief.' };
+        if (args.image_url && !isUrlSafe(args.image_url)) {
+          return { error: 'That image URL is not reachable from here.' };
+        }
+        const { data: brandRow } = await supabase
+          .from('brands')
+          .select('plan, timezone, activated_at, status')
+          .eq('id', brandId)
+          .maybeSingle();
+        const budget = await remaining(
+          supabase,
+          brandId,
+          brandRow?.plan,
+          brandRow?.timezone ?? tz,
+          brandRow
+            ? { id: brandId, plan: brandRow.plan ?? null, activated_at: brandRow.activated_at ?? null, status: brandRow.status ?? 'active' }
+            : undefined
+        );
+        // Il gate sta QUI e non nel job: un job accodato che scopre i crediti finiti dopo minuti
+        // lo racconta a turno chiuso, quando nessuno sta piu' guardando.
+        const gate = gateToolCall('generate_video', budget);
+        if (gate) return gate;
+
+        return startLongToolJob(
+          supabase,
+          brandId,
+          userId,
+          'generate_video',
+          {
+            brief: args.brief.trim(),
+            image_url: args.image_url,
+            duration: args.duration,
+            aspect_ratio: args.aspect_ratio,
+            model: args.model
+          },
+          threadId,
+          opts.abortSignal,
+          origin,
+          locale
+        );
+      }
     }),
   };
 }

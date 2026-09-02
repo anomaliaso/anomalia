@@ -20,6 +20,14 @@ export type PassthroughSpec = {
 };
 
 export const MEDIA_TRANSFORM_TOOLS: Record<string, PassthroughSpec> = {
+	generate_video: {
+		source: 'generate_video',
+		requiresMode: 'agent',
+		effectful: true,
+		consequential: true,
+		description:
+			"Generate a video from a brief with NO post: the clip lands in the brand Media library and you get a media_id. Rendering takes minutes, so it QUEUES and returns a job_id — read it with check_job_status, never poll in a loop. Publish it afterwards with create_post_from_asset(type:\"video\"). For a clip that IS a post from the start, content_create_post(content_type:\"video\") is one step instead of two. Bills the video budget."
+	},
 	refine_video: {
 		source: 'refine_video',
 		requiresMode: 'agent',
@@ -27,6 +35,14 @@ export const MEDIA_TRANSFORM_TOOLS: Record<string, PassthroughSpec> = {
 		consequential: true,
 		description:
 			"Rewrite a finished clip keeping its motion and camera: swap the subject, change the setting, restyle it. Takes an existing video as the base (post_id or video_url) and returns a NEW video_url — the post is never modified. NOT for rewriting a spoken script or removing burned-in subtitles: those live in the audio and the pixels, and remaking the reel is the video path of content_create_post / ugc_generate_video. Refused when the brand has no video refine model set in Settings, naming the empty setting instead of falling back."
+	},
+	create_post_from_asset: {
+		source: 'create_post_from_asset',
+		requiresMode: 'agent',
+		effectful: true,
+		consequential: true,
+		description:
+			"Turn media that ALREADY EXISTS into a post draft: a clip from refine_video / motion_control_video, or anything in the brand Media library (read_media for the ids). Generating and posting are two steps on purpose — a post that fails to write does not cost the render twice, and nothing is minted behind your back. type \"video\" takes one clip, \"image\" one photo, \"carousel\" two or more in slide order. A typographic graphic is NOT an asset — it is editable source, so it stays on content_create_post(graphic_brief) / content_design_graphic. Spends no credits."
 	},
 	motion_control_video: {
 		source: 'motion_control_video',
