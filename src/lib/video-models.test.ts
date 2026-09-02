@@ -48,7 +48,7 @@ describe('the role registry', () => {
     // The same Kling row serves generation and motion control under two different kie ids;
     // sending the generation id to a motion-control job is a 400 after a full round trip.
     const kling = videoModelSpec(KLING_3_MOTION_MODEL);
-    expect(kling?.kieId.motion).toBe('kling-3.0/motion-control');
+    expect(kling?.kieId?.motion).toBe('kling-3.0/motion-control');
   });
 
   it('falls back to the clip model when no image-to-video model was chosen', () => {

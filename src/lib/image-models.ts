@@ -161,6 +161,22 @@ export function imageModelFor(prefs: { imageModel?: unknown } | null | undefined
 }
 
 /**
+ * Il modello con cui si MODIFICA una foto, che non e' per forza quello con cui la si disegna:
+ * riprodurre fedelmente una immagine gia' esistente e inventarne una da zero sono due mestieri, e
+ * la famiglia piu' brava al primo non e' sempre la piu' brava al secondo.
+ *
+ * Senza una scelta propria vale quella della generazione — che e' esattamente cio' che facevano
+ * tutti i brand prima che questo secondo selettore esistesse.
+ */
+export function imageRefineModelFor(
+  prefs: { imageModel?: unknown; imageRefineModel?: unknown } | null | undefined
+): string | undefined {
+  const v = String(prefs?.imageRefineModel ?? '').trim();
+  if (v) return isKnownImageModelId(v) ? v : undefined;
+  return imageModelFor(prefs);
+}
+
+/**
  * L'id da mandare a Google. Un modello che kie serve in esclusiva NON esiste lì: mandarcelo è un
  * 400 su ogni immagine del brand, e succederebbe proprio nel momento peggiore — quando la chiave
  * kie manca o il suo endpoint è giù. Meglio un render col modello di casa e un avviso rumoroso.
