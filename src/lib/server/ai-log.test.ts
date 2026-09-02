@@ -33,6 +33,28 @@ describe('computeCostUsd', () => {
     expect(computeCostUsd({ ...usage, provider: 'llm', model: 'llm/z-ai/glm-5.3-flash' })).toBeCloseTo(0.325, 4);
   });
 
+  /**
+   * MISURATO su produzione, 30 giorni: 4 righe `kie/gpt-5-6-luna` e 10 `google/gemini-embedding-001`
+   * riuscite, con i token contati, e senza costo — perché le RATES tengono quegli id NUDI e la
+   * normalizzazione toglieva solo `openrouter/` e `llm/`. Ogni trasporto nuovo aggiungeva un
+   * prefisso e un buco: la regola ora è una sola, l'ULTIMO segmento, e vale anche per il prossimo.
+   */
+  it('prezza un modello sotto il prefisso di QUALUNQUE trasporto', () => {
+    const usage = { label: 'chat', ms: 0, ok: true, inputTokens: 1_000_000, outputTokens: 0 };
+    expect(computeCostUsd({ ...usage, provider: 'kie', model: 'kie/gpt-5-6-luna' })).toBeCloseTo(0.056, 4);
+    expect(computeCostUsd({ ...usage, provider: 'llm', model: 'google/gemini-embedding-001' })).toBeCloseTo(0.15, 4);
+  });
+
+  /** Un id che somiglia a uno noto non è quello noto: `-vision-exp` è un altro modello. */
+  it('non spaccia per noto un modello diverso che finisce in modo simile', () => {
+    expect(
+      computeCostUsd({
+        label: 'chat', provider: 'llm', model: 'vendor/deepseek-v4-flash-vision-exp',
+        ms: 0, ok: true, inputTokens: 10, outputTokens: 10
+      })
+    ).toBeNull();
+  });
+
   it('un modello openrouter senza tariffa resta null: meglio non misurato che misurato a caso', () => {
     expect(
       computeCostUsd({ label: 'chat', provider: 'openrouter', model: 'openrouter/qualcosa/mai-visto', ms: 0, ok: true, inputTokens: 10, outputTokens: 10 })
