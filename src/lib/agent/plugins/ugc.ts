@@ -22,6 +22,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
 import { createChatTools } from '$lib/server/chat/tools';
 import { execChatTool, jsonSchemaOf, pickJsonSchema, type ChatToolsRecord } from './chat-bridge';
+import { MEDIA_TRANSFORM_TOOLS, type PassthroughSpec } from './media-tools';
 
 export interface UgcPluginDeps {
 	supabase: SupabaseClient;
@@ -48,7 +49,8 @@ const VIDEO_FIELDS = [
 	'image_urls'
 ];
 
-const PASSTHROUGH: Record<string, { source: string; description: string; requiresMode?: ToolSpec['requiresMode']; effectful: boolean; consequential: boolean }> = {
+const PASSTHROUGH: Record<string, PassthroughSpec> = {
+	...MEDIA_TRANSFORM_TOOLS,
 	ugc_list_people: {
 		source: 'read_people',
 		effectful: false,
@@ -61,22 +63,6 @@ const PASSTHROUGH: Record<string, { source: string; description: string; require
 		effectful: false,
 		consequential: false,
 		description: 'List the AI talent library (global synthetic models — no consent needed, they depict nobody). Pass ids into ugc_generate_video.talent_ids as face/body references.'
-	},
-	ugc_refine_video: {
-		source: 'refine_video',
-		requiresMode: 'agent',
-		effectful: true,
-		consequential: true,
-		description:
-			"Rewrite a finished clip keeping its motion: swap the subject, change the setting, restyle it. Takes an existing video as the base (post_id or video_url) and returns a NEW video_url — the post is never modified. NOT for rewriting a spoken script or removing burned-in subtitles: those live in the audio and the pixels, and remaking the reel is ugc_generate_video. Refused when the brand has no video refine model set in Settings."
-	},
-	ugc_motion_control: {
-		source: 'motion_control_video',
-		requiresMode: 'agent',
-		effectful: true,
-		consequential: true,
-		description:
-			"Apply the MOVEMENT of a reference clip to the subject of an image. The two inputs are not interchangeable: image_url is who moves, video_url is how they move — swapping them returns a plausible wrong clip and no error. Returns a video_url and touches no post. This is NOT a motion video: those are Remotion compositions rendered from code (motion_write) and use no generative model. Refused when the brand has no video motion model set in Settings."
 	},
 	ugc_review_video: {
 		source: 'review_video',
