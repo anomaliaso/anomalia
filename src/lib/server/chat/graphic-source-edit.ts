@@ -8,7 +8,7 @@ import {
 	grepSource,
 	sliceSource
 } from '$lib/motion-video/source-ops';
-import type { EditorTarget } from './post-editor-tools';
+import type { EditorTarget } from '$lib/agent/tools/post-editor-tools';
 import { noteRead, requireFreshRead } from './read-guards';
 
 export { MOTION_READ_DEFAULT_CHARS as GRAPHIC_READ_DEFAULT_CHARS, MOTION_READ_MAX_CHARS as GRAPHIC_READ_MAX_CHARS };
@@ -161,7 +161,7 @@ export async function replacePostGraphicSource(
 	const issues = await inspectSource(t, next);
 	const refused = refusal(issues);
 	if (refused) return refused;
-	const { applyPostGraphicSource } = await import('./post-editor-tools');
+	const { applyPostGraphicSource } = await import('$lib/agent/tools/post-editor-tools');
 	const saved = await applyPostGraphicSource(t, {
 		source: next,
 		slide_index: args.slide_index,
@@ -190,7 +190,7 @@ export async function writePostGraphicSource(t: EditorTarget, args: SlideArgs & 
 	const issues = await inspectSource(t, source);
 	const refused = refusal(issues);
 	if (refused) return refused;
-	const { applyPostGraphicSource } = await import('./post-editor-tools');
+	const { applyPostGraphicSource } = await import('$lib/agent/tools/post-editor-tools');
 	const saved = await applyPostGraphicSource(t, {
 		source,
 		slide_index: args.slide_index,

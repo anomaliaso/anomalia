@@ -35,7 +35,7 @@ import {
 	formatStasisViolations
 } from '$lib/motion-video/easing';
 import { motionMp4Scale, parseMotionMp4Quality } from '$lib/motion-video/mp4-render';
-import { compactMotionPersist, persistCompiled } from '$lib/server/chat/motion-video-tools';
+import { compactMotionPersist, persistCompiled } from '$lib/agent/tools/motion-video-tools';
 import { chatTurnDeadline } from '$lib/server/chat/turn-limits';
 import type { DesignerSliceEnd } from '$lib/designer-limits';
 import { getMotionVideo, listMotionVideos, updateMotionPreviewUrl } from '$lib/server/motion-video/persist';
@@ -47,7 +47,7 @@ import {
 	renderMotionStills
 } from '$lib/server/motion-video/render-tools';
 import { MotionVoiceGateError } from '$lib/server/motion-video/voice-gate';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
 
 /** `e instanceof Error ? e.message : String(e)` a un posto solo — non vale importare gemini-audio.ts (rete, chiavi) per una riga pura. */

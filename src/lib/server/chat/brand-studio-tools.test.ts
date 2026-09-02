@@ -179,7 +179,7 @@ vi.mock('$lib/server/content-preview', async (importOriginal) => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let createChatTools: any;
 beforeAll(async () => {
-  ({ createChatTools } = await import('./tools'));
+  ({ createChatTools } = await import('$lib/agent/tools/index'));
 }, 60_000);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

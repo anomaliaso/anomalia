@@ -15,9 +15,9 @@ import {
 import { SPECIALISTS } from '$lib/agent/specs';
 import { modeSystemBlock } from '$lib/chat-modes';
 import { MOTION_CRAFT_SPECS } from '$lib/motion-video/craft';
-import { createChatTools } from './tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { SUBAGENT_TOOL_KEYS, subagentToolNames, createSubagentTools } from './subagents';
-import { SANDBOX_TOOL_KEYS, createSandboxTools } from './sandbox-tools';
+import { SANDBOX_TOOL_KEYS, createSandboxTools } from '$lib/agent/tools/sandbox-tools';
 import { BUILTIN_AGENT_AVATARS } from '$lib/agent-avatars';
 import { AGENT_META, normalizeAgentId } from '$lib/agent-icons';
 

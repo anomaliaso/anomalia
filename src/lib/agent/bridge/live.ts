@@ -138,7 +138,7 @@ import { createSubagentTools, SUBAGENT_TOOL_KEYS } from '$lib/server/chat/subage
 import { resolveChatModel } from '$lib/server/chat/model';
 import { createGoalPlugin, withKitToolNames } from '../plugins/goal';
 import { kitPluginsFor } from '../plugins/registry';
-import { GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { GOAL_TOOL_KEYS } from '$lib/agent/tools/goal-tools';
 import { gateAction, planActionGate, resolveActionApprovalDetail } from '@anomalia/agent-kit/action-approval';
 import { CHAT_MAX_CONTINUATIONS } from '$lib/server/chat/turn-limits';
 import {

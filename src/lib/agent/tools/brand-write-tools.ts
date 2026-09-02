@@ -10,9 +10,9 @@ import { toolFromContract, type ToolFailure } from '$lib/contracts/tool-contract
 import { APPROVABLE_STATUSES, type CrossPostResult, RESCHEDULABLE_STATUSES, approvePostContract, crossPostContract, rejectPostContract, reschedulePostContract, updatePostContract } from '$lib/contracts/post-tools';
 import type { ChatToolCtx } from './shared';
 import { startLongToolJob, type AnyRec } from './shared';
-import { requireFreshRead } from '../read-guards';
+import { requireFreshRead } from '$lib/server/chat/read-guards';
 import { recordPostVerdict } from '$lib/server/post-verdict';
-import { refreshPostReceipt } from '../post-editor-tools';
+import { refreshPostReceipt } from './post-editor-tools';
 
 // ── WRITE tools ─────────────────────────────────────────────────────────
 

@@ -28,7 +28,7 @@ import {
   type RoutineOwner,
   type TeamAgentId
 } from '$lib/agent-owners';
-import { resolveDmInitiator, resolveDmTarget } from '$lib/server/chat/agent-dm-tools';
+import { resolveDmInitiator, resolveDmTarget } from '$lib/agent/tools/agent-dm-tools';
 import { getThread } from '$lib/server/chat/persistence';
 import { AGENT_IDS, resolveAgent } from '$lib/server/chat/agents';
 

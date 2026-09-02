@@ -23,7 +23,7 @@ import {
 	saveMotionVideo,
 	type MotionVideoRow
 } from '$lib/server/motion-video/persist';
-import { noteRead, requireFreshRead } from './read-guards';
+import { noteRead, requireFreshRead } from '$lib/server/chat/read-guards';
 
 const MOTION_SOURCE_HINT =
 	'Patch with grep_motion_source → read_motion_source → replace_motion_source. Photos inside UI mockups: read_media then use_library_image (or generate_image / Nano Banana Pro if nothing fits) then <Img src="https://..." />. Always: brand type (or Inter), slide/iris transitions, extreme ease-in-out + overshoot, motion through the cut, programmatic UI mockups — text-only cards are not enough. write_motion_source only to rebuild. Writes are refused unless you read this source first — and refused again if it changed since that read.';

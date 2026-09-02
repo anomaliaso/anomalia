@@ -16,7 +16,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { DATAFORSEO_CHAT_TOOL_KEYS } from '$lib/server/dataforseo-tools';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
 

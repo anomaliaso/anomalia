@@ -24,9 +24,9 @@ import {
 	createSubagentTools,
 	type SubagentRole
 } from '$lib/server/chat/subagents';
-import { createSandboxTools, type SandboxSession } from '$lib/server/chat/sandbox-tools';
-import { createGoalTools } from '$lib/server/chat/goal-tools';
-import { createArtifactTools } from '$lib/server/chat/artifact-tools';
+import { createSandboxTools, type SandboxSession } from '$lib/agent/tools/sandbox-tools';
+import { createGoalTools } from '$lib/agent/tools/goal-tools';
+import { createArtifactTools } from '$lib/agent/tools/artifact-tools';
 import { goalBriefing, loadOpenGoal, openCriteria } from '$lib/server/chat/goal';
 import { isSandboxConfigured } from '$lib/server/sandbox';
 

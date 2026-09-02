@@ -23,7 +23,7 @@ vi.mock('./subagents', async (orig) => ({
 vi.mock('$lib/server/chat/model', () => ({
   resolveChatModel: () => ({ provider: 'test', modelId: 'test-model', model: {}, callOptions: {} })
 }));
-vi.mock('$lib/server/chat/tools', () => ({ createChatTools: () => ({}) }));
+vi.mock('$lib/agent/tools/index', () => ({ createChatTools: () => ({}) }));
 
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
 

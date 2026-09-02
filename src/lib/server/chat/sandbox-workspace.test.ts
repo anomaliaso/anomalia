@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildBrandWorkspace, describeColumns, toCsv, toJson, workspaceReadme } from './sandbox-workspace';
-import { rejectPath, rejectReadPath } from './sandbox-tools';
+import { rejectPath, rejectReadPath } from '$lib/agent/tools/sandbox-tools';
 
 /**
  * Un finto PostgREST: risolve `{data, error}` come supabase-js — che NON lancia mai — e registra

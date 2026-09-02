@@ -2,7 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dmAgents, dmNames } from '$lib/chat-dm';
-import { AGENTS, type AgentId } from './agents';
+import { AGENTS, type AgentId } from '$lib/server/chat/agents';
 
 /**
  * GLI OCCHI DELLA SQUADRA.

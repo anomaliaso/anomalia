@@ -16,7 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hasWebHub } from '$lib/server/plans';
 import { resolveChatModel } from '$lib/server/chat/model';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { stripWebHubTools } from '$lib/server/chat/agents';
 import { agentStickerColor } from '$lib/chat-expression';
 import type { AgentId } from '$lib/server/chat/agents';

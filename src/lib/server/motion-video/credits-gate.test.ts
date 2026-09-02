@@ -23,7 +23,7 @@ describe('motion-video credit gate', () => {
 
 	it('gates brand-chat source read and patch tools', () => {
 		const src = readFileSync(
-			new URL('../chat/motion-video-tools.ts', import.meta.url),
+			new URL('../../agent/tools/motion-video-tools.ts', import.meta.url),
 			'utf8'
 		);
 		expect(src.match(/requireMotionCredits/g)?.length).toBeGreaterThanOrEqual(6);

@@ -75,9 +75,9 @@ import {
   gateOnFileRead,
   hasReadFile
 } from './agent-files';
-import { createChatTools } from './tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { createSubagentTools } from './subagents';
-import { createSandboxTools } from './sandbox-tools';
+import { createSandboxTools } from '$lib/agent/tools/sandbox-tools';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const stub = {} as any;

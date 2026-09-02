@@ -35,11 +35,11 @@ import { AGENT_IDS, AGENTS, type AgentId } from '$lib/server/chat/agents';
 import { buildSystemPrompt, buildTurnVolatileBlock, wrapTurnContext } from '$lib/server/chat/system-prompt';
 import { type ChatModelResolved } from '$lib/server/chat/model';
 import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
-import { createSandboxTools, type SandboxSession } from '$lib/server/chat/sandbox-tools';
+import { createSandboxTools, type SandboxSession } from '$lib/agent/tools/sandbox-tools';
 import { chatSubAgentMaxTurns, SUB_AGENT_STEP_CEILING } from '$lib/server/chat/turn-limits';
 import { isSandboxConfigured, type SandboxNetworkMode } from '$lib/server/sandbox';
 import { createRecorder, saveAgentSession } from '$lib/server/agent-sessions';
-import { startLongToolJob } from '$lib/server/chat/tools/shared';
+import { startLongToolJob } from '$lib/agent/tools/shared';
 import { createJobPartialMirror } from '$lib/server/chat/job-partial-mirror';
 import {
   applyChatStreamEvent,

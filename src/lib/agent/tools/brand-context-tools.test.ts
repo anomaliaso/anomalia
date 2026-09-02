@@ -50,9 +50,9 @@ describe('the maker agents all take the bundle', () => {
 
 	it('Motion Video, the Media Generator and the UGC planner each spread it once', () => {
 		for (const file of [
-			'../motion-video/agent.ts',
-			'../media-generator/agent.ts',
-			'../media-generator/ugc-plan-agent.ts'
+			'../../server/motion-video/agent.ts',
+			'../../server/media-generator/agent.ts',
+			'../../server/media-generator/ugc-plan-agent.ts'
 		]) {
 			expect(reads(file)).toContain('createBrandContextTools(');
 		}
@@ -60,7 +60,7 @@ describe('the maker agents all take the bundle', () => {
 
 	it('nobody redeclares read_brand_studio or read_knowledge by hand any more', () => {
 		// Three copies of two tools with drifting descriptions is what this module replaced.
-		for (const file of ['../media-generator/agent.ts', '../media-generator/ugc-plan-agent.ts']) {
+		for (const file of ['../../server/media-generator/agent.ts', '../../server/media-generator/ugc-plan-agent.ts']) {
 			const src = reads(file);
 			expect(src).not.toContain('read_brand_studio: tool(');
 			expect(src).not.toContain('read_knowledge: tool(');
@@ -68,7 +68,7 @@ describe('the maker agents all take the bundle', () => {
 	});
 
 	it('the brand chat keeps one definition of the two it shares', () => {
-		const src = reads('./tools.ts');
+		const src = reads('./index.ts');
 		expect(src).not.toContain('read_market_references: tool(');
 		expect(src).not.toContain('search_web: tool(');
 		expect(src).toContain('createBrandContextTools({');
@@ -86,7 +86,7 @@ describe('the chat motion path', () => {
 	 * vera invece di una parafrasi, e che il prompt non se la ricopi dentro un'altra volta.
 	 */
 	it('uses the real craft constant instead of a hand-written paraphrase', () => {
-		const src = readFileSync(new URL('./agent-files.ts', import.meta.url), 'utf8');
+		const src = readFileSync(new URL('../../server/chat/agent-files.ts', import.meta.url), 'utf8');
 		expect(src).toContain('${MOTION_CRAFT_SPECS}');
 		expect(src).toContain("from '$lib/motion-video/craft'");
 		// The paraphrase that used to drift away from craft.ts on its own.
@@ -94,14 +94,14 @@ describe('the chat motion path', () => {
 	});
 
 	it('and the system prompt does not carry a second copy of it', () => {
-		const src = readFileSync(new URL('./system-prompt.ts', import.meta.url), 'utf8');
+		const src = readFileSync(new URL('../../server/chat/system-prompt.ts', import.meta.url), 'utf8');
 		expect(src).not.toContain('MOTION_CRAFT_SPECS');
 		// Ma nomina il file, o l'agente nullo non saprebbe che quel mestiere ha delle regole.
 		expect(src).toContain('how/MAKE-MOTION-VIDEO.md');
 	});
 
 	it('gets the reference wall too — WITH the pixels', () => {
-		const src = readFileSync(new URL('./tools.ts', import.meta.url), 'utf8');
+		const src = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
 		expect(src).toContain('createMotionReferenceTools(');
 		// 2026-08-22: attachMedia:false era il buco per cui la chat "studiava" reference che il
 		// modello non vedeva mai (solo spec testuale). I frame viaggiano come image-data →

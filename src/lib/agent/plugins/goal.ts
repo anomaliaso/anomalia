@@ -13,7 +13,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolSpec } from '../kit';
-import { createGoalTools, GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { createGoalTools, GOAL_TOOL_KEYS } from '$lib/agent/tools/goal-tools';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
 
 /**

@@ -20,7 +20,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { execChatTool, jsonSchemaOf, pickJsonSchema, type ChatToolsRecord } from './chat-bridge';
 import { MEDIA_TRANSFORM_TOOLS, type PassthroughSpec } from './media-tools';
 
