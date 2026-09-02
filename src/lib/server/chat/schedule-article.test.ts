@@ -46,7 +46,7 @@ afterEach(() => {
 });
 
 async function scheduleArticle(input: string) {
-  const { createChatTools } = await import('./tools');
+  const { createChatTools } = await import('$lib/agent/tools/index');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools = createChatTools(fakeClient() as any, 'brand-1', 'Europe/Rome');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

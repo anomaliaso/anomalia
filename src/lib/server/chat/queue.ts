@@ -8,13 +8,13 @@ import { turnModelFamily } from '$lib/chat-model-policy';
 import { harnessGenerateText } from '$lib/server/harness';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildSystemPrompt, buildTurnVolatileBlock, wrapTurnMessage } from '$lib/server/chat/system-prompt';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { resolveAgentForPlan, pickTools, stripWebHubTools } from '$lib/server/chat/agents';
 import { withSubagentTools } from '$lib/server/chat/subagents';
-import { withSandboxTools } from '$lib/server/chat/sandbox-tools';
+import { withSandboxTools } from '$lib/agent/tools/sandbox-tools';
 import { computerOwner } from '$lib/agent-computer';
 import { stripUnattendedTools } from '$lib/server/chat/unattended';
-import { withStrategistTools } from '$lib/server/chat/strategist-tools';
+import { withStrategistTools } from '$lib/agent/tools/strategist-tools';
 import { customAgentSystemBlock, getCustomAgentPersona, kitPersonaOverlay } from '$lib/server/custom-agent-persona';
 import { agentStickerColor } from '$lib/chat-expression';
 import {
@@ -79,7 +79,7 @@ import {
 	trackGoalSettlement
 } from '$lib/server/chat/goal';
 import type { TurnStep } from '$lib/server/chat/goal';
-import { GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { GOAL_TOOL_KEYS } from '$lib/agent/tools/goal-tools';
 import { goalCommandInstruction, parseGoalCommand } from '$lib/goal-command';
 import { withStepDeadline } from '$lib/server/chat/step-deadline';
 import { chatCreditsBlocked, getChatRateUsage } from '$lib/server/chat/rate-limits';
@@ -789,6 +789,7 @@ await maybeCompactThread(admin, {
 						mode: params.mode,
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model, persona?.model)?.family,
+						modelId: turnModelFamily(threadRow?.model, persona?.model)?.model,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
 						// La ripresa di un run lasciato dal reaper: lo stesso turno continua, con il
 						// fence successivo, invece di aprirne uno nuovo accanto al lavoro a metà.

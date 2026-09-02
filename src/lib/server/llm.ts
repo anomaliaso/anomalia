@@ -7,7 +7,9 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { embedMany, generateObject, generateText, jsonSchema } from 'ai';
 import { env } from '$env/dynamic/private';
-import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
+import { extractSdkUsage, logAiCall, noteLlmCost } from '$lib/server/ai-log';
+import { costFromJson, costFromStreamText, withUsageAccounting } from '$lib/server/llm-usage-cost';
+import { gatewayModel } from '$lib/server/openrouter-models';
 
 export const LLM_UNCONFIGURED = 'llm_unconfigured';
 export const LLM_VIDEO_UNCONFIGURED = 'llm_video_unconfigured';
@@ -68,17 +70,50 @@ export function llmModels(): string[] {
 	return def ? [def] : [];
 }
 
-/** Fast/auto = primo della lista (o default). Pro = secondo se c’è. Un id OpenRouter passa così. */
+/**
+ * L'id che va sul filo per questa scelta del picker.
+ *
+ * Un id che il gateway serve davvero passa intatto: è il modello che l'utente ha scelto dal
+ * catalogo, e cadere sul default sarebbe scrivere un nome nel menu e chiamarne un altro. Gli id
+ * ignoti al listino tornano al default invece di diventare una chiamata persa.
+ *
+ * Fast/auto = primo della lista (o default). Pro = secondo se c'è.
+ */
 export function llmModelForPicker(choice: string | null | undefined): string {
 	const models = llmModels();
 	const id = typeof choice === 'string' ? choice.trim() : '';
-	if (id && models.includes(id)) return id;
+	if (id && (models.includes(id) || gatewayModel(id)?.usable)) return id;
 	if ((id === 'pro' || id === 'deepseek-pro' || id === 'gpt-sol') && models[1]) return models[1];
 	return llmDefaultModel();
 }
 
 let cached: ReturnType<typeof createOpenAI> | null = null;
 let cachedSig = '';
+
+/**
+ * Chiede il conto al gateway e lo mette nella cassetta dello scope, senza rallentare la risposta.
+ *
+ * `res.clone()` e non `res.text()`: l'originale continua a scorrere verso l'utente alla sua
+ * velocità mentre la copia viene letta a parte. Su un turno in streaming il costo arriva
+ * nell'ultimo chunk, quindi si conosce quando l'utente ha già finito di leggere — che è esattamente
+ * quando `logAiCall` scrive la riga.
+ */
+const billedFetch: typeof fetch = async (input, init) => {
+	const patched = typeof init?.body === 'string' ? withUsageAccounting(init.body, llmBaseUrl()) : null;
+	const res = await fetch(input, patched ? { ...init, body: patched } : init);
+	if (!patched) return res;
+	const copy = res.clone();
+	void (async () => {
+		try {
+			const text = await copy.text();
+			const cost = text.trimStart().startsWith('{') ? costFromJson(JSON.parse(text)) : costFromStreamText(text);
+			if (cost != null) noteLlmCost(cost);
+		} catch {
+			// Nessun costo lasciato dal gateway: decidono le RATES, come prima di questa cassetta.
+		}
+	})();
+	return res;
+};
 
 export function llmClient(): ReturnType<typeof createOpenAI> {
 	const key = llmApiKey();
@@ -88,7 +123,8 @@ export function llmClient(): ReturnType<typeof createOpenAI> {
 	cached = createOpenAI({
 		baseURL: llmBaseUrl(),
 		apiKey: key,
-		name: 'llm'
+		name: 'llm',
+		fetch: billedFetch
 	});
 	cachedSig = sig;
 	return cached;

@@ -21,7 +21,7 @@ import {
   trackGoalSettlement,
   type TurnStep
 } from '$lib/server/chat/goal';
-import { GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { GOAL_TOOL_KEYS } from '$lib/agent/tools/goal-tools';
 import {
   MOTION_MAX_CONTINUATIONS,
   decideMotionContinuation,
@@ -38,7 +38,7 @@ import {
 } from '$lib/server/chat/turn-limits';
 import { turnLoopNotice } from '$lib/server/chat/loop-guard';
 import type { createChatLoopGuard } from '$lib/server/chat/loop-guard';
-import type { createChatTools } from '$lib/server/chat/tools';
+import type { createChatTools } from '$lib/agent/tools/index';
 import type { ChatMode } from '$lib/chat-modes';
 import { isChatTier } from '$lib/chat-tiers';
 import { unverifiedProductionClaim, recentPostsProbe } from '$lib/server/chat/production-claim';

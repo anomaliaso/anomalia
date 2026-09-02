@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { pickTools } from '$lib/server/chat/agents';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 
 /**
  * The studio agent and the chat's motion specialist are the same agent on two surfaces. This pins

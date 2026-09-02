@@ -42,11 +42,11 @@ import { MOTION_ASSET_MINT_HINT } from '$lib/server/media-origin';
 import { mintStandaloneImage } from '$lib/server/mint-standalone-image';
 import { loadMediaLibraryPromptSection } from '$lib/server/brand-media';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { createMediaLibraryTools } from '$lib/server/chat/media-library-tools';
+import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
 import {
 	brandContextPromptSection,
 	createBrandContextTools
-} from '$lib/server/chat/brand-context-tools';
+} from '$lib/agent/tools/brand-context-tools';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import {
 	MOTION_EXPO_IN_OUT,
@@ -70,7 +70,7 @@ import {
 	type ReferenceStudy
 } from '$lib/server/motion-video/reference-tools';
 import { pickTools } from '$lib/server/chat/agents';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { createAgentBase } from '$lib/server/agent-base';
 import { isSandboxConfigured } from '$lib/server/sandbox';
 import { createMotionRenderTools, readSourceMeta } from '$lib/server/motion-video/render-tools';

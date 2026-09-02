@@ -212,7 +212,7 @@ describe('demo account agent tools', () => {
    */
   it('è in mano ai mestieri che catturano la UI del prodotto', async () => {
     const { pickTools } = await import('$lib/server/chat/agents');
-    const { createChatTools } = await import('$lib/server/chat/tools');
+    const { createChatTools } = await import('$lib/agent/tools/index');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const all = createChatTools({} as any, 'b1', 'Europe/Rome', 'u1');
     for (const agent of ['content', 'motion'] as const) {

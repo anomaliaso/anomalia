@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AGENT_IDS, type AgentId } from './agents';
 import { buildSystemPrompt } from './system-prompt';
 import { AGENT_FILES, createFileTools, filesIndexFor } from './agent-files';
-import { createGoalTools } from './goal-tools';
+import { createGoalTools } from '$lib/agent/tools/goal-tools';
 import { MOTION_CRAFT_SPECS } from '$lib/motion-video/craft';
 import { disruptiveSystemSection } from '$lib/disruptive';
 import { aiActSystemSection } from '$lib/ai-act';

@@ -2,7 +2,7 @@ import { swallow } from '$lib/server/swallow';
 import { houseVoiceFor, loadCaptionKnowledge } from './caption-quality';
 import { brandLines, client } from './plan-pipeline';
 import { type AspectRatio, type QcVerdict, aspectRatioFor, brandVisualDirective, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderCarouselSlide, renderWithQC, uploadPostImage } from './images';
-import { imageModelFor } from '$lib/image-models';
+import { imageModelFor, imageRefineModelFor } from '$lib/image-models';
 import { type AnyRec, type BrandProfile, CAROUSEL_MIN_SLIDES, CAROUSEL_PLATFORMS, type ContentPrefs, type ImagePart, type PreviewPost, carouselMaxSlides, guidanceFor, platformKey } from './seed-model';
 import { aiActCopyGuardrail } from '$lib/ai-act';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -211,7 +211,7 @@ Return JSON with "caption" and "image_prompt" (set image_prompt to "Use library 
   const renderOpts = {
     referenceImages: mergedRefs.length ? (mergedRefs as ImagePart[]) : undefined,
     // Half the price, and its "lower quality" is the point on an amateur frame.
-    ...(isUgcCover ? { model: UGC_COVER_MODEL } : { model: imageModelFor(prefs) }),
+    ...(isUgcCover ? { model: UGC_COVER_MODEL } : { model: imageModelFor(prefs), refineModel: imageRefineModelFor(prefs) }),
     moodImages: isUgcCover ? undefined : moodImages,
     visualStyle: isUgcCover ? UGC_VISUAL_STYLE : (opts.profile?.visual_style as string | undefined) || undefined,
     visualPlaybook: isUgcCover ? undefined : extractVisualPlaybook(opts.profile?.ai_context),
@@ -419,6 +419,7 @@ Return JSON.`;
   );
   const renderOpts = {
     model: imageModelFor(prefs),
+    refineModel: imageRefineModelFor(prefs),
     moodImages,
     visualStyle: (opts.profile?.visual_style as string | undefined) || undefined,
     visualPlaybook: extractVisualPlaybook(opts.profile?.ai_context),
@@ -555,6 +556,7 @@ export async function generateStandaloneImage(opts: {
 
   const renderOpts = {
     model: imageModelFor((brandRow?.content_prefs ?? {}) as ContentPrefs),
+    refineModel: imageRefineModelFor((brandRow?.content_prefs ?? {}) as ContentPrefs),
     baseImage: baseImage ?? undefined,
     referenceImages: extraParts.length ? extraParts : undefined,
     referenceMode: extraParts.length ? ('product' as const) : undefined,

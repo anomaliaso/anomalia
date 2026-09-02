@@ -1,0 +1,10 @@
+{
+  "name": "@anomalia/site-analysis",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./crawl": "./src/crawl.ts"
+  },
+  "dependencies": {}
+}

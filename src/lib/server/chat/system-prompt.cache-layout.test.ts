@@ -67,12 +67,12 @@ vi.mock('$lib/server/harness', () => ({
     return { text: 'Fatto.', steps: [], totalUsage: {} };
   })
 }));
-vi.mock('./tools', () => ({ createChatTools: () => ({}) }));
+vi.mock('$lib/agent/tools/index', () => ({ createChatTools: () => ({}) }));
 vi.mock('./subagents', () => ({ withSubagentTools: (t: unknown) => t }));
-vi.mock('./sandbox-tools', () => ({
+vi.mock('$lib/agent/tools/sandbox-tools', () => ({
   withSandboxTools: (t: unknown) => ({ tools: t, close: async () => undefined })
 }));
-vi.mock('./strategist-tools', () => ({ withStrategistTools: (t: unknown) => t }));
+vi.mock('$lib/agent/tools/strategist-tools', () => ({ withStrategistTools: (t: unknown) => t }));
 vi.mock('$lib/server/custom-agent-persona', () => ({
   getCustomAgentPersona: vi.fn(async () => null),
   customAgentSystemBlock: () => ''

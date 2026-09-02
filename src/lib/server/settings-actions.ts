@@ -9,7 +9,7 @@ import { sendEmail, brandInviteEmailSubject, brandInviteEmailHtml, brandInviteEm
 import { emailLocale } from '$lib/server/email-i18n';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RequestEvent } from '@sveltejs/kit';
-import { isChatTier } from '$lib/chat-tiers';
+import { isChatTier, isGatewayModelTier } from '$lib/chat-tiers';
 import { invalidateBrandNav } from '$lib/server/nav-cache';
 import { readUploadImage } from '$lib/server/raster-image';
 import { createAdminClient } from '$lib/server/supabase-admin';
@@ -195,6 +195,12 @@ export async function setChatDefaultTier({ request, params, locals: { supabase }
   const data = await request.formData();
   const tier = String(data.get('tier') ?? '').trim();
   if (!isChatTier(tier)) return { error: 'Pick a model' };
+  // Un id che ha la forma giusta ma che il gateway non serve sarebbe un default rotto per ogni
+  // chat nuova del brand: qui si controlla che sia una scelta davvero offerta.
+  if (isGatewayModelTier(tier)) {
+    const { isOfferedChatModel } = await import('$lib/server/chat-models');
+    if (!(await isOfferedChatModel(tier))) return { error: 'That model is not available' };
+  }
   const { error } = await supabase
     .from('brands')
     .update({ chat_default_tier: tier })

@@ -4,6 +4,8 @@ import {
   formatMediaLibraryPromptSection,
   formatMediaDigest,
   formatMediaUsageBit,
+  publishLibraryMediaAsPostMedia,
+  mediaSizeCeiling,
   type BrandMediaRow
 } from './brand-media';
 
@@ -123,5 +125,54 @@ describe('formatMediaDigest usage', () => {
     expect(digest.indexOf('Fresh')).toBeLessThan(digest.indexOf('Worn'));
     expect(digest).toContain('unused');
     expect(digest).toContain('used=4 last=2026-07-01');
+  });
+});
+
+describe('publishing a library asset as post media', () => {
+  const found = (kind: string) => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'm1', kind, storage_path: 'p', mime: 'x' } }) }) }) })
+      })
+    })
+  });
+  const empty = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }) })
+      })
+    })
+  };
+
+  it('refuses an asset whose kind is not the one being posted', async () => {
+    // A photo posted as a reel, or a clip posted as a still, is a plausible post that is simply
+    // wrong — and neither the storage nor the provider would say so. The row's kind is the only
+    // thing that knows, so the query filters on it and an empty result is a refusal, not a guess.
+    const res = await publishLibraryMediaAsPostMedia(empty as never, {
+      brandId: 'b1',
+      userId: 'u1',
+      mediaId: 'm1',
+      kind: 'video'
+    });
+    expect(res).toHaveProperty('error');
+  });
+
+  it('gives a video a size ceiling a video can actually meet', () => {
+    // The image path capped at 12MB, which is generous for a still and below a single 15s clip:
+    // reusing it would have refused nearly every video with "asset too large".
+    expect(mediaSizeCeiling('video')).toBeGreaterThan(mediaSizeCeiling('image'));
+    expect(mediaSizeCeiling('image')).toBe(12_000_000);
+  });
+
+  it('still finds an image, so the path every existing caller uses is unchanged', async () => {
+    // Il download vero non parte in test (lo Storage e' finto): basta che la riga sia stata
+    // TROVATA e che il codice sia andato oltre la ricerca, invece di rifiutare.
+    const res = await publishLibraryMediaAsPostMedia(found('image') as never, {
+      brandId: 'b1',
+      userId: 'u1',
+      mediaId: 'm1',
+      kind: 'image'
+    }).catch(() => 'went past the lookup');
+    expect(res).not.toMatchObject({ error: 'Media not found' });
   });
 });

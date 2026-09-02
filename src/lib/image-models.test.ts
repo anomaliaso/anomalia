@@ -6,6 +6,7 @@ import {
   GPT_IMAGE_2_MODEL,
   QWEN3_PRO_MODEL,
   imageModelSpec,
+  imageRefineModelFor,
   isKnownImageModelId,
   imageModelFor,
   kieAspectRatio,
@@ -93,5 +94,23 @@ describe('image models', () => {
     expect(imageModelSpec(QWEN3_PRO_MODEL)!.maxRefs).toBe(3);
     expect(imageModelSpec(GPT_IMAGE_2_MODEL)!.maxRefs).toBe(16);
     expect(imageModelSpec(NANO_BANANA_PRO_MODEL)!.maxRefs).toBe(8);
+  });
+});
+
+describe('the refine model', () => {
+  it('falls back to the generation model when none was chosen', () => {
+    // Editing a photo has always used whatever model drew it. A brand that never opens the new
+    // picker must keep exactly that, not lose its choice to an empty second slot.
+    expect(imageRefineModelFor({ imageModel: SEEDREAM_5_PRO_MODEL })).toBe(SEEDREAM_5_PRO_MODEL);
+  });
+
+  it('lets the brand refine with a different model than it generates with', () => {
+    expect(
+      imageRefineModelFor({ imageModel: SEEDREAM_5_PRO_MODEL, imageRefineModel: GPT_IMAGE_2_MODEL })
+    ).toBe(GPT_IMAGE_2_MODEL);
+  });
+
+  it('ignores a refine model the catalogue no longer serves', () => {
+    expect(imageRefineModelFor({ imageRefineModel: 'seedream-4-legacy' })).toBeUndefined();
   });
 });

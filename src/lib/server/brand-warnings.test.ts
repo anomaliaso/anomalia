@@ -21,7 +21,7 @@ import {
   MAX_OPEN_AGENT_NOTICES,
   type AgentNotice
 } from './brand-warnings';
-import { createNotificationTools } from './chat/notification-tools';
+import { createNotificationTools } from '$lib/agent/tools/notification-tools';
 import { subagentToolNames } from './chat/subagents';
 import type { AppWarning } from '$lib/warnings';
 

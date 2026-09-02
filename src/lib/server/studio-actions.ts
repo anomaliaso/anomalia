@@ -268,19 +268,27 @@ export const studioActions: Actions = {
 
   // Which kie video model generates clips (Settings → Video). Duration options and the render
   // clamp follow this model's caps. Empty = platform env default (Grok Imagine today).
-  updateVideoModel: async ({ request, params, locals: { supabase } }) => {
+  // Quale modello serve quale mestiere (Settings -> Images & video). Una sola azione per tutti e
+  // sei gli slot: la regola che un modello deve saper fare il lavoro in cui viene salvato vale
+  // ovunque, e scritta sei volte divergerebbe al primo cambio.
+  updateMediaModel: async ({ request, params, locals: { supabase } }) => {
     return withBrand(supabase, params.brand, async (brand) => {
       const fd = await request.formData();
-      const { isKnownVideoModel, clampVideoDuration, videoDurationOptions } = await import('$lib/server/video');
+      const { mediaModelSlot, slotAccepts } = await import('$lib/media-model-slots');
+      const slot = mediaModelSlot(fd.get('slot'));
+      if (!slot) return fail(400, { error: 'Unknown model slot' });
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prefs: Record<string, any> = { ...(brand.content_prefs ?? {}) };
-      const raw = String(fd.get('videoModel') ?? '').trim();
-      if (!raw) delete prefs.videoModel;
-      else if (!isKnownVideoModel(raw)) return fail(400, { error: 'Unknown video model' });
-      else prefs.videoModel = raw;
+      const raw = String(fd.get('model') ?? '').trim();
+      if (!raw) delete prefs[slot.pref];
+      else if (!slotAccepts(slot, raw)) return fail(400, { error: 'Unknown model for this slot' });
+      else prefs[slot.pref] = raw;
+
       // Re-clamp a stored length that the previous model allowed but this one does not (e.g. 30s
-      // on Seedance 2.5 → Grok's 15s ceiling), so Settings never shows an unsavable value.
-      if (typeof prefs.videoDuration === 'number') {
+      // on Seedance 2.5 -> Grok's 15s ceiling), so Settings never shows an unsavable value.
+      if (slot.pref === 'videoModel' && typeof prefs.videoDuration === 'number') {
+        const { isKnownVideoModel, clampVideoDuration, videoDurationOptions } = await import('$lib/server/video');
         const model = isKnownVideoModel(prefs.videoModel) ? prefs.videoModel : null;
         prefs.videoDuration = clampVideoDuration(prefs.videoDuration, model);
         const allowed = videoDurationOptions(model);
@@ -290,24 +298,7 @@ export const studioActions: Actions = {
           );
         }
       }
-      const { error } = await supabase.from('brands').update({ content_prefs: prefs }).eq('id', brand.id);
-      if (error) return fail(400, { error: error.message });
-      return { saved: true };
-    });
-  },
 
-  // Which model renders images (Settings → Media models). Empty = the renderer keeps choosing per
-  // call, which is what every brand had before the picker existed.
-  updateImageModel: async ({ request, params, locals: { supabase } }) => {
-    return withBrand(supabase, params.brand, async (brand) => {
-      const fd = await request.formData();
-      const { isKnownImageModelId } = await import('$lib/image-models');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prefs: Record<string, any> = { ...(brand.content_prefs ?? {}) };
-      const raw = String(fd.get('imageModel') ?? '').trim();
-      if (!raw) delete prefs.imageModel;
-      else if (!isKnownImageModelId(raw)) return fail(400, { error: 'Unknown image model' });
-      else prefs.imageModel = raw;
       const { error } = await supabase.from('brands').update({ content_prefs: prefs }).eq('id', brand.id);
       if (error) return fail(400, { error: error.message });
       return { saved: true };

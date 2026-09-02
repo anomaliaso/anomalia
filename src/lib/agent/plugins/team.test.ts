@@ -9,8 +9,8 @@ import { fakeContext } from '../testkit';
  * dedupe a ogni messaggio — e ogni asserzione sul singolo invio resterebbe verde.
  */
 const built = vi.fn();
-vi.mock('$lib/server/chat/agent-dm-tools', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/chat/agent-dm-tools')>();
+vi.mock('$lib/agent/tools/agent-dm-tools', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/agent/tools/agent-dm-tools')>();
 	return {
 		...actual,
 		createAgentDmTools: (opts: Parameters<typeof actual.createAgentDmTools>[0]) => {

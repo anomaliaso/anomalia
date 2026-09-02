@@ -19,7 +19,8 @@
     isCustomChatModel,
     type ChatTier
   } from '$lib/chat-tiers';
-  import { DEFAULT_REASONING, REASONING_LEVELS, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
+  import { usdPerMillion } from '$lib/model-price';
+  import { DEFAULT_REASONING, defaultReasoningFor, reasoningLevelsFor, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
   import type { AgentMeta } from '$lib/agent-icons';
   import {
     buildAttachmentsPayload,
@@ -101,6 +102,8 @@
     agentLocked = false,
     agent = null,
     onagentchange = (_id: string) => {},
+    /** I modelli che il gateway serve adesso: il menu li mostra al posto di una lista fissa. */
+    chatModels = [] as Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>,
     /** La scelta di modello è cambiata dal picker: chi possiede il thread la salva cross-device. */
     onmodelchange = (_choice: { tier: ChatTier; reasoning: ChatReasoning }) => {},
     // The user's own agents, from Custom agents. Picking one hands the thread its brief.
@@ -138,6 +141,7 @@
     agentLocked?: boolean;
     agent?: string | null;
     onagentchange?: (id: string) => void;
+    chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>;
     onmodelchange?: (choice: { tier: ChatTier; reasoning: ChatReasoning }) => void;
     customAgents?: Array<{ id: string; name: string; face: string; color: string }>;
     customAgent?: string | null;
@@ -174,6 +178,26 @@
   let docs = $state<Array<ChatDocument & { converting?: boolean; error?: string }>>([]);
   let picks = $state<ChatAttachmentPick[]>([]);
   let pendingCommand = $state<string | undefined>(undefined);
+  // Un preset ha una chiave i18n; un modello del catalogo porta il suo nome dal gateway, e
+  // inventargli una chiave significherebbe mostrarne il nome tecnico appena ne arriva uno nuovo.
+  function tierLabel(t: ChatTier): string {
+    const model = chatModels.find((m) => m.id === t);
+    if (model) return model.label;
+    return (CHAT_PRESET_TIERS as readonly string[]).includes(t) || (CHAT_CUSTOM_MODELS as readonly string[]).includes(t)
+      ? $_('chat.tier.' + t)
+      : t;
+  }
+
+  const K_TOKENS = 1000;
+  function modelSub(m: { contextLength: number; inputUsdPerM: number; outputUsdPerM: number }): string {
+    const ctx = m.contextLength ? `${Math.round(m.contextLength / K_TOKENS)}k` : '';
+    const price =
+      m.inputUsdPerM || m.outputUsdPerM
+        ? `${usdPerMillion(m.inputUsdPerM)}/${usdPerMillion(m.outputUsdPerM)} per 1M`
+        : '';
+    return [ctx, price].filter(Boolean).join(' · ');
+  }
+
   let menu = $state<'none' | 'plus' | 'commands' | 'mode' | 'agents' | 'tier' | 'reasoning' | 'picker'>('none');
 
   /**
@@ -365,11 +389,11 @@
       /* ignore */
     }
     // Default thinking is the penultimate level of the current model's own list.
-    reasoning = DEFAULT_REASONING[tier];
+    reasoning = defaultReasoningFor(tier);
   });
 
   $effect(() => {
-    if (!isValidForTier(reasoning, tier)) reasoning = DEFAULT_REASONING[tier];
+    if (!isValidForTier(reasoning, tier)) reasoning = defaultReasoningFor(tier);
   });
 
   // Draft che sopravvive a un refresh (per thread, in sessionStorage). Ripristino UNA volta per
@@ -420,7 +444,7 @@
   // Picking a model applies to the conversation in front of you; the default for a NEW chat is the
   // brand setting (Settings → Chat), not whatever this device happened to pick last.
   function setTier(t: ChatTier) {
-    const nextReasoning = DEFAULT_REASONING[t];
+    const nextReasoning = defaultReasoningFor(t);
     tier = t;
     reasoning = nextReasoning;
     menu = 'none';
@@ -953,10 +977,10 @@
               title={$_('chat.tier.' + tier + 'Hint')}
             >
               <Cpu class="size-4" />
-              <span>{$_('chat.tier.label')}: {$_('chat.tier.' + tier)}</span>
+              <span>{$_('chat.tier.label')}: {tierLabel(tier)}</span>
               <ChevronRight class="size-3.5 ch-dd-chevron" />
             </button>
-            {#if REASONING_LEVELS[tier].length > 1}
+            {#if reasoningLevelsFor(tier).length > 1}
               <!-- Il ragionamento è una preferenza rara: sta col modello dentro il `+` invece di
                    occupare la barra. -->
               <button
@@ -1162,19 +1186,19 @@
                 <span class="ch-dd-sub">{$_('chat.tier.' + t + 'Hint')}</span>
               </button>
             {/each}
-            {#if CHAT_CUSTOM_MODELS.length}
+            {#if chatModels.length}
               <div class="ch-dd-group">{$_('chat.tier.custom')}</div>
-              {#each CHAT_CUSTOM_MODELS as t (t)}
+              {#each chatModels as m (m.id)}
                 <button
                   type="button"
                   class="ch-dd-item ch-dd-item-stack"
-                  class:active={tier === t}
+                  class:active={tier === m.id}
                   role="option"
-                  aria-selected={tier === t}
-                  onclick={() => setTier(t)}
+                  aria-selected={tier === m.id}
+                  onclick={() => setTier(m.id)}
                 >
-                  <span class="ch-dd-title">{$_('chat.tier.' + t)}</span>
-                  <span class="ch-dd-sub">{$_('chat.tier.' + t + 'Hint')}</span>
+                  <span class="ch-dd-title">{m.label}</span>
+                  <span class="ch-dd-sub">{modelSub(m)}</span>
                 </button>
               {/each}
             {/if}
@@ -1290,14 +1314,14 @@
         </div>
       {/if}
 
-      {#if REASONING_LEVELS[tier].length > 1}
+      {#if reasoningLevelsFor(tier).length > 1}
         <div class="ch-tier-wrap" data-menu-root>
           {#if menu === 'reasoning'}
             <div class="ch-dropdown ch-tier-dd" role="listbox">
               <button type="button" class="ch-dd-back" onclick={() => (menu = 'plus')}>
                 ← {$_('chat.reasoning.label')}
               </button>
-              {#each REASONING_LEVELS[tier] as level (level)}
+              {#each reasoningLevelsFor(tier) as level (level)}
                 <button
                   type="button"
                   class="ch-dd-item ch-dd-item-stack"
