@@ -346,6 +346,22 @@ Prefer these skills over improvising; load them with the `skill` tool.
 The user-invoked skills (`grill-with-docs`, `to-spec`, `implement`, `wayfinder`) fire on explicit
 request; the others you load yourself when the task matches.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (anomaliaso/anomalia), via the `gh` CLI. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human,
+wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Tasks = Notion "Anomalia > Tasks"
 
 When "the tasks" are mentioned, the **Anomalia > Tasks** database is meant (page "Tasks",
