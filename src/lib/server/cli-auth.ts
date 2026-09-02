@@ -4,6 +4,8 @@ import { env as publicEnv } from '$env/dynamic/public';
 import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { userCanEnter } from '$lib/server/access';
+import { BOOKING_URL } from '$lib/links';
 
 export interface ApiKeyInfo {
   id: string;
@@ -20,10 +22,34 @@ export interface ApiKeyInfo {
  *
  * Returns the Supabase client scoped to the user, or an error Response.
  */
-export async function authenticate(request: Request): Promise<
+type Caller =
   | { supabase: SupabaseClient; user: { id: string; email?: string }; apiKey?: ApiKeyInfo; error?: undefined }
-  | { supabase?: undefined; user?: undefined; apiKey?: undefined; error: Response }
-> {
+  | { supabase?: undefined; user?: undefined; apiKey?: undefined; error: Response };
+
+/**
+ * L'unica porta che CLI e MCP attraversano entrambe. Col prodotto chiuso la guardia sta qui, una
+ * volta: metterla per rotta significa dimenticarla nella prossima. Il 403 porta con sé il link
+ * alla call — la CLI stampa il corpo della risposta, e "Forbidden" secco a chi ha appena provato
+ * a lavorare è il modo peggiore di dirgli che manca un passaggio.
+ */
+export async function authenticate(request: Request): Promise<Caller> {
+  const caller = await resolveCaller(request);
+  if (caller.error) return caller;
+
+  if (await userCanEnter(caller.user.id)) return caller;
+
+  return {
+    error: json(
+      {
+        error: `Access not enabled yet — Anomalia opens after a product call. Book it: ${BOOKING_URL}`,
+        booking_url: BOOKING_URL
+      },
+      { status: 403 }
+    )
+  };
+}
+
+async function resolveCaller(request: Request): Promise<Caller> {
   const auth = request.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) {
     return { error: json({ error: 'Missing or invalid Authorization header' }, { status: 401 }) };

@@ -1031,6 +1031,37 @@ export function day1EmailText(
   ].join('\n');
 }
 
+/**
+ * Chi si iscrive col prodotto chiuso non ha un brand, quindi il drip di lifecycle — che pende dai
+ * brand — non lo vede mai. Senza questa, uno che si registra e non prenota non riceve nulla:
+ * prodotto chiuso e recupero spento insieme.
+ */
+export function pendingEmailSubject(locale: Locale): string {
+  return tEmail(locale, 'pending.subject');
+}
+
+export function pendingEmailHtml(locale: Locale, opts: { callUrl: string }, origin?: string): string {
+  return shell(
+    origin,
+    `
+    <h2 style="font-size:22px;letter-spacing:-0.02em;margin:14px 0 6px;">${tEmail(locale, 'pending.heading')}</h2>
+    <p style="color:#1d1d1f;line-height:1.5;margin:0 0 14px;">${tEmail(locale, 'pending.body')}</p>
+    ${cta(opts.callUrl, tEmail(locale, 'lifecycle.cta_call'))}
+    <p style="color:#86868b;font-size:12px;margin-top:22px;">${tEmail(locale, 'lifecycle.footer')}</p>`
+  );
+}
+
+export function pendingEmailText(locale: Locale, opts: { callUrl: string }): string {
+  return [
+    tEmail(locale, 'pending.heading'),
+    '',
+    tEmail(locale, 'pending.body'),
+    `${tEmail(locale, 'lifecycle.cta_call')} ${opts.callUrl}`,
+    '',
+    tEmail(locale, 'lifecycle.footer')
+  ].join('\n');
+}
+
 export function stepEmailSubject(locale: Locale, brandName: string, stage: Stage): string {
   return tEmail(locale, 'lifecycle.step.subject', { brand: brandName, step: tEmail(locale, `lifecycle.step.title.${stage}`) });
 }

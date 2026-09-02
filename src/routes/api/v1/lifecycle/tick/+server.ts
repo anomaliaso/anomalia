@@ -5,7 +5,7 @@ import { createAdminClient } from '$lib/server/supabase-admin';
 import { cronAuthorized } from '$lib/server/cron-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { brandContacts } from '$lib/server/scheduler';
-import { brandStage } from '$lib/server/lifecycle';
+import { brandStage, pendingToNudge } from '$lib/server/lifecycle';
 import {
   welcomeEmailSubject,
   welcomeEmailHtml,
@@ -15,7 +15,11 @@ import {
   day1EmailText,
   stepEmailSubject,
   stepEmailHtml,
-  stepEmailText
+  stepEmailText,
+  pendingEmailSubject,
+  pendingEmailHtml,
+  pendingEmailText,
+  sendEmail
 } from '$lib/server/email';
 import { senderEmailDomain } from '$lib/server/support-config';
 
@@ -126,6 +130,50 @@ async function processBrand(
   return { slug: brand.slug, sent: sent > 0, step };
 }
 
+/**
+ * Il sollecito a chi aspetta la call. Vive dentro il tick che gira già ogni 10 minuti invece che
+ * in un cron nuovo: la cadenza è la stessa e non si accende niente da pagare.
+ *
+ * Non passa da `notifyBrandContacts` perché non c'è un brand a cui appendersi — è precisamente il
+ * motivo per cui questa gente non riceveva nulla.
+ */
+async function nudgePending(admin: SupabaseClient, origin?: string): Promise<number> {
+  const { data: flag } = await admin.from('app_flags').select('enabled').eq('key', 'closed_beta').maybeSingle();
+  if (flag?.enabled !== true) return 0;
+
+  const waiting = await pendingToNudge(admin);
+  let sent = 0;
+
+  for (const person of waiting) {
+    // Si marca PRIMA di spedire: due giri sovrapposti non scrivono due volte alla stessa persona,
+    // e una mail persa costa meno di una mail doppia.
+    const { error: claimErr } = await admin
+      .from('waitlist')
+      .update({ nudged_at: new Date().toISOString() })
+      .eq('user_id', person.userId)
+      .is('nudged_at', null);
+    if (claimErr) continue;
+
+    try {
+      // ponytail: lingua fissa. `profiles` non porta un locale, e indovinarlo dall'email è peggio
+      // che scegliere. Se serve, il passo è una colonna `locale` scritta alla registrazione.
+      const locale = 'en' as const;
+      await sendEmail({
+        to: person.email,
+        subject: pendingEmailSubject(locale),
+        html: pendingEmailHtml(locale, { callUrl: CALL_URL }, origin),
+        text: pendingEmailText(locale, { callUrl: CALL_URL }),
+        headers: unsubHeaders()
+      });
+      sent += 1;
+    } catch (e) {
+      console.error('[lifecycle tick] sollecito call fallito', person.userId, e);
+    }
+  }
+
+  return sent;
+}
+
 async function runTick(request: Request): Promise<Response> {
   if (!cronAuthorized(request)) return new Response('Unauthorized', { status: 401 });
 
@@ -136,11 +184,13 @@ async function runTick(request: Request): Promise<Response> {
   const forcedStep = (url.searchParams.get('step') as Step | null) ?? null;
   const origin = publicEnv.PUBLIC_APP_URL || undefined;
 
+  const nudged = await nudgePending(admin, origin);
+
   // Scheduled run stays off until the flag is flipped; ?brand=<slug> always runs (for testing).
   if (!brandSlug) {
     const { data: flag } = await admin.from('app_flags').select('enabled').eq('key', 'lifecycle_emails').maybeSingle();
     if (flag?.enabled !== true) {
-      return new Response(JSON.stringify({ ok: true, disabled: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Response(JSON.stringify({ ok: true, disabled: true, nudged }), { status: 200, headers: { 'content-type': 'application/json' } });
     }
   }
 
@@ -167,7 +217,7 @@ async function runTick(request: Request): Promise<Response> {
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, total: brands?.length ?? 0, sent, skipped, errors }), {
+  return new Response(JSON.stringify({ ok: true, total: brands?.length ?? 0, sent, skipped, nudged, errors }), {
     status: 200,
     headers: { 'content-type': 'application/json' }
   });
