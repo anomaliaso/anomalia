@@ -378,6 +378,26 @@ describe('suggestVideoDuration / resolveVideoDuration', () => {
   });
 });
 
+describe('resolveVideoModel reads the job, not one setting', () => {
+  it('animates a cover with the animate model and writes from text with the clip model', () => {
+    const prefs = { videoModel: 'bytedance/seedance-2', videoImageModel: 'kling/v3-turbo-image-to-video' };
+    expect(resolveVideoModel({ prefs, hasCover: true })).toBe('kling/v3-turbo-image-to-video');
+    expect(resolveVideoModel({ prefs, hasCover: false })).toBe('bytedance/seedance-2');
+  });
+
+  it('keeps using the clip model for both when no animate model was chosen', () => {
+    // Every brand from before the split had one setting covering both directions.
+    const prefs = { videoModel: 'bytedance/seedance-2-5' };
+    expect(resolveVideoModel({ prefs, hasCover: true })).toBe('bytedance/seedance-2-5');
+    expect(resolveVideoModel({ prefs, hasCover: false })).toBe('bytedance/seedance-2-5');
+  });
+
+  it('lets an explicit model from the tool beat both settings', () => {
+    const prefs = { videoModel: 'bytedance/seedance-2', videoImageModel: 'bytedance/seedance-2-mini' };
+    expect(resolveVideoModel({ model: 'bytedance/seedance-2-5', prefs, hasCover: true })).toBe('bytedance/seedance-2-5');
+  });
+});
+
 describe('resolveVideoModel / pairedTextToVideoModel', () => {
   it('Seedance uses the same id for I2V and T2V', () => {
     expect(pairedTextToVideoModel('bytedance/seedance-2-5')).toBe('bytedance/seedance-2-5');

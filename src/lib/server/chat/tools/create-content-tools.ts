@@ -425,7 +425,8 @@ export function createContentTools(ctx: ChatToolCtx) {
                   // Selected model wins; else Settings; else the Grok Imagine default.
                   // Ads do NOT force a model — 22s only lands on Seedance 2.5, other models
                   // clamp to the organic 15s ceiling (ugcDurationCap).
-                  model: video_model || prefs.videoModel,
+                  model: video_model,
+                  prefs,
                   // Freeform brief replaces hardcoded MOTION templates when set (buildVideoPrompt).
                   // Ads keep the UGC template (ignore freeform) so speech rails stay on.
                   prompt: isUgcAd ? undefined : video_prompt,
