@@ -506,3 +506,40 @@ gli ultimi 40 errori e concludi il falso.
 Corollario di progettazione: legando in un modulo grande le funzioni che arrivano da un factory,
 **destrutturale** invece di tenere l'oggetto. Un oggetto con un nome generico (`sources`, `items`,
 `data`) prima o poi lo ombreggia una locale, e TypeScript è l'unica cosa che te lo dice.
+
+### PostgREST non risolve un overload: `is_approved()` + `is_approved(uuid)` = PGRST202 su ogni chiamata
+Due funzioni con lo STESSO nome e firme diverse: quella senza argomenti finisce nella schema cache,
+quella con il parametro no. `supabase.rpc('is_approved', { p_user })` torna
+`PGRST202 — Could not find the function public.is_approved(p_user) in the schema cache`, e un
+`notify pgrst, 'reload schema'` non la sistema. Segnale: un RPC che fallisce con PGRST202 su una
+funzione che in psql esiste ed è eseguibile. Mossa: nomi distinti (`is_approved()` /
+`is_user_approved(uuid)`), mai un overload esposto via PostgREST.
+
+### Un predicato di accesso che fallisce chiuso chiude fuori i clienti che pagano
+Corollario del precedente, ed è il difetto vero: con `return data === true` l'errore PGRST202
+diventava un 403 per OGNI utente della API, approvati e paganti compresi. Una porta commerciale
+non è un confine di sicurezza: il costo dei due lati non è lo stesso. Mossa: `if (error) return true`
+— si fallisce aperto, e il caso sta in un test che nomina l'incidente.
+
+### Il riempimento di una migrazione ri-approva tutti alla seconda esecuzione
+`alter table ... add column if not exists` seguito da `update ... where <colonna> is null` sembra
+idempotente e non lo è: la seconda applicazione riempie anche le righe nate DOPO la prima. Qui un
+utente in attesa è diventato approvato senza che nessuno lo approvasse. Segnale: un backfill
+condizionato sul valore della colonna invece che sulla sua esistenza. Mossa: il backfill sta dentro
+un `do $$ ... if not exists (select 1 from information_schema.columns ...) then ...`, così gira
+esattamente una volta, alla creazione della colonna.
+
+### L'embed di Calendly si monta DUE volte se lo lasci allo scan automatico
+Lo script `assets.calendly.com/.../widget.js` cerca da solo gli elementi `.calendly-inline-widget`.
+Con l'idratazione di SvelteKit quello scan corre contro il mount del componente e inizializza due
+iframe nello stesso div: quello che resta non finisce mai di caricare. Segnale:
+`performance.getEntriesByType('resource')` mostra DUE richieste alla pagina Calendly per un solo
+widget. Mossa: contenitore senza quella classe, script caricato in `onMount` e
+`Calendly.initInlineWidget({ url, parentElement })` chiamata una volta sola.
+
+### Una scheda vecchia lasciata aperta rimette in piedi la sessione che hai appena chiuso
+Verificando un gate con due account, una scheda ferma su `/app/<brand>` con la sessione precedente
+rinfresca il token e riscrive il cookie: il logout appena fatto nell'altra scheda viene annullato, e
+l'utente non approvato risulta di colpo dentro. Segnale: dopo un cambio account atterri su una
+dashboard a cui quell'utente non ha accesso. Mossa: chiudi ogni scheda dell'app prima di cambiare
+identità, una sola scheda per verifica.

@@ -86,26 +86,42 @@ describe('userCanEnter', () => {
     adminStub.current = client;
 
     expect(await userCanEnter('user-1')).toBe(true);
-    expect(seen.map((c) => c.fn)).not.toContain('is_approved');
+    expect(seen.map((c) => c.fn)).not.toContain('is_user_approved');
   });
 
   it("col prodotto chiuso chiede l'approvazione di QUELL'utente", async () => {
     const { userCanEnter } = await freshAccess();
     const { client, seen } = stubClient({
       flag_enabled: flagAnswer(true),
-      is_approved: { data: true, error: null }
+      is_user_approved: { data: true, error: null }
     });
     adminStub.current = client;
 
     expect(await userCanEnter('user-1')).toBe(true);
-    expect(seen.find((c) => c.fn === 'is_approved')?.args).toMatchObject({ p_user: 'user-1' });
+    expect(seen.find((c) => c.fn === 'is_user_approved')?.args).toMatchObject({ p_user: 'user-1' });
+  });
+
+  /**
+   * Il difetto visto in locale: la cache dello schema di PostgREST non conosceva ancora
+   * `is_approved(uuid)`, l'RPC tornava errore, e OGNI utente — approvati e paganti compresi —
+   * si prendeva un 403 sulla API. Stessa regola di `canEnter`: un guasto lascia entrare.
+   */
+  it('se il predicato esplode non chiude fuori nessuno', async () => {
+    const { userCanEnter } = await freshAccess();
+    const { client } = stubClient({
+      flag_enabled: flagAnswer(true),
+      is_user_approved: { data: null, error: { message: 'PGRST202' } }
+    });
+    adminStub.current = client;
+
+    expect(await userCanEnter('user-1')).toBe(true);
   });
 
   it('un utente non approvato non entra dalla API', async () => {
     const { userCanEnter } = await freshAccess();
     const { client } = stubClient({
       flag_enabled: flagAnswer(true),
-      is_approved: { data: false, error: null }
+      is_user_approved: { data: false, error: null }
     });
     adminStub.current = client;
 
