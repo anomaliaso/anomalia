@@ -20,6 +20,7 @@ import {
 } from '$lib/server/nav-cache';
 import { resolveTenant } from '$lib/server/tenant';
 import type { LayoutServerLoad } from './$types';
+import { chatModelChoices } from '$lib/server/chat-models';
 
 // Flag globali da env (Vercel, nessun rebuild con $env/dynamic).
 // `ads` è ORTOGONALE a hasAds(plan): il piano dice CHI può usarlo, il flag se esiste. Default OFF.
@@ -330,6 +331,9 @@ export const load: LayoutServerLoad = async ({ params, cookies, locals: { supaba
   return {
     brand,
     brandId: brand.id,
+    // Il menu dei modelli della chat: elenco vivo del gateway, non una lista scritta a mano che
+    // invecchia. È in cache di processo, quindi non è una chiamata di rete per navigazione.
+    chatModels: await chatModelChoices().catch(() => []),
     logoUrl,
     switcherBrands,
     onboarding,

@@ -42,6 +42,11 @@ export const REASONING_LEVELS: Record<ChatTier, readonly ThinkingLevel[]> = {
   'gpt-sol': familyForTier('gpt-sol').thinking
 };
 
+/** Il default di un tier qualunque, id del gateway compresi: la mappa qui sopra ha sei chiavi. */
+export function defaultReasoningFor(tier: ChatTier, agentFamily?: ModelFamilyId | null): ThinkingLevel {
+  return familyForTier(tier, agentFamily).defaultThinking;
+}
+
 export function penultimateLevel(levels: readonly ThinkingLevel[]): ThinkingLevel {
   return levels[Math.max(0, levels.length - 2)];
 }

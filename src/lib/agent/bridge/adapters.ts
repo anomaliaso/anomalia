@@ -37,6 +37,8 @@ import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
 import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
+import { gatewayModel, usableGatewayModels } from '$lib/server/openrouter-models';
+import { isGatewayModelTier } from '$lib/chat-tiers';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
 import { PostgresMemoryStore } from '@anomalia/agent-adapters/memory-postgres';
 import { VercelSandboxProvider } from '@anomalia/agent-adapters/vercel-sandbox';
@@ -123,6 +125,8 @@ export interface HarnessModelRef {
 
 export interface HarnessModelPreference {
 	family?: unknown;
+	/** L'id del gateway scelto dall'utente dal catalogo (`anthropic/claude-opus-5`). */
+	model?: unknown;
 	tier?: unknown;
 }
 
@@ -139,12 +143,26 @@ function servableWireId(family: unknown): string | null {
 	return llmModels().find((id) => id === wire || id.endsWith(`/${wire}`)) ?? null;
 }
 
+/**
+ * Un id scelto dal catalogo passa intatto — se il gateway lo serve davvero. È la differenza fra
+ * "il menu dice Qwen e risponde Qwen" e il difetto visto nel browser: il default del brand su
+ * `qwen/qwen3.8-flash` e il turno che girava sul primo id di LLM_MODELS.
+ */
+function servableModelId(value: unknown): string | null {
+	if (typeof value !== 'string' || !isGatewayModelTier(value)) return null;
+	const id = value.trim();
+	return llmModels().includes(id) || gatewayModel(id)?.usable ? id : null;
+}
+
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {
 	if (!llmApiKey()) return null;
 	const family = typeof pref === 'object' && pref ? pref.family : undefined;
+	const chosen = typeof pref === 'object' && pref ? pref.model : undefined;
 	const tier = typeof pref === 'string' ? pref : pref?.tier;
 
 	const wire =
+		servableModelId(chosen) ??
+		servableModelId(tier) ??
 		servableWireId(family) ??
 		(tier === 'pro' || tier === 'fast' ? llmModelForPicker(tier) : undefined) ??
 		(llmModels()[0] ?? null);
@@ -234,16 +252,33 @@ export interface HarnessTurnStream {
 }
 
 let kieAgentDirCache: string | null = null;
+let kieAgentDirModels = '';
 
 export function harnessSessionSettings(sessionKey?: string): { extensionFactories: unknown[] } | undefined {
 	if (!sessionKey) return undefined;
 	return { extensionFactories: [stickySessionExtension(`thread:${sessionKey}`)] };
 }
 
+/**
+ * I modelli che l'harness DICHIARA di poter chiamare. Non e` un dettaglio di configurazione: un id
+ * che non sta qui dentro l'harness non lo conosce, il turno ripiega su un altro gateway e finisce
+ * in un 403 su un modello che nessuno ha scelto. Quindi qui va anche il catalogo, non solo i due
+ * id di `LLM_MODELS`.
+ */
+function harnessDeclaredModels(): string[] {
+	const ids = new Set(llmModels());
+	for (const m of usableGatewayModels()) ids.add(m.id);
+	return [...ids];
+}
+
 export function ensureKieAgentDir(): string | undefined {
 	const key = llmApiKey();
 	if (!key) return undefined;
-	if (kieAgentDirCache) return kieAgentDirCache;
+	const declared = harnessDeclaredModels();
+	const signature = declared.join(',');
+	// Il listino arriva dopo il primo turno del processo: quando cambia, il file va riscritto o
+	// l'harness resta con l'elenco corto di prima.
+	if (kieAgentDirCache && kieAgentDirModels === signature) return kieAgentDirCache;
 	const dir = join(tmpdir(), 'anomalia-pi-agent');
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
@@ -254,11 +289,12 @@ export function ensureKieAgentDir(): string | undefined {
 					baseUrl: llmBaseUrl(),
 					api: 'openai-completions',
 					apiKey: key,
-					models: llmModels().map((id) => ({ id, input: ['text', 'image'] }))
+					models: declared.map((id) => ({ id, input: ['text', 'image'] }))
 				}
 			}
 		})
 	);
+	kieAgentDirModels = signature;
 	kieAgentDirCache = dir;
 	return dir;
 }

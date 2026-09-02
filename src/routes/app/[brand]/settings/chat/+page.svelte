@@ -1,15 +1,14 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { _ } from 'svelte-i18n';
-  import {
-    CHAT_PRESET_TIERS,
-    CHAT_CUSTOM_MODELS,
-    coerceChatTier
-  } from '$lib/chat-tiers';
+  import { CHAT_PRESET_TIERS, coerceChatTier } from '$lib/chat-tiers';
 
   let { data, form } = $props();
   // NULL in the DB means "never chosen" — show what the chat actually starts on.
   const current = $derived(coerceChatTier(data.brand?.chat_default_tier));
+  const models = $derived(data.chatModels ?? []);
+  const currentModel = $derived(models.find((m) => m.id === current));
+  const K_TOKENS = 1000;
 </script>
 
 <section class="panel">
@@ -24,10 +23,10 @@
         {#each CHAT_PRESET_TIERS as t (t)}
           <option value={t} selected={t === current}>{$_('chat.tier.' + t)}</option>
         {/each}
-        {#if CHAT_CUSTOM_MODELS.length}
+        {#if models.length}
           <optgroup label={$_('chat.tier.custom')}>
-            {#each CHAT_CUSTOM_MODELS as t (t)}
-              <option value={t} selected={t === current}>{$_('chat.tier.' + t)}</option>
+            {#each models as m (m.id)}
+              <option value={m.id} selected={m.id === current}>{m.label}</option>
             {/each}
           </optgroup>
         {/if}
@@ -38,7 +37,11 @@
   <div class="field">
     <div class="ftxt">
       <div class="fs">
-        {$_('chat.tier.' + current + 'Hint')}
+        {#if currentModel}
+          {Math.round(currentModel.contextLength / K_TOKENS)}k · ${currentModel.inputUsdPerM}/${currentModel.outputUsdPerM} per 1M token
+        {:else}
+          {$_('chat.tier.' + current + 'Hint')}
+        {/if}
       </div>
     </div>
   </div>

@@ -1,8 +1,8 @@
 import { AgentModelPolicy, type AgentModelPolicy as ModelPreference } from '@anomalia/agent-contracts/contracts';
-import type { ChatTier } from '$lib/chat-tiers';
+import { isGatewayModelTier, type ChatTier } from '$lib/chat-tiers';
 import {
-	TIER_DEFAULT_FAMILY,
 	coerceThinking,
+	familyForTier,
 	modelFamily,
 	type ModelFamilyId,
 	type ThinkingLevel
@@ -23,8 +23,9 @@ export function turnModelFamily(
  */
 export function policyForChoice(tier: ChatTier, thinking: unknown): ModelPreference | null {
 	if (tier === 'auto') return null;
-	const family = modelFamily(TIER_DEFAULT_FAMILY[tier]);
-	return { family: family.id, thinking: coerceThinking(thinking, family) };
+	const family = familyForTier(tier);
+	const policy: ModelPreference = { family: family.id, thinking: coerceThinking(thinking, family) };
+	return isGatewayModelTier(tier) ? { ...policy, model: tier } : policy;
 }
 
 /** Il tier che nel picker rappresenta ogni famiglia; gemini-flash non ha un tier e non si ripristina. */
@@ -43,7 +44,9 @@ function parseModelPolicy(raw: unknown): ModelPreference | null {
 
 export function choiceForPolicy(raw: unknown): { tier: ChatTier; reasoning: ThinkingLevel } | null {
 	const policy = parseModelPolicy(raw);
-	const tier = policy ? TIER_BY_FAMILY[policy.family] : undefined;
-	if (!policy || !tier) return null;
+	if (!policy) return null;
+	// Un id del catalogo vince sulla famiglia: la famiglia lì dentro dice solo la scala.
+	const tier = policy.model ?? TIER_BY_FAMILY[policy.family];
+	if (!tier) return null;
 	return { tier, reasoning: coerceThinking(policy.thinking, modelFamily(policy.family)) };
 }

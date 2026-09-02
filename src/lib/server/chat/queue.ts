@@ -789,6 +789,7 @@ await maybeCompactThread(admin, {
 						mode: params.mode,
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
 						modelFamily: turnModelFamily(threadRow?.model, persona?.model)?.family,
+						modelId: turnModelFamily(threadRow?.model, persona?.model)?.model,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
 						// La ripresa di un run lasciato dal reaper: lo stesso turno continua, con il
 						// fence successivo, invece di aprirne uno nuovo accanto al lavoro a metà.
