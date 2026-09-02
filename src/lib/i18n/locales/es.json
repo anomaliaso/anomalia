@@ -4993,10 +4993,6 @@
       },
       "video": {
         "title": "Imágenes y vídeo",
-        "imageModel": "Modelo de imagen",
-        "imageModelDesc": "Qué modelo de IA genera tus imágenes. Con el valor predeterminado, el renderizador elige imagen por imagen (uno más barato cuando no hay nada que reproducir, uno fiel con referencias de producto o persona). Los modelos fuera de la familia Nano Banana solo funcionan en kie y encuadran las publicaciones de Instagram en 3:4 en lugar de 4:5.",
-        "model": "Modelo de vídeo",
-        "modelDesc": "Qué modelo de IA genera tus clips. Las duraciones disponibles siguen el modelo elegido — Seedance 2.5 llega hasta 30 segundos.",
         "modelDefault": "Predeterminado de la plataforma",
         "clipLength": "Duración del clip",
         "clipLengthDesc": "Duración fija para cada clip generado, o Auto para que el chat / la generación elijan la longitud por reel según el guion hablado. Se factura por segundo. La duración máxima depende del modelo de vídeo de arriba; por debajo de 10s no caben gancho, mensaje y llamada a la acción.",
@@ -5008,7 +5004,21 @@
         "instructionsPlaceholder": "p. ej. Habla rápido e informal, como a un amigo. Nunca con tono publicitario. Sin jerga corporativa.",
         "resolution": "Calidad de vídeo",
         "resolutionDesc": "Se recomienda 480p: el 720p cuesta exactamente el doble por segundo, y cada clip se factura aunque no lo publiques. En el feed del móvil la diferencia se nota poco.",
-        "recommended": "recomendada"
+        "recommended": "recomendada",
+        "slots": {
+          "imageGenerate": "Generación de imágenes",
+          "imageGenerateDesc": "Qué modelo dibuja una foto nueva a partir de un prompt. Por defecto el renderizador elige imagen por imagen. Los modelos fuera de la familia Nano Banana solo corren en kie y encuadran los posts de Instagram en 3:4 en lugar de 4:5.",
+          "imageRefine": "Edición de imágenes",
+          "imageRefineDesc": "Qué modelo edita una foto que ya existe — añadir el logo, cambiar el estilo, corregir un detalle. Reproducir fielmente una imagen es un oficio distinto de inventarla. Vacío: sigue al modelo de generación.",
+          "videoGenerate": "Generación de vídeo",
+          "videoGenerateDesc": "Qué modelo escribe un clip solo con palabras. Las duraciones disponibles siguen esta elección — Seedance 2.5 llega a 30 segundos.",
+          "videoAnimate": "Generación de vídeo (imagen)",
+          "videoAnimateDesc": "Qué modelo anima una imagen que ya existe, normalmente la portada renderizada. Vacío: sigue al modelo de generación de vídeo.",
+          "videoRefine": "Edición de vídeo",
+          "videoRefineDesc": "Qué modelo reescribe un clip terminado — cambiar sujeto, entorno o estilo — manteniendo el movimiento original. Aquí solo aparecen los modelos que leen un vídeo.",
+          "videoMotion": "Movimiento de vídeo",
+          "videoMotionDesc": "Qué modelo toma el movimiento de un vídeo de referencia y lo aplica al sujeto de tu imagen. No son los motion videos, que se renderizan desde código sin modelo generativo."
+        }
       },
       "library": {
         "subtitle": "Las páginas de tu sitio se convierten en activos enlazables reales para posts y radar.",
