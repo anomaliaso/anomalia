@@ -15,6 +15,8 @@
  * Fonti: docs.kie.ai, una pagina per modello, lette il 2026-09-02.
  */
 
+import { nearestAspectRatio } from '$lib/aspect-ratio';
+
 export const NANO_BANANA_PRO_MODEL = 'nano-banana-pro';
 export const NANO_BANANA_2_MODEL = 'nano-banana-2';
 export const NANO_BANANA_2_LITE_MODEL = 'nano-banana-2-lite';
@@ -200,20 +202,6 @@ export function googleImageModel(model: string | undefined, fallback: string): s
  * la proporzione più vicina — 4:5 → 3:4, non un quadrato.
  */
 export function kieAspectRatio(spec: ImageModelSpec, aspectRatio: string | undefined): string {
-  const wanted = String(aspectRatio ?? '').trim() || '1:1';
-  if (spec.aspectRatios.includes(wanted)) return wanted;
-  const target = ratioValue(wanted);
-  if (!target) return '1:1';
-  return spec.aspectRatios.reduce((best, candidate) => {
-    const b = ratioValue(best);
-    const c = ratioValue(candidate);
-    if (!c) return best;
-    if (!b) return candidate;
-    return Math.abs(Math.log(c / target)) < Math.abs(Math.log(b / target)) ? candidate : best;
-  }, spec.aspectRatios[0]);
+  return nearestAspectRatio(spec.aspectRatios, String(aspectRatio ?? '').trim() || '1:1', '1:1');
 }
 
-function ratioValue(ratio: string): number | undefined {
-  const [w, h] = ratio.split(':').map(Number);
-  return w > 0 && h > 0 ? w / h : undefined;
-}

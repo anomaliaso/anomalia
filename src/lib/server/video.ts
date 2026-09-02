@@ -19,8 +19,12 @@ import {
   isKnownVideoModelId,
   isSeedance25Model,
   videoModelCaps,
-  videoModelForRole
+  videoModelForRole,
+  videoModelSpec,
+  kieVideoModel,
+  type VideoRole
 } from '$lib/video-models';
+import { nearestAspectRatio } from '$lib/aspect-ratio';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
 // non passa mai di qui, quindi un utente free non incorre nel costo video.
@@ -238,6 +242,53 @@ export function clampVideoAspectRatio(ratio: unknown, model?: string | null): st
   const caps = videoModelCaps(model?.trim() || envModelI2V());
   const requested = String(ratio ?? '9:16').trim();
   return (caps.ratios as readonly string[]).includes(requested) ? requested : '9:16';
+}
+
+/**
+ * Il payload dei due mestieri che hanno un VIDEO in ingresso: rifinire una clip che esiste, e
+ * prendere il movimento da una clip per applicarlo al soggetto di una immagine.
+ *
+ * I due media non sono intercambiabili e nessuno dei due provider lo dice con un errore: su
+ * motion control `input_urls` e' il SOGGETTO e `video_urls` e' il movimento, e scambiarli produce
+ * una clip plausibile e sbagliata. Aleph poi vive fuori dall'API a job e vuole i campi in
+ * camelCase: mandargli `video_urls` e' un 200 con dentro un rifiuto — un giro pagato che non
+ * torna nulla. Le due differenze stanno nella tabella, non qui.
+ */
+export function buildTransformInput(
+  model: string,
+  role: 'refine' | 'motion',
+  args: {
+    prompt?: string;
+    videoUrl: string;
+    imageUrl?: string;
+    aspectRatio?: string;
+    mode?: 'std' | 'pro';
+  }
+): Record<string, unknown> {
+  const spec = videoModelSpec(model);
+  if (!spec?.roles.includes(role)) {
+    throw new Error(`${model} does not do ${role}: pick a model that serves that job`);
+  }
+
+  const prompt = args.prompt?.trim().slice(0, spec.maxPromptChars) || undefined;
+
+  if (spec.endpoint === 'aleph') {
+    return {
+      ...(prompt ? { prompt } : {}),
+      videoUrl: args.videoUrl,
+      aspectRatio: nearestAspectRatio(spec.ratios, String(args.aspectRatio ?? '9:16').trim(), '9:16'),
+      ...(args.imageUrl ? { referenceImage: args.imageUrl } : {})
+    };
+  }
+
+  return {
+    ...(prompt ? { prompt } : {}),
+    // Il soggetto, non il movimento.
+    ...(args.imageUrl ? { input_urls: [args.imageUrl] } : {}),
+    // Il movimento, non il soggetto.
+    video_urls: [args.videoUrl],
+    mode: args.mode ?? 'std'
+  };
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -884,6 +935,139 @@ async function runPreparedRender(
     // Non fatale: il chiamante ripiega sulla cover.
     return undefined;
   }
+}
+
+/**
+ * Runway vive su un percorso suo: `/aleph/generate` per inviare e `/runway/record-detail` per
+ * chiedere, con lo stato in `data.state` e l'URL in `data.videoInfo.videoUrl`. Nessuno dei due
+ * combacia con l'API a job, e questa e' l'unica ragione per cui la tabella dichiara `endpoint`.
+ */
+async function runAlephJob(
+  input: Record<string, unknown>,
+  signal?: AbortSignal
+): Promise<VideoJobResult | undefined> {
+  const res = await fetch(`${KIE_BASE}/aleph/generate`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+    signal
+  });
+  if (!res.ok) {
+    console.error(`[video.transform] aleph generate ${res.status}: ${(await res.text().catch(() => '')).slice(0, 400)}`);
+    return undefined;
+  }
+  const created = await res.json();
+  const taskId = created?.data?.taskId ?? created?.data?.task_id;
+  if (!taskId) {
+    console.error(`[video.transform] aleph rifiutata: ${String(created?.msg ?? JSON.stringify(created)).slice(0, 400)}`);
+    return undefined;
+  }
+
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let first = true;
+  while (Date.now() < deadline) {
+    if (signal?.aborted) return undefined;
+    if (!first) await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    first = false;
+    const infoRes = await fetch(`${KIE_BASE}/runway/record-detail?taskId=${encodeURIComponent(taskId)}`, {
+      headers: authHeaders(),
+      signal
+    });
+    if (!infoRes.ok) continue;
+    const info = await infoRes.json();
+    const state = info?.data?.state;
+    if (state === 'fail') {
+      console.error(`[video.transform] aleph fallita: ${String(info?.data?.failMsg ?? '').slice(0, 400)}`);
+      return undefined;
+    }
+    const url = info?.data?.videoInfo?.videoUrl;
+    if (state === 'success' && url) return { url: String(url), taskId };
+  }
+  return undefined;
+}
+
+/**
+ * I due mestieri che partono da un video che esiste gia\'.
+ *
+ * Tornano `undefined` e non lanciano, come ogni altro render qui: una clip che non riesce non deve
+ * portarsi via il post da cui e\' partita.
+ *
+ * La clip finita si RIOSPITA (`persistMp4`): gli URL dei provider scadono — quello di Runway in 14
+ * giorni — e un post che punta a un URL scaduto e\' un post senza video, mesi dopo, senza un errore
+ * da nessuna parte.
+ */
+export async function transformVideo(opts: {
+  supabase: SupabaseClient;
+  userId: string;
+  role: VideoRole & ('refine' | 'motion');
+  videoUrl: string;
+  prompt?: string;
+  imageUrl?: string;
+  aspectRatio?: string;
+  mode?: 'std' | 'pro';
+  model?: string | null;
+  prefs?: Record<string, unknown> | null;
+  abortSignal?: AbortSignal;
+}): Promise<{ url: string; taskId: string; model: string } | undefined> {
+  const model = opts.model?.trim() || videoModelForRole(opts.prefs, opts.role);
+  if (!model) return undefined;
+
+  const gateBrand = getBrandContext();
+  if (gateBrand) {
+    const { gateCredits } = await import('$lib/server/credits');
+    await gateCredits(gateBrand);
+  }
+
+  const spec = videoModelSpec(model);
+  const input = buildTransformInput(model, opts.role, {
+    prompt: opts.prompt,
+    videoUrl: opts.videoUrl,
+    imageUrl: opts.imageUrl,
+    aspectRatio: opts.aspectRatio,
+    mode: opts.mode
+  });
+
+  const t0 = Date.now();
+  let job: VideoJobResult | undefined;
+  try {
+    job =
+      spec?.endpoint === 'aleph'
+        ? await runAlephJob(input, opts.abortSignal)
+        : await (async () => {
+            const taskId = await createKieTask(
+              kieVideoModel(model, opts.role),
+              input,
+              opts.abortSignal,
+              'video.transform'
+            );
+            return taskId
+              ? pollKieTask(taskId, POLL_TIMEOUT_MS, opts.abortSignal, 'video.transform', POLL_INTERVAL_MS)
+              : undefined;
+          })();
+  } catch (e) {
+    console.error('[video.transform] job failed', e);
+  }
+
+  logAiCall({
+    label: `video.${opts.role}`,
+    provider: 'kie',
+    model,
+    prompt: String(input.prompt ?? ''),
+    ms: Date.now() - t0,
+    ok: !!job,
+    error: job ? undefined : 'no video returned',
+    ...(job?.credits != null
+      ? { providerCredits: job.credits, flatCostUsd: Math.round(job.credits * KIE_CREDIT_USD * 1e6) / 1e6 }
+      : {}),
+    context: opts.role
+  });
+  if (!job) return undefined;
+
+  // Niente sottotitoli e niente taglio: la clip di partenza e\' gia\' montata, e rimontarla qui
+  // sposterebbe il timing di quello che l\'utente ha approvato.
+  const url = await persistMp4(opts.supabase, opts.userId, job.url, { captions: false, tighten: false });
+  if (!url) return undefined;
+  return { url, taskId: job.taskId, model };
 }
 
 /** A render kie has accepted but not finished. Everything here must survive the request. */

@@ -1,3 +1,4 @@
+import { ALEPH_REFINE_MODEL, KLING_3_VIDEO_MODEL, GROK_IMAGINE_VIDEO_MODEL } from '$lib/video-models';
 import { describe, it, expect } from 'vitest';
 import {
   buildVideoPrompt,
@@ -7,6 +8,7 @@ import {
   clampVideoResolution,
   clampVideoAspectRatio,
   videoModelCaps,
+  buildTransformInput,
   videoDurationOptions,
   ugcDurationCap,
   suggestVideoDuration,
@@ -651,5 +653,46 @@ describe('clampVideoResolution', () => {
     expect(clampVideoResolution('480P')).toBe('480p');
     // 720p is double the price per second: anything unrecognised must fall to 480p, never up.
     for (const bad of ['1080p', '4k', '', null, undefined, 720]) expect(clampVideoResolution(bad)).toBe('480p');
+  });
+});
+
+describe('buildTransformInput — i due mestieri con un video in ingresso', () => {
+  it('parla il dialetto di Aleph per il refine, non quello dei job', () => {
+    // Aleph vive fuori dall'API a job e ha i campi in camelCase. Mandargli `video_urls` sarebbe
+    // un 200 con un corpo di rifiuto, cioè un giro di rete pagato che non torna nulla.
+    const input = buildTransformInput(ALEPH_REFINE_MODEL, 'refine', {
+      prompt: 'make it night',
+      videoUrl: 'https://x/clip.mp4',
+      aspectRatio: '9:16'
+    });
+    expect(input).toMatchObject({ prompt: 'make it night', videoUrl: 'https://x/clip.mp4', aspectRatio: '9:16' });
+    expect(input.video_urls).toBeUndefined();
+  });
+
+  it('separa il soggetto dal video che detta il movimento', () => {
+    // I due media NON sono intercambiabili: input_urls è l'immagine del soggetto, video_urls è la
+    // clip da cui si prende il movimento. Scambiarli produce una clip plausibile e sbagliata.
+    const input = buildTransformInput(KLING_3_VIDEO_MODEL, 'motion', {
+      videoUrl: 'https://x/drive.mp4',
+      imageUrl: 'https://x/subject.png',
+      mode: 'pro'
+    });
+    expect(input).toMatchObject({
+      input_urls: ['https://x/subject.png'],
+      video_urls: ['https://x/drive.mp4'],
+      mode: 'pro'
+    });
+  });
+
+  it('riporta un rapporto che il modello non serve al più vicino che serve', () => {
+    // 9:16 è il formato di un reel e Aleph ce l'ha; 4:5 no, e ripiegare su 1:1 riquadrerebbe in
+    // silenzio ogni verticale. Vince il rapporto con la proporzione più vicina.
+    expect(buildTransformInput(ALEPH_REFINE_MODEL, 'refine', { videoUrl: 'https://x/c.mp4', aspectRatio: '4:5' }).aspectRatio)
+      .toBe('3:4');
+  });
+
+  it('rifiuta un modello che quel mestiere non lo fa', () => {
+    expect(() => buildTransformInput(GROK_IMAGINE_VIDEO_MODEL, 'refine', { videoUrl: 'https://x/c.mp4' }))
+      .toThrow(/refine/);
   });
 });
