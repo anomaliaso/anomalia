@@ -275,12 +275,18 @@ export function computeCostUsd(entry: AiCallLog, plan?: string | null): number |
   // Modello ASSENTE su una chiamata gemini = Flash; modello PRESENTE ma ignoto deve restare null,
   // non essere prezzato come Flash.
   // `openrouter/z-ai/glm-5.3-flash`, `llm/z-ai/glm-5.3-flash` e `z-ai/glm-5.3-flash` sono lo
-  // stesso modello allo stesso prezzo: il prefisso dice il trasporto, non la tariffa. Il bridge
-  // dell'harness scrive `llm/`, e finché la normalizzazione ne toglieva uno solo quelle righe
-  // restavano senza costo — 54 su 235 dello stesso modello.
-  const modelKey = (entry.model ?? '').replace(/^(?:openrouter|llm)\//, '');
+  // stesso modello allo stesso prezzo: il prefisso dice il trasporto, non la tariffa. Ogni
+  // trasporto nuovo ne ha aggiunto uno — e con esso un buco: `llm/` dal bridge dell'harness
+  // (54 righe), `kie/` (4), il vendor `google/` davanti a un id che le RATES tengono nudo (10).
+  // Elencarli è una rincorsa persa: si prova l'id intero, poi il suo ultimo segmento.
+  const rawModel = (entry.model ?? '').trim();
+  const modelKey = rawModel.replace(/^(?:openrouter|llm)\//, '');
+  const bareModel = modelKey.includes('/') ? modelKey.slice(modelKey.lastIndexOf('/') + 1) : '';
   const rate =
     RATES[modelKey] ??
+    // L'ultimo segmento vale solo se le RATES lo conoscono: un id sconosciuto resta senza prezzo,
+    // non diventa il prezzo di qualcosa che gli somiglia.
+    (bareModel ? RATES[bareModel] : undefined) ??
     // Il listino del gateway, chiesto al gateway: è ciò che rende fatturabile un modello che
     // l'utente ha scelto e che nessuno ha scritto qui sopra. Vuoto finché `ensureGatewayModels`
     // non ha caricato — e allora decidono le RATES, come prima.
