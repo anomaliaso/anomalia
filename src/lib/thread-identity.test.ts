@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { composerIdentity, roomMemberAvatar, threadIdentity } from './thread-identity';
+import { dmAvatars } from './chat-dm';
 import {
   BUILTIN_AGENT_AVATARS,
   DEFAULT_CHAT_AGENT_AVATAR,
@@ -141,9 +142,63 @@ describe('threadIdentity: chat di gruppo', () => {
     expect(who.name).toBe('Content Creator, motion');
   });
 
-  it('un DM (oggetto, non array) non è una stanza: resta la risoluzione di prima', () => {
+  it('un DM (oggetto, non array) non è una stanza: non entra nel ramo delle stanze', () => {
     const who = threadIdentity({ agent: 'content', room_agents: { dm: ['content', 'analyst'] } }, t);
-    expect(who.name).toBe('Content Creator');
+    expect(who.name).not.toContain(',');
+  });
+});
+
+/**
+ * Riportato il 2/9: dal chip «1 messaggio con Content Creator» si entra nel thread privato fra i
+ * due agenti e in testa c'è «Anomalia», nome e faccia — il generalista, che in quel thread non c'è.
+ * Un DM ha `agent` e `custom_agent_id` a null (lo crea `getOrCreateDmThread`) e `room_agents` come
+ * OGGETTO, quindi cadeva nell'ultimo ripiego. I due membri stanno nel marcatore: si leggono da lì.
+ */
+describe('threadIdentity: DM fra agenti', () => {
+  const dm = {
+    title: 'Analyst ⇄ Content Creator',
+    agent: null,
+    custom_agent_id: null,
+    room_agents: {
+      dm: ['analyst', 'content'],
+      names: { analyst: 'Analyst', content: 'Content Creator' }
+    }
+  };
+
+  it('si presenta con i DUE agenti, mai con Anomalia', () => {
+    const who = threadIdentity(dm, t);
+    expect(who.name).toBe('Analyst ⇄ Content Creator');
+    expect(who.face).toBe(BUILTIN_AGENT_AVATARS.analyst.face);
+    expect(who.color).toBe(BUILTIN_AGENT_AVATARS.analyst.color);
+    expect(who.fixed).toBe(true);
+  });
+
+  it('senza i nomi nel marcatore ripiega sulle etichette i18n, mai sulla chiave nuda tradotta', () => {
+    const who = threadIdentity({ agent: null, room_agents: { dm: ['content', 'web'] } }, t);
+    expect(who.name).toBe('Content Creator ⇄ web');
+  });
+
+  it('la coppia esce come pila di avatar: in testata si vedono entrambi', () => {
+    const stack = dmAvatars(dm.room_agents);
+    expect(stack?.map((a) => a.id)).toEqual(['analyst', 'content']);
+    expect(stack?.map((a) => a.name)).toEqual(['Analyst', 'Content Creator']);
+    expect(stack?.[1].face).toBe(BUILTIN_AGENT_AVATARS.content.face);
+  });
+
+  it('un agente custom non porta il suo avatar nel marcatore: faccia derivata, mai vuota', () => {
+    const key = 'custom:11111111-2222-3333-4444-555555555555';
+    const stack = dmAvatars({ dm: ['analyst', key], names: { [key]: 'Il Copy' } });
+    expect(stack?.[1]).toMatchObject({
+      id: key,
+      name: 'Il Copy',
+      face: fallbackAvatarFace(key),
+      color: fallbackAvatarColor(key)
+    });
+  });
+
+  it('un thread che non è un DM non ha pila', () => {
+    expect(dmAvatars(['content', 'web'])).toBeNull();
+    expect(dmAvatars(null)).toBeNull();
   });
 });
 
