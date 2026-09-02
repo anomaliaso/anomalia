@@ -17,3 +17,24 @@ describe('billingProvider()', () => {
 		await expect(provider.gate('credits', { brandId: 'brand-1' })).resolves.toBeUndefined();
 	});
 });
+
+describe('billingProvider() with the real anomalia-provider present', () => {
+	it('picks the anomalia provider instead of falling back to open', async () => {
+		vi.resetModules();
+		vi.doUnmock('./anomalia-provider');
+		vi.doMock('$lib/server/credits', () => ({
+			gateCreditsCore: async () => {},
+			creditQuota: () => 400
+		}));
+		vi.doMock('$lib/server/plans', () => ({
+			postQuota: () => 15,
+			plansAbove: () => [],
+			isTopPlan: () => false
+		}));
+
+		const { billingProvider } = await import('./index');
+		const provider = await billingProvider();
+
+		expect(provider.kind).toBe('anomalia');
+	});
+});
