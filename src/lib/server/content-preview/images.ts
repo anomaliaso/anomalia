@@ -9,7 +9,7 @@ import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext } from '$lib/server/ai-log';
 import { googleGenaiClient, judgeThinkingLevel, NANO_BANANA_2_LITE } from '$lib/server/gemini';
-import { NANO_BANANA_2_MODEL } from '$lib/image-models';
+import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
@@ -80,7 +80,7 @@ export type AspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
 
 // Metà del prezzo di output immagine di Pro, e un articolo rende 3 immagini contro 1 di un post.
 // I post social usano lo stesso id quando non c'è nulla da riprodurre; con riferimenti, Lite.
-export const BLOG_IMAGE_MODEL = NANO_BANANA_2_MODEL;
+export const BLOG_IMAGE_MODEL = GEMINI_NANO_BANANA_2;
 
 const ASPECT_LABEL: Record<AspectRatio, string> = {
   '1:1': 'Square 1:1',
@@ -261,6 +261,9 @@ export async function renderPostImage(
     throw new Error(`No image returned from kie (${imageModel}) after 2 attempts`);
   }
   // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
+  // Un modello che vive solo su kie non è un modello per Google: `googleImageModel` lo riporta a
+  // quello di casa e lo dice, invece di far fallire ogni immagine con un 400.
+  req.model = googleImageModel(req.model, NANO_BANANA_2_LITE);
   const googleAi = googleGenaiClient();
   void ai;
   // genWithRetry ritenta gli ERRORI, ma il modello risponde spesso 200 SENZA parte immagine — un
@@ -269,7 +272,7 @@ export async function renderPostImage(
   const MAX_IMAGE_ATTEMPTS = 3;
   let lastInfo = '';
   for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
-    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: imageModel });
+    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: req.model });
     const found = imageFromResponse(res);
     if (found) return found;
     const out = res.candidates?.[0]?.content?.parts ?? [];
