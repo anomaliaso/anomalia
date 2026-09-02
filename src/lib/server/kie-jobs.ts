@@ -40,6 +40,7 @@
  * nostra. Un URL di kie in una riga che dura più di un giorno è un'immagine che sparisce da sola.
  */
 import { env } from '$env/dynamic/private';
+import { NANO_BANANA_2_LITE_MODEL, NANO_BANANA_2_MODEL, imageModelSpec, kieAspectRatio } from '$lib/image-models';
 import { logAiCall } from '$lib/server/ai-log';
 import { KIE_CREDIT_USD } from '$lib/server/kie';
 
@@ -185,19 +186,6 @@ export function kieFlatCostUsd(credits?: number): number | undefined {
 // ── Immagini ────────────────────────────────────────────────────────────────────────────────
 
 /** Gli unici rapporti d'aspetto che kie accetta. Fuori elenco è un 500 alla submit. */
-export const KIE_ASPECT_RATIOS = new Set([
-  '1:1',
-  '2:3',
-  '3:2',
-  '3:4',
-  '4:3',
-  '4:5',
-  '5:4',
-  '9:16',
-  '16:9',
-  '21:9',
-  'auto'
-]);
 
 /** `1K|2K|4K`, e le maiuscole contano: `"2k"` è un 500. */
 export type KieResolution = '1K' | '2K' | '4K';
@@ -223,34 +211,36 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const KIE_IMAGE_INPUT_MAX = 8;
 
 /**
- * Da id Gemini a id kie.
+ * Da id del catalogo (o da un vecchio id Gemini scritto in un call site) a id kie.
  *
- * Sono gli stessi modelli con due nomi: `gemini-3-pro-image-preview` è Nano Banana Pro,
- * `gemini-3.1-flash-image` è Nano Banana 2, `gemini-3.1-flash-lite-image` è Nano Banana 2 Lite.
- * La regola è una sola riga apposta — un elenco di corrispondenze invecchia al primo id nuovo,
- * mentre "pro nel nome ⇒ pro", "lite nel nome ⇒ lite" reggono anche allora.
+ * `refCount` non è un dettaglio: metà delle famiglie su kie separa il modello testo-a-immagine da
+ * quello che accetta riferimenti — `seedream/5-pro-text-to-image` rifiuta `image_urls`, e il suo
+ * gemello li PRETENDE. Nano Banana usa lo stesso id in entrambi i casi, e per questo la differenza
+ * non si vedeva finché c'era solo lui.
  */
-export type KieImageModel = 'nano-banana-pro' | 'nano-banana-2' | 'nano-banana-2-lite';
-
-export function kieImageModel(geminiModel: string | undefined): KieImageModel {
-  if (/pro/i.test(geminiModel ?? '')) return 'nano-banana-pro';
-  if (/lite/i.test(geminiModel ?? '')) return 'nano-banana-2-lite';
+export function kieImageModel(model: string | undefined, refCount = 0): string {
+  const spec = imageModelSpec(model);
+  if (spec) return refCount > 0 ? spec.kie.refs : spec.kie.text;
+  // Un id che il catalogo non conosce è un id Gemini di prima del registro: la regola vale ancora.
+  if (/pro/i.test(model ?? '')) return 'nano-banana-pro';
+  if (/lite/i.test(model ?? '')) return 'nano-banana-2-lite';
   return 'nano-banana-2';
 }
 
-/** Nano Banana 2 Lite: solo prompt + image_urls + aspect_ratio, e al massimo 10 riferimenti. */
-const KIE_LITE_IMAGE_MAX = 10;
-
-export function isKieLiteImageModel(model: string): model is 'nano-banana-2-lite' {
-  return model === 'nano-banana-2-lite';
+export function isKieLiteImageModel(model: string): boolean {
+  return imageModelSpec(model)?.id === NANO_BANANA_2_LITE_MODEL;
 }
 
 /**
  * L'input del job, dai pezzi che `buildImageRequest` produce già. Puro, quindi testabile.
  *
+ * Ogni campo qui sotto viene dallo spec del modello e non da un `if`: i nomi cambiano davvero da
+ * una famiglia all'altra (`image_input` / `image_urls` / `input_urls`, `aspect_ratio` /
+ * `image_size`, `resolution` / `quality`), e un campo sbagliato non è un errore — è un render che
+ * riesce ignorando i riferimenti del brand.
+ *
  * Il rapporto d'aspetto lo validiamo NOI anche se kie lo rifiuta: il suo rifiuto arriva come un 500
- * generico dopo un giro di rete, e a quel punto il render è perso. Qui invece un valore fuori
- * elenco diventa 1:1 con un avviso, e il post l'immagine ce l'ha.
+ * generico dopo un giro di rete, e a quel punto il render è perso.
  */
 export function buildKieImageInput(opts: {
   prompt: string;
@@ -259,44 +249,37 @@ export function buildKieImageInput(opts: {
   resolution?: KieResolution;
   model?: string;
 }): Record<string, unknown> {
-  const aspect = opts.aspectRatio && KIE_ASPECT_RATIOS.has(opts.aspectRatio) ? opts.aspectRatio : '1:1';
+  const spec = imageModelSpec(opts.model) ?? imageModelSpec(NANO_BANANA_2_MODEL)!;
+  const aspect = kieAspectRatio(spec, opts.aspectRatio);
   if (opts.aspectRatio && aspect !== opts.aspectRatio) {
-    console.warn(`[kie-image] aspect_ratio "${opts.aspectRatio}" non è fra quelli accettati — uso 1:1`);
+    console.warn(`[kie-image] ${spec.id} non serve aspect_ratio "${opts.aspectRatio}" — uso ${aspect}`);
   }
-  // Il taglio qui sotto era muto, e mentiva anche il commento che lo accompagnava ("buildImageRequest
-  // ne attacca al massimo 6": ne può attaccare 13 — base 1 + logo 1 + prodotto 4 + allegati 4 + mood 3).
-  // Un riferimento perso è già trattato come un guasto poche righe più giù, quando l'upload fallisce;
-  // perderlo per aritmetica non è meno grave, ed è più difficile da vedere perché non lascia traccia.
+
   const refUrls = opts.refUrls ?? [];
-  if (refUrls.length > KIE_IMAGE_INPUT_MAX) {
+  if (refUrls.length > spec.maxRefs) {
     console.warn(
-      `[kie-image] ${refUrls.length} riferimenti ma kie ne inoltra ${KIE_IMAGE_INPUT_MAX}: ` +
-        `${refUrls.length - KIE_IMAGE_INPUT_MAX} scartati. Il tetto va imposto A MONTE, dove si sa che cosa sono.`
+      `[kie-image] ${refUrls.length} riferimenti ma ${spec.id} ne inoltra ${spec.maxRefs}: ` +
+        `${refUrls.length - spec.maxRefs} scartati. Il tetto va imposto A MONTE, dove si sa che cosa sono.`
     );
   }
 
-  // La forma Lite è un DIALETTO, non un sottoinsieme: il campo riferimenti si chiama image_urls,
-  // la cap è 10, e resolution/output_format NON esistono (il "2K" inviato a un modello che li
-  // scarta è un payload sbagliato che funziona per sbaglio).
-  if (isKieLiteImageModel(opts.model ?? '')) {
-    return {
-      prompt: opts.prompt.slice(0, 10_000),
-      aspect_ratio: aspect,
-      ...(refUrls.length ? { image_urls: refUrls.slice(0, KIE_LITE_IMAGE_MAX) } : {})
-    };
+  const asked =
+    opts.resolution ?? (isKieResolution(env.KIE_IMAGE_RESOLUTION) ? env.KIE_IMAGE_RESOLUTION : '1K');
+  // Il formato è una decisione di prodotto, la risoluzione una manopola: quando il modello serve
+  // quel rapporto solo a 1K, si abbassa la manopola e si tiene l'inquadratura.
+  const resolution = spec.ratios1KOnly?.includes(aspect) ? '1K' : asked;
+  if (resolution !== asked) {
+    console.warn(`[kie-image] ${spec.id} serve ${aspect} solo a 1K: ${asked} abbassato a 1K`);
   }
 
   return {
-    prompt: opts.prompt.slice(0, 10_000), // limite dichiarato dalla API
-    aspect_ratio: aspect,
-    // 1K è la parità con quello che Gemini rende oggi: cambiare la dimensione dell'immagine è una
-    // decisione di prodotto, non un effetto collaterale di una migrazione di costo. Su
-    // nano-banana-pro 2K costa uguale (18 crediti), su nano-banana-2 costa il 50% in più (8→12):
-    // KIE_IMAGE_RESOLUTION la alza senza deploy quando qualcuno vorrà davvero il 2K.
-    resolution:
-      opts.resolution ?? (isKieResolution(env.KIE_IMAGE_RESOLUTION) ? env.KIE_IMAGE_RESOLUTION : '1K'),
-    output_format: 'png',
-    ...(refUrls.length ? { image_input: refUrls.slice(0, KIE_IMAGE_INPUT_MAX) } : {})
+    prompt: opts.prompt.slice(0, 10_000),
+    [spec.aspectField]: aspect,
+    ...(spec.sizeField === 'resolution' ? { resolution } : {}),
+    // Seedream non ha 4K: basic = 1K, high = tutto il resto di quello che il prodotto chiede.
+    ...(spec.sizeField === 'quality' ? { quality: resolution === '1K' ? 'basic' : 'high' } : {}),
+    ...(spec.outputFormat ? { output_format: spec.outputFormat } : {}),
+    ...(refUrls.length ? { [spec.refField]: refUrls.slice(0, spec.maxRefs) } : {})
   };
 }
 
@@ -386,13 +369,13 @@ export async function generateImageOnKie(
   opts: { label?: string; context?: string; signal?: AbortSignal } = {}
 ): Promise<string | undefined> {
   const label = opts.label ?? 'renderPostImage';
-  const model = kieImageModel(req.model);
   const parts = req.contents?.[0]?.parts ?? [];
   const prompt = parts
     .map((p) => p.text)
     .filter(Boolean)
     .join('\n');
   const refs = parts.flatMap((p) => (p.inlineData ? [p.inlineData] : []));
+  const model = kieImageModel(req.model, refs.length);
   const t0 = Date.now();
 
   const fail = (error: string) => {

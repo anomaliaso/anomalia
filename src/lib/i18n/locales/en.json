@@ -5342,9 +5342,9 @@
         "reload": "Reload properties"
       },
       "video": {
-        "title": "Video",
+        "title": "Images & video",
         "imageModel": "Image model",
-        "imageModelDesc": "Which AI model renders your images. Platform default lets the renderer pick per image (a cheaper model when there is nothing to reproduce, a faithful one with product or person references). Nano Banana Pro is the most faithful and the most expensive.",
+        "imageModelDesc": "Which AI model renders your images. Platform default lets the renderer pick per image (a cheaper model when there is nothing to reproduce, a faithful one with product or person references). Models outside the Nano Banana family run only on kie and frame Instagram posts at 3:4 instead of 4:5.",
         "model": "Video model",
         "modelDesc": "Which AI model generates your clips. Clip length options follow the model you pick — Seedance 2.5 can go up to 30 seconds.",
         "modelDefault": "Platform default",
