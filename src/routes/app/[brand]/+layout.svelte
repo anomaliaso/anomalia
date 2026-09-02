@@ -48,18 +48,10 @@
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
   import { get } from 'svelte/store';
   import { chatThreadId, chatThreads, markThreadUnread, refreshThreads, unreadThreadIds } from '$lib/stores/chat';
+  import { appBrandSlug, isThreadPath, shellShimmerFor } from '$lib/shell-nav';
   import { roomMemberKeys, threadIdentity, type ThreadIdentitySource } from '$lib/thread-identity';
   import { hasAds, hasWebHub } from '$lib/plans';
   let { data, children } = $props();
-
-  /** Primo segmento di `/app/...` quando è uno slug di brand (non una rotta sorella). */
-  const NON_BRAND_APP_SEGMENTS = new Set(['onboarding']);
-  function appBrandSlug(pathname: string | null | undefined): string | null {
-    if (!pathname) return null;
-    const seg = pathname.match(/^\/app\/([^/]+)/)?.[1];
-    if (!seg || NON_BRAND_APP_SEGMENTS.has(seg)) return null;
-    return seg;
-  }
 
   const base = $derived(`/app/${data.brand.slug}`);
   const isMobile = new IsMobile(SHELL_MOBILE_BREAKPOINT);
@@ -85,7 +77,7 @@
       !path.includes('/image-generator') &&
       !path.includes('/activate')
   );
-  const isChatThread = $derived(/\/chat\/[^/]+\/?$/.test(path) && !path.endsWith('/chat/new'));
+  const isChatThread = $derived(isThreadPath(path));
   const isCalendar = $derived(/\/calendar\/?$/.test(path));
   const isLeads = $derived(/\/leads\/?$/.test(path));
   const isMediaWorkbench = $derived(
@@ -98,30 +90,18 @@
     const toBrand = appBrandSlug(navToPath);
     return !!toBrand && toBrand !== data.brand.slug;
   });
-  const shellNavigating = $derived.by(() => {
-    const to = navToPath;
-    if (!to) return false;
-    if (to.includes('/success') || to.includes('/activate') || to.includes('/proposal')) return false;
-    // Panoramica → thread: il composer (e il suo invio in volo) resta montato fino alla fine
-    // della load. Uno shimmer qui distruggerebbe ChatColumn a metà stream e il turno sparirebbe.
-    if (/\/chat\/[^/]+\/?$/.test(to) && !to.endsWith('/chat/new')) return false;
-    if (!brandSwitchPending && !(to === base || to.startsWith(`${base}/`))) return false;
-    if (!brandSwitchPending && !appBrandSlug(to)) return false;
-    const from = navigating.from?.url.pathname;
-    if (from === to && navigating.from?.url.search === navigating.to?.url.search) return false;
-    return true;
-  });
-  const shimmerVariant = $derived.by(() => {
-    const to = navToPath;
-    if (!to) return 'page' as const;
-    const toBrand = appBrandSlug(to);
-    const toBase = toBrand ? `/app/${toBrand}` : base;
-    if (to === toBase || to === `${toBase}/`) return 'overview' as const;
-    if (/\/chat\/[^/]+\/?$/.test(to) && !to.endsWith('/chat/new')) return 'chat' as const;
-    if (/\/calendar\/?$/.test(to)) return 'calendar' as const;
-    if (/\/(media-generator|ugc-creator|motion-video)\/?$/.test(to)) return 'media' as const;
-    return 'page' as const;
-  });
+  // Quale scheletro, e se disegnarlo: la regola sta in `$lib/shell-nav`, sotto test.
+  const shimmer = $derived(
+    shellShimmerFor({
+      from: navigating.from?.url.pathname,
+      to: navToPath,
+      fromSearch: navigating.from?.url.search ?? '',
+      toSearch: navigating.to?.url.search ?? '',
+      brandSlug: data.brand.slug
+    })
+  );
+  const shellNavigating = $derived(shimmer !== null);
+  const shimmerVariant = $derived(shimmer ?? 'page');
   const navToFlush = $derived(shimmerVariant === 'calendar' || shimmerVariant === 'media');
 
   const showPageTopBar = $derived(true);
