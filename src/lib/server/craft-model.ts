@@ -24,7 +24,7 @@ export function craftAgentModel(opts: {
 	const forced = opts.envModel?.trim();
 	if (forced) return { model: llmLanguageModel(forced), modelId: forced, provider: 'llm' };
 
-	const routed = harnessSdkModel('pro');
+	const routed = harnessSdkModel();
 	if (routed) return routed;
 
 	const id = llmDefaultModel();

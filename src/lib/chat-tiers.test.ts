@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import {
   CHAT_CUSTOM_MODELS,
-  CHAT_PRESET_TIERS,
   CHAT_TIERS,
+  coerceChatTier,
   isChatTier,
   isGatewayModelTier,
   isCustomChatModel,
@@ -11,18 +11,32 @@ import {
 } from './chat-tiers';
 
 describe('chat tiers', () => {
-  it('lists presets then custom models', () => {
-    expect(CHAT_PRESET_TIERS).toEqual(['auto', 'fast', 'pro']);
+  it('lists custom models, and nothing else', () => {
     expect(CHAT_CUSTOM_MODELS).toEqual(['deepseek-pro', 'gpt-terra', 'gpt-sol']);
-    expect(CHAT_TIERS).toEqual(['auto', 'fast', 'pro', 'deepseek-pro', 'gpt-terra', 'gpt-sol']);
+    expect(CHAT_TIERS).toEqual(['deepseek-pro', 'gpt-terra', 'gpt-sol']);
+  });
+
+  /**
+   * Auto, Fast e Pro non erano modelli: erano alias per LLM_DEFAULT_MODEL e per il SECONDO
+   * elemento di LLM_MODELS. Chi li rimettesse qui riporterebbe un menu che non corrisponde a
+   * niente che l'operatore possa scegliere.
+   */
+  it('non riconosce piu\' i preset spariti', () => {
+    for (const preset of ['auto', 'fast', 'pro']) {
+      expect(isChatTier(preset)).toBe(false);
+      expect(coerceChatTier(preset)).toBe(null);
+    }
+  });
+
+  it('nessuna scelta e\' null, non un preset di riserva', () => {
+    expect(coerceChatTier(null)).toBe(null);
+    expect(coerceChatTier('')).toBe(null);
+    expect(coerceChatTier('anthropic/claude-opus-5')).toBe('anthropic/claude-opus-5');
   });
 
   it('derives custom ids from the contract vocabulary', () => {
     const contractIds = MODEL_FAMILY_IDS as readonly string[];
     expect(CHAT_CUSTOM_MODELS.every((id) => contractIds.includes(id))).toBe(true);
-    expect(CHAT_TIERS.filter((t) => !(CHAT_PRESET_TIERS as string[]).includes(t))).toEqual([
-      ...CHAT_CUSTOM_MODELS
-    ]);
   });
 
   it('accepts named custom ids', () => {
@@ -71,8 +85,13 @@ describe('un id di modello è un tier', () => {
     }
   });
 
-  it('i preset e i tre custom storici restano validi: ci sono thread che li hanno salvati', () => {
-    for (const t of ['auto', 'fast', 'pro', 'deepseek-pro', 'gpt-terra', 'gpt-sol']) {
+  /**
+   * I custom storici restano: ci sono thread che li hanno salvati, e sono famiglie native vere.
+   * I preset no — un thread fermo su 'auto' torna al default invece di nominare un modello che
+   * nessuno puo` piu` scegliere.
+   */
+  it('i tre custom storici restano validi', () => {
+    for (const t of ['deepseek-pro', 'gpt-terra', 'gpt-sol']) {
       expect(isChatTier(t)).toBe(true);
     }
   });

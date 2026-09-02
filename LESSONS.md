@@ -4,6 +4,22 @@ Lezioni imparate lavorando a questo repo: problemi veri, il segnale che li fa ri
 
 ## Ambiente e worktree
 
+### Una cache letta di sincrono sceglie il modello sbagliato senza dire niente
+Spostato il default della chat da `LLM_DEFAULT_MODEL` a una riga in Supabase, la riga marcata
+diceva `z-ai/glm-5.3-flash` e il turno e` girato su `google/gemini-3.8-flash` — l'env. Nessun
+errore, nessun log: `resolveChatModel` e` sincrono (lo chiamano una dozzina di superfici che poi
+fanno `streamText`), quindi legge una cache di modulo, e su quel percorso nessuno l'aveva
+scaldata. Segnale: la configurazione in database «non ha effetto», il turno riesce lo stesso, e
+`ai_calls` mostra il modello vecchio mentre la tabella mostra quello nuovo. Mossa: scaldare la
+cache al confine della richiesta (`hooks.server.ts`, prima di ogni handler), non nel primo
+chiamante che capita — e il test che vale e` quello che confronta la riga del database col
+modello finito in `ai_calls`, non quello che chiede alla cache cosa ha in pancia.
+
+**La regola dietro**: un valore che l'operatore cambia da fuori NON puo` vivere dietro una cache
+riempita da un chiamante di passaggio. O lo si legge dove si puo` aspettare, o lo si scalda in un
+punto per cui passano tutti. La terza via — «tanto qualcuno l'avra` letta» — e` il difetto piu`
+silenzioso che ci sia, perche' il prodotto continua a funzionare.
+
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 

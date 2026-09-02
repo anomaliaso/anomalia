@@ -26,15 +26,17 @@ export const FALLBACK_CHAT_MODEL_IDS = [
 ];
 
 let cached: string[] | null = null;
+let cachedDefault: string | null = null;
 let loadedAt = 0;
 
 /** Solo per i test: il modulo tiene stato di processo apposta. */
 export function __resetChatModelCatalog(): void {
   cached = null;
+  cachedDefault = null;
   loadedAt = 0;
 }
 
-type CatalogRow = { model_id: string; position: number };
+type CatalogRow = { model_id: string; position: number; is_default: boolean };
 
 /** Gli id in vetrina secondo il database. Vuoto quando la tabella non c'e` o non ha righe. */
 export async function catalogModelIds(): Promise<string[]> {
@@ -42,16 +44,30 @@ export async function catalogModelIds(): Promise<string[]> {
 
   const { data, error } = await createAdminClient()
     .from('chat_model_catalog')
-    .select('model_id, position')
+    .select('model_id, position, is_default')
     .eq('enabled', true)
     .order('position', { ascending: true })
     .order('model_id', { ascending: true });
 
   if (error) return cached ?? [];
 
-  cached = ((data ?? []) as CatalogRow[]).map((r) => r.model_id);
+  const rows = (data ?? []) as CatalogRow[];
+  cached = rows.map((r) => r.model_id);
+  cachedDefault = rows.find((r) => r.is_default)?.model_id ?? null;
   loadedAt = Date.now();
   return cached;
+}
+
+/**
+ * Il modello su cui parte una chat che non ha scelto niente — letto dalla cache, non dal database.
+ *
+ * Sincrono apposta: `llmModelForPicker` risolve dentro un turno gia` avviato, e renderlo
+ * asincrono vorrebbe dire propagare un await fino a ogni superficie che chiama `streamText`.
+ * E` lo stesso patto che il listino del gateway ha gia` con `gatewayModel`: la cache la scalda
+ * `catalogModelIds`, e a cache fredda si torna all'env — cioe` al comportamento di prima.
+ */
+export function defaultChatModelId(): string | null {
+  return cachedDefault;
 }
 
 const vendorOf = (id: string) => id.split('/')[0] ?? '';

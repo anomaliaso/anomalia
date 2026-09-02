@@ -9358,6 +9358,9 @@
     "tier": {
       "label": "Modèle",
       "custom": "Personnalisé",
+      "default": "Par défaut",
+      "defaultHint": "Le modèle sur lequel démarre cet espace",
+      "defaultNamed": "Par défaut · {model}",
       "modelFamily": {
         "luna": "Luna",
         "grok": "Grok 4.6",
@@ -9366,15 +9369,9 @@
         "gpt-terra": "GPT 5.6 Terra",
         "gpt-sol": "GPT 5.6 Sol"
       },
-      "auto": "Auto",
-      "fast": "Fast",
-      "pro": "Pro",
       "deepseek-pro": "DeepSeek Pro",
       "gpt-terra": "GPT 5.6 Terra",
       "gpt-sol": "GPT 5.6 Sol",
-      "fastHint": "Tâches du quotidien, réponses rapides",
-      "proHint": "Raisonnement plus solide pour les problèmes difficiles",
-      "autoHint": "Le meilleur modèle pour la tâche · recommandé",
       "deepseek-proHint": "Nouveau V4 Pro · plus puissant que Fast",
       "gpt-terraHint": "GPT 5.6 Terra · équilibré · lit les images",
       "gpt-solHint": "GPT 5.6 Sol · flagship · lit les images"

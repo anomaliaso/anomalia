@@ -715,9 +715,9 @@ export async function processNextQueuedChatJob(
 					// il turno deve partire lo stesso. Meglio un turno lungo che nessun turno.
 					await (async () => {
 						const modelId = resolveChatModel(
-							typeof params.tier === 'string' ? params.tier : 'auto',
+							typeof params.tier === 'string' ? params.tier : undefined,
 							typeof params.reasoning === 'string' ? params.reasoning : undefined,
-							{ userText: params.scheduled === true ? undefined : userMessageContent, agentId }
+							{ agentId }
 						).modelId;
 await maybeCompactThread(admin, {
 							threadId,
@@ -997,13 +997,9 @@ const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '
 const chatModel = resolveChatModel(
 				// 'auto' e non undefined: il fallback su env.CHAT_TIER è per la chat interattiva senza
 				// preferenze, non per un seed di onboarding o uno schedule (vedi enqueueQueuedChatTurn).
-				typeof params.tier === 'string' ? params.tier : 'auto',
+				typeof params.tier === 'string' ? params.tier : undefined,
 				typeof params.reasoning === 'string' ? params.reasoning : undefined,
-				// Scalata Auto→Pro sui lavori di produzione — solo per messaggi di persone: un turno
-				// schedulato (o un DM fra agenti) non è una richiesta dell'utente e resta sul default.
-				// agentId: su Auto la famiglia la decide lo spec (motion → Grok, resto → Luna).
 				{
-					userText: params.scheduled === true || isDm ? undefined : userMessageContent,
 					agentId,
 					// La preferenza salvata: il thread vince, poi quella permanente dell'agente custom.
 					model: turnModelFamily(threadRow?.model, persona?.model)
@@ -1226,7 +1222,7 @@ const result = await harnessGenerateText({
 						content,
 						jobId,
 						model: chatModel.modelId,
-						tier: chatModel.tier,
+						tier: chatModel.tier ?? undefined,
 						durationMs: Date.now() - chatT0,
 						error: genError instanceof Error ? genError.message : String(genError)
 					});
@@ -1237,7 +1233,7 @@ const result = await harnessGenerateText({
 					userId: job.user_id as string,
 					threadId,
 					jobId,
-					tier: chatModel.tier,
+					tier: chatModel.tier ?? undefined,
 					provider: chatModel.provider,
 					model: chatModel.modelId,
 					kind: 'chat_queue_failed'
@@ -1416,7 +1412,7 @@ const result = await harnessGenerateText({
 					{
 						durationMs: Date.now() - chatT0,
 						model: chatModel.modelId,
-						tier: chatModel.tier,
+						tier: chatModel.tier ?? undefined,
 						inputTokens: result.totalUsage?.inputTokens,
 						outputTokens: result.totalUsage?.outputTokens,
 						...(sources.length ? { sources } : {}),

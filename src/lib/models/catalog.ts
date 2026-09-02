@@ -206,35 +206,26 @@ export function modelFamily(id: ModelFamilyId): ModelFamily {
 
 // ── Tier utente → famiglia di default (senza agente) ──────────────────────────
 
-import { isGatewayModelTier, type ChatTier } from '$lib/chat-tiers';
+import { type ChatTier } from '$lib/chat-tiers';
 
-/**
- * Cosa risolve un tier del picker quando nessun agente impone altro.
- * Auto = Luna (default prodotto). Pro = Grok. Fast = Luna.
- */
+/** Cosa risolve un tier del picker. Restano solo i custom model, che SONO famiglie native. */
 export const TIER_DEFAULT_FAMILY: Record<string, ModelFamilyId> = {
-  auto: 'luna',
-  fast: 'luna',
-  pro: 'grok',
   'deepseek-pro': 'deepseek-pro',
   'gpt-terra': 'gpt-terra',
   'gpt-sol': 'gpt-sol'
 };
 
 /**
- * Famiglia sotto un tier, opzionalmente sovrascritta dalla policy dell'agente.
+ * Famiglia sotto un tier.
  *
  * Un tier che è un id del gateway non ha una famiglia qui dentro — e non deve averla: la famiglia
  * serve SOLO a dire quali gradini di ragionamento mostrare, e su un modello scelto dall'utente si
  * usa la scala comune a tre gradini invece di inventargli un vocabolario nativo che non conosciamo.
+ * `null` — nessuna scelta — sta nello stesso caso: il modello lo dice il default del catalogo, la
+ * scala resta quella comune.
  */
-export function familyForTier(
-  tier: ChatTier,
-  agentFamily?: ModelFamilyId | null
-): ModelFamily {
-  // Solo Auto è "scelta dell'agente". Fast/Pro/custom restano la scelta esplicita dell'utente.
-  if (tier === 'auto' && agentFamily) return modelFamily(agentFamily);
+export function familyForTier(tier: ChatTier | null): ModelFamily {
+  if (!tier) return LUNA;
   const known = TIER_DEFAULT_FAMILY[tier as keyof typeof TIER_DEFAULT_FAMILY];
-  if (known) return modelFamily(known);
-  return isGatewayModelTier(tier) ? LUNA : modelFamily(TIER_DEFAULT_FAMILY.auto);
+  return known ? modelFamily(known) : LUNA;
 }

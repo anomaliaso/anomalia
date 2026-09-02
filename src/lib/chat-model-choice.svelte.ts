@@ -1,15 +1,15 @@
 import { choiceForPolicy, policyForChoice } from '$lib/chat-model-policy';
 import { setThreadModel } from '$lib/stores/chat';
-import { DEFAULT_REASONING, type ChatReasoning } from '$lib/chat-reasoning';
+import { defaultReasoningFor, type ChatReasoning } from '$lib/chat-reasoning';
 import { coerceChatTier, type ChatTier } from '$lib/chat-tiers';
 
-export type ModelChoice = { tier: ChatTier; reasoning: ChatReasoning };
+export type ModelChoice = { tier: ChatTier | null; reasoning: ChatReasoning };
 
 /** Cosa mostrare nel picker dato il model salvato sul thread; senza preferenza vale il default del brand. */
 export function choiceForThread(model: unknown, fallbackTier: unknown): ModelChoice {
   const restored = choiceForPolicy(model);
   const tier = coerceChatTier(restored?.tier ?? fallbackTier);
-  return { tier, reasoning: restored?.reasoning ?? DEFAULT_REASONING[tier] };
+  return { tier, reasoning: restored?.reasoning ?? defaultReasoningFor(tier) };
 }
 
 /**
@@ -19,7 +19,7 @@ export function choiceForThread(model: unknown, fallbackTier: unknown): ModelCho
 export function createModelChoiceSave(ops: {
   brandSlug: () => string;
   threadId: () => string | null | undefined;
-  fallbackTier: () => ChatTier;
+  fallbackTier: () => ChatTier | null;
 }) {
   let confirmed: ModelChoice | null = null;
   let seq = 0;

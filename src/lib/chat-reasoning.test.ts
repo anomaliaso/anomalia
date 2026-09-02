@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { coerceChatTier, DEFAULT_CHAT_TIER, CHAT_TIERS, type ChatTier } from './chat-tiers';
-import { defaultReasoningFor, reasoningLevelsFor } from './chat-reasoning';
+import { coerceChatTier, CHAT_TIERS, type ChatTier } from './chat-tiers';
+import { modelFamily } from './models/catalog';
 import {
   coerceReasoning,
-  DEFAULT_REASONING,
+  defaultReasoningFor,
   deepseekThinking,
   geminiThinkingLevel,
   grokReasoningEffort,
@@ -11,74 +11,83 @@ import {
   isValidForTier,
   kieGptReasoningEffort,
   penultimateLevel,
-  REASONING_LEVELS
+  reasoningLevelsFor
 } from './chat-reasoning';
 
-describe('REASONING_LEVELS', () => {
+/**
+ * I vocabolari sono delle FAMIGLIE, non dei tier: Fast e Pro erano solo i nomi che il picker
+ * dava a Luna e Grok. Tolti i preset, le scale restano — e si chiedono a chi le possiede.
+ */
+const LEVELS = {
+  luna: modelFamily('luna').thinking,
+  grok: modelFamily('grok').thinking,
+  'deepseek-pro': modelFamily('deepseek-pro').thinking,
+  'gpt-terra': modelFamily('gpt-terra').thinking,
+  'gpt-sol': modelFamily('gpt-sol').thinking
+} as const;
+
+describe('i vocabolari di ragionamento', () => {
   it('gives each provider its own vocabulary, not a shared one', () => {
-    expect(REASONING_LEVELS.fast).toEqual(['low', 'medium', 'high']);
-    expect(REASONING_LEVELS.pro).toEqual(['low', 'medium', 'high', 'max']);
+    expect(LEVELS.luna).toEqual(['low', 'medium', 'high']);
+    expect(LEVELS.grok).toEqual(['low', 'medium', 'high', 'max']);
     // DeepSeek shares Gemini's off switch but not its 'medium': its API has no such effort.
-    expect(REASONING_LEVELS['deepseek-pro']).toEqual(['off', 'low', 'high', 'max']);
-    expect(REASONING_LEVELS['gpt-terra']).toEqual(['off', 'low', 'medium', 'high', 'max']);
-    expect(REASONING_LEVELS['gpt-sol']).toEqual(REASONING_LEVELS['gpt-terra']);
-    expect(isValidForTier('off', 'pro')).toBe(false);
-    // Grok's ceiling is 'max' on the common scale (native xhigh on the wire).
-    expect(isValidForTier('max', 'pro')).toBe(true);
-    expect(isValidForTier('medium', 'fast')).toBe(true);
+    expect(LEVELS['deepseek-pro']).toEqual(['off', 'low', 'high', 'max']);
+    expect(LEVELS['gpt-terra']).toEqual(['off', 'low', 'medium', 'high', 'max']);
+    expect(LEVELS['gpt-sol']).toEqual(LEVELS['gpt-terra']);
     expect(isValidForTier('medium', 'deepseek-pro')).toBe(false);
-    // Luna (dietro Fast) non spegne il thinking e non ha un gradino sopra 'high'.
-    expect(isValidForTier('off', 'fast')).toBe(false);
-    expect(isValidForTier('max', 'fast')).toBe(false);
-    expect(isValidForTier('xhigh', 'fast')).toBe(false);
     expect(isValidForTier('max', 'deepseek-pro')).toBe(true);
     // 'none' e' solo un alias legacy di coerceReasoning: isValidForTier vuole il valore reale ('off').
     expect(isValidForTier('none', 'gpt-terra')).toBe(false);
     expect(isValidForTier('max', 'gpt-sol')).toBe(true);
     expect(isValidForTier('off', 'gpt-sol')).toBe(true);
   });
+
+  /**
+   * Senza scelta si usa la scala COMUNE a tre gradini: non spegne il thinking e non ha un
+   * gradino sopra 'high'. E` la stessa che prende un id del gateway, per lo stesso motivo — di
+   * quel modello non conosciamo il vocabolario nativo.
+   */
+  it('nessuna scelta e un id del gateway condividono la scala comune', () => {
+    expect(reasoningLevelsFor(null)).toEqual(['low', 'medium', 'high']);
+    expect(reasoningLevelsFor('anthropic/claude-opus-5')).toEqual(['low', 'medium', 'high']);
+    expect(isValidForTier('medium', null)).toBe(true);
+    expect(isValidForTier('off', null)).toBe(false);
+    expect(isValidForTier('max', null)).toBe(false);
+    expect(isValidForTier('xhigh', null)).toBe(false);
+  });
 });
 
-describe('DEFAULT_REASONING', () => {
-  it('is the penultimate level of that model’s own list, Fast e Auto exceptedi', () => {
+describe('il default di ragionamento', () => {
+  it('e` il penultimo gradino della scala di quel modello', () => {
     for (const tier of CHAT_TIERS) {
-      if (tier === 'fast' || tier === 'auto') continue;
-      expect(DEFAULT_REASONING[tier]).toBe(penultimateLevel(REASONING_LEVELS[tier as ChatTier]));
+      expect(defaultReasoningFor(tier)).toBe(penultimateLevel(reasoningLevelsFor(tier as ChatTier)));
     }
-    expect(DEFAULT_REASONING.pro).toBe('high');
-    expect(DEFAULT_REASONING['deepseek-pro']).toBe('high');
-    expect(DEFAULT_REASONING['gpt-terra']).toBe('high');
-    expect(DEFAULT_REASONING['gpt-sol']).toBe('high');
+    expect(defaultReasoningFor('deepseek-pro')).toBe('high');
+    expect(defaultReasoningFor('gpt-terra')).toBe('high');
+    expect(defaultReasoningFor('gpt-sol')).toBe('high');
   });
 
-  // Fast e Auto → Luna a medium; Pro → Grok a high (catalogo).
-  it('tiene Fast e Auto a medium, Pro a high', () => {
-    expect(DEFAULT_REASONING.fast).toBe('medium');
-    expect(DEFAULT_REASONING.auto).toBe('medium');
-    expect(DEFAULT_REASONING.pro).toBe('high');
-    expect(geminiThinkingLevel(DEFAULT_REASONING.fast)).toBe('medium');
-    expect(geminiThinkingLevel(DEFAULT_REASONING.auto)).toBe('medium');
+  it('tiene la scala comune a medium', () => {
+    expect(defaultReasoningFor(null)).toBe('medium');
+    expect(geminiThinkingLevel(defaultReasoningFor(null))).toBe('medium');
   });
 });
 
 describe('coerceReasoning', () => {
   it('keeps a level the tier already offers', () => {
-    expect(coerceReasoning('medium', 'fast')).toBe('medium');
-    expect(coerceReasoning('medium', 'pro')).toBe('medium');
+    expect(coerceReasoning('medium', null)).toBe('medium');
     expect(coerceReasoning('off', 'gpt-terra')).toBe('off');
   });
 
   it('maps the ceiling onto the other ceiling across a tier switch', () => {
-    // Scala comune: max resta max su Grok; sul filo diventa xhigh (nativeThinking).
-    expect(coerceReasoning('max', 'pro')).toBe('max');
-    expect(coerceReasoning('xhigh', 'pro')).toBe('max');
     expect(coerceReasoning('xhigh', 'deepseek-pro')).toBe('max');
-    expect(coerceReasoning('xhigh', 'fast')).toBe('high');
-    expect(coerceReasoning('max', 'fast')).toBe('high');
+    // La scala comune non ha un gradino sopra 'high': i soffitti altrui ci atterrano sopra.
+    expect(coerceReasoning('xhigh', null)).toBe('high');
+    expect(coerceReasoning('max', null)).toBe('high');
   });
 
-  it("lands 'off' on Grok's floor, which has no off switch", () => {
-    expect(coerceReasoning('off', 'pro')).toBe('low');
+  it("lands 'off' on the common floor, which has no off switch", () => {
+    expect(coerceReasoning('off', null)).toBe('low');
   });
 
   it('breaks a tie toward the cheaper side', () => {
@@ -87,8 +96,7 @@ describe('coerceReasoning', () => {
   });
 
   it('falls back to the tier default for junk', () => {
-    expect(coerceReasoning('turbo', 'fast')).toBe('medium');
-    expect(coerceReasoning(null, 'pro')).toBe('high');
+    expect(coerceReasoning('turbo', null)).toBe('medium');
     expect(coerceReasoning(null, 'deepseek-pro')).toBe('high');
     expect(coerceReasoning(null, 'gpt-sol')).toBe('high');
   });
@@ -108,7 +116,7 @@ describe('deepseekThinking', () => {
 
   it('never leaks a Grok-only level into the DeepSeek body', () => {
     expect(deepseekThinking('xhigh').reasoning_effort).toBe('max');
-    for (const level of REASONING_LEVELS.pro) {
+    for (const level of LEVELS.grok) {
       const effort = deepseekThinking(level).reasoning_effort;
       expect(effort === undefined || ['low', 'high', 'max'].includes(effort)).toBe(true);
     }
@@ -118,7 +126,7 @@ describe('deepseekThinking', () => {
 describe('geminiThinkingLevel', () => {
   it('never emits a value outside the three levels 3.7 Flash documents', () => {
     const allowed = new Set(['low', 'medium', 'high']);
-    for (const levels of Object.values(REASONING_LEVELS)) {
+    for (const levels of Object.values(LEVELS)) {
       for (const level of levels) {
         expect(allowed.has(geminiThinkingLevel(level))).toBe(true);
       }
@@ -139,7 +147,7 @@ describe('grokReasoningEffort', () => {
 
   it('never emits a value outside the documented Grok scale', () => {
     const allowed = new Set(['low', 'medium', 'high', 'xhigh']);
-    for (const levels of Object.values(REASONING_LEVELS)) {
+    for (const levels of Object.values(LEVELS)) {
       for (const level of levels) {
         expect(allowed.has(grokReasoningEffort(level))).toBe(true);
       }
@@ -164,44 +172,38 @@ describe('kieGptReasoningEffort', () => {
   });
 });
 
-// Auto = "scelta dell'agente": default Luna (stessi livelli di Fast). Motion sovrascrive a Grok.
-describe('auto tier', () => {
-  it('usa i livelli di Luna di default, e parte da medium', () => {
-    expect(REASONING_LEVELS.auto).toEqual(REASONING_LEVELS.fast);
-    expect(DEFAULT_REASONING.auto).toBe('medium');
-    expect(coerceReasoning('high', 'auto')).toBe('high');
-    expect(coerceReasoning('nonsense', 'auto')).toBe('medium');
-    expect(coerceReasoning(undefined, 'auto')).toBe('medium');
-    // Con famiglia Grok (motion): max è valido, xhigh collassa su max.
-    expect(coerceReasoning('max', 'auto', 'grok')).toBe('max');
-    expect(coerceReasoning('xhigh', 'auto', 'grok')).toBe('max');
+/** Il posto che era di Auto adesso e` "nessuna scelta": stessa scala, stesso default. */
+describe('nessuna scelta', () => {
+  it('usa la scala comune, e parte da medium', () => {
+    expect(reasoningLevelsFor(null)).toEqual(LEVELS.luna);
+    expect(defaultReasoningFor(null)).toBe('medium');
+    expect(coerceReasoning('high', null)).toBe('high');
+    expect(coerceReasoning('nonsense', null)).toBe('medium');
+    expect(coerceReasoning(undefined, null)).toBe('medium');
   });
 
-  it('sends DeepSeek thinking on when the vision swap borrows Auto’s level', () => {
-    const t = deepseekThinking(DEFAULT_REASONING.auto);
+  it('sends DeepSeek thinking on when the vision swap borrows that level', () => {
+    const t = deepseekThinking(defaultReasoningFor(null));
     expect(t.thinking).toEqual({ type: 'enabled' });
     expect(['low', 'high', 'max']).toContain(t.reasoning_effort);
   });
 });
 
 describe('coerceChatTier', () => {
-  it('keeps a real tier and falls back to auto for anything else', () => {
-    expect(coerceChatTier('pro')).toBe('pro');
-    expect(coerceChatTier('fast')).toBe('fast');
-    expect(coerceChatTier('auto')).toBe('auto');
+  it('keeps a real tier and answers null for anything else', () => {
     expect(coerceChatTier('deepseek-pro')).toBe('deepseek-pro');
     expect(coerceChatTier('gpt-terra')).toBe('gpt-terra');
     expect(coerceChatTier('gpt-sol')).toBe('gpt-sol');
-    expect(coerceChatTier(null)).toBe(DEFAULT_CHAT_TIER);
-    expect(coerceChatTier('gpt-9')).toBe('auto');
+    expect(coerceChatTier(null)).toBe(null);
+    expect(coerceChatTier('gpt-9')).toBe(null);
   });
 });
 
 
 /**
- * Con il catalogo del gateway il tier può essere un id qualunque: `REASONING_LEVELS[tier]` e
- * `DEFAULT_REASONING[tier]` erano mappe con sei chiavi, e su un id nuovo restituivano undefined —
- * cioè il picker si schiantava su `.length` alla prima apertura del menu.
+ * Con il catalogo del gateway il tier può essere un id qualunque. Prima erano mappe con sei
+ * chiavi, e su un id nuovo restituivano undefined — cioè il picker si schiantava su `.length`
+ * alla prima apertura del menu.
  */
 describe('un tier che è un id di modello', () => {
   it('ha comunque una scala di ragionamento', () => {
@@ -209,8 +211,9 @@ describe('un tier che è un id di modello', () => {
     expect(defaultReasoningFor('anthropic/claude-opus-5')).toBeTruthy();
   });
 
-  it('i preset restano quelli di prima', () => {
-    expect(defaultReasoningFor('pro')).toBe(DEFAULT_REASONING.pro);
-    expect(reasoningLevelsFor('fast')).toEqual(REASONING_LEVELS.fast);
+  /** Un custom model conserva il suo vocabolario nativo: non e` un id del gateway. */
+  it('i custom model restano quelli di prima', () => {
+    expect(reasoningLevelsFor('deepseek-pro')).toEqual(LEVELS['deepseek-pro']);
+    expect(defaultReasoningFor('deepseek-pro')).toBe('high');
   });
 });

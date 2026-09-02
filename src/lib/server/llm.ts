@@ -10,6 +10,7 @@ import { env } from '$env/dynamic/private';
 import { extractSdkUsage, logAiCall, noteLlmCost } from '$lib/server/ai-log';
 import { costFromJson, costFromStreamText, withUsageAccounting } from '$lib/server/llm-usage-cost';
 import { gatewayModel } from '$lib/server/openrouter-models';
+import { defaultChatModelId } from '$lib/server/chat-model-catalog';
 
 export const LLM_UNCONFIGURED = 'llm_unconfigured';
 export const LLM_VIDEO_UNCONFIGURED = 'llm_video_unconfigured';
@@ -77,14 +78,15 @@ export function llmModels(): string[] {
  * catalogo, e cadere sul default sarebbe scrivere un nome nel menu e chiamarne un altro. Gli id
  * ignoti al listino tornano al default invece di diventare una chiamata persa.
  *
- * Fast/auto = primo della lista (o default). Pro = secondo se c'è.
+ * Il default lo dice il catalogo (`chat_model_catalog.is_default`), non l'env: è la riga che
+ * l'operatore cambia da Supabase. `LLM_DEFAULT_MODEL` resta la rete per un'istanza appena
+ * installata, e per la cache ancora fredda.
  */
 export function llmModelForPicker(choice: string | null | undefined): string {
 	const models = llmModels();
 	const id = typeof choice === 'string' ? choice.trim() : '';
 	if (id && (models.includes(id) || gatewayModel(id)?.usable)) return id;
-	if ((id === 'pro' || id === 'deepseek-pro' || id === 'gpt-sol') && models[1]) return models[1];
-	return llmDefaultModel();
+	return defaultChatModelId() ?? llmDefaultModel();
 }
 
 let cached: ReturnType<typeof createOpenAI> | null = null;

@@ -14,12 +14,11 @@
   import { CHAT_MODES, isChatMode, type ChatMode } from '$lib/chat-modes';
   import { readChatDraft, writeChatDraft } from '$lib/chat-draft';
   import {
-    CHAT_PRESET_TIERS,
     CHAT_CUSTOM_MODELS,
     isCustomChatModel,
     type ChatTier
   } from '$lib/chat-tiers';
-  import { DEFAULT_REASONING, defaultReasoningFor, reasoningLevelsFor, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
+  import { defaultReasoningFor, reasoningLevelsFor, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
   import type { AgentMeta } from '$lib/agent-icons';
   import {
     buildAttachmentsPayload,
@@ -69,7 +68,7 @@
 
   type ChatSubmitMeta = {
     mode: ChatMode;
-    tier: ChatTier;
+    tier: ChatTier | null;
     reasoning: ChatReasoning;
     command?: string;
     attachments?: ChatAttachmentsPayload;
@@ -90,7 +89,7 @@
     draftKey = '',
     mode = $bindable<ChatMode>('agent'),
     tier = $bindable<ChatTier>('fast'),
-    reasoning = $bindable<ChatReasoning>(DEFAULT_REASONING.fast),
+    reasoning = $bindable<ChatReasoning>(defaultReasoningFor(null)),
     onsubmit = (_text: string, _meta?: ChatSubmitMeta) => {},
     onstop = () => {},
     onkeydown = (_e: KeyboardEvent) => {},
@@ -104,7 +103,7 @@
     /** I modelli che il gateway serve adesso: il menu li mostra al posto di una lista fissa. */
     chatModels = [] as Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>,
     /** La scelta di modello è cambiata dal picker: chi possiede il thread la salva cross-device. */
-    onmodelchange = (_choice: { tier: ChatTier; reasoning: ChatReasoning }) => {},
+    onmodelchange = (_choice: { tier: ChatTier | null; reasoning: ChatReasoning }) => {},
     // The user's own agents, from Custom agents. Picking one hands the thread its brief.
     customAgents = [],
     customAgent = null,
@@ -130,7 +129,7 @@
     brandSlug?: string;
     draftKey?: string;
     mode?: ChatMode;
-    tier?: ChatTier;
+    tier?: ChatTier | null;
     reasoning?: ChatReasoning;
     onsubmit?: (text: string, meta?: ChatSubmitMeta) => void;
     onstop?: () => void;
@@ -141,7 +140,7 @@
     agent?: string | null;
     onagentchange?: (id: string) => void;
     chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>;
-    onmodelchange?: (choice: { tier: ChatTier; reasoning: ChatReasoning }) => void;
+    onmodelchange?: (choice: { tier: ChatTier | null; reasoning: ChatReasoning }) => void;
     customAgents?: Array<{ id: string; name: string; face: string; color: string }>;
     customAgent?: string | null;
     oncustomagentchange?: (id: string | null) => void;
@@ -177,14 +176,13 @@
   let docs = $state<Array<ChatDocument & { converting?: boolean; error?: string }>>([]);
   let picks = $state<ChatAttachmentPick[]>([]);
   let pendingCommand = $state<string | undefined>(undefined);
-  // Un preset ha una chiave i18n; un modello del catalogo porta il suo nome dal gateway, e
+  // Un custom model ha una chiave i18n; un modello del catalogo porta il suo nome dal gateway, e
   // inventargli una chiave significherebbe mostrarne il nome tecnico appena ne arriva uno nuovo.
-  function tierLabel(t: ChatTier): string {
+  function tierLabel(t: ChatTier | null): string {
+    if (!t) return $_('chat.tier.default');
     const model = chatModels.find((m) => m.id === t);
     if (model) return model.label;
-    return (CHAT_PRESET_TIERS as readonly string[]).includes(t) || (CHAT_CUSTOM_MODELS as readonly string[]).includes(t)
-      ? $_('chat.tier.' + t)
-      : t;
+    return (CHAT_CUSTOM_MODELS as readonly string[]).includes(t) ? $_('chat.tier.' + t) : t;
   }
 
   const K_TOKENS = 1000;
@@ -439,7 +437,7 @@
 
   // Picking a model applies to the conversation in front of you; the default for a NEW chat is the
   // brand setting (Settings → Chat), not whatever this device happened to pick last.
-  function setTier(t: ChatTier) {
+  function setTier(t: ChatTier | null) {
     const nextReasoning = defaultReasoningFor(t);
     tier = t;
     reasoning = nextReasoning;
@@ -1169,19 +1167,17 @@
             <button type="button" class="ch-dd-back" onclick={() => (menu = 'plus')}>
               ← {$_('chat.tier.label')}
             </button>
-            {#each CHAT_PRESET_TIERS as t (t)}
-              <button
-                type="button"
-                class="ch-dd-item ch-dd-item-stack"
-                class:active={tier === t}
-                role="option"
-                aria-selected={tier === t}
-                onclick={() => setTier(t)}
-              >
-                <span class="ch-dd-title">{$_('chat.tier.' + t)}</span>
-                <span class="ch-dd-sub">{$_('chat.tier.' + t + 'Hint')}</span>
-              </button>
-            {/each}
+            <button
+              type="button"
+              class="ch-dd-item ch-dd-item-stack"
+              class:active={!tier}
+              role="option"
+              aria-selected={!tier}
+              onclick={() => setTier(null)}
+            >
+              <span class="ch-dd-title">{$_('chat.tier.default')}</span>
+              <span class="ch-dd-sub">{$_('chat.tier.defaultHint')}</span>
+            </button>
             {#if chatModels.length}
               <div class="ch-dd-group">{$_('chat.tier.custom')}</div>
               {#each chatModels as m (m.id)}

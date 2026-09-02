@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const rows = vi.hoisted(() => ({ current: [] as Array<{ model_id: string; position: number }>, error: null as unknown }));
+const rows = vi.hoisted(() => ({
+  current: [] as Array<{ model_id: string; position: number; is_default?: boolean }>,
+  error: null as unknown
+}));
 
 vi.mock('$lib/server/supabase-admin', () => ({
   createAdminClient: () =>
@@ -89,5 +92,45 @@ describe('chi decide la vetrina', () => {
     const ids = (await chatModelChoices({ fetchImpl, baseUrl: 'https://openrouter.ai/api/v1' })).map((c) => c.id);
 
     expect(ids).toContain('google/gemini-3.7-flash');
+  });
+});
+
+
+/**
+ * Il default globale: la riga marcata in Supabase, non `LLM_DEFAULT_MODEL`.
+ *
+ * E` il punto di tutto il lavoro. Se l'env tornasse a vincere, l'operatore cambierebbe la riga in
+ * Studio e non succederebbe niente — il difetto piu` silenzioso possibile, perche' il turno gira
+ * lo stesso, solo sul modello sbagliato.
+ */
+describe('il modello di default', () => {
+  it('viene dalla riga marcata, e batte LLM_DEFAULT_MODEL', async () => {
+    rows.current = [
+      { model_id: 'anthropic/claude-opus-5', position: 10 },
+      { model_id: 'google/gemini-3.8-flash', position: 20, is_default: true }
+    ];
+    vi.resetModules();
+
+    const { catalogModelIds, defaultChatModelId } = await import('./chat-model-catalog');
+    await catalogModelIds();
+
+    expect(defaultChatModelId()).toBe('google/gemini-3.8-flash');
+  });
+
+  /** A cache fredda si torna all'env: e` il comportamento di prima, non una scelta a caso. */
+  it('e\' null finche\' nessuno ha letto il catalogo', async () => {
+    vi.resetModules();
+    const { defaultChatModelId } = await import('./chat-model-catalog');
+    expect(defaultChatModelId()).toBe(null);
+  });
+
+  it('nessuna riga marcata: nessun default, e decide l\'env', async () => {
+    rows.current = [{ model_id: 'anthropic/claude-opus-5', position: 10 }];
+    vi.resetModules();
+
+    const { catalogModelIds, defaultChatModelId } = await import('./chat-model-catalog');
+    await catalogModelIds();
+
+    expect(defaultChatModelId()).toBe(null);
   });
 });
