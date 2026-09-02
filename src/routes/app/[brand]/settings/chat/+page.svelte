@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import { _ } from 'svelte-i18n';
   import { CHAT_PRESET_TIERS, coerceChatTier } from '$lib/chat-tiers';
+  import { usdPerMillion } from '$lib/model-price';
 
   let { data, form } = $props();
   // NULL in the DB means "never chosen" — show what the chat actually starts on.
@@ -38,7 +39,7 @@
     <div class="ftxt">
       <div class="fs">
         {#if currentModel}
-          {Math.round(currentModel.contextLength / K_TOKENS)}k · ${currentModel.inputUsdPerM}/${currentModel.outputUsdPerM} per 1M token
+          {Math.round(currentModel.contextLength / K_TOKENS)}k · {usdPerMillion(currentModel.inputUsdPerM)}/{usdPerMillion(currentModel.outputUsdPerM)} per 1M token
         {:else}
           {$_('chat.tier.' + current + 'Hint')}
         {/if}
