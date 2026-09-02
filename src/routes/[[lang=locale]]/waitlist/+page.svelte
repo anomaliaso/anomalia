@@ -1,25 +1,37 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
+  import { BOOKING_URL } from '$lib/links';
+
   let { data } = $props();
+
+  // Calendly precompilato: chi è già dentro non riscrive nome ed email per prenotare.
+  const bookingUrl = $derived(
+    `${BOOKING_URL}?hide_gdpr_banner=1` +
+      (data.email ? `&email=${encodeURIComponent(data.email)}` : '') +
+      (data.fullName ? `&name=${encodeURIComponent(data.fullName)}` : '')
+  );
 </script>
 
 <svelte:head>
   <title>{$_('meta.waitlist.title')}</title>
-  <!-- Confirmation page shows the user's email — keep it out of the index. -->
+  <!-- La pagina mostra l'email di chi la guarda: fuori dall'indice. -->
   <meta name="robots" content="noindex, nofollow" />
+  <script async src="https://assets.calendly.com/assets/external/widget.js"></script>
 </svelte:head>
 
 <main class="wrap">
   <div class="mark">Anomalia</div>
   <h1>{$_('waitlist.title')}</h1>
-  <p class="sub">
-    {@html $_('waitlist.sub', { values: { email: '<b>' + data.email + '</b>' } })}
+  <p class="sub">{$_('waitlist.sub')}</p>
+
+  <!-- L'embed è il punto della pagina, non un ornamento: un link porta via, un calendario fa
+       prenotare. Il link sotto resta per chi ha gli script di terze parti bloccati. -->
+  <div class="calendly-inline-widget" data-url={bookingUrl}></div>
+
+  <p class="note">
+    {$_('waitlist.note')}
+    <a href={bookingUrl} target="_blank" rel="noopener">{$_('waitlist.fallback')}</a>
   </p>
-  <div class="queue">
-    <div class="num">{data.ahead}</div>
-    <div class="lbl">{$_('waitlist.ahead', { values: { count: data.ahead } })}</div>
-  </div>
-  <p class="note">{$_('waitlist.note')}</p>
 </main>
 
 <style>
@@ -28,7 +40,6 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     text-align: center;
     padding: 40px 24px;
     gap: 6px;
@@ -55,31 +66,24 @@
   .sub {
     color: var(--ink-soft, #6e6e73);
     margin: 12px 0 0;
-    max-width: 36ch;
+    max-width: 42ch;
     line-height: 1.45;
   }
-  .queue {
-    margin: 30px 0 0;
-    padding: 24px 40px;
-    border: 1px solid var(--line, #e3e3e6);
-    border-radius: 20px;
-    background: var(--paper-2, #f5f5f7);
-  }
-  .num {
-    font-size: 3.2rem;
-    font-weight: 700;
-    letter-spacing: -0.04em;
-    line-height: 1;
-    color: var(--accent, #7c5cff);
-  }
-  .lbl {
-    font-size: 14px;
-    color: var(--ink-faint, #86868b);
-    margin-top: 6px;
+  .calendly-inline-widget {
+    width: 100%;
+    max-width: 820px;
+    min-width: 0;
+    height: 700px;
+    margin-top: 18px;
   }
   .note {
-    margin-top: 22px;
-    font-size: 13px;
-    color: var(--ink-faint, #86868b);
+    color: var(--ink-soft, #6e6e73);
+    font-size: 0.9rem;
+    margin: 6px 0 0;
+  }
+  @media (max-width: 640px) {
+    .calendly-inline-widget {
+      height: 880px;
+    }
   }
 </style>

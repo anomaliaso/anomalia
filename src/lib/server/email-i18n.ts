@@ -154,6 +154,10 @@ const EMAIL: Record<Locale, Dict> = {
       'Yesterday you created {brand} on Anomalia — don’t leave it half-done. The “wow” moment (a full week of on-brand posts) is just a couple of steps away.',
     'lifecycle.day1.body':
       'Easiest way is to do it together: 15 minutes, we set it all up and you leave with your first week ready.',
+    'pending.subject': 'Your Anomalia access — one call away',
+    'pending.heading': 'One last step',
+    'pending.body':
+      'You signed up for Anomalia. We open access after a short call: fifteen minutes to understand what you sell and set up the first week together. Pick a time — your access switches on right after.',
     'lifecycle.cta_call': 'Book your call →',
     'lifecycle.or_self': 'Prefer solo? Pick up your next steps:',
     'lifecycle.footer': 'Reply to this email anytime — it comes straight to us.',
@@ -334,6 +338,10 @@ const EMAIL: Record<Locale, Dict> = {
       'Ieri hai creato {brand} su Anomalia \u2014 non lasciarlo a met\u00e0. Il momento \u201cwow\u201d (una settimana di post nel tuo stile) \u00e8 a un paio di step.',
     'lifecycle.day1.body':
       'Il modo pi\u00f9 semplice \u00e8 farlo insieme: 15 minuti, impostiamo tutto noi e parti gi\u00e0 con la prima settimana.',
+    'pending.subject': 'Il tuo accesso ad Anomalia — manca una call',
+    'pending.heading': 'Manca un ultimo passo',
+    'pending.body':
+      'Ti sei iscritto ad Anomalia. Apriamo l’accesso dopo una call breve: quindici minuti per capire cosa vendi e impostare insieme la prima settimana. Scegli quando ti va meglio — l’accesso si accende appena finita.',
     'lifecycle.cta_call': 'Prenota la tua call \u2192',
     'lifecycle.or_self': 'Preferisci da solo? Riparti dai prossimi passi:',
     'lifecycle.footer': 'Rispondi a questa email quando vuoi \u2014 arriva dritta a noi.',
@@ -504,6 +512,10 @@ const EMAIL: Record<Locale, Dict> = {
       'Ayer creaste {brand} en Anomalia — no lo dejes a medias. El momento “wow” (una semana de posts con tu estilo) está a un par de pasos.',
     'lifecycle.day1.body':
       'Lo más fácil es hacerlo juntos: 15 minutos, lo configuramos todo y sales con tu primera semana lista.',
+    'pending.subject': 'Tu acceso a Anomalia — falta una llamada',
+    'pending.heading': 'Falta un último paso',
+    'pending.body':
+      'Te registraste en Anomalia. Abrimos el acceso tras una llamada breve: quince minutos para entender qué vendes y preparar juntos la primera semana. Elige cuándo — tu acceso se activa justo después.',
     'lifecycle.cta_call': 'Reserva tu llamada →',
     'lifecycle.or_self': '¿Prefieres solo? Retoma tus próximos pasos:',
     'lifecycle.footer': 'Responde a este email cuando quieras — nos llega directamente.',
@@ -675,6 +687,10 @@ const EMAIL: Record<Locale, Dict> = {
       'Hier tu as cr\u00e9\u00e9 {brand} sur Anomalia \u2014 ne le laisse pas \u00e0 moiti\u00e9. Le moment \u201cwaouh\u201d (une semaine de posts \u00e0 ton image) est \u00e0 quelques \u00e9tapes.',
     'lifecycle.day1.body':
       'Le plus simple, c\u2019est de le faire ensemble : 15 minutes, on configure tout et tu repars avec ta premi\u00e8re semaine pr\u00eate.',
+    'pending.subject': 'Votre accès à Anomalia — un appel suffit',
+    'pending.heading': 'Une dernière étape',
+    'pending.body':
+      'Vous vous êtes inscrit à Anomalia. Nous ouvrons l’accès après un court appel : quinze minutes pour comprendre ce que vous vendez et préparer ensemble la première semaine. Choisissez un créneau — votre accès s’active juste après.',
     'lifecycle.cta_call': 'R\u00e9serve ton appel \u2192',
     'lifecycle.or_self': 'Tu pr\u00e9f\u00e8res en solo ? Reprends tes prochaines \u00e9tapes :',
     'lifecycle.footer': 'R\u00e9ponds \u00e0 cet email quand tu veux \u2014 il nous arrive directement.',
