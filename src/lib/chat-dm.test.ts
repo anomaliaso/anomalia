@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
+  dmBrief,
   dmReplyBackMessage,
   dmSendsFromCall,
   dmSendsFromOutput,
@@ -86,5 +87,24 @@ describe('la chip sta su ogni surface, come lo sticker', () => {
     ]) {
       expect(reads(f)).toContain('<ChatDmChip');
     }
+  });
+});
+
+/**
+ * Misurato su un DM vero (2/9): la risposta del Content Creator all'Analyst apriva con
+ * «Allegato: risposta operativa ad Analyst.» — una riga di trasporto, non di merito. Il modello
+ * si etichettava la battuta perché niente altro diceva chi scriveva a chi; adesso lo dicono la
+ * firma di ogni battuta e la testata del thread, e il brief chiude la porta all'intestazione.
+ */
+describe('dmBrief', () => {
+  it('vieta la riga di intestazione, in entrambe le lingue', () => {
+    expect(dmBrief('Content Creator', 'Analyst', 'it')).toContain('niente riga di intestazione');
+    expect(dmBrief('Content Creator', 'Analyst', 'en')).toContain('no header line');
+  });
+
+  it('nomina i due agenti: chi risponde e a chi', () => {
+    const brief = dmBrief('Content Creator', 'Analyst', 'it');
+    expect(brief).toContain('Content Creator');
+    expect(brief).toContain('Analyst');
   });
 });

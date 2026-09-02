@@ -523,6 +523,19 @@ describe('buildImageRequest (image model tier)', () => {
     expect(buildImageRequest('p', { moodImages: [img], logoImage: img }).model).toBe(BLOG_IMAGE_MODEL);
   });
 
+  it('a base image is an EDIT, and the brand can edit with another model', () => {
+    // Editing the photo the user is looking at and inventing one from a prompt are two jobs, and
+    // the brand picks a model for each. This is the only place that knows which one is happening.
+    expect(buildImageRequest('p', { model: 'draw', refineModel: 'edit', baseImage: img }).model).toBe('edit');
+  });
+
+  it('does not reach for the refine model when there is nothing to refine', () => {
+    // Reference or mood images are things to REPRODUCE, not a base to edit: sending those through
+    // the refine model would quietly retire the brand's generation choice on half its posts.
+    expect(buildImageRequest('p', { model: 'draw', refineModel: 'edit' }).model).toBe('draw');
+    expect(buildImageRequest('p', { model: 'draw', refineModel: 'edit', referenceImages: [img] }).model).toBe('draw');
+  });
+
   it('never overrides an explicit caller model (blog/batch/UGC)', () => {
     expect(buildImageRequest('p', { model: 'x', personImages: [img] }).model).toBe('x');
   });

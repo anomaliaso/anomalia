@@ -19,6 +19,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
 import { createChatTools } from '$lib/server/chat/tools';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
+import { MEDIA_TRANSFORM_TOOLS } from './media-tools';
 
 export interface ContentPluginDeps {
 	supabase: SupabaseClient;
@@ -38,6 +39,7 @@ type ContentSource = {
 };
 
 const MAP: Record<string, ContentSource> = {
+	...MEDIA_TRANSFORM_TOOLS,
 	content_create_post: {
 		source: 'create_post',
 		requiresMode: 'agent',

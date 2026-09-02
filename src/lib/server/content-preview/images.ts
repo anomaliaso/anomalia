@@ -143,6 +143,8 @@ export type RenderImageOpts = {
   brandLook?: string;
   logoImage?: ImagePart;
   baseImage?: ImagePart;
+  /** Il modello con cui il brand MODIFICA. Vale solo con `baseImage`: senza, non c'e' nulla da modificare. */
+  refineModel?: string;
   aspectRatio?: AspectRatio;
   model?: string;
   craftFloor?: string;
@@ -164,7 +166,12 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
     opts.userRefImages?.length ||
     opts.baseImage
   );
+  // `baseImage` e' l'unico segnale che distingue una MODIFICA da un disegno nuovo, e passa tutto
+  // di qui: un riferimento o un mood sono cose da riprodurre, non una base da modificare, quindi
+  // non attivano il modello di refine — altrimenti la scelta di generazione del brand sparirebbe
+  // su meta' dei suoi post senza che nessuno l'abbia toccata.
   const imageModel =
+    (opts.baseImage ? opts.refineModel : undefined) ??
     opts.model ??
     (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
   // Con foto di persona, il testo sul genere non deve mai scavalcare le foto.

@@ -13,6 +13,13 @@
  * battute senza una query sui custom agent a ogni render.
  */
 
+import {
+  BUILTIN_AGENT_AVATARS,
+  fallbackAvatarColor,
+  fallbackAvatarFace,
+  type AgentAvatarFace
+} from '$lib/agent-avatars';
+
 export type DmMarker = { dm: [string, string]; names?: Record<string, string> };
 
 /**
@@ -43,6 +50,35 @@ export function dmNames(raw: unknown): Record<string, string> {
   return out;
 }
 
+/**
+ * Volto e colore di un membro di un DM. I builtin hanno un'identità fissa; un custom
+ * (`custom:<uuid>`) il suo avatar nel marcatore non ce l'ha, quindi vale la derivazione
+ * deterministica del resto del prodotto — una faccia stabile basta a riconoscerlo.
+ *
+ * ponytail: per un custom agent questa faccia non è quella SALVATA su `custom_agents` — è
+ * derivata, quindi in un DM ha un volto e in sidebar un altro. Si chiude scrivendo l'avatar nel
+ * marcatore alla creazione del DM (accanto a `names`), il giorno in cui la differenza dà fastidio.
+ */
+export function dmMemberAvatar(key: string): { face: AgentAvatarFace; color: string } {
+  return (
+    BUILTIN_AGENT_AVATARS[key] ?? { face: fallbackAvatarFace(key), color: fallbackAvatarColor(key) }
+  );
+}
+
+/**
+ * I due membri come avatar, nell'ordine del marcatore: la pila che sidebar e testata disegnano.
+ * null se il thread non è un DM. È l'UNICA derivazione dell'avatar di un membro DM — la chip
+ * «N messaggi con X» e la testata del thread devono mostrare la stessa faccia.
+ */
+export function dmAvatars(
+  raw: unknown
+): Array<{ id: string; name: string; face: AgentAvatarFace; color: string }> | null {
+  const pair = dmAgents(raw);
+  if (!pair) return null;
+  const names = dmNames(raw);
+  return pair.map((key) => ({ id: key, name: names[key] || key, ...dmMemberAvatar(key) }));
+}
+
 /** Il marcatore da scrivere alla creazione. La coppia è ordinata: (A,B) e (B,A) sono LO stesso DM. */
 export function dmMarker(a: { key: string; name: string }, b: { key: string; name: string }): DmMarker {
   const pair = [a.key, b.key].sort() as [string, string];
@@ -57,8 +93,8 @@ export function dmMarker(a: { key: string; name: string }, b: { key: string; nam
  */
 export function dmBrief(meName: string, otherName: string, locale: string): string {
   return locale === 'en'
-    ? `## PRIVATE AGENT CHAT — READ FIRST\nThis thread is NOT a conversation with the end user. It is a private thread between two AI agents of this brand: you (**${meName}**) and **${otherName}**. Every "user" message here was written by ${otherName} — an AI agent, never a human. Reply TO ${otherName}: concise and operational — facts, decisions, blockers, next steps. NEVER greet or address the user or the brand, never introduce yourself, no customer-facing prose. The user can read this thread but cannot write in it.\nIf the request needs the PERSON — a decision, an approval, a question only they can answer, a result to hand over — OPEN YOUR OWN USER SESSION: call open_session_with_user with your visible opening line to them. It opens your own user thread (the one with your face in the sidebar), writes your line, and puts you to work there. Then tell ${otherName} in ONE line that you did, so they can point the user to it. Do not do the user-facing work here and do not write your answer as if the user could reply.\nIf the request needs an action of your craft, do it with your tools and report the outcome. Your reply text IS your message to ${otherName} — do not use message_agent here.`
-    : `## CHAT PRIVATA TRA AGENTI — LEGGI PRIMA\nQuesto thread NON è una conversazione con l'utente finale. È un thread privato fra due agenti AI di questo brand: tu (**${meName}**) e **${otherName}**. Ogni messaggio "user" qui l'ha scritto ${otherName} — un agente AI, mai una persona. Rispondi A ${otherName}: conciso e operativo — fatti, decisioni, blocchi, prossimi passi. MAI salutare o rivolgerti all'utente o al brand, mai presentarti, niente prosa da cliente. L'utente può leggere questo thread ma non scriverci.\nSe la richiesta ha bisogno della PERSONA — una scelta, un'approvazione, una domanda che solo lei può rispondere, un risultato da consegnare — APRI LA TUA SESSIONE UTENTE: chiama open_session_with_user con la tua riga di apertura rivolta a lei. Apre il tuo thread utente (quello con la tua faccia in sidebar), scrive la tua riga e ti mette al lavoro lì. Poi di' a ${otherName} in UNA riga che l'hai fatto, così può indirizzare l'utente lì. Non fare il lavoro per l'utente qui e non scrivere la tua risposta come se l'utente potesse rispondere.\nSe serve un'azione del tuo mestiere, falla con i tuoi tool e riferisci l'esito. Il testo della tua risposta È il messaggio per ${otherName} — non usare message_agent qui.`;
+    ? `## PRIVATE AGENT CHAT — READ FIRST\nThis thread is NOT a conversation with the end user. It is a private thread between two AI agents of this brand: you (**${meName}**) and **${otherName}**. Every "user" message here was written by ${otherName} — an AI agent, never a human. Reply TO ${otherName}: concise and operational — facts, decisions, blockers, next steps. NEVER greet or address the user or the brand, never introduce yourself, no customer-facing prose. The user can read this thread but cannot write in it.\nIf the request needs the PERSON — a decision, an approval, a question only they can answer, a result to hand over — OPEN YOUR OWN USER SESSION: call open_session_with_user with your visible opening line to them. It opens your own user thread (the one with your face in the sidebar), writes your line, and puts you to work there. Then tell ${otherName} in ONE line that you did, so they can point the user to it. Do not do the user-facing work here and do not write your answer as if the user could reply.\nIf the request needs an action of your craft, do it with your tools and report the outcome. Your reply text IS your message to ${otherName} — do not use message_agent here. Start with the substance: no header line, no \"Attachment:\", no recipient name on top — every line here is already signed with who wrote it.`
+    : `## CHAT PRIVATA TRA AGENTI — LEGGI PRIMA\nQuesto thread NON è una conversazione con l'utente finale. È un thread privato fra due agenti AI di questo brand: tu (**${meName}**) e **${otherName}**. Ogni messaggio "user" qui l'ha scritto ${otherName} — un agente AI, mai una persona. Rispondi A ${otherName}: conciso e operativo — fatti, decisioni, blocchi, prossimi passi. MAI salutare o rivolgerti all'utente o al brand, mai presentarti, niente prosa da cliente. L'utente può leggere questo thread ma non scriverci.\nSe la richiesta ha bisogno della PERSONA — una scelta, un'approvazione, una domanda che solo lei può rispondere, un risultato da consegnare — APRI LA TUA SESSIONE UTENTE: chiama open_session_with_user con la tua riga di apertura rivolta a lei. Apre il tuo thread utente (quello con la tua faccia in sidebar), scrive la tua riga e ti mette al lavoro lì. Poi di' a ${otherName} in UNA riga che l'hai fatto, così può indirizzare l'utente lì. Non fare il lavoro per l'utente qui e non scrivere la tua risposta come se l'utente potesse rispondere.\nSe serve un'azione del tuo mestiere, falla con i tuoi tool e riferisci l'esito. Il testo della tua risposta È il messaggio per ${otherName} — non usare message_agent qui. Attacca dal merito: niente riga di intestazione, niente «Allegato:», niente nome del destinatario in cima — ogni battuta qui porta già la firma di chi l'ha scritta.`;
 }
 
 /**

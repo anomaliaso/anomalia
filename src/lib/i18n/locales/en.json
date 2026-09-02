@@ -5343,10 +5343,6 @@
       },
       "video": {
         "title": "Images & video",
-        "imageModel": "Image model",
-        "imageModelDesc": "Which AI model renders your images. Platform default lets the renderer pick per image (a cheaper model when there is nothing to reproduce, a faithful one with product or person references). Models outside the Nano Banana family run only on kie and frame Instagram posts at 3:4 instead of 4:5.",
-        "model": "Video model",
-        "modelDesc": "Which AI model generates your clips. Clip length options follow the model you pick — Seedance 2.5 can go up to 30 seconds.",
         "modelDefault": "Platform default",
         "clipLength": "Clip length",
         "clipLengthDesc": "Fixed length for every generated clip, or Auto so chat / batch generation picks a length per reel from the spoken script. Billed per second. The longest option depends on the video model above; clips shorter than 10s cannot carry a hook, a point and a call to action.",
@@ -5358,7 +5354,21 @@
         "instructionsPlaceholder": "e.g. Speak fast and informally, like talking to a friend. Never sound like an ad. Italian accent, no corporate jargon.",
         "resolution": "Video quality",
         "resolutionDesc": "480p is recommended: 720p costs exactly double per second, and every clip is billed whether or not you publish it. On a phone feed the difference is small.",
-        "recommended": "recommended"
+        "recommended": "recommended",
+        "slots": {
+          "imageGenerate": "Image generation",
+          "imageGenerateDesc": "Which model draws a new photo from a prompt. Platform default lets the renderer pick per image. Models outside the Nano Banana family run only on kie and frame Instagram posts at 3:4 instead of 4:5.",
+          "imageRefine": "Image refine",
+          "imageRefineDesc": "Which model edits a photo that already exists — adding a logo, restyling, changing one detail. Reproducing an image faithfully is a different job from inventing one, and the best family at one is not always the best at the other. Empty follows the generation model.",
+          "videoGenerate": "Video generation",
+          "videoGenerateDesc": "Which model writes a clip from words alone. Clip length options follow this pick — Seedance 2.5 goes to 30 seconds.",
+          "videoAnimate": "Video generation (image)",
+          "videoAnimateDesc": "Which model animates a still that already exists, usually the rendered cover. Empty follows the video generation model, which is what every brand had before this split.",
+          "videoRefine": "Video refine",
+          "videoRefineDesc": "Which model rewrites a finished clip — swapping a subject, changing the setting or the styling — while keeping the original motion. Only models that read a video appear here.",
+          "videoMotion": "Video motion",
+          "videoMotionDesc": "Which model takes the movement from a reference video and applies it to a subject in your image. Not the same as motion videos, which are rendered from code and use no generative model."
+        }
       },
       "library": {
         "subtitle": "Pages from your website become real linkable assets for posts and radar.",
