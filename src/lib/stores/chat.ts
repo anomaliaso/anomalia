@@ -124,7 +124,21 @@ export function markThreadRead(brandSlug: string, threadId: string): void {
  */
 const threadsInFlight = new Map<string, Promise<void>>();
 
+/**
+ * Di CHI è la lista che sta in memoria. Lo store è uno solo per tutta la shell, e finché non
+ * arrivava la lista nuova continuava a mostrare quella del brand precedente: creando un brand si
+ * passa da una rotta senza slug, quindi né la sidebar (che si rimonta) né `beforeNavigate` (che
+ * confronta due slug) avevano un brand di prima da riconoscere. Qui il confronto c'è sempre.
+ */
+let listedBrand: string | null = null;
+
 export function refreshThreads(brandSlug: string): Promise<void> {
+  if (listedBrand !== brandSlug) {
+    listedBrand = brandSlug;
+    chatThreads.set([]);
+    unreadThreadIds.set(new Map());
+  }
+
   const running = threadsInFlight.get(brandSlug);
   if (running) return running;
 
