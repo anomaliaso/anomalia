@@ -1,7 +1,8 @@
-import { CHAT_TIERS, type ChatTier } from '$lib/chat-tiers';
+import { type ChatTier } from '$lib/chat-tiers';
 import {
   coerceThinking,
   familyForTier,
+  modelFamily,
   nativeThinking,
   type ModelFamilyId,
   type ThinkingLevel,
@@ -21,40 +22,19 @@ export type ChatReasoning = ThinkingLevel | 'none' | 'xhigh';
 
 export type { ThinkingLevel };
 
-/** Livelli offerti dal picker per un tier, data la famiglia sotto (agente o default tier). */
-export function reasoningLevelsFor(
-  tier: ChatTier,
-  agentFamily?: ModelFamilyId | null
-): readonly ThinkingLevel[] {
-  return familyForTier(tier, agentFamily).thinking;
+/** Livelli offerti dal picker per un tier. */
+export function reasoningLevelsFor(tier: ChatTier | null): readonly ThinkingLevel[] {
+  return familyForTier(tier).thinking;
 }
 
-/**
- * @deprecated Prefer `reasoningLevelsFor(tier, agentFamily)`.
- * Mappa statica senza agente: Auto/Fast → Luna, Pro → Grok.
- */
-export const REASONING_LEVELS: Record<ChatTier, readonly ThinkingLevel[]> = {
-  auto: familyForTier('auto').thinking,
-  fast: familyForTier('fast').thinking,
-  pro: familyForTier('pro').thinking,
-  'deepseek-pro': familyForTier('deepseek-pro').thinking,
-  'gpt-terra': familyForTier('gpt-terra').thinking,
-  'gpt-sol': familyForTier('gpt-sol').thinking
-};
-
-/** Il default di un tier qualunque, id del gateway compresi: la mappa qui sopra ha sei chiavi. */
-export function defaultReasoningFor(tier: ChatTier, agentFamily?: ModelFamilyId | null): ThinkingLevel {
-  return familyForTier(tier, agentFamily).defaultThinking;
+/** Il default di un tier qualunque, id del gateway e "nessuna scelta" compresi. */
+export function defaultReasoningFor(tier: ChatTier | null): ThinkingLevel {
+  return familyForTier(tier).defaultThinking;
 }
 
 export function penultimateLevel(levels: readonly ThinkingLevel[]): ThinkingLevel {
   return levels[Math.max(0, levels.length - 2)];
 }
-
-/** Default thinking per tier (senza agente): dal catalogo. */
-export const DEFAULT_REASONING: Record<ChatTier, ThinkingLevel> = Object.fromEntries(
-  CHAT_TIERS.map((tier) => [tier, familyForTier(tier).defaultThinking])
-) as Record<ChatTier, ThinkingLevel>;
 
 export const CHAT_REASONING_KEY = 'anomalia.chatReasoning';
 
@@ -64,24 +44,14 @@ export function isChatReasoning(v: unknown): v is ChatReasoning {
   return v === 'none' || v === 'xhigh';
 }
 
-export function isValidForTier(
-  level: unknown,
-  tier: ChatTier,
-  agentFamily?: ModelFamilyId | null
-): level is ThinkingLevel {
+export function isValidForTier(level: unknown, tier: ChatTier | null): level is ThinkingLevel {
   if (typeof level !== 'string') return false;
-  return (reasoningLevelsFor(tier, agentFamily) as readonly string[]).includes(level);
+  return (reasoningLevelsFor(tier) as readonly string[]).includes(level);
 }
 
-/**
- * Porta una scelta sui gradini della famiglia sotto il tier (e l'agente, se Auto).
- */
-export function coerceReasoning(
-  level: unknown,
-  tier: ChatTier,
-  agentFamily?: ModelFamilyId | null
-): ThinkingLevel {
-  return coerceThinking(level, familyForTier(tier, agentFamily));
+/** Porta una scelta sui gradini della famiglia sotto il tier. */
+export function coerceReasoning(level: unknown, tier: ChatTier | null): ThinkingLevel {
+  return coerceThinking(level, familyForTier(tier));
 }
 
 /** DeepSeek V4 Pro: body thinking + effort nativi. */
@@ -89,7 +59,7 @@ export function deepseekThinking(level: ChatReasoning): {
   thinking: { type: 'enabled' | 'disabled' };
   reasoning_effort?: 'low' | 'high' | 'max';
 } {
-  const family = familyForTier('deepseek-pro');
+  const family = modelFamily('deepseek-pro');
   const common = coerceThinking(level, family);
   if (common === 'off') return { thinking: { type: 'disabled' } };
   const effort = nativeThinking(common, family) as 'low' | 'high' | 'max';
@@ -98,19 +68,19 @@ export function deepseekThinking(level: ChatReasoning): {
 
 /** Gemini Flash: thinkingLevel nativo. */
 export function geminiThinkingLevel(level: ChatReasoning): 'low' | 'medium' | 'high' {
-  return nativeThinking(level, familyForTier('fast')) as 'low' | 'medium' | 'high';
+  return nativeThinking(level, modelFamily('luna')) as 'low' | 'medium' | 'high';
 }
 
 /** Grok: effort nativo (max → xhigh). */
 export function grokReasoningEffort(level: ChatReasoning): 'low' | 'medium' | 'high' | 'xhigh' {
-  return nativeThinking(level, familyForTier('pro')) as 'low' | 'medium' | 'high' | 'xhigh';
+  return nativeThinking(level, modelFamily('grok')) as 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 /** Terra/Sol: effort nativo sul filo kie. */
 export function gptReasoningEffort(
   level: ChatReasoning
 ): 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
-  return nativeThinking(level, familyForTier('gpt-terra')) as
+  return nativeThinking(level, modelFamily('gpt-terra')) as
     | 'none'
     | 'low'
     | 'medium'
@@ -132,5 +102,5 @@ export function kieGptReasoningEffort(level: ChatReasoning): 'low' | 'medium' | 
 
 /** Effort nativo per Luna (low|medium|high). */
 export function lunaReasoningEffort(level: ChatReasoning): 'low' | 'medium' | 'high' {
-  return nativeThinking(level, familyForTier('fast')) as 'low' | 'medium' | 'high';
+  return nativeThinking(level, modelFamily('luna')) as 'low' | 'medium' | 'high';
 }

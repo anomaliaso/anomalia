@@ -37,6 +37,7 @@ import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
 import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
+import { defaultChatModelId } from '$lib/server/chat-model-catalog';
 import { gatewayModel, usableGatewayModels } from '$lib/server/openrouter-models';
 import { isGatewayModelTier } from '$lib/chat-tiers';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
@@ -106,14 +107,14 @@ const moduleLiveSessions = new Map<string, unknown>();
 
 /**
  * IL SEAM verso le superfici che chiamano `streamText` da sole invece di passare dal runtime
- * dell'harness — il motion video, le rese UGC. Un solo tubo, il centralino `$lib/server/llm.ts`:
- * chi lo usa chiede un tier e riceve un modello, o `null` se il centralino non è configurato.
+ * dell'harness — il motion video, le rese UGC. Un solo tubo, il centralino `$lib/server/llm.ts`,
+ * e un solo modello: il default. Chiedeva un tier finche' i tier erano tre nomi per due valori
+ * d'ambiente; adesso sceglierebbe sempre la stessa cosa, e un parametro che non distingue niente
+ * e` solo un posto dove sbagliare.
  */
-export function harnessSdkModel(
-	tier: 'fast' | 'auto' | 'pro'
-): { model: LanguageModel; modelId: string; provider: 'llm' } | null {
+export function harnessSdkModel(): { model: LanguageModel; modelId: string; provider: 'llm' } | null {
 	if (!llmApiKey()) return null;
-	const id = llmModelForPicker(tier === 'pro' ? 'pro' : 'fast');
+	const id = llmModelForPicker(null);
 	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }
 
@@ -164,7 +165,7 @@ export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | 
 		servableModelId(chosen) ??
 		servableModelId(tier) ??
 		servableWireId(family) ??
-		(tier === 'pro' || tier === 'fast' ? llmModelForPicker(tier) : undefined) ??
+		defaultChatModelId() ??
 		(llmModels()[0] ?? null);
 	if (!wire) return null;
 	return { provider: 'llm', id: `llm/${wire}`, label: wire.split('/').pop() ?? wire };

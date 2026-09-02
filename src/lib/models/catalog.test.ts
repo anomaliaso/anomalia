@@ -39,14 +39,25 @@ describe('model catalog', () => {
     expect(coerceThinking('nonsense', LUNA)).toBe(LUNA.defaultThinking);
   });
 
-  it('defaults Auto and Fast to Luna, Pro to Grok', () => {
-    expect(TIER_DEFAULT_FAMILY.auto).toBe('luna');
-    expect(TIER_DEFAULT_FAMILY.fast).toBe('luna');
-    expect(TIER_DEFAULT_FAMILY.pro).toBe('grok');
-    expect(familyForTier('auto').id).toBe('luna');
-    expect(familyForTier('auto', 'grok').id).toBe('grok');
-    // Fast/Pro ignore agent override — explicit user pick.
-    expect(familyForTier('fast', 'grok').id).toBe('luna');
-    expect(familyForTier('pro', 'luna').id).toBe('grok');
+  /**
+   * La famiglia serve SOLO a dire quali gradini di ragionamento mostrare. Un custom model ha un
+   * vocabolario nativo suo; tutto il resto — un id del gateway, o nessuna scelta — usa la scala
+   * comune a tre gradini, invece di inventarsi un vocabolario che non conosciamo.
+   */
+  it('tiene una famiglia solo per i custom model', () => {
+    expect(TIER_DEFAULT_FAMILY['deepseek-pro']).toBe('deepseek-pro');
+    expect(familyForTier('deepseek-pro').id).toBe('deepseek-pro');
+  });
+
+  it('un id del gateway e nessuna scelta prendono la scala comune', () => {
+    expect(familyForTier('anthropic/claude-opus-5').id).toBe('luna');
+    expect(familyForTier(null).id).toBe('luna');
+  });
+
+  /** I preset non hanno piu` una famiglia: se ne riavessero una, sarebbero tornati. */
+  it('non conosce piu\' auto, fast e pro', () => {
+    for (const preset of ['auto', 'fast', 'pro']) {
+      expect(TIER_DEFAULT_FAMILY[preset]).toBeUndefined();
+    }
   });
 });

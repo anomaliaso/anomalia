@@ -1,14 +1,16 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { _ } from 'svelte-i18n';
-  import { CHAT_PRESET_TIERS, coerceChatTier } from '$lib/chat-tiers';
+  import { coerceChatTier } from '$lib/chat-tiers';
   import { usdPerMillion } from '$lib/model-price';
 
   let { data, form } = $props();
-  // NULL in the DB means "never chosen" — show what the chat actually starts on.
+  // NULL in the DB means "never chosen": the chat starts on the catalogue's default.
   const current = $derived(coerceChatTier(data.brand?.chat_default_tier));
   const models = $derived(data.chatModels ?? []);
-  const currentModel = $derived(models.find((m) => m.id === current));
+  const defaultModel = $derived(models.find((m) => m.id === data.defaultChatModel));
+  // Senza scelta del brand la riga sotto il picker descrive il modello che parte davvero.
+  const currentModel = $derived(models.find((m) => m.id === current) ?? defaultModel);
   const K_TOKENS = 1000;
 </script>
 
@@ -21,16 +23,12 @@
     </div>
     <form method="POST" action="?/setChatDefaultTier" use:enhance class="tier-form">
       <select name="tier" class="tier-select">
-        {#each CHAT_PRESET_TIERS as t (t)}
-          <option value={t} selected={t === current}>{$_('chat.tier.' + t)}</option>
+        <option value="" selected={!current}>
+          {defaultModel ? $_('chat.tier.defaultNamed', { values: { model: defaultModel.label } }) : $_('chat.tier.default')}
+        </option>
+        {#each models as m (m.id)}
+          <option value={m.id} selected={m.id === current}>{m.label}</option>
         {/each}
-        {#if models.length}
-          <optgroup label={$_('chat.tier.custom')}>
-            {#each models as m (m.id)}
-              <option value={m.id} selected={m.id === current}>{m.label}</option>
-            {/each}
-          </optgroup>
-        {/if}
       </select>
       <button class="mini connect" type="submit">{$_('app.settings.save')}</button>
     </form>
@@ -41,7 +39,7 @@
         {#if currentModel}
           {Math.round(currentModel.contextLength / K_TOKENS)}k · {usdPerMillion(currentModel.inputUsdPerM)}/{usdPerMillion(currentModel.outputUsdPerM)} per 1M token
         {:else}
-          {$_('chat.tier.' + current + 'Hint')}
+          {$_('chat.tier.defaultHint')}
         {/if}
       </div>
     </div>

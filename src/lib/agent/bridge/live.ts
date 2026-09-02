@@ -191,12 +191,6 @@ export interface RunKitTurnInput {
 	/** Lo sforzo di ragionamento scelto dall'utente. */
 	reasoning?: unknown;
 	/**
-	 * Il testo dell'ultimo messaggio utente: è ciò che alimenta la scalata Auto→Pro
-	 * (`isHeavyProductionAsk` in model.ts apre con `if (!text) return false`, quindi senza
-	 * questo la scalata NON scatta MAI e ogni specialista che non sia motion cade sul default).
-	 */
-	escalationText?: string;
-	/**
 	 * Riprese automatiche già fatte su QUESTA catena — lo stesso contatore del motore classico
 	 * (`chat_jobs.input_params.continuation_depth`), che è anche dove vive fra un turno e l'altro:
 	 * il run kit non ha una colonna sua e non gliene serve una, perché la catena la porta avanti

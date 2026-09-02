@@ -216,8 +216,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 
   let {
     roomPlan, roomSpeaker, agentId, persona, systemPrompt, mode, refUrls, turnDocuments,
-    customTools, tools, sandboxMount, chatModel, canSeeImages, canSeeVideo, historyMedia,
-    escalationText
+    customTools, tools, sandboxMount, chatModel, canSeeImages, canSeeVideo, historyMedia
   } = await buildTurnContext({
     supabase,
     brand,
@@ -286,12 +285,10 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   if (kitSpec) {
     const { createAdminClient } = await import('$lib/server/supabase-admin');
     const kitPersona = persona ? kitPersonaOverlay(persona, bilingualNoticeLocale(locale)) : undefined;
-    // Il tier scelto dall'utente, il reasoning e il testo che alimenta la scalata Auto→Pro
-    // (isHeavyProductionAsk) sono gia' calcolati sopra per il percorso classico: il ramo kit li
-    // buttava via e ricablava `resolveChatModel('auto', undefined, …)` dentro il bridge. Senza
-    // `userText` la scalata NON scatta mai (model.ts: `if (!text) return false`), quindi ogni
-    // specialista che non sia motion cadeva sul default `luna` — che kie.ts descrive come
-    // "NOT a chat model": il motore delle sonde di citazione GEO, usato per scrivere caroselli.
+    // Il tier e il reasoning scelti dall'utente sono gia' calcolati sopra per il percorso
+    // classico: il ramo kit li buttava via e ricablava `resolveChatModel` dentro il bridge,
+    // facendo cadere ogni specialista sul default `luna` — che kie.ts descrive come "NOT a chat
+    // model": il motore delle sonde di citazione GEO, usato per scrivere caroselli.
     return await runKitTurn({
       supabase,
       admin: createAdminClient(),
@@ -306,7 +303,6 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       modelFamily: modelPref?.family,
       modelId: modelPref?.model,
       reasoning: body.reasoning,
-      escalationText,
       persona: kitPersona,
       // `origin` serve al bridge per risvegliare la coda a fine turno (kickChatQueueWork):
       // senza, un follow-up accodato su un thread kit resta fermo fino al cron (2 minuti) e poi

@@ -18,20 +18,22 @@ export function turnModelFamily(
 }
 
 /**
- * La scelta del picker diventa la riga da salvare su chat_threads.model. Auto = null: il thread
- * torna alla risoluzione di default invece di restare incollato all'ultima famiglia scelta.
+ * La scelta del picker diventa la riga da salvare su chat_threads.model. Nessuna scelta = null:
+ * il thread torna al default del catalogo invece di restare incollato all'ultimo modello scelto.
  */
-export function policyForChoice(tier: ChatTier, thinking: unknown): ModelPreference | null {
-	if (tier === 'auto') return null;
+export function policyForChoice(tier: ChatTier | null, thinking: unknown): ModelPreference | null {
+	if (!tier) return null;
 	const family = familyForTier(tier);
 	const policy: ModelPreference = { family: family.id, thinking: coerceThinking(thinking, family) };
 	return isGatewayModelTier(tier) ? { ...policy, model: tier } : policy;
 }
 
-/** Il tier che nel picker rappresenta ogni famiglia; gemini-flash non ha un tier e non si ripristina. */
+/**
+ * Il tier che nel picker rappresenta ogni famiglia. Luna e Grok non ce l'hanno piu`: erano i
+ * preset Fast e Pro, e una preferenza salvata che nomina solo la famiglia non sa piu` dire QUALE
+ * modello — quindi non si ripristina, e la chat riparte dal default.
+ */
 const TIER_BY_FAMILY: Partial<Record<ModelFamilyId, ChatTier>> = {
-	luna: 'fast',
-	grok: 'pro',
 	'deepseek-pro': 'deepseek-pro',
 	'gpt-terra': 'gpt-terra',
 	'gpt-sol': 'gpt-sol'

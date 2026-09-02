@@ -86,7 +86,7 @@
   import { workbenchTabLabel } from '$lib/workbench-paths';
   import type { ChatMode } from '$lib/chat-modes';
   import { coerceChatTier, type ChatTier } from '$lib/chat-tiers';
-  import { DEFAULT_REASONING, type ChatReasoning } from '$lib/chat-reasoning';
+  import { defaultReasoningFor, type ChatReasoning } from '$lib/chat-reasoning';
   import type { ChatAttachmentsPayload } from '$lib/chat-attachments';
   import {
     attachedDocNamesFromContent,
@@ -281,7 +281,7 @@
     ($page.data as { chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }> }).chatModels ?? []
   );
   let chatTier = $state<ChatTier>('auto');
-  let chatReasoning = $state<ChatReasoning>(DEFAULT_REASONING.auto);
+  let chatReasoning = $state<ChatReasoning>(defaultReasoningFor(null));
   const saveModelChoice = createModelChoiceSave({
     brandSlug: () => brandSlug,
     threadId: () => sessionThreadId,

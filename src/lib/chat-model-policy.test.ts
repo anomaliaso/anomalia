@@ -33,29 +33,42 @@ describe('chat-model-policy — la catena thread.model → custom_agent.model', 
 
 describe('policyForChoice — la scelta del picker diventa la riga da salvare sul thread', () => {
 	it('un modello esplicito risolve alla sua famiglia col thinking scelto', () => {
-		expect(policyForChoice('pro', 'high')).toEqual({ family: 'grok', thinking: 'high' });
 		expect(policyForChoice('gpt-terra', 'medium')).toEqual({ family: 'gpt-terra', thinking: 'medium' });
 	});
 
-	it('Auto non salva nulla: null = torna la risoluzione di default (tier → env)', () => {
-		expect(policyForChoice('auto', 'low')).toBeNull();
+	it('nessuna scelta non salva nulla: null = il thread torna al default', () => {
+		expect(policyForChoice(null, 'low')).toBeNull();
 	});
 
-	it('il thinking si adagia sui gradini della famiglia (max su luna → high)', () => {
-		expect(policyForChoice('fast', 'max')).toEqual({ family: 'luna', thinking: 'high' });
+	/**
+	 * Un id del gateway porta con se` la famiglia solo per dire la SCALA: il modello e` l'id, e
+	 * la scala di un modello che non conosciamo e` quella comune (luna).
+	 */
+	it('il thinking si adagia sui gradini della scala comune (max → high)', () => {
+		expect(policyForChoice('anthropic/claude-opus-5', 'max')).toEqual({
+			family: 'luna',
+			thinking: 'high',
+			model: 'anthropic/claude-opus-5'
+		});
 	});
 });
 
 describe('choiceForPolicy — dal DB al picker, al reload da un altro device', () => {
 	it('riprende il tier e il thinking salvati', () => {
-		expect(choiceForPolicy({ family: 'grok', thinking: 'max' })).toEqual({
-			tier: 'pro',
+		expect(choiceForPolicy({ family: 'gpt-terra', thinking: 'max' })).toEqual({
+			tier: 'gpt-terra',
 			reasoning: 'max'
 		});
-		expect(choiceForPolicy({ family: 'luna', thinking: 'medium' })).toEqual({
-			tier: 'fast',
-			reasoning: 'medium'
-		});
+	});
+
+	/**
+	 * Luna e Grok erano i preset Fast e Pro. Una riga che nomina solo la famiglia non sa piu` dire
+	 * QUALE modello: ripristinarla vorrebbe dire scegliere per conto dell'utente. Torna null, e la
+	 * chat riparte dal default.
+	 */
+	it('una famiglia che era un preset non si ripristina piu\'', () => {
+		expect(choiceForPolicy({ family: 'grok', thinking: 'max' })).toBeNull();
+		expect(choiceForPolicy({ family: 'luna', thinking: 'medium' })).toBeNull();
 	});
 
 	it('null / assente / riga sporca = nessun ripristino', () => {
@@ -98,13 +111,13 @@ describe('un modello del gateway sul thread', () => {
     expect(choiceForPolicy(row)?.tier).toBe('anthropic/claude-opus-5');
   });
 
-  it('le righe salvate prima, senza `model`, continuano a tornare al loro tier', () => {
-    const row = policyForChoice('pro', 'high');
+  it('le righe salvate prima, senza `model`, tornano al loro tier se e\' un custom model', () => {
+    const row = policyForChoice('gpt-terra', 'high');
     expect(row?.model).toBeUndefined();
-    expect(choiceForPolicy(row)?.tier).toBe('pro');
+    expect(choiceForPolicy(row)?.tier).toBe('gpt-terra');
   });
 
-  it('Auto resta null: il thread torna alla risoluzione di default', () => {
-    expect(policyForChoice('auto', 'high')).toBeNull();
+  it('nessuna scelta resta null: il thread torna al default', () => {
+    expect(policyForChoice(null, 'high')).toBeNull();
   });
 });

@@ -190,10 +190,22 @@ export async function deleteBrand({ request, params, locals: { supabase } }: Ev)
   throw redirect(303, '/app');
 }
 
-/** Which model new chats start on for this brand ('auto' | 'fast' | 'pro' | custom). */
+/**
+ * Il modello su cui partono le chat nuove di questo brand. Vuoto = nessuna scelta: il brand
+ * segue il default globale del catalogo, e continuera` a seguirlo quando cambia.
+ */
 export async function setChatDefaultTier({ request, params, locals: { supabase } }: Ev) {
   const data = await request.formData();
   const tier = String(data.get('tier') ?? '').trim();
+  if (!tier) {
+    const { error } = await supabase
+      .from('brands')
+      .update({ chat_default_tier: null })
+      .eq('slug', params.brand!);
+    if (error) return { error: error.message };
+    invalidateBrandNav(params.brand!);
+    return { chatTierSaved: true };
+  }
   if (!isChatTier(tier)) return { error: 'Pick a model' };
   // Un id che ha la forma giusta ma che il gateway non serve sarebbe un default rotto per ogni
   // chat nuova del brand: qui si controlla che sia una scelta davvero offerta.

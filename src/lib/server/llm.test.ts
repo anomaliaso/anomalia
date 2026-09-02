@@ -4,8 +4,12 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const M = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
+const M = vi.hoisted(() => ({
+	env: {} as Record<string, string | undefined>,
+	catalogDefault: null as string | null
+}));
 vi.mock('$env/dynamic/private', () => ({ env: M.env }));
+vi.mock('$lib/server/chat-model-catalog', () => ({ defaultChatModelId: () => M.catalogDefault }));
 
 function setEnv(vars: Record<string, string | undefined>) {
 	for (const k of Object.keys(M.env)) delete M.env[k];
@@ -16,6 +20,28 @@ describe('llm — catalogo e fallback', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		setEnv({});
+		M.catalogDefault = null;
+	});
+
+	/**
+	 * IL DIFETTO PAGATO, 2026-09-02. La riga marcata in Supabase diceva `z-ai/glm-5.3-flash`,
+	 * l'env diceva `google/gemini-3.8-flash`, e il turno e` girato sull'env — senza un errore da
+	 * nessuna parte. Il piu` silenzioso che ci sia: il turno riesce, solo sul modello sbagliato.
+	 * Se questo test cade, l'operatore cambia la riga in Studio e non succede niente.
+	 */
+	it('il default del catalogo batte LLM_DEFAULT_MODEL', async () => {
+		setEnv({ LLM_API_KEY: 'k', LLM_DEFAULT_MODEL: 'google/gemini-3.8-flash' });
+		M.catalogDefault = 'z-ai/glm-5.3-flash';
+		const { llmModelForPicker } = await import('./llm');
+		expect(llmModelForPicker(null)).toBe('z-ai/glm-5.3-flash');
+		expect(llmModelForPicker(undefined)).toBe('z-ai/glm-5.3-flash');
+	});
+
+	/** A catalogo vuoto o irraggiungibile resta l'env: un'istanza appena installata parte lo stesso. */
+	it('senza riga marcata decide l\'env', async () => {
+		setEnv({ LLM_API_KEY: 'k', LLM_DEFAULT_MODEL: 'google/gemini-3.8-flash' });
+		const { llmModelForPicker } = await import('./llm');
+		expect(llmModelForPicker(null)).toBe('google/gemini-3.8-flash');
 	});
 
 	it('senza LLM_DEFAULT_MODEL il default non esiste', async () => {
@@ -52,7 +78,7 @@ describe('llm — catalogo e fallback', () => {
 		expect(() => llmEmbeddingModel()).toThrow(LLM_EMBEDDING_UNCONFIGURED);
 	});
 
-	it('il picker usa LLM_MODELS, Pro il secondo id', async () => {
+	it('il picker usa LLM_MODELS, e senza scelta il default', async () => {
 		setEnv({
 			LLM_API_KEY: 'k',
 			LLM_DEFAULT_MODEL: 'google/gemini-2.5-flash',
@@ -60,9 +86,11 @@ describe('llm — catalogo e fallback', () => {
 		});
 		const { llmModels, llmModelForPicker } = await import('./llm');
 		expect(llmModels()).toEqual(['google/gemini-2.5-flash', 'anthropic/claude-sonnet-4']);
-		expect(llmModelForPicker('pro')).toBe('anthropic/claude-sonnet-4');
-		expect(llmModelForPicker('fast')).toBe('google/gemini-2.5-flash');
+		expect(llmModelForPicker(null)).toBe('google/gemini-2.5-flash');
 		expect(llmModelForPicker('anthropic/claude-sonnet-4')).toBe('anthropic/claude-sonnet-4');
+		// I preset spariti non salgono piu` al secondo id: non sono una scelta.
+		expect(llmModelForPicker('pro')).toBe('google/gemini-2.5-flash');
+		expect(llmModelForPicker('fast')).toBe('google/gemini-2.5-flash');
 	});
 
 	/**

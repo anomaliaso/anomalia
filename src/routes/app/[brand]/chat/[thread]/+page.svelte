@@ -48,7 +48,7 @@
   import { snapshotWorkbench } from '$lib/workbench-context';
   import type { ChatMode } from '$lib/chat-modes';
   import { coerceChatTier, type ChatTier } from '$lib/chat-tiers';
-  import { DEFAULT_REASONING, type ChatReasoning } from '$lib/chat-reasoning';
+  import { defaultReasoningFor, type ChatReasoning } from '$lib/chat-reasoning';
   import type { ChatAttachmentsPayload } from '$lib/chat-attachments';
   import type { ChatDocument } from '$lib/chat-documents';
   import { DEFAULT_AGENT_ID, agentMetaForBrand, normalizeAgentIdForBrand } from '$lib/agent-icons';
@@ -146,7 +146,7 @@
   let chatMode = $state<ChatMode>('agent');
   const brandDefaultTier = $derived(coerceChatTier($page.data.brand?.chat_default_tier));
   let chatTier = $state<ChatTier>('auto');
-  let chatReasoning = $state<ChatReasoning>(DEFAULT_REASONING.auto);
+  let chatReasoning = $state<ChatReasoning>(defaultReasoningFor(null));
   const saveModelChoice = createModelChoiceSave({
     brandSlug: () => data.brandSlug,
     threadId: () => data.thread.id,
