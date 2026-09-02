@@ -59,7 +59,10 @@ beforeEach(() => {
 });
 
 describe('content plugin — mount', () => {
-	it('espone solo content_* e nessun tool di un altro mestiere', () => {
+	// I due tool video non sono di un mestiere: rifinire una clip serve a chi la gira e a chi la
+	// mette in un post, quindi portano il nome della chat e stanno in entrambi (come
+	// `search_knowledge`). Il prefisso resta per cio' che appartiene davvero a content.
+	it('espone i content_* piu\' i due tool video comuni, e nessun tool di un altro mestiere', () => {
 		const kit = seed();
 		const plugin = createContentPlugin({ supabase: kit.client, brandId: BRAND_ID, userId: USER_ID });
 		const names = plugin.tools.map((t) => t.name).sort();
@@ -71,9 +74,14 @@ describe('content plugin — mount', () => {
 			'content_list_posts',
 			'content_reschedule_post',
 			'content_schedule',
-			'content_update_post'
+			'content_update_post',
+			'motion_control_video',
+			'refine_video'
 		]);
-		expect(names.some((n) => n.startsWith('ugc_') || n.startsWith('web_') || n.startsWith('motion_'))).toBe(false);
+		// `motion_control_video` non e' del mestiere motion: quello monta motion_write/render/edit,
+		// che sono Remotion. Il prefisso da solo non basta a distinguerli, quindi si nominano.
+		const OTHER_TRADES = ['motion_write', 'motion_render', 'motion_edit', 'motion_stills', 'motion_list'];
+		expect(names.some((n) => n.startsWith('ugc_') || n.startsWith('web_') || OTHER_TRADES.includes(n))).toBe(false);
 	});
 });
 
