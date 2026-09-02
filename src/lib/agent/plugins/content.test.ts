@@ -66,20 +66,7 @@ describe('content plugin — mount', () => {
 		const kit = seed();
 		const plugin = createContentPlugin({ supabase: kit.client, brandId: BRAND_ID, userId: USER_ID });
 		const names = plugin.tools.map((t) => t.name).sort();
-		expect(names).toEqual([
-			'content_create_post',
-			'content_cross_post',
-			'content_design_graphic',
-			'content_generate_image',
-			'content_list_posts',
-			'content_reschedule_post',
-			'content_schedule',
-			'content_update_post',
-			'create_post_from_asset',
-			'generate_video',
-			'motion_control_video',
-			'refine_video'
-		]);
+		expect(names).toEqual(['content_create_post', 'content_cross_post', 'content_design_graphic', 'content_generate_image', 'content_list_posts', 'content_reschedule_post', 'content_schedule', 'content_update_post', 'create_post_from_asset', 'generate_video', 'motion_control_video', 'read_media', 'refine_video', 'use_library_image']);
 		// `motion_control_video` non e' del mestiere motion: quello monta motion_write/render/edit,
 		// che sono Remotion. Il prefisso da solo non basta a distinguerli, quindi si nominano.
 		const OTHER_TRADES = ['motion_write', 'motion_render', 'motion_edit', 'motion_stills', 'motion_list'];

@@ -76,7 +76,7 @@ describe('ugc plugin — mount', () => {
 		const kit = seed();
 		const plugin = createUgcPlugin({ supabase: kit.client, brandId: BRAND_ID, userId: USER_ID });
 		const names = plugin.tools.map((t) => t.name).sort();
-		expect(names).toEqual(['create_post_from_asset', 'generate_video', 'motion_control_video', 'refine_video', 'ugc_check_video', 'ugc_generate_video', 'ugc_list_people', 'ugc_list_talents', 'ugc_review_video']);
+		expect(names).toEqual(['create_post_from_asset', 'generate_video', 'motion_control_video', 'read_media', 'refine_video', 'ugc_check_video', 'ugc_generate_video', 'ugc_list_people', 'ugc_list_talents', 'ugc_review_video', 'use_library_image']);
 		expect(names.some((n) => n.startsWith('content_'))).toBe(false);
 	});
 
