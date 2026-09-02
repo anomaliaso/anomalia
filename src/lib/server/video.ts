@@ -18,7 +18,8 @@ import {
   VIDEO_MODEL_CHOICES as SHARED_VIDEO_MODEL_CHOICES,
   isKnownVideoModelId,
   isSeedance25Model,
-  videoModelCaps
+  videoModelCaps,
+  videoModelForRole
 } from '$lib/video-models';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
@@ -77,9 +78,21 @@ export function pairedTextToVideoModel(model: string): string {
   return model;
 }
 
-/** Precedenza: override esplicito (Settings o tool AI) → default d'ambiente per I2V o T2V. */
-export function resolveVideoModel(opts: { model?: string | null; hasCover: boolean }): string {
-  const preferred = opts.model?.trim();
+/**
+ * Precedenza: modello esplicito del tool → scelta del brand PER QUESTO LAVORO → default d'ambiente.
+ *
+ * `hasCover` non e' un dettaglio di implementazione: e' cio' che distingue i due mestieri. Con una
+ * cover il modello ANIMA una immagine che esiste, senza scrive dal nulla, e il brand puo' aver
+ * scelto due modelli diversi. Chi chiama non sa ancora quale dei due sara' — la cover si scopre
+ * qui — quindi passa le preferenze intere e il ruolo lo decide questa funzione.
+ */
+export function resolveVideoModel(opts: {
+  model?: string | null;
+  prefs?: Record<string, unknown> | null;
+  hasCover: boolean;
+}): string {
+  const preferred =
+    opts.model?.trim() || videoModelForRole(opts.prefs, opts.hasCover ? 'image' : 'text');
   if (preferred) {
     if (!opts.hasCover) return pairedTextToVideoModel(preferred);
     return preferred;
@@ -280,6 +293,8 @@ export type RenderVideoOpts = {
   shotBrief?: string | null;
   // kie model id override (brand Settings → Video, or an AI tool choice). Unset → env default.
   // Duration is clamped against THIS model's caps, not a global ceiling.
+  /** Le preferenze del brand: `resolveVideoModel` ne legge quella del mestiere che questo job e'. */
+  prefs?: Record<string, unknown> | null;
   model?: string | null;
   /**
    * Seedance first-frame URL (alias of imageUrl when both set — firstFrameUrl wins).
@@ -759,7 +774,7 @@ async function prepareVideoRender(
   // Prima il modello: i tetti di durata e ratio sono proprietà di QUESTO modello, non globali.
   // L'ad UGC non impone il modello: 22s solo su Seedance 2.5 (`ugcDurationCap`), altrimenti tetto
   // organico 15s sul default (Grok Imagine).
-  const model = resolveVideoModel({ model: opts.model, hasCover: !!cover || hasRefs });
+  const model = resolveVideoModel({ model: opts.model, prefs: opts.prefs, hasCover: !!cover || hasRefs });
 
   const durationSeconds = resolveVideoDuration(
     opts.duration ?? (opts.ugc && opts.ugcAd ? UGC_AD_DURATION : undefined),
