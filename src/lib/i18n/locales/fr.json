@@ -2370,7 +2370,7 @@
   "waitlist": {
     "title": "Une dernière étape",
     "sub": "Anomalia s'ouvre après un court appel avec Marco. Choisissez le moment qui vous convient : votre accès s'active juste après.",
-    "note": "Le calendrier ne se charge pas ?",
+    "note": "Vous préférez ouvrir le calendrier dans un onglet ?",
     "fallback": "Ouvrez-le ici"
   },
   "login": {

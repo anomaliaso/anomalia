@@ -35,7 +35,11 @@ export async function canEnter(supabase: SupabaseClient): Promise<boolean> {
 export async function userCanEnter(userId: string): Promise<boolean> {
   const admin = createAdminClient();
   if (!(await flagEnabled(admin, 'closed_beta', false))) return true;
-  const { data } = await admin.rpc('is_approved', { p_user: userId });
+  const { data, error } = await admin.rpc('is_user_approved', { p_user: userId });
+  // Un predicato che esplode non è un "no". La cache dello schema di PostgREST resta indietro
+  // dopo una migrazione, e con un `data !== true` secco quel ritardo si presenta come un 403 a
+  // OGNI cliente, approvati e paganti compresi. Stessa scelta di `canEnter`: si fallisce aperto.
+  if (error) return true;
   return data === true;
 }
 

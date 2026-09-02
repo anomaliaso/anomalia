@@ -2370,7 +2370,7 @@
   "waitlist": {
     "title": "One last step",
     "sub": "Anomalia opens after a short call with Marco. Pick a time that works: your access switches on right after it.",
-    "note": "Calendar not loading?",
+    "note": "Prefer to open the calendar in its own tab?",
     "fallback": "Open it here"
   },
   "login": {

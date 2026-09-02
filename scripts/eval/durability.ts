@@ -64,7 +64,7 @@ const SCENARIOS: Scenario[] = [
 			// Si interroga `is_approved(uuid)` e non `can_enter()`: quest'ultima dipende dal flag
 			// GLOBALE, e un eval che per girare deve chiudere il prodotto chiude fuori i clienti veri.
 			const approved = async () => {
-				const { data } = await admin.rpc('is_approved', { p_user: fixture.userId });
+				const { data } = await admin.rpc('is_user_approved', { p_user: fixture.userId });
 				return data === true;
 			};
 
