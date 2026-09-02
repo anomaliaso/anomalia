@@ -47,12 +47,22 @@ chat nuova partiva su Auto. Difetto che c'era già con "Pro", solo che nessuno l
 mostrato in faccia all'utente. La migration lo allarga alla FORMA di un id — che esista lo dice il
 listino vivo, non un CHECK che nessuno aggiornerà mai.
 
-## Quello che NON funziona ancora, misurato
+## Quello che NON funziona ancora, e di chi è la colpa
 
 Il turno su `qwen/qwen3.8-flash` è arrivato in fondo, ma l'harness non ha riportato l'uso di token
 (`? in / ? out`) e quella riga di `ai_calls` è rimasta senza costo. Sul modello di default i token
-c'erano. Non so ancora se dipenda dal modello o dall'harness, e non l'ho indovinato: è una misura.
+c'erano.
 
-La strada strutturale è togliere all'harness il suo client HTTP — puntarlo a un endpoint nostro
-che inoltra a OpenRouter, aggiunge `usage: {include: true}` e registra il conto, come fa già
-`llmClient` per tutto il resto. Non è in questa PR.
+**Non è OpenRouter.** Chiamando i due modelli in streaming senza alcun flag, l'ultimo chunk porta
+`usage` con dentro `cost` per entrambi:
+
+```
+qwen/qwen3.8-flash        → "usage":{"prompt_tokens":62,"completion_tokens":3,"cost":0.00001071,…}
+deepseek/…-flash-vision   → "usage":{"prompt_tokens":84,"completion_tokens":3,"cost":0.00002046,…}
+```
+
+Il dato **c'è già nella risposta**: è l'harness a non estrarlo per quel turno. Il che rende la
+strada strutturale più semplice di come sembrava — non serve convincere nessuno a mandarci il
+conto, serve solo passare da un posto dove possiamo leggerlo: puntare il `baseUrl` dell'harness a
+un endpoint nostro che inoltra a OpenRouter e registra `usage.cost`, come fa già `llmClient` per
+tutto il resto. Non è in questa PR.

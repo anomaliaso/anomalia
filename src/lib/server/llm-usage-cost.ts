@@ -6,9 +6,13 @@
  * `llm/z-ai/glm-5.3-flash`, 30 `google/gemini-3.7-flash` e ogni riga del modello di default,
  * tutte senza costo. Un listino a mano non regge un catalogo che sceglie l'utente.
  *
- * OpenRouter allega `usage.cost` alla risposta quando glielo si chiede (`usage: {include: true}`),
- * anche in streaming, dentro l'ULTIMO chunk. È la fattura: copre il modello che ha risposto
- * davvero, il provider a monte e il markup.
+ * OpenRouter allega `usage.cost` alla risposta — anche in streaming, dentro l'ULTIMO chunk. È la
+ * fattura: copre il modello che ha risposto davvero, il provider a monte e il markup.
+ *
+ * MISURATO il 2026-09-02: il campo arriva anche SENZA `usage: {include: true}`, su ogni modello
+ * provato. Il flag si manda lo stesso perché è l'unica cosa che lo garantisce per contratto — e
+ * perché il giorno che un provider smettesse di allegarlo, la riga tornerebbe senza costo in
+ * silenzio. Non è la ragione per cui il costo c'è: è la ragione per cui continuerà ad esserci.
  *
  * L'alternativa era `GET /generation?id=` con l'`x-generation-id` dell'header. Scartata dopo
  * averla misurata: il record compare **9 secondi** dopo la risposta, e tenere in vita una
