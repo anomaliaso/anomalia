@@ -18,7 +18,7 @@ import {
   VIDEO_MODEL_CHOICES as SHARED_VIDEO_MODEL_CHOICES,
   isKnownVideoModelId,
   isSeedance25Model,
-  GROK_PROMPT_LIMIT
+  videoModelCaps
 } from '$lib/video-models';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
@@ -58,14 +58,6 @@ export function clampVideoResolution(value: unknown): string {
 // What an approved clip gets upscaled to. kie's upscale accepts 720p | 1080p.
 export const UPSCALE_RESOLUTION = env.KIE_VIDEO_UPSCALE_RESOLUTION || '720p';
 
-// Grok è più stretto; Seedance aggiunge 4:3 / 3:4 / 21:9 / adaptive.
-const GROK_RATIOS = ['2:3', '3:2', '1:1', '16:9', '9:16'] as const;
-const SEEDANCE_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9', 'adaptive'] as const;
-
-// Provider text ceilings. Grok rejects over-long prompts at createTask ("text length cannot
-// exceed the maximum limit"); an over-long brief would otherwise surface as a silent clip loss.
-const SEEDANCE_PROMPT_LIMIT = 10_000;
-
 /** Truncate a video prompt to the model's provider ceiling. Keeps the head, where the scene and
  *  the clean-frame rule live, and drops only the tail that already exceeded the model. */
 export function clampVideoPrompt(prompt: string, model: string): string {
@@ -73,85 +65,8 @@ export function clampVideoPrompt(prompt: string, model: string): string {
   return prompt.length > limit ? prompt.slice(0, limit).trim() : prompt;
 }
 
-export type VideoModelFamily = 'grok-1.5' | 'grok-v1' | 'seedance-2' | 'seedance-2-5' | 'unknown';
-
-export type VideoModelCaps = {
-  family: VideoModelFamily;
-  /** Provider minimum duration in whole seconds. */
-  minDuration: number;
-  /** L'UNICO posto in cui la lunghezza di una clip è limitata. */
-  maxDuration: number;
-  /**
-   * Provider prompt ceiling, in characters. Grok rejects anything longer at createTask
-   * ("text length cannot exceed the maximum limit") and the failure surfaces as a bare
-   * "Video render returned nothing". Unlike images (clamped in buildKieImageInput), video had
-   * no clamp: an over-long AI-authored brief silently killed the clip.
-   */
-  maxPromptChars: number;
-  ratios: readonly string[];
-  /** Whether grok-imagine/upscale can take this model's task_id. */
-  supportsUpscale: boolean;
-  /** Whether the job input accepts generate_audio (Seedance). */
-  generateAudio: boolean;
-};
-
-/** Capabilities of a kie video model id. Unknown ids fall back to the conservative Grok window. */
-export function videoModelCaps(model: string): VideoModelCaps {
-  // Seedance 2.5 PRIMA del regex seedance-2* più largo, o 2-5 eredita il tetto di 15s.
-  if (/^bytedance\/seedance-2-5\b/.test(model)) {
-    return {
-      family: 'seedance-2-5',
-      minDuration: 4,
-      maxDuration: 30,
-      maxPromptChars: SEEDANCE_PROMPT_LIMIT,
-      ratios: SEEDANCE_RATIOS,
-      supportsUpscale: false,
-      generateAudio: true
-    };
-  }
-  if (/^bytedance\/seedance-2\b/.test(model)) {
-    return {
-      family: 'seedance-2',
-      minDuration: 4,
-      maxDuration: 15,
-      maxPromptChars: SEEDANCE_PROMPT_LIMIT,
-      ratios: SEEDANCE_RATIOS,
-      supportsUpscale: false,
-      generateAudio: true
-    };
-  }
-  if (/^grok-imagine-video-1-5/.test(model)) {
-    return {
-      family: 'grok-1.5',
-      minDuration: 1,
-      maxDuration: 15,
-      maxPromptChars: GROK_PROMPT_LIMIT,
-      ratios: GROK_RATIOS,
-      supportsUpscale: true,
-      generateAudio: false
-    };
-  }
-  if (/^grok-imagine\//.test(model)) {
-    return {
-      family: 'grok-v1',
-      minDuration: 1,
-      maxDuration: 15,
-      maxPromptChars: GROK_PROMPT_LIMIT,
-      ratios: GROK_RATIOS,
-      supportsUpscale: true,
-      generateAudio: false
-    };
-  }
-  return {
-    family: 'unknown',
-    minDuration: 1,
-    maxDuration: 15,
-    maxPromptChars: GROK_PROMPT_LIMIT,
-    ratios: GROK_RATIOS,
-    supportsUpscale: false,
-    generateAudio: false
-  };
-}
+export type { VideoModelFamily, VideoModelCaps } from '$lib/video-models';
+export { videoModelCaps } from '$lib/video-models';
 
 /** Seedance (and similar) use one model id for I2V and T2V; Grok needs a paired T2V id. */
 export function pairedTextToVideoModel(model: string): string {
