@@ -29,6 +29,8 @@ export type GatewayModel = {
   /** Gli agenti chiamano tool e leggono immagini: senza, il turno muore a metà. */
   usable: boolean;
   reasoning: boolean;
+  /** Quando il gateway ha pubblicato il modello: e` cosi` che il cron riconosce l'ultimo uscito. */
+  created: number;
 };
 
 let models = new Map<string, GatewayModel>();
@@ -51,6 +53,7 @@ type RawModel = {
   id?: string;
   name?: string;
   context_length?: number;
+  created?: number;
   supported_parameters?: string[];
   architecture?: { input_modalities?: string[] };
   pricing?: Record<string, unknown>;
@@ -82,7 +85,8 @@ export async function ensureGatewayModels(opts: { fetchImpl?: typeof fetch; base
             output: perMillion(m.pricing?.completion)
           },
           usable: params.includes('tools') && (m.architecture?.input_modalities ?? []).includes('image'),
-          reasoning: params.includes('reasoning')
+          reasoning: params.includes('reasoning'),
+          created: Number(m.created) || 0
         });
       }
       if (next.size) {

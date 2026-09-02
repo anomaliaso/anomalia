@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { __resetGatewayModels, ensureGatewayModels } from './openrouter-models';
 import { chatModelChoices } from './chat-models';
 
-const raw = (id: string, name: string, opts: { tools?: boolean; image?: boolean } = {}) => ({
+const raw = (id: string, name: string, opts: { tools?: boolean; image?: boolean; created?: number } = {}) => ({
   id,
   name,
+  created: opts.created ?? 0,
   context_length: 200_000,
   supported_parameters: opts.tools === false ? [] : ['tools', 'reasoning'],
   architecture: { input_modalities: opts.image === false ? ['text'] : ['text', 'image'] },
@@ -17,7 +18,10 @@ const LIVE = {
     raw('openai/gpt-5.6-sol', 'GPT-5.6 Sol'),
     raw('deepseek/deepseek-v4-flash-vision-exp', 'DeepSeek V4 Flash'),
     raw('someone/deprecated-text-model', 'Solo testo', { tools: false, image: false }),
-    raw('vendor/not-featured', 'Non in vetrina')
+    raw('vendor/not-featured', 'Non in vetrina'),
+    raw('google/gemini-3.7-flash', 'Gemini 3.7 Flash', { created: 1_000 }),
+    raw('google/gemini-3.8-flash', 'Gemini 3.8 Flash', { created: 2_000 }),
+    raw('google/gemini-3.8-flash:batch', 'Gemini 3.8 Flash (batch)', { created: 2_000 })
   ]
 };
 
@@ -44,6 +48,20 @@ describe('catalogo della chat', () => {
   it('include quello che l\'operatore ha configurato, anche se non è in vetrina', async () => {
     const ids = (await chatModelChoices({ configured: ['vendor/not-featured'] })).map((c) => c.id);
     expect(ids).toContain('vendor/not-featured');
+  });
+
+  /**
+   * Il modello uscito stamattina non aspetta un deploy per entrare nel menu: di ogni vendor in
+   * vetrina il piu` recente che il gateway serve entra da solo.
+   */
+  it('aggiunge da se\' il modello piu\' recente di ogni vendor in vetrina', async () => {
+    const ids = (await chatModelChoices({ configured: [] })).map((c) => c.id);
+    expect(ids).toContain('google/gemini-3.8-flash');
+  });
+
+  it('non scambia una variante per un modello nuovo', async () => {
+    const ids = (await chatModelChoices({ configured: [] })).map((c) => c.id);
+    expect(ids).not.toContain('google/gemini-3.8-flash:batch');
   });
 
   it('non offre un modello che non sa usare i tool o leggere immagini', async () => {
