@@ -9,6 +9,7 @@ import { embedMany, generateObject, generateText, jsonSchema } from 'ai';
 import { env } from '$env/dynamic/private';
 import { extractSdkUsage, logAiCall, noteLlmCost } from '$lib/server/ai-log';
 import { costFromJson, costFromStreamText, withUsageAccounting } from '$lib/server/llm-usage-cost';
+import { gatewayModel } from '$lib/server/openrouter-models';
 
 export const LLM_UNCONFIGURED = 'llm_unconfigured';
 export const LLM_VIDEO_UNCONFIGURED = 'llm_video_unconfigured';
@@ -69,11 +70,19 @@ export function llmModels(): string[] {
 	return def ? [def] : [];
 }
 
-/** Fast/auto = primo della lista (o default). Pro = secondo se c’è. Un id OpenRouter passa così. */
+/**
+ * L'id che va sul filo per questa scelta del picker.
+ *
+ * Un id che il gateway serve davvero passa intatto: è il modello che l'utente ha scelto dal
+ * catalogo, e cadere sul default sarebbe scrivere un nome nel menu e chiamarne un altro. Gli id
+ * ignoti al listino tornano al default invece di diventare una chiamata persa.
+ *
+ * Fast/auto = primo della lista (o default). Pro = secondo se c'è.
+ */
 export function llmModelForPicker(choice: string | null | undefined): string {
 	const models = llmModels();
 	const id = typeof choice === 'string' ? choice.trim() : '';
-	if (id && models.includes(id)) return id;
+	if (id && (models.includes(id) || gatewayModel(id)?.usable)) return id;
 	if ((id === 'pro' || id === 'deepseek-pro' || id === 'gpt-sol') && models[1]) return models[1];
 	return llmDefaultModel();
 }

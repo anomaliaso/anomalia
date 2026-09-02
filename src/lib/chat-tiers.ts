@@ -13,7 +13,20 @@ import type { ModelFamilyId } from '@anomalia/agent-contracts/contracts';
 export type ChatPresetTier = 'auto' | 'fast' | 'pro';
 const CHAT_CUSTOM_MODEL_IDS = ['deepseek-pro', 'gpt-terra', 'gpt-sol'] as const satisfies readonly ModelFamilyId[];
 export type ChatCustomModel = (typeof CHAT_CUSTOM_MODEL_IDS)[number];
-export type ChatTier = ChatPresetTier | ChatCustomModel;
+/**
+ * Un id del gateway (`anthropic/claude-opus-5`) è una scelta valida quanto un preset: il picker
+ * offre il catalogo, non tre nomi scritti a mano. Qui se ne riconosce solo la FORMA — se quel
+ * modello esista davvero lo sa il server, che ha il listino, e un id sconosciuto ricade sul
+ * default invece di rompere il turno.
+ */
+export type ChatGatewayModelTier = string;
+export type ChatTier = ChatPresetTier | ChatCustomModel | ChatGatewayModelTier;
+
+const GATEWAY_MODEL_ID = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
+
+export function isGatewayModelTier(v: unknown): boolean {
+  return typeof v === 'string' && GATEWAY_MODEL_ID.test(v.trim());
+}
 
 export const CHAT_PRESET_TIERS: ChatPresetTier[] = ['auto', 'fast', 'pro'];
 export const CHAT_CUSTOM_MODELS: ChatCustomModel[] = [...CHAT_CUSTOM_MODEL_IDS];
@@ -40,7 +53,7 @@ export const DEFAULT_CHAT_TIER: ChatTier = 'auto';
  */
 
 export function isChatTier(v: unknown): v is ChatTier {
-  return typeof v === 'string' && (CHAT_TIERS as readonly string[]).includes(v);
+  return (typeof v === 'string' && (CHAT_TIERS as readonly string[]).includes(v)) || isGatewayModelTier(v);
 }
 
 export function isCustomChatModel(v: unknown): v is ChatCustomModel {

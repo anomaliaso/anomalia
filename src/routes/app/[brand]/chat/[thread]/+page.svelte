@@ -1048,6 +1048,7 @@
     bind:mode={chatMode}
     bind:tier={chatTier}
     bind:reasoning={chatReasoning}
+    chatModels={data.chatModels ?? []}
     agentOptions={agentOptions}
     agentLocked={messages.length > 0}
     agent={agentSel}

@@ -84,3 +84,27 @@ describe('migration 0225_agent_model_preference', () => {
 		expect(sql).not.toMatch(/create policy/i);
 	});
 });
+
+
+/**
+ * Il picker offre il catalogo del gateway, quindi la scelta salvata sul thread non è più solo una
+ * famiglia: `{family, thinking}` non sa dire "claude-opus-5". Il campo `model` porta l'id, e la
+ * famiglia resta a dire quali gradini di ragionamento mostrare.
+ */
+describe('un modello del gateway sul thread', () => {
+  it('salva l\'id e lo ritrova', () => {
+    const row = policyForChoice('anthropic/claude-opus-5', 'high');
+    expect(row?.model).toBe('anthropic/claude-opus-5');
+    expect(choiceForPolicy(row)?.tier).toBe('anthropic/claude-opus-5');
+  });
+
+  it('le righe salvate prima, senza `model`, continuano a tornare al loro tier', () => {
+    const row = policyForChoice('pro', 'high');
+    expect(row?.model).toBeUndefined();
+    expect(choiceForPolicy(row)?.tier).toBe('pro');
+  });
+
+  it('Auto resta null: il thread torna alla risoluzione di default', () => {
+    expect(policyForChoice('auto', 'high')).toBeNull();
+  });
+});

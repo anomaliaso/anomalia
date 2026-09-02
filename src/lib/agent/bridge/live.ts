@@ -186,6 +186,8 @@ export interface RunKitTurnInput {
 	/** Il tier scelto dall'utente nel composer (auto|fast|pro…). Senza, il bridge cablava 'auto'. */
 	tier?: unknown;
 	modelFamily?: unknown;
+	/** L'id del gateway scelto dal catalogo, quando l'utente ne ha pinnato uno. */
+	modelId?: unknown;
 	/** Lo sforzo di ragionamento scelto dall'utente. */
 	reasoning?: unknown;
 	/**
@@ -487,7 +489,11 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 	let brandSandbox: Awaited<ReturnType<typeof openBrandHarnessSession>> | null = null;
 
 	try {
-		const modelRef = resolveHarnessModelRef({ family: input.modelFamily, tier: input.tier });
+		const modelRef = resolveHarnessModelRef({
+			family: input.modelFamily,
+			model: input.modelId,
+			tier: input.tier
+		});
 		if (!modelRef) throw new Error('harness_model_missing: nessun modello configurato per il provider attivo');
 		console.log(
 			`[AGENT_KIT] run ${run.id} start — agente=${spec.id}, modello=${modelRef.label} (${modelRef.provider}), thread=${threadId}`
