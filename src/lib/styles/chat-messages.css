@@ -22,12 +22,6 @@
 .chat-turn {
   --chat-gutter: 38px;
   position: relative;
-  /* Una cronologia aperta ne porta cento e sullo schermo ne stanno dieci: il browser rifaceva
-     layout e disegno anche dei novanta fuori campo, perché nessuno gli aveva detto che poteva
-     saltarli. `contain-intrinsic-size` è l'altezza che il turno DICHIARA finché resta fuori:
-     la barra di scorrimento non salta quando entra, e la misura vera prende il posto della stima. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 180px;
 }
 
 /* La riga di UNA bolla di testo. Ci vive quello che appartiene alla risposta parlata e non
