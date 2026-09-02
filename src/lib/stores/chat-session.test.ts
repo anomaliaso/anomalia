@@ -9,7 +9,7 @@ import {
   hydrateSessionFromStorage,
   readPersistedSession,
   watchToolJobs,
-  detachToolJobMessages,
+  detachToolJobCallbacks,
   stopWatchingToolJobs,
   isWatchingToolJobs,
   getSession,
@@ -470,7 +470,7 @@ describe('chat-session store', () => {
   it('watchToolJobs keeps sidebar busy after detach and clears when jobs finish', async () => {
     const fetchMock = vi.mocked(fetch);
     let pending = [{ id: 'j1', tool_name: 'produce_week', status: 'running' }];
-    const onMessages = vi.fn();
+    const onTick = vi.fn();
     const onIdle = vi.fn();
 
     fetchMock.mockImplementation((url) => {
@@ -478,33 +478,23 @@ describe('chat-session store', () => {
       if (u.includes('pending_tools=1')) {
         return Promise.resolve(new Response(JSON.stringify({ jobs: pending }), { status: 200 }));
       }
-      if (u.includes('/chat?thread=')) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              messages: [{ role: 'assistant', content: 'ancora in corso…' }]
-            }),
-            { status: 200 }
-          )
-        );
-      }
       return Promise.reject(new Error(u));
     });
 
     watchToolJobs({
       brandSlug: 'acme',
       threadId: 'thread-4',
-      onMessages,
+      onTick,
       onIdle
     });
 
     await vi.runOnlyPendingTimersAsync();
     expect(isWatchingToolJobs('thread-4')).toBe(true);
     expect(get(backgroundToolThreads).has('thread-4')).toBe(true);
-    expect(onMessages).toHaveBeenCalled();
+    expect(onTick).toHaveBeenCalled();
 
     // User leaves the page — detach callbacks but keep watcher
-    detachToolJobMessages('thread-4');
+    detachToolJobCallbacks('thread-4');
     expect(isWatchingToolJobs('thread-4')).toBe(true);
     expect(get(backgroundToolThreads).has('thread-4')).toBe(true);
 
@@ -795,5 +785,53 @@ describe('chat-session — turni kit e race del client (23-24/8)', () => {
     await vi.advanceTimersByTimeAsync(91_000);
     expect(await p).toBe('ok');
     expect(getSession('th-stall')).toBeNull();
+  });
+});
+
+/**
+ * Misurato l'1/9: mentre un lavoro gira in background il watcher rifaceva l'INTERO transcript
+ * ogni tre secondi — 202 KB e 176 ms per un thread da 100 messaggi, cioè ~4 MB al minuto di
+ * cronologia identica. Il thread ha già un registro durevole con cursore (`thread_events`, scritto
+ * da un trigger su ogni insert di `chat_messages`) e la pagina lo legge già per `thread-seq`: il
+ * tick deve chiedere il DELTA, non la storia.
+ */
+describe('watchToolJobs non riscarica la cronologia a ogni tick', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    __resetChatSessionForTests();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: unknown) => {
+        const u = String(url);
+        if (u.includes('pending_tools=1')) {
+          return new Response(JSON.stringify({ jobs: [{ id: 'j1', tool_name: 'motion_video', status: 'running' }] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ messages: [] }), { status: 200 });
+      })
+    );
+  });
+
+  it('il tick chiede i lavori, non il transcript', async () => {
+    watchToolJobs({ brandSlug: 'acme', threadId: 'thread-delta', onTick: vi.fn() });
+    await vi.runOnlyPendingTimersAsync();
+    await vi.advanceTimersByTimeAsync(3000);
+    await vi.runOnlyPendingTimersAsync();
+
+    const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes('pending_tools=1'))).toBe(true);
+    expect(urls.filter((u) => /\/chat\?thread=[^&]+$/.test(u))).toEqual([]);
+    vi.useRealTimers();
+  });
+
+  it('a ogni tick avvisa la pagina, che sincronizza il suo cursore', async () => {
+    const onTick = vi.fn();
+    watchToolJobs({ brandSlug: 'acme', threadId: 'thread-delta2', onTick });
+    await vi.runOnlyPendingTimersAsync();
+    expect(onTick).toHaveBeenCalled();
+
+    const before = onTick.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(3000);
+    await vi.runOnlyPendingTimersAsync();
+    expect(onTick.mock.calls.length).toBeGreaterThan(before);
   });
 });

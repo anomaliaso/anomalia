@@ -79,6 +79,17 @@ Il mock scritto nell'era della PR non dichiara gli export nuovi di dev (`createS
 ### Il websocket Realtime non si collega dalla stack locale: quello che arriva per broadcast non lo verifichi qui
 Il broadcast HTTP del server risponde 202 e il container lo logga, ma il browser non apre mai il canale: `channel(...).subscribe()` non risolve, e in `read_network_requests` non c'è una sola richiesta verso `localhost:8000`. Tutto quello che il prodotto consegna via `thread-changed` / `turn-state` / `kit_stream` — il turno scritto dal worker che deve comparire da solo, il pallino in sidebar, il riaggancio a uno stream partito altrove — nella stack locale non si vede, e la tentazione è di dichiararlo rotto nel codice. Segnale: il POST `/api/broadcast/...` esce 202, i log di `realtime-dev.anomalia-realtime` non mostrano nessun join di canale, e la UI resta ferma. Mossa: verifica quel percorso dal lato che NON dipende dal socket — scrivi la riga in `chat_messages` mentre la scheda è nascosta e torna sulla scheda: se il ricontrollo al focus la porta a schermo, il difetto non è lì. E dillo nel PR invece di far passare per verificato ciò che la macchina non poteva provare.
 
+### Due dev server su localhost si rubano la sessione: il 404 «Brand not found» non è un bug tuo
+Per un confronto prima/dopo viene naturale tenere due porte accese insieme (dev su 5201, branch su
+5200). I cookie però stanno sull'HOST, non sulla porta: entrambi i server ruotano lo stesso refresh
+token di GoTrue, e chi arriva secondo se lo trova già speso. Da lì la pagina risponde 404 con
+`{"error":"Brand not found"}`, oppure ti sbatte su `/app/onboarding` come se l'utente non avesse
+brand — e sembra un difetto del codice appena scritto. Segnale: la stessa URL rende su una porta e
+404 sull'altra, con lo stesso `.env` e lo stesso `PUBLIC_SUPABASE_URL=http://localhost:8000`; un
+`fetch` all'endpoint dice «Brand not found» invece di «Unauthorized». Mossa: **un dev server alla
+volta** per qualunque verifica nel browser. Il confronto prima/dopo si fa in sequenza — misuri il
+branch, spegni, accendi il baseline, misuri — non in parallelo.
+
 ### Il worker locale è un build vecchio che compete per la stessa coda
 La stack Docker porta un'app pronta (`anomalia-app`, immagine `anomalia-selfhost-app`) che prosciuga `chat_jobs` dallo stesso DB del dev server: il cron chiama `app:3000`, non la tua porta. Con l'immagine più vecchia del checkout, il codice nuovo **non gira mai** (il team contact post-onboarding non parte) e i due reaper si contendono i turni: `chat turn died mid-flight (heartbeat lost)` su turni vivi, `Failed to load url credits.ts` da moduli che nel checkout esistono. Segnale: `chat_jobs` failed con errori che il codice attuale non può produrre. Mossa: identificare chi prosciuga la coda prima di giudicare il flusso — `docker logs anomalia-app`, data dell'immagine (`docker images`) contro `git log -1` — e fermare o ricostruire il container stantio (ricordarsi di riaccenderlo).
 

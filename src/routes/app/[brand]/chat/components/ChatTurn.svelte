@@ -72,7 +72,8 @@
     speakerLabel: (name: string | null | undefined) => string;
     speakerAvatar: (name: string | null | undefined) => SpeakerWho;
     artifactsByCall: Map<string, ChatArtifactUi[]>;
-    followingUserTexts: string[];
+    /** Getter, non lista: la calcola solo una card domande, che quasi nessun turno ha. */
+    followingUserTexts: () => string[];
     oncopy: (content: string) => void;
     onredo: (index: number) => void;
     onfeedback: (messageId: string | undefined, value: 1 | -1 | null, note?: string) => void;
@@ -308,7 +309,7 @@
     questions={tc.questions!}
     toolCallId={tc.toolCallId ?? `qq-${i}-${bi}-${ti}`}
     {threadId}
-    followingUserTexts={followingUserTexts}
+    followingUserTexts={followingUserTexts()}
     disabled={loading}
     onanswer={(text) => onsend(text)}
   />

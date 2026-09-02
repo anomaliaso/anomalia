@@ -1,16 +1,6 @@
 import { readPersistedSession, hydrateSessionFromStorage, beginJobPolling, watchToolJobs, isWatchingToolJobs, getSession } from '$lib/stores/chat-session';
 import { refreshThreads } from '$lib/stores/chat';
-import { consolidateMessages, parseToolCalls, redoIdOf, type ChatMessage } from '../components/transcript';
-
-type FreshRow = {
-  id?: string;
-  role: string;
-  content: string;
-  reasoning?: string | null;
-  tool_calls?: unknown;
-  tool_call_id?: string | null;
-  name?: string | null;
-};
+import { parseToolCalls, redoIdOf, type ChatMessage } from '../components/transcript';
 
 /**
  * Il ciclo di vita del turno visto dalla pagina: riaggancio dopo un refresh, poll dei job di
@@ -27,55 +17,22 @@ export function createLifecycle(io: {
   handled: () => number | null;
   touchHandled: (at: number) => void;
   finalize: (completedAt: number) => Promise<void>;
+  /** Avanza il cursore del thread sul registro degli eventi e, se serve, rilegge il transcript. */
+  syncCursor: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   send: (text?: string, meta?: any, opts?: { resend?: boolean; redoMessageId?: string; truncateFromMessageId?: string }) => Promise<void>;
 }) {
-  function applyFreshToolMessages(
-    fresh: Array<{
-      id?: string;
-      role: string;
-      content: string;
-      reasoning?: string | null;
-      tool_calls?: unknown;
-      tool_call_id?: string | null;
-      name?: string | null;
-    }>
-  ) {
-    if (!fresh?.length) return;
-    const consolidated = consolidateMessages(
-      fresh.map((m) => ({
-        // Senza l'id, redo/edit ricadono in silenzio sul percorso che non tronca.
-        id: m.id,
-        role: m.role,
-        content: typeof m.content === 'string' ? m.content : '',
-        reasoning: m.reasoning,
-        tool_calls: m.tool_calls,
-        tool_call_id: m.tool_call_id,
-        name: m.name
-      }))
-    );
-    // Si rimpiazza solo se è arrivato qualcosa di nuovo: mai cancellare la UI ottimistica.
-    if (!io.loading() && consolidated.length >= io.messages().length) {
-      io.setMessages(consolidated);
-    }
-  }
-
+  /**
+   * Il battito del watcher non porta più la cronologia: la chiede la pagina al proprio cursore
+   * sul registro del thread, che risponde con il solo delta e ricarica il transcript unicamente
+   * quando un messaggio è davvero atterrato. Prima il tick si tirava dietro tutto — 202 KB e
+   * 176 ms per cento messaggi, ogni tre secondi, quasi sempre identici a sé stessi.
+   */
   function startToolPolling() {
     watchToolJobs({
       brandSlug: io.brandSlug(),
       threadId: io.threadId(),
-      onMessages: (fresh) =>
-        applyFreshToolMessages(
-          fresh as Array<{
-            id?: string;
-            role: string;
-            content: string;
-            reasoning?: string | null;
-            tool_calls?: unknown;
-            tool_call_id?: string | null;
-            name?: string | null;
-          }>
-        ),
+      onTick: () => io.syncCursor(),
       onIdle: () => refreshThreads(io.brandSlug())
     });
   }
@@ -222,7 +179,7 @@ export function createLifecycle(io: {
     }
   }
 
-  return { applyFreshToolMessages, startToolPolling, maybeStartToolPolling, checkPendingTools, resumeActiveGeneration, retryLast, resendAt, redoAssistant, sendFeedback };
+  return { startToolPolling, maybeStartToolPolling, checkPendingTools, resumeActiveGeneration, retryLast, resendAt, redoAssistant, sendFeedback };
 }
 
 // VERBATIM: i report dei job sono già deterministici lato server, niente parser da inventare.
