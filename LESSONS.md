@@ -135,6 +135,18 @@ GET su `/videos/review` risponde 400 (endpoint POST-only), POST senza url rispon
 ### **Il marcatore che matcha la bolla dell'utente è un falso positivo**
 aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio CHE HAI INVIATO TU: nel gate di oggi ha mascherato un 401 reale (nessuna risposta mai arrivata, "verde" lo stesso). Mossa: contare le occorrenze (≥ 2) oppure aspettare il selettore della bolla dell'assistente, non il body intero.
 
+### **Un difetto che vive nella finestra di una load non si riproduce in locale senza rallentare la rete**
+Segnalato: due agenti «riportano gli stessi identici 3 messaggi». In locale la load del thread
+torna in decine di millisecondi, lo schermo si corregge prima che tu riesca a guardarlo, e il primo
+verdetto è «non riproducibile, sarà stato il database» — che era falso: sul database i due thread
+erano giusti. Vale per tutta la famiglia (liste che restano quelle di prima, testate che cambiano
+prima del contenuto): il difetto NON è la finestra, è che dentro la finestra la pagina afferma una
+cosa falsa, e in produzione quella finestra dura quanto la risposta. Mossa: `newCDPSession(page)`
++ `Network.emulateNetworkConditions` con `latency: 400`–`1500`, e campiona lo schermo ogni
+100–150 ms invece di guardarlo a regime — il numero da riportare nel PR è per quanti millisecondi
+la pagina ha mentito, prima e dopo. Attenzione a rallentare DOPO il caricamento iniziale, o è la
+prima pagina a non arrivare mai e sembra un altro guasto.
+
 ### Build e dev server lungi dal tool di shell
 `npm run build` di questo repo dura ~4 minuti: lancialo in `nohup … &` e sondalo col log, il timeout del tool di shell uccide il processo (e lascia esbuild a metà: la dev server dopo parte con `write EPIPE`). La dev server del worktree ha la sua porta (`--port 5185 --strictPort`) — il 5173 è di chiunque arrivi prima. E il comando che LA VA A PROVARE con `curl` in blocco va in timeout e trascina via il process group: lancia il server staccato (`disown`), verifica con un comando successivo.
 
