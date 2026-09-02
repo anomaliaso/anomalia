@@ -554,3 +554,23 @@ rinfresca il token e riscrive il cookie: il logout appena fatto nell'altra sched
 l'utente non approvato risulta di colpo dentro. Segnale: dopo un cambio account atterri su una
 dashboard a cui quell'utente non ha accesso. Mossa: chiudi ogni scheda dell'app prima di cambiare
 identità, una sola scheda per verifica.
+
+## Due app locali sulla stessa porta, una su IPv4 e una su IPv6
+
+**Segnale.** `curl http://localhost:5174/...` risponde con la tua pagina, il browser sulla
+stessa porta mostra un'altra applicazione, e `/app/...` dà 404 in browser mentre in curl è 200.
+
+**Cosa succede.** `localhost` risolve a `::1` e `127.0.0.1` a IPv4: due processi Vite possono
+tenere la *stessa* porta, uno per stack, senza che nessuno dei due dica "porta occupata". Qui
+erano `anomalia` e `anomalia-leads`, entrambi su 5174.
+
+**La mossa.** Avvia il dev server con una porta esplicita e un host esplicito, e prima di
+crederci chiedi all'app chi è:
+
+```bash
+npm run dev -- --port 5200 --host 127.0.0.1
+curl -s http://127.0.0.1:5200/login | grep -oE 'Anomalia|anomalia/leads' | head -1
+```
+
+Vite può comunque slittare di porta se trova occupato ("Port 5199 is in use, trying another
+one"): l'unica porta di cui fidarsi è quella stampata nel log, verificata con la riga sopra.
