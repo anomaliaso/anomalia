@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { cronAuthorized } from '$lib/server/cron-auth';
-import { runOutcomeChecks, CHECK_AFTER_HOURS, MAX_CHECKS_PER_RUN } from '$lib/server/lead-outcomes';
+import { runOutcomeChecks } from '$lib/server/lead-outcomes';
+import { CHECK_AFTER_HOURS, MAX_CHECKS_PER_RUN } from '@anomalia/leads-core/match';
 
 // Esiti dei lead — torna a guardare i commenti segnati come "fatto" e registra com'è andata.
 //

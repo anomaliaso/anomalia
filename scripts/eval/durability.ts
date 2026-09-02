@@ -17,6 +17,7 @@ import { reapDeadKitRuns } from '$lib/server/agent-kit-recover';
 // grafo prima che il giro cominci. Serve all'harness, non al prodotto.
 import '$lib/server/chat/queue';
 import { MAX_RUN_ATTEMPTS } from '$lib/server/chat/turn-limits';
+import { loadThreadEvents, threadProjectionRows } from '$lib/server/chat/thread-events';
 import { createFixture, destroyFixture, type Fixture } from './durability/fixture';
 
 type Fact = { id: string; ok: boolean; detail: string };
@@ -24,6 +25,7 @@ type Scenario = { id: string; what: string; run: (fixture: Fixture) => Promise<F
 
 const DEAD_HEARTBEAT_MS = 30 * 60_000;
 const PARTIAL_TEXT = 'ho sistemato quattro articoli su dieci';
+const REWRITTEN_TEXT = 'il turno intero, come lo vede chi riapre il thread';
 
 const SCENARIOS: Scenario[] = [
 	{
@@ -101,6 +103,52 @@ const SCENARIOS: Scenario[] = [
 				fact('lo-zombie-non-chiude', zombie.closed === false, `closed ${zombie.closed}`),
 				fact('chi-tiene-il-lease-chiude', owner.closed === true, `closed ${owner.closed}`),
 				fact('un-solo-messaggio', messages.length === 1, `${messages.length} messaggi assistant`)
+			];
+		}
+	},
+	{
+		id: 'il-turno-riscritto-non-sparisce',
+		what: 'la riga dell’assistente nasce vuota e viene riscritta: il thread deve mostrare il turno intero',
+		async run(fixture) {
+			const admin = createAdminClient();
+			const { data, error } = await admin
+				.from('chat_messages')
+				.insert({
+					brand_id: fixture.brandId,
+					user_id: fixture.userId,
+					thread_id: fixture.threadId,
+					role: 'assistant',
+					content: ''
+				})
+				.select('id')
+				.single();
+			if (error) throw new Error(`seed del messaggio fallito — ${error.message}`);
+			const messageId = (data as { id: string }).id;
+
+			// Il battito riscrive la STESSA riga a ogni checkpoint: due giri, come in produzione.
+			for (const text of ['a metà del lavoro', REWRITTEN_TEXT]) {
+				const { error: patch } = await admin
+					.from('chat_messages')
+					.update({ content: text, reasoning: `${text} — pensiero`, tool_calls: [{ toolName: 'read_posts' }] })
+					.eq('id', messageId);
+				if (patch) throw new Error(`riscrittura fallita — ${patch.message}`);
+			}
+
+			const events = (await loadThreadEvents(admin, fixture.threadId)) ?? [];
+			const projection = threadProjectionRows(events);
+			const shown = (projection?.messages ?? []).find((m) => m.id === messageId) as
+				| { content?: string; reasoning?: string }
+				| undefined;
+
+			return [
+				fact('una-bolla-sola', (projection?.messages ?? []).filter((m) => m.id === messageId).length === 1, `${(projection?.messages ?? []).length} messaggi proiettati`),
+				fact('il-testo-e-l-ultimo', shown?.content === REWRITTEN_TEXT, `contenuto proiettato: ${JSON.stringify(shown?.content ?? null)}`),
+				fact('il-pensiero-arriva', Boolean(shown?.reasoning), `reasoning proiettato: ${shown?.reasoning ? 'sì' : 'no'}`),
+				fact(
+					'una-revisione-sola',
+					events.filter((e) => e.source_key.startsWith(`message:${messageId}:r`)).length === 1,
+					`${events.filter((e) => e.source_key.startsWith(`message:${messageId}:r`)).length} revisioni in log`
+				)
 			];
 		}
 	}

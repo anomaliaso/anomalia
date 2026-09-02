@@ -3,20 +3,26 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import BrandMark from '$lib/components/BrandMark.svelte';
-  import { PLATFORM_META, PLATFORM_KEYS } from '$lib/components/platform-meta';
   import {
     saveGuestOnboarding,
     loadGuestOnboarding,
     guestOnboardingLoginHref,
-    type GuestOnboardingPending
+    type GuestOnboardingPending,
+    type GuestPost
   } from '$lib/guest-onboarding';
   import { sanitizeWebsiteParam } from '$lib/website-param';
   import { track } from '$lib/analytics';
 
   let { data } = $props();
 
-  type Phase = 'input' | 'socials';
+  type Phase = 'input' | 'preview';
   let phase = $state<Phase>('input');
+
+  // The artefact moved in front of the login: one post, from the site alone, before any account.
+  let post = $state<GuestPost | null>(null);
+  let generating = $state(false);
+  let genProgress = $state('');
+  let genFailed = $state(false);
 
   let url = $state('');
   let noWebsite = $state(false);
@@ -25,31 +31,8 @@
   let selectedPlatforms = $state<string[]>([]);
   let handles = $state<Record<string, string>>({});
 
-  const LINKEDIN_PATH =
-    'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z';
-  const PLACEHOLDERS: Record<string, string> = {
-    facebook: 'facebook.com/yourpage',
-    linkedin: 'linkedin.com/company/yourcompany',
-    bluesky: 'bsky.app/profile/username',
-    reddit: 'u/username'
-  };
-
-  const TIMELINE_STEPS = ['onboarding.timeline.website', 'onboarding.timeline.socials'];
+  const TIMELINE_STEPS = ['onboarding.timeline.website', 'onboarding.timeline.preview'];
   const progressStep = $derived(phase === 'input' ? 1 : 2);
-
-  const pmeta = (k: string | undefined | null) => PLATFORM_META[(k ?? '').toLowerCase()] ?? null;
-  const plabel = (k: string | undefined | null) => pmeta(k)?.label ?? k ?? '';
-  const picon = (k: string | undefined | null) => {
-    const m = pmeta(k);
-    if (m?.icon) return m.icon;
-    return (k ?? '').toLowerCase() === 'linkedin' ? { path: LINKEDIN_PATH, hex: '0a66c2' } : null;
-  };
-
-  function togglePlatform(k: string) {
-    selectedPlatforms = selectedPlatforms.includes(k)
-      ? selectedPlatforms.filter((x) => x !== k)
-      : [...selectedPlatforms, k];
-  }
 
   function useNoWebsite() {
     noWebsite = true;
@@ -57,16 +40,98 @@
   }
 
   function continueFromInput() {
+    // No site to read means nothing to make a post FROM: that visitor goes straight to signup,
+    // exactly as before. The pre-login artefact is a promise we can only keep with a website.
     if (noWebsite) {
       if (!brandName.trim()) return;
-    } else {
-      const clean = sanitizeWebsiteParam(url);
-      if (!clean) return;
-      url = clean;
+      const pending = snapshot(true);
+      saveGuestOnboarding(pending);
+      track('onboarding_guest_login', { no_website: true });
+      void goto(guestOnboardingLoginHref(pending));
+      return;
     }
-    phase = 'socials';
+
+    const clean = sanitizeWebsiteParam(url);
+    if (!clean) return;
+    url = clean;
+
+    phase = 'preview';
     saveGuestOnboarding(snapshot(false));
-    track('onboarding_guest_socials', { no_website: noWebsite });
+    track('onboarding_guest_preview', { no_website: false });
+    void generatePost();
+  }
+
+  /**
+   * One post, streamed. The endpoint holds the request open (NDJSON + keepalive) because the work
+   * is inline: an anonymous visitor has no row on the durable job queue to poll.
+   */
+  async function generatePost() {
+    if (generating) return;
+    generating = true;
+    genFailed = false;
+    genProgress = $_('onboarding.guestPreview.working');
+    try {
+      const res = await fetch('/start/preview', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (value) buf += dec.decode(value, { stream: !done });
+        let idx: number;
+        while ((idx = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, idx).trim();
+          buf = buf.slice(idx + 1);
+          if (line) handleMessage(JSON.parse(line));
+        }
+        if (done) {
+          const tail = buf.trim();
+          if (tail) handleMessage(JSON.parse(tail));
+          break;
+        }
+      }
+    } catch {
+      genFailed = true;
+    }
+    generating = false;
+    if (!post) genFailed = true;
+  }
+
+  function handleMessage(msg: { type: string; [k: string]: unknown }) {
+    if (msg.type === 'progress') {
+      genProgress = String(msg.message ?? '');
+      return;
+    }
+    if (msg.type === 'error') {
+      genFailed = true;
+      return;
+    }
+    if (msg.type !== 'result') return;
+
+    const data = msg.data as { post?: GuestPost; website?: string; brandName?: string };
+    if (!data?.post?.imageUrl) {
+      genFailed = true;
+      return;
+    }
+    post = data.post;
+    if (data.website) url = sanitizeWebsiteParam(data.website) || url;
+    if (!brandName.trim() && data.brandName) brandName = data.brandName;
+    // Persisted immediately: the post must survive the login round-trip that comes next.
+    saveGuestOnboarding(snapshot(false));
+    track('onboarding_guest_post_shown', { platform: post.platform });
+  }
+
+  function retry() {
+    post = null;
+    phase = 'input';
+    genFailed = false;
+    genProgress = '';
   }
 
   function snapshot(readyForAnalysis: boolean): GuestOnboardingPending {
@@ -78,23 +143,20 @@
       creatorNiche: creatorNiche.trim(),
       selectedPlatforms: [...selectedPlatforms],
       handles: { ...handles },
-      readyForAnalysis
+      readyForAnalysis,
+      ...(post ? { post } : {})
     };
   }
 
-  function continueFromSocials() {
-    if (!selectedPlatforms.length) return;
+  function continueToLogin() {
     const pending = snapshot(true);
     saveGuestOnboarding(pending);
-    track('onboarding_guest_login', {
-      platforms: selectedPlatforms.length,
-      no_website: noWebsite
-    });
+    track('onboarding_guest_login', { has_post: !!post, no_website: noWebsite });
     void goto(guestOnboardingLoginHref(pending));
   }
 
   function back() {
-    if (phase === 'socials') phase = 'input';
+    if (phase === 'preview' && !generating) retry();
   }
 
   onMount(() => {
@@ -107,7 +169,8 @@
       creatorNiche = existing.creatorNiche;
       selectedPlatforms = existing.selectedPlatforms;
       handles = existing.handles;
-      phase = existing.url || existing.noWebsite ? 'socials' : 'input';
+      post = existing.post ?? null;
+      phase = post ? 'preview' : 'input';
       track('onboarding_guest_resumed', { step: phase });
       return;
     }
@@ -115,8 +178,9 @@
     if (data.website) {
       url = data.website;
       noWebsite = false;
-      phase = 'socials';
-      track('onboarding_started', { source: 'homepage_url', step: 'socials', guest: true });
+      phase = 'preview';
+      track('onboarding_started', { source: 'homepage_url', step: 'preview', guest: true });
+      void generatePost();
     } else {
       track('onboarding_started', { guest: true });
     }
@@ -145,7 +209,7 @@
 
   <div class="ob-main">
     <main class="wrap">
-      {#if phase === 'socials'}
+      {#if phase === 'preview' && !generating && !post}
         <div class="ob-topnav">
           <button type="button" class="back asbtn" onclick={back}>{$_('onboarding.back')}</button>
         </div>
@@ -167,8 +231,8 @@
               <h1 class="ch-title">{$_('onboarding.input.title')}</h1>
               <p class="ch-lead">{$_('onboarding.input.sub')}</p>
             {:else}
-              <h1 class="ch-title">{$_('onboarding.socials.title')}</h1>
-              <p class="ch-lead">{$_('onboarding.socials.sub')}</p>
+              <h1 class="ch-title">{$_('onboarding.guestPreview.title')}</h1>
+              <p class="ch-lead">{$_('onboarding.guestPreview.sub')}</p>
             {/if}
           </div>
 
@@ -226,72 +290,30 @@
               </div>
             {/if}
           {:else}
-            <div class="block">
-              <div class="lbl">{$_('onboarding.socials.postLabel')}</div>
-              <p class="hint">{$_('onboarding.socials.postHint')}</p>
-              <div class="social-grid">
-                {#each PLATFORM_KEYS as k (k)}
-                  {@const ic = picon(k)}
-                  <button
-                    type="button"
-                    class="scard"
-                    class:sel={selectedPlatforms.includes(k)}
-                    onclick={() => togglePlatform(k)}
-                  >
-                    <span class="sglyph" style={`background:${pmeta(k)?.bg}`}>
-                      {#if ic}<svg viewBox="0 0 24 24" fill="#fff"
-                          ><path d={ic.path} /></svg
-                        >{:else}{pmeta(k)?.short}{/if}
-                    </span>
-                    <span class="sname">{plabel(k)}</span>
-                    {#if selectedPlatforms.includes(k)}<span class="scheck">✓</span>{/if}
-                  </button>
-                {/each}
+            {#if post}
+              <div class="post-card">
+                <img class="post-img" src={post.imageUrl} alt={post.caption} />
+                <p class="post-caption">{post.caption}</p>
               </div>
-              {#if !selectedPlatforms.length}<p class="hint start-hint"
-                  >{$_('onboarding.socials.selectToStart')}</p
-                >{/if}
-            </div>
-
-            <div class="block">
-              <div class="lbl">{$_('onboarding.socials.learnLabel')}</div>
-              <p class="hint">{$_('onboarding.socials.learnHint')}</p>
-              <div class="social-input-list">
-                {#each PLATFORM_KEYS as k (k)}
-                  {@const ic = picon(k)}
-                  <div class="social-input-row">
-                    <span class="sglyph" style={`background:${pmeta(k)?.bg}`}>
-                      {#if ic}<svg viewBox="0 0 24 24" fill="#fff"
-                          ><path d={ic.path} /></svg
-                        >{:else}{pmeta(k)?.short}{/if}
-                    </span>
-                    <span class="sname">{plabel(k)}</span>
-                    <input
-                      type="text"
-                      autocomplete="off"
-                      autocapitalize="off"
-                      spellcheck="false"
-                      placeholder={PLACEHOLDERS[k] ??
-                        $_('onboarding.socials.usernamePlaceholder', {
-                          values: { platform: plabel(k) }
-                        })}
-                      value={handles[k] ?? ''}
-                      oninput={(e) => (handles = { ...handles, [k]: e.currentTarget.value })}
-                    />
-                  </div>
-                {/each}
+              <div class="cta-row cta-row-setup">
+                <button class="primary cta-press" onclick={continueToLogin}>
+                  {$_('onboarding.guestPreview.cta')}
+                </button>
               </div>
-            </div>
-
-            <div class="cta-row cta-row-setup">
-              <button
-                class="primary cta-press"
-                onclick={continueFromSocials}
-                disabled={!selectedPlatforms.length}
-              >
-                {$_('onboarding.continue')}
-              </button>
-            </div>
+              <p class="hint">{$_('onboarding.guestPreview.ctaHint')}</p>
+            {:else if genFailed}
+              <p class="err">{$_('onboarding.guestPreview.failed')}</p>
+              <div class="cta-row cta-row-setup">
+                <button class="primary cta-press" onclick={retry}>
+                  {$_('onboarding.guestPreview.retry')}
+                </button>
+              </div>
+            {:else}
+              <div class="gen-wait">
+                <div class="gen-spinner"></div>
+                <p class="hint">{genProgress}</p>
+              </div>
+            {/if}
           {/if}
         </div>
       {/key}
@@ -300,6 +322,35 @@
 </div>
 
 <style>
+  .post-card {
+    margin-top: 24px;
+    border: 1px solid var(--line-2, #d2d2d7);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--paper, #fff);
+    max-width: 460px;
+  }
+  .post-img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+  .post-caption {
+    margin: 0;
+    padding: 14px 16px;
+    font-size: 15px;
+    line-height: 1.5;
+    text-align: left;
+    white-space: pre-wrap;
+  }
+  .gen-wait { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .gen-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid var(--line-2, #ece9ff);
+    border-top-color: var(--accent, #7c5cff);
+    animation: gen-spin 0.8s linear infinite;
+  }
+  @keyframes gen-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .gen-spinner { animation: none; } }
+
   .ob-shell {
     height: 100dvh;
     display: flex;
@@ -657,79 +708,4 @@
     border-top: 1px solid var(--line, #e3e3e6);
   }
 
-  .scard {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 13px 14px;
-    border: 1px solid var(--line-2, #d2d2d7);
-    border-radius: 14px;
-    background: var(--paper, #fff);
-    color: var(--ink-soft, #6e6e73);
-    cursor: pointer;
-    text-align: left;
-  }
-  .scard.sel {
-    border-color: var(--accent, #7c5cff);
-    background: rgba(var(--accent-rgb), 0.05);
-    color: var(--ink, #1d1d1f);
-    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
-  }
-  .sglyph {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    color: #fff;
-    font-weight: 700;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-  }
-  .sglyph svg {
-    width: 18px;
-    height: 18px;
-  }
-  .sname {
-    font-size: 14px;
-    font-weight: 600;
-    flex: 1;
-  }
-  .scheck {
-    color: var(--accent, #7c5cff);
-    font-weight: 700;
-  }
-  .social-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
-    margin-top: 4px;
-  }
-  .social-input-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 4px;
-  }
-  .social-input-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 0;
-  }
-  .social-input-row .sname {
-    font-size: 14px;
-    font-weight: 600;
-    min-width: 80px;
-    flex: 0 0 auto;
-    color: var(--ink, #1d1d1f);
-  }
-  .social-input-row input {
-    flex: 1;
-    font-size: 14px;
-    padding: 9px 12px;
-    border-radius: 10px;
-    height: 38px;
-  }
 </style>

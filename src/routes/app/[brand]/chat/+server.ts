@@ -35,6 +35,7 @@ import { isChatTier } from '$lib/chat-tiers';
 import { threadModelPreference } from '$lib/server/chat/model-preference';
 import { withBrandContext } from '$lib/server/ai-log';
 import { shouldUseKit, runKitTurn } from '$lib/agent/bridge/live';
+import { kitPersonaOverlay } from '$lib/server/custom-agent-persona';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { RequestHandler } from './$types';
 import {
@@ -214,7 +215,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   });
 
   let {
-    roomPlan, roomSpeaker, agentId, systemPrompt, mode, refUrls, turnDocuments,
+    roomPlan, roomSpeaker, agentId, persona, systemPrompt, mode, refUrls, turnDocuments,
     customTools, tools, sandboxMount, chatModel, canSeeImages, canSeeVideo, historyMedia,
     escalationText
   } = await buildTurnContext({
@@ -284,6 +285,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   const kitSpec = shouldUseKit(env, agentId);
   if (kitSpec) {
     const { createAdminClient } = await import('$lib/server/supabase-admin');
+    const kitPersona = persona ? kitPersonaOverlay(persona, bilingualNoticeLocale(locale)) : undefined;
     // Il tier scelto dall'utente, il reasoning e il testo che alimenta la scalata Auto→Pro
     // (isHeavyProductionAsk) sono gia' calcolati sopra per il percorso classico: il ramo kit li
     // buttava via e ricablava `resolveChatModel('auto', undefined, …)` dentro il bridge. Senza
@@ -304,6 +306,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
       modelFamily: modelPref?.family,
       reasoning: body.reasoning,
       escalationText,
+      persona: kitPersona,
       // `origin` serve al bridge per risvegliare la coda a fine turno (kickChatQueueWork):
       // senza, un follow-up accodato su un thread kit resta fermo fino al cron (2 minuti) e poi
       // viene risposto dal motore CLASSICO invece che dallo specialista.

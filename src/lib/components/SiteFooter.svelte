@@ -56,7 +56,7 @@
     <!-- Left: brand + description -->
     <div class="foot-brand">
       <div class="foot-logo" role="img" aria-label={$_('landing.nav.brandAria')}>
-        <BrandMark size={36} />
+        <BrandMark size={36} tone="negative" />
         <span class="foot-logo-text" aria-hidden="true">Anomalia</span>
       </div>
       <p class="foot-desc">{$_('marketing.footer.tagline')}</p>
@@ -167,7 +167,7 @@
     </div>
   </div>
   <div class="foot-brand-big" aria-hidden="true">
-    <BrandMark size="clamp(4.5rem, 14vw, 12rem)" />
+    <BrandMark size="clamp(4.5rem, 14vw, 12rem)" tone="negative" />
     <span>anomalia</span>
   </div>
 </footer>
@@ -234,6 +234,7 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 14px;
+    color: #fff;
   }
   .foot-logo-text {
     font-size: 20px;

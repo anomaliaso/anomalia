@@ -12,6 +12,18 @@ export const GUEST_ONBOARDING_KEY = 'anomalia_guest_onboarding';
 export const GUEST_ONBOARDING_COOKIE = 'anomalia_guest_ob';
 export const GUEST_ONBOARDING_COOKIE_MAX_AGE = 60 * 60; // 1 hour
 
+/**
+ * The one post generated before the visitor had an account. Kept flat and small on purpose: it
+ * lives in sessionStorage, and the image is a URL to an already-uploaded object, never its bytes.
+ */
+export type GuestPost = {
+  platform: string;
+  format: string;
+  caption: string;
+  imageUrl: string;
+  imagePrompt: string;
+};
+
 export type GuestOnboardingPending = {
   v: 1;
   url: string;
@@ -20,8 +32,10 @@ export type GuestOnboardingPending = {
   creatorNiche: string;
   selectedPlatforms: string[];
   handles: Record<string, string>;
-  /** User finished socials and should jump to analyze (or early create) after auth. */
+  /** User finished the guest funnel and should jump to analyze (or early create) after auth. */
   readyForAnalysis: boolean;
+  /** Present once /start/preview produced a post. Adopted by the brand at create time. */
+  post?: GuestPost;
 };
 
 function isPlatformKey(k: string): boolean {
@@ -37,6 +51,25 @@ function sanitizeHandles(raw: unknown): Record<string, string> {
     if (s) out[k] = s;
   }
   return out;
+}
+
+/**
+ * A post is only worth carrying when its image rendered: the whole promise is that the visitor
+ * finds again EXACTLY what convinced them. A caption with no picture is not that, so it is dropped
+ * rather than adopted as an empty card.
+ */
+export function parseGuestPost(raw: unknown): GuestPost | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const imageUrl = String(o.imageUrl ?? '').trim().slice(0, 2000);
+  if (!imageUrl) return undefined;
+  return {
+    platform: String(o.platform ?? '').trim().toLowerCase().slice(0, 40),
+    format: String(o.format ?? '').trim().slice(0, 40),
+    caption: String(o.caption ?? '').trim().slice(0, 4000),
+    imageUrl,
+    imagePrompt: String(o.imagePrompt ?? '').trim().slice(0, 4000)
+  };
 }
 
 function sanitizePlatforms(raw: unknown): string[] {
@@ -58,7 +91,7 @@ export function parseGuestOnboarding(raw: unknown): GuestOnboardingPending | nul
   const selectedPlatforms = sanitizePlatforms(o.selectedPlatforms);
   const handles = sanitizeHandles(o.handles);
   const readyForAnalysis = !!o.readyForAnalysis;
-  if (readyForAnalysis && !selectedPlatforms.length) return null;
+  const post = parseGuestPost(o.post);
   return {
     v: 1,
     url,
@@ -67,7 +100,8 @@ export function parseGuestOnboarding(raw: unknown): GuestOnboardingPending | nul
     creatorNiche,
     selectedPlatforms,
     handles,
-    readyForAnalysis
+    readyForAnalysis,
+    ...(post ? { post } : {})
   };
 }
 
@@ -127,4 +161,26 @@ export function guestOnboardingLoginHref(pending: GuestOnboardingPending): strin
   const qs = new URLSearchParams({ next: 'onboarding', mode: 'signup' });
   if (!pending.noWebsite && pending.url) qs.set('website', pending.url);
   return `/login?${qs}`;
+}
+
+/**
+ * The pre-login post, as a row of `posts` on the brand that was just created.
+ *
+ * Adoption, not regeneration: `media_url` is the image the visitor already saw. Generating a
+ * second one would hand them a different post from the one that earned the signup.
+ */
+export function guestPostRow(post: GuestPost, brandId: string): Record<string, unknown> {
+  return {
+    brand_id: brandId,
+    plan_id: null,
+    platform: post.platform || null,
+    platforms: null,
+    format: post.format || null,
+    content_type: 'generated_image',
+    source: 'guest_preview',
+    caption: post.caption || null,
+    image_prompt: post.imagePrompt || null,
+    media_url: post.imageUrl,
+    status: 'pending_user'
+  };
 }

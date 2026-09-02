@@ -147,3 +147,50 @@ describe('thread page: il turno orfano non mescola canale e poll', () => {
 		expect(src).toMatch(/orphanState = emptyStreamState\(\);\s*\n\s*orphanPending = \[\];/);
 	});
 });
+
+/**
+ * Il difetto dell'1/9: la bolla viva stava in DUE blocchi `{#if}` distinti — uno per il run
+ * orfano, uno per lo stream della sessione — ciascuno con il suo `<ChatLiveStatus>`. Su una
+ * disconnessione benigna di un turno kit la sessione viene dismessa di proposito
+ * (`chat-session.ts`) e il poll riaggancia il run entro `LIVE_POLL_MS`: il passaggio fra i due
+ * rami SMONTAVA il componente e ne montava un altro, e l'utente vedeva lo stream sparire e la
+ * pagina saltare. I dati erano già durevoli: a rompersi era il montaggio.
+ */
+describe('thread page: la bolla viva non si smonta passando da sessione a orfano', () => {
+	const src = readFileSync(new URL('../components/TranscriptList.svelte', import.meta.url), 'utf8');
+
+	it('monta un solo ChatLiveStatus: due istanze in rami esclusivi si rimontano a vicenda', () => {
+		expect(src.match(/<ChatLiveStatus\b/g) ?? []).toHaveLength(1);
+	});
+
+	it('sceglie la sorgente in un posto solo, non ripetendo la condizione su ogni prop', () => {
+		expect(src.match(/showLivePartial\s*\?/g) ?? []).not.toHaveLength(6);
+	});
+});
+
+/**
+ * Il difetto dell'1/9, seconda metà: la pagina del thread non aveva NESSUNA sincronia viva.
+ * `ChatColumn` — l'altra superficie della stessa chat — si riaggancia da sempre a
+ * `thread-changed` e rifà il transcript; qui c'era solo `thread-seq`, che muove la proiezione
+ * degli eventi e non tocca i messaggi. Risultato: il turno di rientro di un lavoro in background
+ * (scritto dal worker, senza SSE in questa scheda) atterrava nel database e a schermo non
+ * compariva finché l'utente non ricaricava a mano.
+ */
+describe('thread page: un turno scritto altrove compare senza ricaricare', () => {
+	const src = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
+
+	it('si riaggancia a thread-changed, non solo a thread-seq', () => {
+		expect(src).toContain('brandChannel.onThreadChanged(');
+	});
+
+	it('il ricontrollo dei lavori in background esce dal ramo felice di send()', () => {
+		// tre uscite: busy a parte (nessun lavoro può essere partito), cancelled, error e il
+		// ramo felice devono passare tutte dallo stesso ricontrollo.
+		expect(src.match(/life\.checkPendingTools\(\)/g) ?? []).not.toHaveLength(1);
+		expect(src).not.toMatch(/pending_tools=1[\s\S]{0,200}?startToolPolling/);
+	});
+
+	it('il ritorno del focus ricontrolla: un canale caduto a scheda nascosta non lascia il buio', () => {
+		expect(src).toContain("addEventListener('visibilitychange'");
+	});
+});

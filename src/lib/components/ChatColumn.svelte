@@ -849,7 +849,7 @@
     if (liveSendThreadId) return liveSendThreadId;
     // Chat di gruppo: la stanza scelta nel picker nasce insieme al thread, al primo messaggio.
     // Se il server la rifiuta (feature spenta, meno di due membri) resta un thread normale.
-    const id = await createThread(brandSlug, undefined, agentSel, roomSel);
+    const id = await createThread(brandSlug, undefined, agentSel, roomSel, roomSel.length ? null : customAgentSel);
     if (id) {
       liveSendThreadId = id;
       // Da qui in poi la stanza è il thread: la memoria del campo "A" copre solo l'attesa fra
@@ -861,7 +861,6 @@
       // `createThread` ha già inserito la riga in `chatThreads`: il refetch è solo allineamento
       // e non deve trattenere il primo turno.
       void refreshThreads(brandSlug);
-      if (!roomSel.length && customAgentSel) await setThreadCustomAgent(brandSlug, id, customAgentSel);
     }
     return id;
   }

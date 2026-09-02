@@ -11,12 +11,13 @@ import { APPROVABLE_STATUSES, type CrossPostResult, RESCHEDULABLE_STATUSES, appr
 import type { ChatToolCtx } from './shared';
 import { startLongToolJob, type AnyRec } from './shared';
 import { requireFreshRead } from '../read-guards';
+import { recordPostVerdict } from '$lib/server/post-verdict';
 import { refreshPostReceipt } from '../post-editor-tools';
 
 // ── WRITE tools ─────────────────────────────────────────────────────────
 
 export function brandWriteTools(ctx: ChatToolCtx) {
-  const { supabase, brandId, tz } = ctx;
+  const { supabase, brandId, tz, userId } = ctx;
   return {
     update_brand_kit: tool({
       description:
@@ -355,13 +356,24 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         if (Object.keys(clean).length === 0) return { error: 'No changes specified' };
 
         // Check current status before updating
-        const { data: current } = await supabase.from('posts').select('status, updated_at').eq('id', post_id).eq('brand_id', brandId).maybeSingle();
+        const { data: current } = await supabase.from('posts').select('status, updated_at, caption').eq('id', post_id).eq('brand_id', brandId).maybeSingle();
         if (!current) return { error: 'Post not found' };
         const stale = requireFreshRead('post', String(post_id), current.updated_at, 'This post', 'read_posts (find this id in the list)');
         if (stale) return stale;
 
         const { error } = await supabase.from('posts').update(clean).eq('id', post_id).eq('brand_id', brandId);
         if (error) return { error: error.message };
+
+        if (typeof clean.caption === 'string' && String(current.caption ?? '') !== clean.caption) {
+          await recordPostVerdict(supabase, {
+            postId: String(post_id),
+            brandId,
+            actorId: userId,
+            verdict: 'edited',
+            captionBefore: current.caption as string | null,
+            captionAfter: clean.caption
+          });
+        }
         await refreshPostReceipt(supabase, brandId, String(post_id));
 
         // For scheduled posts: cancel old Zernio schedule and re-publish to keep 1:1 sync
@@ -461,7 +473,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
           };
         }
         try {
-          const res = await publishApprovedPost(supabase, post as ApprovablePost, tz);
+          const res = await publishApprovedPost(supabase, post as ApprovablePost, tz, { by: userId });
           if (res.scheduled === 0 && res.failed > 0) {
             return { error: res.error ?? 'Could not schedule — the post did not meet platform requirements.' };
           }
@@ -506,6 +518,14 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         }
         const { error } = await supabase.from('posts').delete().eq('id', post_id).eq('brand_id', brandId);
         if (error) return { error: error.message };
+
+        await recordPostVerdict(supabase, {
+          postId: String(post_id),
+          brandId,
+          actorId: userId,
+          verdict: 'discarded'
+        });
+
         return { success: true, deleted: post_id };
     }),
 

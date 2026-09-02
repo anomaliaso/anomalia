@@ -17,6 +17,7 @@ import { signPaths } from '$lib/server/people';
 import { svgToPng } from '$lib/server/brand-analysis';
 import { normalizeContentFormat } from '$lib/content-formats';
 import { firstLogoUrl } from '$lib/server/blog-site';
+import { designWallDigestSection } from '$lib/server/wall-digest';
 
 
 // Image MIME types Gemini ingests directly (SVG is rasterised via svgToPng).
@@ -143,6 +144,7 @@ export type RenderImageOpts = {
   baseImage?: ImagePart;
   aspectRatio?: AspectRatio;
   model?: string;
+  craftFloor?: string;
 };
 
 /**
@@ -203,7 +205,7 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   const userRefSuffix = opts.userRefImages?.length
     ? '\n\nThe user attached the following image(s) as REFERENCES for this specific edit — use them to guide the change described above: match the look, composition, colours or subject they show, as the feedback implies. Let the user\'s instruction decide exactly what to take from them.'
     : '';
-  const text = `${cleanPrompt}\n\n${ASPECT_LABEL[aspectRatio]}, high quality, social-media ready. No text overlays unless natural.\n\n${HOUSE_LOOK}${styleSuffix}${brandSuffix}${playbookSuffix}${baseSuffix}${logoSuffix}${personSuffix}${refSuffix}${userRefSuffix}${moodSuffix}`;
+  const text = `${cleanPrompt}\n\n${ASPECT_LABEL[aspectRatio]}, high quality, social-media ready. No text overlays unless natural.\n\n${HOUSE_LOOK}${opts.craftFloor ?? ''}${styleSuffix}${brandSuffix}${playbookSuffix}${baseSuffix}${logoSuffix}${personSuffix}${refSuffix}${userRefSuffix}${moodSuffix}`;
   // L'immagine base va per PRIMA: il prompt la chiama "the FIRST attached image". I mood per ultimi.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts: any[] = [{ text }, ...(opts.baseImage ? [opts.baseImage] : []), ...(opts.logoImage ? [opts.logoImage] : []), ...(opts.personImages ?? []), ...(opts.referenceImages ?? []), ...(opts.userRefImages ?? []), ...(opts.moodImages ?? [])];
@@ -422,8 +424,9 @@ export async function renderWithQC(
 ): Promise<{ dataUrl: string | undefined; qc?: QcVerdict }> {
   // Alto rischio → N candidati in parallelo e il critico sceglie; altrimenti un render solo.
   const wanted = highStakes ? HIGH_STAKES_CANDIDATES : 1;
+  const opts = { ...renderOpts, craftFloor: await designWallDigestSection() };
   const settled = await Promise.allSettled(
-    Array.from({ length: wanted }, () => renderPostImage(ai, imagePrompt, renderOpts))
+    Array.from({ length: wanted }, () => renderPostImage(ai, imagePrompt, opts))
   );
   const candidates = settled
     .filter((r): r is PromiseFulfilledResult<string | undefined> => r.status === 'fulfilled')
@@ -461,7 +464,7 @@ export async function renderWithQC(
     const retryPrompt = `${imagePrompt}\n\nCORRECTIONS (previous attempt(s) failed QC — fix ALL of these):${hints.map((h) => `\n- ${h}`).join('')}`;
     console.warn(`[renderWithQC] QC failed (${best.critique.score}/10, ${nCandidates} candidate(s))${critiqueOpts.productName ? ` for "${critiqueOpts.productName}"` : ''}: ${best.critique.issues.join('; ')} → retry ${attempt + 1}/${MAX_QC_RETRIES}`);
     // Un ritentativo che non torna con un'immagine chiude il ciclo: resta il migliore finora.
-    const retry = await renderPostImage(ai, retryPrompt, renderOpts).catch((error) => { swallow('render qc retry', error); return undefined; });
+    const retry = await renderPostImage(ai, retryPrompt, opts).catch((error) => { swallow('render qc retry', error); return undefined; });
     if (!retry) break;
     attempts += 1;
     retried = true;
@@ -519,7 +522,7 @@ export async function renderCarouselSlide(
 ): Promise<string | undefined> {
   const seriesDirective = carouselSeriesDirective(slideIndex, totalSlides);
   // La slide 1 precede i mood del brand, così domina l'ancoraggio estetico.
-  const opts = { ...renderOpts, moodImages: [...(slideOneAnchor ? [slideOneAnchor] : []), ...(renderOpts.moodImages ?? [])] };
+  const opts = { ...renderOpts, craftFloor: await designWallDigestSection(), moodImages: [...(slideOneAnchor ? [slideOneAnchor] : []), ...(renderOpts.moodImages ?? [])] };
   try {
     let dataUrl = await renderPostImage(ai, slidePrompt + seriesDirective, opts);
     if (dataUrl && critiqueOpts.referenceImages?.length) {

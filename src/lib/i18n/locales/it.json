@@ -2156,6 +2156,18 @@
           "cardSub": "revisionata: ship · caption pronta"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "LIVE",
+        "today": "OGGI",
+        "tue": "MAR",
+        "wed": "MER",
+        "launchStory": "Storia del lancio",
+        "behindScenes": "Dietro le quinte",
+        "customerNote": "Nota cliente",
+        "calendarChecked": "Calendario controllato · {count} bozze da rivedere",
+        "nextPost": "Prossimo post in coda per martedì alle 09:00"
+      },
       "foot": "I lavori lunghi continuano anche a scheda chiusa, e l’agente ti scrive quando ha finito. Pubblicare è l’unico passo che non fa mai da solo."
     }
   },
@@ -3117,6 +3129,15 @@
       "prev": "Agente precedente",
       "next": "Agente successivo",
       "customDesc": "Un agente tuo"
+    },
+    "guestPreview": {
+      "title": "Il tuo primo post",
+      "sub": "Fatto dal tuo sito. Per guardarlo non serve un account.",
+      "working": "Leggo il tuo sito e preparo il primo post…",
+      "failed": "Non sono riuscito a creare un post da quel sito.",
+      "retry": "Prova un altro sito",
+      "cta": "Salvalo e vedi il resto",
+      "ctaHint": "Crea l'account per tenere questo post e ricevere gli altri."
     }
   },
   "editorialPlan": {

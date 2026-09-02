@@ -85,6 +85,27 @@ export function createLifecycle(io: {
     if (pending.length || isWatchingToolJobs(io.threadId())) startToolPolling();
   }
 
+  /**
+   * Il thread ha ancora un lavoro che gira FUORI dal turno?
+   *
+   * Sta qui, e non dentro il ramo felice di `send()`, perché la domanda va rifatta da più punti:
+   * la fine di OGNI turno — anche quello rotto o fermato —, un messaggio scritto altrove, il
+   * ritorno del focus. Finché la risposta arrivava da un posto solo, uno stream che si spezzava
+   * lasciava un render in corso senza nessuno che lo dicesse: il seed del server è la fotografia
+   * della load, e nient'altro chiedeva più niente.
+   */
+  async function checkPendingTools(): Promise<void> {
+    if (io.loading()) return;
+    try {
+      const res = await fetch(`/app/${io.brandSlug()}/chat?thread=${io.threadId()}&pending_tools=1`);
+      if (!res.ok) return;
+      const { jobs } = await res.json();
+      if (jobs?.length) startToolPolling();
+    } catch {
+      /* best-effort */
+    }
+  }
+
   /** Si riaggancia a uno stream vivo, o fa poll del job server dopo un refresh. */
   function resumeActiveGeneration(data: { activeJob?: { id: string; status: string } | null }) {
     const threadId = io.threadId();
@@ -201,7 +222,7 @@ export function createLifecycle(io: {
     }
   }
 
-  return { applyFreshToolMessages, startToolPolling, maybeStartToolPolling, resumeActiveGeneration, retryLast, resendAt, redoAssistant, sendFeedback };
+  return { applyFreshToolMessages, startToolPolling, maybeStartToolPolling, checkPendingTools, resumeActiveGeneration, retryLast, resendAt, redoAssistant, sendFeedback };
 }
 
 // VERBATIM: i report dei job sono già deterministici lato server, niente parser da inventare.

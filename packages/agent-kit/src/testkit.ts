@@ -227,3 +227,8 @@ function stableSerialize(value: unknown): string {
 	}
 	return JSON.stringify(value);
 }
+
+/** Sempre avanti rispetto all'orologio: una data scritta a mano invecchia e diventa passato. */
+export function aDateInTheFuture(): string {
+	return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+}

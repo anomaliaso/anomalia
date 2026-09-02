@@ -55,9 +55,6 @@ import {
 	type VoiceOverVoice
 } from '$lib/server/gemini-audio';
 
-/** Voce e musica per turno. Oltre, non è una correzione: è un agente che prova a orecchio. */
-export const MAX_VOICEOVERS_PER_TURN = 2;
-export const MAX_MUSIC_PER_TURN = 2;
 /** Render finiti per turno. Ognuno è una VM accesa e crediti spesi: non è una cosa da riprovare a caso. */
 export const MAX_VIDEO_RENDERS_PER_TURN = 2;
 /**
@@ -151,9 +148,13 @@ export function createMotionOutputTools(opts: {
 	abortSignal?: AbortSignal;
 	locale?: string;
 }) {
-	let voiceovers = 0;
-	let musics = 0;
 	let renders = 0;
+	/**
+	 * Un modello ritirato o una chiave assente non si riparano riprovando: la musica si spegne per
+	 * il resto del turno. È l'UNICO freno rimasto sull'audio — i tentativi non hanno un tetto,
+	 * perché provare una voce e un letto è il mestiere, e la spesa la governano i crediti.
+	 */
+	let musicUnavailable = false;
 	/** Lo storyboard di questo turno: chi l'ha già visto, e quante volte si può ancora rimandare. */
 	const storyboard = createStoryboardGate();
 	/** I PNG dello storyboard, consegnati al modello da `toModelOutput` (vedi render-tools.ts). */
@@ -405,13 +406,6 @@ export function createMotionOutputTools(opts: {
 				style?: string;
 				language_code?: string;
 			}) => {
-				if (voiceovers >= MAX_VOICEOVERS_PER_TURN) {
-					return {
-						error: 'voiceover_budget_spent',
-						hint: `Already recorded ${MAX_VOICEOVERS_PER_TURN} takes this turn. Build with what you have.`
-					};
-				}
-				voiceovers += 1;
 				try {
 					const res = await generateVoiceOver({
 						supabase: opts.supabase,
@@ -601,10 +595,12 @@ export function createMotionOutputTools(opts: {
 					.describe('clip (default, ~30s, loop if longer) or pro (real duration, higher cost).')
 			}),
 			execute: async (input: { prompt: string; seconds: number; tier?: 'clip' | 'pro' }) => {
-				if (musics >= MAX_MUSIC_PER_TURN) {
-					return { error: 'music_budget_spent', hint: `Already generated ${MAX_MUSIC_PER_TURN} beds this turn.` };
+				if (musicUnavailable) {
+					return {
+						error: 'music_unavailable',
+						hint: 'Music generation is down for this turn (a configuration failure, not a bad prompt). Build the video without a bed and say so.'
+					};
 				}
-				musics += 1;
 				try {
 					const res = await generateMusicBed({
 						supabase: opts.supabase,
@@ -630,18 +626,18 @@ export function createMotionOutputTools(opts: {
 					};
 				} catch (e) {
 					const detail = errorMessage(e);
-					// Permanente vs passeggero, detto nel risultato: un 404/modello ritirato riproposto
-					// identico bruciava il secondo slot di budget per comprare lo stesso errore. Sul
-					// permanente il budget si CHIUDE: nessun prompt diverso ripara un modello sbagliato.
+					// Permanente vs passeggero, detto nel risultato: sul permanente la musica si SPEGNE
+					// per il turno — nessun prompt diverso ripara un modello ritirato. Sul passeggero
+					// si riprova quante volte serve.
 					const permanent = permanentMusicFailure(detail);
-					if (permanent) musics = MAX_MUSIC_PER_TURN;
+					if (permanent) musicUnavailable = true;
 					return {
 						error: 'music_failed',
 						retryable: !permanent,
 						detail,
 						hint: permanent
 							? 'This failure is an environment/configuration problem (wrong or retired model id, missing key) — retrying cannot fix it. Carry on without music, say so, and do not invent an audio URL.'
-							: 'Transient failure — one more try is reasonable if the bed matters; otherwise carry on without music and say so. Do not invent an audio URL.'
+							: 'Transient failure — try again if the bed matters; otherwise carry on without music and say so. Do not invent an audio URL.'
 					};
 				}
 			}

@@ -21,7 +21,7 @@ import {
   roomRoster,
   setThreadRoomAgents
 } from '$lib/server/chat/room';
-import { listThreadAgentAvatars } from '$lib/server/custom-agents';
+import { listThreadAgentAvatars, type ThreadAgentAvatar } from '$lib/server/custom-agents';
 import { isUnread, loadLastReads, loadUnreadCounts, markThreadRead } from '$lib/server/chat/unread';
 import { hasWebHub } from '$lib/server/plans';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
@@ -42,8 +42,8 @@ export const GET: RequestHandler = async ({ params, locals: { supabase, safeGetS
     (t) => !dmAgents((t as { room_agents?: unknown }).room_agents)
   );
   const ids = threads.map((t) => t.id);
-  // Custom agents that ran in each thread — the sidebar stacks their avatars.
-  const avatars = await listThreadAgentAvatars(supabase, brand.id, ids);
+  // Custom agents that identify each thread — the sidebar stacks their avatars.
+  const avatars = await listThreadAgentAvatars(supabase, brand.id, threads);
 
   // Chat di gruppo: per una stanza la pila di avatar è LA STANZA — i membri, nell'ordine in cui
   // sono stati scelti — non chi ci ha girato dentro. Stessa forma di `listThreadAgentAvatars`,
@@ -111,6 +111,17 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 
   const thread = await createThread(supabase, brand.id, user.id, title, null, agent);
 
+  const customAgentId =
+    typeof body.custom_agent_id === 'string' && body.custom_agent_id ? body.custom_agent_id : null;
+  let agents: ThreadAgentAvatar[] = [];
+  if (thread && customAgentId) {
+    await setThreadCustomAgent(supabase, thread.id, brand.id, user.id, customAgentId);
+    const avatars = await listThreadAgentAvatars(supabase, brand.id, [
+      { id: thread.id, custom_agent_id: customAgentId }
+    ]);
+    agents = avatars[thread.id] ?? [];
+  }
+
   // Chat di gruppo: `agents` è la stanza, `agent` resta chi risponde se la stanza non regge
   // (feature spenta, migration non applicata, meno di due membri validi). Un update a parte e non
   // un parametro di createThread apposta: se fallisce, il thread è già nato ed è un thread normale.
@@ -118,7 +129,19 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   if (thread && groupChatsEnabled() && Array.isArray(body.agents)) {
     room = await setThreadRoomAgents(supabase, thread.id, brand.id, user.id, body.agents);
   }
-  return json({ thread: thread ? { ...thread, room_agents: room.length ? room : null } : thread }, { status: 201 });
+  return json(
+    {
+      thread: thread
+        ? {
+            ...thread,
+            custom_agent_id: customAgentId,
+            room_agents: room.length ? room : null,
+            agents
+          }
+        : thread
+    },
+    { status: 201 }
+  );
 };
 
 // PATCH: rename a thread and/or set its specialized agent

@@ -135,8 +135,9 @@ program
   .option('--gender <g>', 'Genere (female/male)')
   .option('--ageRange <range>', 'Fascia età (es. 26-35)')
   .option('--kind <kind>', 'ai (genera foto) o real (default)')
+  .option('--consent', 'Attesti di avere il consenso della persona reale (obbligatorio per --kind real)')
   .option('--id <id>', 'ID persona (per remove)')
-  .action(async (slug: string, action: string | undefined, opts: Record<string, string>) => {
+  .action(async (slug: string, action: string | undefined, opts: Record<string, string> & { consent?: boolean }) => {
     const { cmdPeople } = await import('./commands/people.ts');
     await cmdPeople(slug, { action: action ?? 'list', ...opts as any });
   });
@@ -165,13 +166,14 @@ program
   .option('--gender <gender>', 'Genere persona AI: female|male|non-binary')
   .option('--ageRange <range>', 'Fascia età AI: 18-25|26-35|36-50|50+')
   .option('--vibe <vibe>', 'Stile AI: professional|casual|luxury|sporty|creative|natural')
+  .option('--consent', 'Attesti di avere il consenso della persona reale (people-add)')
   .option('--title <title>', 'Titolo nota (add-note)')
   .option('--text <text>', 'Testo nota (add-note)')
   .option('--website <url>', 'Sito web competitor')
   .option('--compKind <kind>', 'Tipo competitor: direct|indirect')
   .option('--rationale <text>', 'Motivo competitor')
   .option('--id <uuid>', 'ID da eliminare (people-delete, delete-doc, delete-competitor)')
-  .action(async (slug: string, action: string | undefined, opts: Record<string, string>) => {
+  .action(async (slug: string, action: string | undefined, opts: Record<string, string> & { consent?: boolean }) => {
     const { cmdStudio } = await import('./commands/studio.ts');
     await cmdStudio(slug, { action: action ?? 'show', ...opts });
   });
