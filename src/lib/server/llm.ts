@@ -7,7 +7,8 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { embedMany, generateObject, generateText, jsonSchema } from 'ai';
 import { env } from '$env/dynamic/private';
-import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
+import { extractSdkUsage, logAiCall, noteLlmCost } from '$lib/server/ai-log';
+import { costFromJson, costFromStreamText, withUsageAccounting } from '$lib/server/llm-usage-cost';
 
 export const LLM_UNCONFIGURED = 'llm_unconfigured';
 export const LLM_VIDEO_UNCONFIGURED = 'llm_video_unconfigured';
@@ -80,6 +81,31 @@ export function llmModelForPicker(choice: string | null | undefined): string {
 let cached: ReturnType<typeof createOpenAI> | null = null;
 let cachedSig = '';
 
+/**
+ * Chiede il conto al gateway e lo mette nella cassetta dello scope, senza rallentare la risposta.
+ *
+ * `res.clone()` e non `res.text()`: l'originale continua a scorrere verso l'utente alla sua
+ * velocità mentre la copia viene letta a parte. Su un turno in streaming il costo arriva
+ * nell'ultimo chunk, quindi si conosce quando l'utente ha già finito di leggere — che è esattamente
+ * quando `logAiCall` scrive la riga.
+ */
+const billedFetch: typeof fetch = async (input, init) => {
+	const patched = typeof init?.body === 'string' ? withUsageAccounting(init.body, llmBaseUrl()) : null;
+	const res = await fetch(input, patched ? { ...init, body: patched } : init);
+	if (!patched) return res;
+	const copy = res.clone();
+	void (async () => {
+		try {
+			const text = await copy.text();
+			const cost = text.trimStart().startsWith('{') ? costFromJson(JSON.parse(text)) : costFromStreamText(text);
+			if (cost != null) noteLlmCost(cost);
+		} catch {
+			// Nessun costo lasciato dal gateway: decidono le RATES, come prima di questa cassetta.
+		}
+	})();
+	return res;
+};
+
 export function llmClient(): ReturnType<typeof createOpenAI> {
 	const key = llmApiKey();
 	if (!key) throw new Error('LLM_API_KEY is not configured');
@@ -88,7 +114,8 @@ export function llmClient(): ReturnType<typeof createOpenAI> {
 	cached = createOpenAI({
 		baseURL: llmBaseUrl(),
 		apiKey: key,
-		name: 'llm'
+		name: 'llm',
+		fetch: billedFetch
 	});
 	cachedSig = sig;
 	return cached;

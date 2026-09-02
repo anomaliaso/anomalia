@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeCostUsd, extractGeminiUsage, extractSdkUsage, extractXiaomiUsage, withBrandContext } from './ai-log';
+import { computeCostUsd, extractGeminiUsage, extractSdkUsage, extractXiaomiUsage, noteLlmCost, takeLlmCost, withBrandContext } from './ai-log';
 import { GEMINI_FLASH, NANO_BANANA_PRO } from './gemini';
 
 const GO = 'go';
@@ -20,6 +20,17 @@ describe('computeCostUsd', () => {
     // $0.075/M input + $0.25/M output
     expect(bare).toBeCloseTo(0.325, 4);
     expect(prefixed).toBeCloseTo(0.325, 4);
+  });
+
+  /**
+   * MISURATO sul database, non dedotto: 54 righe `llm/z-ai/glm-5.3-flash` con zero costo accanto a
+   * 181 righe dello STESSO modello, prezzate, sotto l'id nudo. Il prefisso lo mette il bridge
+   * (`adapters.ts`), la normalizzazione ne toglieva uno solo, e il tier che scrive le composizioni
+   * motion smetteva di toccare i crediti passando dall'harness.
+   */
+  it('prezza lo stesso modello anche sotto il prefisso `llm/` del bridge', () => {
+    const usage = { label: 'chat', ms: 0, ok: true, inputTokens: 1_000_000, outputTokens: 1_000_000 };
+    expect(computeCostUsd({ ...usage, provider: 'llm', model: 'llm/z-ai/glm-5.3-flash' })).toBeCloseTo(0.325, 4);
   });
 
   it('un modello openrouter senza tariffa resta null: meglio non misurato che misurato a caso', () => {
@@ -388,5 +399,42 @@ describe('extractSdkUsage', () => {
       cachedTokens: undefined,
       thinkingTokens: undefined
     });
+  });
+});
+
+
+/**
+ * Un turno di chat non è UNA chiamata: ogni passo con i tool ne è una, e ognuna ha la sua
+ * generazione fatturata. La riga aggregata che si scrive alla fine deve poterle sommare tutte,
+ * quindi gli id si accumulano nello scope come già fanno i crediti kie.
+ */
+describe('fatture del gateway nello scope', () => {
+  it('somma i passi del turno e li consegna una volta sola', async () => {
+    await withBrandContext('brand-1', async () => {
+      noteLlmCost(0.001);
+      noteLlmCost(0.002);
+      expect(takeLlmCost()).toBeCloseTo(0.003, 10);
+      expect(takeLlmCost()).toBeUndefined();
+    });
+  });
+
+  it('due turni paralleli non si mescolano i costi', async () => {
+    await Promise.all([
+      withBrandContext('brand-1', async () => {
+        noteLlmCost(1);
+        await new Promise((r) => setTimeout(r, 5));
+        expect(takeLlmCost()).toBe(1);
+      }),
+      withBrandContext('brand-2', async () => {
+        noteLlmCost(2);
+        await new Promise((r) => setTimeout(r, 5));
+        expect(takeLlmCost()).toBe(2);
+      })
+    ]);
+  });
+
+  it('fuori da uno scope non esplode e non ricorda nulla', () => {
+    noteLlmCost(5);
+    expect(takeLlmCost()).toBeUndefined();
   });
 });

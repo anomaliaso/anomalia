@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { gatewayRate } from '$lib/server/openrouter-models';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { GEMINI_FLASH, geminiFlash, isGeminiFlashId, isKieFlashId, kieFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } from '$lib/server/gemini';
 
@@ -15,6 +16,8 @@ type BrandLogContext = {
   plan?: string | null;
   /** Crediti kie letti dalle risposte HTTP di questo scope, in attesa della riga che li scrive. */
   kieCredits?: number;
+  /** Costo fatturato dal gateway in questo scope, sommato: la fattura vera del turno. */
+  llmCostUsd?: number;
 };
 
 const brandStorage = new AsyncLocalStorage<BrandLogContext>();
@@ -81,6 +84,26 @@ function takeKieCredits(): number | undefined {
   if (!ctx || !credits) return undefined;
   ctx.kieCredits = 0;
   return credits;
+}
+
+/**
+ * Il costo che il gateway ci ha fatturato in questo scope. Un turno di chat è N chiamate (una per
+ * passo con i tool) e ognuna ha la sua fattura: si sommano qui e la riga aggregata le scrive,
+ * esattamente come i crediti kie qui sopra. `llmClient` le deposita leggendo `usage.cost` da una
+ * copia della risposta, senza rallentare quella che sta leggendo l'utente.
+ */
+export function noteLlmCost(usd: number): void {
+  const ctx = brandStorage.getStore();
+  if (!ctx || !Number.isFinite(usd) || usd < 0) return;
+  ctx.llmCostUsd = (ctx.llmCostUsd ?? 0) + usd;
+}
+
+export function takeLlmCost(): number | undefined {
+  const ctx = brandStorage.getStore();
+  const cost = ctx?.llmCostUsd;
+  if (!ctx || cost == null) return undefined;
+  ctx.llmCostUsd = undefined;
+  return cost;
 }
 
 /** $5 = 1000 crediti kie. */
@@ -251,12 +274,17 @@ export function computeCostUsd(entry: AiCallLog, plan?: string | null): number |
   if (isKieFlashId(entry.model) && !RATES[entry.model ?? '']) return null;
   // Modello ASSENTE su una chiamata gemini = Flash; modello PRESENTE ma ignoto deve restare null,
   // non essere prezzato come Flash.
-  // `openrouter/z-ai/glm-5.3-flash` e `z-ai/glm-5.3-flash` sono lo stesso modello allo stesso
-  // prezzo: il prefisso dice il trasporto, non la tariffa. Normalizzare qui costa una riga e
-  // vale per OGNI modello del provider, invece di una seconda chiave per ciascuno.
-  const modelKey = (entry.model ?? '').replace(/^openrouter\//, '');
+  // `openrouter/z-ai/glm-5.3-flash`, `llm/z-ai/glm-5.3-flash` e `z-ai/glm-5.3-flash` sono lo
+  // stesso modello allo stesso prezzo: il prefisso dice il trasporto, non la tariffa. Il bridge
+  // dell'harness scrive `llm/`, e finché la normalizzazione ne toglieva uno solo quelle righe
+  // restavano senza costo — 54 su 235 dello stesso modello.
+  const modelKey = (entry.model ?? '').replace(/^(?:openrouter|llm)\//, '');
   const rate =
     RATES[modelKey] ??
+    // Il listino del gateway, chiesto al gateway: è ciò che rende fatturabile un modello che
+    // l'utente ha scelto e che nessuno ha scritto qui sopra. Vuoto finché `ensureGatewayModels`
+    // non ha caricato — e allora decidono le RATES, come prima.
+    gatewayRate(entry.model) ??
     (isGeminiFlashId(entry.model) ? RATES[GEMINI_FLASH] : null) ??
     (!entry.model && entry.provider === 'gemini' ? RATES[GEMINI_FLASH] : null);
   if (!rate) return null;
@@ -306,12 +334,26 @@ export function logAiCall(entry: AiCallLog): void {
       const credits = takeKieCredits();
       if (credits != null) entry = { ...entry, providerCredits: credits };
     }
+    // La fattura vera del gateway, se questo turno ne ha lasciata una. Si ritira QUI, sincrono:
+    // dopo il primo await un'altra riga dello stesso scope se la porterebbe via.
+    if (entry.provider === 'llm' && entry.flatCostUsd == null) {
+      const billed = takeLlmCost();
+      // Il prezzo del gateway batte le RATES scritte a mano: copre il modello che ha risposto
+      // davvero, il provider a monte e il markup, e vale per un modello che nessuno ha listato.
+      if (billed != null) entry = { ...entry, flatCostUsd: billed };
+    }
     const admin = createAdminClient();
     const brandId = entry.brandId ?? getBrandContext();
     const planFromAls = getBrandPlanContext();
     void (async () => {
       const plan =
         planFromAls !== undefined ? planFromAls : brandId ? await resolveBrandPlan(brandId) : null;
+      // Il listino serve PRIMA di prezzare, e solo per le righe che possono averne bisogno: la
+      // prima chiamata del processo lo carica, le altre lo trovano in memoria.
+      if (entry.provider === 'llm' && entry.flatCostUsd == null) {
+        const { ensureGatewayModels } = await import('$lib/server/openrouter-models');
+        await ensureGatewayModels();
+      }
       const { error } = await admin.from('ai_calls').insert({
         label: entry.label,
         provider: entry.provider,
