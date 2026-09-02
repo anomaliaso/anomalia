@@ -48,6 +48,7 @@
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
   import { get } from 'svelte/store';
   import { chatThreadId, chatThreads, markThreadUnread, refreshThreads, unreadThreadIds } from '$lib/stores/chat';
+  import { dmAvatars } from '$lib/chat-dm';
   import { roomMemberKeys, threadIdentity, type ThreadIdentitySource } from '$lib/thread-identity';
   import { hasAds, hasWebHub } from '$lib/plans';
   let { data, children } = $props();
@@ -145,8 +146,12 @@
       if (t) {
         const who = threadIdentity(t, (k) => $_(k));
         // Una stanza (≥2 membri) non ha UN agente: nel topbar vanno tutti. Gli avatar sono già
-        // risolti dal server (`roomAvatars`), qui non si ricalcola niente.
-        const room = roomMemberKeys(t.room_agents).length >= 2 ? (t.agents ?? null) : null;
+        // risolti dal server (`roomAvatars`), qui non si ricalcola niente. Un DM ha due membri
+        // allo stesso modo, ma non passa dalla lista dei thread: la pila esce dal marcatore.
+        const room =
+          roomMemberKeys(t.room_agents).length >= 2
+            ? (t.agents ?? null)
+            : dmAvatars(t.room_agents);
         setPageMeta({
           title: who.name,
           subtitle: null,
