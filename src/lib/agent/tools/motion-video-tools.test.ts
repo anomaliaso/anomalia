@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { compactMotionPersist, createMotionVideoChatTools } from './motion-video-tools';
-import { buildAgentHead } from './agents';
+import { buildAgentHead } from '$lib/server/chat/agents';
 import type { MotionVideoRow } from '$lib/motion-video/source';
 
 const row: MotionVideoRow = {

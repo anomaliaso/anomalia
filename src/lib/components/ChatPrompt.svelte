@@ -18,6 +18,7 @@
     isCustomChatModel,
     type ChatTier
   } from '$lib/chat-tiers';
+  import { usdPerMillion } from '$lib/model-price';
   import { defaultReasoningFor, reasoningLevelsFor, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
   import type { AgentMeta } from '$lib/agent-icons';
   import {
@@ -188,7 +189,10 @@
   const K_TOKENS = 1000;
   function modelSub(m: { contextLength: number; inputUsdPerM: number; outputUsdPerM: number }): string {
     const ctx = m.contextLength ? `${Math.round(m.contextLength / K_TOKENS)}k` : '';
-    const price = m.inputUsdPerM || m.outputUsdPerM ? `$${m.inputUsdPerM}/$${m.outputUsdPerM} per 1M` : '';
+    const price =
+      m.inputUsdPerM || m.outputUsdPerM
+        ? `${usdPerMillion(m.inputUsdPerM)}/${usdPerMillion(m.outputUsdPerM)} per 1M`
+        : '';
     return [ctx, price].filter(Boolean).join(' · ');
   }
 

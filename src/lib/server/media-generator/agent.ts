@@ -29,8 +29,8 @@ import { geminiFast } from '$lib/server/chat/model';
 import {
   brandContextPromptSection,
   createBrandContextTools
-} from '$lib/server/chat/brand-context-tools';
-import { imageModelFor } from '$lib/image-models';
+} from '$lib/agent/tools/brand-context-tools';
+import { imageModelFor, imageRefineModelFor } from '$lib/image-models';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
 
@@ -255,6 +255,11 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
     opts.supabase.from('brands').select('name, content_prefs').eq('id', opts.brandId).maybeSingle()
   ]);
 
+  const contentPrefs =
+    brandRow?.content_prefs && typeof brandRow.content_prefs === 'object'
+      ? (brandRow.content_prefs as Record<string, unknown>)
+      : {};
+
   const brandLook = useBrandStyle
     ? brandVisualDirective(
         kit?.brand_colors as string[] | null,
@@ -283,10 +288,6 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
       '$lib/server/media-generator/brand-grounding'
     );
     const { loadDesignDoc } = await import('$lib/server/brand-design-doc');
-    const prefs =
-      brandRow?.content_prefs && typeof brandRow.content_prefs === 'object'
-        ? (brandRow.content_prefs as Record<string, unknown>)
-        : {};
     const designDoc = await loadDesignDoc(opts.supabase, opts.brandId, {
       brandName: String(brandRow?.name ?? '').trim() || 'Brand',
       toolHints: false,
@@ -308,7 +309,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
       // block must not be poorer than what it replaced.
       aiContext: designDoc ? '' : identityFromAiContext(kit?.ai_context),
       offerings: [],
-      language: typeof prefs.language === 'string' ? prefs.language.trim() : ''
+      language: typeof contentPrefs.language === 'string' ? contentPrefs.language.trim() : ''
     });
   } catch (e) {
     console.error('[media-generator] brand identity load failed', e);
@@ -491,7 +492,8 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
               ? `${prompt}\n\nEdit the attached BASE photo (Ref ${hasExplicitBase ? baseRefIndex : 0}) in place — keep the scene, subject and composition; apply only what this prompt asks. Do not replace the photo with a blank canvas.`
               : prompt;
             const dataUrl = await renderPostImage(ai, promptText, {
-              model: imageModelFor(prefs),
+              model: imageModelFor(contentPrefs),
+              refineModel: imageRefineModelFor(contentPrefs),
               baseImage,
               referenceImages: extraRefs.length ? extraRefs : undefined,
               referenceMode: extraRefs.length ? 'product' : undefined,

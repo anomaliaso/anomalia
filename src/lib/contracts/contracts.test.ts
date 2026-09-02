@@ -11,7 +11,7 @@ import {
   updatePostContract
 } from './post-tools';
 import { createTestSupabase } from '$lib/testkit/supabase';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { AGENT_FILES, REQUIRED_READS } from '$lib/server/chat/agent-files';
 
 /**

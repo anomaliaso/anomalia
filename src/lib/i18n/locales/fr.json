@@ -4993,10 +4993,6 @@
       },
       "video": {
         "title": "Images et vidéo",
-        "imageModel": "Modèle d'image",
-        "imageModelDesc": "Quel modèle d'IA génère vos images. Par défaut, le moteur de rendu choisit image par image (un modèle moins cher quand il n'y a rien à reproduire, un modèle fidèle avec des références de produit ou de personne). Les modèles hors famille Nano Banana ne tournent que sur kie et cadrent les posts Instagram en 3:4 au lieu de 4:5.",
-        "model": "Modèle vidéo",
-        "modelDesc": "Quel modèle IA génère vos clips. Les durées proposées suivent le modèle choisi — Seedance 2.5 va jusqu’à 30 secondes.",
         "modelDefault": "Défaut de la plateforme",
         "clipLength": "Durée du clip",
         "clipLengthDesc": "Durée fixe pour chaque clip généré, ou Auto pour laisser le chat / la génération choisir la longueur par reel selon le script parlé. Facturé à la seconde. La durée max dépend du modèle vidéo ci-dessus ; en dessous de 10s, impossible de tenir accroche, message et appel à l’action.",
@@ -5008,7 +5004,21 @@
         "instructionsPlaceholder": "ex. Parle vite et de façon informelle, comme à un ami. Jamais un ton publicitaire. Pas de jargon corporate.",
         "resolution": "Qualité vidéo",
         "resolutionDesc": "480p est recommandé : le 720p coûte exactement le double à la seconde, et chaque clip est facturé même s'il n'est jamais publié. Sur un fil mobile la différence se voit peu.",
-        "recommended": "recommandé"
+        "recommended": "recommandé",
+        "slots": {
+          "imageGenerate": "Génération d’images",
+          "imageGenerateDesc": "Quel modèle dessine une nouvelle photo à partir d’un prompt. Par défaut, le moteur choisit image par image. Les modèles hors de la famille Nano Banana tournent uniquement sur kie et cadrent les posts Instagram en 3:4 au lieu de 4:5.",
+          "imageRefine": "Retouche d’images",
+          "imageRefineDesc": "Quel modèle modifie une photo existante — ajouter un logo, changer le style, corriger un détail. Reproduire fidèlement une image est un métier différent d’en inventer une. Vide : suit le modèle de génération.",
+          "videoGenerate": "Génération vidéo",
+          "videoGenerateDesc": "Quel modèle écrit un clip à partir des seuls mots. Les durées proposées suivent ce choix — Seedance 2.5 va jusqu’à 30 secondes.",
+          "videoAnimate": "Génération vidéo (image)",
+          "videoAnimateDesc": "Quel modèle anime une image existante, en général la couverture rendue. Vide : suit le modèle de génération vidéo.",
+          "videoRefine": "Retouche vidéo",
+          "videoRefineDesc": "Quel modèle réécrit un clip terminé — changer de sujet, de décor ou de style — en gardant le mouvement d’origine. Seuls les modèles qui lisent une vidéo apparaissent ici.",
+          "videoMotion": "Mouvement vidéo",
+          "videoMotionDesc": "Quel modèle prend le mouvement d’une vidéo de référence et l’applique au sujet de votre image. À ne pas confondre avec les motion videos, rendues depuis du code sans modèle génératif."
+        }
       },
       "library": {
         "subtitle": "Les pages de votre site deviennent des assets linkables pour posts et radar.",

@@ -1,5 +1,5 @@
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { execChatTool, jsonSchemaOf, type ChatToolsRecord } from './chat-bridge';
 import type { SupabaseClient } from '@supabase/supabase-js';
 

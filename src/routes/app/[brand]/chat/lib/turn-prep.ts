@@ -15,14 +15,14 @@ import { buildSystemPrompt, buildTurnVolatileBlock, wrapTurnMessage } from '$lib
 import { attachmentParts, withoutVideo } from '$lib/media-parts';
 import { resolveAgentForPlan, pickTools, stripWebHubTools } from '$lib/server/chat/agents';
 import { withSubagentTools } from '$lib/server/chat/subagents';
-import { withSandboxTools } from '$lib/server/chat/sandbox-tools';
+import { withSandboxTools } from '$lib/agent/tools/sandbox-tools';
 import { computerOwner } from '$lib/agent-computer';
 import { listThreadArtifacts, formatArtifactsForPrompt } from '$lib/server/chat/artifacts';
 import { resolveChatModel, modelSeesImages, modelSeesVideo } from '$lib/server/chat/model';
 import { roomBeat, roomSystemBlock, stripRoomPeerTools, type RoomMember } from '$lib/server/chat/room';
 import { filterToolsForMode, isChatMode, modeSystemBlock, type ChatMode } from '$lib/chat-modes';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import {
   CHAT_HISTORY_DOC_CAP,
   formatAttachedDocsBlock,
@@ -242,27 +242,7 @@ The user attached ${turnDocuments.length} file(s) converted to markdown for THIS
 
   // Attachments become multimodal image parts when the resolved model can see them (Gemini / kie).
   // DeepSeek Fast cannot — those turns strip pixels and note it in the system prompt.
-  // `userText` alimenta la scalata Auto→Pro (vedi isHeavyProductionAsk): sul redo il testo arriva
-  // solo più avanti dalla history, e un redo riparte col tier di prima — niente scalata lì.
-  const escalationText = !isRedo && userMessages?.length
-    ? (() => {
-        const lm = userMessages[userMessages.length - 1];
-        return typeof lm.content === 'string'
-          ? lm.content
-          : Array.isArray(lm.content)
-            ? (lm.content as Array<{ type?: string; text?: string }>)
-                .filter((p) => p.type === 'text')
-                .map((p) => p.text ?? '')
-                .join('\n')
-            : '';
-      })()
-    : '';
-  const chatModel = resolveChatModel(body.tier, body.reasoning, {
-    userText: escalationText,
-    // Su Auto: motion → Grok, altri specialisti / generalista → Luna (catalogo + AgentSpec.model).
-    agentId,
-    model: modelPref
-  });
+  const chatModel = resolveChatModel(body.tier, body.reasoning, { agentId, model: modelPref });
   // La delega arriva dopo il modello, perché un sotto-agente gira sul modello del turno.
   tools = withSubagentTools(tools, {
     supabase,
@@ -300,7 +280,7 @@ The user attached ${turnDocuments.length} file(s) converted to markdown for THIS
   return {
     roomPlan, roomSpeaker, agentId, customAgentId, memoryAgentKey, persona, systemPrompt, mode,
     refUrls, turnDocuments, customTools, tools, delegable, sandboxMount, chatModel,
-    canSeeImages, canSeeVideo, historyMedia, escalationText
+    canSeeImages, canSeeVideo, historyMedia
   };
 }
 

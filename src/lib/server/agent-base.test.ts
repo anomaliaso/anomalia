@@ -10,8 +10,8 @@ import { GROUNDING_BLOCK } from './chat/agents';
  * dell'agente non vedeva niente di quello che stava succedendo.
  */
 const sandboxMounts = vi.hoisted(() => [] as { agentId?: string }[]);
-vi.mock('$lib/server/chat/sandbox-tools', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/chat/sandbox-tools')>();
+vi.mock('$lib/agent/tools/sandbox-tools', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/agent/tools/sandbox-tools')>();
 	return {
 		...actual,
 		createSandboxTools: (opts: { agentId?: string }) => {

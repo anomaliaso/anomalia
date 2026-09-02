@@ -18,7 +18,7 @@ vi.mock('$lib/motion-video/compile', () => ({
 	compileMotionSource: () => ({ fps: 30, durationInFrames: 90, width: 1080, height: 1920 })
 }));
 
-import { createMotionVideoChatTools } from './motion-video-tools';
+import { createMotionVideoChatTools } from '$lib/agent/tools/motion-video-tools';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function row(overrides: Record<string, unknown> = {}): any {

@@ -11,6 +11,7 @@ import {
   type AgentAvatarFace
 } from '$lib/agent-avatars';
 import { JOB_OWNERS } from '$lib/agent-owners';
+import { dmAgents, dmMemberAvatar, dmNames } from '$lib/chat-dm';
 
 /** Il minimo di un thread che serve per dargli un volto e un nome. */
 export type ThreadIdentitySource = {
@@ -81,6 +82,8 @@ export function roomMemberAvatar(
 /**
  * Risolve nome + avatar di un thread. Il nome è SEMPRE l'agente, mai il titolo/riassunto: come in
  * una lista di messaggi l'identità è il contatto.
+ * - DM fra agenti (`room_agents` OGGETTO) → i due membri, con la faccia del primo. Non ha un
+ *   agente né una riga in lista: tutto quello che serve sta nel marcatore.
  * - `agent = 'job:<key>'` (LEGACY) → nome della routine con la faccia dell'agente PROPRIETARIO.
  * - thread con custom agent → il suo nome e il suo avatar salvati; finché non è risolto resta
  *   "Anomalia", mai l'etichetta dello specialista che gli sta sotto.
@@ -110,6 +113,20 @@ export function threadIdentity(
       name: translated === i18nKey ? title || 'Anomalia' : translated,
       face: ownerAvatar?.face ?? fallbackAvatarFace(key),
       color: ownerAvatar?.color ?? fallbackAvatarColor(key),
+      fixed: true
+    };
+  }
+
+  // DM fra agenti: l'identità sono i DUE, e stanno nel marcatore. Un DM non ha `agent` né
+  // `custom_agent_id` e non compare nella lista dei thread, quindi senza questo ramo cadeva
+  // nell'ultimo ripiego e si presentava come Anomalia — il generalista, che lì dentro non c'è.
+  const pair = dmAgents(thread.room_agents);
+  if (pair) {
+    const names = dmNames(thread.room_agents);
+    const memberName = (key: string) => names[key] || roomMemberName(key, thread.agents, t);
+    return {
+      name: pair.map(memberName).join(' ⇄ '),
+      ...dmMemberAvatar(pair[0]),
       fixed: true
     };
   }

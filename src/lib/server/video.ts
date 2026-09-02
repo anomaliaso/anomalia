@@ -18,8 +18,13 @@ import {
   VIDEO_MODEL_CHOICES as SHARED_VIDEO_MODEL_CHOICES,
   isKnownVideoModelId,
   isSeedance25Model,
-  GROK_PROMPT_LIMIT
+  videoModelCaps,
+  videoModelForRole,
+  videoModelSpec,
+  kieVideoModel,
+  type VideoRole
 } from '$lib/video-models';
+import { nearestAspectRatio } from '$lib/aspect-ratio';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
 // non passa mai di qui, quindi un utente free non incorre nel costo video.
@@ -58,14 +63,6 @@ export function clampVideoResolution(value: unknown): string {
 // What an approved clip gets upscaled to. kie's upscale accepts 720p | 1080p.
 export const UPSCALE_RESOLUTION = env.KIE_VIDEO_UPSCALE_RESOLUTION || '720p';
 
-// Grok è più stretto; Seedance aggiunge 4:3 / 3:4 / 21:9 / adaptive.
-const GROK_RATIOS = ['2:3', '3:2', '1:1', '16:9', '9:16'] as const;
-const SEEDANCE_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9', 'adaptive'] as const;
-
-// Provider text ceilings. Grok rejects over-long prompts at createTask ("text length cannot
-// exceed the maximum limit"); an over-long brief would otherwise surface as a silent clip loss.
-const SEEDANCE_PROMPT_LIMIT = 10_000;
-
 /** Truncate a video prompt to the model's provider ceiling. Keeps the head, where the scene and
  *  the clean-frame rule live, and drops only the tail that already exceeded the model. */
 export function clampVideoPrompt(prompt: string, model: string): string {
@@ -73,85 +70,8 @@ export function clampVideoPrompt(prompt: string, model: string): string {
   return prompt.length > limit ? prompt.slice(0, limit).trim() : prompt;
 }
 
-export type VideoModelFamily = 'grok-1.5' | 'grok-v1' | 'seedance-2' | 'seedance-2-5' | 'unknown';
-
-export type VideoModelCaps = {
-  family: VideoModelFamily;
-  /** Provider minimum duration in whole seconds. */
-  minDuration: number;
-  /** L'UNICO posto in cui la lunghezza di una clip è limitata. */
-  maxDuration: number;
-  /**
-   * Provider prompt ceiling, in characters. Grok rejects anything longer at createTask
-   * ("text length cannot exceed the maximum limit") and the failure surfaces as a bare
-   * "Video render returned nothing". Unlike images (clamped in buildKieImageInput), video had
-   * no clamp: an over-long AI-authored brief silently killed the clip.
-   */
-  maxPromptChars: number;
-  ratios: readonly string[];
-  /** Whether grok-imagine/upscale can take this model's task_id. */
-  supportsUpscale: boolean;
-  /** Whether the job input accepts generate_audio (Seedance). */
-  generateAudio: boolean;
-};
-
-/** Capabilities of a kie video model id. Unknown ids fall back to the conservative Grok window. */
-export function videoModelCaps(model: string): VideoModelCaps {
-  // Seedance 2.5 PRIMA del regex seedance-2* più largo, o 2-5 eredita il tetto di 15s.
-  if (/^bytedance\/seedance-2-5\b/.test(model)) {
-    return {
-      family: 'seedance-2-5',
-      minDuration: 4,
-      maxDuration: 30,
-      maxPromptChars: SEEDANCE_PROMPT_LIMIT,
-      ratios: SEEDANCE_RATIOS,
-      supportsUpscale: false,
-      generateAudio: true
-    };
-  }
-  if (/^bytedance\/seedance-2\b/.test(model)) {
-    return {
-      family: 'seedance-2',
-      minDuration: 4,
-      maxDuration: 15,
-      maxPromptChars: SEEDANCE_PROMPT_LIMIT,
-      ratios: SEEDANCE_RATIOS,
-      supportsUpscale: false,
-      generateAudio: true
-    };
-  }
-  if (/^grok-imagine-video-1-5/.test(model)) {
-    return {
-      family: 'grok-1.5',
-      minDuration: 1,
-      maxDuration: 15,
-      maxPromptChars: GROK_PROMPT_LIMIT,
-      ratios: GROK_RATIOS,
-      supportsUpscale: true,
-      generateAudio: false
-    };
-  }
-  if (/^grok-imagine\//.test(model)) {
-    return {
-      family: 'grok-v1',
-      minDuration: 1,
-      maxDuration: 15,
-      maxPromptChars: GROK_PROMPT_LIMIT,
-      ratios: GROK_RATIOS,
-      supportsUpscale: true,
-      generateAudio: false
-    };
-  }
-  return {
-    family: 'unknown',
-    minDuration: 1,
-    maxDuration: 15,
-    maxPromptChars: GROK_PROMPT_LIMIT,
-    ratios: GROK_RATIOS,
-    supportsUpscale: false,
-    generateAudio: false
-  };
-}
+export type { VideoModelFamily, VideoModelCaps } from '$lib/video-models';
+export { videoModelCaps } from '$lib/video-models';
 
 /** Seedance (and similar) use one model id for I2V and T2V; Grok needs a paired T2V id. */
 export function pairedTextToVideoModel(model: string): string {
@@ -162,9 +82,21 @@ export function pairedTextToVideoModel(model: string): string {
   return model;
 }
 
-/** Precedenza: override esplicito (Settings o tool AI) → default d'ambiente per I2V o T2V. */
-export function resolveVideoModel(opts: { model?: string | null; hasCover: boolean }): string {
-  const preferred = opts.model?.trim();
+/**
+ * Precedenza: modello esplicito del tool → scelta del brand PER QUESTO LAVORO → default d'ambiente.
+ *
+ * `hasCover` non e' un dettaglio di implementazione: e' cio' che distingue i due mestieri. Con una
+ * cover il modello ANIMA una immagine che esiste, senza scrive dal nulla, e il brand puo' aver
+ * scelto due modelli diversi. Chi chiama non sa ancora quale dei due sara' — la cover si scopre
+ * qui — quindi passa le preferenze intere e il ruolo lo decide questa funzione.
+ */
+export function resolveVideoModel(opts: {
+  model?: string | null;
+  prefs?: Record<string, unknown> | null;
+  hasCover: boolean;
+}): string {
+  const preferred =
+    opts.model?.trim() || videoModelForRole(opts.prefs, opts.hasCover ? 'image' : 'text');
   if (preferred) {
     if (!opts.hasCover) return pairedTextToVideoModel(preferred);
     return preferred;
@@ -312,6 +244,53 @@ export function clampVideoAspectRatio(ratio: unknown, model?: string | null): st
   return (caps.ratios as readonly string[]).includes(requested) ? requested : '9:16';
 }
 
+/**
+ * Il payload dei due mestieri che hanno un VIDEO in ingresso: rifinire una clip che esiste, e
+ * prendere il movimento da una clip per applicarlo al soggetto di una immagine.
+ *
+ * I due media non sono intercambiabili e nessuno dei due provider lo dice con un errore: su
+ * motion control `input_urls` e' il SOGGETTO e `video_urls` e' il movimento, e scambiarli produce
+ * una clip plausibile e sbagliata. Aleph poi vive fuori dall'API a job e vuole i campi in
+ * camelCase: mandargli `video_urls` e' un 200 con dentro un rifiuto — un giro pagato che non
+ * torna nulla. Le due differenze stanno nella tabella, non qui.
+ */
+export function buildTransformInput(
+  model: string,
+  role: 'refine' | 'motion',
+  args: {
+    prompt?: string;
+    videoUrl: string;
+    imageUrl?: string;
+    aspectRatio?: string;
+    mode?: 'std' | 'pro';
+  }
+): Record<string, unknown> {
+  const spec = videoModelSpec(model);
+  if (!spec?.roles.includes(role)) {
+    throw new Error(`${model} does not do ${role}: pick a model that serves that job`);
+  }
+
+  const prompt = args.prompt?.trim().slice(0, spec.maxPromptChars) || undefined;
+
+  if (spec.endpoint === 'aleph') {
+    return {
+      ...(prompt ? { prompt } : {}),
+      videoUrl: args.videoUrl,
+      aspectRatio: nearestAspectRatio(spec.ratios, String(args.aspectRatio ?? '9:16').trim(), '9:16'),
+      ...(args.imageUrl ? { referenceImage: args.imageUrl } : {})
+    };
+  }
+
+  return {
+    ...(prompt ? { prompt } : {}),
+    // Il soggetto, non il movimento.
+    ...(args.imageUrl ? { input_urls: [args.imageUrl] } : {}),
+    // Il movimento, non il soggetto.
+    video_urls: [args.videoUrl],
+    mode: args.mode ?? 'std'
+  };
+}
+
 const POLL_INTERVAL_MS = 5000;
 // Le clip parlate di Seedance 2.5 stanno regolarmente in coda + render oltre i 3–6 minuti: 180s e
 // perfino 360s hanno abortito job vivi come "no video returned" mentre kie stava ancora generando.
@@ -365,6 +344,8 @@ export type RenderVideoOpts = {
   shotBrief?: string | null;
   // kie model id override (brand Settings → Video, or an AI tool choice). Unset → env default.
   // Duration is clamped against THIS model's caps, not a global ceiling.
+  /** Le preferenze del brand: `resolveVideoModel` ne legge quella del mestiere che questo job e'. */
+  prefs?: Record<string, unknown> | null;
   model?: string | null;
   /**
    * Seedance first-frame URL (alias of imageUrl when both set — firstFrameUrl wins).
@@ -844,7 +825,7 @@ async function prepareVideoRender(
   // Prima il modello: i tetti di durata e ratio sono proprietà di QUESTO modello, non globali.
   // L'ad UGC non impone il modello: 22s solo su Seedance 2.5 (`ugcDurationCap`), altrimenti tetto
   // organico 15s sul default (Grok Imagine).
-  const model = resolveVideoModel({ model: opts.model, hasCover: !!cover || hasRefs });
+  const model = resolveVideoModel({ model: opts.model, prefs: opts.prefs, hasCover: !!cover || hasRefs });
 
   const durationSeconds = resolveVideoDuration(
     opts.duration ?? (opts.ugc && opts.ugcAd ? UGC_AD_DURATION : undefined),
@@ -954,6 +935,139 @@ async function runPreparedRender(
     // Non fatale: il chiamante ripiega sulla cover.
     return undefined;
   }
+}
+
+/**
+ * Runway vive su un percorso suo: `/aleph/generate` per inviare e `/runway/record-detail` per
+ * chiedere, con lo stato in `data.state` e l'URL in `data.videoInfo.videoUrl`. Nessuno dei due
+ * combacia con l'API a job, e questa e' l'unica ragione per cui la tabella dichiara `endpoint`.
+ */
+async function runAlephJob(
+  input: Record<string, unknown>,
+  signal?: AbortSignal
+): Promise<VideoJobResult | undefined> {
+  const res = await fetch(`${KIE_BASE}/aleph/generate`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(input),
+    signal
+  });
+  if (!res.ok) {
+    console.error(`[video.transform] aleph generate ${res.status}: ${(await res.text().catch(() => '')).slice(0, 400)}`);
+    return undefined;
+  }
+  const created = await res.json();
+  const taskId = created?.data?.taskId ?? created?.data?.task_id;
+  if (!taskId) {
+    console.error(`[video.transform] aleph rifiutata: ${String(created?.msg ?? JSON.stringify(created)).slice(0, 400)}`);
+    return undefined;
+  }
+
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let first = true;
+  while (Date.now() < deadline) {
+    if (signal?.aborted) return undefined;
+    if (!first) await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    first = false;
+    const infoRes = await fetch(`${KIE_BASE}/runway/record-detail?taskId=${encodeURIComponent(taskId)}`, {
+      headers: authHeaders(),
+      signal
+    });
+    if (!infoRes.ok) continue;
+    const info = await infoRes.json();
+    const state = info?.data?.state;
+    if (state === 'fail') {
+      console.error(`[video.transform] aleph fallita: ${String(info?.data?.failMsg ?? '').slice(0, 400)}`);
+      return undefined;
+    }
+    const url = info?.data?.videoInfo?.videoUrl;
+    if (state === 'success' && url) return { url: String(url), taskId };
+  }
+  return undefined;
+}
+
+/**
+ * I due mestieri che partono da un video che esiste gia\'.
+ *
+ * Tornano `undefined` e non lanciano, come ogni altro render qui: una clip che non riesce non deve
+ * portarsi via il post da cui e\' partita.
+ *
+ * La clip finita si RIOSPITA (`persistMp4`): gli URL dei provider scadono — quello di Runway in 14
+ * giorni — e un post che punta a un URL scaduto e\' un post senza video, mesi dopo, senza un errore
+ * da nessuna parte.
+ */
+export async function transformVideo(opts: {
+  supabase: SupabaseClient;
+  userId: string;
+  role: VideoRole & ('refine' | 'motion');
+  videoUrl: string;
+  prompt?: string;
+  imageUrl?: string;
+  aspectRatio?: string;
+  mode?: 'std' | 'pro';
+  model?: string | null;
+  prefs?: Record<string, unknown> | null;
+  abortSignal?: AbortSignal;
+}): Promise<{ url: string; taskId: string; model: string } | undefined> {
+  const model = opts.model?.trim() || videoModelForRole(opts.prefs, opts.role);
+  if (!model) return undefined;
+
+  const gateBrand = getBrandContext();
+  if (gateBrand) {
+    const { gateCredits } = await import('$lib/server/credits');
+    await gateCredits(gateBrand);
+  }
+
+  const spec = videoModelSpec(model);
+  const input = buildTransformInput(model, opts.role, {
+    prompt: opts.prompt,
+    videoUrl: opts.videoUrl,
+    imageUrl: opts.imageUrl,
+    aspectRatio: opts.aspectRatio,
+    mode: opts.mode
+  });
+
+  const t0 = Date.now();
+  let job: VideoJobResult | undefined;
+  try {
+    job =
+      spec?.endpoint === 'aleph'
+        ? await runAlephJob(input, opts.abortSignal)
+        : await (async () => {
+            const taskId = await createKieTask(
+              kieVideoModel(model, opts.role),
+              input,
+              opts.abortSignal,
+              'video.transform'
+            );
+            return taskId
+              ? pollKieTask(taskId, POLL_TIMEOUT_MS, opts.abortSignal, 'video.transform', POLL_INTERVAL_MS)
+              : undefined;
+          })();
+  } catch (e) {
+    console.error('[video.transform] job failed', e);
+  }
+
+  logAiCall({
+    label: `video.${opts.role}`,
+    provider: 'kie',
+    model,
+    prompt: String(input.prompt ?? ''),
+    ms: Date.now() - t0,
+    ok: !!job,
+    error: job ? undefined : 'no video returned',
+    ...(job?.credits != null
+      ? { providerCredits: job.credits, flatCostUsd: Math.round(job.credits * KIE_CREDIT_USD * 1e6) / 1e6 }
+      : {}),
+    context: opts.role
+  });
+  if (!job) return undefined;
+
+  // Niente sottotitoli e niente taglio: la clip di partenza e\' gia\' montata, e rimontarla qui
+  // sposterebbe il timing di quello che l\'utente ha approvato.
+  const url = await persistMp4(opts.supabase, opts.userId, job.url, { captions: false, tighten: false });
+  if (!url) return undefined;
+  return { url, taskId: job.taskId, model };
 }
 
 /** A render kie has accepted but not finished. Everything here must survive the request. */

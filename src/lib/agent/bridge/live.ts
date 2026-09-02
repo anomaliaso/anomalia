@@ -138,7 +138,7 @@ import { createSubagentTools, SUBAGENT_TOOL_KEYS } from '$lib/server/chat/subage
 import { resolveChatModel } from '$lib/server/chat/model';
 import { createGoalPlugin, withKitToolNames } from '../plugins/goal';
 import { kitPluginsFor } from '../plugins/registry';
-import { GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { GOAL_TOOL_KEYS } from '$lib/agent/tools/goal-tools';
 import { gateAction, planActionGate, resolveActionApprovalDetail } from '@anomalia/agent-kit/action-approval';
 import { CHAT_MAX_CONTINUATIONS } from '$lib/server/chat/turn-limits';
 import {
@@ -190,12 +190,6 @@ export interface RunKitTurnInput {
 	modelId?: unknown;
 	/** Lo sforzo di ragionamento scelto dall'utente. */
 	reasoning?: unknown;
-	/**
-	 * Il testo dell'ultimo messaggio utente: è ciò che alimenta la scalata Auto→Pro
-	 * (`isHeavyProductionAsk` in model.ts apre con `if (!text) return false`, quindi senza
-	 * questo la scalata NON scatta MAI e ogni specialista che non sia motion cade sul default).
-	 */
-	escalationText?: string;
 	/**
 	 * Riprese automatiche già fatte su QUESTA catena — lo stesso contatore del motore classico
 	 * (`chat_jobs.input_params.continuation_depth`), che è anche dove vive fra un turno e l'altro:

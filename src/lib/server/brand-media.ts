@@ -665,21 +665,40 @@ export function formatMediaDigestForPlanner(rows: BrandMediaRow[], max = 24): st
  * Publish a library image into the public `media` bucket (platform aspect crop) so it can be
  * used as the post's media_url — pixel-perfect reuse of the user's asset, no AI generation.
  */
-export async function publishLibraryImageAsPostMedia(
+/**
+ * Il tetto di dimensione per tipo. Uno solo non basta: 12MB e' generoso per una foto e sotto una
+ * singola clip da 15s, quindi riusarlo sui video avrebbe rifiutato quasi tutti con "asset too
+ * large" — un errore che parla di dimensione e nasconde che il tetto era di un altro mestiere.
+ */
+export function mediaSizeCeiling(kind: 'image' | 'video'): number {
+  return kind === 'video' ? 200_000_000 : 12_000_000;
+}
+
+/**
+ * Copia un asset della libreria dove un post puo' puntarlo, e restituisce l'URL pubblico.
+ *
+ * Il `kind` non e' un parametro di comodo: e' il filtro della query. Una foto pubblicata come reel
+ * — o una clip come immagine — e' un post plausibile e sbagliato, e ne' lo Storage ne' il provider
+ * direbbero niente. La riga sa di che tipo e', quindi si chiede quella giusta e un risultato vuoto
+ * e' un rifiuto, non un'ipotesi.
+ */
+export async function publishLibraryMediaAsPostMedia(
   supabase: SupabaseClient,
   opts: {
     brandId: string;
     userId: string;
     mediaId: string;
+    kind?: 'image' | 'video';
     platform?: string | null;
   }
 ): Promise<{ publicUrl: string; media: BrandMediaRow } | { error: string }> {
+  const kind = opts.kind ?? 'image';
   const { data: row, error } = await supabase
     .from('brand_media')
     .select('*')
     .eq('id', opts.mediaId)
     .eq('brand_id', opts.brandId)
-    .eq('kind', 'image')
+    .eq('kind', kind)
     .maybeSingle();
   if (error || !row) return { error: error?.message ?? 'Media not found' };
   const media = row as BrandMediaRow;
@@ -691,14 +710,63 @@ export async function publishLibraryImageAsPostMedia(
   const res = await fetch(url);
   if (!res.ok) return { error: 'Failed to download media asset' };
   const buf = Buffer.from(await res.arrayBuffer());
-  if (!buf.length || buf.length > 12_000_000) return { error: 'Media asset empty or too large' };
+  const ceiling = mediaSizeCeiling(kind);
+  if (!buf.length || buf.length > ceiling) return { error: 'Media asset empty or too large' };
 
-  const mime = (media.mime || res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+  const fallbackMime = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+  const mime = (media.mime || res.headers.get('content-type') || fallbackMime).split(';')[0].trim();
   const { publishImageBufferAsPostMedia } = await import('$lib/server/content-preview');
   const publicUrl = await publishImageBufferAsPostMedia(supabase, opts.userId, buf, mime, opts.platform);
   if (!publicUrl) return { error: 'Upload of library media failed' };
   await recordBrandMediaUse(supabase, opts.brandId, [media.id]);
   return { publicUrl, media };
+}
+
+/** Il nome storico, per i sei call site che pubblicano solo immagini. */
+export const publishLibraryImageAsPostMedia = (
+  supabase: SupabaseClient,
+  opts: { brandId: string; userId: string; mediaId: string; platform?: string | null }
+) => publishLibraryMediaAsPostMedia(supabase, { ...opts, kind: 'image' });
+
+/**
+ * Deposita in libreria una clip appena renderizzata, e restituisce l'id.
+ *
+ * Senza questo passo un video generato e' un file pagato che nessun tool sa raggiungere: e' il
+ * vicolo cieco in cui `refine_video` e' nato — restituiva un URL e nessuno poteva farci un post.
+ * La libreria e' l'unico posto da cui un asset e' riusabile da tutti (read_media, media_ids,
+ * create_post_from_asset), quindi ci passa tutto cio' che generiamo, non solo cio' che si carica.
+ *
+ * Best-effort: se il deposito fallisce, la clip esiste ancora al suo URL e il chiamante lo dice.
+ * Perdere l'id e' un fastidio; far fallire un render gia' pagato per un INSERT no.
+ */
+export async function saveRenderedVideoToLibrary(
+  supabase: SupabaseClient,
+  opts: { brandId: string; userId: string; url: string; title: string; durationSeconds?: number }
+): Promise<{ mediaId: string } | { error: string }> {
+  const res = await fetch(opts.url);
+  if (!res.ok) return { error: `could not read the rendered clip (${res.status})` };
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (!buf.length) return { error: 'the rendered clip was empty' };
+
+  const storagePath = `${opts.userId}/${opts.brandId}/media/generated-${Date.now()}.mp4`;
+  const { error: upErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, buf, { contentType: 'video/mp4', upsert: false });
+  if (upErr) return { error: upErr.message };
+
+  const { row, error } = await insertBrandMedia(supabase, {
+    brandId: opts.brandId,
+    userId: opts.userId,
+    storagePath,
+    mime: 'video/mp4',
+    bytes: buf.length,
+    durationSeconds: opts.durationSeconds,
+    fileName: storagePath.split('/').pop() ?? 'generated.mp4',
+    title: opts.title,
+    source: 'ai'
+  });
+  if (error || !row) return { error: error ?? 'could not register the clip in the library' };
+  return { mediaId: row.id };
 }
 
 /** Load library images as Gemini inline parts (for composite / reference mode). */

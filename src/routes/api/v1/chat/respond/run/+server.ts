@@ -3,7 +3,7 @@ import { json } from '@sveltejs/kit';
 import { hasToolCall, stepCountIs, type ModelMessage } from 'ai';
 import { harnessGenerateText } from '$lib/server/harness';
 import { buildSystemPrompt, buildTurnVolatileBlock, wrapTurnContext } from '$lib/server/chat/system-prompt';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { resolveAgentForPlan, pickTools, stripWebHubTools } from '$lib/server/chat/agents';
 import { saveMessages, loadHistory, getThread, renameThread, assistantContentFromSteps } from '$lib/server/chat/persistence';
 import { agentStickerColor } from '$lib/chat-expression';

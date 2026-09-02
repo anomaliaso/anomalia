@@ -6,7 +6,7 @@ import { listCalendarConflicts, formatInZone } from '$lib/server/schedule';
 import { resolveScheduleInput } from '$lib/server/clock';
 import type { ChatToolCtx } from './shared';
 import { startLongToolJob, type AnyRec } from './shared';
-import { noteRead, requireFreshRead } from '../read-guards';
+import { noteRead, requireFreshRead } from '$lib/server/chat/read-guards';
 
 export function catalogTools(ctx: ChatToolCtx) {
   const { supabase, brandId, tz, userId, origin } = ctx;

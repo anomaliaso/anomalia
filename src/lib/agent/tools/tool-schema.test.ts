@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSupabase } from '$lib/testkit/supabase';
-import { createChatTools } from './tools';
-import { AGENT_IDS } from './agents';
+import { createChatTools } from './index';
+import { AGENT_IDS } from '$lib/server/chat/agents';
 
 /**
  * Gemini rifiuta un intero toolset quando una function declaration porta un enum con valori

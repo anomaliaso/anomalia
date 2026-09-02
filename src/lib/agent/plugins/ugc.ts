@@ -20,8 +20,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AdapterContext, ToolCall, ToolPlugin, ToolResult, ToolSpec } from '../kit';
-import { createChatTools } from '$lib/server/chat/tools';
+import { createChatTools } from '$lib/agent/tools/index';
 import { execChatTool, jsonSchemaOf, pickJsonSchema, type ChatToolsRecord } from './chat-bridge';
+import { MEDIA_TRANSFORM_TOOLS, type PassthroughSpec } from './media-tools';
 
 export interface UgcPluginDeps {
 	supabase: SupabaseClient;
@@ -48,7 +49,8 @@ const VIDEO_FIELDS = [
 	'image_urls'
 ];
 
-const PASSTHROUGH: Record<string, { source: string; description: string; requiresMode?: ToolSpec['requiresMode']; effectful: boolean; consequential: boolean }> = {
+const PASSTHROUGH: Record<string, PassthroughSpec> = {
+	...MEDIA_TRANSFORM_TOOLS,
 	ugc_list_people: {
 		source: 'read_people',
 		effectful: false,

@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { canEnter } from '$lib/server/access';
 import { GRAPHIC_SOURCE_MAX_CHARS, unwrapGraphicSource } from '$lib/design/graphic-source';
 import { latestGraphic, versionSource } from '$lib/server/design-store';
-import { applyPostGraphicSource, loadEditorContext } from '$lib/server/chat/post-editor-tools';
+import { applyPostGraphicSource, loadEditorContext } from '$lib/agent/tools/post-editor-tools';
 import { pngToJpeg, renderGraphicSource } from '$lib/server/design-render';
 import { isVideoPostRow } from '$lib/server/media-origin';
 

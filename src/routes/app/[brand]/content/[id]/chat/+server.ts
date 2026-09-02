@@ -6,7 +6,7 @@ import { env } from '$env/dynamic/private';
 import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { canEnter } from '$lib/server/access';
 import { signKnowledgePaths } from '$lib/server/media-archive';
-import { createPostEditorTools, loadEditorContext, loadGraphicEditorSystemSuffix } from '$lib/server/chat/post-editor-tools';
+import { createPostEditorTools, loadEditorContext, loadGraphicEditorSystemSuffix } from '$lib/agent/tools/post-editor-tools';
 import { loadMediaLibraryPromptSection } from '$lib/server/brand-media';
 import { getOrCreatePostThread, saveMessages, loadHistory, loadHistoryForUI, assistantContentFromSteps } from '$lib/server/chat/persistence';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';

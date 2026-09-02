@@ -22,7 +22,7 @@ describe('createChatTools → createMotionOutputTools', () => {
 	// 30s: il test importa TUTTO tools.ts (il grafo intero della chat), che da solo costa ~5s a
 	// freddo — il default di 5s falliva o passava per una manciata di ms a seconda della macchina.
 	it('inoltra remainingMs del turno al render', { timeout: 30_000 }, async () => {
-		const { createChatTools } = await import('./tools');
+		const { createChatTools } = await import('$lib/agent/tools/index');
 		const remainingMs = () => 123_456;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		createChatTools({} as any, 'b1', 'Europe/Rome', 'u1', '', 'it', undefined, '', [], [], '', remainingMs);

@@ -2,13 +2,15 @@
   import { enhance } from '$app/forms';
   import { _ } from 'svelte-i18n';
   import { coerceChatTier } from '$lib/chat-tiers';
+  import { usdPerMillion } from '$lib/model-price';
 
   let { data, form } = $props();
   // NULL in the DB means "never chosen": the chat starts on the catalogue's default.
   const current = $derived(coerceChatTier(data.brand?.chat_default_tier));
   const models = $derived(data.chatModels ?? []);
-  const currentModel = $derived(models.find((m) => m.id === current));
   const defaultModel = $derived(models.find((m) => m.id === data.defaultChatModel));
+  // Senza scelta del brand la riga sotto il picker descrive il modello che parte davvero.
+  const currentModel = $derived(models.find((m) => m.id === current) ?? defaultModel);
   const K_TOKENS = 1000;
 </script>
 
@@ -35,9 +37,9 @@
     <div class="ftxt">
       <div class="fs">
         {#if currentModel}
-          {Math.round(currentModel.contextLength / K_TOKENS)}k · ${currentModel.inputUsdPerM}/${currentModel.outputUsdPerM} per 1M token
+          {Math.round(currentModel.contextLength / K_TOKENS)}k · {usdPerMillion(currentModel.inputUsdPerM)}/{usdPerMillion(currentModel.outputUsdPerM)} per 1M token
         {:else}
-          {$_('chat.tier.' + current + 'Hint')}
+          {$_('chat.tier.defaultHint')}
         {/if}
       </div>
     </div>

@@ -281,7 +281,7 @@ export function createAgentDmTools(opts: {
          * orchestrare, non allargarsi. Senza goal, la regola sta.
          */
         if (recipients.length > 1 && !becauseUserAsked?.trim()) {
-            const { loadOpenGoal } = await import('./goal');
+            const { loadOpenGoal } = await import('$lib/server/chat/goal');
             const goal = await loadOpenGoal(supabase, threadId);
             if (!goal) {
                 return {

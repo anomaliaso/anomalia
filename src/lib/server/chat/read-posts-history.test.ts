@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createChatTools } from './tools';
+import { createChatTools } from '$lib/agent/tools/index';
 
 /**
  * L'ANALYST CIECO — eval del 24/8.

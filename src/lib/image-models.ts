@@ -15,6 +15,8 @@
  * Fonti: docs.kie.ai, una pagina per modello, lette il 2026-09-02.
  */
 
+import { nearestAspectRatio } from '$lib/aspect-ratio';
+
 export const NANO_BANANA_PRO_MODEL = 'nano-banana-pro';
 export const NANO_BANANA_2_MODEL = 'nano-banana-2';
 export const NANO_BANANA_2_LITE_MODEL = 'nano-banana-2-lite';
@@ -161,6 +163,22 @@ export function imageModelFor(prefs: { imageModel?: unknown } | null | undefined
 }
 
 /**
+ * Il modello con cui si MODIFICA una foto, che non e' per forza quello con cui la si disegna:
+ * riprodurre fedelmente una immagine gia' esistente e inventarne una da zero sono due mestieri, e
+ * la famiglia piu' brava al primo non e' sempre la piu' brava al secondo.
+ *
+ * Senza una scelta propria vale quella della generazione — che e' esattamente cio' che facevano
+ * tutti i brand prima che questo secondo selettore esistesse.
+ */
+export function imageRefineModelFor(
+  prefs: { imageModel?: unknown; imageRefineModel?: unknown } | null | undefined
+): string | undefined {
+  const v = String(prefs?.imageRefineModel ?? '').trim();
+  if (v) return isKnownImageModelId(v) ? v : undefined;
+  return imageModelFor(prefs);
+}
+
+/**
  * L'id da mandare a Google. Un modello che kie serve in esclusiva NON esiste lì: mandarcelo è un
  * 400 su ogni immagine del brand, e succederebbe proprio nel momento peggiore — quando la chiave
  * kie manca o il suo endpoint è giù. Meglio un render col modello di casa e un avviso rumoroso.
@@ -184,20 +202,6 @@ export function googleImageModel(model: string | undefined, fallback: string): s
  * la proporzione più vicina — 4:5 → 3:4, non un quadrato.
  */
 export function kieAspectRatio(spec: ImageModelSpec, aspectRatio: string | undefined): string {
-  const wanted = String(aspectRatio ?? '').trim() || '1:1';
-  if (spec.aspectRatios.includes(wanted)) return wanted;
-  const target = ratioValue(wanted);
-  if (!target) return '1:1';
-  return spec.aspectRatios.reduce((best, candidate) => {
-    const b = ratioValue(best);
-    const c = ratioValue(candidate);
-    if (!c) return best;
-    if (!b) return candidate;
-    return Math.abs(Math.log(c / target)) < Math.abs(Math.log(b / target)) ? candidate : best;
-  }, spec.aspectRatios[0]);
+  return nearestAspectRatio(spec.aspectRatios, String(aspectRatio ?? '').trim() || '1:1', '1:1');
 }
 
-function ratioValue(ratio: string): number | undefined {
-  const [w, h] = ratio.split(':').map(Number);
-  return w > 0 && h > 0 ? w / h : undefined;
-}

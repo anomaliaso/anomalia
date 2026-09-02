@@ -15,11 +15,7 @@
   );
   const current = $derived(storedDuration);
 
-  const MODELS = $derived(data.videoModels ?? []);
-  const currentModel = $derived(data.videoModel ?? '');
-
-  const IMAGE_MODELS = $derived(data.imageModels ?? []);
-  const currentImageModel = $derived(data.imageModel ?? '');
+  const SLOTS = $derived(data.modelSlots ?? []);
 
   // 720p costs exactly double per second and every draft is billed, shipped or not — so 480p is
   // the recommendation, not merely the default. Kept a two-rung choice: kie offers nothing between.
@@ -38,36 +34,24 @@
 
 <section class="panel">
   <div class="panel-head"><div class="t">{$_('app.settings.video.title')}</div></div>
-  <div class="field">
-    <div class="ftxt">
-      <div class="fh">{$_('app.settings.video.imageModel')}</div>
-      <div class="fs">{$_('app.settings.video.imageModelDesc')}</div>
+  {#each SLOTS as slot (slot.id)}
+    <div class="field">
+      <div class="ftxt">
+        <div class="fh">{$_(`app.settings.video.slots.${slot.i18n}`)}</div>
+        <div class="fs">{$_(`app.settings.video.slots.${slot.i18n}Desc`)}</div>
+      </div>
+      <form method="POST" action="?/updateMediaModel" use:enhance class="vd-form">
+        <input type="hidden" name="slot" value={slot.id} />
+        <select name="model" class="vd-select">
+          <option value="" selected={!slot.current}>{$_('app.settings.video.modelDefault')}</option>
+          {#each slot.choices as m (m.id)}
+            <option value={m.id} selected={m.id === slot.current}>{m.label}</option>
+          {/each}
+        </select>
+        <button class="mini connect" type="submit">{$_('app.settings.save')}</button>
+      </form>
     </div>
-    <form method="POST" action="?/updateImageModel" use:enhance class="vd-form">
-      <select name="imageModel" class="vd-select">
-        <option value="" selected={!currentImageModel}>{$_('app.settings.video.modelDefault')}</option>
-        {#each IMAGE_MODELS as m (m.id)}
-          <option value={m.id} selected={m.id === currentImageModel}>{m.label}</option>
-        {/each}
-      </select>
-      <button class="mini connect" type="submit">{$_('app.settings.save')}</button>
-    </form>
-  </div>
-  <div class="field">
-    <div class="ftxt">
-      <div class="fh">{$_('app.settings.video.model')}</div>
-      <div class="fs">{$_('app.settings.video.modelDesc')}</div>
-    </div>
-    <form method="POST" action="?/updateVideoModel" use:enhance class="vd-form">
-      <select name="videoModel" class="vd-select">
-        <option value="" selected={!currentModel}>{$_('app.settings.video.modelDefault')}</option>
-        {#each MODELS as m (m.id)}
-          <option value={m.id} selected={m.id === currentModel}>{m.label}</option>
-        {/each}
-      </select>
-      <button class="mini connect" type="submit">{$_('app.settings.save')}</button>
-    </form>
-  </div>
+  {/each}
   <div class="field">
     <div class="ftxt">
       <div class="fh">{$_('app.settings.video.clipLength')}</div>

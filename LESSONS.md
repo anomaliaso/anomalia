@@ -151,6 +151,18 @@ GET su `/videos/review` risponde 400 (endpoint POST-only), POST senza url rispon
 ### **Il marcatore che matcha la bolla dell'utente è un falso positivo**
 aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio CHE HAI INVIATO TU: nel gate di oggi ha mascherato un 401 reale (nessuna risposta mai arrivata, "verde" lo stesso). Mossa: contare le occorrenze (≥ 2) oppure aspettare il selettore della bolla dell'assistente, non il body intero.
 
+### **Un difetto che vive nella finestra di una load non si riproduce in locale senza rallentare la rete**
+Segnalato: due agenti «riportano gli stessi identici 3 messaggi». In locale la load del thread
+torna in decine di millisecondi, lo schermo si corregge prima che tu riesca a guardarlo, e il primo
+verdetto è «non riproducibile, sarà stato il database» — che era falso: sul database i due thread
+erano giusti. Vale per tutta la famiglia (liste che restano quelle di prima, testate che cambiano
+prima del contenuto): il difetto NON è la finestra, è che dentro la finestra la pagina afferma una
+cosa falsa, e in produzione quella finestra dura quanto la risposta. Mossa: `newCDPSession(page)`
++ `Network.emulateNetworkConditions` con `latency: 400`–`1500`, e campiona lo schermo ogni
+100–150 ms invece di guardarlo a regime — il numero da riportare nel PR è per quanti millisecondi
+la pagina ha mentito, prima e dopo. Attenzione a rallentare DOPO il caricamento iniziale, o è la
+prima pagina a non arrivare mai e sembra un altro guasto.
+
 ### Build e dev server lungi dal tool di shell
 `npm run build` di questo repo dura ~4 minuti: lancialo in `nohup … &` e sondalo col log, il timeout del tool di shell uccide il processo (e lascia esbuild a metà: la dev server dopo parte con `write EPIPE`). La dev server del worktree ha la sua porta (`--port 5185 --strictPort`) — il 5173 è di chiunque arrivi prima. E il comando che LA VA A PROVARE con `curl` in blocco va in timeout e trascina via il process group: lancia il server staccato (`disown`), verifica con un comando successivo.
 
@@ -570,3 +582,23 @@ rinfresca il token e riscrive il cookie: il logout appena fatto nell'altra sched
 l'utente non approvato risulta di colpo dentro. Segnale: dopo un cambio account atterri su una
 dashboard a cui quell'utente non ha accesso. Mossa: chiudi ogni scheda dell'app prima di cambiare
 identità, una sola scheda per verifica.
+
+## Due app locali sulla stessa porta, una su IPv4 e una su IPv6
+
+**Segnale.** `curl http://localhost:5174/...` risponde con la tua pagina, il browser sulla
+stessa porta mostra un'altra applicazione, e `/app/...` dà 404 in browser mentre in curl è 200.
+
+**Cosa succede.** `localhost` risolve a `::1` e `127.0.0.1` a IPv4: due processi Vite possono
+tenere la *stessa* porta, uno per stack, senza che nessuno dei due dica "porta occupata". Qui
+erano `anomalia` e `anomalia-leads`, entrambi su 5174.
+
+**La mossa.** Avvia il dev server con una porta esplicita e un host esplicito, e prima di
+crederci chiedi all'app chi è:
+
+```bash
+npm run dev -- --port 5200 --host 127.0.0.1
+curl -s http://127.0.0.1:5200/login | grep -oE 'Anomalia|anomalia/leads' | head -1
+```
+
+Vite può comunque slittare di porta se trova occupato ("Port 5199 is in use, trying another
+one"): l'unica porta di cui fidarsi è quella stampata nel log, verificata con la riga sopra.

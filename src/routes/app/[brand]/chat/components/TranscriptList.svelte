@@ -7,7 +7,7 @@
   import { dayDividers, firstUnreadIndex } from '$lib/chat-day-groups';
   import { renderMd, escapeChatText } from '$lib/chat-markdown';
   import { stripAttachedDocsForDisplay } from '$lib/chat-documents';
-  import { dmAgents, dmNames, isDmReplyBackMessage } from '$lib/chat-dm';
+  import { dmAgents, dmMemberAvatar, dmNames, isDmReplyBackMessage } from '$lib/chat-dm';
   import { roomMemberAvatar, roomMemberKeys, roomMemberName, threadIdentity } from '$lib/thread-identity';
   import { chatThreads } from '$lib/stores/chat';
   import type { ChatStreamState, StreamToolCallState } from '$lib/chat-stream-events';
@@ -143,8 +143,11 @@
   );
   const speakerLabel = (name: string | null | undefined) =>
     dmPair ? dmSpeakerLabel(name) : roomMemberName(name ?? '', roomAgentList, (k) => $_(k));
-  const speakerAvatar = (name: string | null | undefined) =>
-    roomKeys.length >= 2 && name ? roomMemberAvatar(name, roomAgentList) : threadWho;
+  const speakerAvatar = (name: string | null | undefined) => {
+    if (!name) return threadWho;
+    if (dmPair) return dmMemberAvatar(name);
+    return roomKeys.length >= 2 ? roomMemberAvatar(name, roomAgentList) : threadWho;
+  };
 
   /** Chi sta parlando ora: in una stanza la voce cambia a ogni battuta. La firma arriva dal
    * server (header `X-Chat-Speaker`, o `speaker` del job accodato). */
