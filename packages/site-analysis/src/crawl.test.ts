@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { blockPageReason, classifyArchetype, discoverAnnouncementPages, discoverInternalPages, extractLogos, extractSocialHandles, harvestPageImages, isUrlSafe, loadPageHtml, matchTeamPhotos, resolveEntryUrl, svgToPng, type BrowserRenderer, type EntryProbe } from './brand-analysis';
+import { blockPageReason, classifyArchetype, discoverAnnouncementPages, discoverInternalPages, extractLogos, extractSocialHandles, harvestPageImages, isUrlSafe, loadPageHtml, matchTeamPhotos, resolveEntryUrl, svgToPng, type BrowserRenderer, type EntryProbe } from './crawl';
 
 const linksHtml = (hrefs: string[]) =>
     `<html><body>${hrefs.map((h) => `<a href="${h}">x</a>`).join('')}</body></html>`;
