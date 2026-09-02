@@ -117,6 +117,10 @@ export type ContentPrefs = {
   videoDuration?: number;
   /** '480p' (default/recommended) | '720p' — Settings → Video. */
   videoResolution?: string;
+  /** Which kie video model renders clips — Settings → Media models. */
+  videoModel?: string;
+  /** Which image model renders visuals — Settings → Media models. Unset = renderer decides. */
+  imageModel?: string;
   // Steers the CLIP (recitazione e movimento) via buildVideoPrompt, non la caption — quella la
   // copre già platformInstructions.
   videoInstructions?: string;

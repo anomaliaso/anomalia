@@ -4993,6 +4993,8 @@
       },
       "video": {
         "title": "Vídeo",
+        "imageModel": "Modelo de imagen",
+        "imageModelDesc": "Qué modelo de IA genera tus imágenes. Con el valor predeterminado, el renderizador elige imagen por imagen (uno más barato cuando no hay nada que reproducir, uno fiel con referencias de producto o persona). Nano Banana Pro es el más fiel y el más caro.",
         "model": "Modelo de vídeo",
         "modelDesc": "Qué modelo de IA genera tus clips. Las duraciones disponibles siguen el modelo elegido — Seedance 2.5 llega hasta 30 segundos.",
         "modelDefault": "Predeterminado de la plataforma",
@@ -9382,6 +9384,7 @@
       "link": "AI Act"
     },
     "connectors": "Conectores",
+    "mediaModels": "Modelos de imagen y vídeo",
     "toolDetail": {
       "toggle": "Abrir los detalles de {tool}",
       "params": "Parámetros",
