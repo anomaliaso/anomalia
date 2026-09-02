@@ -23,12 +23,17 @@ entra chi è approvato.
 
 ## Il predicato è uno solo, con due porte
 
-`is_approved()` legge la sessione, `is_approved(uuid)` risponde per id. Serve entrambe:
+`is_approved()` legge la sessione, `is_user_approved(uuid)` risponde per id. Serve entrambe:
 la CLI e l'MCP arrivano con una chiave API su un client **service-role**, dove `auth.uid()`
 è nullo — `can_enter()` così com'è li avrebbe bloccati sempre, e riscrivere la regola in
 TypeScript accanto a quella in plpgsql l'avrebbe fatta divergere al primo cambio. La
 versione per id è concessa al solo `service_role`: a `authenticated` permetterebbe di
 chiedere se un'altra email è stata approvata.
+
+Il nome è **diverso**, non un overload, e non per gusto: PostgREST non risolve
+`is_approved(uuid)` accanto a `is_approved()` — la prima non entra nemmeno nella schema cache, e
+ogni chiamata torna `PGRST202`. Scoperto in locale nel modo peggiore, cioè con un 403 su ogni
+utente della API.
 
 ## Tre buchi che non erano nel gate
 
@@ -49,12 +54,24 @@ chiedere se un'altra email è stata approvata.
    nessun cron nuovo da pagare — e si deduplica su `waitlist.nudged_at`, che è già il
    registro di chi aspetta.
 
-## Il fallback sta dalla parte meno cara
+## Il fallback sta dalla parte meno cara, in tutti e due i posti
 
-`flagEnabled(admin, 'closed_beta', false)`: una lettura del flag che fallisce lascia
-entrare, non chiude fuori. È una porta commerciale, non un confine di sicurezza, e il costo
-dei due lati non è lo stesso — chiudere fuori ogni cliente che paga per un RPC andato storto
-è il guasto peggiore dei due.
+`flagEnabled(admin, 'closed_beta', false)`: una lettura del flag che fallisce lascia entrare,
+non chiude fuori. È una porta commerciale, non un confine di sicurezza, e il costo dei due lati
+non è lo stesso — chiudere fuori ogni cliente che paga per un RPC andato storto è il guasto
+peggiore dei due.
+
+La stessa regola vale per il predicato, e la prima versione **non ce l'aveva**: `data === true`
+trasformava il PGRST202 di cui sopra in un 403 per tutti. Ora `if (error) return true`, con un
+test che nomina l'incidente invece di descrivere l'astrazione.
+
+## Il riempimento gira una volta sola
+
+`add column if not exists` più `update ... where approved_at is null` sembra idempotente e non lo
+è: la seconda applicazione approva in blocco anche chi si è iscritto nel frattempo. Successo in
+locale — un utente in attesa è diventato approvato senza che nessuno lo approvasse. Il riempimento
+sta dentro la creazione della colonna, in un `do $$`, e la migrazione si riapplica senza fare
+danni.
 
 ## L'ordine del rollout non è negoziabile
 
@@ -65,6 +82,18 @@ dei due lati non è lo stesso — chiudere fuori ogni cliente che paga per un RP
 
 Invertire 1 e 2 chiude fuori ogni cliente attuale per la durata del deploy. Il flag vive in
 `app_flags`: si riapre in SQL senza redeploy.
+
+## La pagina della call
+
+L'embed di Calendly si inizializza a mano e il contenitore non porta la classe
+`calendly-inline-widget`: lasciata allo scan automatico di quello script, l'idratazione ci corre
+contro e monta DUE iframe nello stesso div — quello che resta non finisce mai di caricare.
+
+E il link "aprilo in una scheda" sta **sopra** il calendario, non sotto. L'embed ci mette dai dieci
+ai trenta secondi a dipingere, e mille pixel di riquadro bianco spingono fuori schermo qualunque
+cosa stia sotto: chi arriva mentre gira la rotella deve avere qualcosa da cliccare. Durante la
+verifica Calendly è stato irraggiungibile per minuti — anche aperto direttamente, senza embed — ed
+è esattamente lo scenario in cui quel link è l'unica cosa che resta in piedi.
 
 ## Scartato
 

@@ -2370,7 +2370,7 @@
   "waitlist": {
     "title": "Un ultimo passo",
     "sub": "Anomalia si apre dopo una call di conoscenza con Marco. Scegli quando ti va meglio: appena finita, il tuo accesso si accende.",
-    "note": "Il calendario non si carica?",
+    "note": "Preferisci aprire il calendario a parte?",
     "fallback": "Aprilo qui"
   },
   "login": {
