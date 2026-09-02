@@ -1,12 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
-  import {
-    BUILTIN_AGENT_AVATARS,
-    fallbackAvatarColor,
-    fallbackAvatarFace
-  } from '$lib/agent-avatars';
-  import { dmSendsFromCall } from '$lib/chat-dm';
+  import { dmMemberAvatar, dmSendsFromCall } from '$lib/chat-dm';
 
   /**
    * La riga "N messaggi con X" sotto un turno che ha usato `message_agent`: un link compatto al
@@ -42,24 +37,12 @@
     return [...byThread.entries()];
   });
 
-  /** Il volto del destinatario: identità fissa per i builtin (`web`, `content`, …); per i
-   *  custom (`custom:<uuid>`) la stessa derivazione deterministica del resto del prodotto —
-   *  l'avatar salvato non viaggia nel tool output, e una faccia stabile basta a riconoscerlo. */
-  function avatarFor(g: { to: string; name: string }) {
-    const seed = g.to || g.name;
-    return (
-      BUILTIN_AGENT_AVATARS[g.to] ?? {
-        face: fallbackAvatarFace(seed),
-        color: fallbackAvatarColor(seed)
-      }
-    );
-  }
 </script>
 
 {#if groups.length}
   <div class="dm-chips">
     {#each groups as [threadId, g] (threadId)}
-      {@const av = avatarFor(g)}
+      {@const av = dmMemberAvatar(g.to || g.name)}
       <a class="dm-chip" href={`/app/${brandSlug}/chat/${threadId}`}>
         <AgentAvatar face={av.face} color={av.color} size={16} title={g.name} />
         <span>{$_('chat.dmChip', { values: { n: g.n, name: g.name } })}</span>
