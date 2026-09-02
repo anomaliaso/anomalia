@@ -43,11 +43,6 @@ sola; finita quella, la successiva riparte davvero. E i tre `console.log` non ci
 **Le due scansioni spariscono.** `lastUserIndex` si calcola una volta; `followingUserTexts` passa
 come getter, quindi il giro quadratico avviene solo per il turno raro che mostra la card domande.
 
-**`content-visibility: auto` su ogni turno.** Cento turni sono renderizzati, dieci stanno sullo
-schermo, e il browser non aveva modo di sapere che poteva saltare gli altri novanta.
-`contain-intrinsic-size: auto 180px` è l'altezza dichiarata finché il turno resta fuori campo, così
-la barra di scorrimento non salta quando entra.
-
 ## Quello che NON si è fatto, e perché
 
 **Chiavare la lista sull'id del messaggio.** Sembra l'ovvio miglioramento e invece spegne la lista:
@@ -64,4 +59,9 @@ dieci `{#await}` dentro il file che non si deve rompere. Non paga.
 
 **La barra azioni al hover.** Quattro bottoni e quattro icone per turno sono ~800 nodi su cento
 turni, ma senza hover — cioè su ogni schermo tattile — quelle azioni diventano irraggiungibili.
-`content-visibility` prende gran parte dello stesso beneficio senza togliere niente a nessuno.
+
+**`content-visibility: auto` sui turni.** Scritto, misurato, tolto. Su cento turni di testo il
+benchmark di scroll a schermo visibile dà lo stesso p95 con e senza (9,4 ms contro 9,5 ms, su un
+budget di 8,33 ms a 120 Hz), e il costo di un re-layout forzato resta 0,05–0,1 ms in entrambi i
+casi. Zero misurato, quindi zero righe: se un giorno un thread pieno di immagini e card mostrerà
+un costo di layout vero, si riapre con quel numero in mano.
