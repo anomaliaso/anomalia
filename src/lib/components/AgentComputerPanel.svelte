@@ -12,6 +12,7 @@
   import { AGENT_HOME, JOB_HOME } from '$lib/agent-owners';
   import { computerOwner } from '$lib/agent-computer';
   import { agentScheduleSummary } from '$lib/agent-templates';
+  import { postPreviewHref } from '$lib/page-modal-navigation';
   import type { StreamToolCall } from '$lib/stores/chat-session';
 
   type JobPanel = {
@@ -159,7 +160,7 @@
   // usa al contrario per "Parla con <agente>" — una fonte, due direzioni.
   const work = $derived.by(() => {
     if (renders.length) return { href: `${base}/motion-video`, key: 'openGallery' };
-    if (lastPostId) return { href: `${base}/calendar?post=${lastPostId}`, key: 'openPost' };
+    if (lastPostId) return { href: postPreviewHref(base, lastPostId), key: 'openPost' };
     if (lastPlanId) return { href: `${base}/plans/${lastPlanId}`, key: 'openPlan' };
     const path = job
       ? ((JOB_HOME as Record<string, string>)[job.key] ?? '')

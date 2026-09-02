@@ -1,4 +1,5 @@
-import { isPaidPlan, RADAR_SOURCE_LIMITS } from '$lib/plans';
+import { isPaidPlan, PLAN_WEEKS, RADAR_SOURCE_LIMITS } from '$lib/plans';
+import { creditsForPost } from '$lib/server/content-cost';
 import { isPlanGoEnabled } from '$lib/server/feature-flags';
 
 // Free / absent plan matches Go quotas for blog + radar (capabilities parity, not credits).
@@ -50,13 +51,15 @@ export function isExportOnlyPlan(plan: string | null | undefined): boolean {
 //
 // UGC covers use Nano Banana Pro (same as stills). The MASTER UGC look — pores, candid light,
 // imperfect presence — is enforced in the prompt, not by downgrading the model.
-export const UNIT_COST_USD = { video: 0.41, image: 0.184, text: 0.04, carousel5: 0.82 } as const;
-
-// The editorial mix we are steering every plan toward: video-first, carousels dropped, and the
-// remainder split between stills and near-free text/link posts. The share is what makes the
-// budget work — text/link posts cost a tenth of a still, so they pay for the clips.
+// La quota di video nel mix che stiamo puntando. È una scelta EDITORIALE (il video viaggia), non
+// di prezzo: quanto costi lo dice il listino.
 export const VIDEO_SHARE = 0.4;
-const MIX_COST_USD = VIDEO_SHARE * UNIT_COST_USD.video + 0.3 * UNIT_COST_USD.image + 0.3 * UNIT_COST_USD.text; // $0.227
+
+// Il costo del mix viene dal LISTINO MISURATO (content-cost.ts), non da una seconda tabella.
+// Qui ce n'era una scritta a mano — video $0.41, immagine $0.184 — e i prezzi veri, misurati su
+// `ai_calls`, sono altri: un'immagine costa $0.077 e una clip $0.12 col modello di default (o
+// $2.10 con seedance). Due listini che si contraddicono sono il difetto che blog-cost.ts ha già
+// pagato una volta: le quote erano dimensionate su prezzi che non esistevano.
 
 // Monthly post quota per plan — a HARD cap (no usage billing, no add-ons). Hitting it
 // means "upgrade for more". More connected accounts never raises this; only the plan does.
@@ -91,7 +94,15 @@ export function videoCap(plan: string | null | undefined): number {
 
 /** What one month of the target mix costs a plan, in USD. Exported for the budget test. */
 export function mixCostUsd(plan: string | null | undefined): number {
-  return postQuota(plan) * MIX_COST_USD;
+  const posts = postQuota(plan);
+  const videos = Math.round(posts * VIDEO_SHARE);
+  const images = Math.round(posts * 0.3);
+  const cheap = Math.max(0, posts - videos - images); // text/link: niente da renderizzare
+  const credits =
+    videos * creditsForPost({ format: 'video' }) +
+    images * creditsForPost({ format: 'single_image' }) +
+    cheap * creditsForPost({ format: 'text_post' });
+  return credits / 100;
 }
 
 // Map a brand's cadence ('3/week' | '5/week' | 'daily') to how many posts one generation run
@@ -223,3 +234,24 @@ export function plansAbove(plan: string | null | undefined): UpgradeOption[] {
 export function isTopPlan(plan: string | null | undefined): boolean {
   return PLAN_ORDER.indexOf((plan ?? '') as PlanTier) === PLAN_ORDER.length - 1;
 }
+
+/**
+ * Quante settimane del ciclo editoriale copre UN batch di pianificazione.
+ *
+ * Ne copriva una, e una settimana è poco per due ragioni diverse: l'utente deve approvare quattro
+ * volte al mese, e una serie non può costruire un arco fra un episodio e il successivo se chi
+ * pianifica vede solo sette giorni. Due è il default per tutti. Quattro — il ciclo intero in un
+ * colpo — è per il piano pro: non è un limite tecnico, è la cosa che si vende.
+ *
+ * Il ciclo non si supera mai: oltre `PLAN_WEEKS` non ci sono settimane da pianificare.
+ */
+export const BATCH_WEEKS_DEFAULT = 2;
+const BATCH_WEEKS_MAX_BY_PLAN: Record<string, number> = { pro: 4 };
+
+export function batchWeeks(plan: string | null | undefined, wanted?: number): number {
+  const max = BATCH_WEEKS_MAX_BY_PLAN[plan ?? ''] ?? BATCH_WEEKS_DEFAULT;
+  const asked = Number(wanted);
+  if (!Number.isFinite(asked) || asked < 1) return BATCH_WEEKS_DEFAULT;
+  return Math.min(Math.floor(asked), max, PLAN_WEEKS);
+}
+

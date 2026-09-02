@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { GoogleGenAI, type ThinkingLevel } from '@google/genai';
 import { route } from '$lib/server/model-routing';
+import { GEMINI_NANO_BANANA_2_LITE, GEMINI_NANO_BANANA_PRO } from '$lib/image-models';
 
 /** Default Gemini Flash text/vision model when `GEMINI_FLASH` is unset. */
 export const GEMINI_FLASH = 'gemini-3.7-flash';
@@ -21,12 +22,15 @@ export function isGeminiFlashId(model: string | undefined): boolean {
   return !!model && FLASH_ID.test(model);
 }
 
-/** Nano Banana Pro — social stills, UGC covers, people, fidelity edits. */
-export const NANO_BANANA_PRO = 'gemini-3-pro-image-preview';
+/** Nano Banana Pro — reachable only via an explicit model at a call site. */
+export const NANO_BANANA_PRO = GEMINI_NANO_BANANA_PRO;
 
 export function isNanoBananaProId(model: string | undefined): boolean {
   return model === NANO_BANANA_PRO;
 }
+
+/** Nano Banana 2 Lite — the default render model everywhere (Gemini 3.1 Flash-Lite Image). */
+export const NANO_BANANA_2_LITE = GEMINI_NANO_BANANA_2_LITE;
 
 /**
  * Share of *list* written to `ai_calls.cost_usd` for Gemini Flash / Nano Banana Pro: always 1,

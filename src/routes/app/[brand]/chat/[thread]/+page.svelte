@@ -11,6 +11,7 @@
   import { hasWebHub } from '$lib/plans';
   import { openPlanDocument } from '$lib/stores/plan-panel';
   import { pageTopActions } from '$lib/stores/page-meta';
+  import { postPreviewHref } from '$lib/page-modal-navigation';
   import TopbarCta from '$lib/components/TopbarCta.svelte';
   import AgentComputerPanel from '$lib/components/AgentComputerPanel.svelte';
   import {
@@ -31,7 +32,7 @@
     readPersistedSession,
     hydrateSessionFromStorage,
     watchToolJobs,
-    detachToolJobMessages,
+    detachToolJobCallbacks,
     isWatchingToolJobs,
     type QueuedChatItem
   } from '$lib/stores/chat-session';
@@ -52,15 +53,17 @@
   import type { ChatDocument } from '$lib/chat-documents';
   import { DEFAULT_AGENT_ID, agentMetaForBrand, normalizeAgentIdForBrand } from '$lib/agent-icons';
   import { brandChannel } from '$lib/realtime/brand-channel.svelte';
-  import { emptyStreamState } from '$lib/chat-stream-events';
+  import { emptyStreamState, type StreamToolCallState } from '$lib/chat-stream-events';
   import { applyLiveChunk, applyLiveSnapshot, type PendingChunk } from '$lib/chat-live-join';
+  import { foldThreadCursor, latestRunProgress, seedThreadProjection, type RawThreadEvent } from '$lib/thread-cursor';
   import '$lib/styles/chat-messages.css';
   import TranscriptList from '../components/TranscriptList.svelte';
   import ComposerDock from '../components/ComposerDock.svelte';
   import EditMessageDialog from '../components/EditMessageDialog.svelte';
   import AgentComputerDock from '../components/AgentComputerDock.svelte';
   import { consolidateMessages, mapMsg, planIdsIn, parseToolCalls, redoIdOf, type ChatArtifactUi, type ChatMessage, type PostPreview } from '../components/transcript';
-  import { LIVE_POLL_MS, IDLE_POLL_EVERY, type KitRun } from '../components/kit-run';
+  import { type KitRun } from '../components/kit-run';
+  import { startLiveRunPoll } from '../components/live-run-poll.svelte';
   import { createLifecycle, assistantReportOf, assistantWorkOf } from './lifecycle.svelte';
   import { dmAgents } from '$lib/chat-dm';
 
@@ -75,6 +78,7 @@
   });
 
   let messages = $state<ChatMessage[]>([]);
+  let approvalStatuses = $state<Record<string, string>>(data.approvalStatuses ?? {});
   let artifacts = $state<ChatArtifactUi[]>([]);
   let agentSel = $state(DEFAULT_AGENT_ID);
   // `agentSel` in coda: Anomalia non è più fra le scelte ma va rimessa in lista se è l'agente
@@ -94,6 +98,7 @@
     handled: () => handledCompletionAt,
     touchHandled: (at) => (handledCompletionAt = at),
     finalize: (at) => finalizeCompletedSession(at),
+    syncCursor: () => void syncThreadCursor(data.thread.id),
     send
   });
 
@@ -102,6 +107,7 @@
     // ri-sottoscrive l'effect e fa scattare effect_update_depth_exceeded.
     const next = consolidateMessages((data.messages ?? []).map(mapMsg));
     messages = next;
+    approvalStatuses = { ...(data.approvalStatuses ?? {}) };
     artifacts = (data.artifacts ?? []) as ChatArtifactUi[];
     // I piani già nel thread sono cronologia, non una proposta da aprire.
     autoOpenedPlans = new Set(planIdsIn(next));
@@ -264,14 +270,108 @@
     loading || (!!session?.completedAt && hasLivePartial)
   );
 
+  function seedProjectionFromData() {
+    return seedThreadProjection(data.liveProgress ?? {}, data.eventCursor ?? 0);
+  }
+
   // Reload a metà turno: il turno CONTINUA sul server (consumeStream) e il suo stato vive in
   // agent_kit_runs. Qui lo si riaggancia (Realtime, o il poll qui sotto) e a run chiuso si
   // ricaricano i messaggi: l'utente non deve mai pensare di aver perso tutto.
-  let orphanRun = $state<KitRun | null>(null);
+  let orphanRun = $state<KitRun | null>((data.liveRun as KitRun | null) ?? null);
   let orphanState = $state(emptyStreamState());
   let orphanStateRunId = '';
   /** I chunk del canale che non continuano dove siamo: aspettano lo snapshot che colma il buco. */
   let orphanPending: PendingChunk[] = [];
+
+  /** La proiezione durevole del thread aperto: `thread-seq` la spinge oltre `kit_stream`/poll. */
+  let threadProjection = $state(seedProjectionFromData());
+  let threadCursorFetching = false;
+
+  $effect(() => {
+    void data.thread.id;
+    threadProjection = seedProjectionFromData();
+    // `orphanRun` nasce dal caricamento, e cambiando thread SENZA ricaricare quel valore
+    // iniziale resterebbe quello del thread precedente: va riseminato qui, dove si rifà anche
+    // la proiezione. Il poll lo aggiorna dopo; questo è ciò che si vede al primo fotogramma.
+    orphanRun = (data.liveRun as KitRun | null) ?? null;
+  });
+
+  $effect(() => {
+    const threadId = data.thread.id;
+    return brandChannel.onThreadSeq(({ threadId: seqThreadId, seq }) => {
+      if (seqThreadId !== threadId || seq <= threadProjection.cursor) return;
+      void syncThreadCursor(threadId);
+    });
+  });
+
+  /**
+   * Un turno può essere scritto da qualcuno che non è questa scheda: il worker della coda che
+   * riporta un lavoro finito in background, un compagno, un altro dispositivo. Qui non c'è nessuno
+   * stream a cui appoggiarsi — `thread-seq` muove la proiezione degli eventi, non il transcript —
+   * e senza questo la risposta atterrava nel database mentre a schermo restava la chat di prima.
+   * È lo stesso riaggancio che `ChatColumn` ha da sempre: il server notifica, il transcript si
+   * rifà dall'endpoint autorizzato, quindi niente qui deve fidarsi di quello che arriva.
+   */
+  $effect(() => {
+    const threadId = data.thread.id;
+    return brandChannel.onThreadChanged((changed) => {
+      if (changed !== threadId) return;
+      void life.checkPendingTools();
+      // Il nostro turno sta già scorrendo: piegare il database a metà stream litigherebbe coi
+      // buffer vivi. Ci pensa la chiusura del turno.
+      if (loading) return;
+      void reloadMessages();
+    });
+  });
+
+  /**
+   * Il canale Realtime può cadere mentre la scheda è nascosta, e al ritorno la pagina resterebbe
+   * ferma su una fotografia vecchia — proprio quando l'utente torna a vedere se il lavoro lungo
+   * è finito. Al rientro si richiede quello che conta.
+   */
+  $effect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || loading) return;
+      void life.checkPendingTools();
+      void reloadMessages();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
+
+  async function syncThreadCursor(threadId: string) {
+    if (threadCursorFetching) return;
+    threadCursorFetching = true;
+    try {
+      const after = threadProjection.cursor;
+      const res = await fetch(
+        `/app/${data.brandSlug}/chat?thread=${threadId}&events_after=${after}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok || threadId !== data.thread.id) return;
+      const { events } = (await res.json()) as { events?: RawThreadEvent[] };
+      const fold = foldThreadCursor(threadProjection, events ?? []);
+      threadProjection = fold.projection;
+
+      if (orphanRun) {
+        const progress = latestRunProgress(threadProjection, orphanRun.id);
+        if (progress) {
+          applyLiveSnapshot(
+            orphanState,
+            orphanPending,
+            progress as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+          );
+        }
+      }
+
+      // La prima sincronizzazione di un thread è una SEMINA: il cursore parte da zero e
+      // rilegge tutto l'arretrato, che la pagina ha già a schermo dal caricamento. Ricaricare
+      // lì sarebbe un lampo a ogni apertura.
+      if (fold.hasMessage && !fold.seeded) await reloadMessages();
+    } finally {
+      threadCursorFetching = false;
+    }
+  }
 
   // LE DUE SORGENTI HANNO UNA POSIZIONE SOLA. Realtime consegna INCREMENTI, il poll il testo
   // ASSOLUTO: appendere gli uni sopra l'altro produce testo mescolato carattere per carattere —
@@ -294,6 +394,18 @@
     applyLiveSnapshot(orphanState, orphanPending, orphanRun.partial);
   });
 
+  $effect(() => {
+    if (!orphanRun) return;
+    const seeded = latestRunProgress(threadProjection, orphanRun.id);
+    if (seeded) {
+      applyLiveSnapshot(
+        orphanState,
+        orphanPending,
+        seeded as { text?: string; reasoning?: string; tools?: StreamToolCallState[] }
+      );
+    }
+  });
+
   // Stesso reducer che usa il server per scrivere `partial` (chat-stream-events.ts): a canale
   // connesso il testo cresce token per token invece che a scatti.
   $effect(() => {
@@ -313,49 +425,25 @@
     };
   });
 
+  // Il ritmo del battito sta in `live-run-poll.svelte.ts`, e il run lo legge da `untrack`: qui
+  // dentro l'effetto leggeva `orphanRun` e la risposta lo riscriveva, quindi ogni risposta
+  // smontava e rimontava il battito — 840 giri al secondo, il thread principale saturo, e
+  // l'utente che ricarica a metà turno non vede più muoversi niente.
   $effect(() => {
+    void data.brandSlug;
+    void data.thread.id;
     if (loading) {
       orphanRun = null;
       return;
     }
-    let stop = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    let tick = 0;
-    const poll = async () => {
-      // Senza questi due guard ogni thread aperto chiederebbe 50 volte al minuto, per sempre,
-      // per ricevere 204. Valgono A VUOTO: un turno VIVO si continua a seguire anche con la
-      // scheda in secondo piano — fermarlo lì è ciò che l'utente legge come «cambio tab e lo
-      // stream si perde», e al ritorno trova la risposta ferma a dov'era.
-      if (!orphanRun && typeof document !== 'undefined' && document.hidden) return;
-      // Come v1 (chat-session.ts, FAST_MS=350): quando un turno e' VIVO si chiede spesso, perche'
-      // e' il ritmo con cui l'utente vede crescere la risposta dopo un refresh. Quando non c'e'
-      // niente si rallenta, o ogni thread aperto chiederebbe per sempre — ed e' lo stesso costo a
-      // vuoto di prima (350ms x 28 = ~10s fra due domande, come 1200ms x 8).
-      if (!orphanRun && tick++ % IDLE_POLL_EVERY !== 0) return;
-      try {
-        const res = await fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`);
-        if (stop) return;
-        if (res.status === 200) {
-          orphanRun = (await res.json()) as KitRun;
-        } else {
-          // 204: nessun run attivo. Se prima ne mostravamo uno, è appena finito.
-          if (orphanRun) {
-            void finalizeOrphanRun();
-          }
-        }
-      } catch {
-        /* un poll fallito riprova al giro dopo */
-      }
-    };
-    poll();
-    // 1,2s e non 4: con una rete scarsa lo stream si perde e questo poll è l'unica cosa che
-    // muove la pagina. A vuoto i guard scendono a ~10s, e a zero se la scheda è nascosta; con un
-    // turno vivo restano 1,2s comunque, scheda davanti o no. Chi lo ferma è il 204 del server.
-    timer = setInterval(poll, LIVE_POLL_MS);
-    return () => {
-      stop = true;
-      if (timer) clearInterval(timer);
-    };
+    return startLiveRunPoll({
+      isBusy: () => loading,
+      currentRun: () => orphanRun,
+      isHidden: () => typeof document !== 'undefined' && document.hidden,
+      fetchRun: () => fetch(`/app/${data.brandSlug}/chat/${data.thread.id}/kit-run`),
+      onRun: (run) => (orphanRun = run as KitRun),
+      onFinished: () => void finalizeOrphanRun()
+    });
   });
 
   // Il computer dell'agente: colonna affiancata sopra ~1100px, Sheet sotto.
@@ -561,7 +649,7 @@
   onDestroy(() => {
     // SSE e watcher restano vivi nello store di modulo (il pulse in sidebar deve spegnersi anche
     // dopo aver lasciato la pagina): si stacca solo la callback che tocca questo componente.
-    detachToolJobMessages(data.thread.id);
+    detachToolJobCallbacks(data.thread.id);
   });
 
   /** Incollati in fondo solo finché l'utente ci sta: chi ha scrollato indietro sta LEGGENDO, e
@@ -598,6 +686,24 @@
     if (id === agentSel) return;
     agentSel = id;
     await setThreadAgent(data.brandSlug, data.thread.id, id);
+  }
+
+  async function decideApproval(approvalId: string, approved: boolean) {
+    const result = await startChatSession({
+      brandSlug: data.brandSlug,
+      threadId: data.thread.id,
+      userText: '',
+      pendingUserText: '',
+      mode: chatMode,
+      tier: chatTier,
+      reasoning: chatReasoning,
+      agent: agentSel,
+      approval: { approvalId, approved }
+    });
+    if (result === 'ok') {
+      approvalStatuses = { ...approvalStatuses, [approvalId]: approved ? 'approved' : 'denied' };
+    }
+    if (result === 'error') staleError = 'chat.error';
   }
 
   async function send(
@@ -753,6 +859,9 @@
         await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
         await refreshQueue();
       }
+      // Un turno fermato può aver già avviato un render: il lavoro resta vivo anche quando la
+      // risposta non c'è più, e questa è l'unica riga che lo dice.
+      await life.checkPendingTools();
       return;
     }
 
@@ -765,6 +874,7 @@
         dismissSession(data.thread.id);
         await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
       }
+      await life.checkPendingTools();
       return;
     }
 
@@ -780,15 +890,7 @@
       await reattachActiveChatJob({ brandSlug: data.brandSlug, threadId: data.thread.id });
     }
 
-    try {
-      const res = await fetch(`/app/${data.brandSlug}/chat?thread=${data.thread.id}&pending_tools=1`);
-      if (res.ok) {
-        const { jobs } = await res.json();
-        if (jobs?.length) life.startToolPolling();
-      }
-    } catch {
-      /* best-effort */
-    }
+    await life.checkPendingTools();
   }
 
   /** Legge il transcript senza scriverlo: serve separato perché riga salvata e smontaggio della
@@ -869,7 +971,7 @@
 {#snippet agentPanelTopAction()}
   <TopbarCta
     type="button"
-    variant="ghost"
+    variant="neutral"
     Icon={Monitor}
     title={$_('chat.computer.toggle')}
     onclick={() => (agentPanelOpen = !agentPanelOpen)}
@@ -879,19 +981,21 @@
 {/snippet}
 
 {#snippet agentPanelContent()}
-  <AgentComputerPanel
-    brandSlug={data.brandSlug}
-    thread={data.thread}
-    job={data.agentPanel?.job ?? null}
-    custom={data.agentPanel?.custom ?? null}
-    renders={data.agentPanel?.renders ?? []}
-    live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
-    backgroundLabels={panelBgLabels}
-    lastReport={panelLastReport}
-    lastPostId={panelWork.post}
-    lastPlanId={panelWork.plan}
-    onclose={() => (agentPanelOpen = false)}
-  />
+  {#if data.agentDesktopEnabled}
+    <AgentComputerPanel
+      brandSlug={data.brandSlug}
+      thread={data.thread}
+      job={data.agentPanel?.job ?? null}
+      custom={data.agentPanel?.custom ?? null}
+      renders={data.agentPanel?.renders ?? []}
+      live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
+      backgroundLabels={panelBgLabels}
+      lastReport={panelLastReport}
+      lastPostId={panelWork.post}
+      lastPlanId={panelWork.plan}
+      onclose={() => (agentPanelOpen = false)}
+    />
+  {/if}
 {/snippet}
 
 <div class="chat-thread-shell">
@@ -925,6 +1029,8 @@
       onredo={(index) => life.redoAssistant(index)}
       onfeedback={(id, value, note) => void life.sendFeedback(id, value, note)}
       onsend={(text) => send(text)}
+      {approvalStatuses}
+      onapproval={decideApproval}
     />
   </div>
 
@@ -942,6 +1048,7 @@
     bind:mode={chatMode}
     bind:tier={chatTier}
     bind:reasoning={chatReasoning}
+    chatModels={data.chatModels ?? []}
     agentOptions={agentOptions}
     agentLocked={messages.length > 0}
     agent={agentSel}
@@ -969,7 +1076,7 @@
   <ChatImageLightbox
     src={zoomPost.media_urls?.length ? zoomPost.media_urls : (zoomPost.media_url ?? '')}
     caption={zoomPost.caption}
-    calendarHref={`/app/${data.brandSlug}/calendar?post=${zoomPost.post_id}`}
+    calendarHref={postPreviewHref(`/app/${data.brandSlug}`, zoomPost.post_id)}
     onclose={() => (zoomPost = null)}
   />
 {/if}

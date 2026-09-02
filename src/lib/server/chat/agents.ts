@@ -224,7 +224,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'search_library_docs',
       'cross_post',
       'update_post',
-      'review_video',
       'approve_post',
       'reject_post',
       'reschedule_post',
@@ -282,7 +281,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'sync_social_history',
       'save_social_handles',
       'run_analytics_review',
-      'review_video',
       'show_media',
       'fetch_social_thumbs',
       'research_meta_ads',
@@ -318,7 +316,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       // Senza questo la chat consegna codice, non video: con l'audio il file finito lo può produrre
       // solo il render server.
       'render_motion_video',
-      'review_video',
       'read_posts',
       'capture_website',
       'harvest_product_ui',
@@ -339,7 +336,6 @@ export const AGENTS: Record<AgentId, AgentDef> = {
       'read_posts',
       'create_post',
       'update_post',
-      'review_video',
       'generate_image',
       'read_people',
       'read_talents',
@@ -400,30 +396,10 @@ export function resolveAgent(raw: unknown): AgentId | null {
   return (AGENT_IDS as readonly string[]).includes(mapped) ? (mapped as AgentId) : null;
 }
 
-/**
- * `review_video` è SMONTATO dalla chat (riaccensione: `CHAT_REVIEW_VIDEO=on`). L'implementazione e
- * le altre superfici restano intere; qui si spegne solo il montaggio, e i nomi restano nelle
- * `toolKeys` qui sopra.
- *
- * Da riparare PRIMA di riaccenderlo: non accetta un `video_id` (solo `url` e `post_id`, e un motion
- * video non è un post, quindi l'agente si costruisce a mano un path di storage), e non controlla che
- * il file esista — con `preview_url` NULL riporta un problema di media invece di «renderizza prima».
- */
-const CHAT_REVIEW_VIDEO_ENABLED = env.CHAT_REVIEW_VIDEO === 'on';
-
-/** I tool definiti ma non montati in chat. Vuoto = tutto montato. */
-const UNMOUNTED_TOOL_KEYS = new Set<string>(CHAT_REVIEW_VIDEO_ENABLED ? [] : ['review_video']);
-
-/**
- * Narrow a full tool object to the subset owned by `agentId` (own keys + shared).
- * A null agentId returns the full object unchanged (legacy / onboarding behavior) — minus whatever
- * is unmounted, perché uno smontaggio che l'agente nullo scavalca non è uno smontaggio.
- */
 export function pickTools<T extends Record<string, unknown>>(tools: T, agentId: AgentId | null): Partial<T> {
   const allow = agentId ? new Set<string>([...AGENTS[agentId].toolKeys, ...SHARED_TOOL_KEYS]) : null;
   const out: Partial<T> = {};
   for (const key of Object.keys(tools)) {
-    if (UNMOUNTED_TOOL_KEYS.has(key)) continue;
     if (!allow || allow.has(key)) out[key as keyof T] = tools[key as keyof T];
   }
   return out;
@@ -550,7 +526,7 @@ const CAPABILITIES: Record<AgentId, (lang: string, slug: string) => string> = {
 
 CAPABILITIES (Content Creator — posts, captions, graphics, calendar, plan, and the brand identity they carry):
 - Read posts, editorial plan, products, and Media library assets (read_posts, read_editorial_plan, read_products, read_media)
-- Create posts from a brief — caption + visual (create_post / generate_content). MEDIA FIRST: if MEDIA LIBRARY has usable assets, call read_media then create_post with media_ids (prefer media_mode use_as_is for pixel-perfect photos; composite to integrate into a branded frame). Generate a brand-new Nano Banana image ONLY when no library asset fits. For word-led visuals pass graphic_brief to create_post (optionally with image_urls from a prior standalone generate_image, or media_ids) — the photo can sit in the stack or as a full-bleed background. Set content_type:"carousel" (optional slide_count 3-8) on Instagram, Facebook or LinkedIn only. For reels set content_type:"video". Freely choose video_model, duration, and video_prompt (creative brief that replaces hardcoded UGC/cinematic templates). ugc:true only when asked for raw phone UGC. Seedance 2.5 = video_model "bytedance/seedance-2-5". Preview renders inline in chat.
+- Create posts from a brief — caption + visual (create_post / generate_content). MEDIA FIRST: if MEDIA LIBRARY has usable assets, call read_media then create_post with media_ids (prefer media_mode use_as_is for pixel-perfect photos; composite to integrate into a branded frame). Generate a brand-new Nano Banana image ONLY when no library asset fits. For word-led visuals pass graphic_brief to create_post (optionally with image_urls from a prior standalone generate_image, or media_ids) — the photo can sit in the stack or as a full-bleed background. Set content_type:"carousel" (optional slide_count 3-8) on Instagram, Facebook or LinkedIn only. For reels set content_type:"video". Freely choose video_model, duration, and video_prompt (creative brief that replaces hardcoded UGC/cinematic templates). Default video model is Grok Imagine (480p, ≤15s); Seedance 2.5 = video_model "bytedance/seedance-2-5" only on request or for >15s/reference video. ugc:true only when asked for raw phone UGC. Preview renders inline in chat.
 - CHAIN visuals freely: MEDIA FIRST — read_media then reuse (use_library_image → replace_source / replace_motion_source, or media_ids on create_post / design_graphic). generate_image (no post_id) → create_post(graphic_brief, image_urls:[that url]) only when the library has nothing suitable; OR generate_image N times then replace_source <img src="https://..."> on an existing graphic; OR generate_image N times then replace_motion_source <Img src="https://..." /> on a Remotion motion video; OR capture_website → media_id → create_post(graphic_brief, media_ids) as background/in-stack. Do not create an intermediate photo post just to hold a draft.
 - MEDIA ORIGIN: read_posts annotates media_origin — typographic_graphic (editable HTML/TSX; patch with grep_source → read_source → replace_source, write_source only to rebuild, design_graphic for a high-level brief; photos inside the graphic → read_media first, then use_library_image or generate_image then replace_source <img src>, or design_graphic generate_prompt), ai_generated (edit with generate_image + post_id), user_uploaded, video, none. VIDEO: never design_graphic / generate_image / write_source to remake a reel or strip subtitles — that deletes the clip. When the user asks about a STILL graphic source/code, grep/read it — never claim you cannot see it, never dump the whole file into chat. On a typographic graphic, generate_image (even with post_id) mints an asset and does NOT replace the canvas.
 - MEDIA REVIEW: read_posts also annotates media_review on every post with reviewable media — overall (0–10), verdict (ship|fix|kill), judgment (why), next_test (one change), issues[]. Use that when advising, remaking, or approving. Honor fix/kill — do not approve as-is. The score is READ-ONLY here: you cannot request a new one from chat. When status is none/failed, judge the visual yourself with read_media (or render_stills on a motion video) and say what you see — never wait for a score that is not coming.

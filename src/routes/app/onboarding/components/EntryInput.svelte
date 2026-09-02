@@ -155,7 +155,7 @@
           onanalyzed();
         } else if (msg.type === 'error') {
           onerror?.('analyze', msg.message);
-          error = msg.message as string;
+          error = $_('onboarding.status.analysisFailed');
         }
       });
     } catch (e) {

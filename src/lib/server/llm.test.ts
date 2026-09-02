@@ -1,3 +1,4 @@
+import { LLM_TIMEOUT_MS, LLM_REASONING_EFFORT } from './llm';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -62,6 +63,45 @@ describe('llm — catalogo e fallback', () => {
 		expect(llmModelForPicker('pro')).toBe('anthropic/claude-sonnet-4');
 		expect(llmModelForPicker('fast')).toBe('google/gemini-2.5-flash');
 		expect(llmModelForPicker('anthropic/claude-sonnet-4')).toBe('anthropic/claude-sonnet-4');
+	});
+
+	/**
+	 * Il picker offre il catalogo del gateway, non solo i due id di LLM_MODELS: un modello scelto
+	 * dall'utente deve arrivare INTATTO al gateway. Prima cadeva sul default in silenzio — cioè
+	 * "GPT Terra" nel menu e DeepSeek nella risposta.
+	 */
+	it('un id del catalogo passa intatto, anche fuori da LLM_MODELS', async () => {
+		setEnv({
+			LLM_API_KEY: 'k',
+			LLM_DEFAULT_MODEL: 'google/gemini-2.5-flash',
+			LLM_MODELS: 'google/gemini-2.5-flash'
+		});
+		const { llmModelForPicker } = await import('./llm');
+		const { __resetGatewayModels, ensureGatewayModels } = await import('./openrouter-models');
+		__resetGatewayModels();
+		await ensureGatewayModels({
+			baseUrl: 'https://openrouter.ai/api/v1',
+			fetchImpl: (async () => ({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					data: [
+						{
+							id: 'anthropic/claude-opus-5',
+							name: 'Claude Opus 5',
+							context_length: 1000,
+							supported_parameters: ['tools'],
+							architecture: { input_modalities: ['text', 'image'] },
+							pricing: { prompt: '0.000001', completion: '0.000002' }
+						}
+					]
+				})
+			})) as unknown as typeof fetch
+		});
+		expect(llmModelForPicker('anthropic/claude-opus-5')).toBe('anthropic/claude-opus-5');
+		// Un id che il gateway non serve non diventa una chiamata persa: si torna al default.
+		expect(llmModelForPicker('vendor/mai-visto')).toBe('google/gemini-2.5-flash');
+		__resetGatewayModels();
 	});
 
 	it('GEO Gemini search vuole un id google/gemini-*', async () => {
@@ -131,4 +171,23 @@ describe('nessun SDK Google nei call site app', () => {
 		}
 		expect(hits, hits.join('\n')).toEqual([]);
 	});
+});
+
+// Una chiamata al gateway non scadeva mai, e la pagina che l'aspettava nemmeno. La scadenza però
+// deve stare LARGA: misurato sul percorso vero, il modello di default impiega 107s dove gemini ne
+// impiega 15 — su uno schema piccolo. Una scadenza stretta trasformerebbe la lentezza in un guasto,
+// che è esattamente la diagnosi sbagliata da cui questo commento nasce.
+describe('LLM_TIMEOUT_MS', () => {
+  it('lascia spazio a un modello lento invece di scambiarlo per rotto', () => {
+    expect(LLM_TIMEOUT_MS).toBeGreaterThanOrEqual(600_000);
+  });
+});
+
+// Il campo `reasoning` non veniva mandato mai, e il default non impostato è patologico: misurato su
+// z-ai/glm-5.3-flash, 113s e 12.134 token per un risultato SBAGLIATO (1 elemento su 3 chiesti).
+// Con un effort qualunque — anche 'high' — sono 7s e il risultato giusto.
+describe('LLM_REASONING_EFFORT', () => {
+  it('è sempre uno sforzo dichiarato, mai il default del provider', () => {
+    expect(['low', 'medium', 'high']).toContain(LLM_REASONING_EFFORT);
+  });
 });

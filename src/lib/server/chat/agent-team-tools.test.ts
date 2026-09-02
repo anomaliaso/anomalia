@@ -81,6 +81,8 @@ const CUSTOM_ID = '11111111-2222-3333-4444-555555555555';
 
 function tools(extra: Record<string, Row[]> = {}, threadId = 'thread-1') {
   const store = db({
+    // L'identità (0210) e la sua routine: due righe, tabelle diverse.
+    custom_agents: [{ id: CUSTOM_ID, brand_id: 'b1', name: 'Watcher', agent: 'content', enabled: true }],
     custom_agent_schedules: [
       { id: CUSTOM_ID, brand_id: 'b1', name: 'Watcher', agent: 'content', enabled: true, days_of_week: [1], times: ['09:00'] }
     ],
@@ -166,8 +168,8 @@ describe('owner di una routine', () => {
     });
     expect(out.success).toBe(true);
 
-    // L'identità: una riga su `custom_agents`, con lo specialista che la esegue.
-    const agents = store.tables.custom_agents ?? [];
+    // L'identità: UNA riga nuova su `custom_agents` oltre a quella seminata, con lo specialista che la esegue.
+    const agents = (store.tables.custom_agents ?? []).filter((a) => a.id !== CUSTOM_ID);
     expect(agents).toHaveLength(1);
     expect(agents[0].name).toBe('Ronda prezzi concessionari');
     expect(agents[0].agent).toBe('web');
@@ -190,7 +192,8 @@ describe('owner di una routine', () => {
     expect(out.success).toBe(true);
     expect(out.owner).toBe(`custom:${CUSTOM_ID}`);
     // Nessuna assunzione: Watcher ora ha due incarichi, non un sosia.
-    expect(store.tables.custom_agents ?? []).toHaveLength(0);
+    // L'identità seminata è l'unica: nessuna riga nuova su `custom_agents`.
+    expect((store.tables.custom_agents ?? []).filter((a) => a.id !== CUSTOM_ID)).toHaveLength(0);
     expect(store.inserted.filter((r) => r.agent === `custom:${CUSTOM_ID}`)).toHaveLength(1);
   });
 });

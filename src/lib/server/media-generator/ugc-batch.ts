@@ -32,13 +32,6 @@ import {
 import { UGC_MAX_DURATION } from '$lib/server/video';
 import { deleteMediaGeneratorItem, insertMediaGeneratorItem } from '$lib/server/media-generator/persist';
 import {
-  compactReviewForTool,
-  formatReviewApplyBrief,
-  reviewNeedsRewrite,
-  scoreFinishedClip,
-  VIDEO_QC_REMAKE_MAX
-} from '$lib/server/video-review-apply';
-import {
   formatUgcBrandGrounding,
   loadUgcBrandGrounding,
   type UgcBrandGrounding
@@ -57,7 +50,7 @@ import {
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { aiStructured } from '$lib/server/xiaomi';
 import { trendingWallDigestSection } from '$lib/server/wall-digest';
-import { isSeedanceFamily, SEEDANCE_25_MODEL } from '$lib/video-models';
+import { GROK_IMAGINE_VIDEO_MODEL, isSeedanceFamily, SEEDANCE_25_MODEL } from '$lib/video-models';
 import {
   DESIGNER_SLICE_RESERVE_MS,
   truncatedDesignerNotice
@@ -248,6 +241,8 @@ export type UgcClipPlan = {
   setting: string;
   /** The format this clip runs in — travels into the shot brief and into a resumed job. */
   format?: UgcFormatId | null;
+  /** The batch's one invented face — rendered once, carried by every clip and by a resumed job. */
+  castPortraitUrl?: string | null;
   /** What happens on screen in second one (the planner's, not derived from the spoken hook). */
   hookVisual?: string | null;
 };
@@ -327,6 +322,9 @@ ${disruptiveBriefSection()}
 Mark the disruptive clip of the batch by naming its lever in hook_visual (e.g. "destroy_the_alternative: …").`;
 }
 
+const SHARED_CAST_ASSIGNMENT =
+  'speaker: the SAME single person in every clip of this batch (one cast portrait is rendered once and reused) — never describe a different look per clip';
+
 export function buildAssignmentLines(
   count: number,
   productAssignments: (UgcProductRef | null)[],
@@ -341,7 +339,7 @@ export function buildAssignmentLines(
     const format = formatPlan[i];
     const bits = [
       product ? `product "${product.name}"` : `feature ${brandName} (no specific product pick)`,
-      model ? `speaker/model "${model.name}"` : 'invent a concrete speaker look',
+      model ? `speaker/model "${model.name}"` : SHARED_CAST_ASSIGNMENT,
       format ? `format ${format}` : null
     ].filter(Boolean);
     return `#${i + 1}: ${bits.join('; ')}`;
@@ -499,6 +497,34 @@ async function planClipScriptsFallback(
   );
 }
 
+async function renderCastPortrait(
+  opts: UgcBatchOpts,
+  ai: GoogleGenAI,
+  aspect: AspectRatio,
+  setting: string
+): Promise<string | null> {
+  const prompt = buildUgcCastPortraitPrompt({ setting });
+  const data = await renderPostImage(ai, prompt, {
+    visualStyle: UGC_VISUAL_STYLE,
+    model: UGC_COVER_MODEL,
+    aspectRatio: aspect === '16:9' ? '16:9' : '9:16'
+  });
+  const url = data ? await uploadPostImage(opts.supabase, opts.userId, data) : null;
+  if (!url) return null;
+
+  await insertMediaGeneratorItem(opts.supabase, {
+    brandId: opts.brandId,
+    userId: opts.userId,
+    promptId: opts.promptId,
+    kind: 'image',
+    url,
+    prompt,
+    aspect,
+    ugc: true
+  });
+  return url;
+}
+
 function genaiClient(): GoogleGenAI {
   // Dummy: renderPostImage costruisce Google da solo sul ripiego pixel.
   return null as unknown as GoogleGenAI;
@@ -617,55 +643,14 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
       const spoken = ugcSpokenLine(plan.script, clipSeconds);
       const productName = plan.product?.name || brand.name || undefined;
 
-      /**
-       * IL CASTING, PRIMA DI OGNI FRAME.
-       *
-       * Rendere lo storyboard scena per scena dallo stesso testo non dà lo stesso film: ne
-       * dà cinque. Il prompt dice "inventa una persona vera e restaci coerente", e Nano
-       * Banana la inventa da capo ogni volta — faccia diversa, prodotto diverso, stanza
-       * diversa. La coerenza fra i frame non è una proprietà del testo, è una proprietà
-       * delle IMMAGINI che il testo si porta dietro.
-       *
-       * Quindi: un ritratto della persona e uno still del prodotto PRIMA, e quelle due
-       * immagini entrano come reference in ogni frame successivo e nella cover. Se il brand
-       * ha già un talent o le foto del prodotto non si genera niente — una foto vera vale
-       * più di un ritratto inventato.
-       */
       const castParts: Array<{ inlineData: { mimeType: string; data: string } }> = [
         ...modelParts
       ];
       const castUrls: string[] = [];
-      const needsCastPortrait =
-        !modelParts.length && !materials.skipGeneratedCover && !remakeMode;
-      if (needsCastPortrait) {
-        try {
-          const portraitPrompt = buildUgcCastPortraitPrompt({ setting: plan.setting });
-          const portraitData = await renderPostImage(ai, portraitPrompt, {
-            visualStyle: UGC_VISUAL_STYLE,
-            model: UGC_COVER_MODEL,
-            aspectRatio: aspect === '16:9' ? '16:9' : '9:16'
-          });
-          const portraitUrl = portraitData
-            ? await uploadPostImage(opts.supabase, opts.userId, portraitData)
-            : null;
-          if (portraitUrl) {
-            castUrls.push(portraitUrl);
-            const part = await fetchImagePart(portraitUrl);
-            if (part) castParts.push(part);
-            await insertMediaGeneratorItem(opts.supabase, {
-              brandId: opts.brandId,
-              userId: opts.userId,
-              promptId: opts.promptId,
-              kind: 'image',
-              url: portraitUrl,
-              prompt: portraitPrompt,
-              aspect,
-              ugc: true
-            });
-          }
-        } catch (e) {
-          console.warn('[ugc-batch] cast portrait failed', e);
-        }
+      if (!modelParts.length && plan.castPortraitUrl) {
+        castUrls.push(plan.castPortraitUrl);
+        const part = await fetchImagePart(plan.castPortraitUrl);
+        if (part) castParts.push(part);
       }
 
       // Lo still del prodotto solo quando un prodotto è assegnato e non ha foto proprie.
@@ -744,16 +729,13 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
       };
 
       const { renderVideo, isKnownVideoModel } = await import('$lib/server/video');
-      // UGC Creator defaults to Seedance 2.5. Remake from a selected grid video
-      // requires Seedance (Kie reference_video_urls) — Grok Imagine cannot take video refs.
+      // UGC Creator defaults to Grok Imagine (480p). Remake from a selected grid video and
+      // reference audio require Seedance (Kie reference_video_urls) — Grok cannot take them.
       let lockedModel =
         opts.videoModel && isKnownVideoModel(opts.videoModel)
           ? opts.videoModel
-          : SEEDANCE_25_MODEL;
-      if (
-        (remakeMode || materials.refAudios.length || materials.firstFrame) &&
-        !isSeedanceFamily(lockedModel)
-      ) {
+          : GROK_IMAGINE_VIDEO_MODEL;
+      if ((remakeMode || materials.refAudios.length) && !isSeedanceFamily(lockedModel)) {
         lockedModel = SEEDANCE_25_MODEL;
       }
       const refForClip =
@@ -961,78 +943,8 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
         return 'row' in saved ? saved.row.id : undefined;
       };
 
-      const scoreClip = async (url: string) =>
-        scoreFinishedClip(opts.supabase, {
-          brandId: opts.brandId,
-          url,
-          // Automatico: giudizio in linea che pilota il rifacimento della presa.
-          auto: true,
-          standard: 'organic',
-          opts: {
-            standard: 'organic',
-            brandName: brand.name || null,
-            product: plan.product?.name || null,
-            script: spoken,
-            language: brand.language || null,
-            kind: 'video',
-            abortSignal: opts.abortSignal
-          }
-        });
-
-      let take = await renderTake(remakeBrief, refForClip);
-      // Persist first so the grid shows the clip with a pending score ring
-      // (calendar-style). persistReadyReview then overwrites pending → ready.
-      let id = await persistClip(take.url, spoken);
-      let qc = await scoreClip(take.url);
-
-      writer.write({
-        type: 'text-delta',
-        id: textId,
-        delta: qc.ok
-          ? `Clip ${plan.index + 1} QC ${qc.review.overall}/10 · ${qc.review.verdict}.\n`
-          : `Clip ${plan.index + 1} QC skipped (${qc.error}).\n`
-      });
-
-      if (qc.ok && reviewNeedsRewrite(qc.review)) {
-        for (let attempt = 0; attempt < VIDEO_QC_REMAKE_MAX; attempt += 1) {
-          if (opts.abortSignal?.aborted) throw new Error('Aborted');
-          const applyBrief = `${remakeBrief}\n\n${formatReviewApplyBrief(qc.review, 'ugc')}`;
-          writer.write({
-            type: 'text-delta',
-            id: textId,
-            delta: `Clip ${plan.index + 1} insufficient — applying QC notes…\n`
-          });
-          try {
-            const remade = await renderTake(applyBrief, [take.url, ...refForClip].slice(0, 10));
-            const prevId = id;
-            const remadeQc = await scoreClip(remade.url);
-            const remadeId = await persistClip(remade.url, spoken);
-            if (prevId) {
-              await deleteMediaGeneratorItem(opts.supabase, opts.brandId, prevId).catch(swallow('delete replaced item'));
-            }
-            take = remade;
-            id = remadeId;
-            qc = remadeQc;
-            writer.write({
-              type: 'text-delta',
-              id: textId,
-              delta: remadeQc.ok
-                ? `Clip ${plan.index + 1} remake QC ${remadeQc.review.overall}/10 · ${remadeQc.review.verdict}.\n`
-                : `Clip ${plan.index + 1} remake ready (QC skipped).\n`
-            });
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.error(`[ugc-batch] clip ${plan.index + 1} QC remake failed`, msg);
-            writer.write({
-              type: 'text-delta',
-              id: textId,
-              delta: `Clip ${plan.index + 1} remake failed — keeping first take.\n`
-            });
-            break;
-          }
-          if (!qc.ok || !reviewNeedsRewrite(qc.review)) break;
-        }
-      }
+      const take = await renderTake(remakeBrief, refForClip);
+      const id = await persistClip(take.url, spoken);
 
       tally.done += 1;
       finished.add(plan.index);
@@ -1053,8 +965,7 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
           model: plan.model?.name ?? null,
           index: plan.index + 1,
           of: videoCount,
-          remake: remakeMode,
-          review: qc.ok ? compactReviewForTool(qc.review) : undefined
+          remake: remakeMode
         }
       });
       writer.write({
@@ -1319,6 +1230,19 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
                 agentPlan.toolsUsed.length ? ` (via ${agentPlan.toolsUsed.join(' → ')})` : ''
               }${sharedRefUrls.length ? ` · ${sharedRefUrls.length} media ref(s)` : ''}. Rendering…\n`
         });
+
+        const needsInventedFace = !models.length && !materials.skipGeneratedCover && !remakeMode;
+        const castPortraitUrl =
+          plans.find((p) => p.castPortraitUrl)?.castPortraitUrl ??
+          (needsInventedFace
+            ? await renderCastPortrait(opts, ai, aspect, plans[0]!.setting).catch((e) => {
+                console.warn('[ugc-batch] cast portrait failed', e);
+                return null;
+              })
+            : null);
+        if (castPortraitUrl) {
+          plans = plans.map((p) => ({ ...p, castPortraitUrl }));
+        }
 
         const finished = new Set<number>();
         /** Indice → ragione. Il canale dei fallimenti, separato da `finished` (vedi il tipo). */

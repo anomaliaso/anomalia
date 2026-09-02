@@ -9,7 +9,13 @@ import {
   prefsFromPlan,
   weekStrategyBrief,
   postsForWeek,
+  postsForWeeks,
+  weekMixForSpan,
   normalizePlan,
+  agentPlanBudget,
+  AGENT_PLAN_MAX_MS,
+  LEGACY_PLAN_RESERVE_MS,
+  MIN_AGENT_PLAN_MS,
   PLAN_WEEKS,
   type EditorialPlan,
   type PlanWeek
@@ -39,11 +45,13 @@ const plan = (over: Partial<EditorialPlan> = {}): EditorialPlan => ({
 });
 
 describe('cadenceAllowed / clampCadence', () => {
-  it('bounds go to 3/week; starter (and unknown) below daily; pro gets everything', () => {
-    expect(cadenceAllowed('go')).toEqual(['3/week']);
-    expect(cadenceAllowed('starter')).toEqual(['3/week', '5/week']);
-    expect(cadenceAllowed(null)).toEqual(['3/week', '5/week']);
-    expect(cadenceAllowed('pro')).toContain('daily');
+  // La cadenza era gated dal piano — go poteva SOLO 3/settimana — e legava il volume al ritmo: il
+  // mix doveva sommare alla cadenza, quindi un tetto sul ritmo era un tetto sui post. Ora il volume
+  // lo decide il budget, e il ritmo è una scelta editoriale che ogni piano può fare.
+  it('non è più il piano a decidere il ritmo', () => {
+    expect(cadenceAllowed('go')).toEqual(cadenceAllowed('pro'));
+    expect(cadenceAllowed(null)).toEqual(cadenceAllowed('pro'));
+    expect(cadenceAllowed('go')).toContain('daily');
   });
 
   it('clamps a disallowed LLM cadence to the top allowed one', () => {
@@ -150,12 +158,17 @@ describe('postsForWeek', () => {
     expect(postsForWeek(p, 1)).toBe(4);
   });
 
+  // Il tetto per settimana non è più il volume: quello lo dice il piano pagato (weeklyPostTarget).
+  // Qui resta solo la rete di sicurezza contro una somma assurda, alzata perché con la vecchia a 14
+  // un Pro che paga 90 post al mese ne vedeva pianificati 28.
   it('falls back to the cadence when the mix is empty, and clamps absurd sums', () => {
     const p = plan({ cadence: '3/week' });
     p.weeks[0].content_mix = [];
     expect(postsForWeek(p, 0)).toBe(3);
-    p.weeks[2].content_mix = [{ type: 'spam', count: 99 }];
-    expect(postsForWeek(p, 2)).toBe(14);
+    p.weeks[2].content_mix = [{ type: 'spam', count: 999 }];
+    expect(postsForWeek(p, 2)).toBe(30);
+    p.weeks[1].content_mix = [{ type: 'reale', count: 22 }];
+    expect(postsForWeek(p, 1)).toBe(22);
   });
 });
 
@@ -247,5 +260,128 @@ describe('profileBlock (the brand half of every plan prompt)', () => {
     const block = profileBlock({ name: 'Nuovo', about: 'Solo questo' });
     expect(block).toContain('Nuovo');
     expect(block).not.toContain('undefined');
+  });
+});
+
+describe('agentPlanBudget', () => {
+  it('leaves the legacy pipeline its own time, and gives the agent the rest', () => {
+    expect(agentPlanBudget(300_000)).toBe(300_000 - LEGACY_PLAN_RESERVE_MS);
+  });
+
+  it('never claims more than the standalone budget, however much is left', () => {
+    expect(agentPlanBudget(3_600_000)).toBe(AGENT_PLAN_MAX_MS);
+  });
+
+  it('gives up the agent when what is left cannot hold it and the fallback too', () => {
+    expect(agentPlanBudget(LEGACY_PLAN_RESERVE_MS + MIN_AGENT_PLAN_MS - 1)).toBeNull();
+    expect(agentPlanBudget(LEGACY_PLAN_RESERVE_MS)).toBeNull();
+    expect(agentPlanBudget(0)).toBeNull();
+  });
+
+  it('keeps the agent when what is left holds both', () => {
+    expect(agentPlanBudget(LEGACY_PLAN_RESERVE_MS + MIN_AGENT_PLAN_MS)).toBe(MIN_AGENT_PLAN_MS);
+  });
+});
+
+// Un batch che copre due settimane deve vedere ENTRAMBE, con il tema e il mix di ciascuna: con il
+// brief di una sola, i post della seconda nascono sul tema della prima.
+describe('weekStrategyBrief su più settimane', () => {
+  const plan = (): EditorialPlan => ({
+    strategy: 'S',
+    voice: { mood: '', tone: '', goal: '', personality: '' },
+    cadence: '3/week',
+    platform_mix: [],
+    gtm: null,
+    weeks: [
+      { index: 0, week_start: null, theme: 'Settimana uno', focus: 'F1', content_mix: [{ type: 'educational', count: 3 }], rationale: 'R1', brief: null, products: null, status: 'upcoming' },
+      { index: 1, week_start: null, theme: 'Settimana due', focus: 'F2', content_mix: [{ type: 'narrativo', count: 2 }], rationale: 'R2', brief: null, products: null, status: 'upcoming' },
+      { index: 2, week_start: null, theme: 'Settimana tre', focus: 'F3', content_mix: [], rationale: '', brief: null, products: null, status: 'upcoming' }
+    ]
+  });
+
+  it('porta il tema e il mix di ogni settimana coperta', () => {
+    const brief = weekStrategyBrief(plan(), 0, [], 2);
+    expect(brief).toContain('Settimana uno');
+    expect(brief).toContain('Settimana due');
+    expect(brief).toContain('3× educational');
+    expect(brief).toContain('2× narrativo');
+  });
+
+  it('non tira dentro settimane fuori dal batch', () => {
+    expect(weekStrategyBrief(plan(), 0, [], 2)).not.toContain('Settimana tre');
+  });
+
+  it('con una settimana sola resta quello di prima', () => {
+    expect(weekStrategyBrief(plan(), 0, [], 1)).toBe(weekStrategyBrief(plan(), 0));
+  });
+
+  it('non sfora la fine del ciclo', () => {
+    const brief = weekStrategyBrief(plan(), 2, [], 4);
+    expect(brief).toContain('Settimana tre');
+    expect(brief).not.toContain('undefined');
+  });
+});
+
+// Un batch che copre due settimane deve produrne il totale, e chiedere a ogni settimana il SUO mix.
+describe('postsForWeeks e i mix dello span', () => {
+  const plan = (): EditorialPlan => ({
+    strategy: 'S',
+    voice: { mood: '', tone: '', goal: '', personality: '' },
+    cadence: '3/week',
+    platform_mix: [],
+    gtm: null,
+    weeks: [
+      { index: 0, week_start: null, theme: 'W1', focus: '', content_mix: [{ type: 'a', count: 3 }], rationale: '', brief: null, products: null, status: 'upcoming' },
+      { index: 1, week_start: null, theme: 'W2', focus: '', content_mix: [{ type: 'b', count: 2 }], rationale: '', brief: null, products: null, status: 'upcoming' },
+      { index: 2, week_start: null, theme: 'W3', focus: '', content_mix: [{ type: 'c', count: 4 }], rationale: '', brief: null, products: null, status: 'upcoming' }
+    ]
+  });
+
+  it('somma le settimane coperte', () => {
+    expect(postsForWeeks(plan(), 0, 2)).toBe(5);
+  });
+
+  it('con una settimana sola è quello di prima', () => {
+    expect(postsForWeeks(plan(), 0, 1)).toBe(postsForWeek(plan(), 0));
+  });
+
+  it('non conta settimane che non esistono', () => {
+    expect(postsForWeeks(plan(), 2, 3)).toBe(4);
+  });
+
+  it('etichetta ogni voce di mix con la sua settimana', () => {
+    const mix = weekMixForSpan(plan(), 0, 2);
+    expect(mix).toEqual([
+      { week: 0, type: 'a', count: 3 },
+      { week: 1, type: 'b', count: 2 }
+    ]);
+  });
+
+  it('su una settimana sola non etichetta niente: il mix vale per il batch', () => {
+    expect(weekMixForSpan(plan(), 1, 1)).toEqual([{ type: 'b', count: 2 }]);
+  });
+});
+
+// Il brief numerava le settimane 1-based per chi legge, e il modello ha scritto quei numeri in un
+// campo che è un INDICE 0-based: l'intero batch slittava di uno e la prima settimana restava vuota.
+// Il numero da usare ora è scritto accanto all'etichetta, così l'etichetta resta leggibile.
+describe('il brief dice quale numero scrivere', () => {
+  const plan = (): EditorialPlan => ({
+    strategy: 'S',
+    voice: { mood: '', tone: '', goal: '', personality: '' },
+    cadence: '3/week',
+    platform_mix: [],
+    gtm: null,
+    weeks: [
+      { index: 0, week_start: null, theme: 'Uno', focus: '', content_mix: [], rationale: '', brief: null, products: null, status: 'upcoming' },
+      { index: 1, week_start: null, theme: 'Due', focus: '', content_mix: [], rationale: '', brief: null, products: null, status: 'upcoming' }
+    ]
+  });
+
+  it('affianca l\'indice da scrivere all\'etichetta leggibile', () => {
+    const brief = weekStrategyBrief(plan(), 0, [], 2);
+    expect(brief).toContain('WEEK 1');
+    expect(brief).toMatch(/week\s*=\s*0/);
+    expect(brief).toMatch(/week\s*=\s*1/);
   });
 });

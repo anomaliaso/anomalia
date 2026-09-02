@@ -1,5 +1,5 @@
 diff --git a/node_modules/@ai-sdk/harness-pi/dist/index.js b/node_modules/@ai-sdk/harness-pi/dist/index.js
-index 258bb62..69002a1 100644
+index 258bb62..f47ea6a 100644
 --- a/node_modules/@ai-sdk/harness-pi/dist/index.js
 +++ b/node_modules/@ai-sdk/harness-pi/dist/index.js
 @@ -967,16 +967,60 @@ function extractUserText(prompt) {
@@ -69,7 +69,30 @@ index 258bb62..69002a1 100644
  function serializeToolOutput(output) {
    if (typeof output === "string") {
      return output;
-@@ -2407,6 +2451,7 @@ async function createPiSession(input) {
+@@ -1060,6 +1104,22 @@ function finishStep(state) {
+     }
+   ];
+ }
++function closeOpenStepForTerminal(state) {
++  if (!state.stepOpen) return [];
++  state.stepOpen = false;
++  state.pendingStepToolCallIds.clear();
++  return [
++    {
++      type: "finish-step",
++      finishReason: { unified: "other", raw: void 0 },
++      usage: {
++        inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
++        outputTokens: { total: 0, text: 0, reasoning: 0 }
++      },
++      harnessMetadata: { pi: { inferredStep: true } }
++    }
++  ];
++}
+ function finishPiApprovalStep(state, toolCallId) {
+   state.stepOpen = true;
+   state.pendingStepToolCallIds.delete(toolCallId);
+@@ -2407,6 +2467,7 @@ async function createPiSession(input) {
      if (stopped) {
        throw new Error("Pi session has been stopped.");
      }
@@ -77,7 +100,7 @@ index 258bb62..69002a1 100644
      const userTools = turnOpts.tools;
      currentEmit = turnOpts.emit;
      const turnAbortController = new AbortController();
-@@ -2483,7 +2528,7 @@ async function createPiSession(input) {
+@@ -2483,7 +2544,7 @@ async function createPiSession(input) {
            }
          });
          try {
@@ -86,7 +109,27 @@ index 258bb62..69002a1 100644
            if (terminalError) {
              if (suspending && isAbortError(terminalError)) return;
              currentEmit?.({ type: "error", error: new Error(terminalError) });
-@@ -2593,6 +2638,7 @@ async function createPiSession(input) {
+@@ -2507,6 +2568,9 @@ async function createPiSession(input) {
+               reasoning: void 0
+             }
+           };
++          for (const part of closeOpenStepForTerminal(translatorState)) {
++            currentEmit?.(part);
++          }
+           currentEmit?.({
+             type: "finish",
+             finishReason,
+@@ -2514,6 +2578,9 @@ async function createPiSession(input) {
+           });
+         } catch (err) {
+           if (suspending && isAbortError(err)) return;
++          for (const part of closeOpenStepForTerminal(translatorState)) {
++            currentEmit?.(part);
++          }
+           currentEmit?.({ type: "error", error: err });
+         } finally {
+           unsubErr();
+@@ -2593,6 +2660,7 @@ async function createPiSession(input) {
        }
        return runTurn({
          text: extractUserText(promptOpts.prompt),
@@ -94,7 +137,7 @@ index 258bb62..69002a1 100644
          tools: promptOpts.tools ?? [],
          instructions: promptOpts.instructions,
          emit: promptOpts.emit,
-@@ -3079,6 +3125,8 @@ var pi = createPi();
+@@ -3079,6 +3147,8 @@ var pi = createPi();
  export {
    VERSION,
    createPi,

@@ -9,7 +9,7 @@
   import BrandMark from '$lib/components/BrandMark.svelte';
   import MarcoWidget from '$lib/components/MarcoWidget.svelte';
   import { sanitizeWebsiteParam } from '$lib/website-param';
-  import { clearGuestOnboarding, loadGuestOnboarding } from '$lib/guest-onboarding';
+  import { clearGuestOnboarding, loadGuestOnboarding, type GuestPost } from '$lib/guest-onboarding';
     import { pmeta, buildHandleList, requestRecommendedPlatforms } from './components/platform-utils';
   import { cancelPoll, type JobPoll } from './components/step-jobs';
   import { toGenPeople, toSavePeople, collectPersonPaths, applySignedUrls, snapshotDetected, type DetectedPerson } from './components/people';
@@ -74,6 +74,8 @@ import EntryInput from './components/EntryInput.svelte';
   };
 
   let url = $state('');
+  // Il post che l'ospite ha già visto su /start: si adotta al create, non si rigenera.
+  let guestPost = $state<GuestPost | null>(null);
   // Senza sito: nome + nicchia, e si sintetizza un profilo minimo perché la pipeline resti una sola.
   let noWebsite = $state(false);
   let brandName = $state('');
@@ -175,12 +177,15 @@ import EntryInput from './components/EntryInput.svelte';
   function applyResearchResult(result: Record<string, any> | null | undefined) {
     if (!result) return;
     if (Array.isArray(result.steps)) {
+      // Rows written before the timeline became a registry can repeat a step, and the timeline is
+      // rendered keyed by it: one duplicate and the whole strategy step is torn down.
+      const byStep = new Map<string, { step: string; message: string; result?: unknown }>();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      researchSteps = result.steps.map((s: any) => ({
-        step: String(s.step ?? ''),
-        message: String(s.message ?? ''),
-        result: s.result
-      }));
+      for (const s of result.steps as any[]) {
+        const step = String(s.step ?? '');
+        byStep.set(step, { ...byStep.get(step), step, message: String(s.message ?? ''), result: s.result });
+      }
+      researchSteps = [...byStep.values()];
     }
     if (result.report) report = result.report;
     if (result.researchData) researchData = result.researchData;
@@ -353,7 +358,8 @@ import EntryInput from './components/EntryInput.svelte';
       selectedPlatforms,
       handleList,
       brandId,
-      draftId
+      draftId,
+      guestPost
     };
   }
 
@@ -534,6 +540,7 @@ import EntryInput from './components/EntryInput.svelte';
     // brand NUOVO non deve finire dentro un draft stantio.
     const guest = loadGuestOnboarding();
     if (guest?.readyForAnalysis && guest) {
+      guestPost = guest.post ?? null;
       clearGuestOnboarding();
       ({ url, noWebsite, brandName, creatorNiche, selectedPlatforms, handles } = guestAssignments(guest));
       if (!brandId) brandId = crypto.randomUUID();

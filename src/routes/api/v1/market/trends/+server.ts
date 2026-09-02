@@ -15,7 +15,6 @@ import {
   storeTrendVideos
 } from '$lib/server/market-harvest';
 import { catalogueMarketPosts } from '$lib/server/market-categorise';
-import { analyseTrendingVideos } from '$lib/server/market-video-analysis';
 import { reportHarvestErrors, reportHarvestFatal } from '$lib/server/market-errors';
 
 export const config = { maxDuration: 800 };
@@ -108,7 +107,6 @@ async function drain(request: Request): Promise<Record<string, unknown>> {
   const t0 = Date.now();
   const BASELINE_BY = t0 + BASELINE_TIME_BUDGET_MS;
   const CATALOGUE_BY = t0 + 560_000;
-  const ANALYSIS_BY = t0 + 770_000;
 
   try {
     const sweep = await runTrendSweep({
@@ -137,15 +135,6 @@ async function drain(request: Request): Promise<Record<string, unknown>> {
 
     const catalogue = await catalogueMarketPosts(admin, { deadline: CATALOGUE_BY });
 
-    // I clip si guardano per ultimi: sono la metà cara, e un giudice lento non deve costare il
-    // raccolto — a quel punto i video sono già salvati ed etichettati.
-    const analysis = url.searchParams.get('analyse') === '0'
-      ? null
-      : await analyseTrendingVideos(admin, {
-          limit: Number(url.searchParams.get('clips') ?? '') || undefined,
-          deadlineMs: ANALYSIS_BY
-        });
-
     const problems = [
       ...sweep.errors.map((e) => ({ stage: 'discovery' as const, target: e.source, message: e.message })),
       ...baselines.errors,
@@ -170,7 +159,6 @@ async function drain(request: Request): Promise<Record<string, unknown>> {
       transcriptsFromHistory: baselines.transcripts,
       labelled,
       catalogue,
-      analysis,
       ms: Date.now() - t0
     };
     console.log('[market/trends]', JSON.stringify(summary));

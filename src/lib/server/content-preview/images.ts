@@ -8,7 +8,8 @@ import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext } from '$lib/server/ai-log';
-import { googleGenaiClient, judgeThinkingLevel } from '$lib/server/gemini';
+import { googleGenaiClient, judgeThinkingLevel, NANO_BANANA_2_LITE } from '$lib/server/gemini';
+import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
@@ -17,6 +18,7 @@ import { signPaths } from '$lib/server/people';
 import { svgToPng } from '$lib/server/brand-analysis';
 import { normalizeContentFormat } from '$lib/content-formats';
 import { firstLogoUrl } from '$lib/server/blog-site';
+import { designWallDigestSection } from '$lib/server/wall-digest';
 
 
 // Image MIME types Gemini ingests directly (SVG is rasterised via svgToPng).
@@ -57,7 +59,7 @@ export function brandVisualDirective(colors?: string[] | null, fonts?: string[] 
   const lines = [
     'BRAND IDENTITY — keep this unmistakably the SAME brand across every post:',
     palette.length
-      ? `- Colour palette: ${palette.join(', ')}. Any graphic elements, backgrounds, UI, charts or on-image text MUST use these brand colours; photographic scenes must harmonise with them. Never introduce an off-brand colour scheme.`
+      ? `- Colour palette: ${palette.join(', ')}. Any graphic elements, backgrounds, UI, charts or on-image text MUST use these brand colours; photographic scenes must harmonise with them. Never introduce an off-brand colour scheme. The codes are how the colours are named to you, never something to show: never draw, letter, print or label a colour code anywhere in the image.`
       : '',
     fams.length ? `- Typography: use ${fams.join(', ')} (or a very close match) for any text or graphic elements.` : ''
   ].filter(Boolean);
@@ -77,8 +79,8 @@ export function brandVisualDirective(colors?: string[] | null, fonts?: string[] 
 export type AspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
 
 // Metà del prezzo di output immagine di Pro, e un articolo rende 3 immagini contro 1 di un post.
-// I post social restano su Pro: è la superficie dove la fedeltà del prodotto viene guardata.
-export const BLOG_IMAGE_MODEL = 'gemini-3.1-flash-image';
+// I post social usano lo stesso id quando non c'è nulla da riprodurre; con riferimenti, Lite.
+export const BLOG_IMAGE_MODEL = GEMINI_NANO_BANANA_2;
 
 const ASPECT_LABEL: Record<AspectRatio, string> = {
   '1:1': 'Square 1:1',
@@ -141,8 +143,11 @@ export type RenderImageOpts = {
   brandLook?: string;
   logoImage?: ImagePart;
   baseImage?: ImagePart;
+  /** Il modello con cui il brand MODIFICA. Vale solo con `baseImage`: senza, non c'e' nulla da modificare. */
+  refineModel?: string;
   aspectRatio?: AspectRatio;
   model?: string;
+  craftFloor?: string;
 };
 
 /**
@@ -152,22 +157,23 @@ export type RenderImageOpts = {
  */
 export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {}) {
   const aspectRatio = opts.aspectRatio ?? '1:1';
-  // Nano Banana Pro si paga per la RIPRODUZIONE: un prodotto vero tenuto esatto nel colore, una
-  // faccia costante fra i render, un edit fedele all'immagine a schermo. Senza nessuno di quei
-  // riferimenti il render è una composizione libera da un brief testuale, e Nano Banana 2 la fa a
-  // METÀ prezzo. I riferimenti di mood NON contano: guidano il look, non vengono riprodotti. Il
-  // LOGO deliberatamente non conta — vive esattamente su questi render, quindi contarlo lascerebbe
-  // la leva senza niente da muovere; se i wordmark tornano storti, IMAGE_MODEL_NO_REF riporta
-  // tutto su Pro senza deploy. Un opts.model esplicito vince comunque.
+  // Il default di render è Nano Banana 2 Lite, anche con riferimenti da riprodurre: decisione di
+  // prodotto presa nel 2026-08, Lite al posto di Pro su OGNI superficie. Un opts.model esplicito
+  // vince comunque — è la strada per riportare un call site su Pro senza deploy.
   const needsFidelity = !!(
     opts.personImages?.length ||
     opts.referenceImages?.length ||
     opts.userRefImages?.length ||
     opts.baseImage
   );
+  // `baseImage` e' l'unico segnale che distingue una MODIFICA da un disegno nuovo, e passa tutto
+  // di qui: un riferimento o un mood sono cose da riprodurre, non una base da modificare, quindi
+  // non attivano il modello di refine — altrimenti la scelta di generazione del brand sparirebbe
+  // su meta' dei suoi post senza che nessuno l'abbia toccata.
   const imageModel =
+    (opts.baseImage ? opts.refineModel : undefined) ??
     opts.model ??
-    (needsFidelity ? 'gemini-3-pro-image-preview' : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
+    (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
   // Con foto di persona, il testo sul genere non deve mai scavalcare le foto.
   const cleanPrompt = opts.personImages?.length ? scrubPersonAppearance(imagePrompt) : imagePrompt;
   const styleSuffix = opts.visualStyle ? `\n\nBRAND VISUAL STYLE to match: ${opts.visualStyle}` : '';
@@ -207,7 +213,7 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   const userRefSuffix = opts.userRefImages?.length
     ? '\n\nThe user attached the following image(s) as REFERENCES for this specific edit — use them to guide the change described above: match the look, composition, colours or subject they show, as the feedback implies. Let the user\'s instruction decide exactly what to take from them.'
     : '';
-  const text = `${cleanPrompt}\n\n${ASPECT_LABEL[aspectRatio]}, high quality, social-media ready. No text overlays unless natural.\n\n${HOUSE_LOOK}${styleSuffix}${brandSuffix}${playbookSuffix}${baseSuffix}${logoSuffix}${personSuffix}${refSuffix}${userRefSuffix}${moodSuffix}`;
+  const text = `${cleanPrompt}\n\n${ASPECT_LABEL[aspectRatio]}, high quality, social-media ready. No text overlays unless natural.\n\n${HOUSE_LOOK}${opts.craftFloor ?? ''}${styleSuffix}${brandSuffix}${playbookSuffix}${baseSuffix}${logoSuffix}${personSuffix}${refSuffix}${userRefSuffix}${moodSuffix}`;
   // L'immagine base va per PRIMA: il prompt la chiama "the FIRST attached image". I mood per ultimi.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts: any[] = [{ text }, ...(opts.baseImage ? [opts.baseImage] : []), ...(opts.logoImage ? [opts.logoImage] : []), ...(opts.personImages ?? []), ...(opts.referenceImages ?? []), ...(opts.userRefImages ?? []), ...(opts.moodImages ?? [])];
@@ -262,6 +268,9 @@ export async function renderPostImage(
     throw new Error(`No image returned from kie (${imageModel}) after 2 attempts`);
   }
   // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
+  // Un modello che vive solo su kie non è un modello per Google: `googleImageModel` lo riporta a
+  // quello di casa e lo dice, invece di far fallire ogni immagine con un 400.
+  req.model = googleImageModel(req.model, NANO_BANANA_2_LITE);
   const googleAi = googleGenaiClient();
   void ai;
   // genWithRetry ritenta gli ERRORI, ma il modello risponde spesso 200 SENZA parte immagine — un
@@ -270,7 +279,7 @@ export async function renderPostImage(
   const MAX_IMAGE_ATTEMPTS = 3;
   let lastInfo = '';
   for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
-    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: imageModel });
+    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: req.model });
     const found = imageFromResponse(res);
     if (found) return found;
     const out = res.candidates?.[0]?.content?.parts ?? [];
@@ -426,8 +435,9 @@ export async function renderWithQC(
 ): Promise<{ dataUrl: string | undefined; qc?: QcVerdict }> {
   // Alto rischio → N candidati in parallelo e il critico sceglie; altrimenti un render solo.
   const wanted = highStakes ? HIGH_STAKES_CANDIDATES : 1;
+  const opts = { ...renderOpts, craftFloor: await designWallDigestSection() };
   const settled = await Promise.allSettled(
-    Array.from({ length: wanted }, () => renderPostImage(ai, imagePrompt, renderOpts))
+    Array.from({ length: wanted }, () => renderPostImage(ai, imagePrompt, opts))
   );
   const candidates = settled
     .filter((r): r is PromiseFulfilledResult<string | undefined> => r.status === 'fulfilled')
@@ -465,7 +475,7 @@ export async function renderWithQC(
     const retryPrompt = `${imagePrompt}\n\nCORRECTIONS (previous attempt(s) failed QC — fix ALL of these):${hints.map((h) => `\n- ${h}`).join('')}`;
     console.warn(`[renderWithQC] QC failed (${best.critique.score}/10, ${nCandidates} candidate(s))${critiqueOpts.productName ? ` for "${critiqueOpts.productName}"` : ''}: ${best.critique.issues.join('; ')} → retry ${attempt + 1}/${MAX_QC_RETRIES}`);
     // Un ritentativo che non torna con un'immagine chiude il ciclo: resta il migliore finora.
-    const retry = await renderPostImage(ai, retryPrompt, renderOpts).catch((error) => { swallow('render qc retry', error); return undefined; });
+    const retry = await renderPostImage(ai, retryPrompt, opts).catch((error) => { swallow('render qc retry', error); return undefined; });
     if (!retry) break;
     attempts += 1;
     retried = true;
@@ -504,6 +514,12 @@ export async function renderWithQC(
 // LEGGERO (solo fedeltà prodotto, un ritentativo, niente best-of-N). Tenere leggeri i seguiti è ciò
 // che tiene un carosello a ~N render invece di N pipeline di QC complete. Una slide fallita si
 // scarta, non blocca il post.
+// La regola di serie che tiene N slide un oggetto solo, non N immagini: vive qui, in un posto solo,
+// così la sonda creativa misura lo stesso prompt che la produzione manda.
+export function carouselSeriesDirective(slideIndex: number, totalSlides: number): string {
+  return `\n\nCAROUSEL SLIDE ${slideIndex + 1} of ${totalSlides} — this image is ONE SLIDE of a single carousel post. The FIRST attached style/mood reference is SLIDE 1 of the same carousel: match its medium, palette, lighting, styling and art direction EXACTLY so the whole set reads as one coherent series. Compose THIS slide's own subject as described above — never copy slide 1's composition or subject.`;
+}
+
 export async function renderCarouselSlide(
   ai: GoogleGenAI,
   supabase: SupabaseClient,
@@ -515,9 +531,9 @@ export async function renderCarouselSlide(
   slideOneAnchor: ImagePart | undefined,
   critiqueOpts: CritiqueOpts
 ): Promise<string | undefined> {
-  const seriesDirective = `\n\nCAROUSEL SLIDE ${slideIndex + 1} of ${totalSlides} — this image is ONE SLIDE of a single carousel post. The FIRST attached style/mood reference is SLIDE 1 of the same carousel: match its medium, palette, lighting, styling and art direction EXACTLY so the whole set reads as one coherent series. Compose THIS slide's own subject as described above — never copy slide 1's composition or subject.`;
+  const seriesDirective = carouselSeriesDirective(slideIndex, totalSlides);
   // La slide 1 precede i mood del brand, così domina l'ancoraggio estetico.
-  const opts = { ...renderOpts, moodImages: [...(slideOneAnchor ? [slideOneAnchor] : []), ...(renderOpts.moodImages ?? [])] };
+  const opts = { ...renderOpts, craftFloor: await designWallDigestSection(), moodImages: [...(slideOneAnchor ? [slideOneAnchor] : []), ...(renderOpts.moodImages ?? [])] };
   try {
     let dataUrl = await renderPostImage(ai, slidePrompt + seriesDirective, opts);
     if (dataUrl && critiqueOpts.referenceImages?.length) {

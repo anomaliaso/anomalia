@@ -9,6 +9,10 @@ vi.mock('$env/static/public', async (originale) => ({
   PUBLIC_SUPABASE_URL: 'https://test.supabase.co'
 }));
 
+vi.mock('$env/dynamic/public', () => ({
+  env: { PUBLIC_SUPABASE_URL: 'https://test.supabase.co' }
+}));
+
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { assistantContentFromSteps, chronologicalTail, dropLeadingAssistant, messagesFromRow, snippetText } from './persistence';
 
@@ -682,6 +686,27 @@ describe('messagesFromRow', () => {
     const result = (msgs[1] as { content: Array<{ output: { value: string } }> }).content[0];
     expect(result.output.value).toContain('completed');
     expect(result.output.value).not.toContain('outcome unknown');
+  });
+
+  it('reconstructs a native approval request without manufacturing a tool result', () => {
+    const msgs = messagesFromRow({
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        { type: 'tool-call', toolCallId: 'a1', toolName: 'publish_post', input: { post_id: 'p1' } },
+        { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'a1' }
+      ]
+    });
+
+    expect(msgs).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool-call', toolCallId: 'a1', toolName: 'publish_post', input: { post_id: 'p1' } },
+          { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'a1' }
+        ]
+      }
+    ]);
   });
 
   it('keeps history text-only by default — a model that cannot see must not be handed parts', () => {

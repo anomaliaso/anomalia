@@ -17,8 +17,8 @@ import { jpegIfHeic } from './raster-image';
 const BUCKET = 'brand-knowledge';
 const SIGN_TTL_SECONDS = 60 * 60 * 2; // 2h — long enough for a generation run
 
-// Same Nano Banana Pro model the post image generator uses, so people render in a matching look.
-const IMAGE_MODEL = 'gemini-3-pro-image-preview';
+// Same model the post image generator defaults to, so people render in a matching look.
+const IMAGE_MODEL = 'gemini-3.1-flash-lite-image';
 
 export type PersonImage = { path: string; label?: string };
 

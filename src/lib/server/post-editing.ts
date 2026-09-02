@@ -6,6 +6,7 @@ import { deletePost, getPostStatus } from '$lib/server/zernio';
 import { nextOccurrence, wallClockToUtc, startOfWeek } from '$lib/server/schedule';
 import { learnFromCaptionEdit } from '$lib/server/brand-memory';
 import { ALT_CAPTION_PLATFORMS, ensureShortNetworkCuts } from '$lib/platform-limits';
+import { recordPostVerdict } from '$lib/server/post-verdict';
 
 // Columns the shared post editor (caption + scheduling + status actions) needs.
 // Intentionally omits video_task_id / video_resolution — those are publish-only (see
@@ -180,10 +181,9 @@ export async function applyPostEdits(
   id: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   patch: Record<string, any>,
-  opts?: { origin?: string }
+  opts?: { origin?: string; by?: string }
 ) {
   const wantsCaptionLearn = typeof patch.caption === 'string' && patch.caption.trim();
-  const wantsMedia = 'media_url' in patch || 'media_urls' in patch;
   let before: {
     brand_id: string;
     caption: string | null;
@@ -191,7 +191,7 @@ export async function applyPostEdits(
     media_url: string | null;
     media_urls: unknown;
   } | null = null;
-  if (wantsCaptionLearn || wantsMedia) {
+  if (wantsCaptionLearn) {
     const { data } = await supabase
       .from('posts')
       .select('brand_id, caption, source, media_url, media_urls')
@@ -212,17 +212,18 @@ export async function applyPostEdits(
     void captureCaptionEditPair(before.brand_id, String(before.caption), String(patch.caption)).catch(swallow('String failed'));
   }
   const result = await supabase.from('posts').update(patch).eq('id', id);
-  if (!result.error && wantsMedia && before?.brand_id) {
-    const { postMediaChanged, requestPostMediaReview } = await import('$lib/server/video-review-store');
-    if (postMediaChanged(before, patch)) {
-      await requestPostMediaReview(supabase, {
-        brandId: before.brand_id,
-        postId: id,
-        origin: opts?.origin,
-        force: true
-      });
-    }
+
+  if (opts?.by && before && String(before.caption ?? '') !== String(patch.caption ?? '')) {
+    await recordPostVerdict(supabase, {
+      postId: id,
+      brandId: before.brand_id,
+      actorId: opts.by,
+      verdict: 'edited',
+      captionBefore: before.caption,
+      captionAfter: patch.caption
+    });
   }
+
   return result;
 }
 
@@ -367,7 +368,8 @@ export type PostDeletionResult =
 export async function deletePostCancellingZernio(
   supabase: App.Locals['supabase'],
   postId: string,
-  brandId?: string
+  brandId?: string,
+  by?: string
 ): Promise<PostDeletionResult> {
   let query = supabase.from('posts').select('id, brand_id, platform, status').eq('id', postId);
   if (brandId) query = query.eq('brand_id', brandId);
@@ -403,6 +405,16 @@ export async function deletePostCancellingZernio(
   }
   const { error } = await supabase.from('posts').delete().eq('id', postId);
   if (error) return { ok: false, status: 500, message: error.message };
+
+  if (by) {
+    await recordPostVerdict(supabase, {
+      postId,
+      brandId: post.brand_id,
+      actorId: by,
+      verdict: 'discarded'
+    });
+  }
+
   return { ok: true, wasScheduled };
 }
 
@@ -410,20 +422,20 @@ export async function deletePostCancellingZernio(
 // `export const actions`. Both pages render the same <PostEditor> whose forms POST to these.
 export const editorActions: Actions = {
   // Edit caption and/or schedule (exact day+time). RLS scopes by brand.
-  updatePost: async ({ request, params, url, locals: { supabase } }) => {
+  updatePost: async ({ request, params, url, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400, { error: 'Missing post' });
 
     const patch = editPatchFrom(data, await brandTz(supabase, params.brand));
     if (patch === null) return fail(400, { error: 'Pick a time at least 2 minutes from now.' });
-    const { error } = await applyPostEdits(supabase, id, patch, { origin: url.origin });
+    const { error } = await applyPostEdits(supabase, id, patch, { origin: url.origin, by: user?.id });
     if (error) return fail(500, { error: error.message });
     return { saved: true };
   },
 
   // Reschedule an already-scheduled post: apply edits, cancel the live Zernio post, re-publish.
-  reschedule: async ({ request, params, url, locals: { supabase } }) => {
+  reschedule: async ({ request, params, url, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400, { error: 'Missing post' });
@@ -435,7 +447,7 @@ export const editorActions: Actions = {
     const cancellationError = zernioCancellationError(cancellation);
     if (cancellationError) return fail(502, { error: cancellationError });
 
-    if (Object.keys(patch).length) await applyPostEdits(supabase, id, patch, { origin: url.origin });
+    if (Object.keys(patch).length) await applyPostEdits(supabase, id, patch, { origin: url.origin, by: user?.id });
 
     const { data: post } = await supabase.from('posts').select(EDITOR_POST_COLS).eq('id', id).maybeSingle();
     if (!post) return fail(404, { error: 'Post not found' });
@@ -487,17 +499,17 @@ export const editorActions: Actions = {
   // Reject a draft → delete it (the user chose not to publish this one).
   // Prima cancellava la riga e basta: su un post scheduled/approved la schedulazione Zernio
   // restava viva e il post usciva comunque (classe incidente scheduling luglio 2026).
-  reject: async ({ request, locals: { supabase } }) => {
+  reject: async ({ request, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400, { error: 'Missing post' });
-    const res = await deletePostCancellingZernio(supabase, id);
+    const res = await deletePostCancellingZernio(supabase, id, undefined, user?.id);
     if (!res.ok) return fail(res.status, { error: res.message });
     return { rejected: true };
   },
 
   // Approve = apply edits, then send to Zernio scheduled at the chosen instant.
-  approve: async ({ request, params, url, locals: { supabase } }) => {
+  approve: async ({ request, params, url, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return {};
@@ -505,26 +517,26 @@ export const editorActions: Actions = {
     const tz = await brandTz(supabase, params.brand);
     const patch = editPatchFrom(data, tz);
     if (patch === null) return fail(400, { error: 'Pick a time at least 2 minutes from now.' });
-    if (Object.keys(patch).length) await applyPostEdits(supabase, id, patch, { origin: url.origin });
+    if (Object.keys(patch).length) await applyPostEdits(supabase, id, patch, { origin: url.origin, by: user?.id });
 
     const { data: post } = await supabase.from('posts').select(EDITOR_POST_COLS).eq('id', id).maybeSingle();
     if (!post || post.status !== 'pending_user') return {};
 
-    const res = await publishApprovedPost(supabase, post as ApprovablePost, tz);
+    const res = await publishApprovedPost(supabase, post as ApprovablePost, tz, { by: user?.id });
     return { ok: true, noAccount: res.noAccount };
   },
 
   // Publish immediately. Cancels any existing scheduled Zernio copy FIRST (so Zernio's 24h
   // same-content-same-account dedupe guard doesn't reject the new send), then publishes now.
   // Works from any editable state (pending / scheduled / failed) and applies pending edits.
-  publishNow: async ({ request, params, url, locals: { supabase } }) => {
+  publishNow: async ({ request, params, url, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400, { error: 'Missing post' });
 
     const tz = await brandTz(supabase, params.brand);
     const patch = editPatchFrom(data, tz, { ignoreSchedule: true }) ?? {};
-    if (Object.keys(patch).length) await applyPostEdits(supabase, id, patch, { origin: url.origin });
+    if (Object.keys(patch).length) await applyPostEdits(supabase, id, patch, { origin: url.origin, by: user?.id });
 
     // Remove the live/scheduled Zernio post (and mark its logs canceled) before re-sending.
     const cancellation = await cancelZernioForPost(supabase, id);
@@ -534,25 +546,7 @@ export const editorActions: Actions = {
     const { data: post } = await supabase.from('posts').select(EDITOR_POST_COLS).eq('id', id).maybeSingle();
     if (!post) return fail(404, { error: 'Post not found' });
 
-    const res = await publishApprovedPost(supabase, post as ApprovablePost, tz, { now: true });
+    const res = await publishApprovedPost(supabase, post as ApprovablePost, tz, { now: true, by: user?.id });
     return { ok: true, noAccount: res.noAccount };
-  },
-
-  requestReview: async ({ request, url, locals: { supabase } }) => {
-    const data = await request.formData();
-    const id = String(data.get('id') ?? '');
-    if (!id) return fail(400, { error: 'Missing post' });
-    const { data: post } = await supabase.from('posts').select('id, brand_id, media_url').eq('id', id).maybeSingle();
-    if (!post) return fail(404, { error: 'Post not found' });
-    const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-    const r = await requestPostMediaReview(supabase, {
-      brandId: post.brand_id,
-      postId: id,
-      origin: url.origin,
-      force: true
-    });
-    if (!r.queued && r.skippedRunning) return { reviewQueued: 0, skippedRunning: r.skippedRunning };
-    if (!r.queued) return fail(400, { error: 'No reviewable media on this post.' });
-    return { reviewQueued: r.queued, skippedRunning: r.skippedRunning };
   }
 };

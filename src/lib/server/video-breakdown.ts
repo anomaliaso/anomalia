@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { ensureFfmpegPath } from '$lib/server/ffmpeg-bin';
 // One fetcher, one size cap, one place that says why a clip was rejected.
-import { fetchVideoBytes } from '$lib/server/video-review';
+import { fetchVideoBytes } from '$lib/server/video-fetch';
 import { structured } from '$lib/server/research';
 import {
   formatUgcShotBrief,

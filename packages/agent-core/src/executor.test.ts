@@ -8,7 +8,8 @@ import {
 	createMemorySandbox,
 	createMemoryStore,
 	fakeContext,
-	fakePlugin
+	fakePlugin,
+	createMemoryEffectsLedger
 } from '@anomalia/agent-kit/testkit';
 
 function baseDeps(overrides: Partial<ApplyToolDeps> = {}): ApplyToolDeps {
@@ -256,5 +257,191 @@ describe('attach — mai più lo stub che mente', () => {
 		const out = await apply({ name: 'attach', args: { path: '/tmp/x.mp4' } }, fakeContext());
 		expect(out.isError).toBeFalsy();
 		expect((out.content[0] as { text: string }).text).toBe('fatto:/tmp/x.mp4');
+	});
+});
+
+describe('createApplyTool — il gate sugli effetti', () => {
+	function effectfulPlugin(counter: { calls: number }) {
+		return {
+			name: 'content',
+			tools: [{ name: 'content_schedule', description: 'schedula', inputSchema: { type: 'object' }, effectful: true, consequential: true }],
+			async execute() {
+				counter.calls += 1;
+				return { content: [{ type: 'text' as const, text: `post ${counter.calls}` }] };
+			}
+		};
+	}
+
+	const CALL = { name: 'content_schedule', id: 'call-1', args: { post_id: 'p1' } };
+
+	it('claim PRIMA di eseguire, resolve completed dopo', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+		const out = await apply(CALL, fakeContext());
+		expect(out.isError).toBeFalsy();
+		expect(ledger.rows).toHaveLength(1);
+		expect(ledger.rows[0].status).toBe('completed');
+		expect(counter.calls).toBe(1);
+	});
+
+	it('resume della stessa intenzione esegue una sola volta', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+
+		await apply(CALL, fakeContext({ runId: 'run-1' }));
+		expect(counter.calls).toBe(1);
+
+		const out = await apply(CALL, fakeContext({ runId: 'run-2' }));
+		expect(counter.calls).toBe(1);
+		expect(out.isError).toBeFalsy();
+		expect((out.content[0] as { text: string }).text).toContain('post 1');
+	});
+
+	it('due intenzioni nuove con args identici eseguono due volte', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+
+		await apply(CALL, fakeContext({ runId: 'run-1' }));
+		await apply({ ...CALL, id: 'call-2' }, fakeContext({ runId: 'run-2' }));
+
+		expect(counter.calls).toBe(2);
+		expect(ledger.rows).toHaveLength(2);
+	});
+
+	it('un tool effectful senza identità stabile non viene eseguito', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+
+		const out = await apply({ name: 'content_schedule', args: { post_id: 'p1' } }, fakeContext());
+
+		expect(counter.calls).toBe(0);
+		expect(out.isError).toBe(true);
+		expect(out.content[0]).toMatchObject({ type: 'text' });
+	});
+
+	it('due worker concorrenti ottengono un solo claim', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+
+		const [first, second] = await Promise.all([
+			apply(CALL, fakeContext({ runId: 'run-1' })),
+			apply(CALL, fakeContext({ runId: 'run-2' }))
+		]);
+
+		expect(counter.calls).toBe(1);
+		expect([first, second].filter((result) => !result.isError)).toHaveLength(1);
+		expect(ledger.rows).toHaveLength(1);
+	});
+
+	it('un worker tardivo non risolve un effetto già riconciliato', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const claim = await ledger.claim({
+			brandId: 'brand-test',
+			runId: 'run-dead',
+			invocationId: CALL.id,
+			toolName: CALL.name,
+			request: CALL.args
+		});
+		await ledger.reconcileRun('run-dead');
+		await ledger.resolve(claim.effect.id, 'completed', { content: [{ type: 'text', text: 'late' }] });
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+
+		const out = await apply(CALL, fakeContext({ runId: 'run-new' }));
+		expect(counter.calls).toBe(0);
+		expect(out.isError).toBe(true);
+		expect((out.content[0] as { text: string }).text).toMatch(/già registrato/);
+		expect(ledger.rows[0].status).toBe('ambiguous');
+	});
+
+	it('failed lascia rieseguire (l\'effetto non è avvenuto, non è un doppione)', async () => {
+		const counter = { calls: 0 };
+		const injected = createMemoryEffectsLedger();
+		const claim = await injected.claim({
+			brandId: 'brand-test',
+			runId: 'r0',
+			invocationId: CALL.id,
+			toolName: CALL.name,
+			request: CALL.args
+		});
+		await injected.resolve(claim.effect.id, 'failed', { message: 'net' });
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: injected }));
+
+		const out = await apply(CALL, fakeContext());
+		expect(counter.calls).toBe(1);
+		expect((out.content[0] as { text: string }).text).toBe('post 1');
+	});
+
+	it('un risultato ambiguo resta congelato anche se il tool lo segnala come errore', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const plugin = {
+			...effectfulPlugin(counter),
+			async execute() {
+				counter.calls += 1;
+				return { content: [{ type: 'text' as const, text: 'esito incerto' }], isError: true, effectStatus: 'ambiguous' as const };
+			}
+		};
+		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
+
+		const first = await apply(CALL, fakeContext({ runId: 'run-1' }));
+		const second = await apply(CALL, fakeContext({ runId: 'run-2' }));
+
+		expect(first.effectStatus).toBe('ambiguous');
+		expect(second).toEqual(first);
+		expect(counter.calls).toBe(1);
+		expect(ledger.rows[0]?.status).toBe('ambiguous');
+	});
+
+	it('un eccezione durante un effetto diventa ambiguous, non un retry cieco', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const plugin = {
+			...effectfulPlugin(counter),
+			async execute() {
+				counter.calls += 1;
+				throw new Error('connessione interrotta dopo la scrittura');
+			}
+		};
+		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
+
+		await expect(apply(CALL, fakeContext({ runId: 'run-1' }))).rejects.toThrow('connessione interrotta');
+		const second = await apply(CALL, fakeContext({ runId: 'run-2' }));
+
+		expect(second.isError).toBe(true);
+		expect(counter.calls).toBe(1);
+		expect(ledger.rows[0]?.status).toBe('ambiguous');
+	});
+
+	it('la stessa identità con payload diverso viene rifiutata', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const apply = createApplyTool(baseDeps({ plugins: [effectfulPlugin(counter)], effects: ledger }));
+
+		await apply(CALL, fakeContext({ runId: 'run-1' }));
+		const out = await apply(
+			{ ...CALL, args: { post_id: 'p2' } },
+			fakeContext({ runId: 'run-2' })
+		);
+
+		expect(counter.calls).toBe(1);
+		expect(out.isError).toBe(true);
+		expect((out.content[0] as { text: string }).text).toMatch(/payload|identità|identity/i);
+	});
+
+	it('solo i tool marcat effectful passano dal gate; gli altri no', async () => {
+		const counter = { calls: 0 };
+		const ledger = createMemoryEffectsLedger();
+		const plugin = { ...effectfulPlugin(counter), tools: [{ name: 'content_read', description: 'legge', inputSchema: { type: 'object' }, effectful: false, consequential: false }] };
+		const apply = createApplyTool(baseDeps({ plugins: [plugin], effects: ledger }));
+		const out = await apply({ name: 'content_read', args: {} }, fakeContext());
+		expect(out.isError).toBeFalsy();
+		expect(ledger.rows).toHaveLength(0); // nessuna riga: il tool non ha effetti
+		expect(counter.calls).toBe(1);
 	});
 });

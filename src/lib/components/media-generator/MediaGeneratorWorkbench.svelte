@@ -24,9 +24,9 @@
     type UgcPlatformId
   } from '$lib/ugc-formats';
   import ChatImageLightbox from '$lib/components/ChatImageLightbox.svelte';
-  import VideoReviewPanel from '$lib/components/VideoReviewPanel.svelte';
   import { isVideoUrl } from '$lib/content-formats';
   import {
+    GROK_IMAGINE_VIDEO_MODEL,
     isKnownVideoModelId,
     isSeedanceFamily,
     modelSupportsReferenceVideo,
@@ -117,8 +117,8 @@
   let playbookOpen = $state(false);
   /** When true, agent uses brand visual_style / look / mood. */
   let useBrandStyle = $state(true);
-  /** Video model when kind=video. Empty = platform default. UGC defaults to Seedance 2.5. */
-  let videoModel = $state<'' | VideoModelChoiceId>(mode === 'ugc' ? SEEDANCE_25_MODEL : '');
+  /** Video model when kind=video. Empty = platform default. UGC defaults to Grok Imagine (480p). */
+  let videoModel = $state<'' | VideoModelChoiceId>(mode === 'ugc' ? GROK_IMAGINE_VIDEO_MODEL : '');
   let firstFrameUrl = $state('');
   let lastFrameUrl = $state('');
   let referenceVideoText = $state('');
@@ -611,8 +611,8 @@
       .slice(0, MAX_SEEDANCE_REFS);
 
     // Remake from a selected video → Seedance (Grok has no reference_video_urls on Kie).
-    // UGC Creator: empty "platform default" is Seedance 2.5.
-    const requestedModel = ugcMode && !videoModel ? SEEDANCE_25_MODEL : videoModel;
+    // UGC Creator: empty "platform default" is Grok Imagine.
+    const requestedModel = ugcMode && !videoModel ? GROK_IMAGINE_VIDEO_MODEL : videoModel;
     const effectiveVideoModel =
       (referenceVideoUrls.length || referenceAudioUrls.length || firstFrameUrl || lastFrameUrl) &&
       !modelSupportsReferenceVideo(requestedModel)
@@ -912,16 +912,7 @@
 
 {#if previewUrl}
   {#if isVideoUrl(previewUrl)}
-    <ChatImageLightbox src={previewUrl} caption={previewCaption} onclose={closePreview}>
-      {#snippet extra()}
-        <VideoReviewPanel
-          url={previewUrl}
-          brandSlug={brand.slug}
-          defaultStandard="organic"
-          caption={previewCaption}
-        />
-      {/snippet}
-    </ChatImageLightbox>
+    <ChatImageLightbox src={previewUrl} caption={previewCaption} onclose={closePreview} />
   {:else}
     <ChatImageLightbox src={previewUrl} caption={previewCaption} onclose={closePreview} />
   {/if}

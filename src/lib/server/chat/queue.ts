@@ -15,7 +15,7 @@ import { withSandboxTools } from '$lib/server/chat/sandbox-tools';
 import { computerOwner } from '$lib/agent-computer';
 import { stripUnattendedTools } from '$lib/server/chat/unattended';
 import { withStrategistTools } from '$lib/server/chat/strategist-tools';
-import { customAgentSystemBlock, getCustomAgentPersona } from '$lib/server/custom-agent-persona';
+import { customAgentSystemBlock, getCustomAgentPersona, kitPersonaOverlay } from '$lib/server/custom-agent-persona';
 import { agentStickerColor } from '$lib/chat-expression';
 import {
 	saveMessages,
@@ -92,6 +92,8 @@ import { hydrateChatDocuments } from '$lib/server/hydrate-chat-documents';
 import { DM_REPLY_STEP_CAP, dmAgents, dmBrief, dmNames } from '$lib/chat-dm';
 import { parseRoomAgents, stripRoomPeerTools } from '$lib/server/chat/room';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { carryImagesToContinuation } from '$lib/agent/bridge/provider-refs';
+import { createChatActionApproval } from '$lib/server/chat/action-approval';
 
 export function kickChatQueueWork(origin: string): Promise<void> {
 	const headers: Record<string, string> = {};
@@ -150,6 +152,7 @@ export async function enqueueQueuedChatTurn(
 		 * domanda, è un prefill, e la seconda voce continuerebbe la frase della prima.
 		 */
 		userMessageSaved?: boolean;
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const locale = bilingualNoticeLocale(opts.locale);
@@ -178,7 +181,8 @@ export async function enqueueQueuedChatTurn(
 				...(opts.agent ? { agent: opts.agent } : {}),
 				...(opts.customAgentId ? { custom_agent_id: opts.customAgentId } : {}),
 				...(opts.speaker ? { speaker: opts.speaker } : {}),
-				...(opts.userMessageSaved ? { user_message_saved: true } : {})
+				...(opts.userMessageSaved ? { user_message_saved: true } : {}),
+				...(opts.resumeRunId ? { resume_run_id: opts.resumeRunId } : {})
 			}
 		})
 		.select('id')
@@ -227,6 +231,12 @@ export async function enqueueTurnContinuation(
 		 * di battute. Vedi motion-video/unfinished.ts.
 		 */
 		maxDepth?: number;
+		/**
+		 * Il run da RIPRENDERE, invece di aprirne uno nuovo. Lo passa il reaper per una riga
+		 * lasciata `running` col lease scaduto: chi drena la prende col fence successivo e
+		 * continua lo stesso turno, senza un secondo messaggio in chat.
+		 */
+		resumeRunId?: string;
 	}
 ): Promise<string | null> {
 	const depth = Math.max(0, Math.trunc(opts.depth ?? 0));
@@ -259,7 +269,8 @@ export async function enqueueTurnContinuation(
 		continuationDepth: depth + 1,
 		mode: opts.mode,
 		tier: opts.tier,
-		reasoning: opts.reasoning
+		reasoning: opts.reasoning,
+		resumeRunId: opts.resumeRunId
 	});
 }
 
@@ -643,6 +654,9 @@ export async function processNextQueuedChatJob(
 					? dmSpeaker.slice('custom:'.length)
 					: threadRow?.custom_agent_id;
 		const memoryAgentKey = personaId ? `custom:${personaId}` : agentId;
+		// Il persona si risolve UNA volta: entra nel system prompt del classico E nel turno kit
+		// (blocco, memoria `custom:<id>`, preferenza di modello).
+		const persona = personaId ? await getCustomAgentPersona(admin, brand.id, personaId) : null;
 		// ── IL TURNO KIT, DAL DRAIN ────────────────────────────────────────────────────────────
 		// Il drain non sapeva far girare uno specialista: qualunque job accodato su un thread kit
 		// finiva nel motore CLASSICO qui sotto, cioè rispondeva un agente diverso da quello con cui
@@ -660,16 +674,20 @@ export async function processNextQueuedChatJob(
 		// L'agente è lo STESSO `agentId` del percorso classico (thread + `params.agent`): una sola
 		// risoluzione, o i due motori risponderebbero con agenti diversi allo stesso job.
 		//
-		// FUORI dal kit restano stanze e agenti custom: sono meccaniche del motore classico che
-		// vivono QUI dentro (la voce successiva della stanza, il persona nel system prompt) e che
-		// il bridge non conosce. Mandarcele dentro non è «uno specialista al posto di un altro»,
-		// è perdere la catena delle voci e il persona. I DM ci stanno: il contesto del DM (chi
-		// parla, il blocco in testa al prompt) entra nel turno kit come `dm`.
+		// FUORI dal kit restano le stanze (la catena delle voci è meccanica del runner classico)
+		// e i turni SCHEDULATI dell'agente custom (routine e brief: un incarico che nessuno
+		// guarda, di proprietà del ticket successivo). Un agente custom VIVO ci sta: lo spec è
+		// il mestiere del thread, la persona entra nel turno kit come overlay (blocco, memoria,
+		// modello). I DM ci stanno: il contesto del DM entra come `dm`.
 		//
 		// Il flag si guarda PRIMA dell'import: `shouldUseKit` resta l'autorità sulla condizione, ma
 		// tirare dentro il bridge (executor, sandbox, plugin) a ogni turno accodato si paga anche a
 		// kit spento.
-		if (env.AGENT_KIT === 'on' && !personaId && parseRoomAgents(threadRow?.room_agents).length < 2) {
+		if (
+			env.AGENT_KIT === 'on' &&
+			(params.scheduled !== true || !personaId) &&
+			parseRoomAgents(threadRow?.room_agents).length < 2
+		) {
 			const { shouldUseKit, runKitTurn } = await import('$lib/agent/bridge/live');
 			const kitSpec = shouldUseKit(env, agentId);
 			if (kitSpec) {
@@ -709,15 +727,27 @@ await maybeCompactThread(admin, {
 							plan: brand.plan
 						});
 					})().catch((e) => console.warn('[Chat Queue] compattazione kit saltata:', e));
-					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId);
+					// LLM di chat vision-native: la storia ricaricata per il kit porta le parti
+					// immagine, o un rilancio su un thread con allegati riparte cieco.
+					let hist = await loadHistory(admin, brand.id, job.user_id as string, threadId, undefined, 'images');
 					const tail = hist[hist.length - 1];
 					// Un DM è SEMPRE già salvato: message_agent scrive la riga (firmata col mittente) al
 					// momento dell'invio — risalvarla qui la duplicherebbe senza firma.
+					// Il confronto legge anche il content a PARTI (storia col media attivo): il testo
+					// è il primo pezzo, non l'array intero.
+					const tailText =
+						typeof tail?.content === 'string'
+							? tail.content
+							: Array.isArray(tail?.content)
+								? (tail.content as Array<{ type?: string; text?: string }>)
+										.filter((p) => p?.type === 'text')
+										.map((p) => p.text ?? '')
+										.join('\n')
+								: '';
 					const alreadySaved =
 						isDm ||
 						replay ||
-						(tail?.role === 'user' &&
-							(typeof tail.content === 'string' ? tail.content : '') === userMessageContent);
+						(tail?.role === 'user' && tailText === userMessageContent);
 					if (!alreadySaved) {
 						await saveMessages(
 							admin,
@@ -735,7 +765,13 @@ await maybeCompactThread(admin, {
 					// un DM, l'identità del mittente DENTRO il contenuto — sostituisce l'ultima riga
 					// user invece di duplicarla, stesso gesto del percorso classico.
 					const kitMessages: ModelMessage[] = replay
-						? [...hist, { role: 'user', content: modelUserContent } as ModelMessage]
+						? [
+								...hist,
+								// La continuazione è un messaggio UTENTE per l'harness, che collassa la catena
+								// all'ultimo turno: senza le immagini del turno che si continua, l'agente
+								// riparte cieco e smentisce di averle mai viste.
+								carryImagesToContinuation(hist, modelUserContent) as ModelMessage
+							]
 						: (turnDocuments.length || dmTaggedContent) && hist[hist.length - 1]?.role === 'user'
 							? [...hist.slice(0, -1), { role: 'user', content: modelUserContent } as ModelMessage]
 							: hist;
@@ -752,11 +788,23 @@ await maybeCompactThread(admin, {
 						locale: bilingualNoticeLocale(locale),
 						mode: params.mode,
 						tier: typeof params.tier === 'string' ? params.tier : undefined,
-						modelFamily: turnModelFamily(threadRow?.model)?.family,
+						modelFamily: turnModelFamily(threadRow?.model, persona?.model)?.family,
+						modelId: turnModelFamily(threadRow?.model, persona?.model)?.model,
 						reasoning: typeof params.reasoning === 'string' ? params.reasoning : undefined,
+						// La ripresa di un run lasciato dal reaper: lo stesso turno continua, con il
+						// fence successivo, invece di aprirne uno nuovo accanto al lavoro a metà.
+						resumeRunId: typeof params.resume_run_id === 'string' ? params.resume_run_id : undefined,
 						// La scalata Auto→Pro segue la richiesta di una PERSONA: un turno schedulato, un
 						// DM fra agenti o una ripresa scritta dal sistema restano sul default.
 						escalationText: params.scheduled === true || replay || isDm ? undefined : userMessageContent,
+						approval: isDm
+							? undefined
+							: createChatActionApproval({
+									messages: kitMessages,
+									brandId: brand.id,
+									userId: job.user_id as string,
+									threadId
+							  }),
 						// Il contesto del DM: chi parla, per chi. Il turno kit nasce DM (blocco in testa
 						// al prompt, firma della risposta, niente riprese) come lo nasceva quello classico.
 						dm:
@@ -767,6 +815,11 @@ await maybeCompactThread(admin, {
 										otherName: dmOtherName
 									}
 								: undefined,
+						// L'overlay della persona: chi è (macchina), dove legge la memoria, cosa vuole
+						// l'utente. Il blocco lo monta il formatter condiviso, col locale del kit.
+						persona: persona
+							? kitPersonaOverlay(persona, bilingualNoticeLocale(locale))
+							: undefined,
 						origin,
 						budgetMs,
 						continuationDepth: Math.max(0, Math.trunc(Number(params.continuation_depth)) || 0),
@@ -832,7 +885,6 @@ const turnVolatileP = buildTurnVolatileBlock(admin, brand, locale).catch(() => '
 			// già perso una volta — il paragrafo finale non batteva l'intero prompt di brand.
 			systemPrompt = `${dmBrief(dmMemberNames[dmSpeaker] ?? dmSpeaker, dmOtherName, locale)}\n\n${systemPrompt}`;
 		}
-		const persona = personaId ? await getCustomAgentPersona(admin, brand.id, personaId) : null;
 		if (persona) systemPrompt += customAgentSystemBlock(persona, locale);
 		// Anche un turno in coda deve sapere cosa ha già consegnato in questo thread, o un incarico
 		// ricorrente ripubblica lo stesso report ogni settimana con un nome diverso.

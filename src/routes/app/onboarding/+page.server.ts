@@ -23,6 +23,7 @@ import { latestOnboardingStepJob } from '$lib/server/onboarding-steps';
 import { seedOnboardingChat } from '$lib/server/onboarding-chat';
 import { kickChatQueueWork } from '$lib/server/chat/queue';
 import { insertBrandWithSlug } from '$lib/server/brand-create';
+import { guestPostRow, parseGuestPost } from '$lib/guest-onboarding';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Cookies } from '@sveltejs/kit';
 
@@ -276,6 +277,28 @@ async function persistHandlesAndContext(
       await rebuildBrandContext(supabase, brandId, undefined, delta);
     }
   } catch (error) { swallow('rebuild brand context', error); }
+}
+
+/**
+ * Adopt the post the visitor was shown BEFORE signing up.
+ *
+ * Not a regeneration: the image is the object already rendered and stored under `guest/<uuid>/`,
+ * so what earned the signup is exactly what they find in the account. Silent when the form
+ * carries no post — every path through `create` also serves visitors who never saw one.
+ */
+async function adoptGuestPost(
+  supabase: SupabaseClient,
+  brandId: string,
+  data: FormData
+): Promise<void> {
+  const raw = String(data.get('guest_post') ?? '');
+  if (!raw) return;
+
+  const post = parseGuestPost(parseJson<unknown>(raw, null));
+  if (!post) return;
+
+  const { error } = await supabase.from('posts').insert(guestPostRow(post, brandId));
+  if (error) swallow('adopt guest post', error);
 }
 
 async function persistSecondHalf(
@@ -586,7 +609,11 @@ export const actions: Actions = {
       return fail(500, { error: 'Could not create your workspace', name, website });
     }
 
-    const websiteNorm = website ?? (profile?.url as string) ?? null;
+    // L'indirizzo scritto dall'utente può non essere quello da cui il sito si legge davvero: un
+    // dominio che rimanda altrove senza il certificato per sé stesso viene risolto dall'analisi
+    // (brand-analysis.resolveEntryUrl). Vince quello ANALIZZATO, perché è l'unico che risponde:
+    // radar, SEO e ri-analisi ripartiranno da lì.
+    const websiteNorm = (profile?.url as string) ?? website ?? null;
     // Recover from a prior attempt that inserted then timed out (client brandId may have drifted).
     if (websiteNorm) {
       const { data: bySite } = await supabase
@@ -602,6 +629,7 @@ export const actions: Actions = {
           syncHistory: false
         });
         if (draftId) await supabase.from('onboarding_drafts').delete().eq('id', draftId).eq('user_id', user.id);
+        await adoptGuestPost(supabase, bySite.id, data);
         scheduleSocialHistory(platform, url.origin, bySite.id);
         await redeemReferralQuietly(cookies, user.id, bySite.id);
         throw redirect(
@@ -658,17 +686,21 @@ export const actions: Actions = {
     }
 
     if (!brand) {
-      const { data: inserted, error } = await insertBrandWithSlug(supabase, {
-        id: brandId,
-        org_id: orgId,
-        created_by: user.id,
-        // Left null until people → preview finishes (or the user never resumes — that's fine).
-        onboarding_completed_at: null,
-        name,
-        website: websiteNorm,
-        slug,
-        target_platforms: targetPlatforms.length ? targetPlatforms : null
-      });
+      const { data: inserted, error } = await insertBrandWithSlug(
+        supabase,
+        {
+          id: brandId,
+          org_id: orgId,
+          created_by: user.id,
+          // Left null until people → preview finishes (or the user never resumes — that's fine).
+          onboarding_completed_at: null,
+          name,
+          website: websiteNorm,
+          slug,
+          target_platforms: targetPlatforms.length ? targetPlatforms : null
+        },
+        { idSource: 'client-proposed' }
+      );
       if (error || !inserted) {
         await logOnboardingError(
           supabase,
@@ -692,6 +724,7 @@ export const actions: Actions = {
 
     if (draftId) await supabase.from('onboarding_drafts').delete().eq('id', draftId).eq('user_id', user.id);
 
+    await adoptGuestPost(supabase, brand.id, data);
     scheduleSocialHistory(platform, url.origin, brand.id);
     await redeemReferralQuietly(cookies, user.id, brand.id);
     throw redirect(
@@ -787,12 +820,12 @@ export const actions: Actions = {
         created_by: user.id,
         onboarding_completed_at: new Date().toISOString(),
         name,
-        website: website ?? (profile?.url as string) ?? null,
+        website: (profile?.url as string) ?? website ?? null,
         slug,
         target_platforms: targetPlatforms.length ? targetPlatforms : null,
         content_prefs: contentPrefs
       },
-      'id, timezone'
+      { select: 'id, timezone', idSource: 'client-proposed' }
     );
     if (error || !brand) return fail(500, { error: error ?? 'Could not create brand', name, website });
 
@@ -814,7 +847,7 @@ export const actions: Actions = {
       pay.set('cycle', normalizeCycle(cycle));
     }
     await redeemReferralQuietly(cookies, user.id, brand.id);
-    const setupTarget = await setupChatTarget(platform, url.origin, { id: brand.id, slug }, user.id, website ?? (profile?.url as string) ?? null, name, locale);
+    const setupTarget = await setupChatTarget(platform, url.origin, { id: brand.id, slug }, user.id, (profile?.url as string) ?? website ?? null, name, locale);
     throw redirect(303, `${setupTarget}${pay.toString() ? `?${pay}` : ''}`);
   }
 };

@@ -30,9 +30,9 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getBrandContext } from '$lib/server/ai-log';
-import { llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
+import { isGoogleGeminiModel, llmConfigured, llmStructured, llmVideoReviewerModel } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { fetchVideoBytes, prepareReviewMedia } from '$lib/server/video-review';
+import { fetchVideoBytes, prepareReviewMedia } from '$lib/server/video-fetch';
 import {
   isPostsDesignEnabled,
   loadPostsDesignDetail,
@@ -309,6 +309,7 @@ const SPEC_SCHEMA = {
 
 function studyPrompt(opts: {
   medium: 'video' | 'still';
+  videoAttached: boolean;
   brandName?: string | null;
   language?: string | null;
   ref: MotionReferenceCard;
@@ -320,7 +321,9 @@ function studyPrompt(opts: {
     : 'The engineer reading this is about to build a different piece for another brand.';
   const watch =
     opts.medium === 'video'
-      ? `MEDIA: stills from the scene changes plus the clip itself (~${opts.duration.toFixed(1)}s). Watch it in order and time the beats.`
+      ? opts.videoAttached
+        ? `MEDIA: stills from the scene changes plus the clip itself (~${opts.duration.toFixed(1)}s). Watch it in order and time the beats.`
+        : 'MEDIA: extracted stills only — the selected model cannot receive video input. Describe the visible structure without inventing unseen timing.'
       : 'MEDIA: a single still — this post does not move. Describe the composition as one beat and say what a motion version of it would animate.';
 
   return `You are a motion-design director breaking down a reference so someone else can build their own piece with the same STRUCTURE.
@@ -601,6 +604,9 @@ export async function studyMotionReference(opts: {
   if (opts.abortSignal?.aborted) return { ok: false, error: 'aborted' };
   if (!media) return { ok: false, error: 'media_unavailable' };
 
+  const reviewerModel = llmVideoReviewerModel();
+  const videoAttached = !!media.clipMp4 && isGoogleGeminiModel(reviewerModel);
+
   const frameNote = media.frames.map((f, i) => `${i + 1}. ${f.label || `frame ${i + 1}`}`).join('\n');
 
   try {
@@ -608,6 +614,7 @@ export async function studyMotionReference(opts: {
     const prompt = [
       studyPrompt({
         medium: media.medium,
+        videoAttached,
         brandName: opts.brandName,
         language: opts.language,
         ref,
@@ -622,8 +629,8 @@ export async function studyMotionReference(opts: {
       prompt,
       schema: SPEC_SCHEMA,
       images: media.frames.map((f) => ({ mediaType: f.mimeType, data: f.data })),
-      file: media.clipMp4 ? { mediaType: 'video/mp4', data: media.clipMp4 } : undefined,
-      model: llmVideoReviewerModel(),
+      ...(videoAttached ? { file: { mediaType: 'video/mp4', data: media.clipMp4! } } : {}),
+      model: reviewerModel,
       label: 'motion.reference_study'
     })) as AnyRec | null;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'model_parse_failed' };

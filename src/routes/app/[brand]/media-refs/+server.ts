@@ -1,6 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { json } from '@sveltejs/kit';
 import { signKnowledgePaths } from '$lib/server/media-archive';
+import { likenessConsented } from '$lib/server/design-visual-refs';
 import { signPersonImages, type PersonImage } from '$lib/server/people';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { listTalents } from '$lib/server/talent';
@@ -10,7 +11,7 @@ import type { RequestHandler } from './$types';
 // Lists reusable reference images for post editor + brand chat composer + media generator:
 //  - brandImages: Studio mood refs (brand_documents kind='image') + Media library images
 //  - postThumbs:  recent own-post thumbnails (social_post_history)
-//  - people:      brand people from Studio (all signed reference photos)
+//  - people:      brand people from Studio whose likeness may be used (see likenessConsented)
 //  - talents:     global AI talents from /talents (all signed views)
 //  - products:    brand catalog products with image URLs
 //  - ads:         already-harvested Meta Ad Library creatives (no live pull)
@@ -50,7 +51,7 @@ export const GET: RequestHandler = async ({ params, locals: { supabase, safeGetS
       .limit(36),
     supabase
       .from('people')
-      .select('id, name, role, images')
+      .select('id, name, role, kind, consent, images')
       .eq('brand_id', brand.id)
       .order('created_at', { ascending: true })
       .limit(24),
@@ -96,6 +97,9 @@ export const GET: RequestHandler = async ({ params, locals: { supabase, safeGetS
 
   const people: Array<{ id: string; name: string; role: string | null; url: string; urls: string[] }> = [];
   for (const row of peopleRows ?? []) {
+    if (!likenessConsented(row)) {
+      continue;
+    }
     const urls = await signPersonImages(supabase, (row.images ?? []) as PersonImage[]);
     if (!urls.length) continue;
     people.push({

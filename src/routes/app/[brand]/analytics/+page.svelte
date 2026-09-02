@@ -8,7 +8,6 @@
   import { getPlatform } from '$lib/components/platform-meta';
   import PageHead from '$lib/components/PageHead.svelte';
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
-  import MediaReviewStatsPanel from '$lib/components/MediaReviewStatsPanel.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
   let { data } = $props();
   const brand = $derived(data.brand);
@@ -214,7 +213,6 @@
     { label: $_('app.analytics.failed'), value: data.failed, delta: data.failed ? $_('app.analytics.needsAttention') : $_('app.analytics.none') },
   ]} />
 
-  <MediaReviewStatsPanel stats={data.mediaReviews} brandSlug={brand.slug} />
 
   {#if data.socialPerformance.length}
     <section class="panel" style="margin-top:16px;">

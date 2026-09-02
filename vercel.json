@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm ci",
   "headers": [
     {
       "source": "/fonts/(.*)",
@@ -143,20 +144,12 @@
       "schedule": "15 * * * *"
     },
     {
-      "path": "/api/v1/market/harvest",
-      "schedule": "40 6 * * *"
-    },
-    {
       "path": "/api/v1/market/field",
       "schedule": "50 6 * * *"
     },
     {
       "path": "/api/v1/leads/outcomes",
       "schedule": "20 7 * * *"
-    },
-    {
-      "path": "/api/v1/market/trends",
-      "schedule": "20 */4 * * *"
     },
     {
       "path": "/api/v1/webhooks/work",

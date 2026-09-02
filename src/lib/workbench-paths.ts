@@ -126,15 +126,18 @@ export const WORKBENCH_PAGES: WorkbenchPageDef[] = [
   // { hub: 'web', segment: 'geo', labelKey: 'app.hub.web.geo' }, // kill seo/geo 2026-08-29
   // { hub: 'web', segment: 'keywords', labelKey: 'app.hub.web.keywords' }, // kill seo/geo 2026-08-29
   // { hub: 'web', segment: 'backlinks', labelKey: 'app.hub.web.backlinks' }, // kill seo/geo 2026-08-29
-  { hub: 'web', segment: 'site', labelKey: 'app.hub.web.blog' }
-  // Il hub `designer` non è più elencato: le pagine restano su disco e raggiungibili per link.
+  { hub: 'web', segment: 'site', labelKey: 'app.hub.web.blog' },
+  { hub: 'designer', segment: 'designer', labelKey: 'app.hub.designer.label' },
+  { hub: 'designer', segment: 'media-generator', labelKey: 'app.hub.designer.mediaGenerator' },
+  { hub: 'designer', segment: 'ugc-creator', labelKey: 'app.hub.designer.ugcCreator' },
+  { hub: 'designer', segment: 'motion-video', labelKey: 'app.hub.designer.motionVideo' },
+  { hub: 'designer', segment: 'media', labelKey: 'app.hub.designer.mediaLibrary' },
 ];
 
-export const WORKBENCH_HUBS: WorkbenchPageHub[] = ['brand', 'strategy', 'publish', 'web', 'ads', 'automations'];
+export const WORKBENCH_HUBS: WorkbenchPageHub[] = ['brand', 'strategy', 'publish', 'web', 'ads', 'automations', 'designer'];
 
 /**
  * Sotto-pagine di ogni hub (sidebar). Le chiavi combaciano con `app.hub.{hub}.{key}`.
- * `Partial` perché il hub `designer` non ha più una voce di nav: il tipo resta, la sua riga no.
  */
 export const HUB_TABS: Partial<Record<WorkbenchPageHub, { key: string; path: string; adsOnly?: boolean }[]>> = {
   brand: [
@@ -177,6 +180,13 @@ export const HUB_TABS: Partial<Record<WorkbenchPageHub, { key: string; path: str
     // { key: 'backlinks', path: '/backlinks' }, // kill seo/geo 2026-08-29
     { key: 'blog', path: '/site' }
     // SEO/GEO spente (kill 2026-08-29): voci nav rimosse, pagine e dati restano su disco.
+  ],
+  designer: [
+    { key: 'overview', path: '/designer' },
+    { key: 'mediaGenerator', path: '/media-generator' },
+    { key: 'ugcCreator', path: '/ugc-creator' },
+    { key: 'motionVideo', path: '/motion-video' },
+    { key: 'mediaLibrary', path: '/media' },
   ],
 };
 

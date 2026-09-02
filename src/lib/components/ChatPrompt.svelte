@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
-  import { Plus, ImagePlus, ImageUp, Users, Images, ChevronRight, Terminal, Bot, Check, FileText, Plug, Cpu, Brain, X } from '@lucide/svelte';
+  import { Plus, ImagePlus, ImageUp, Users, Images, ChevronRight, Terminal, Bot, Check, FileText, Plug, Cpu, Brain, Wand2, X } from '@lucide/svelte';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import { BUILTIN_AGENT_AVATARS } from '$lib/agent-avatars';
   import {
@@ -19,7 +19,8 @@
     isCustomChatModel,
     type ChatTier
   } from '$lib/chat-tiers';
-  import { DEFAULT_REASONING, REASONING_LEVELS, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
+  import { usdPerMillion } from '$lib/model-price';
+  import { DEFAULT_REASONING, defaultReasoningFor, reasoningLevelsFor, isValidForTier, type ChatReasoning } from '$lib/chat-reasoning';
   import type { AgentMeta } from '$lib/agent-icons';
   import {
     buildAttachmentsPayload,
@@ -101,6 +102,8 @@
     agentLocked = false,
     agent = null,
     onagentchange = (_id: string) => {},
+    /** I modelli che il gateway serve adesso: il menu li mostra al posto di una lista fissa. */
+    chatModels = [] as Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>,
     /** La scelta di modello è cambiata dal picker: chi possiede il thread la salva cross-device. */
     onmodelchange = (_choice: { tier: ChatTier; reasoning: ChatReasoning }) => {},
     // The user's own agents, from Custom agents. Picking one hands the thread its brief.
@@ -138,6 +141,7 @@
     agentLocked?: boolean;
     agent?: string | null;
     onagentchange?: (id: string) => void;
+    chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>;
     onmodelchange?: (choice: { tier: ChatTier; reasoning: ChatReasoning }) => void;
     customAgents?: Array<{ id: string; name: string; face: string; color: string }>;
     customAgent?: string | null;
@@ -162,14 +166,38 @@
   let fileEl = $state<HTMLInputElement>();
   let docEl = $state<HTMLInputElement>();
   let importEl = $state<HTMLInputElement>();
+  let hydrated = $state(false);
   let importStatus = $state<string | null>(null);
   let convertStatus = $state<string | null>(null);
   let rootEl = $state<HTMLFormElement>();
   let uploads = $state<string[]>([]);
   let uploadError = $state('');
+  // Downscale in corso: l'invio con un allegato ancora in elaborazione lo lascia a terra
+  // (il payload nasce senza l'immagine e il turno parte cieco). Conta i file in volo.
+  let attaching = $state(0);
   let docs = $state<Array<ChatDocument & { converting?: boolean; error?: string }>>([]);
   let picks = $state<ChatAttachmentPick[]>([]);
   let pendingCommand = $state<string | undefined>(undefined);
+  // Un preset ha una chiave i18n; un modello del catalogo porta il suo nome dal gateway, e
+  // inventargli una chiave significherebbe mostrarne il nome tecnico appena ne arriva uno nuovo.
+  function tierLabel(t: ChatTier): string {
+    const model = chatModels.find((m) => m.id === t);
+    if (model) return model.label;
+    return (CHAT_PRESET_TIERS as readonly string[]).includes(t) || (CHAT_CUSTOM_MODELS as readonly string[]).includes(t)
+      ? $_('chat.tier.' + t)
+      : t;
+  }
+
+  const K_TOKENS = 1000;
+  function modelSub(m: { contextLength: number; inputUsdPerM: number; outputUsdPerM: number }): string {
+    const ctx = m.contextLength ? `${Math.round(m.contextLength / K_TOKENS)}k` : '';
+    const price =
+      m.inputUsdPerM || m.outputUsdPerM
+        ? `${usdPerMillion(m.inputUsdPerM)}/${usdPerMillion(m.outputUsdPerM)} per 1M`
+        : '';
+    return [ctx, price].filter(Boolean).join(' · ');
+  }
+
   let menu = $state<'none' | 'plus' | 'commands' | 'mode' | 'agents' | 'tier' | 'reasoning' | 'picker'>('none');
 
   /**
@@ -244,6 +272,7 @@
   let recTimer: ReturnType<typeof setInterval> | null = null;
 
   const canSend = $derived(!!value.trim() || hasAttachments);
+  const attachReady = $derived(attaching === 0);
   const showMic = $derived(sttSupported && !!brandSlug && !canSend && !loading && !sending);
 
   /**
@@ -252,6 +281,7 @@
    * così i bottoni dentro il menu tengono il loro handler.
    */
   onMount(() => {
+    hydrated = true;
     const onPointerDown = (e: Event) => {
       if (menu === 'none' && !slashOpen) return;
       const target = e.target as HTMLElement | null;
@@ -359,11 +389,11 @@
       /* ignore */
     }
     // Default thinking is the penultimate level of the current model's own list.
-    reasoning = DEFAULT_REASONING[tier];
+    reasoning = defaultReasoningFor(tier);
   });
 
   $effect(() => {
-    if (!isValidForTier(reasoning, tier)) reasoning = DEFAULT_REASONING[tier];
+    if (!isValidForTier(reasoning, tier)) reasoning = defaultReasoningFor(tier);
   });
 
   // Draft che sopravvive a un refresh (per thread, in sessionStorage). Ripristino UNA volta per
@@ -414,7 +444,7 @@
   // Picking a model applies to the conversation in front of you; the default for a NEW chat is the
   // brand setting (Settings → Chat), not whatever this device happened to pick last.
   function setTier(t: ChatTier) {
-    const nextReasoning = DEFAULT_REASONING[t];
+    const nextReasoning = defaultReasoningFor(t);
     tier = t;
     reasoning = nextReasoning;
     menu = 'none';
@@ -485,7 +515,9 @@
     const text = value.trim();
     micError = '';
     // While a reply is generating, submit still works — the parent queues the message.
-    if ((!text && !hasAttachments) || convertingDocs) return;
+    // Un allegato ancora in elaborazione NON parte col messaggio: blocchiamo l'invio
+    // anziché consegnare un turno cieco (la strip mostra il chip "in elaborazione").
+    if ((!text && !hasAttachments) || convertingDocs || !attachReady) return;
     const attachments = buildAttachmentsPayload(uploads, picks);
     const command = pendingCommand;
     // The same thumbs the strip is showing — the chat puts them straight on the sent bubble
@@ -565,6 +597,7 @@
     input.value = '';
     menu = 'none';
     for (const f of files.slice(0, MAX_UPLOADS - uploads.length)) {
+      attaching += 1;
       try {
         // A clip goes to Storage and travels as a URL; an image still rides inline as a data URL.
         uploads = [
@@ -576,6 +609,8 @@
           (err as Error)?.message === 'video_too_large'
             ? $_('chat.attach.videoTooLarge')
             : $_('chat.attach.uploadFailed');
+      } finally {
+        attaching -= 1;
       }
     }
   }
@@ -794,9 +829,15 @@
   {#if micError}
     <p class="ch-ref-err" role="status" aria-live="polite">{micError}</p>
   {/if}
-  {#if strip.length || docs.length}
+  {#if strip.length || docs.length || attaching > 0}
     <div class="ch-refs">
-      {#each strip as item (item.key)}
+      {#each Array(attaching) as pend, pi (pi)}
+        <div class="ch-ref ch-ref-busy" title={$_('chat.attach.processing')} aria-label={$_('chat.attach.processing')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M12 3a9 9 0 1 0 9 9" />
+          </svg>
+        </div>
+      {/each}      {#each strip as item (item.key)}
         <div
           class="ch-ref"
           class:ch-ref-video={/\.(mp4|mov|webm)(\?|$)/i.test(item.url)}
@@ -936,10 +977,10 @@
               title={$_('chat.tier.' + tier + 'Hint')}
             >
               <Cpu class="size-4" />
-              <span>{$_('chat.tier.label')}: {$_('chat.tier.' + tier)}</span>
+              <span>{$_('chat.tier.label')}: {tierLabel(tier)}</span>
               <ChevronRight class="size-3.5 ch-dd-chevron" />
             </button>
-            {#if REASONING_LEVELS[tier].length > 1}
+            {#if reasoningLevelsFor(tier).length > 1}
               <!-- Il ragionamento è una preferenza rara: sta col modello dentro il `+` invece di
                    occupare la barra. -->
               <button
@@ -980,6 +1021,14 @@
               >
                 <Plug class="size-4" />
                 <span>{$_('chat.connectors')}</span>
+              </a>
+              <a
+                class="ch-dd-item"
+                href={`/app/${brandSlug}/settings/video`}
+                onclick={() => (menu = 'none')}
+              >
+                <Wand2 class="size-4" />
+                <span>{$_('chat.mediaModels')}</span>
               </a>
             {/if}
           </div>
@@ -1137,19 +1186,19 @@
                 <span class="ch-dd-sub">{$_('chat.tier.' + t + 'Hint')}</span>
               </button>
             {/each}
-            {#if CHAT_CUSTOM_MODELS.length}
+            {#if chatModels.length}
               <div class="ch-dd-group">{$_('chat.tier.custom')}</div>
-              {#each CHAT_CUSTOM_MODELS as t (t)}
+              {#each chatModels as m (m.id)}
                 <button
                   type="button"
                   class="ch-dd-item ch-dd-item-stack"
-                  class:active={tier === t}
+                  class:active={tier === m.id}
                   role="option"
-                  aria-selected={tier === t}
-                  onclick={() => setTier(t)}
+                  aria-selected={tier === m.id}
+                  onclick={() => setTier(m.id)}
                 >
-                  <span class="ch-dd-title">{$_('chat.tier.' + t)}</span>
-                  <span class="ch-dd-sub">{$_('chat.tier.' + t + 'Hint')}</span>
+                  <span class="ch-dd-title">{m.label}</span>
+                  <span class="ch-dd-sub">{modelSub(m)}</span>
                 </button>
               {/each}
             {/if}
@@ -1265,14 +1314,14 @@
         </div>
       {/if}
 
-      {#if REASONING_LEVELS[tier].length > 1}
+      {#if reasoningLevelsFor(tier).length > 1}
         <div class="ch-tier-wrap" data-menu-root>
           {#if menu === 'reasoning'}
             <div class="ch-dropdown ch-tier-dd" role="listbox">
               <button type="button" class="ch-dd-back" onclick={() => (menu = 'plus')}>
                 ← {$_('chat.reasoning.label')}
               </button>
-              {#each REASONING_LEVELS[tier] as level (level)}
+              {#each reasoningLevelsFor(tier) as level (level)}
                 <button
                   type="button"
                   class="ch-dd-item ch-dd-item-stack"
@@ -1290,24 +1339,26 @@
         </div>
       {/if}
 
-      {#if brandSlug}
-        <input
-          bind:this={fileEl}
-          type="file"
-          accept={`${RASTER_IMAGE_ACCEPT},${CHAT_VIDEO_ACCEPT}`}
-          multiple
-          hidden
-          onchange={onPickFiles}
-        />
-        <input
-          bind:this={docEl}
-          type="file"
-          accept={CHAT_DOCUMENT_ACCEPT}
-          multiple
-          hidden
-          onchange={onPickDocs}
-        />
-        <input bind:this={importEl} type="file" accept={RASTER_IMAGE_ACCEPT} multiple hidden onchange={onImportFiles} />
+      {#if hydrated}
+        {#if brandSlug}
+          <input
+            bind:this={fileEl}
+            type="file"
+            accept={`${RASTER_IMAGE_ACCEPT},${CHAT_VIDEO_ACCEPT}`}
+            multiple
+            hidden
+            onchange={onPickFiles}
+          />
+          <input
+            bind:this={docEl}
+            type="file"
+            accept={CHAT_DOCUMENT_ACCEPT}
+            multiple
+            hidden
+            onchange={onPickDocs}
+          />
+          <input bind:this={importEl} type="file" accept={RASTER_IMAGE_ACCEPT} multiple hidden onchange={onImportFiles} />
+        {/if}
       {/if}
       {#if convertStatus}
         <span class="ch-hint" role="status" aria-live="polite">{convertStatus}</span>
@@ -1384,7 +1435,7 @@
         <button
           type="submit"
           class="ch-send"
-          disabled={!canSend || convertingDocs}
+          disabled={!canSend || convertingDocs || !attachReady}
           aria-label={$_('chat.send')}
         >
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
@@ -1512,6 +1563,23 @@
     background-size: cover;
     background-position: center;
     border: 1px solid var(--line);
+  }
+  /* Il downscale sta girando: il chip esiste, l'immagine non c'è ancora. */
+  .ch-ref-busy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-soft);
+  }
+  .ch-ref-busy svg {
+    width: 18px;
+    height: 18px;
+    animation: ch-ref-spin 0.9s linear infinite;
+  }
+  @keyframes ch-ref-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   /* A clip has no poster frame — show a film glyph instead of an empty tile. */
   .ch-ref-video {

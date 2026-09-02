@@ -14,6 +14,7 @@
  */
 import { json } from '@sveltejs/kit';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { readClipboard, writeClipboard } from '$lib/agent/adapters/graphical-bootstrap';
 import { createVercelSandboxProvider } from '$lib/agent/bridge/adapters';
 import type { AdapterContext } from '$lib/agent/kit/types';
@@ -36,6 +37,7 @@ async function brandFor(supabase: App.Locals['supabase'], slug: string) {
 export const GET: RequestHandler = async ({ params, url, locals: { supabase, safeGetSession, locale: uiLocale } }) => {
 	const { user } = await safeGetSession();
 	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!agentDesktopEnabled()) return new Response(null, { status: 404 });
 	const brand = await brandFor(supabase, params.brand);
 	if (!brand) return new Response('Not found', { status: 404 });
 

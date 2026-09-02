@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createAdminClient } from '$lib/server/supabase-admin';
 
 // can_enter() depends on the caller's session (admin bypass), so it can only be cached per
 // request, not globally. Keyed by the per-request supabase client (WeakMap so entries die
@@ -6,14 +7,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const canEnterCache = new WeakMap<SupabaseClient, Promise<boolean>>();
 
 // Feature flags live in the DB (public.app_flags) — toggle without redeploy.
-// `can_enter()` (security-definer) returns true when the waitlist flag is off OR the
-// session is an admin. Toggle the waitlist in SQL:
-//   update public.app_flags set enabled = true  where key = 'waitlist';  -- re-enable
-//   update public.app_flags set enabled = false where key = 'waitlist';  -- open to all
+// `can_enter()` (security-definer) = NOT closed_beta OR is_approved(). Toggle in SQL:
+//   update public.app_flags set enabled = true  where key = 'closed_beta';  -- close
+//   update public.app_flags set enabled = false where key = 'closed_beta';  -- open to all
+//
+// Il default è `false` — aperto — e non per distrazione: una lettura del flag che fallisce
+// chiuderebbe fuori ogni cliente che paga, e questa è una porta commerciale, non un confine di
+// sicurezza. Il costo dei due lati non è lo stesso, e il fallback sta dalla parte meno cara.
 export async function canEnter(supabase: SupabaseClient): Promise<boolean> {
-  // can_enter() = NOT waitlist OR is_admin. Waitlist is off in prod and already TTL-cached
-  // via flagEnabled — skip the RPC on every /app/[brand] navigation.
-  if (!(await flagEnabled(supabase, 'waitlist', true))) return true;
+  // Col prodotto aperto la risposta è già nota: nessun RPC per navigazione.
+  if (!(await flagEnabled(supabase, 'closed_beta', false))) return true;
 
   let cached = canEnterCache.get(supabase);
   if (!cached) {
@@ -21,6 +24,23 @@ export async function canEnter(supabase: SupabaseClient): Promise<boolean> {
     canEnterCache.set(supabase, cached);
   }
   return cached;
+}
+
+/**
+ * La stessa porta, ma per un utente di cui non abbiamo la sessione: la CLI e l'MCP arrivano con una
+ * chiave API su un client service-role, dove `auth.uid()` è nullo e `can_enter()` direbbe sempre no.
+ * Il predicato resta uno solo — `is_approved(uuid)` in SQL — perché una regola riscritta in
+ * TypeScript accanto a quella in plpgsql diverge al primo cambio, in silenzio.
+ */
+export async function userCanEnter(userId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!(await flagEnabled(admin, 'closed_beta', false))) return true;
+  const { data, error } = await admin.rpc('is_user_approved', { p_user: userId });
+  // Un predicato che esplode non è un "no". La cache dello schema di PostgREST resta indietro
+  // dopo una migrazione, e con un `data !== true` secco quel ritardo si presenta come un 403 a
+  // OGNI cliente, approvati e paganti compresi. Stessa scelta di `canEnter`: si fallisce aperto.
+  if (error) return true;
+  return data === true;
 }
 
 // Flags rarely change and serverless instances are reused (Fluid Compute), so a short

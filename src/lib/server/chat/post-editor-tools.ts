@@ -6,6 +6,7 @@ import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
 import { regeneratePost, loadBrandMoodImageUrls } from '$lib/server/content-preview';
 import { GRAPHIC_ASSET_MINT_HINT, isVideoPostRow } from '$lib/server/media-origin';
 import { mintStandaloneImage } from '$lib/server/mint-standalone-image';
+import { VIDEO_BRIEF_MAX_CHARS } from '$lib/video-models';
 import { designGraphicVideoBlock, resolveMakeVideoSource } from '$lib/server/chat/post-editor-video';
 import { resolveTypography } from '$lib/design/typography';
 import {
@@ -190,25 +191,6 @@ export async function readPostState(t: EditorTarget) {
   }
 
   const coverOrigin = await resolveMediaOrigin(t.supabase, t.postId, row);
-  const { loadChatMediaReviews, lookupChatMediaReview, emptyChatMediaReview } = await import(
-    '$lib/server/video-review-store'
-  );
-  const { visualUrlsFromPost } = await import('$lib/server/video-review');
-  const reviewMap = await loadChatMediaReviews(t.supabase, t.brandId, [
-    row,
-    ...(slides ?? []).map((s) => ({ media_url: s.url }))
-  ]);
-  if (slides) {
-    for (const s of slides) {
-      const slideReview =
-        lookupChatMediaReview(reviewMap, { media_url: s.url }) ??
-        (visualUrlsFromPost({ media_url: s.url }).length ? emptyChatMediaReview() : null);
-      if (slideReview) s.media_review = slideReview;
-    }
-  }
-  const mediaReview =
-    lookupChatMediaReview(reviewMap, row) ??
-    (visualUrlsFromPost(row).length ? emptyChatMediaReview() : null);
 
   return {
     content_type: row.content_type,
@@ -240,7 +222,6 @@ export async function readPostState(t: EditorTarget) {
     slides,
     status: row.status,
     text_only: isTextOnly(row),
-    ...(mediaReview ? { media_review: mediaReview } : {}),
     ...coverOrigin
   };
 }
@@ -461,8 +442,6 @@ export async function regeneratePostImage(t: EditorTarget, args: { instruction: 
   if (error) return { error: error.message };
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
   if (r.imageUrl) {
-    const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-    await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
   }
   return { success: true, rendered: !!r.imageUrl, media_url: media, notes: r.notes ?? undefined };
 }
@@ -501,8 +480,6 @@ export async function editCarouselSlide(t: EditorTarget, args: { slide_index: nu
   if (error) return { error: error.message };
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
   if (r.imageUrl) {
-    const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-    await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
   }
   return { success: true, slide_index: args.slide_index, rendered: !!r.imageUrl };
 }
@@ -565,13 +542,12 @@ export async function renderPostVideo(
   const { isKnownVideoModel, UGC_AD_DURATION } = await import('$lib/server/video');
   const { submitAndTrackVideoRender } = await import('$lib/server/video-render-queue');
   const { createAdminClient } = await import('$lib/server/supabase-admin');
-  const { SEEDANCE_25_MODEL } = await import('$lib/video-models');
-  // Ads force Seedance 2.5; else AI override / brand setting / env default.
-  const model = isUgcAd
-    ? SEEDANCE_25_MODEL
-    : (args.model && isKnownVideoModel(args.model) ? args.model : null) ??
-      (typeof prefs.videoModel === 'string' ? prefs.videoModel : null) ??
-      t.ctx.videoModel;
+  // Ads do NOT force a model — 22s only lands on Seedance 2.5, other models clamp to the
+  // organic 15s ceiling. Else AI override / brand setting / Grok Imagine default.
+  const model =
+    (args.model && isKnownVideoModel(args.model) ? args.model : null) ??
+    (typeof prefs.videoModel === 'string' ? prefs.videoModel : null) ??
+    t.ctx.videoModel;
   // Submitted, not awaited. kie owns the job from here and the reconciler attaches the clip; this
   // tool used to hold the editor for minutes watching someone else's render queue.
   const clip = await submitAndTrackVideoRender({
@@ -725,8 +701,6 @@ export async function persistRenderedGraphic(
   });
 
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
-  const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-  await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
 
   return {
     success: true,
@@ -1002,8 +976,6 @@ export async function restructureCarouselSlides(t: EditorTarget, args: { order: 
     .eq('id', t.postId).eq('brand_id', t.brandId);
   if (error) return { error: error.message };
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
-  const { requestPostMediaReview } = await import('$lib/server/video-review-store');
-  await requestPostMediaReview(t.supabase, { brandId: t.brandId, postId: t.postId, force: true });
   return { success: true, slide_count: newUrls.length };
 }
 
@@ -1033,7 +1005,7 @@ export function createPostEditorTools(
 
     read_post: tool({
       description:
-        'Read the current state of the post: caption, title, media_origin (typographic_graphic | ai_generated | user_uploaded | video | none), and media_review (overall /10, verdict ship|fix|kill, judgment, next_test, issues — always present when this post has reviewable media). When media_origin is typographic_graphic, graphic.source_chars / source_kind are metadata only — grep_source → read_source → replace_source to patch the HTML/TSX (write_source only to rebuild). Photos inside the graphic: read_media first; if a library image fits, use_library_image then replace_source <img src>; generate_image only when nothing fits (returns image_url, does not change the post). For carousels, every slide includes its own origin and media_review when scored. Call this first. Honor media_review.verdict: ship is ok to approve; fix/kill means apply next_test before approving. Call review_video only when media_review.status is none/failed or the media changed. When media_origin is video (or is_video is true), remakes go through make_video — never design_graphic / write_source.',
+        'Read the current state of the post: caption, title, media_origin (typographic_graphic | ai_generated | user_uploaded | video | none). When media_origin is typographic_graphic, graphic.source_chars / source_kind are metadata only — grep_source → read_source → replace_source to patch the HTML/TSX (write_source only to rebuild). Photos inside the graphic: read_media first; if a library image fits, use_library_image then replace_source <img src>; generate_image only when nothing fits (returns image_url, does not change the post). Call this first. When media_origin is video (or is_video is true), remakes go through make_video — never design_graphic / write_source.',
       inputSchema: z.object({}),
       execute: async () => readPostState(t)
     }),
@@ -1122,7 +1094,7 @@ export function createPostEditorTools(
         'When the post is ALREADY a video: remakes it in place from the stored cover (video_thumbnail_url) or the existing clip. Does NOT convert it into a graphic.',
         'Use when the user asks to remake the reel, rewrite the spoken script (più naturale/fluido), or remove on-screen subtitles/captions/titles — those are burned into the VIDEO, not a typographic canvas.',
         'Pass script (the spoken line), ugc:true for talking UGC (also disables burned-in captions), and prompt directing delivery ("no on-screen text, natural full sentences").',
-        'Do NOT call design_graphic for subtitle/script requests. Seedance 2.5 via model="bytedance/seedance-2-5". Paid UGC ads: ugc_ad:true → 22s. Bills the monthly video budget.'
+        'Do NOT call design_graphic for subtitle/script requests. Default model is Grok Imagine (480p, ≤15s); pass model="bytedance/seedance-2-5" for Seedance 2.5. Paid UGC ads: 22s on Seedance 2.5, 15s cap elsewhere. Bills the monthly video budget.'
       ].join('\n'),
       inputSchema: z.object({
         duration: z
@@ -1137,11 +1109,18 @@ export function createPostEditorTools(
         script: z.string().optional().describe('Line to be spoken on camera; trimmed to fit the runtime. Omit for silent clips.'),
         prompt: z
           .string()
+          .max(VIDEO_BRIEF_MAX_CHARS)
           .optional()
           .describe(
-            'YOUR creative brief for THIS clip (camera, motion, energy, genre). When set it replaces hardcoded UGC/cinematic MOTION templates — you can still pass ugc:true together with it. Never ask the video model for on-screen text.'
+            'YOUR creative brief for THIS clip (camera, motion, energy, genre). When set it replaces hardcoded UGC/cinematic MOTION templates — you can still pass ugc:true together with it. Never ask the video model for on-screen text. Keep under ' +
+              VIDEO_BRIEF_MAX_CHARS +
+              ' chars.'
           ),
-        instructions: z.string().optional().describe('Extra delivery direction (tone, accent). Overrides Settings → Video when set.'),
+        instructions: z
+          .string()
+          .max(600)
+          .optional()
+          .describe('Extra delivery direction (tone, accent), at most 600 chars. Overrides Settings → Video when set.'),
         ugc: z
           .boolean()
           .optional()
@@ -1150,7 +1129,7 @@ export function createPostEditorTools(
           .boolean()
           .optional()
           .describe(
-            'Paid UGC ad. Implies ugc. Forces Seedance 2.5 and locks duration to 22s. Omit/false = organic ≤15s when ugc.'
+            'Paid UGC ad. Implies ugc. 22s on Seedance 2.5 (pass model), capped at 15s on other models. Omit/false = organic ≤15s when ugc.'
           ),
         model: z
           .enum([
@@ -1162,7 +1141,7 @@ export function createPostEditorTools(
           ])
           .optional()
           .describe(
-            'Video model for THIS clip. Pass "bytedance/seedance-2-5" for Seedance 2.5. Omit to use Settings → Video (or platform default). This IS the manual selector — do not claim it is missing. Ignored when ugc_ad:true (always Seedance 2.5).'
+            'Video model for THIS clip. Default is Grok Imagine ("grok-imagine-video-1-5-preview", 480p, ≤15s). Pass "bytedance/seedance-2-5" for Seedance 2.5 (up to 30s or reference video/audio). Omit to use Settings → Video. This IS the manual selector — do not claim it is missing.'
           )
       }),
       execute: async (args: {
@@ -1176,75 +1155,6 @@ export function createPostEditorTools(
       }) => renderPostVideo(t, args)
     }),
 
-    review_video: tool({
-      description:
-        'Review THIS post\'s finished video (or a public mp4 URL) against organic UGC or paid-ads standards. Scores hook / doomscroll stop, sound-off, hold, authenticity, CTA/offer. Call when the user asks if the reel works, before approving, or after make_video. Credits only — not the monthly video budget.',
-      inputSchema: z.object({
-        standard: z
-          .enum(['organic', 'ads'])
-          .describe('organic = Reels/TikTok UGC. ads = paid UGC ad (proof, offer, uniqueness).'),
-        url: z
-          .string()
-          .optional()
-          .describe('Public https mp4 URL. Omit to use this post\'s attached video.'),
-        product: z.string().optional(),
-        script: z.string().optional()
-      }),
-      execute: async ({
-        standard,
-        url,
-        product,
-        script
-      }: {
-        standard: 'organic' | 'ads';
-        url?: string;
-        product?: string;
-        script?: string;
-      }) => {
-        const { extraReviewOpts, parseVideoStandard, resolveReviewVideoUrl, reviewVideo } = await import('$lib/server/video-review');
-        const { withBrandContext } = await import('$lib/server/ai-log');
-        return withBrandContext(t.brandId, async () => {
-          const resolved = await resolveReviewVideoUrl(t.supabase, t.brandId, {
-            url,
-            postId: url?.trim() ? null : t.postId
-          });
-          if ('error' in resolved) return { error: resolved.error };
-          const { data: brand } = await t.supabase
-            .from('brands')
-            .select('name, content_prefs')
-            .eq('id', t.brandId)
-            .maybeSingle();
-          const language =
-            brand?.content_prefs && typeof brand.content_prefs === 'object'
-              ? String((brand.content_prefs as { language?: string }).language ?? '')
-              : '';
-          try {
-            const result = await reviewVideo(resolved.url, {
-              standard: parseVideoStandard(standard) ?? 'organic',
-              brandName: brand?.name,
-              product: product?.trim() || resolved.product || null,
-              caption: resolved.caption || null,
-              script: script?.trim() || null,
-              language: language || t.ctx.language,
-              ...extraReviewOpts(resolved)
-            });
-            if (!result.ok) return { error: result.error };
-            const { persistReadyReview } = await import('$lib/server/video-review-store');
-            await persistReadyReview(t.supabase, {
-              brandId: t.brandId,
-              url: resolved.url,
-              postId: t.postId,
-              standard: parseVideoStandard(standard) ?? 'organic',
-              review: result.review,
-              kind: extraReviewOpts(resolved).kind
-            });
-            return { ok: true, ...result.review };
-          } catch (e) {
-            return { error: e instanceof Error ? e.message : String(e) };
-          }
-        });
-      }
-    }),
 
     design_graphic: tool({
       description: [

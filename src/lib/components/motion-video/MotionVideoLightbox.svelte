@@ -1,15 +1,13 @@
 <script lang="ts">
-	import VideoReviewPanel from '$lib/components/VideoReviewPanel.svelte';
 	import X from '@lucide/svelte/icons/x';
 	import type { GridItem } from './motion-video-model';
 
 	interface Props {
 		item: GridItem;
-		brandSlug: string;
 		onClose: () => void;
 	}
 
-	let { item, brandSlug, onClose }: Props = $props();
+	let { item, onClose }: Props = $props();
 
 	function portalLightbox(node: HTMLElement) {
 		document.body.appendChild(node);
@@ -53,15 +51,6 @@
 			playsinline
 			onclick={(e) => e.stopPropagation()}
 		></video>
-		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-		<div class="mv-lightbox-review" onclick={(e) => e.stopPropagation()}>
-			<VideoReviewPanel
-				url={item.preview_url}
-				brandSlug={brandSlug}
-				defaultStandard="ads"
-				caption={item.title}
-			/>
-		</div>
 	</div>
 {/if}
 
@@ -99,12 +88,5 @@
 		max-height: min(70vh, calc(100dvh - 96px));
 		border-radius: 12px;
 		background: #000;
-	}
-	.mv-lightbox-review {
-		width: min(900px, 100%);
-		max-height: min(40vh, 360px);
-		overflow: auto;
-		border-radius: 12px;
-		background: var(--paper);
 	}
 </style>

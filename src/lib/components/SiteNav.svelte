@@ -122,7 +122,7 @@
     <!-- Left: brand -->
     <div class="nav-left">
       <a href={lp('/')} class="brand" aria-label={$_('landing.nav.brandAria')}>
-        <BrandMark size={28} />
+        <BrandMark size={28} tone="negative" />
         <span class="logo logo-text" aria-hidden="true">Anomalia</span>
       </a>
     </div>
@@ -161,6 +161,7 @@
       </button>
       <LangToggle />
       {@render githubLink()}
+      <a href={lp('/login')} class="nav-login">{$_('login.signin.title')}</a>
       <a
         href={ctaHref}
         class="nav-cta"
@@ -194,6 +195,8 @@
       <a href={lp('/pricing')} class="nav-dialog-link" class:is-current={current === 'pricing'} onclick={closeMenu}>{$_('landing.nav.pricing')}</a>
       <a href="https://blog.anomalia.so" class="nav-dialog-link" onclick={closeMenu}>Blog</a>
       <a href={lp('/docs')} class="nav-dialog-link" onclick={closeMenu}>Docs</a>
+      <hr class="nav-dialog-sep" />
+      <a href={lp('/login')} class="nav-dialog-link" onclick={closeMenu}>{$_('login.signin.title')}</a>
     </nav>
     <div class="nav-dialog-footer">
       <div class="nav-dialog-theme">

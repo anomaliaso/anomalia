@@ -55,8 +55,9 @@ describe('length comes from the beats', () => {
 describe('the craft specs ask for an arc', () => {
 	it('names the shape of the story, not just the polish', () => {
 		expect(MOTION_CRAFT_SPECS).toContain('STORYLINE');
-		expect(MOTION_CRAFT_SPECS).toMatch(/hook → tension/);
-		expect(MOTION_CRAFT_SPECS).toMatch(/not five statements in a row/i);
+		expect(MOTION_CRAFT_SPECS).toMatch(/hook, tension/);
+		// L'arco nomina i mestieri; il CONTO lo decide chi scrive (craft.test.ts).
+		expect(MOTION_CRAFT_SPECS).toMatch(/JOBS, not a fixed count/);
 	});
 
 	it('gives each beat room, which is what "too fast" actually meant', () => {

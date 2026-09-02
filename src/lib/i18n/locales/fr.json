@@ -2029,6 +2029,18 @@
           "cardSub": "revue : ship · légende prête"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "EN DIRECT",
+        "today": "AUJOURD’HUI",
+        "tue": "MAR.",
+        "wed": "MER.",
+        "launchStory": "Récit du lancement",
+        "behindScenes": "Dans les coulisses",
+        "customerNote": "Note client",
+        "calendarChecked": "Calendrier vérifié · {count} brouillons à relire",
+        "nextPost": "Prochain post en file pour mardi à 09:00"
+      },
       "foot": "Les tâches longues continuent même l’onglet fermé, et l’agent vous écrit quand il a fini. Publier est la seule étape qu’il ne franchit jamais seul."
     },
     "problems": {
@@ -2356,10 +2368,10 @@
     "creditsDocsLink": "Comment fonctionnent crédits et limites →"
   },
   "waitlist": {
-    "title": "Vous êtes sur la liste 🎉",
-    "sub": "Nous vous préviendrons dès qu'Anomalia ouvrira pour {email}.",
-    "ahead": "{count, plural, one {person devant vous} other {personnes devant vous}}",
-    "note": "Vous voulez passer en tête ? Parrainez un ami (bientôt disponible)."
+    "title": "Une dernière étape",
+    "sub": "Anomalia s'ouvre après un court appel avec Marco. Choisissez le moment qui vous convient : votre accès s'active juste après.",
+    "note": "Vous préférez ouvrir le calendrier dans un onglet ?",
+    "fallback": "Ouvrez-le ici"
   },
   "login": {
     "reset": {
@@ -2507,7 +2519,7 @@
       "description": "Découvrez comment Anomalia gère les réseaux sociaux pour les créateurs, agences, e-commerce, marques, SaaS, commerces locaux, coachs, immobilier et événements."
     },
     "waitlist": {
-      "title": "Anomalia — Vous êtes sur la liste"
+      "title": "Anomalia — Réservez votre appel"
     },
     "login": {
       "titleWaitlist": "Anomalia — Rejoindre la liste d'attente",
@@ -3105,10 +3117,9 @@
       }
     },
     "pick": {
-      "title": "Par qui commencez-vous",
-      "sub": "Choisissez avec qui vous commencez. Vous pourrez écrire aux autres quand vous voulez.",
-      "start": "Démarrer la discussion",
-      "own": "Créer le mien",
+      "title": "Votre équipe autonome",
+      "sub": "Explorez votre équipe d’agents IA experts en marketing.",
+      "start": "Commencer",
       "prev": "Agent précédent",
       "next": "Agent suivant",
       "customDesc": "Un agent à vous"
@@ -3118,6 +3129,15 @@
       "body": "Anomalia va analyser votre site et vos réseaux sociaux, puis construire votre stratégie et vos premiers posts. Fermer ou rafraîchir cette page peut interrompre le processus et vous perdrez votre progression.",
       "confirm": "Compris — continuer",
       "cancel": "Pas maintenant"
+    },
+    "guestPreview": {
+      "title": "Votre premier post",
+      "sub": "Créé depuis votre site. Aucun compte requis pour le voir.",
+      "working": "Je lis votre site et prépare votre premier post…",
+      "failed": "Nous n'avons pas pu créer de post depuis ce site.",
+      "retry": "Essayer un autre site",
+      "cta": "L'enregistrer et voir la suite",
+      "ctaHint": "Créez votre compte pour garder ce post et recevoir les autres."
     }
   },
   "editorialPlan": {
@@ -3323,7 +3343,10 @@
       "actions": "Actions",
       "product": "Produit",
       "person": "Personne",
-      "subject": "Visuel suggéré"
+      "subject": "Visuel suggéré",
+      "beats": "Histoire (un temps par slide)",
+      "artDirection": "Direction artistique (médium)",
+      "source": "D’où vient l’histoire (provenance, jamais publiée)"
     },
     "status": {
       "todo": "À produire",
@@ -3380,6 +3403,13 @@
     "past": {
       "title": "La semaine {n} est déjà passée",
       "body": "Impossible de planifier une semaine déjà passée. Choisissez la semaine en cours ou une semaine à venir."
+    },
+    "beatsPlaceholder": "Une ligne par slide : action | qui est à l’image | ce qu’elle pense | qui parle : réplique",
+    "sourcePlaceholder": "La situation réelle racontée, et son lien — les noms restent ici",
+    "noSource": "Cet épisode n’a pas de source",
+    "span": {
+      "label": "Planifier",
+      "weeks": "{n} semaines"
     }
   },
   "setup": {
@@ -4962,9 +4992,7 @@
         "reload": "Recharger les propriétés"
       },
       "video": {
-        "title": "Vidéo",
-        "model": "Modèle vidéo",
-        "modelDesc": "Quel modèle IA génère vos clips. Les durées proposées suivent le modèle choisi — Seedance 2.5 va jusqu’à 30 secondes.",
+        "title": "Images et vidéo",
         "modelDefault": "Défaut de la plateforme",
         "clipLength": "Durée du clip",
         "clipLengthDesc": "Durée fixe pour chaque clip généré, ou Auto pour laisser le chat / la génération choisir la longueur par reel selon le script parlé. Facturé à la seconde. La durée max dépend du modèle vidéo ci-dessus ; en dessous de 10s, impossible de tenir accroche, message et appel à l’action.",
@@ -4976,60 +5004,20 @@
         "instructionsPlaceholder": "ex. Parle vite et de façon informelle, comme à un ami. Jamais un ton publicitaire. Pas de jargon corporate.",
         "resolution": "Qualité vidéo",
         "resolutionDesc": "480p est recommandé : le 720p coûte exactement le double à la seconde, et chaque clip est facturé même s'il n'est jamais publié. Sur un fil mobile la différence se voit peu.",
-        "recommended": "recommandé"
-      },
-      "mediaReviewer": {
-        "nav": "Media reviewer",
-        "title": "Media reviewer",
-        "subtitle": "Scores et erreurs des clips, stills et carrousels de cette marque.",
-        "empty": "Aucune review pour l’instant. Les scores apparaissent ici au fur et à mesure.",
-        "filterLabel": "Filtrer par statut",
-        "filter": {
-          "all": "Tous",
-          "ready": "Prêts",
-          "failed": "Échecs",
-          "pending": "En cours"
-        },
-        "tileTotal": "Reviews",
-        "tileTotalDelta": "Cette marque uniquement",
-        "tileReady": "Notés",
-        "tileReadyDelta": "Prêts à lire",
-        "tileFailed": "Échecs",
-        "tileFailedDelta": "Après les retries",
-        "tilePending": "En cours",
-        "tilePendingDelta": "En file ou en cours",
-        "logsTitle": "Journal des reviews",
-        "logsSub": "{total} dans cette vue",
-        "col": {
-          "when": "Quand",
-          "media": "Média",
-          "kind": "Type",
-          "status": "Statut",
-          "score": "Score",
-          "verdict": "Verdict",
-          "note": "Note"
-        },
-        "openPost": "Ouvrir le post",
-        "judgment": "Jugement",
-        "scriptSpoken": "Parlé",
-        "scriptOnScreen": "À l’écran",
-        "caption": "Légende",
-        "error": "Erreur",
-        "attempts": "{n} tentatives",
-        "rerun": "Relancer",
-        "rerunQueued": "Review mise en file. Le score se mettra à jour dans quelques minutes.",
-        "rerunRunning": "Une review est déjà en cours pour ce média.",
-        "status": {
-          "pending": "En attente",
-          "running": "En cours",
-          "ready": "Prêt",
-          "failed": "Échec"
-        },
-        "kind": {
-          "video": "Vidéo",
-          "image": "Image",
-          "carousel": "Carrousel",
-          "graphic": "Graphique"
+        "recommended": "recommandé",
+        "slots": {
+          "imageGenerate": "Génération d’images",
+          "imageGenerateDesc": "Quel modèle dessine une nouvelle photo à partir d’un prompt. Par défaut, le moteur choisit image par image. Les modèles hors de la famille Nano Banana tournent uniquement sur kie et cadrent les posts Instagram en 3:4 au lieu de 4:5.",
+          "imageRefine": "Retouche d’images",
+          "imageRefineDesc": "Quel modèle modifie une photo existante — ajouter un logo, changer le style, corriger un détail. Reproduire fidèlement une image est un métier différent d’en inventer une. Vide : suit le modèle de génération.",
+          "videoGenerate": "Génération vidéo",
+          "videoGenerateDesc": "Quel modèle écrit un clip à partir des seuls mots. Les durées proposées suivent ce choix — Seedance 2.5 va jusqu’à 30 secondes.",
+          "videoAnimate": "Génération vidéo (image)",
+          "videoAnimateDesc": "Quel modèle anime une image existante, en général la couverture rendue. Vide : suit le modèle de génération vidéo.",
+          "videoRefine": "Retouche vidéo",
+          "videoRefineDesc": "Quel modèle réécrit un clip terminé — changer de sujet, de décor ou de style — en gardant le mouvement d’origine. Seuls les modèles qui lisent une vidéo apparaissent ici.",
+          "videoMotion": "Mouvement vidéo",
+          "videoMotionDesc": "Quel modèle prend le mouvement d’une vidéo de référence et l’applique au sujet de votre image. À ne pas confondre avec les motion videos, rendues depuis du code sans modèle génératif."
         }
       },
       "library": {
@@ -6061,6 +6049,7 @@
       "openAndDm": "Open profile & DM →",
       "dismiss": "Ignore",
       "restore": "Restore",
+      "dontContact": "Ne plus jamais contacter",
       "empty": "No leads here yet.",
       "rewrite": "Rewrite",
       "feedbackPh": "ex. plus court, plus décontracté, mentionner notre produit…",
@@ -6076,6 +6065,7 @@
       "searchPh": "Rechercher contenu, commentaire ou DM…",
       "markDone": "Terminé",
       "postLabel": "Publication d'origine",
+      "postGist": "Ce que demande la personne (résumé IA — le post original est dans le lien)",
       "openPost": "Ouvrir",
       "relevanceLabel": "Pertinence selon l'IA",
       "close": "Fermer",
@@ -6433,44 +6423,6 @@
         "social": "Social ads",
         "google": "Google ads",
         "library": "Ads library"
-      }
-    },
-    "videoReview": {
-      "title": "Revue vidéo",
-      "standard": "Standard de revue",
-      "organic": "UGC organique",
-      "ads": "Pubs payantes",
-      "run": "Relire le clip",
-      "running": "Analyse…",
-      "error": "Impossible d’analyser cette vidéo.",
-      "fetchFailed": "Impossible de télécharger la vidéo (URL bloquée ou expirée).",
-      "credits": "Crédits IA épuisés pour cette période.",
-      "ship": "Valider",
-      "fix": "Corriger",
-      "kill": "Rejeter",
-      "stops": "Arrête le scroll",
-      "scrolls": "Le pouce continue",
-      "hook": "Hook",
-      "nextTest": "Prochain test",
-      "spoken": "Parlé",
-      "onScreen": "À l’écran",
-      "research": "Recherche",
-      "scorePending": "Notation…",
-      "dim": {
-        "scroll_stop": "Scroll-stop",
-        "sound_off": "Sans son",
-        "hold": "Rétention",
-        "authenticity": "Authenticité",
-        "anatomy": "Anatomie",
-        "structure": "Structure",
-        "spoken_craft": "Oral",
-        "cta_soft": "CTA doux",
-        "loop_worthiness": "Rewatch / save",
-        "audience_signal": "Pour qui",
-        "proof": "Preuve",
-        "offer": "Offre",
-        "uniqueness": "Unicité",
-        "claims_safe": "Claims"
       }
     },
     "motionVideo": {
@@ -7390,28 +7342,8 @@
     "prevVersion": "Previous version",
     "nextVersion": "Next version",
     "saveDraft": "Save draft",
-    "requestReview": "Demander une review média",
-    "reviewQueued": "Review mise en file. L’anneau se mettra à jour à la fin.",
     "reviewDone": "Review prête.",
     "reviewFailed": "La review a échoué. Réessayez, ou ouvrez Media reviewer.",
-    "reviewRunning": "Une review est déjà en cours pour ce média.",
-    "review": {
-      "why": "Pourquoi",
-      "improve": "Comment l’améliorer",
-      "chipApply": "Appliquer ça",
-      "chipHook": "Corriger le hook",
-      "chipReel": "Refaire le reel",
-      "chipVisual": "Refaire le visuel",
-      "promptScore": "La review média a noté ce contenu {score}/10 ({verdict}).",
-      "promptWhy": "Pourquoi : {judgment}",
-      "promptNext": "Comment l’améliorer (changer une seule chose) : {next}",
-      "promptIssue": "- {problem} → {fix}",
-      "promptApply": "Applique ce changement au média de CE post maintenant. Garde la légende sauf si la review demande de la changer.",
-      "promptVideo": "C’est une VIDÉO. Refais-la avec make_video, ugc:true, parlé caméra, sans texte à l’écran. Ne remplace pas le reel par un visuel statique.",
-      "promptHook": "Corrige le hook / les 3 premières secondes pour arrêter le scroll. Puis refais le média.",
-      "promptReel": "Refais ce reel en UGC parlé : script naturel, sans texte à l’écran, sans overlay graphique.",
-      "promptStill": "Refais le visuel (photo ou graphique) d’après cette review. Ne le transforme pas en vidéo sauf si je le demande."
-    },
     "approveSchedule": "Approve & schedule →",
     "publishNow": "Publish now",
     "reject": "Refuser",
@@ -7561,7 +7493,11 @@
         },
         "notePre": "Nous utilisons le contenu et l'historique public de posts que vous fournissez pour générer des posts avec l'IA. Nous",
         "noteStrong": "ne",
-        "notePost": "vendons pas vos données personnelles, et nous n'utilisons pas votre contenu pour entraîner des modèles d'IA tiers à des fins autres que la prestation de notre service."
+        "notePost": "vendons pas vos données personnelles, et nous n'utilisons pas votre contenu pour entraîner des modèles d'IA tiers à des fins autres que la prestation de notre service.",
+        "row7": {
+          "purpose": "Recherche de contacts commerciaux (radar/leads) : lecture de contenus publics de tiers sur les réseaux sociaux pour proposer des conversations à rejoindre et des brouillons de contact",
+          "basis": "Intérêt légitime — art. 6, par. 1, f)"
+        }
       },
       "s4": {
         "heading": "4. AI-generated content",
@@ -7586,7 +7522,7 @@
         "stripe": "Facturation d'abonnement et traitement des paiements",
         "google": "Génération de texte et d'images par IA",
         "kie": "AI image / video generation",
-        "scrapecreators": "Collecte de l'historique public des posts des comptes connectés",
+        "scrapecreators": "Lecture en temps réel de contenus publics (posts et profils) sur les plateformes sociales pour le radar d’actualités et de leads, et collecte de l’historique public des comptes connectés",
         "resend": "Envoi d'emails transactionnels et de notification",
         "metaProvider": "Meta (Instagram, Facebook) & TikTok",
         "meta": "Publication de posts sur vos comptes connectés",
@@ -7617,7 +7553,8 @@
       },
       "s9": {
         "heading": "9. Combien de temps nous conservons vos données",
-        "body": "Nous conservons vos données personnelles tant que votre compte est actif et aussi longtemps que nécessaire pour fournir le service. Lorsque vous supprimez votre compte, nous effaçons ou anonymisons vos données dans un délai de 30 jours, sauf obligation légale de conservation plus longue."
+        "body": "Nous conservons vos données personnelles tant que votre compte est actif et aussi longtemps que nécessaire pour fournir le service. Lorsque vous supprimez votre compte, nous effaçons ou anonymisons vos données dans un délai de 30 jours, sauf obligation légale de conservation plus longue.",
+        "body2": " Les contenus de tiers trouvés par le radar ont une durée de conservation propre : le résumé du post est supprimé après 14 jours, les leads non convertis après 90 jours, les résultats des commentaires après 12 mois. Toute personne qui ne souhaite plus être contactée peut le dire en réponse au message reçu ou via le client qui l’a contactée : son profil est exclu de toute proposition future, pour toutes les marques."
       },
       "s10": {
         "heading": "10. Vos droits",
@@ -7759,7 +7696,8 @@
       "s13": {
         "heading": "13. Third-party services",
         "body": "Le Service s'appuie sur des prestataires tiers (pour l'hébergement, l'IA, l'analyse, les paiements, l'email et les réseaux sociaux). Nous ne sommes pas responsables des interruptions, retards ou problèmes causés par ces prestataires.",
-        "body2": "Certaines fonctionnalités pilotent un navigateur réel pour votre compte — par exemple la capture d’écrans de votre propre produit après connexion avec des identifiants de démonstration que vous enregistrez. Vous ne pouvez enregistrer des identifiants que pour un service dont vous êtes titulaire ou que vous êtes autorisé à automatiser, et cette autorisation relève de votre responsabilité. Nous ne les utiliserons pas pour nous connecter à des plateformes tierces telles qu’Instagram, Facebook, LinkedIn ou TikTok : la connexion et la publication automatisées enfreignent généralement les conditions de ces plateformes et peuvent entraîner des restrictions de compte, c’est pourquoi le Service les refuse. La publication passe uniquement par les API officielles des comptes que vous connectez, après votre approbation du contenu."
+        "body2": "Certaines fonctionnalités pilotent un navigateur réel pour votre compte — par exemple la capture d’écrans de votre propre produit après connexion avec des identifiants de démonstration que vous enregistrez. Vous ne pouvez enregistrer des identifiants que pour un service dont vous êtes titulaire ou que vous êtes autorisé à automatiser, et cette autorisation relève de votre responsabilité. Nous ne les utiliserons pas pour nous connecter à des plateformes tierces telles qu’Instagram, Facebook, LinkedIn ou TikTok : la connexion et la publication automatisées enfreignent généralement les conditions de ces plateformes et peuvent entraîner des restrictions de compte, c’est pourquoi le Service les refuse. La publication passe uniquement par les API officielles des comptes que vous connectez, après votre approbation du contenu.",
+        "body3": " Certaines fonctions (radar/leads) lisent des contenus publics de tiers sur les réseaux sociaux pour suggérer à l’utilisateur des conversations à rejoindre, avec des brouillons de commentaires et de messages. L’utilisateur est l’unique expéditeur : le Service n’envoie jamais de messages à des tiers automatiquement — chaque brouillon exige la relecture et l’envoi manuel par l’utilisateur depuis son propre compte. L’utilisateur est donc responsable du traitement des contacts qu’il envoie et répond du contenu du message, du respect des conditions de la plateforme où il publie et de l’honneur des demandes des personnes de ne plus être contactées. Le Service minimise les données des personnes trouvées (résumé et lien vers le post, sans copie du texte) et les exclut de toute proposition future lorsqu’elles le demandent."
       },
       "s14": {
         "heading": "14. Availability & changes",
@@ -9342,7 +9280,8 @@
       "importing": "Importation…",
       "imported": "{n} images importées dans Media generation",
       "importFailed": "Échec de l'import",
-      "remove": "Retirer"
+      "remove": "Retirer",
+      "processing": "Traitement de l'image…"
     },
     "toolReading": {
       "brandKit": "🔧 Reading brand data...",
@@ -9429,14 +9368,14 @@
     "tier": {
       "label": "Modèle",
       "custom": "Personnalisé",
-    "modelFamily": {
-      "luna": "Luna",
-      "grok": "Grok 4.6",
-      "gemini-flash": "Gemini Flash",
-      "deepseek-pro": "DeepSeek V4 Pro",
-      "gpt-terra": "GPT 5.6 Terra",
-      "gpt-sol": "GPT 5.6 Sol"
-    },
+      "modelFamily": {
+        "luna": "Luna",
+        "grok": "Grok 4.6",
+        "gemini-flash": "Gemini Flash",
+        "deepseek-pro": "DeepSeek V4 Pro",
+        "gpt-terra": "GPT 5.6 Terra",
+        "gpt-sol": "GPT 5.6 Sol"
+      },
       "auto": "Auto",
       "fast": "Fast",
       "pro": "Pro",
@@ -9455,6 +9394,7 @@
       "link": "AI Act"
     },
     "connectors": "Connecteurs",
+    "mediaModels": "Modèles d'image et vidéo",
     "toolDetail": {
       "toggle": "Ouvrir les détails de {tool}",
       "params": "Paramètres",
@@ -9489,6 +9429,14 @@
     },
     "unread": "Messages non lus",
     "unreadCount": "{count, plural, one {# message non lu} other {# messages non lus}}",
+    "replyNotification": {
+      "region": "Nouvelles réponses de chat",
+      "label": "Nouvelle réponse",
+      "message": "Ouvrez le chat pour la lire",
+      "open": "Ouvrir le chat de {name}",
+      "count": "{count, plural, one {# réponse non lue} other {# réponses non lues}}",
+      "dismiss": "Ignorer"
+    },
     "docPanel": {
       "subtitle": "Depuis la base de connaissances",
       "openInKnowledge": "Ouvrir dans Knowledge",
@@ -9750,6 +9698,7 @@
       "format": "Format",
       "cadence": "Cadence",
       "differentiation": "Pourquoi elle diffère des concurrents",
+      "art_direction": "Direction artistique (à quoi ressemble chaque épisode)",
       "rationale": "Pourquoi pour votre marque"
     },
     "formats": {

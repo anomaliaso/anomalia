@@ -86,7 +86,10 @@ export function applyLiveSnapshot(
       changed = true;
     }
     const tools = Array.isArray(snapshot.tools) ? snapshot.tools : [];
-    if (tools.length > state.tools.length) {
+    // Anche a lunghezza invariata lo snapshot può dire qualcosa di nuovo: la chiusura di una chip
+    // persa dal canale (realtime best-effort, stream morto a metà tool) è una transizione di
+    // stato, non un'aggiunta. Il merge tiene i payload interi che il canale ha già portato.
+    if (tools.length > 0 && tools.length >= state.tools.length) {
       // Lo snapshot ha payload troncati: il merge tiene quelli interi che il canale ha già portato.
       state.tools = mergeStreamToolCalls(state.tools, tools);
       changed = true;

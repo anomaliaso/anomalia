@@ -45,18 +45,19 @@ You need Node.js 22+, Docker with Compose, and openssl.
 ```sh
 cp infra/compose/.env.example infra/compose/.env   # fill POSTGRES_PASSWORD, DASHBOARD_PASSWORD, SECRET_KEY_BASE
 cp .env.example .env                               # set PUBLIC_SUPABASE_URL=http://localhost:8000 and copy ANON_KEY / SERVICE_ROLE_KEY from infra/compose/.env into PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
-(cd infra/compose && docker compose up -d --wait)
+(cd infra/compose && docker compose up -d --wait db kong auth rest realtime storage)
 npm install
 
 export DATABASE_URL="postgres://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres"
 npm run db:migrate
+(cd infra/compose && docker compose --profile init run --rm realtime-policies)
 npm run db:seed
 npm run dev          # http://localhost:5173 — login with the seeded demo@example.com / change-me-now-12345
 ```
 
 `--wait` is required: migrate needs tables that storage and realtime create on
-startup. If it stops on a missing `storage.buckets` relation, run
-`npm run db:migrate` again.
+startup. The `realtime-policies` init runs after Realtime health and is safe to
+repeat; it records 0226 only after both policies exist.
 
 `db:seed` prints the `TENANT_BRAND_ID` line to paste into `.env` for a
 single-brand install. The demo login comes from `SEED_DEMO_EMAIL` /

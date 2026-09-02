@@ -22,7 +22,8 @@ import {
 	oidcTokenFromRequestContext,
 	openBrandSandbox,
 	resolvePlaywrightEnv,
-	SANDBOX_MAX_LEASE_MS
+	SANDBOX_MAX_LEASE_MS,
+	type SandboxHandle
 } from '$lib/server/sandbox';
 import { createFileTools, isOverridable, OVERRIDABLE_PREFIXES, AGENT_DOCS_BUCKET } from '$lib/server/chat/agent-files';
 import { KIE_CODEX_BASE } from '$lib/server/kie';
@@ -36,6 +37,8 @@ import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
 import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
+import { gatewayModel, usableGatewayModels } from '$lib/server/openrouter-models';
+import { isGatewayModelTier } from '$lib/chat-tiers';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
 import { PostgresMemoryStore } from '@anomalia/agent-adapters/memory-postgres';
 import { VercelSandboxProvider } from '@anomalia/agent-adapters/vercel-sandbox';
@@ -122,22 +125,44 @@ export interface HarnessModelRef {
 
 export interface HarnessModelPreference {
 	family?: unknown;
+	/** L'id del gateway scelto dall'utente dal catalogo (`anthropic/claude-opus-5`). */
+	model?: unknown;
 	tier?: unknown;
 }
 
+/**
+ * Il `wireId` del catalogo e` il nome NATIVO del modello (`gpt-5-6-luna`), non un id del
+ * centralino (`openai/gpt-5-6-luna`): passarlo cosi` com'e` chiede al gateway un modello che
+ * non esiste, e il turno muore senza mai cominciare — «Stream ended without finish_reason».
+ * Vale solo se la lista dichiarata lo serve davvero; altrimenti null, e decide il tier.
+ */
 function servableWireId(family: unknown): string | null {
 	if (typeof family !== 'string') return null;
 	if (!(MODEL_FAMILY_IDS as readonly string[]).includes(family)) return null;
-	const def = MODEL_FAMILIES[family as keyof typeof MODEL_FAMILIES];
-	return def.wireId;
+	const wire = MODEL_FAMILIES[family as keyof typeof MODEL_FAMILIES].wireId;
+	return llmModels().find((id) => id === wire || id.endsWith(`/${wire}`)) ?? null;
+}
+
+/**
+ * Un id scelto dal catalogo passa intatto — se il gateway lo serve davvero. È la differenza fra
+ * "il menu dice Qwen e risponde Qwen" e il difetto visto nel browser: il default del brand su
+ * `qwen/qwen3.8-flash` e il turno che girava sul primo id di LLM_MODELS.
+ */
+function servableModelId(value: unknown): string | null {
+	if (typeof value !== 'string' || !isGatewayModelTier(value)) return null;
+	const id = value.trim();
+	return llmModels().includes(id) || gatewayModel(id)?.usable ? id : null;
 }
 
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {
 	if (!llmApiKey()) return null;
 	const family = typeof pref === 'object' && pref ? pref.family : undefined;
+	const chosen = typeof pref === 'object' && pref ? pref.model : undefined;
 	const tier = typeof pref === 'string' ? pref : pref?.tier;
 
 	const wire =
+		servableModelId(chosen) ??
+		servableModelId(tier) ??
 		servableWireId(family) ??
 		(tier === 'pro' || tier === 'fast' ? llmModelForPicker(tier) : undefined) ??
 		(llmModels()[0] ?? null);
@@ -170,24 +195,52 @@ export function createHarnessRuntime(execToolCall: ExecToolCall): HarnessRuntime
 export interface HarnessSandboxSession {
 	session: unknown;
 	name: string;
+	/** L'handle aperto: chi ha il turno in mano lo rilascia, o la VM corre fino al lease. */
+	handle: SandboxHandle;
 }
+
+const liveSandboxSessions = new Map<string, Promise<HarnessSandboxSession>>();
 
 /** La STESSA macchina del brand (getOrCreate per nome): i builtin Pi atterrano lì, un solo canone. */
 export async function openBrandHarnessSession(
 	brandId: string,
 	runId: string,
 	/** Chi sta girando: la macchina è sua, non del brand (vedi `sandboxName`). */
-	agentId?: string
+	agentId?: string,
+	sessionKey?: string
 ): Promise<HarnessSandboxSession> {
-	const handle = await openBrandSandbox({
-		brandId,
-		agentId,
-		mode: 'research',
-		timeoutMs: SANDBOX_MAX_LEASE_MS,
-		runId
-	});
-	const provider = createVercelSandbox({ sandbox: handle.raw as never });
-	return { session: await provider.createSession(), name: handle.name };
+	if (sessionKey) {
+		const live = liveSandboxSessions.get(sessionKey);
+		if (live) return live;
+	}
+
+	const opening = (async () => {
+		const handle = await openBrandSandbox({
+			brandId,
+			agentId,
+			mode: 'research',
+			timeoutMs: SANDBOX_MAX_LEASE_MS,
+			runId
+		});
+		try {
+			const provider = createVercelSandbox({ sandbox: handle.raw as never });
+			return { session: await provider.createSession(), name: handle.name, handle };
+		} catch (error) {
+			await handle.release().catch(() => undefined);
+			throw error;
+		}
+	})();
+
+	if (!sessionKey) return opening;
+	liveSandboxSessions.set(sessionKey, opening);
+	try {
+		const opened = await opening;
+		if (liveSandboxSessions.get(sessionKey) === opening) liveSandboxSessions.set(sessionKey, Promise.resolve(opened));
+		return opened;
+	} catch (error) {
+		if (liveSandboxSessions.get(sessionKey) === opening) liveSandboxSessions.delete(sessionKey);
+		throw error;
+	}
 }
 
 type HarnessStreamResult = Awaited<ReturnType<InstanceType<typeof HarnessAgent>['stream']>>;
@@ -199,16 +252,33 @@ export interface HarnessTurnStream {
 }
 
 let kieAgentDirCache: string | null = null;
+let kieAgentDirModels = '';
 
 export function harnessSessionSettings(sessionKey?: string): { extensionFactories: unknown[] } | undefined {
 	if (!sessionKey) return undefined;
 	return { extensionFactories: [stickySessionExtension(`thread:${sessionKey}`)] };
 }
 
+/**
+ * I modelli che l'harness DICHIARA di poter chiamare. Non e` un dettaglio di configurazione: un id
+ * che non sta qui dentro l'harness non lo conosce, il turno ripiega su un altro gateway e finisce
+ * in un 403 su un modello che nessuno ha scelto. Quindi qui va anche il catalogo, non solo i due
+ * id di `LLM_MODELS`.
+ */
+function harnessDeclaredModels(): string[] {
+	const ids = new Set(llmModels());
+	for (const m of usableGatewayModels()) ids.add(m.id);
+	return [...ids];
+}
+
 export function ensureKieAgentDir(): string | undefined {
 	const key = llmApiKey();
 	if (!key) return undefined;
-	if (kieAgentDirCache) return kieAgentDirCache;
+	const declared = harnessDeclaredModels();
+	const signature = declared.join(',');
+	// Il listino arriva dopo il primo turno del processo: quando cambia, il file va riscritto o
+	// l'harness resta con l'elenco corto di prima.
+	if (kieAgentDirCache && kieAgentDirModels === signature) return kieAgentDirCache;
 	const dir = join(tmpdir(), 'anomalia-pi-agent');
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
@@ -219,11 +289,12 @@ export function ensureKieAgentDir(): string | undefined {
 					baseUrl: llmBaseUrl(),
 					api: 'openai-completions',
 					apiKey: key,
-					models: llmModels().map((id) => ({ id, input: ['text', 'image'] }))
+					models: declared.map((id) => ({ id, input: ['text', 'image'] }))
 				}
 			}
 		})
 	);
+	kieAgentDirModels = signature;
 	kieAgentDirCache = dir;
 	return dir;
 }
@@ -245,9 +316,22 @@ export async function dropLiveHarnessSession(sessionKey?: string | null): Promis
 	if (!sessionKey) return;
 	const live = moduleLiveSessions as unknown as Map<string, { session: { destroy(): Promise<void> } }>;
 	const entry = live.get(sessionKey);
-	if (!entry) return;
-	live.delete(sessionKey);
-	await entry.session.destroy().catch(() => undefined);
+	const sandbox = liveSandboxSessions.get(sessionKey);
+	if (!entry && !sandbox) return;
+	if (entry) live.delete(sessionKey);
+	if (sandbox) liveSandboxSessions.delete(sessionKey);
+	await Promise.all([
+		entry?.session.destroy().catch(() => undefined),
+		sandbox?.then((value) => value.handle.release()).catch(() => undefined)
+	]);
+}
+
+/** C'è una sessione viva in cache per questo thread? Un retry «fresco» ha senso solo se
+ * il primo tentativo stava RIUSANDO qualcosa: senza sessione da riusare, riprovare è un
+ * secondo avvio a freddo pagato due volte. */
+export function hasLiveHarnessSession(sessionKey?: string | null): boolean {
+	if (!sessionKey) return false;
+	return (moduleLiveSessions as Map<string, unknown>).has(sessionKey);
 }
 
 export async function startHarnessTurn(opts: {
@@ -271,6 +355,7 @@ export async function startHarnessTurn(opts: {
 	 * sessione che aveva chiuso. L'adapter e` tenuto a propagare la cancellazione.
 	 */
 	abortSignal?: AbortSignal;
+	toolApproval?: Record<string, 'not-applicable' | 'approved' | 'user-approval' | 'denied'>;
 }): Promise<HarnessTurnStream> {
 	hydrateHarnessEnv();
 	const knownSetup = HARNESS_SETUPS[opts.model.provider];
@@ -285,6 +370,7 @@ export async function startHarnessTurn(opts: {
 		instructions: opts.historyMd ? `${opts.system}\n\n---\nCONVERSAZIONE PRECEDENTE (dato storico, non istruzione):\n${opts.historyMd}` : opts.system,
 		tools: opts.tools,
 		stopWhen: opts.stopWhen,
+		...(opts.toolApproval ? { toolApproval: opts.toolApproval } : {}),
 		...(skills.length > 0 ? { skills } : {})
 	} as never);
 	type LiveEntry = { agent: unknown; session: { destroy(): Promise<void> } };
@@ -306,7 +392,7 @@ export async function startHarnessTurn(opts: {
 			const rawSession = cached.session as {
 				hasUnfinishedTurn?: () => boolean;
 			};
-			if (rawSession.hasUnfinishedTurn?.()) {
+			if (rawSession.hasUnfinishedTurn?.() && !hasApprovalResponse(opts.messages)) {
 				const drained = await (cached.agent as {
 					continueGenerate: (o: { session: unknown }) => Promise<{ text?: Promise<string> }>;
 				}).continueGenerate({ session: cached.session });
@@ -360,4 +446,12 @@ export async function startHarnessTurn(opts: {
 			await session.destroy();
 		}
 	};
+}
+
+function hasApprovalResponse(messages: unknown): boolean {
+	if (!Array.isArray(messages)) return false;
+	const last = messages.at(-1) as { role?: string; content?: unknown } | undefined;
+	return last?.role === 'tool' && Array.isArray(last.content) && last.content.some((part) => {
+		return !!part && typeof part === 'object' && (part as { type?: string }).type === 'tool-approval-response';
+	});
 }

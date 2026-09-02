@@ -47,4 +47,17 @@ describe('il primo invio mostra la rotella finche` il thread non esiste', () => 
 		expect(branch).toBeGreaterThan(-1);
 		expect(branch).toBeLessThan(mic);
 	});
+
+	it('ChatPrompt monta il file picker solo dopo l’hydration', () => {
+		const prompt = read('./ChatPrompt.svelte');
+		const ready = prompt.indexOf('let hydrated = $state(false)');
+		const mount = prompt.indexOf('hydrated = true');
+		const picker = prompt.indexOf('bind:this={fileEl}');
+		const guard = prompt.lastIndexOf('{#if hydrated}', picker);
+
+		expect(ready).toBeGreaterThan(-1);
+		expect(mount).toBeGreaterThan(ready);
+		expect(guard).toBeGreaterThan(mount);
+		expect(guard).toBeLessThan(picker);
+	});
 });

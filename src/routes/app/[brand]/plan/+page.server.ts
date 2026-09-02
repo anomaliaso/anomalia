@@ -10,10 +10,11 @@ import {
 } from '$lib/server/content-preview';
 import { attachBrandPeople } from '$lib/server/people';
 import { attachBrandPages } from '$lib/server/content-library';
-import { loadActivePlan, activatePlan, currentWeekIndex, weekStrategyBrief, postsForWeek, weekWindow } from '$lib/server/editorial-plan';
+import { loadActivePlan, activatePlan, currentWeekIndex, weekStrategyBrief, postsForWeek, postsForWeeks, weekWindow } from '$lib/server/editorial-plan';
+import { PLAN_WEEKS } from '$lib/plans';
 import { proposeFirstPlan } from '$lib/server/planner-inputs';
 import { activeGtmBrief, loadActiveGtm, currentPhaseIndex } from '$lib/server/gtm';
-import { countForFrequency } from '$lib/server/plans';
+import { batchWeeks, BATCH_WEEKS_DEFAULT, countForFrequency } from '$lib/server/plans';
 import { remaining } from '$lib/server/usage';
 import { rankRecentWinners } from '$lib/server/scheduler';
 import { cachedBrandPage } from '$lib/server/page-cache';
@@ -91,8 +92,21 @@ export const load: PageServerLoad = async (event) => {
     const phaseIdx = gtm ? currentPhaseIndex(gtm, brand.timezone) : null;
 
     const draftWeek = draft ? ((draft.editorial_week as number | null) ?? currentIdx) : null;
-    const showDraft = Boolean(draft) && draftWeek === weekIdx;
-    const draftStrategy = showDraft ? normalizeWeeklyStrategy(draft!.seeds) : null;
+    // Una bozza può coprire più settimane: la riga porta la PRIMA, ogni seed porta la sua. Si mostra
+    // quando la settimana scelta è fra quelle coperte, e la griglia vede solo i post di quella —
+    // filtrare sulla riga faceva sparire tutto tranne la prima settimana del batch.
+    const draftAll = draft ? normalizeWeeklyStrategy(draft.seeds) : null;
+    const draftWeeks = new Set(
+      (draftAll?.seeds ?? []).map((s) => s.week).filter((w): w is number => Number.isFinite(w))
+    );
+    const showDraft =
+      Boolean(draft) && (draftWeeks.size ? weekIdx != null && draftWeeks.has(weekIdx) : draftWeek === weekIdx);
+    const draftStrategy =
+      showDraft && draftAll
+        ? draftWeeks.size
+          ? { ...draftAll, seeds: draftAll.seeds.filter((s) => s.week === weekIdx) }
+          : draftAll
+        : null;
 
     // Trovati in DUE modi e uniti, così un collegamento editoriale rotto o stantio non nasconde
     // mai lavoro vero: (a) i batch legati esplicitamente a questo piano+settimana, e (b) tutto ciò
@@ -213,7 +227,10 @@ export const load: PageServerLoad = async (event) => {
       platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
       productNames: (products ?? []).map((p) => String(p.title)).filter(Boolean),
       peopleNames: (people ?? []).map((p) => String(p.name)).filter(Boolean),
-      quota: { remaining: budget.posts, total: budget.postsQuota }
+      quota: { remaining: budget.posts, total: budget.postsQuota },
+      // Quante settimane può coprire un batch su questo piano: la pagina offre la scelta solo dove
+      // c'è davvero, invece di mostrare un'opzione che il server riporterebbe al default.
+      batchWeeks: { standard: BATCH_WEEKS_DEFAULT, max: batchWeeks(brand.plan, PLAN_WEEKS) }
     };
   }, url.searchParams.get('week') ?? '');
 };
@@ -321,15 +338,18 @@ export const actions: Actions = {
     }
 
     const gtmBrief = await activeGtmBrief(supabase, brand.id, brand.timezone).catch((error) => { swallow('load gtm brief', error); return ''; });
-    const strategyBrief = [gtmBrief, editorialPlan && weekIdx != null ? weekStrategyBrief(editorialPlan, weekIdx) : '']
+    // Quante settimane copre questo batch: due di default, quattro sul pro. Chi produce lo chiede,
+    // il piano tariffario lo limita — una richiesta più grande torna al default invece di fallire.
+    const weeks = batchWeeks(brand.plan, Number(form?.get('weeks')) || undefined);
+    const strategyBrief = [gtmBrief, editorialPlan && weekIdx != null ? weekStrategyBrief(editorialPlan, weekIdx, [], weeks) : '']
       .filter(Boolean)
       .join('\n\n');
-    const desired = editorialPlan && weekIdx != null ? postsForWeek(editorialPlan, weekIdx) : countForFrequency(prefs.frequency);
+    const desired = editorialPlan && weekIdx != null ? postsForWeeks(editorialPlan, weekIdx, weeks) : countForFrequency(prefs.frequency);
     const count = Math.min(desired, budget.posts);
     const maxVideos = Math.min(budget.videos, count);
 
     try {
-      const strategy = await planWeekStrategy(profile, { platforms, prefs, maxVideos, topPosts, strategyBrief }, count);
+      const strategy = await planWeekStrategy(profile, { platforms, prefs, maxVideos, topPosts, strategyBrief, weekIndex: weekIdx ?? undefined, weeks }, count);
 
       const existing = await loadDraft(supabase, brand.id);
       if (existing) {
@@ -399,11 +419,11 @@ export const actions: Actions = {
   // publish_logs.post_id è ON DELETE SET NULL, quindi la riga di audit sopravvive.
   // La REVOCA su Zernio viene PRIMA della cancellazione: senza, un post scheduled/approved usciva
   // lo stesso. Se la revoca fallisce, il post resta.
-  deletePost: async ({ request, params, locals: { supabase } }) => {
+  deletePost: async ({ request, params, locals: { supabase, user } }) => {
     const brand = await requireBrand(supabase, params.brand);
     const id = String((await request.formData()).get('id') ?? '');
     if (!id) return fail(400, { error: 'missing_id' });
-    const res = await deletePostCancellingZernio(supabase, id, brand.id);
+    const res = await deletePostCancellingZernio(supabase, id, brand.id, user?.id);
     if (!res.ok) return fail(res.status, { error: res.message });
     return { deleted: true };
   },

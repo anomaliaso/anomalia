@@ -11,12 +11,13 @@ import { APPROVABLE_STATUSES, type CrossPostResult, RESCHEDULABLE_STATUSES, appr
 import type { ChatToolCtx } from './shared';
 import { startLongToolJob, type AnyRec } from './shared';
 import { requireFreshRead } from '../read-guards';
+import { recordPostVerdict } from '$lib/server/post-verdict';
 import { refreshPostReceipt } from '../post-editor-tools';
 
 // ── WRITE tools ─────────────────────────────────────────────────────────
 
 export function brandWriteTools(ctx: ChatToolCtx) {
-  const { supabase, brandId, tz } = ctx;
+  const { supabase, brandId, tz, userId } = ctx;
   return {
     update_brand_kit: tool({
       description:
@@ -355,13 +356,24 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         if (Object.keys(clean).length === 0) return { error: 'No changes specified' };
 
         // Check current status before updating
-        const { data: current } = await supabase.from('posts').select('status, updated_at').eq('id', post_id).eq('brand_id', brandId).maybeSingle();
+        const { data: current } = await supabase.from('posts').select('status, updated_at, caption').eq('id', post_id).eq('brand_id', brandId).maybeSingle();
         if (!current) return { error: 'Post not found' };
         const stale = requireFreshRead('post', String(post_id), current.updated_at, 'This post', 'read_posts (find this id in the list)');
         if (stale) return stale;
 
         const { error } = await supabase.from('posts').update(clean).eq('id', post_id).eq('brand_id', brandId);
         if (error) return { error: error.message };
+
+        if (typeof clean.caption === 'string' && String(current.caption ?? '') !== clean.caption) {
+          await recordPostVerdict(supabase, {
+            postId: String(post_id),
+            brandId,
+            actorId: userId,
+            verdict: 'edited',
+            captionBefore: current.caption as string | null,
+            captionAfter: clean.caption
+          });
+        }
         await refreshPostReceipt(supabase, brandId, String(post_id));
 
         // For scheduled posts: cancel old Zernio schedule and re-publish to keep 1:1 sync
@@ -381,82 +393,6 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         return { success: true, updated_fields: Object.keys(clean) };
     }),
 
-    review_video: tool({
-      description:
-        'Review a FINISHED video against organic UGC or paid-ads standards (Gemini watches the clip). Scores hook / doomscroll stop, 2s sound-off, hold, authenticity, structure, CTA/offer. Use before approving a reel, after creating a video, or on a competitor ad URL. Credits only — does not spend the monthly video budget.',
-      inputSchema: z.object({
-        standard: z
-          .enum(['organic', 'ads'])
-          .describe('organic = Reels/TikTok UGC. ads = Meta/paid UGC ad (proof, offer, uniqueness, claims).'),
-        url: z.string().optional().describe('Public https URL of the mp4. Omit when post_id is set.'),
-        post_id: z.string().optional().describe('Brand post id — uses its video media_url.'),
-        product: z.string().optional(),
-        caption: z.string().optional(),
-        script: z.string().optional().describe('Intended spoken line, if known.')
-      }),
-      execute: async (
-        {
-          standard,
-          url,
-          post_id,
-          product,
-          caption,
-          script
-        }: {
-          standard: 'organic' | 'ads';
-          url?: string;
-          post_id?: string;
-          product?: string;
-          caption?: string;
-          script?: string;
-        },
-        opts: ToolExecutionOptions<unknown>
-      ) => {
-        return withBrandContext(brandId, async () => {
-          const { extraReviewOpts, parseVideoStandard, resolveReviewVideoUrl, reviewVideo } = await import('$lib/server/video-review');
-          const resolved = await resolveReviewVideoUrl(supabase, brandId, { url, postId: post_id });
-          if ('error' in resolved) return { error: resolved.error };
-          const { data: brand } = await supabase
-            .from('brands')
-            .select('name, content_prefs')
-            .eq('id', brandId)
-            .maybeSingle();
-          const language = (brand?.content_prefs as AnyRec)?.language
-            ? String((brand!.content_prefs as AnyRec).language)
-            : null;
-          try {
-            const result = await reviewVideo(resolved.url, {
-              standard: parseVideoStandard(standard) ?? 'organic',
-              brandName: brand?.name,
-              product: product?.trim() || resolved.product || null,
-              caption: caption?.trim() || resolved.caption || null,
-              script: script?.trim() || null,
-              language,
-              // reviewVideo has always accepted this and always been handed undefined: the clip
-              // download plus the agent loop is one of the longest steps a turn can take.
-              abortSignal: opts.abortSignal,
-              ...extraReviewOpts(resolved)
-            });
-            if (!result.ok) return { error: result.error };
-            const { persistReadyReview } = await import('$lib/server/video-review-store');
-            await persistReadyReview(supabase, {
-              brandId,
-              url: resolved.url,
-              postId: post_id ?? null,
-              standard: parseVideoStandard(standard) ?? 'organic',
-              review: result.review,
-              kind: extraReviewOpts(resolved).kind
-            });
-            return { ok: true, ...result.review };
-          } catch (e) {
-            if (e instanceof Error && e.name === 'CreditsExhaustedError') {
-              return { error: 'credits_exhausted', action: 'offer_upgrade' };
-            }
-            return { error: e instanceof Error ? e.message : String(e) };
-          }
-        });
-      }
-    }),
 
     // Il ponte fra un URL `inspect_only` e una generazione: entra un mp4 di terzi, esce TESTO.
     // Senza questo tool, in chat, `research_meta_ads` restituiva un video del competitor e l'unica
@@ -537,7 +473,7 @@ export function brandWriteTools(ctx: ChatToolCtx) {
           };
         }
         try {
-          const res = await publishApprovedPost(supabase, post as ApprovablePost, tz);
+          const res = await publishApprovedPost(supabase, post as ApprovablePost, tz, { by: userId });
           if (res.scheduled === 0 && res.failed > 0) {
             return { error: res.error ?? 'Could not schedule — the post did not meet platform requirements.' };
           }
@@ -582,6 +518,14 @@ export function brandWriteTools(ctx: ChatToolCtx) {
         }
         const { error } = await supabase.from('posts').delete().eq('id', post_id).eq('brand_id', brandId);
         if (error) return { error: error.message };
+
+        await recordPostVerdict(supabase, {
+          postId: String(post_id),
+          brandId,
+          actorId: userId,
+          verdict: 'discarded'
+        });
+
         return { success: true, deleted: post_id };
     }),
 

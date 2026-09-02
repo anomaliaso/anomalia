@@ -21,16 +21,20 @@ function geminiRequest(parts: Array<Record<string, unknown>>, aspectRatio = '4:5
 }
 
 describe('buildKieImageInput', () => {
-  it('accetta solo i rapporti d\'aspetto dell\'enum di kie, e ripiega su 1:1', async () => {
+  it('non esce mai un rapporto che il modello non serve', async () => {
     const { buildKieImageInput } = await import('./kie-jobs');
+    const { imageModelSpec, NANO_BANANA_2_MODEL } = await import('$lib/image-models');
+    const spec = imageModelSpec(NANO_BANANA_2_MODEL)!;
     // I quattro che il prodotto usa davvero passano intatti.
     for (const ar of ['1:1', '4:5', '9:16', '16:9']) {
       expect(buildKieImageInput({ prompt: 'x', aspectRatio: ar }).aspect_ratio).toBe(ar);
     }
-    // 99:1 su kie è un 500 alla submit: qui diventa un render valido invece di un render perso.
+    // 99:1 su kie è un 500 alla submit: qui diventa il rapporto servito più vicino, cioè un render
+    // valido invece di un render perso.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(buildKieImageInput({ prompt: 'x', aspectRatio: '99:1' }).aspect_ratio).toBe('1:1');
-    expect(buildKieImageInput({ prompt: 'x', aspectRatio: '3:1' }).aspect_ratio).toBe('1:1');
+    for (const junk of ['99:1', '3:1', 'banana']) {
+      expect(spec.aspectRatios).toContain(buildKieImageInput({ prompt: 'x', aspectRatio: junk }).aspect_ratio);
+    }
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -53,6 +57,32 @@ describe('buildKieImageInput', () => {
     );
   });
 
+  it('su nano-banana-2-lite il payload è la forma Lite: image_urls, niente resolution', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const input = buildKieImageInput({
+      model: 'nano-banana-2-lite',
+      prompt: 'x',
+      aspectRatio: '4:5',
+      refUrls: ['https://ref/1.png', 'https://ref/2.png']
+    });
+    expect(input.image_urls).toEqual(['https://ref/1.png', 'https://ref/2.png']);
+    expect(input.image_input).toBeUndefined();
+    expect(input.resolution).toBeUndefined();
+    expect(input.output_format).toBeUndefined();
+    expect(input.aspect_ratio).toBe('4:5');
+
+    const bare = buildKieImageInput({ model: 'nano-banana-2-lite', prompt: 'x' });
+    expect(bare.image_urls).toBeUndefined();
+    expect(bare.resolution).toBeUndefined();
+  });
+
+  it('su lite i riferimenti hanno tetto 10', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const many = Array.from({ length: 12 }, (_, i) => `https://ref/${i}.png`);
+    const input = buildKieImageInput({ model: 'nano-banana-2-lite', prompt: 'x', refUrls: many });
+    expect(input.image_urls).toHaveLength(10);
+  });
+
   // Un riferimento perso all'upload fa fallire il render apposta ("non è un dettaglio: è la foto del
   // prodotto vero"). Perderlo per aritmetica costava esattamente lo stesso e non lasciava traccia.
   it('quando ne arrivano più di 8 lo dice, invece di scartarli in silenzio', async () => {
@@ -72,6 +102,7 @@ describe('kieImageModel', () => {
     const { kieImageModel } = await import('./kie-jobs');
     expect(kieImageModel('gemini-3-pro-image-preview')).toBe('nano-banana-pro');
     expect(kieImageModel('gemini-3.1-flash-image')).toBe('nano-banana-2');
+    expect(kieImageModel('gemini-3.1-flash-lite-image')).toBe('nano-banana-2-lite');
     expect(kieImageModel(undefined)).toBe('nano-banana-2');
   });
 });
@@ -155,6 +186,22 @@ describe('generateImageOnKie', () => {
     const { generateImageOnKie } = await import('./kie-jobs');
     await generateImageOnKie(geminiRequest([{ text: 'solo testo' }], '1:1'));
     expect(calls.filter((c) => c.url.includes('file-base64-upload'))).toHaveLength(0);
+  });
+
+  it('una richiesta Lite esce con il modello Lite e la forma Lite del payload', async () => {
+    const { generateImageOnKie } = await import('./kie-jobs');
+    const lite = { ...geminiRequest([{ text: 'x' }, { inlineData: { mimeType: 'image/png', data: PNG_B64 } }]) };
+    lite.model = 'gemini-3.1-flash-lite-image';
+    await generateImageOnKie(lite);
+
+    const submit = calls.find((c) => c.url.includes('createTask'))!.body as {
+      model: string;
+      input: { image_urls?: string[]; image_input?: string[]; resolution?: string };
+    };
+    expect(submit.model).toBe('nano-banana-2-lite');
+    expect(submit.input.image_urls).toEqual(['https://tempfile.kie/1.png']);
+    expect(submit.input.image_input).toBeUndefined();
+    expect(submit.input.resolution).toBeUndefined();
   });
 
   it('il costo viene da creditsConsumed, non da una tariffa a listino', async () => {
@@ -258,5 +305,94 @@ describe('generateSpeechOnKie', () => {
     expect(out?.credits).toBe(0.62);
     expect(out?.wav.equals(wav)).toBe(true);
     vi.unstubAllGlobals();
+  });
+});
+
+// Ogni famiglia su kie è un dialetto diverso dello stesso endpoint. Questi test sono la copia
+// eseguibile di docs.kie.ai: se un campo cambia nome, qui si rompe prima che si rompa un render.
+describe('buildKieImageInput, un dialetto per famiglia', () => {
+  it('Seedream vuole image_urls e quality, mai image_input né resolution', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const input = buildKieImageInput({
+      model: 'seedream-5-pro',
+      prompt: 'x',
+      aspectRatio: '4:5',
+      refUrls: ['https://a/1.png'],
+      resolution: '2K'
+    });
+    expect(input.image_urls).toEqual(['https://a/1.png']);
+    expect(input.image_input).toBeUndefined();
+    expect(input.resolution).toBeUndefined();
+    expect(input.quality).toBe('high');
+    // 4:5 non esiste su Seedream: diventa il verticale più vicino, non un quadrato.
+    expect(input.aspect_ratio).toBe('3:4');
+  });
+
+  it('GPT Image 2 vuole input_urls, e 4:5 lo serve davvero', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const input = buildKieImageInput({
+      model: 'gpt-image-2',
+      prompt: 'x',
+      aspectRatio: '4:5',
+      refUrls: ['https://a/1.png']
+    });
+    expect(input.input_urls).toEqual(['https://a/1.png']);
+    expect(input.aspect_ratio).toBe('4:5');
+    expect(input.output_format).toBeUndefined();
+  });
+
+  it('Qwen3 chiama image_size il rapporto d\'aspetto e prende 3 riferimenti', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const refs = ['1', '2', '3', '4', '5'].map((n) => `https://a/${n}.png`);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const input = buildKieImageInput({ model: 'qwen3-pro', prompt: 'x', aspectRatio: '4:5', refUrls: refs });
+    expect(input.image_size).toBe('3:4');
+    expect(input.aspect_ratio).toBeUndefined();
+    expect(input.image_urls).toHaveLength(3);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  // MISURATO su kie, non dedotto: 4:5 a 2K → 500 "aspect_ratio is not within the range of allowed
+  // options"; lo stesso 4:5 a 1K passa, e 9:16 a 2K passa. Con KIE_IMAGE_RESOLUTION=2K in
+  // produzione, senza questa regola OGNI post Instagram su GPT Image 2 fallirebbe.
+  it('GPT Image 2: un rapporto che esiste solo a 1K abbassa la risoluzione, non perde il formato', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const portrait = buildKieImageInput({ model: 'gpt-image-2', prompt: 'x', aspectRatio: '4:5', resolution: '2K' });
+    expect(portrait.aspect_ratio).toBe('4:5');
+    expect(portrait.resolution).toBe('1K');
+    const story = buildKieImageInput({ model: 'gpt-image-2', prompt: 'x', aspectRatio: '9:16', resolution: '2K' });
+    expect(story.resolution).toBe('2K');
+  });
+
+  it('Nano Banana Pro resta com\'era: image_input, resolution, output_format', async () => {
+    const { buildKieImageInput } = await import('./kie-jobs');
+    const input = buildKieImageInput({
+      model: 'nano-banana-pro',
+      prompt: 'x',
+      aspectRatio: '4:5',
+      refUrls: ['https://a/1.png'],
+      resolution: '2K'
+    });
+    expect(input.image_input).toEqual(['https://a/1.png']);
+    expect(input.aspect_ratio).toBe('4:5');
+    expect(input.resolution).toBe('2K');
+    expect(input.output_format).toBe('png');
+  });
+});
+
+describe('kieImageModel', () => {
+  it('con riferimenti sceglie l\'id image-to-image, dove la famiglia lo separa', async () => {
+    const { kieImageModel } = await import('./kie-jobs');
+    expect(kieImageModel('seedream-5-pro', 0)).toBe('seedream/5-pro-text-to-image');
+    expect(kieImageModel('seedream-5-pro', 2)).toBe('seedream/5-pro-image-to-image');
+    expect(kieImageModel('nano-banana-pro', 2)).toBe('nano-banana-pro');
+  });
+
+  it('un id Gemini di un vecchio call site resta tradotto', async () => {
+    const { kieImageModel } = await import('./kie-jobs');
+    expect(kieImageModel('gemini-3-pro-image-preview', 0)).toBe('nano-banana-pro');
+    expect(kieImageModel('gemini-3.1-flash-lite-image', 0)).toBe('nano-banana-2-lite');
+    expect(kieImageModel(undefined, 0)).toBe('nano-banana-2');
   });
 });

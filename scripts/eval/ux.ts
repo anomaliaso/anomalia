@@ -1,5 +1,4 @@
-import { spawn } from 'node:child_process';
-import { openSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { generateText } from 'ai';
 import { createAdminClient } from '$lib/server/supabase-admin';
@@ -12,7 +11,6 @@ import { RUBRIC, grade, parseJudgment } from './ux/grader';
 import { writeReport, type FlowFact, type JudgeUsage } from './ux/report';
 
 const APP_URL = process.env.EVAL_UX_APP_URL ?? 'http://localhost:4180';
-const VITE_PORT = Number(APP_URL.split(':').pop() ?? 4180);
 const REPLY_WAIT_MS = Number(process.env.EVAL_UX_WAIT_MS ?? 240_000);
 // Il contatto del team nasce quando il TURNO di setup chiude, non quando la prima risposta
 // arriva: il turno continua a lavorare per minuti dopo (tool, memoria) e la finestra della
@@ -20,7 +18,6 @@ const REPLY_WAIT_MS = Number(process.env.EVAL_UX_WAIT_MS ?? 240_000);
 const TEAM_WAIT_MS = Number(process.env.EVAL_UX_TEAM_WAIT_MS ?? 420_000);
 const RESULTS_ROOT = process.env.EVAL_UX_RESULTS_DIR ?? 'eval-results';
 const BRAND_POLL_MS = 60_000;
-const HEALTH_TIMEOUT_MS = 90_000;
 const CHAT_SNAPSHOT_CHARS = 8_000;
 const PICK_SNAPSHOT_CHARS = 4_000;
 
@@ -52,39 +49,10 @@ async function httpReachable(url: string): Promise<boolean> {
   }
 }
 
-function startViteServer(): Promise<() => Promise<void>> {
-  return new Promise((resolve, reject) => {
-    const logFd = openSync(join(runDir, 'server.log'), 'a');
-    const child = spawn('npx', ['vite', 'dev', '--port', String(VITE_PORT), '--strictPort'], {
-      env: { ...process.env, NO_HMR: '1', AGENT_KIT },
-      detached: true,
-      stdio: ['ignore', logFd, logFd]
-    });
-    const startedAt = Date.now();
-    const poll = setInterval(async () => {
-      if (await httpReachable(APP_URL)) {
-        clearInterval(poll);
-        resolve(async () => {
-          try {
-            process.kill(-child.pid!, 'SIGTERM');
-          } catch {}
-        });
-      } else if (Date.now() - startedAt > HEALTH_TIMEOUT_MS || child.exitCode !== null) {
-        clearInterval(poll);
-        reject(new Error(`vite dev non è partito sulla porta ${VITE_PORT} (log: ${join(runDir, 'server.log')})`));
-      }
-    }, 1_500);
-    child.on('error', (e) => {
-      clearInterval(poll);
-      reject(e);
-    });
-  });
-}
-
 async function ensureAppServer(): Promise<() => Promise<void>> {
-  if (await httpReachable(APP_URL)) return async () => {};
-  log(`[server] ${APP_URL} non risponde, avvio vite dev…`);
-  return startViteServer();
+  if (!(await httpReachable(APP_URL))) throw new Error(`stack non raggiungibile su ${APP_URL}`);
+  log(`[server] uso lo stack su ${APP_URL}`);
+  return async () => {};
 }
 
 async function pollBrand(userId: string): Promise<{ id: string; slug: string; name: string }> {
@@ -134,82 +102,37 @@ async function judge(brandSlug: string, pickSnapshot: string, chatSnapshot: stri
 }
 
 async function main(): Promise<number> {
-  const stopServer = await ensureAppServer();
+  let stopServer = async () => {};
   const admin = createAdminClient();
-  let userId: string | null = null;
-  let browser: Browser | null = null;
+  const users: Array<{ id: string; email: string; password: string }> = [];
+  const browsers: Browser[] = [];
 
   try {
+    stopServer = await ensureAppServer();
     const stamp = Date.now();
-    const user = await createEvalUser(`eval-ux-${stamp}@anomalia.so`, `eval-ux-${stamp}`);
-    userId = user.id;
-    log(`[user] creato ${user.email}`);
+    const noWebsiteUser = await createEvalUser(`eval-ux-no-site-${stamp}@anomalia.so`, `eval-ux-no-site-${stamp}`);
+    users.push(noWebsiteUser);
+    log(`[user] creato ${noWebsiteUser.email}`);
+    const noWebsiteBrowser = new Browser(join(evidenceDir, 'no-site'), (line) => log(`[browser no-site] ${line}`));
+    mkdirSync(join(evidenceDir, 'no-site'), { recursive: true });
+    browsers.push(noWebsiteBrowser);
+    const noWebsite = await runScenario(admin, noWebsiteBrowser, noWebsiteUser, null, 'no-site', join(evidenceDir, 'no-site'));
 
-    browser = new Browser(evidenceDir, (line) => log(`[browser] ${line}`));
-    const walk = await walkOnboarding(browser, APP_URL, user);
-    log(`[walk] ${walk.steps.join(' · ')}`);
+    const websiteUser = await createEvalUser(`eval-ux-website-${stamp}@anomalia.so`, `eval-ux-website-${stamp}`);
+    users.push(websiteUser);
+    log(`[user] creato ${websiteUser.email}`);
+    const websiteBrowser = new Browser(join(evidenceDir, 'website'), (line) => log(`[browser website] ${line}`));
+    mkdirSync(join(evidenceDir, 'website'), { recursive: true });
+    browsers.push(websiteBrowser);
+    const website = await runScenario(admin, websiteBrowser, websiteUser, 'https://example.com', 'website', join(evidenceDir, 'website'));
 
-    const brand = await pollBrand(user.id);
-    log(`[brand] ${brand.slug} (${brand.id})`);
-
-    const { replied, facts: chat } = await waitForAssistantReply(admin, brand.id, REPLY_WAIT_MS);
-    log(`[chat] replied=${replied} assistant=${chat.assistantMessages} latency=${chat.firstAssistantLatencyMs}ms`);
-
-    const team = await waitForTeamContact(admin, brand.id, TEAM_WAIT_MS);
-    log(`[team] contatti firmati: ${team.agents.join(', ') || 'nessuno'}`);
-
-    // Prova di delega: una domanda cross-craft (audit + idee post). Il fatto misurato è se
-    // nascono DM agente-agente — la forma osservabile della delega a un collega.
-    await sendCrossCraftAsk(browser);
-    log('[walk] domanda cross-craft inviata');
-    const delegation = await waitForDelegation(admin, brand.id, REPLY_WAIT_MS);
-    log(`[delegation] dmThreads=${delegation.dmThreads} dmMessages=${delegation.dmMessages}`);
-    await browser.captureEvidence('03-delegation');
-
-    const chatUrl = (await browser.run('get', 'url')).trim();
-    await browser.captureEvidence('02-chat');
-    const pick = await readText(join(evidenceDir, '01-pick.a11y.txt'));
-    const chatSnap = await readText(join(evidenceDir, '02-chat.a11y.txt'));
-
-    const plans = await planFacts(admin, brand.id);
-    const flowFacts: FlowFact[] = [
-      { id: 'brand-created', ok: true, gate: true, detail: `brand ${brand.slug} creato dall'onboarding` },
-      {
-        id: 'setup-chat-reply',
-        ok: replied,
-        gate: true,
-        detail: replied
-          ? `prima risposta agente in ${chat.firstAssistantLatencyMs}ms (${chat.assistantMessages} messaggi assistente)`
-          : `nessuna risposta entro ${REPLY_WAIT_MS / 1000}s`
-      },
-      {
-        id: 'team-of-agents-contact',
-        ok: team.agents.length >= 2,
-        gate: true,
-        detail:
-          team.agents.length >= 2
-            ? `contattano l'utente: ${team.agents.join(', ')}`
-            : `solo ${team.agents.length} specialista ha contattato l'utente (${team.agents.join(', ') || 'nessuno'}) — il team non si presenta`
-      },
-      {
-        id: 'delegation-fact',
-        ok: delegation.dmThreads > 0,
-        gate: false,
-        detail:
-          delegation.dmThreads > 0
-            ? `${delegation.dmThreads} DM fra agenti, ${delegation.dmMessages} messaggi dopo la richiesta cross-craft`
-            : 'nessun DM fra agenti dopo la richiesta cross-craft: il lavoro cross-craft non è stato delegato'
-      },
-      {
-        id: 'editorial-plan',
-        ok: plans.editorialPlans > 0,
-        gate: false,
-        detail: `${plans.editorialPlans} piani editoriali (fase strategy/plan saltata nel percorso chat-prima)`
-      },
-      { id: 'news-sources', ok: plans.newsSources > 0, gate: false, detail: `${plans.newsSources} fonti radar attive` }
-    ];
-
-    const judged = await judge(brand.slug, pick ?? '', chatSnap ?? '', { chat, plans, team, delegation });
+    const flowFacts = [...noWebsite.flowFacts, ...website.flowFacts];
+    const judged = await judge(
+      noWebsite.brand.slug,
+      noWebsite.pickSnapshot,
+      noWebsite.chatSnapshot,
+      noWebsite.judgeFacts
+    );
     const judgment = parseJudgment(judged.text);
     if (!judgment) {
       log(`[judge] output non parsabile: ${judged.text.slice(0, 400)}`);
@@ -232,12 +155,29 @@ async function main(): Promise<number> {
       grade: g,
       judgeUsage: judged.judgeUsage,
       evidenceFiles: [
-        'evidence/01-pick.png',
-        'evidence/02-chat.png',
-        'evidence/03-delegation.png',
-        'evidence/01-pick.a11y.txt',
-        'evidence/02-chat.a11y.txt',
-        'evidence/03-delegation.a11y.txt'
+        'evidence/no-site/01-homepage.png',
+        'evidence/no-site/02-login.png',
+        'evidence/no-site/05-pick.png',
+        'evidence/no-site/06-chat.png',
+        'evidence/no-site/07-delegation.png',
+        'evidence/no-site/05-pick.a11y.txt',
+        'evidence/no-site/06-chat.a11y.txt',
+        'evidence/no-site/07-delegation.a11y.txt',
+        'evidence/website/01-homepage.png',
+        'evidence/website/02-login.png',
+        'evidence/website/03-start.png',
+        'evidence/website/04-onboarding.png',
+        'evidence/website/05-pick.png',
+        'evidence/website/06-chat.png',
+        'evidence/website/07-delegation.png',
+        'evidence/website/03-start.a11y.txt',
+        'evidence/website/04-onboarding.a11y.txt',
+        'evidence/website/05-pick.a11y.txt',
+        'evidence/website/06-chat.a11y.txt',
+        'evidence/website/07-delegation.a11y.txt',
+        'evidence/browser-console.log',
+        'evidence/browser-network.log',
+        'evidence/browser-transcript.log'
       ]
     });
     log(`[report] ${report}`);
@@ -245,18 +185,110 @@ async function main(): Promise<number> {
     const gatesOk = flowFacts.filter((f) => f.gate).every((f) => f.ok);
     return gatesOk && g.allPass ? 0 : 1;
   } finally {
-    await browser?.close().catch(() => {});
-    if (userId) {
+    await Promise.all(browsers.map((browser) => browser.close().catch(() => {})));
+    for (const user of users) {
       try {
-        await deleteEvalUser(userId);
-        log(`[teardown] utente eval ${userId} eliminato (brand e storage cascata)`);
+        await deleteEvalUser(user.id);
+        log(`[teardown] utente eval ${user.id} eliminato (brand e storage cascata)`);
       } catch (e) {
-        console.error(`[teardown] FALLITO per ${userId}: eliminare a mano. Motivo:`, e);
+        console.error(`[teardown] FALLITO per ${user.id}: eliminare a mano. Motivo:`, e);
       }
     }
     await stopServer();
     writeFileSync(join(runDir, 'transcript.log'), transcriptLines.join('\n'));
   }
+}
+
+type ScenarioResult = {
+  brand: { id: string; slug: string; name: string };
+  flowFacts: FlowFact[];
+  pickSnapshot: string;
+  chatSnapshot: string;
+  judgeFacts: unknown;
+};
+
+async function runScenario(
+  admin: ReturnType<typeof createAdminClient>,
+  browser: Browser,
+  user: { id: string; email: string; password: string },
+  website: string | null,
+  label: string,
+  evidencePath: string
+): Promise<ScenarioResult> {
+  const walk = await walkOnboarding(browser, APP_URL, user, website);
+  log(`[walk ${label}] ${walk.steps.join(' · ')}`);
+
+  const brand = await pollBrand(user.id);
+  log(`[brand ${label}] ${brand.slug} (${brand.id})`);
+
+  const { replied, facts: chat } = await waitForAssistantReply(admin, brand.id, REPLY_WAIT_MS);
+  log(`[chat ${label}] replied=${replied} assistant=${chat.assistantMessages} latency=${chat.firstAssistantLatencyMs}ms`);
+  if (!replied) throw new Error(`${label}: setup assistant reply and run completion were not persisted`);
+  await browser.run('wait', '--assistant', '--timeout', String(REPLY_WAIT_MS));
+  await browser.captureEvidence('06-chat');
+
+  const team = await waitForTeamContact(admin, brand.id, TEAM_WAIT_MS);
+  log(`[team ${label}] expected=${team.expectedAgents.join(', ')} actual=${team.agents.join(', ') || 'none'}`);
+
+  await sendCrossCraftAsk(browser);
+  log(`[walk ${label}] cross-craft question sent`);
+  const delegation = await waitForDelegation(admin, brand.id, REPLY_WAIT_MS);
+  log(`[delegation ${label}] dmThreads=${delegation.dmThreads} dmMessages=${delegation.dmMessages}`);
+  await browser.run('wait', '--assistant-count', '2', '--timeout', String(REPLY_WAIT_MS));
+  await browser.captureEvidence('07-delegation');
+  await browser.assertHealthyNetwork();
+
+  const plans = await planFacts(admin, brand.id);
+  const expectedContactsOk = team.expectedAgents.every((agent) => team.agents.includes(agent));
+  const delegationOk = delegation.dmThreads > 0 && delegation.dmMessages > 0;
+  const prefix = label;
+  const flowFacts: FlowFact[] = [
+    { id: `${prefix}-homepage-dom`, ok: true, gate: true, detail: 'homepage rendered one Sign in and one Get started link' },
+    { id: `${prefix}-get-started-url`, ok: true, gate: true, detail: walk.urls.getStarted },
+    { id: `${prefix}-sign-in-url`, ok: true, gate: true, detail: walk.urls.signIn },
+    { id: `${prefix}-login-signup-dom`, ok: true, gate: true, detail: 'login and signup forms both rendered and toggled' },
+    {
+      id: `${prefix}-website-preserved`,
+      ok: website ? walk.urls.start?.includes(encodeURIComponent(website)) || walk.urls.login?.includes(encodeURIComponent(website)) : true,
+      gate: true,
+      detail: website ? `preserved through /start, /login, and /app/onboarding: ${walk.urls.onboarding}` : 'not applicable to the no-website branch'
+    },
+    { id: `${prefix}-onboarding-url-dom`, ok: true, gate: true, detail: walk.urls.onboarding },
+    { id: `${prefix}-agent-picker-dom`, ok: !!walk.selectedAgent, gate: true, detail: `selected ${walk.selectedAgent} at ${walk.urls.pick}` },
+    {
+      id: `${prefix}-setup-chat-db`,
+      ok: replied && chat.setupAssistantMessages > 0 && chat.setupRunStates.includes('done'),
+      gate: true,
+      detail: `url ${walk.chatUrl}; setup assistant=${chat.setupAssistantMessages}; runs=${chat.setupRunStates.join(', ') || 'none'}`
+    },
+    {
+      id: `${prefix}-team-contacts-db`,
+      ok: expectedContactsOk,
+      gate: true,
+      detail: `expected [${team.expectedAgents.join(', ')}], signed [${team.agents.join(', ') || 'none'}]`
+    },
+    {
+      id: `${prefix}-delegation-db`,
+      ok: delegationOk,
+      gate: true,
+      detail: `${delegation.dmThreads} agent DM threads, ${delegation.dmMessages} messages`
+    },
+    {
+      id: `${prefix}-editorial-plan-db`,
+      ok: plans.editorialPlans > 0,
+      gate: false,
+      detail: `${plans.editorialPlans} editorial plans`
+    },
+    { id: `${prefix}-news-sources-db`, ok: plans.newsSources > 0, gate: false, detail: `${plans.newsSources} active news sources` }
+  ];
+
+  return {
+    brand,
+    flowFacts,
+    pickSnapshot: (await readText(join(evidencePath, '05-pick.a11y.txt'))) ?? '',
+    chatSnapshot: (await readText(join(evidencePath, '06-chat.a11y.txt'))) ?? '',
+    judgeFacts: { chat, plans, team, delegation, walk: walk.urls }
+  };
 }
 
 async function readText(path: string): Promise<string | null> {

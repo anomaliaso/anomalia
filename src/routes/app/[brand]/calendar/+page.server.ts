@@ -10,14 +10,12 @@ import {
   EDITOR_POST_COLS,
   decoratePosts,
   buildBusyDays,
+  applyPostEdits,
   deletePostCancellingZernio,
   editorActions
 } from '$lib/server/post-editing';
 import { founderVideoBudget, listVideoRequests } from '$lib/server/video-requests';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { isReviewableMediaUrl } from '$lib/content-formats';
-import { loadVideoScoreBadges, mediaUrlHash } from '$lib/server/video-review-store';
-import type { VideoScoreBadge } from '$lib/video-score';
 import { cachedBrandPage } from '$lib/server/page-cache';
 
 function parseIds(form: FormData, key = 'ids'): string[] {
@@ -54,7 +52,6 @@ export type CalendarPost = {
   product_name?: string | null;
   format?: string | null;
   lastError?: string | null;
-  videoScore?: VideoScoreBadge | null;
   /** Full decorated social row for PostEditor — absent for blog. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   editorPost?: any;
@@ -232,15 +229,6 @@ export const load: PageServerLoad = async (event) => {
       };
     });
 
-    const videoUrls = socialCal.map((p) => p.media_url).filter((u): u is string => !!u && isReviewableMediaUrl(u));
-    if (videoUrls.length) {
-      const badges = await loadVideoScoreBadges(supabase, brand.id, videoUrls);
-      for (const p of socialCal) {
-        if (!p.media_url || !isReviewableMediaUrl(p.media_url)) continue;
-        p.videoScore = badges.get(mediaUrlHash(p.media_url)) ?? badges.get(p.media_url) ?? null;
-      }
-    }
-
     const articleCal: CalendarPost[] = ((articleRows ?? []) as Array<Record<string, unknown>>)
       .map((a): CalendarPost | null => {
         const iso = (a.published_at as string | null) || (a.scheduled_for as string | null);
@@ -330,13 +318,13 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-  updateCaption: async ({ request, locals: { supabase } }) => {
+  updateCaption: async ({ request, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     const caption = String(data.get('caption') ?? '').trim();
     if (!id) return fail(400, { error: 'Missing post' });
     if (!caption) return fail(400, { error: 'Caption cannot be empty' });
-    const { error } = await supabase.from('posts').update({ caption }).eq('id', id);
+    const { error } = await applyPostEdits(supabase, id, { caption }, { by: user?.id });
     if (error) return fail(500, { error: error.message });
     return { updated: id };
   },
@@ -344,16 +332,16 @@ export const actions: Actions = {
   // Prima scriveva un publish_log 'canceled' e cancellava la riga SENZA mai revocare Zernio:
   // il log dichiarava una cancellazione inesistente e il post usciva comunque (classe incidente
   // scheduling luglio 2026). Ora la revoca viene prima; se fallisce, il post resta visibile.
-  deletePost: async ({ request, locals: { supabase } }) => {
+  deletePost: async ({ request, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');
     if (!id) return fail(400, { error: 'Missing post' });
-    const res = await deletePostCancellingZernio(supabase, id);
+    const res = await deletePostCancellingZernio(supabase, id, undefined, user?.id);
     if (!res.ok) return fail(res.status, { error: res.message });
     return { deleted: id, wasScheduled: res.wasScheduled };
   },
 
-  approveWeek: async ({ request, params, locals: { supabase } }) => {
+  approveWeek: async ({ request, params, locals: { supabase, user } }) => {
     const form = await request.formData();
     const ids = parseIds(form);
     if (!ids.length) return {};
@@ -374,7 +362,8 @@ export const actions: Actions = {
       const res = await publishApprovedPost(
         supabase,
         post as ApprovablePost,
-        brand.timezone ?? 'Europe/Rome'
+        brand.timezone ?? 'Europe/Rome',
+        { by: user?.id }
       );
       if (res.noAccount) noAccount = true;
     }
@@ -382,7 +371,7 @@ export const actions: Actions = {
   },
 
   /** Bulk-delete selected social posts (same-type multi-select). */
-  deleteSelected: async ({ request, params, locals: { supabase } }) => {
+  deleteSelected: async ({ request, params, locals: { supabase, user } }) => {
     const ids = parseIds(await request.formData());
     if (!ids.length) return fail(400, { error: 'No posts selected' });
     const { data: brand } = await supabase
@@ -405,7 +394,7 @@ export const actions: Actions = {
     let deleted = 0;
     const failures: string[] = [];
     for (const post of posts) {
-      const res = await deletePostCancellingZernio(supabase, post.id, brand.id);
+      const res = await deletePostCancellingZernio(supabase, post.id, brand.id, user?.id);
       if (res.ok) deleted++;
       else failures.push(res.message);
     }
@@ -470,7 +459,7 @@ export const actions: Actions = {
   },
 
 
-  approveAll: async ({ params, locals: { supabase } }) => {
+  approveAll: async ({ params, locals: { supabase, user } }) => {
     const { data: brand } = await supabase
       .from('brands')
       .select('id, timezone')
@@ -487,7 +476,8 @@ export const actions: Actions = {
       const res = await publishApprovedPost(
         supabase,
         post as ApprovablePost,
-        brand.timezone ?? 'Europe/Rome'
+        brand.timezone ?? 'Europe/Rome',
+        { by: user?.id }
       );
       if (res.noAccount) noAccount = true;
     }

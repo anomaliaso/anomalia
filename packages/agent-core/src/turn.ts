@@ -35,6 +35,7 @@ export interface TurnInput {
 	extras: { memoryMd: string; fileIndex: string };
 	limits: RunRequest['limits'];
 	model: RunRequest['model'];
+	approval?: RunRequest['approval'];
 	sessionKey?: string;
 }
 
@@ -84,6 +85,7 @@ export async function runTurn(
 		system: buildSystemPrompt(input.spec, input.extras),
 		messages: input.messages,
 		tools: input.tools,
+		approval: input.approval,
 		model: input.model,
 		limits: input.limits
 	};

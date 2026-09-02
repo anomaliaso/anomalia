@@ -737,3 +737,28 @@ describe('artifacts/motion/<id>.md è il sorgente, non una promessa', () => {
     expect(out.content).toContain(SOURCE);
   });
 });
+
+/**
+ * LA GUIDA AI PROMPT IMMAGINE STA DOVE SI MINTA UN'IMMAGINE, e da nessun'altra parte.
+ *
+ * `generate_image` prende un `prompt` scritto dall'agente in chat (post-editor-tools.ts): quel
+ * testo diventa il brief dell'image agent, e sul percorso legacy — `isImageAgentEnabled()` falso —
+ * arriva al renderer così com'è. Chi ha quel tool deve vedere la guida; chi non ce l'ha no, perché
+ * un indice si paga a ogni passo.
+ */
+describe('how/WRITE-IMAGE-PROMPTS.md', () => {
+  const PATH = 'how/WRITE-IMAGE-PROMPTS.md';
+
+  it('la vedono tutti e soli i mestieri che possono mintare un\'immagine', () => {
+    const minters = AGENT_IDS.filter((id) => 'generate_image' in pickTools(ALL, id));
+    expect(minters.length).toBeGreaterThan(0);
+    for (const id of AGENT_IDS) {
+      expect(filePathsFor(id).includes(PATH), `${id}`).toBe(minters.includes(id));
+    }
+  });
+
+  it('non è un cancello: nessun numero lo giustifica ancora', () => {
+    expect(AGENT_FILES[PATH].unlocks).toEqual([]);
+    expect(Object.values(REQUIRED_READS)).not.toContain(PATH);
+  });
+});

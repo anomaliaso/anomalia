@@ -27,11 +27,6 @@ import {
 	latestVoiceoverTakeUrl
 } from '$lib/server/motion-video/voice-gate';
 import {
-	compactCraftReview,
-	formatCraftApplyBrief,
-	reviewMotionCraft
-} from '$lib/server/motion-video/craft-review';
-import {
 	readSourceMeta,
 	renderMotionMp4,
 	renderMotionStills,
@@ -60,9 +55,6 @@ import {
 	type VoiceOverVoice
 } from '$lib/server/gemini-audio';
 
-/** Voce e musica per turno. Oltre, non è una correzione: è un agente che prova a orecchio. */
-export const MAX_VOICEOVERS_PER_TURN = 2;
-export const MAX_MUSIC_PER_TURN = 2;
 /** Render finiti per turno. Ognuno è una VM accesa e crediti spesi: non è una cosa da riprovare a caso. */
 export const MAX_VIDEO_RENDERS_PER_TURN = 2;
 /**
@@ -141,65 +133,6 @@ export function permanentMusicFailure(detail: string): boolean {
 // ne ha bisogno e questo modulo importa già da quel lato). Ri-esportati per i chiamanti esistenti.
 export { isVoiceoverTakeUrl, latestVoiceoverTakeUrl };
 
-/** Il nome del job di QC fuori banda (vedi enqueueMotionQcJob e job-executor.ts). */
-export const MOTION_QC_JOB = 'motion_video_qc';
-
-/**
- * LA REVIEW CHE GIRA SEMPRE — accodata come chat_job quando non può girare nel turno.
- *
- * Il trailer del 21/8 è uscito senza che `motion.craft_review` girasse MAI: la QC in banda salta
- * in silenzio sotto i 90s di budget residuo, cioè proprio nei turni lunghi, che sono quelli in cui
- * i difetti sono più probabili. Da qui in poi il render che non riceve un verdetto nel turno ne
- * riceve uno fuori: una riga `pending` che `processNextPendingToolJob` (queue.ts) esegue con
- * `scoreAndMaybeRewriteMotion` — cioè review E remake, non solo un flag — e il cui esito rientra
- * nel thread via tool-job-report.ts. Nessun percorso chiude un video senza verdetto.
- *
- * Dedupe sul video: un giro di QC già in coda o in corso per questo video basta — accodarne un
- * secondo comprerebbe due review dello stesso file.
- */
-export async function enqueueMotionQcJob(
-	supabase: SupabaseClient,
-	opts: {
-		brandId: string;
-		userId?: string;
-		videoId: string;
-		threadId?: string | null;
-		origin?: string;
-		locale?: string;
-	}
-): Promise<{ queued: boolean; reason?: string }> {
-	if (!opts.userId) return { queued: false, reason: 'no_user' };
-	const { data: existing } = await supabase
-		.from('chat_jobs')
-		.select('id')
-		.eq('brand_id', opts.brandId)
-		.eq('tool_name', MOTION_QC_JOB)
-		.eq('input_params->>video_id', opts.videoId)
-		.in('status', ['pending', 'running'])
-		.limit(1)
-		.maybeSingle();
-	if (existing) return { queued: true, reason: 'already_queued' };
-	const { error } = await supabase.from('chat_jobs').insert({
-		brand_id: opts.brandId,
-		user_id: opts.userId,
-		tool_name: MOTION_QC_JOB,
-		input_params: {
-			video_id: opts.videoId,
-			report_locale: bilingualNoticeLocale(opts.locale),
-			report_origin: opts.origin ?? ''
-		},
-		status: 'pending',
-		thread_id: opts.threadId ?? null
-	});
-	if (error) return { queued: false, reason: error.message };
-	// Il kick è solo per non aspettare il cron; se si perde, il cron lo pesca comunque.
-	if (opts.origin) {
-		void import('$lib/server/chat/queue')
-			.then(({ kickChatQueueWork }) => kickChatQueueWork(opts.origin!))
-			.catch(swallow('kick queue work'));
-	}
-	return { queued: true };
-}
 
 const VOICE_LINES = Object.entries(VOICE_OVER_VOICES)
 	.map(([k, v]) => `${k} = ${v}`)
@@ -213,17 +146,15 @@ export function createMotionOutputTools(opts: {
 	fps: () => number;
 	remainingMs?: () => number;
 	abortSignal?: AbortSignal;
-	/** Per il giudice di craft sul render appena uscito. Assente = '(unknown brand)'. */
-	brandName?: string | null;
-	language?: string | null;
-	/** Il thread dove far rientrare l'esito della QC accodata (vedi enqueueMotionQcJob). */
-	threadId?: string | null;
-	origin?: string;
 	locale?: string;
 }) {
-	let voiceovers = 0;
-	let musics = 0;
 	let renders = 0;
+	/**
+	 * Un modello ritirato o una chiave assente non si riparano riprovando: la musica si spegne per
+	 * il resto del turno. È l'UNICO freno rimasto sull'audio — i tentativi non hanno un tetto,
+	 * perché provare una voce e un letto è il mestiere, e la spesa la governano i crediti.
+	 */
+	let musicUnavailable = false;
 	/** Lo storyboard di questo turno: chi l'ha già visto, e quante volte si può ancora rimandare. */
 	const storyboard = createStoryboardGate();
 	/** I PNG dello storyboard, consegnati al modello da `toModelOutput` (vedi render-tools.ts). */
@@ -279,7 +210,7 @@ export function createMotionOutputTools(opts: {
 				 *
 				 * Il tempo residuo NON fa saltare il passo in silenzio: se non c'è, il render va
 				 * avanti e il risultato lo dichiara. Un controllo che sparisce senza dirlo è il
-				 * difetto che la QC di craft ha già pagato una volta.
+				 * difetto che nessuno poteva vedere prima.
 				 *
 				 * ponytail: lo storyboard gira PRIMA del gate sulla voce (che vive dentro
 				 * renderMotionMp4, l'unico posto dove vale per tutti i chiamanti). Una composizione
@@ -391,62 +322,7 @@ export function createMotionOutputTools(opts: {
 					// L'anteprima sulla riga è ciò che rende il render VISIBILE: senza, il file esiste
 					// nello storage e la galleria continua a mostrare la tessera vuota.
 					const saved = await updateMotionPreviewUrl(opts.supabase, opts.brandId, input.video_id, out.url);
-					// IL GATE DI CRAFT SUL PERCORSO VERO. Il giudice con il gate wow + stasi + legibility
-					// viveva solo dietro l'azione 'qc' del workbench: il trailer del 2026-08-21 (5 beat,
-					// solo slide(), testo sopra due screenshot in crossfade) è uscito dalla CHAT e non è
-					// mai stato guardato da nessuno. Da qui in poi ogni MP4 renderizzato viene giudicato
-					// nel momento in cui esiste, qualunque superficie l'abbia chiesto, e un verdetto
-					// fix/kill torna nel tool result con il brief da applicare SUBITO. Non-fatale: un
-					// giudice che non risponde non deve mai mangiarsi il render.
-					let craftQc: Record<string, unknown> = {};
-					let verdict: string | null = null;
-					if ((opts.remainingMs?.() ?? Number.MAX_SAFE_INTEGER) > 90_000) {
-						try {
-							const crafted = await reviewMotionCraft({
-								url: out.url,
-								source,
-								brandName: opts.brandName ?? null,
-								language: opts.language ?? null,
-								abortSignal: opts.abortSignal
-							});
-							if (crafted.ok) {
-								verdict = crafted.review.verdict;
-								craftQc =
-									crafted.review.verdict === 'ship'
-										? { craft_qc: compactCraftReview(crafted.review) }
-										: {
-												craft_qc: compactCraftReview(crafted.review),
-												must_fix: true,
-												fix_brief: formatCraftApplyBrief(crafted.review, { previewUrl: out.url })
-											};
-							}
-						} catch (e) {
-							if (e instanceof Error && e.name === 'CreditsExhaustedError') throw e;
-							// Giudice esploso ≠ verdetto: si accoda sotto, come per il budget finito.
-						}
-					}
-					// LA REVIEW GIRA SEMPRE. Prima, sotto i 90s residui la QC saltava IN SILENZIO — cioè
-					// proprio nei turni lunghi, quando i difetti sono più probabili: il trailer del 21/8
-					// (voce troncata, beat muti) è uscito così, zero righe in motion_craft_scores. Ora un
-					// render senza verdetto non è "pronto": è "in verifica" — la QC viene accodata fuori
-					// banda (review + remake, vedi job-executor.ts) e l'esito rientra nel thread. E un
-					// verdetto fix/kill in banda accoda comunque il giro fuori banda: è il remake
-					// GARANTITO, che morde anche quando l'agente ignora il fix_brief.
-					if (verdict !== 'ship') {
-						const queued = await enqueueMotionQcJob(opts.supabase, {
-							brandId: opts.brandId,
-							userId: opts.userId,
-							videoId: input.video_id,
-							threadId: opts.threadId,
-							origin: opts.origin,
-							locale: opts.locale
-						}).catch((e) => ({ queued: false, reason: e instanceof Error ? e.message : 'enqueue_failed' }));
-						craftQc = verdict
-							? { ...craftQc, review_queued: queued.queued }
-							: { under_review: true, review_queued: queued.queued };
-					}
 					return {
-						...craftQc,
 						video_id: input.video_id,
 						url: out.url,
 						attached_to_gallery: saved.ok,
@@ -458,15 +334,11 @@ export function createMotionOutputTools(opts: {
 						// fatto è già in `budget.rendersLeft - 1`), dal turno solo come ripiego.
 						renders_left: Math.max(0, budget.rendersLeft - 1),
 						// Se lo storyboard non è stato fatto, si DICE. Un controllo che sparisce in
-						// silenzio è come non averlo: è già successo con la QC di craft sotto i 90s.
+						// silenzio è come non averlo.
 						...(storyboardSkipped ? { storyboard_skipped: storyboardSkipped } : {}),
-						hint: craftQc.must_fix
-							? 'The MP4 exists, but the craft judge watched it and the verdict is NOT shippable — apply the fix_brief with the source tools NOW, then render again. Do not tell the user it is ready.'
-							: craftQc.under_review
-								? 'The MP4 exists but NOBODY has reviewed it yet: an independent review is queued and its verdict will arrive in this conversation. Tell the user the video is IN VERIFICATION ("in verifica"), not that it is ready.'
-								: saved.ok
-									? 'The video is out and visible in the gallery. Tell the user it is ready, and SHOW it (in chat: show_media with this url) — a produced clip is handed over as media, not as a link.'
-									: 'The file rendered but could not be attached to the gallery row — say so, and hand the clip over as media (in chat: show_media with this url), never as an address pasted into the text.'
+						hint: saved.ok
+							? 'The video is out and visible in the gallery. Tell the user it is ready, and SHOW it (in chat: show_media with this url) — a produced clip is handed over as media, not as a link.'
+							: 'The file rendered but could not be attached to the gallery row — say so, and hand the clip over as media (in chat: show_media with this url), never as an address pasted into the text.'
 					};
 				} catch (e) {
 					if (e instanceof MotionVoiceGateError) {
@@ -534,13 +406,6 @@ export function createMotionOutputTools(opts: {
 				style?: string;
 				language_code?: string;
 			}) => {
-				if (voiceovers >= MAX_VOICEOVERS_PER_TURN) {
-					return {
-						error: 'voiceover_budget_spent',
-						hint: `Already recorded ${MAX_VOICEOVERS_PER_TURN} takes this turn. Build with what you have.`
-					};
-				}
-				voiceovers += 1;
 				try {
 					const res = await generateVoiceOver({
 						supabase: opts.supabase,
@@ -730,10 +595,12 @@ export function createMotionOutputTools(opts: {
 					.describe('clip (default, ~30s, loop if longer) or pro (real duration, higher cost).')
 			}),
 			execute: async (input: { prompt: string; seconds: number; tier?: 'clip' | 'pro' }) => {
-				if (musics >= MAX_MUSIC_PER_TURN) {
-					return { error: 'music_budget_spent', hint: `Already generated ${MAX_MUSIC_PER_TURN} beds this turn.` };
+				if (musicUnavailable) {
+					return {
+						error: 'music_unavailable',
+						hint: 'Music generation is down for this turn (a configuration failure, not a bad prompt). Build the video without a bed and say so.'
+					};
 				}
-				musics += 1;
 				try {
 					const res = await generateMusicBed({
 						supabase: opts.supabase,
@@ -759,18 +626,18 @@ export function createMotionOutputTools(opts: {
 					};
 				} catch (e) {
 					const detail = errorMessage(e);
-					// Permanente vs passeggero, detto nel risultato: un 404/modello ritirato riproposto
-					// identico bruciava il secondo slot di budget per comprare lo stesso errore. Sul
-					// permanente il budget si CHIUDE: nessun prompt diverso ripara un modello sbagliato.
+					// Permanente vs passeggero, detto nel risultato: sul permanente la musica si SPEGNE
+					// per il turno — nessun prompt diverso ripara un modello ritirato. Sul passeggero
+					// si riprova quante volte serve.
 					const permanent = permanentMusicFailure(detail);
-					if (permanent) musics = MAX_MUSIC_PER_TURN;
+					if (permanent) musicUnavailable = true;
 					return {
 						error: 'music_failed',
 						retryable: !permanent,
 						detail,
 						hint: permanent
 							? 'This failure is an environment/configuration problem (wrong or retired model id, missing key) — retrying cannot fix it. Carry on without music, say so, and do not invent an audio URL.'
-							: 'Transient failure — one more try is reasonable if the bed matters; otherwise carry on without music and say so. Do not invent an audio URL.'
+							: 'Transient failure — try again if the bed matters; otherwise carry on without music and say so. Do not invent an audio URL.'
 					};
 				}
 			}

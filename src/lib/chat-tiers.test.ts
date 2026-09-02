@@ -5,6 +5,7 @@ import {
   CHAT_PRESET_TIERS,
   CHAT_TIERS,
   isChatTier,
+  isGatewayModelTier,
   isCustomChatModel,
   isGptCustomModel
 } from './chat-tiers';
@@ -46,6 +47,33 @@ describe('chat tiers', () => {
     const tier = en.chat.tier;
     for (const [k, v] of Object.entries(tier)) {
       expect(`${k}:${v}`).not.toContain('{mult}');
+    }
+  });
+});
+
+
+/**
+ * Il picker non offre più tre modelli scritti a mano: offre il catalogo del gateway, e un id come
+ * `anthropic/claude-opus-5` è una scelta valida quanto "pro". Chi può dire se ESISTE è il server,
+ * che ha il listino; qui si riconosce solo la forma, perché il client non deve indovinare.
+ */
+describe('un id di modello è un tier', () => {
+  it('riconosce la forma vendor/modello', () => {
+    expect(isChatTier('anthropic/claude-opus-5')).toBe(true);
+    expect(isChatTier('openai/gpt-5.6-sol')).toBe(true);
+    expect(isGatewayModelTier('anthropic/claude-opus-5')).toBe(true);
+    expect(isGatewayModelTier('pro')).toBe(false);
+  });
+
+  it('non scambia per modello una stringa qualunque', () => {
+    for (const junk of ['', '/', 'solo-testo', 'a/', '/b', 'a//b', 'spazi nel mezzo/x']) {
+      expect(isGatewayModelTier(junk)).toBe(false);
+    }
+  });
+
+  it('i preset e i tre custom storici restano validi: ci sono thread che li hanno salvati', () => {
+    for (const t of ['auto', 'fast', 'pro', 'deepseek-pro', 'gpt-terra', 'gpt-sol']) {
+      expect(isChatTier(t)).toBe(true);
     }
   });
 });

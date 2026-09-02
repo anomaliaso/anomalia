@@ -261,7 +261,7 @@ export const api = {
     request<{ ok: boolean; colors: string[] }>(`/api/v1/brands/${slug}/studio/colors`, t, { method: 'PUT', body: JSON.stringify({ colors }) }),
 
   // Studio — People
-  addPerson: (t: string, slug: string, data: { name: string; role?: string; description?: string; kind?: string; gender?: string; ageRange?: string; ethnicity?: string; vibe?: string }) =>
+  addPerson: (t: string, slug: string, data: { name: string; role?: string; description?: string; kind?: string; gender?: string; ageRange?: string; ethnicity?: string; vibe?: string; consent?: boolean }) =>
     post<{ ok: boolean; person: { id: string; name: string; role: string | null; kind: string } }>(`/api/v1/brands/${slug}/studio/people`, t, data),
 
   deletePerson: (t: string, slug: string, personId: string) =>

@@ -1,3 +1,4 @@
+import IMAGE_PROMPTS_GUIDE from '$lib/agent-docs/how/WRITE-IMAGE-PROMPTS.md?raw';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
 import { tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
@@ -35,7 +36,11 @@ export const MAX_AGENT_INSPECTS = 2;
 export const MAX_AGENT_STEPS = 50;
 export const STALL_STEP_THRESHOLD = 3;
 export const CONTEXT_IMAGE_MAX_PX = 768;
-/** Typical Nano Banana Pro render at list — and list is what the brand pays, on every plan. */
+/**
+ * Nano Banana Pro render at list — kept as the BUDGET estimate even though renders now default to
+ * the cheaper Nano Banana 2 Lite: until Lite's credits are measured, Pro list is the prudent upper
+ * bound, and real cost is in ai_calls from renderPostImage regardless.
+ */
 export const NANO_BANANA_PRO_LIST_RENDER_USD = 0.1386;
 
 /**
@@ -275,6 +280,14 @@ function modelOutputWithImages(text: string, dataUrls: string[]) {
   };
 }
 
+/**
+ * IL PEZZO CHE MANCAVA: il prompt di sistema sapeva GIUDICARE un'immagine e non sapeva SCRIVERNE
+ * una. La checklist di QC qui sotto boccia il render generico (punto 5) senza dire da nessuna
+ * parte come si evita — e la si evita con la terminologia fotografica, che è quello che la guida
+ * porta. Sta inline e non dietro un `read_file` perché questo loop non ha file da leggere.
+ */
+export const IMAGE_PROMPT_GUIDE = IMAGE_PROMPTS_GUIDE.trim();
+
 // critiqueImage checklist — copied verbatim from content-preview.ts (do not paraphrase).
 const CRITIQUE_CHECKLIST = `1. PRODUCT FIDELITY: does the generated product match the REAL product reference (shape, TRUE colours, materials, finish, branding)? It must NOT be desaturated to greyscale, recoloured, redesigned, or swapped for a similar object.
 2. PERSON FIDELITY: if a person should appear, they must look like the attached person REFERENCE photo(s) — same face, gender presentation, approximate age, hair. FAIL if the generated person clearly contradicts the references (e.g. wrong gender presentation vs the photos). Place them NATURALLY in the scene (not pasted into a reflection, not floating, not duplicated).
@@ -309,7 +322,9 @@ Rules:
 - Prefer a real library asset when it clearly fits the brief.
 - The brand's official LOGO is attached on every render_image when available — reproduce THAT mark whenever branding/wordmark appears; never invent a different logo. On a candid photo with no branding, you may omit it.
 - imagePrompt in finish must be non-empty when source is "generated".
-- notes in finish: explain what you tried and what you changed.`;
+- notes in finish: explain what you tried and what you changed.
+
+${IMAGE_PROMPT_GUIDE}`;
 }
 
 async function loadAssetCatalog(

@@ -13,8 +13,6 @@ import { defaultMotionSource } from '$lib/motion-video/source';
 
 const renderMotionMp4 = vi.fn();
 const updateMotionPreviewUrl = vi.fn();
-const queueVideoReview = vi.fn();
-const kickVideoReviewWork = vi.fn();
 const gateCredits = vi.fn();
 let sandboxConfigured = true;
 
@@ -30,10 +28,6 @@ vi.mock('$lib/server/motion-video/render-tools', () => ({
 }));
 vi.mock('$lib/server/motion-video/persist', () => ({
 	updateMotionPreviewUrl: (...args: unknown[]) => updateMotionPreviewUrl(...args)
-}));
-vi.mock('$lib/server/video-review-store', () => ({
-	queueVideoReview: (...args: unknown[]) => queueVideoReview(...args),
-	kickVideoReviewWork: (...args: unknown[]) => kickVideoReviewWork(...args)
 }));
 vi.mock('$lib/server/sandbox', () => ({
 	isSandboxConfigured: () => sandboxConfigured
@@ -77,8 +71,6 @@ beforeEach(() => {
 	gateCredits.mockResolvedValue(undefined);
 	renderMotionMp4.mockResolvedValue({ url: 'https://cdn/new.mp4', bytes: 12, seconds: 3 });
 	updateMotionPreviewUrl.mockResolvedValue({ ok: true, row: {} });
-	queueVideoReview.mockResolvedValue(true);
-	kickVideoReviewWork.mockResolvedValue(undefined);
 });
 
 describe('motion-video render route', () => {
@@ -107,16 +99,6 @@ describe('motion-video render route', () => {
 			'v1',
 			'https://cdn/second.mp4'
 		);
-	});
-
-	it('queues the ads-standard review that the deleted preview endpoint used to queue', async () => {
-		await post({ source: SOURCE, videoId: 'v1' });
-		expect(queueVideoReview).toHaveBeenCalledWith(supabase, {
-			brandId: BRAND.id,
-			url: 'https://cdn/new.mp4',
-			standard: 'ads'
-		});
-		expect(kickVideoReviewWork).toHaveBeenCalled();
 	});
 
 	it('refuses to open a VM when credits are exhausted', async () => {

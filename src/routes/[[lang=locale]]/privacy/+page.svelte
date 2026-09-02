@@ -59,6 +59,7 @@
       <tr><td class="text-left align-top py-2.5 px-3 border-b border-border font-semibold whitespace-nowrap">{$_('legal.privacy.s3.row4.purpose')}</td><td class="text-left align-top py-2.5 px-3 border-b border-border">{$_('legal.privacy.s3.row4.basis')}</td></tr>
       <tr><td class="text-left align-top py-2.5 px-3 border-b border-border font-semibold whitespace-nowrap">{$_('legal.privacy.s3.row5.purpose')}</td><td class="text-left align-top py-2.5 px-3 border-b border-border">{$_('legal.privacy.s3.row5.basis')}</td></tr>
       <tr><td class="text-left align-top py-2.5 px-3 border-b border-border font-semibold whitespace-nowrap">{$_('legal.privacy.s3.row6.purpose')}</td><td class="text-left align-top py-2.5 px-3 border-b border-border">{$_('legal.privacy.s3.row6.basis')}</td></tr>
+      <tr><td class="text-left align-top py-2.5 px-3 border-b border-border font-semibold whitespace-nowrap">{$_('legal.privacy.s3.row7.purpose')}</td><td class="text-left align-top py-2.5 px-3 border-b border-border">{$_('legal.privacy.s3.row7.basis')}</td></tr>
     </tbody>
   </table>
   <p class="text-base text-foreground/80 mb-3.5">
@@ -122,6 +123,9 @@
   <h2 class="font-[family-name:var(--serif)] text-xl mt-11 mb-3 pt-2" style="font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking)">{$_('legal.privacy.s9.heading')}</h2>
   <p class="text-base text-foreground/80 mb-3.5">
     {$_('legal.privacy.s9.body')}
+  </p>
+  <p class="text-base text-foreground/80 mb-3.5">
+    {$_('legal.privacy.s9.body2')}
   </p>
 
   <h2 class="font-[family-name:var(--serif)] text-xl mt-11 mb-3 pt-2" style="font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking)">{$_('legal.privacy.s10.heading')}</h2>

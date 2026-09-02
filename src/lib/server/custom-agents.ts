@@ -705,32 +705,40 @@ export type ThreadAgentAvatar = {
 };
 
 /**
- * Avatars of the custom agents that ran in each of `threadIds`, newest run first.
+ * Avatars of the custom agents that identify each thread: the one the thread is BOUND to first,
+ * then whoever ran in it, newest run first. A thread bound before its first turn has no run row
+ * yet, and without the binding it would borrow the name of the specialist underneath.
  * Threads no agent touched are simply absent from the map.
  */
 export async function listThreadAgentAvatars(
   supabase: SupabaseClient,
   brandId: string,
-  threadIds: string[]
+  threads: Array<{ id: string; custom_agent_id?: string | null }>
 ): Promise<Record<string, ThreadAgentAvatar[]>> {
   const out: Record<string, ThreadAgentAvatar[]> = {};
-  if (!threadIds.length) return out;
+  if (!threads.length) return out;
 
   const { data: runs } = await supabase
     .from('custom_agent_thread_runs')
     .select('thread_id, schedule_id, last_run_at')
     .eq('brand_id', brandId)
-    .in('thread_id', threadIds)
+    .in(
+      'thread_id',
+      threads.map((t) => t.id)
+    )
     .order('last_run_at', { ascending: false });
-  if (!runs?.length) return out;
+
+  const bound = threads
+    .filter((t) => t.custom_agent_id)
+    .map((t) => [t.id, t.custom_agent_id as string] as const);
+  const wanted = [
+    ...new Set([...(runs ?? []).map((r) => r.schedule_id as string), ...bound.map(([, a]) => a)])
+  ];
+  if (!wanted.length) return out;
 
   // La faccia è dell'AGENTE, non della routine che l'ha fatto lavorare: due routine dello stesso
   // agente devono impilare un avatar solo.
-  const agents = await getCustomAgentsByIds(
-    supabase,
-    brandId,
-    [...new Set(runs.map((r) => r.schedule_id as string))]
-  );
+  const agents = await getCustomAgentsByIds(supabase, brandId, wanted);
 
   const byId = new Map(
     agents.map((s) => [
@@ -744,12 +752,15 @@ export async function listThreadAgentAvatars(
     ])
   );
 
-  for (const run of runs) {
-    const avatar = byId.get(run.schedule_id as string);
-    if (!avatar) continue;
-    const list = (out[run.thread_id as string] ??= []);
+  const stack = (threadId: string, agentId: string) => {
+    const avatar = byId.get(agentId);
+    if (!avatar) return;
+    const list = (out[threadId] ??= []);
     if (!list.some((a) => a.id === avatar.id)) list.push(avatar);
-  }
+  };
+
+  for (const [threadId, agentId] of bound) stack(threadId, agentId);
+  for (const run of runs ?? []) stack(run.thread_id as string, run.schedule_id as string);
   return out;
 }
 

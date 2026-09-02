@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ModelMessage, TextPart, ToolCallPart, ToolResultPart } from 'ai';
+import type { ModelMessage, TextPart, ToolApprovalRequest, ToolCallPart, ToolResultPart } from 'ai';
 import { TERMINAL_TOOL_NAMES } from '@anomalia/agent-core/tools/builtin';
 import { normalizeQuestionsPayload } from '$lib/chat-questions';
 import { normalizeAgentProposal } from '$lib/chat-agent-proposal';
@@ -20,6 +20,8 @@ import {
 } from '$lib/media-parts';
 import { summaryBlock } from './compaction';
 import { markThreadRead } from './unread';
+import { loadThreadEvents, threadMessageRows, threadProjectionRows } from './thread-events';
+import type { ThreadProgress } from '@anomalia/agent-kit';
 
 type ChatMessageRow = {
   id: string;
@@ -667,9 +669,16 @@ export function messagesFromRow(
   }
 
   const out: ModelMessage[] = [];
-  let assistantParts: Array<TextPart | ToolCallPart> = [];
+  let assistantParts: Array<TextPart | ToolApprovalRequest | ToolCallPart> = [];
   let resultParts: ToolResultPart[] = [];
   let partsHaveText = false;
+  const approvalCallIds = new Set(
+    parts
+      .filter((part): part is { type: 'tool-approval-request'; toolCallId: string } => {
+        return !!part && typeof part === 'object' && (part as { type?: string }).type === 'tool-approval-request' && typeof (part as { toolCallId?: unknown }).toolCallId === 'string';
+      })
+      .map((part) => part.toolCallId)
+  );
 
   const flush = () => {
     if (assistantParts.length) {
@@ -691,6 +700,11 @@ export function messagesFromRow(
       partsHaveText = true;
       continue;
     }
+    if (p && typeof p === 'object' && (p as { type?: string }).type === 'tool-approval-request') {
+      if (resultParts.length) flush();
+      assistantParts.push(p as ToolApprovalRequest);
+      continue;
+    }
     if (!isStoredToolCall(p) || !p.toolCallId) continue;
     if (TERMINAL_TOOL_NAMES.includes(p.toolName)) continue;
     assistantParts.push({
@@ -699,16 +713,18 @@ export function messagesFromRow(
       toolName: p.toolName,
       input: p.input ?? {}
     });
-    resultParts.push(
-      p.output === undefined
-        ? interruptedToolResult({ toolCallId: p.toolCallId, toolName: p.toolName, status: p.status })
-        : {
-            type: 'tool-result',
-            toolCallId: p.toolCallId,
-            toolName: p.toolName,
-            output: toToolResultOutput(p.output)
-          }
-    );
+    if (!approvalCallIds.has(p.toolCallId)) {
+      resultParts.push(
+        p.output === undefined
+          ? interruptedToolResult({ toolCallId: p.toolCallId, toolName: p.toolName, status: p.status })
+          : {
+              type: 'tool-result',
+              toolCallId: p.toolCallId,
+              toolName: p.toolName,
+              output: toToolResultOutput(p.output)
+            }
+      );
+    }
   }
 
   flush();
@@ -914,7 +930,7 @@ export async function saveMessages(
   const { data: inserted, error } = await supabase
     .from('chat_messages')
     .insert(rows)
-    .select('id');
+    .select('*');
   if (error) throw new Error(`[saveMessages] insert failed: ${error.message}`);
 
   // Da qui in giù è tutto accessorio e va dentro un catch proprio: la riga c'è già, e un'eccezione
@@ -934,7 +950,10 @@ export async function saveMessages(
     // senza browser attaccato arriva comunque in ogni tab aperta.
     if (inserted?.length) {
       const { broadcastToBrand } = await import('$lib/server/realtime');
-      void broadcastToBrand(brandId, { event: 'thread-changed', payload: { threadId } });
+      void broadcastToBrand(brandId, {
+        event: 'thread-changed',
+        payload: { threadId, hasAssistantReply: messages.some((m) => m.role === 'assistant') }
+      });
     }
   } catch (e) {
     console.warn('[saveMessages] post-insert best-effort failed:', e instanceof Error ? e.message : e);
@@ -949,6 +968,19 @@ export async function saveMessages(
  */
 export function chronologicalTail<T>(newestFirst: T[], limit: number): T[] {
   return newestFirst.slice(0, limit).reverse();
+}
+
+/**
+ * La coda di una lista GIÀ cronologica. `chronologicalTail` pretende il contrario — la query la
+ * ordina `created_at desc` — e passargli la proiezione del log, che esce in ordine di `seq`,
+ * capovolgeva l'intera conversazione: la risposta sopra la domanda a cui rispondeva.
+ */
+export function newestTail<T>(oldestFirst: T[], limit: number): T[] {
+  return limit >= oldestFirst.length ? oldestFirst : oldestFirst.slice(-limit);
+}
+
+function visibleInUi(row: { role?: unknown }): boolean {
+  return row.role !== 'system' && row.role !== 'tool';
 }
 
 /**
@@ -1048,6 +1080,31 @@ export async function loadHistory(
     .eq('user_id', userId)
     .maybeSingle();
 
+  const summary: ModelMessage[] = thread?.summary
+    ? [
+        {
+          role: 'system',
+          content: summaryBlock(thread.summary, thread.summary_message_count ?? 0)
+        }
+      ]
+    : [];
+
+  const eventRows = await loadThreadEvents(supabase, threadId);
+  const eventMessages = eventRows?.length
+    ? threadMessageRows(eventRows)?.filter((row) => row.role !== 'system' && row.role !== 'tool') ?? null
+    : null;
+  if (eventMessages) {
+    const filtered = thread?.summary_upto
+      ? eventMessages.filter((row) => String(row.created_at ?? '') > thread.summary_upto)
+      : eventMessages;
+    const messages: ModelMessage[] = [];
+    for (const row of chronologicalTail(filtered, limit)) {
+      messages.push(...messagesFromRow(row as Parameters<typeof messagesFromRow>[0], media));
+    }
+    if (media !== 'none') await pruneUnreachableMedia(messages);
+    return [...summary, ...dropLeadingAssistant(messages)];
+  }
+
   let query = supabase
     .from('chat_messages')
     .select('role, content, tool_calls, tool_call_id, name, created_at, attachments')
@@ -1070,15 +1127,6 @@ export async function loadHistory(
     // Un errore inghiottito qui si legge come «l'AI ha dimenticato tutto», senza traccia.
   if (error) console.error('[loadHistory]', error.message);
 
-  const summary: ModelMessage[] = thread?.summary
-    ? [
-        {
-          role: 'system',
-          content: summaryBlock(thread.summary, thread.summary_message_count ?? 0)
-        }
-      ]
-    : [];
-
   if (!data?.length) return summary;
 
   const messages: ModelMessage[] = [];
@@ -1096,13 +1144,12 @@ export async function loadHistory(
   return [...summary, ...dropLeadingAssistant(messages)];
 }
 
-/** Come loadHistory, ma per la UI: include tool call e tool result. */
-export async function loadHistoryForUI(
+async function chatMessagesFallbackForUI(
   supabase: SupabaseClient,
   brandId: string,
   userId: string,
   threadId: string,
-  limit: number = 100
+  limit: number
 ): Promise<ChatMessageUiRow[]> {
   const { data, error } = await supabase
     .from('chat_messages')
@@ -1118,6 +1165,57 @@ export async function loadHistoryForUI(
 
   if (error) console.error('[loadHistoryForUI]', error.message);
   return chronologicalTail(data ?? [], limit);
+}
+
+/** Come loadHistory, ma per la UI: include tool call e tool result. */
+export async function loadHistoryForUI(
+  supabase: SupabaseClient,
+  brandId: string,
+  userId: string,
+  threadId: string,
+  limit: number = 100
+): Promise<ChatMessageUiRow[]> {
+  const eventRows = await loadThreadEvents(supabase, threadId);
+  if (eventRows?.length) {
+    const eventMessages = threadMessageRows(eventRows);
+    if (eventMessages) {
+      return newestTail(eventMessages.filter(visibleInUi), limit) as ChatMessageUiRow[];
+    }
+  }
+
+  return chatMessagesFallbackForUI(supabase, brandId, userId, threadId, limit);
+}
+
+export type ThreadUiHistory = {
+  messages: ChatMessageUiRow[];
+  liveProgress: Record<string, ThreadProgress>;
+  eventCursor: number;
+};
+
+export async function loadThreadUiHistory(
+  supabase: SupabaseClient,
+  brandId: string,
+  userId: string,
+  threadId: string,
+  limit: number = 100
+): Promise<ThreadUiHistory> {
+  const eventRows = await loadThreadEvents(supabase, threadId);
+  if (eventRows?.length) {
+    const projection = threadProjectionRows(eventRows);
+    if (projection) {
+      return {
+        messages: newestTail(projection.messages.filter(visibleInUi), limit) as ChatMessageUiRow[],
+        liveProgress: projection.progress,
+        eventCursor: projection.cursor
+      };
+    }
+  }
+
+  return {
+    messages: await chatMessagesFallbackForUI(supabase, brandId, userId, threadId, limit),
+    liveProgress: {},
+    eventCursor: 0
+  };
 }
 
 /** Tutta la storia di un brand+utente, senza filtro sul thread — per la pagina di riepilogo. */

@@ -8,6 +8,8 @@
     "./types": "./src/types.ts",
     "./interfaces": "./src/interfaces.ts",
     "./registry": "./src/registry.ts",
-    "./testkit": "./src/testkit.ts"
+    "./action-approval": "./src/action-approval.ts",
+    "./testkit": "./src/testkit.ts",
+    "./thread-events": "./src/thread-events.ts"
   }
 }

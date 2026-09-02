@@ -3,10 +3,11 @@
  * reply/ask_user/plan restano no-op qui — il loro effetto è di chi orchestra il run (turn.ts).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AdapterContext, ToolCall, ToolResult } from '@anomalia/agent-kit';
+import type { AdapterContext, EffectsLedger, ToolCall, ToolResult } from '@anomalia/agent-kit';
 import type { BrandFs, CheckpointStore, MemoryStore, SandboxProvider, SandboxRef, ToolPlugin } from '@anomalia/agent-kit';
 import { SYSTEM_PROMPT_MAX_CHARS, type AgentSpec } from '@anomalia/agent-contracts/contracts';
 import { BUILTIN_TOOLS, TERMINAL_TOOL_NAMES } from './tools/builtin';
+import { frozenResult, legacyEffectKey } from './effects';
 import { ensureComputer, touchComputer } from './computer';
 import {
 	ensureGraphicalMode,
@@ -75,6 +76,13 @@ export interface ApplyToolDeps {
 	computer?: { db: SupabaseClient; home: CheckpointStore };
 	/** Senza, `observe`/`act` rispondono con l'errore-che-insegna invece di esplodere. */
 	graphicalBootstrap?: GraphicalBootstrapDeps;
+	/**
+	 * Presente: i tool con `effectful: true` passano dal ledger degli effetti — claim prima di
+	 * eseguire, resolve dopo, e su un resume che rivede la stessa identità congelano invece di
+	 * rieseguire (un doppio post/schedulazione è un danno, non un errore da riprovare).
+	 * Assente: nessun gate, si esegue e basta (il lab, i test, le superfici senza righe).
+	 */
+	effects?: EffectsLedger;
 }
 
 export type ApplyTool = (call: ToolCall, ctx: AdapterContext) => Promise<ToolResult>;
@@ -93,7 +101,8 @@ async function resolveSandboxRef(deps: ApplyToolDeps, ctx: AdapterContext): Prom
 }
 
 export function createApplyTool(deps: ApplyToolDeps): ApplyTool {
-	return async (call: ToolCall, ctx: AdapterContext): Promise<ToolResult> => {
+	// L'esecuzione vera, senza gate: la chiude in una closure che ha `deps` nel suo scope.
+	const execute = async (call: ToolCall, ctx: AdapterContext): Promise<ToolResult> => {
 		const { args } = call;
 		const name = LEGACY_TOOL_ALIASES[call.name] ?? call.name;
 
@@ -214,6 +223,59 @@ export function createApplyTool(deps: ApplyToolDeps): ApplyTool {
 			}
 		}
 	};
+
+	return async (call: ToolCall, ctx: AdapterContext): Promise<ToolResult> => {
+		const name = LEGACY_TOOL_ALIASES[call.name] ?? call.name;
+
+		if (!deps.effects || !isEffectful(name, deps.plugins)) {
+			return execute(call, ctx);
+		}
+
+		const invocationId = call.id?.trim();
+		if (!invocationId) {
+			return err(`tool '${name}' senza identità stabile della chiamata`);
+		}
+
+		const claim = await deps.effects.claim({
+			brandId: ctx.brandId,
+			runId: ctx.runId,
+			invocationId,
+			toolName: name,
+			request: call.args,
+			legacyKey: legacyEffectKey(name, call.args)
+		});
+		if (claim.kind === 'mismatch') {
+			return err(`tool '${name}' rifiutato: payload diverso per la stessa identità di chiamata`);
+		}
+		if (claim.kind === 'existing') {
+			const frozen = frozenResult(claim.effect);
+			if (frozen) {
+				return frozen;
+			}
+			return err(`tool '${name}' non eseguito: effetto già registrato (${claim.effect.status})`);
+		}
+
+		const effect = claim.effect;
+		try {
+			const result = await execute(call, ctx);
+			const status = result.effectStatus ?? (result.isError ? 'failed' : 'completed');
+			await deps.effects.resolve(effect.id, status, result);
+			return result;
+		} catch (cause) {
+			const message = cause instanceof Error ? cause.message : String(cause);
+			await deps.effects.resolve(effect.id, 'ambiguous', err(message));
+			throw cause;
+		}
+	};
+}
+
+/** Un tool è `effectful` se la sua dichiarazione (builtin o plugin) lo marca tale. */
+function isEffectful(name: string, plugins: ToolPlugin[]): boolean {
+	const builtin = BUILTIN_TOOLS.find((t) => t.name === name);
+	if (builtin) return Boolean(builtin.effectful);
+	return (
+		plugins.find((p) => p.tools.some((t) => t.name === name))?.tools.find((t) => t.name === name)?.effectful ?? false
+	);
 }
 
 /**

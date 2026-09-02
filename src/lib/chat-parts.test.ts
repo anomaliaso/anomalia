@@ -50,6 +50,17 @@ describe('messageBlocks', () => {
     expect(toolCallsOf('[{"type":"tool-call","toolName":"x"},{"type":"text","text":"hi"}]')).toHaveLength(1);
   });
 
+  it('attaches a native approval request to its tool call', () => {
+    const calls = toolCallsOf([
+      { type: 'tool-call', toolCallId: 'call-1', toolName: 'publish_post', input: { post_id: 'p1' } },
+      { type: 'tool-approval-request', approvalId: 'approval-1', toolCallId: 'call-1' }
+    ]);
+    expect(calls[0]).toMatchObject({
+      toolName: 'publish_post',
+      approval: { approvalId: 'approval-1' }
+    });
+  });
+
   it('does not dump a persisted tool output into the bubble — chips stay chips', () => {
     const parts = [
       {

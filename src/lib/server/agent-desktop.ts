@@ -10,7 +10,17 @@
  * ricostruisce identica a ogni chiamata, e cambiarlo invalida tutti i desktop già aperti.
  */
 import { createHmac } from 'node:crypto';
+import { env } from '$env/dynamic/private';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * Il desktop grafico è TOGLIUTO dal prodotto: nessuna anteprima, nessun controllo utente,
+ * l'agente lavora solo con `browse`. Il codice resta qui da parte: `AGENT_DESKTOP_ENABLED=1`
+ * lo rimette in piedi senza ritoccare niente.
+ */
+export function agentDesktopEnabled(): boolean {
+	return env.AGENT_DESKTOP_ENABLED === '1';
+}
 
 /**
  * L'autenticazione classica di VNC guarda 8 caratteri: quelli oltre non li legge nessuno, e una

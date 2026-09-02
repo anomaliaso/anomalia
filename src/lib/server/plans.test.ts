@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { blogArticlesPerMonth, blogTranslationLanguages, blogArticlesPerWeek, postQuota, videoCap, mixCostUsd, VIDEO_SHARE } from './plans';
+import { blogArticlesPerMonth, blogTranslationLanguages, blogArticlesPerWeek, postQuota, videoCap, mixCostUsd, VIDEO_SHARE, batchWeeks } from './plans';
+import { PLAN_WEEKS } from './editorial-plan';
 import { creditQuota } from './credits';
 
 // The quotas are sized against a MEASURED cost per post, so they are only correct while the two
@@ -162,3 +163,31 @@ describe('isExportOnlyPlan', () => {
     }
   });
 });
+
+// Un batch di una settimana sola costringeva l'utente ad approvare quattro volte al mese, e
+// impediva a una serie di costruire un arco fra un episodio e il successivo. Due settimane sono il
+// default; quattro — l'intero ciclo in un colpo — sono una cosa che si vende.
+describe('batchWeeks', () => {
+  it('due settimane per tutti', () => {
+    expect(batchWeeks('go')).toBe(2);
+    expect(batchWeeks('starter')).toBe(2);
+    expect(batchWeeks(null)).toBe(2);
+  });
+
+  it('il pro può pianificare il ciclo intero', () => {
+    expect(batchWeeks('pro', 4)).toBe(4);
+  });
+
+  it('sotto il pro la richiesta di quattro viene riportata a due', () => {
+    expect(batchWeeks('starter', 4)).toBe(2);
+  });
+
+  it('non si va mai oltre il ciclo del piano editoriale', () => {
+    expect(batchWeeks('pro', 99)).toBe(PLAN_WEEKS);
+  });
+
+  it('meno di una settimana non è un batch', () => {
+    expect(batchWeeks('pro', 0)).toBe(2);
+  });
+});
+

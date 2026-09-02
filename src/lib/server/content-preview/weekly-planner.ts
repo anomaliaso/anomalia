@@ -7,7 +7,7 @@ import { swallow } from '$lib/server/swallow';
 import { PRODUCT_REF_IMAGES, aspectRatioFor, brandOfferings, brandVisualDirective, extractVisualPlaybook, fetchLogoPart, loadMoodRefs, loadProductRefs, markProduceApproved, personImageMap, personReference, referenceModeFor, renderCarouselSlide, renderWithQC, resolveOffering, uploadPostImage } from './images';
 import { type CaptionKnowledgeCtx, executePlan } from './caption-quality';
 import { client, planStrategy, warnOnSceneCollapse } from './plan-pipeline';
-import { type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, type PastWinner, type PostSeed, type PreviewPost, type Progress, VISUAL_REQUIRED, type WeeklyStrategy, carouselMaxPerBatch, clampCarousels, clampMediaCapabilities, clampVideos, platformKey } from './seed-model';
+import { normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, type PastWinner, type PostSeed, type PreviewPost, type Progress, VISUAL_REQUIRED, type WeeklyStrategy, carouselMaxPerBatch, clampCarousels, clampMediaCapabilities, clampVideos, platformKey } from './seed-model';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { synthesizeVisualStyle } from '$lib/server/brand-context';
@@ -55,6 +55,8 @@ type PlanPreviewOpts = {
   brandId?: string;
   userId?: string;
   weekIndex?: number;
+  /** Quante settimane del ciclo copre il batch. Assente → 1. */
+  weeks?: number;
   timezone?: string;
   agentVerbose?: boolean;
   /**
@@ -71,6 +73,11 @@ type RenderPreviewOpts = {
   supabase: SupabaseClient;
   userId: string;
   brandId?: string;
+  // Force one image model for the whole batch, ahead of the brand's own preference. Absent → the
+  // brand's Settings choice, and absent that too, buildImageRequest picks as it always has. The
+  // guest preview passes the cheapest model here; a UGC cover still overrides everything, because
+  // its look is the point of that format.
+  imageModel?: string;
   onProgress?: Progress;
   onPost: (post: PreviewPost) => void;
 };
@@ -99,7 +106,13 @@ export function normalizeWeeklyStrategy(raw: any): WeeklyStrategy {
         // Stored rows carry legacy free-form formats ('reel', 'story', 'short video'…) — always
         // mapped onto the enum here, the single rehydration point. Unknown values → single_image.
         format,
+        week: Number.isFinite(Number(s?.week)) ? Math.max(0, Math.floor(Number(s.week))) : undefined,
         slide_count: Number(s?.slide_count) || undefined,
+        // La storia e il medium sopravvivono al giro in DB e alla griglia di editing: senza,
+        // l'utente approva un racconto e il produttore riceve una riga di angle.
+        beats: normalizeBeats(s?.beats),
+        art_direction: String(s?.art_direction ?? '').trim() || undefined,
+        sourced_from: String(s?.sourced_from ?? '').trim() || undefined,
         // Rubric linkage survives store/edit round-trips untouched (resolution happened at plan time).
         rubric: typeof s?.rubric === 'string' && s.rubric ? s.rubric : undefined,
         rubric_id: typeof s?.rubric_id === 'string' && s.rubric_id ? s.rubric_id : undefined,
@@ -216,6 +229,7 @@ async function invokeWeekPlannerAgent(
       platforms: opts.platforms ?? [],
       count,
       weekIndex: opts.weekIndex,
+      weeks: opts.weeks,
       prefs: opts.prefs,
       maxVideos: opts.maxVideos,
       maxCarousels: opts.maxCarousels,
@@ -361,12 +375,27 @@ export async function planPreviewPosts(
 // post (imageUrl set when rendering succeeds) via onPost. Builds the shared render context (offerings,
 // people, visual style, brand look, logo) once per batch from the profile, so this is a faithful,
 // stateless continuation of planPreviewPosts — runnable in a separate request.
+async function brandPreferredImageModel(opts: RenderPreviewOpts): Promise<string | undefined> {
+  if (!opts.brandId) return undefined;
+  const { data } = await opts.supabase
+    .from('brands')
+    .select('content_prefs')
+    .eq('id', opts.brandId)
+    .maybeSingle();
+  const { imageModelFor } = await import('$lib/image-models');
+  return imageModelFor((data?.content_prefs ?? {}) as { imageModel?: unknown });
+}
+
 export async function renderPreviewImages(
   profile: BrandProfile,
   posts: PreviewPost[],
   opts: RenderPreviewOpts
 ): Promise<void> {
   const ai = client();
+  // La preferenza del brand si legge QUI e non nei sette chiamanti: è la produzione della
+  // settimana, e sette posti da ricordare sono sette posti da dimenticare. Un `imageModel`
+  // esplicito (l'anteprima ospite) vince comunque.
+  const brandImageModel = opts.imageModel ?? (await brandPreferredImageModel(opts));
 
   opts.onProgress?.('generating', `Generating images for ${posts.length} posts…`);
 
@@ -489,11 +518,12 @@ export async function renderPreviewImages(
           const isUgc = post.format === 'video' && post.ugc !== false;
           const { UGC_VISUAL_STYLE, UGC_COVER_MODEL } = await import('$lib/server/ugc');
           const effectiveStyle = isUgc ? UGC_VISUAL_STYLE : visualStyle;
+          const forcedModel = isUgc ? UGC_COVER_MODEL : brandImageModel;
           const renderOpts = {
             referenceImages,
             personImages: personRefs,
             // Nano Banana Pro — MASTER UGC look is enforced in the prompt, not by a cheaper model.
-            ...(isUgc ? { model: UGC_COVER_MODEL } : {}),
+            ...(forcedModel ? { model: forcedModel } : {}),
             // A curated brand moodboard would drag a UGC frame back toward the polished look.
             moodImages: isUgc ? undefined : moodImages,
             visualStyle: effectiveStyle,

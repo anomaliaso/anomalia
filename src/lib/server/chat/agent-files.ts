@@ -29,6 +29,7 @@ import { disruptiveSystemSection } from '$lib/disruptive';
 import { renderBrandStudioFile, renderBrandStrategyFile } from '$lib/server/chat/brand-file';
 import { DEFAULT_SKILLS } from '$lib/server/default-skills';
 import VIDEO_PROMPTS_GUIDE from '$lib/agent-docs/how/WRITE-VIDEO-PROMPTS.md?raw';
+import IMAGE_PROMPTS_GUIDE from '$lib/agent-docs/how/WRITE-IMAGE-PROMPTS.md?raw';
 import { AGENTS, type AgentId } from '$lib/server/chat/agents';
 import { logAiCall } from '$lib/server/ai-log';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -64,6 +65,9 @@ export type AgentFile = {
   /** Pigro: il corpo si compone solo quando qualcuno legge davvero. */
   body: () => string;
 };
+
+/** I mestieri che possono mintare una still con `generate_image`. */
+const IMAGE_MINTERS = ['content', 'motion', 'ugc'] as const satisfies readonly AgentId[];
 
 /** Gli unici due mestieri che scrivono TSX Remotion — gli stessi di `MOTION_WRITERS`. */
 const MOTION_WRITERS = ['motion', 'content'] as const satisfies readonly AgentId[];
@@ -123,6 +127,25 @@ export const AGENT_FILES: Record<string, AgentFile> = {
     summary:
       'come si scrive un prompt per Seedance 2.5: struttura, i lock numerici, le note per genere — e perché il testo non si chiede MAI dentro il prompt',
     body: () => VIDEO_PROMPTS_GUIDE
+  },
+  /**
+   * NESSUN CANCELLO QUI, e la differenza con la guida video sta nei numeri, non nel gusto.
+   *
+   * Là il cancello se lo è guadagnato con una misura: 131 prompt su 340 chiedevano testo dentro il
+   * frame, il 16,8% delle review lo ritrovava corrotto. Sulle immagini quella misura non l'abbiamo
+   * ancora, e `unlocks` su `generate_image` costerebbe un giro di tool in più a ogni still per un
+   * difetto di cui non conosciamo la frequenza. Si legge perché è nell'indice; diventa cancello
+   * quando un numero lo chiede.
+   *
+   * L'image agent NON passa di qui — non ha `read_file` — e la stessa guida ce l'ha inline nel suo
+   * prompt di sistema (`IMAGE_PROMPT_GUIDE`). Il file markdown è uno solo: due lettori, una fonte.
+   */
+  'how/WRITE-IMAGE-PROMPTS.md': {
+    agents: IMAGE_MINTERS,
+    unlocks: [],
+    summary:
+      'come si scrive un prompt per Nano Banana: la forma, la terminologia fotografica che toglie il look da render generico, e le quattro regole che qui non si violano (niente testo, niente aspect ratio, niente descrizione fisica di una persona, il medium del brand)',
+    body: () => IMAGE_PROMPTS_GUIDE
   },
     /**
      * `agents: null` e nessun `unlocks`: vale per tutti (anche l'Analyst propone angoli) e non blocca
@@ -789,14 +812,11 @@ function capSource(src: string, full?: boolean): string {
 type ArtifactRow = { path: string; type: ArtifactType; label: string; status: string; date: string; sortKey: string };
 
 /**
- * `status` è DERIVATO: `motion_videos` non ha quella colonna. La verità sono due fatti — c'è un MP4
- * (`preview_url`) ed è mai stato giudicato `ship` — la stessa lettura di `unfinished.ts`.
+ * `status` è DERIVATO: `motion_videos` non ha quella colonna. La verità è un fatto — c'è un MP4
+ * (`preview_url`) — la stessa lettura di `unfinished.ts`.
  */
-function motionStatus(previewUrl: string | null, score: { verdict: string; overall: number } | null): string {
-  if (!previewUrl) return 'no render yet';
-  if (!score) return 'rendered, not yet scored';
-  if (score.verdict === 'ship') return `shipped (craft ${score.overall}/10)`;
-  return `rendered, verdict ${score.verdict} (craft ${score.overall}/10)`;
+function motionStatus(previewUrl: string | null): string {
+  return previewUrl ? 'shipped' : 'no render yet';
 }
 
 async function fetchMotionRows(ctx: RunCtx, limit: number): Promise<ArtifactRow[]> {
@@ -808,22 +828,11 @@ async function fetchMotionRows(ctx: RunCtx, limit: number): Promise<ArtifactRow[
     .limit(limit);
   const rows = (data ?? []) as Array<{ id: string; title: string; preview_url: string | null; created_at: string }>;
   if (!rows.length) return [];
-  const ids = rows.map((r) => r.id);
-  const { data: scoreRows } = await ctx.supabase
-    .from('motion_craft_scores')
-    .select('video_id, verdict, overall, created_at')
-    .in('video_id', ids)
-    .order('created_at', { ascending: true });
-  // Ascendente e si sovrascrive: l'ultima scrittura per id è quella più recente.
-  const latest = new Map<string, { verdict: string; overall: number }>();
-  for (const s of (scoreRows ?? []) as Array<{ video_id: string; verdict: string; overall: number }>) {
-    latest.set(s.video_id, { verdict: s.verdict, overall: s.overall });
-  }
   return rows.map((r) => ({
     path: `artifacts/motion/${r.id}.md`,
     type: 'motion' as const,
     label: clipLabel(r.title),
-    status: motionStatus(r.preview_url, latest.get(r.id) ?? null),
+    status: motionStatus(r.preview_url),
     date: (r.created_at || '').slice(0, 10),
     sortKey: r.created_at || ''
   }));
@@ -912,18 +921,10 @@ async function resolveMotionArtifact(ctx: RunCtx, id: string, full?: boolean): P
     created_at: string;
     updated_at: string;
   };
-  const { data: scoreRows } = await ctx.supabase
-    .from('motion_craft_scores')
-    .select('verdict, overall, created_at')
-    .eq('video_id', id)
-    .order('created_at', { ascending: false })
-    .limit(1);
-  const latest = ((scoreRows ?? [])[0] ?? null) as { verdict: string; overall: number } | null;
-
   const head = `# artifacts/motion/${row.id}.md
 
 Motion video · created ${row.created_at} · updated ${row.updated_at}
-Status: ${motionStatus(row.preview_url, latest)}
+Status: ${motionStatus(row.preview_url)}
 Public URL: ${row.preview_url || 'none — not rendered yet, so there is no MP4 to link.'}
 Linked post: none — motion videos live in their own gallery, not attached to a post.`;
 
@@ -932,8 +933,7 @@ Linked post: none — motion videos live in their own gallery, not attached to a
 - title: ${row.title}
 - fps: ${row.fps}
 - duration_in_frames: ${row.duration_in_frames}
-- size: ${row.width}x${row.height}
-- craft verdict (latest): ${latest ? `${latest.verdict} (${latest.overall}/10)` : 'not yet scored'}`;
+- size: ${row.width}x${row.height}`;
 
   const source = `## Source
 \`\`\`tsx

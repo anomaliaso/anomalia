@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchVideoBytesDetailed, videoFetchError } from './video-review';
+import { fetchVideoBytesDetailed, videoFetchError } from './video-fetch';
 
 function stubFetch(impl: () => Promise<Response> | never) {
 	const original = globalThis.fetch;
@@ -62,7 +62,7 @@ describe('fetchVideoBytesDetailed', () => {
 
 describe('mp4 duration', () => {
 	it('reads the length from the mvhd atom so the no-ffmpeg path can still be reviewed', async () => {
-		const { mp4DurationSeconds } = await import('./video-review');
+		const { mp4DurationSeconds } = await import('./video-fetch');
 		// mvhd v0: 'mvhd' + version/flags(4) + created(4) + modified(4) + timescale(4) + duration(4)
 		const buf = Buffer.alloc(32);
 		buf.write('mvhd', 0, 'ascii');

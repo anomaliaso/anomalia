@@ -11,6 +11,7 @@ import {
   type AgentAvatarFace
 } from '$lib/agent-avatars';
 import { JOB_OWNERS } from '$lib/agent-owners';
+import { dmAgents, dmMemberAvatar, dmNames } from '$lib/chat-dm';
 
 /** Il minimo di un thread che serve per dargli un volto e un nome. */
 export type ThreadIdentitySource = {
@@ -81,8 +82,11 @@ export function roomMemberAvatar(
 /**
  * Risolve nome + avatar di un thread. Il nome è SEMPRE l'agente, mai il titolo/riassunto: come in
  * una lista di messaggi l'identità è il contatto.
+ * - DM fra agenti (`room_agents` OGGETTO) → i due membri, con la faccia del primo. Non ha un
+ *   agente né una riga in lista: tutto quello che serve sta nel marcatore.
  * - `agent = 'job:<key>'` (LEGACY) → nome della routine con la faccia dell'agente PROPRIETARIO.
- * - thread con custom agent → il suo nome e il suo avatar salvati.
+ * - thread con custom agent → il suo nome e il suo avatar salvati; finché non è risolto resta
+ *   "Anomalia", mai l'etichetta dello specialista che gli sta sotto.
  * - specialista builtin → la sua etichetta i18n e il suo avatar fisso.
  * - thread semplice → "Anomalia" con l'avatar neutro a tema. Il nome è un letterale, non una
  *   chiave i18n: non si traduce.
@@ -113,6 +117,20 @@ export function threadIdentity(
     };
   }
 
+  // DM fra agenti: l'identità sono i DUE, e stanno nel marcatore. Un DM non ha `agent` né
+  // `custom_agent_id` e non compare nella lista dei thread, quindi senza questo ramo cadeva
+  // nell'ultimo ripiego e si presentava come Anomalia — il generalista, che lì dentro non c'è.
+  const pair = dmAgents(thread.room_agents);
+  if (pair) {
+    const names = dmNames(thread.room_agents);
+    const memberName = (key: string) => names[key] || roomMemberName(key, thread.agents, t);
+    return {
+      name: pair.map(memberName).join(' ⇄ '),
+      ...dmMemberAvatar(pair[0]),
+      fixed: true
+    };
+  }
+
   // Chat di gruppo: l'identità è LA STANZA, non un agente. Nome = i membri, volto = il primo (la
   // sidebar disegna la pila intera, perché `agents` ha più di una voce).
   const roomKeys = roomMemberKeys(thread.room_agents);
@@ -128,10 +146,9 @@ export function threadIdentity(
     };
   }
 
-  const custom =
-    (thread.custom_agent_id
-      ? thread.agents?.find((a) => a.id === thread.custom_agent_id)
-      : null) ?? (thread.agents?.length ? thread.agents[0] : null);
+  const custom = thread.custom_agent_id
+    ? (thread.agents?.find((a) => a.id === thread.custom_agent_id) ?? null)
+    : (thread.agents?.[0] ?? null);
   if (custom) {
     return {
       name: custom.name || title || 'Anomalia',
@@ -141,7 +158,7 @@ export function threadIdentity(
     };
   }
 
-  if (agent && agent !== 'auto' && BUILTIN_AGENT_AVATARS[agent]) {
+  if (!thread.custom_agent_id && agent && agent !== 'auto' && BUILTIN_AGENT_AVATARS[agent]) {
     const builtin = BUILTIN_AGENT_AVATARS[agent];
     // `.label`, non la chiave nuda: `chat.agents.<id>` è un OGGETTO {label, desc}, e svelte-i18n su
     // una chiave-oggetto restituisce l'oggetto → "[object Object]" in sidebar.

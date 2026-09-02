@@ -284,15 +284,13 @@
   // sopra la pagina viva (PageModal), quindi un clic sbagliato costa un Esc. Niente nemmeno il
   // pannello dei figli sull'hover: era il terzo modo di arrivare alle stesse sottopagine.
 
-  // Thread caricati subito, e azzerati solo quando il brand cambia davvero: azzerarli al primo
-  // mount cancellerebbe un thread deep-linked prima che ChatColumn si allinei all'URL.
+  // Il thread aperto si molla solo quando il brand cambia davvero: mollarlo al primo mount
+  // cancellerebbe un thread deep-linked prima che ChatColumn si allinei all'URL. La lista la
+  // azzera `refreshThreads`, che sa a quale brand appartiene quella che ha in memoria.
   let threadsBrandSlug = $state<string | null>(null);
   $effect(() => {
     const slug = brandSlug || null;
-    if (threadsBrandSlug !== null && threadsBrandSlug !== slug) {
-      chatThreads.set([]);
-      chatThreadId.set(null);
-    }
+    if (threadsBrandSlug !== null && threadsBrandSlug !== slug) chatThreadId.set(null);
     threadsBrandSlug = slug;
     if (slug) refreshThreads(slug);
   });

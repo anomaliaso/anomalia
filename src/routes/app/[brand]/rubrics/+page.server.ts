@@ -72,7 +72,8 @@ export const actions: Actions = {
           platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
           outputLanguage: localeLanguageName(locale),
           strategyBrief: [gtmBrief, evidence.strategyBrief].filter(Boolean).join('\n\n'),
-          benchmark: evidence.benchmark
+          benchmark: evidence.benchmark,
+          topPosts: evidence.topPosts
         });
         if (!candidates.length) throw new Error('no candidates');
         await saveProposedRubrics(supabase, brand.id, candidates);
@@ -101,7 +102,8 @@ export const actions: Actions = {
           strategic_role: String(form.get(`role_${id}`) ?? ''),
           format: (CONTENT_FORMATS as readonly string[]).includes(fmt) ? fmt : undefined,
           cadence: String(form.get(`cadence_${id}`) ?? ''),
-          differentiation: String(form.get(`diff_${id}`) ?? '')
+          differentiation: String(form.get(`diff_${id}`) ?? ''),
+          art_direction: String(form.get(`art_${id}`) ?? '')
         }
       };
     });

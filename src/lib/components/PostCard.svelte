@@ -2,8 +2,6 @@
   import PlatformGlyph from './PlatformGlyph.svelte';
   import { getPlatform } from './platform-meta';
   import { isVideoUrl } from '$lib/content-formats';
-  import VideoScoreRing from './VideoScoreRing.svelte';
-  import type { VideoScoreBadge } from '$lib/video-score';
 
   let { post, compact = false }: {
     post: {
@@ -13,7 +11,6 @@
       thumbnail?: string;
       pillar?: string;
       angle?: string;
-      videoScore?: VideoScoreBadge | null;
       /**
        * 'rendering' while a clip is being produced out-of-band. The thumbnail is the cover
        * standing in for it, so without this the card looks like a finished photo post and the
@@ -62,9 +59,6 @@
            says "video", and playback happens in PostEditor where the post is actually reviewed. -->
       <video class="post-video" src={post.thumbnail} muted playsinline preload="metadata"></video>
       <span class="video-badge" aria-label="Video">▶</span>
-      <VideoScoreRing url={post.thumbnail} badge={post.videoScore} size={compact ? 24 : 28} />
-    {:else if post.thumbnail && post.videoScore}
-      <VideoScoreRing url={post.thumbnail} badge={post.videoScore} size={compact ? 24 : 28} />
     {:else if !post.thumbnail}
       <span class="ph-icon">{getPlatform(post.platform).short[0]}</span>
     {/if}

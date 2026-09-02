@@ -13,6 +13,9 @@ type Row = Record<string, any>;
 
 let enteredKitTurn = false;
 let releaseKitTurn: (() => void) | null = null;
+const kitTurnInputs: Array<Record<string, unknown>> = [];
+
+const actionApproval = { autoReviewEnabled: true, checker: async () => 'pass' as const };
 
 // La compattazione parla con tabelle che questo finto database non conosce (scrive il riassunto):
 // qui si misura il BATTITO, non lei. Che venga chiamata nel punto giusto lo pinna kit-parity.test.
@@ -21,12 +24,17 @@ vi.mock('$env/dynamic/private', () => ({ env: { AGENT_KIT: 'on' } }));
 vi.mock('$lib/agent/bridge/live', () => ({
 	shouldUseKit: () => ({ id: 'content' }),
 	runKitTurn: vi.fn(
-		() =>
-			new Promise((resolve) => {
+		(input: Record<string, unknown>) => {
+			kitTurnInputs.push(input);
+			return new Promise((resolve) => {
 				enteredKitTurn = true;
 				releaseKitTurn = () => resolve(new Response(null, { status: 200 }));
-			})
+			});
+		}
 	)
+}));
+vi.mock('$lib/server/chat/action-approval', () => ({
+	createChatActionApproval: vi.fn(() => actionApproval)
 }));
 vi.mock('./persistence', () => ({
 	getThread: vi.fn(async () => ({
@@ -123,6 +131,7 @@ describe('il ramo kit del drain batte mentre lavora', () => {
 			const drain = processNextQueuedChatJob(db.client as never, 'https://app.example');
 			await until(() => enteredKitTurn);
 			expect(enteredKitTurn).toBe(true);
+			expect(kitTurnInputs[0]?.approval).toBe(actionApproval);
 
 			const claimedAt = Number(db.tables.chat_jobs[0].partial?.at);
 			expect(claimedAt).toBeGreaterThan(0);

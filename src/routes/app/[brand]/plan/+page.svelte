@@ -278,6 +278,24 @@
   }
 </script>
 
+{#snippet spanPicker()}
+  <!-- La durata del batch. Il selettore compare SOLO dove il piano tariffario la consente davvero:
+       offrire quattro settimane e produrne due in silenzio è peggio che non offrirle. -->
+  {#if data.batchWeeks && data.batchWeeks.max > data.batchWeeks.standard}
+    <label class="span-pick">
+      <span>{$_('weekPlan.span.label')}</span>
+      <select name="weeks">
+        <option value={data.batchWeeks.standard}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.standard } })}</option>
+        <option value={data.batchWeeks.max}>{$_('weekPlan.span.weeks', { values: { n: data.batchWeeks.max } })}</option>
+      </select>
+    </label>
+  {:else}
+    <input type="hidden" name="weeks" value={data.batchWeeks?.standard ?? 2} />
+  {/if}
+{/snippet}
+
+
+
 <svelte:head><title>Anomalia — {$_('weekPlan.title')}</title></svelte:head>
 
 <div class="content">
@@ -506,6 +524,7 @@
         <p>{$_('weekPlan.future.body')}</p>
         <form method="POST" action="?/plan" use:enhance={working('plan')}>
           <input type="hidden" name="week" value={wk} />
+          {@render spanPicker()}
           <button class="btn-primary" disabled={busy === 'plan' || data.quota.remaining <= 0}>
             {busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.future.cta', { values: { n: wk + 1 } })}
           </button>
@@ -528,6 +547,7 @@
             </button>
           </form>
           <form method="POST" action="?/plan" use:enhance={working('plan')}>
+            {@render spanPicker()}
             <button class="btn-ghost" disabled={busy !== '' || data.quota.remaining <= 0}>
               {busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.empty.cta')}
             </button>
@@ -606,7 +626,7 @@
               </span>
               <span>{#if s.pillar}<span class="pillar-chip" style={`color:${pillarColor(s.pillar)};background:${pillarColor(s.pillar)}1a`}>● {s.pillar}</span>{/if}</span>
               <span class="wt-fmt">{s.format}</span>
-              <span class="wt-text">{s.angle}</span>
+              <span class="wt-text">{s.angle}{#if s.beats?.length}<span class="beats-chip" title={s.beats.map((b: { shows: string }) => b.shows).join(' · ')}>{s.beats.length} ⧉</span>{/if}{#if s.beats?.length && !s.sourced_from}<span class="nosrc-chip" title={$_('weekPlan.noSource')}>?</span>{/if}</span>
               <span><span class="st-chip" data-s="todo"><span class="st-dot"></span>{$_('weekPlan.status.todo')}</span></span>
               <span class="wt-actions">
                 <button type="button" class="mini-btn gen" onclick={() => produceRow(r.i)} disabled={producing || producingRow != null || data.quota.remaining <= 0}>
@@ -640,6 +660,26 @@
                 <label class="f"><span class="fl">{$_('weekPlan.col.product')}</span><input list="wp-products" bind:value={s.product} placeholder="—" /></label>
                 <label class="f"><span class="fl">{$_('weekPlan.col.person')}</span><input list="wp-people" bind:value={s.person} placeholder="—" /></label>
                 <label class="f"><span class="fl">{$_('weekPlan.col.subject')}</span><input bind:value={s.subject} placeholder={$_('weekPlan.subjectPlaceholder')} /></label>
+                {#if s.format === 'carousel'}
+                  <label class="f wide"><span class="fl">{$_('weekPlan.col.beats')}</span>
+                    <textarea rows={Math.max(3, (s.beats ?? []).length)} placeholder={$_('weekPlan.beatsPlaceholder')}
+                      value={(s.beats ?? []).map((b: { shows: string; who?: string; thinks: string; says?: { speaker: string; line: string } }) => [b.shows, b.who, b.thinks, b.says ? `${b.says.speaker}: ${b.says.line}` : ''].join(' | ').replace(/(\s*\|)+$/, '')).join('\n')}
+                      oninput={(e) => (s.beats = e.currentTarget.value.split('\n').map((line) => {
+                        const [shows = '', who = '', thinks = '', said = ''] = line.split('|').map((x) => x.trim());
+                        const i = said.indexOf(':');
+                        const says = i > 0 ? { speaker: said.slice(0, i).trim(), line: said.slice(i + 1).trim() } : null;
+                        return { shows, who, thinks, ...(says?.speaker && says.line ? { says } : {}) };
+                      }).filter((b) => b.shows))}></textarea>
+                  </label>
+                {/if}
+                <label class="f wide"><span class="fl">{$_('weekPlan.col.artDirection')}</span>
+                  <textarea rows="2" bind:value={s.art_direction} placeholder="—"></textarea>
+                </label>
+                {#if s.beats?.length}
+                  <label class="f wide"><span class="fl">{$_('weekPlan.col.source')}</span>
+                    <textarea rows="2" bind:value={s.sourced_from} placeholder={$_('weekPlan.sourcePlaceholder')}></textarea>
+                  </label>
+                {/if}
               </div>
             {/if}
           {/if}
@@ -699,6 +739,7 @@
         <div class="ab-actions">
           <form method="POST" action="?/plan" use:enhance={working('plan')}>
             <input type="hidden" name="week" value={wk} />
+            {@render spanPicker()}
             <button class="btn-ghost" disabled={busy !== '' || producing}>{busy === 'plan' ? $_('weekPlan.planning') : $_('weekPlan.replan') + ' ↻'}</button>
           </form>
           <button
@@ -840,6 +881,10 @@
   .pillar-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .wt-fmt { font-size: 13px; text-transform: capitalize; color: var(--ink-soft, #6e6e73); }
   .wt-text { font-size: 13px; line-height: 1.4; color: var(--ink, #1d1d1f); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .span-pick { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 12.5px; color: var(--ink-soft, #6e6e73); }
+  .span-pick select { font-size: 12.5px; padding: 3px 6px; border-radius: 7px; }
+  .beats-chip { margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); white-space: nowrap; }
+  .nosrc-chip { margin-left: 4px; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: rgba(200, 120, 0, 0.16); color: #b26a00; }
   .st-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; white-space: nowrap;
     background: rgba(0, 0, 0, 0.05); color: var(--ink-soft, #6e6e73); }
   .st-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }

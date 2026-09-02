@@ -2156,6 +2156,18 @@
           "cardSub": "reviewed: ship · caption ready"
         }
       },
+      "remote": {
+        "brand": "FLASH CAMP",
+        "live": "LIVE",
+        "today": "TODAY",
+        "tue": "TUE",
+        "wed": "WED",
+        "launchStory": "Launch story",
+        "behindScenes": "Behind the scenes",
+        "customerNote": "Customer note",
+        "calendarChecked": "Calendar checked · {count} drafts ready for review",
+        "nextPost": "Next post queued for Tuesday at 09:00"
+      },
       "foot": "Long jobs keep running after you close the tab, and the agent writes to you when it is done. Publishing is the one step it never takes on its own."
     }
   },
@@ -2356,10 +2368,10 @@
     "creditsDocsLink": "How credits & limits work →"
   },
   "waitlist": {
-    "title": "You're on the list 🎉",
-    "sub": "We'll let you know the moment Anomalia opens for {email}.",
-    "ahead": "{count, plural, one {person ahead of you} other {people ahead of you}}",
-    "note": "Want to skip the line? Refer a friend (coming soon)."
+    "title": "One last step",
+    "sub": "Anomalia opens after a short call with Marco. Pick a time that works: your access switches on right after it.",
+    "note": "Prefer to open the calendar in its own tab?",
+    "fallback": "Open it here"
   },
   "login": {
     "reset": {
@@ -2507,7 +2519,7 @@
       "description": "See how Anomalia runs social media for creators, agencies, ecommerce, brands, SaaS, local businesses, coaches, real estate and events."
     },
     "waitlist": {
-      "title": "Anomalia — You're on the list"
+      "title": "Anomalia — Book your call"
     },
     "login": {
       "titleWaitlist": "Anomalia — Join the waitlist",
@@ -3111,13 +3123,21 @@
       }
     },
     "pick": {
-      "title": "Meet your first agent",
-      "sub": "Pick who you start with. You can talk to any of the others whenever you want.",
-      "start": "Start chat",
-      "own": "Create my own",
+      "title": "Your autonomous team",
+      "sub": "Explore your team of AI agents who know marketing.",
+      "start": "Start",
       "prev": "Previous agent",
       "next": "Next agent",
       "customDesc": "Your own agent"
+    },
+    "guestPreview": {
+      "title": "Your first post",
+      "sub": "Made from your site. No account needed to look at it.",
+      "working": "Reading your site and making your first post…",
+      "failed": "We could not make a post from that site.",
+      "retry": "Try another site",
+      "cta": "Save it and see more",
+      "ctaHint": "Create your account to keep this post and get the rest."
     }
   },
   "editorialPlan": {
@@ -3323,7 +3343,10 @@
       "actions": "Actions",
       "product": "Product",
       "person": "Person",
-      "subject": "Suggested visual"
+      "subject": "Suggested visual",
+      "beats": "Story (one beat per slide)",
+      "artDirection": "Art direction (medium)",
+      "source": "Where the story comes from (provenance, never published)"
     },
     "status": {
       "todo": "To produce",
@@ -3380,6 +3403,13 @@
     "past": {
       "title": "Week {n} has already passed",
       "body": "A week that has already gone by can't be planned. Pick the current week or a future one."
+    },
+    "beatsPlaceholder": "One line per slide: action | who is in frame | what they think | speaker: line",
+    "sourcePlaceholder": "The real situation this retells, and its link — the names stay here, the episode is anonymised",
+    "noSource": "This episode has no source",
+    "span": {
+      "label": "Plan",
+      "weeks": "{n} weeks"
     }
   },
   "setup": {
@@ -4165,44 +4195,6 @@
         "formatAuto": "Mixed formats",
         "platform": "Platform",
         "platformAny": "Any platform"
-      }
-    },
-    "videoReview": {
-      "title": "Video review",
-      "standard": "Review standard",
-      "organic": "Organic UGC",
-      "ads": "Paid ads",
-      "run": "Review clip",
-      "running": "Watching…",
-      "error": "Could not review this video.",
-      "fetchFailed": "Could not download the video (blocked or expired URL).",
-      "credits": "AI credits are exhausted for this period.",
-      "ship": "Ship",
-      "fix": "Fix",
-      "kill": "Kill",
-      "stops": "Stops the scroll",
-      "scrolls": "Thumb keeps moving",
-      "hook": "Hook",
-      "nextTest": "Next test",
-      "spoken": "Spoken",
-      "onScreen": "On-screen",
-      "research": "Research",
-      "scorePending": "Scoring…",
-      "dim": {
-        "scroll_stop": "Scroll-stop",
-        "sound_off": "Sound-off",
-        "hold": "Hold",
-        "authenticity": "Authenticity",
-        "anatomy": "Anatomy",
-        "structure": "Structure",
-        "spoken_craft": "Spoken craft",
-        "cta_soft": "Soft CTA",
-        "loop_worthiness": "Rewatch / save",
-        "audience_signal": "Who it's for",
-        "proof": "Proof",
-        "offer": "Offer",
-        "uniqueness": "Uniqueness",
-        "claims_safe": "Claims"
       }
     },
     "motionVideo": {
@@ -5350,9 +5342,7 @@
         "reload": "Reload properties"
       },
       "video": {
-        "title": "Video",
-        "model": "Video model",
-        "modelDesc": "Which AI model generates your clips. Clip length options follow the model you pick — Seedance 2.5 can go up to 30 seconds.",
+        "title": "Images & video",
         "modelDefault": "Platform default",
         "clipLength": "Clip length",
         "clipLengthDesc": "Fixed length for every generated clip, or Auto so chat / batch generation picks a length per reel from the spoken script. Billed per second. The longest option depends on the video model above; clips shorter than 10s cannot carry a hook, a point and a call to action.",
@@ -5364,60 +5354,20 @@
         "instructionsPlaceholder": "e.g. Speak fast and informally, like talking to a friend. Never sound like an ad. Italian accent, no corporate jargon.",
         "resolution": "Video quality",
         "resolutionDesc": "480p is recommended: 720p costs exactly double per second, and every clip is billed whether or not you publish it. On a phone feed the difference is small.",
-        "recommended": "recommended"
-      },
-      "mediaReviewer": {
-        "nav": "Media reviewer",
-        "title": "Media reviewer",
-        "subtitle": "Scores and errors for this brand’s clips, stills, and carousels.",
-        "empty": "No reviews yet. Scores appear here as media is generated.",
-        "filterLabel": "Filter by status",
-        "filter": {
-          "all": "All",
-          "ready": "Ready",
-          "failed": "Failed",
-          "pending": "In progress"
-        },
-        "tileTotal": "Reviews",
-        "tileTotalDelta": "This brand only",
-        "tileReady": "Scored",
-        "tileReadyDelta": "Ready to read",
-        "tileFailed": "Failed",
-        "tileFailedDelta": "After retries",
-        "tilePending": "In progress",
-        "tilePendingDelta": "Queued or running",
-        "logsTitle": "Review log",
-        "logsSub": "{total} in this view",
-        "col": {
-          "when": "When",
-          "media": "Media",
-          "kind": "Kind",
-          "status": "Status",
-          "score": "Score",
-          "verdict": "Verdict",
-          "note": "Note"
-        },
-        "openPost": "Open post",
-        "judgment": "Judgment",
-        "scriptSpoken": "Spoken",
-        "scriptOnScreen": "On screen",
-        "caption": "Caption",
-        "error": "Error",
-        "attempts": "{n} attempts",
-        "rerun": "Re-run",
-        "rerunQueued": "Review queued. The score will refresh in a few minutes.",
-        "rerunRunning": "A review is already running for this media.",
-        "status": {
-          "pending": "Pending",
-          "running": "Running",
-          "ready": "Ready",
-          "failed": "Failed"
-        },
-        "kind": {
-          "video": "Video",
-          "image": "Image",
-          "carousel": "Carousel",
-          "graphic": "Graphic"
+        "recommended": "recommended",
+        "slots": {
+          "imageGenerate": "Image generation",
+          "imageGenerateDesc": "Which model draws a new photo from a prompt. Platform default lets the renderer pick per image. Models outside the Nano Banana family run only on kie and frame Instagram posts at 3:4 instead of 4:5.",
+          "imageRefine": "Image refine",
+          "imageRefineDesc": "Which model edits a photo that already exists — adding a logo, restyling, changing one detail. Reproducing an image faithfully is a different job from inventing one, and the best family at one is not always the best at the other. Empty follows the generation model.",
+          "videoGenerate": "Video generation",
+          "videoGenerateDesc": "Which model writes a clip from words alone. Clip length options follow this pick — Seedance 2.5 goes to 30 seconds.",
+          "videoAnimate": "Video generation (image)",
+          "videoAnimateDesc": "Which model animates a still that already exists, usually the rendered cover. Empty follows the video generation model, which is what every brand had before this split.",
+          "videoRefine": "Video refine",
+          "videoRefineDesc": "Which model rewrites a finished clip — swapping a subject, changing the setting or the styling — while keeping the original motion. Only models that read a video appear here.",
+          "videoMotion": "Video motion",
+          "videoMotionDesc": "Which model takes the movement from a reference video and applies it to a subject in your image. Not the same as motion videos, which are rendered from code and use no generative model."
         }
       },
       "library": {
@@ -6438,6 +6388,7 @@
       "openAndDm": "Open profile & DM →",
       "dismiss": "Ignore",
       "restore": "Restore",
+      "dontContact": "Never contact again",
       "empty": "No leads here yet.",
       "rewrite": "Rewrite",
       "feedbackPh": "e.g. shorter, more casual, mention our product…",
@@ -6453,6 +6404,7 @@
       "searchPh": "Search content, comment or DM…",
       "markDone": "Done",
       "postLabel": "Original post",
+      "postGist": "What the person is asking (AI summary — the original post is one link away)",
       "openPost": "Open",
       "relevanceLabel": "AI relevance",
       "close": "Close",
@@ -7389,28 +7341,8 @@
     "prevVersion": "Previous version",
     "nextVersion": "Next version",
     "saveDraft": "Save draft",
-    "requestReview": "Request media review",
-    "reviewQueued": "Review queued. The ring will update when it finishes.",
     "reviewDone": "Review ready.",
     "reviewFailed": "Review failed. Try again, or check Media reviewer.",
-    "reviewRunning": "A review is already running for this media.",
-    "review": {
-      "why": "Why",
-      "improve": "How to improve",
-      "chipApply": "Apply this",
-      "chipHook": "Fix the hook",
-      "chipReel": "Remake reel",
-      "chipVisual": "Redo visual",
-      "promptScore": "Media review scored this {score}/10 ({verdict}).",
-      "promptWhy": "Why: {judgment}",
-      "promptNext": "How to improve (change exactly one thing): {next}",
-      "promptIssue": "- {problem} → {fix}",
-      "promptApply": "Apply that change to THIS post's media now. Keep the caption unless the review requires changing it.",
-      "promptVideo": "This is a VIDEO. Remake with make_video, ugc:true, spoken to camera, no on-screen text. Do not replace the reel with a graphic.",
-      "promptHook": "Fix the hook / first 3 seconds so it stops the scroll. Then remake the media.",
-      "promptReel": "Remake this reel as talking UGC: natural spoken script, no on-screen text, no graphic overlays.",
-      "promptStill": "Redo the visual (photo or graphic) based on this review. Do not turn it into a video unless I ask."
-    },
     "approveSchedule": "Approve & schedule →",
     "publishNow": "Publish now",
     "reject": "Reject",
@@ -7560,7 +7492,11 @@
         },
         "notePre": "We use the content and public post history you provide to generate posts with AI. We do",
         "noteStrong": "not",
-        "notePost": "sell your personal data, and we do not use your content to train third-party AI models for purposes unrelated to providing you the service."
+        "notePost": "sell your personal data, and we do not use your content to train third-party AI models for purposes unrelated to providing you the service.",
+        "row7": {
+          "purpose": "Business contact research (radar/leads): reading third-party public content on social platforms to propose conversations to join and contact drafts",
+          "basis": "Legitimate interest — Art. 6(1)(f)"
+        }
       },
       "s4": {
         "heading": "4. AI-generated content",
@@ -7585,7 +7521,7 @@
         "stripe": "Subscription billing and payment processing",
         "google": "AI text and image generation",
         "kie": "AI image / video generation",
-        "scrapecreators": "Collecting public post history from connected accounts",
+        "scrapecreators": "Real-time reading of public content (posts and profiles) from social platforms for the news and leads radar, and collection of the public history of connected accounts",
         "resend": "Sending transactional and notification emails",
         "metaProvider": "Meta (Instagram, Facebook) & TikTok",
         "meta": "Publishing posts to your connected accounts",
@@ -7616,7 +7552,8 @@
       },
       "s9": {
         "heading": "9. How long we keep your data",
-        "body": "We keep your personal data for as long as your account is active and as needed to provide the service. After you close your account we delete or anonymise your data within a reasonable period, except where we must keep it longer to comply with legal obligations (for example, invoices for tax purposes) or to resolve disputes."
+        "body": "We keep your personal data for as long as your account is active and as needed to provide the service. After you close your account we delete or anonymise your data within a reasonable period, except where we must keep it longer to comply with legal obligations (for example, invoices for tax purposes) or to resolve disputes.",
+        "body2": " Third-party content found by the radar has its own retention: the post summary is deleted after 14 days, unconverted leads after 90 days, comment outcomes after 12 months. Anyone who does not want to be contacted again can say so in a reply to the message they received, or through the customer who contacted them: their profile is excluded from all future suggestions, for every brand."
       },
       "s10": {
         "heading": "10. Your rights",
@@ -7758,7 +7695,8 @@
       "s13": {
         "heading": "13. Third-party services",
         "body": "The Service relies on third-party providers (for hosting, AI, analytics, payments, email and social platforms). We are not responsible for those providers’ services, and your use of connected platforms is also governed by their own terms.",
-        "body2": "Some features drive a real browser on your behalf — for example capturing screenshots of your own product after signing in with demo credentials you save. You may only save credentials for a service you own or are authorised to automate, and that authorisation is your responsibility. We will not use them to sign in to third-party platforms such as Instagram, Facebook, LinkedIn or TikTok: automated sign-in and automated posting generally breach those platforms’ terms and can get an account restricted, so the Service refuses it. Publishing happens only through the official APIs of the accounts you connect, after you approve the content."
+        "body2": "Some features drive a real browser on your behalf — for example capturing screenshots of your own product after signing in with demo credentials you save. You may only save credentials for a service you own or are authorised to automate, and that authorisation is your responsibility. We will not use them to sign in to third-party platforms such as Instagram, Facebook, LinkedIn or TikTok: automated sign-in and automated posting generally breach those platforms’ terms and can get an account restricted, so the Service refuses it. Publishing happens only through the official APIs of the accounts you connect, after you approve the content.",
+        "body3": " Some features (radar/leads) read third-party public content on social platforms to suggest conversations worth joining, with draft comments and messages. The user is the only sender: the Service never messages third parties automatically — every draft requires the user’s review and manual sending from their own account. The user is therefore the data controller of the contacts they send and is responsible for the message content, for complying with the terms of the platform they post on, and for honoring people’s requests not to be contacted again. The Service minimizes the data of the people it finds (a summary and the post link, no copy of the text) and excludes them from all future suggestions when they ask not to be contacted."
       },
       "s14": {
         "heading": "14. Availability & changes",
@@ -9150,6 +9088,7 @@
       "format": "Format",
       "cadence": "Cadence",
       "differentiation": "Why it differs from competitors",
+      "art_direction": "Art direction (how every episode looks)",
       "rationale": "Why for your brand"
     },
     "formats": {
@@ -9390,7 +9329,8 @@
       "importFailed": "Import failed",
       "remove": "Remove",
       "videoTooLarge": "Video too large (max 18MB).",
-      "uploadFailed": "Upload failed."
+      "uploadFailed": "Upload failed.",
+      "processing": "Processing image…"
     },
     "commands": {
       "label": "Commands",
@@ -9523,14 +9463,14 @@
     "tier": {
       "label": "Model",
       "custom": "Custom",
-    "modelFamily": {
-      "luna": "Luna",
-      "grok": "Grok 4.6",
-      "gemini-flash": "Gemini Flash",
-      "deepseek-pro": "DeepSeek V4 Pro",
-      "gpt-terra": "GPT 5.6 Terra",
-      "gpt-sol": "GPT 5.6 Sol"
-    },
+      "modelFamily": {
+        "luna": "Luna",
+        "grok": "Grok 4.6",
+        "gemini-flash": "Gemini Flash",
+        "deepseek-pro": "DeepSeek V4 Pro",
+        "gpt-terra": "GPT 5.6 Terra",
+        "gpt-sol": "GPT 5.6 Sol"
+      },
       "auto": "Auto",
       "fast": "Fast",
       "pro": "Pro",
@@ -9566,6 +9506,7 @@
       "link": "AI Act"
     },
     "connectors": "Connectors",
+    "mediaModels": "Image & video models",
     "toolDetail": {
       "toggle": "Open the details of {tool}",
       "params": "Params",
@@ -9606,6 +9547,14 @@
     },
     "unread": "Unread messages",
     "unreadCount": "{count, plural, one {# unread message} other {# unread messages}}",
+    "replyNotification": {
+      "region": "New chat replies",
+      "label": "New reply",
+      "message": "Open the chat to read it",
+      "open": "Open {name}'s chat",
+      "count": "{count, plural, one {# unread reply} other {# unread replies}}",
+      "dismiss": "Dismiss"
+    },
     "docPanel": {
       "subtitle": "From the knowledge base",
       "openInKnowledge": "Open in Knowledge",

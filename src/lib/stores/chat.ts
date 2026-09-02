@@ -115,16 +115,43 @@ export function markThreadRead(brandSlug: string, threadId: string): void {
 }
 
 /**
- * Refresh the thread list from the server.
+ * La lista dei thread, chiesta UNA volta anche quando la chiedono in sette.
+ *
+ * `/chat/threads` non è una lettura leggera: elenca tutti i thread del brand e ci monta sopra
+ * avatar, anteprime, soglie di lettura e conteggi — sei query. Sette chiamanti indipendenti la
+ * facevano partire tre volte nello stesso secondo all'apertura di un thread. Chi arriva mentre
+ * una è in volo aspetta quella; la prossima, dopo, riparte davvero.
  */
-export async function refreshThreads(brandSlug: string): Promise<void> {
+const threadsInFlight = new Map<string, Promise<void>>();
+
+/**
+ * Di CHI è la lista che sta in memoria. Lo store è uno solo per tutta la shell, e finché non
+ * arrivava la lista nuova continuava a mostrare quella del brand precedente: creando un brand si
+ * passa da una rotta senza slug, quindi né la sidebar (che si rimonta) né `beforeNavigate` (che
+ * confronta due slug) avevano un brand di prima da riconoscere. Qui il confronto c'è sempre.
+ */
+let listedBrand: string | null = null;
+
+export function refreshThreads(brandSlug: string): Promise<void> {
+  if (listedBrand !== brandSlug) {
+    listedBrand = brandSlug;
+    chatThreads.set([]);
+    unreadThreadIds.set(new Map());
+  }
+
+  const running = threadsInFlight.get(brandSlug);
+  if (running) return running;
+
+  const call = fetchThreads(brandSlug).finally(() => threadsInFlight.delete(brandSlug));
+  threadsInFlight.set(brandSlug, call);
+  return call;
+}
+
+async function fetchThreads(brandSlug: string): Promise<void> {
   try {
-    console.log('[refreshThreads] Fetching:', `/app/${brandSlug}/chat/threads`);
     const res = await fetch(`/app/${brandSlug}/chat/threads`);
-    console.log('[refreshThreads] Status:', res.status);
     if (res.ok) {
       const data = await res.json();
-      console.log('[refreshThreads] Threads:', data.threads?.length ?? 0);
       const threads: ChatThread[] = data.threads ?? [];
       chatThreads.set(threads);
       // Il thread aperto non è mai non letto: il server può averlo marcato tale per il messaggio
@@ -153,7 +180,8 @@ export async function createThread(
   brandSlug: string,
   title?: string,
   agent?: string,
-  agents?: string[]
+  agents?: string[],
+  customAgentId?: string | null
 ): Promise<string | null> {
   try {
     console.log('[createThread] Creating thread for:', brandSlug);
@@ -163,6 +191,7 @@ export async function createThread(
       body: JSON.stringify({
         title: title ?? undefined,
         agent: agent ?? undefined,
+        custom_agent_id: customAgentId ?? undefined,
         ...(agents && agents.length >= 2 ? { agents } : {})
       })
     });

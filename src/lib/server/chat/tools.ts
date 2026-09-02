@@ -161,9 +161,7 @@ export function createChatTools(
     ...expressionMemoryTools(ctx),
     // `remainingMs` DEVE passare: senza, il render MP4 apriva un lease da 900s dentro un turno da
     // 300 — la guardia sul tempo rimasto veniva semplicemente saltata su questa superficie.
-    // threadId/origin/locale: dove far rientrare l'esito della QC fuori banda quando il turno non
-    // ha più budget per il giudice (il trailer del 21/8 è uscito dalla CHAT senza review — mai più).
-    ...createMotionOutputTools({ supabase, brandId, userId, fps: () => MOTION_FPS, remainingMs, threadId, origin, locale }),
+    ...createMotionOutputTools({ supabase, brandId, userId, fps: () => MOTION_FPS, remainingMs, locale }),
 
     ...createGraphicSourceEditTools(
       async ({ post_id }) => {

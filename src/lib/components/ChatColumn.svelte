@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { openPageModal } from '$lib/components/PageModal.svelte';
+  import { postPreviewHref } from '$lib/page-modal-navigation';
   import {
     chatThreadId,
     chatPrefill,
@@ -276,6 +277,9 @@
   // Il modello scelto nel composer vale per QUESTA conversazione; la prossima riparte dal
   // default del brand (Settings → Chat).
   const brandDefaultTier = $derived(coerceChatTier(($page.data as { brand?: { chat_default_tier?: unknown } }).brand?.chat_default_tier));
+  const catalogModels = $derived(
+    ($page.data as { chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }> }).chatModels ?? []
+  );
   let chatTier = $state<ChatTier>('auto');
   let chatReasoning = $state<ChatReasoning>(DEFAULT_REASONING.auto);
   const saveModelChoice = createModelChoiceSave({
@@ -286,7 +290,10 @@
   // Aprire una conversazione mostra il modello CHE HA, non il default del brand: la riga arriva
   // dalla lista dei thread, quindi si idrata quando c'è — una volta sola per thread, o la lista
   // che si aggiorna a ogni messaggio riscriverebbe la scelta appena fatta.
-  let hydratedThread: string | null = null;
+  // `undefined` e non `null`: senza thread (composer della home) il primo giro deve ENTRARE, o il
+  // default di modello del brand non viene mai applicato e ogni chat nuova parte su Auto — con il
+  // menu che mostra il modello scelto e il turno che gira su un altro.
+  let hydratedThread: string | null | undefined = undefined;
   $effect(() => {
     const id = threadId ?? null;
     const row = id ? $chatThreads.find((t) => t.id === id) : null;
@@ -848,7 +855,7 @@
     if (liveSendThreadId) return liveSendThreadId;
     // Chat di gruppo: la stanza scelta nel picker nasce insieme al thread, al primo messaggio.
     // Se il server la rifiuta (feature spenta, meno di due membri) resta un thread normale.
-    const id = await createThread(brandSlug, undefined, agentSel, roomSel);
+    const id = await createThread(brandSlug, undefined, agentSel, roomSel, roomSel.length ? null : customAgentSel);
     if (id) {
       liveSendThreadId = id;
       // Da qui in poi la stanza è il thread: la memoria del campo "A" copre solo l'attesa fra
@@ -860,7 +867,6 @@
       // `createThread` ha già inserito la riga in `chatThreads`: il refetch è solo allineamento
       // e non deve trattenere il primo turno.
       void refreshThreads(brandSlug);
-      if (!roomSel.length && customAgentSel) await setThreadCustomAgent(brandSlug, id, customAgentSel);
     }
     return id;
   }
@@ -1709,6 +1715,7 @@
       bind:mode={chatMode}
       bind:tier={chatTier}
         bind:reasoning={chatReasoning}
+      chatModels={catalogModels}
       brandSlug={brandSlug}
       draftKey={`anomalia:chat-draft:${brandSlug}:${threadId ?? 'new'}`}
       onsubmit={(text, meta) => send(text, meta)}
@@ -1742,7 +1749,7 @@
   <ChatImageLightbox
     src={zoomPost.media_urls?.length ? zoomPost.media_urls : (zoomPost.media_url ?? '')}
     caption={zoomPost.caption}
-    calendarHref={`/app/${brandSlug}/calendar?post=${zoomPost.post_id}`}
+    calendarHref={postPreviewHref(`/app/${brandSlug}`, zoomPost.post_id)}
     onclose={() => (zoomPost = null)}
   />
 {/if}

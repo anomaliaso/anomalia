@@ -5,7 +5,7 @@ import { logAiCall, extractXiaomiUsage, requireBrandContext } from '$lib/server/
 import { geminiFlash, type GeminiThinkingLevel } from '$lib/server/gemini';
 import { env } from '$env/dynamic/private';
 import { route } from '$lib/server/model-routing';
-import { llmImagesFromInline, llmStructured, llmText } from '$lib/server/llm';
+import { llmBaseUrl, llmConfigured, llmImagesFromInline, llmModels, llmStructured, llmText } from '$lib/server/llm';
 
 // ── Xiaomi MiMo structured output via tool calling ──────────────────────────
 // Shared module used by GTM engine, strategy report, editorial plan, etc.
@@ -51,9 +51,19 @@ export const AI_PROVIDER =
     : TEXT_ROUTE.provider === 'kie' && TEXT_ROUTE.family !== 'gemini'
       ? 'kie'
       : 'gemini';
-const providerModel =
-  AI_PROVIDER === 'xiaomi' ? XIAOMI_MODEL : AI_PROVIDER === 'kie' ? (env.KIE_MODEL || 'grok-4-5') : geminiFlash();
-console.log(`[AI] provider: ${AI_PROVIDER} (${providerModel})`);
+/**
+ * Chi serve il testo DAVVERO, per la riga di boot. Non è la famiglia richiesta: da quando ogni
+ * testo passa dal centralino, `AI_PROVIDER === 'gemini'` vuol dire "gateway", e la riga di prima
+ * annunciava `gemini (gemini-3.7-flash)` — un modello che quel percorso non chiama — mandando la
+ * diagnosi dalla parte sbagliata prima ancora di cominciare.
+ */
+export function textRouteLabel(): string {
+  if (AI_PROVIDER === 'xiaomi') return `xiaomi (${XIAOMI_MODEL})`;
+  if (AI_PROVIDER === 'kie') return `kie (${env.KIE_MODEL || 'grok-4-5'})`;
+  if (!llmConfigured()) return 'not configured (LLM_API_KEY missing)';
+  const host = llmBaseUrl().replace(/^https?:\/\//, '').split('/')[0];
+  return `${host} (${llmModels().join(', ') || 'no model declared'})`;
+}
 
 // Tutta la generazione di testo — strategia GTM, piano editoriale, articoli del blog — resta su
 // Gemini Flash: mai MiMo, mai Kie, qualunque cosa dica GTM_PROVIDER.

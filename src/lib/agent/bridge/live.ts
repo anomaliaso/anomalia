@@ -33,6 +33,7 @@ import {
 	type KitRunLiveness
 } from '$lib/server/chat/turn-limits';
 import { DM_REPLY_STEP_CAP, dmBrief } from '$lib/chat-dm';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { UNATTENDED_TOOL_EXCLUSIONS, UNATTENDED_KIT_TOOL_EXCLUSIONS } from '$lib/server/chat/unattended';
 import { logAiCall, extractSdkUsage } from '$lib/server/ai-log';
 import { filesIndexFor } from '$lib/server/chat/agent-files';
@@ -42,8 +43,9 @@ import { assistantContentFromPartial, type ChatPartialSnapshot } from '$lib/serv
 import { createQueryTool, type QueryToolDeps } from '$lib/server/chat/query-tool';
 import { CHAT_USER_ERROR } from '$lib/server/chat/report-error';
 import { enqueueTurnContinuation, kickChatQueueWork } from '$lib/server/chat/queue';
-import { applyChatStreamEvent, emptyStreamState, readSseEvents, toolsForMirror } from '$lib/chat-stream-events';
+import { applyChatStreamEvent, closeDanglingToolCalls, emptyStreamState, readSseEvents, toolsForMirror } from '$lib/chat-stream-events';
 import { isChatMode, modeBlock, toolsForMode, type ChatMode } from '$lib/chat-modes';
+import { appendRunProgress, pruneRunProgress } from '$lib/server/chat/thread-events';
 import { broadcastToBrand } from '$lib/server/realtime';
 import { specById } from '../specs';
 import type { AgentSpec } from '../contracts';
@@ -67,6 +69,12 @@ import {
  * riscritta, e il beneficio è entrare in una chat viva nel punto esatto in cui sta.
  */
 const PARTIAL_MIRROR_MS = 100;
+/**
+ * Il parziale si riscrive sulla stessa riga, l'evento di progress ne aggiunge una: la stessa
+ * cadenza costerebbe una riga ogni 100ms col testo intero dentro. Un quarto di secondo resta
+ * sotto la soglia in cui l'occhio legge uno scatto, e le righe se ne vanno a fine turno.
+ */
+const PROGRESS_EVENT_MS = 250;
 
 /**
  * GLI EVENTI CHE NON POSSONO ASPETTARE IL THROTTLE.
@@ -84,12 +92,16 @@ const PARTIAL_FLUSH_EVENTS = new Set(['tool-input-available', 'tool-output-avail
 
 const TURN_MAX_STEPS = 75;
 
+const RUN_LEASE_TTL_MS = 300_000;
+const RUN_LEASE_LOST = 'lease_lost';
+
 /** Il turno vivo di ogni thread, per i tool che una sessione riusata ha cotto in un turno prima. */
 const liveTurnByThread = new Map<string, { stopped: boolean; closedBy: string }>();
 import { attachForChat } from './attach';
 import { buildTools } from '@anomalia/agent-adapters/runtime/ai-runtime';
 import { createCheckpointStorage } from '@anomalia/agent-adapters/checkpoint-storage';
 import { markComputerRunning, touchComputer } from '@anomalia/agent-core/computer';
+import { createEffectsLedger } from '$lib/server/agent-kit-effects-store';
 import {
 	createServerBrandFs,
 	createPostgresMemoryStore,
@@ -97,13 +109,25 @@ import {
 	graphicalBootstrapDeps,
 	openBrandHarnessSession,
 	dropLiveHarnessSession,
+	hasLiveHarnessSession,
 	resolveHarnessModelRef,
 	startHarnessTurn
 } from './adapters';
 import { reportChatError } from '$lib/server/chat/report-error';
 import { BUILTIN_TOOLS } from '../tools/builtin';
-import { createRun, transition, finish, resume, closeRunSaving, type CloseMessage, type CloseOutcome, type RunRow } from '../run-store';
-import type { AdapterContext, RunStopReason, ToolResult } from '../kit/types';
+import {
+	createRun,
+	transition,
+	finish,
+	closeRunSaving,
+	claimRun,
+	renewLease,
+	type CloseMessage,
+	type CloseOutcome,
+	type RunRow,
+	type RunLease
+} from '../run-store';
+import type { ActionApprovalConfig, AdapterContext, RunStopReason, ToolResult } from '../kit/types';
 import { createMotionPlugin } from '../plugins/motion';
 import { createContentPlugin } from '../plugins/content';
 import { createUgcPlugin } from '../plugins/ugc';
@@ -115,6 +139,7 @@ import { resolveChatModel } from '$lib/server/chat/model';
 import { createGoalPlugin, withKitToolNames } from '../plugins/goal';
 import { kitPluginsFor } from '../plugins/registry';
 import { GOAL_TOOL_KEYS } from '$lib/server/chat/goal-tools';
+import { gateAction, planActionGate, resolveActionApprovalDetail } from '@anomalia/agent-kit/action-approval';
 import { CHAT_MAX_CONTINUATIONS } from '$lib/server/chat/turn-limits';
 import {
 	goalBriefing,
@@ -125,6 +150,8 @@ import {
 	trackGoalSettlement,
 	type ChatGoal
 } from '$lib/server/chat/goal';
+import { approvalContinuationMessage, approvalMessageParts, findToolApproval, type ToolApproval } from './approval';
+import { waitForApproval } from '$lib/server/chat/agent-kit-approvals';
 
 /**
  * La condizione pura che il ramo nel motore esistente valuta: flag ON *E* uno specialista
@@ -159,6 +186,8 @@ export interface RunKitTurnInput {
 	/** Il tier scelto dall'utente nel composer (auto|fast|pro…). Senza, il bridge cablava 'auto'. */
 	tier?: unknown;
 	modelFamily?: unknown;
+	/** L'id del gateway scelto dal catalogo, quando l'utente ne ha pinnato uno. */
+	modelId?: unknown;
 	/** Lo sforzo di ragionamento scelto dall'utente. */
 	reasoning?: unknown;
 	/**
@@ -174,6 +203,7 @@ export interface RunKitTurnInput {
 	 * la coda. Zero su un turno avviato da una persona.
 	 */
 	continuationDepth?: number;
+	resumeRunId?: string;
 	/**
 	 * Il tempo che questo turno può bruciare. Vuoto = il budget del muro serverless. Il drain
 	 * passa la propria fetta, che si accorcia man mano che macina job.
@@ -200,6 +230,15 @@ export interface RunKitTurnInput {
 	 * automatica. Senza, è un normale turno kit.
 	 */
 	dm?: { speaker: string; meName: string; otherName: string };
+	approval?: ActionApprovalConfig;
+	approvalResponse?: { approvalId: string; approved: boolean; reason?: string; toolCallId?: string };
+	/**
+	 * L'identità custom che indossa lo spec del mestiere: un agente custom NON ha un AgentSpec
+	 * suo — è il mestiere del thread (`spec`) con la persona dell'utente sopra. `id` è chi ha la
+	 * macchina (come `computerOwner` sul classico), `memoryKey` è la chiave della memoria di
+	 * mestiere (`custom:<uuid>`), `systemBlock` è il brief già montato col formatter condiviso.
+	 */
+	persona?: { id: string; memoryKey: string; systemBlock: string };
 }
 
 /**
@@ -207,19 +246,9 @@ export interface RunKitTurnInput {
  * risposta precedente: il provider Responses li ritraduce in `item_reference`, che kie
  * rifiuta con un 422 («unknown item type "item_reference"») — successo davvero alle 13:06
  * del 23/8, turno morto. La storia riparte pulita: il contenuto resta, i riferimenti no.
+ * (Vedi provider-refs.ts per il perché delle parti immagine.)
  */
-function stripProviderRefs<T>(value: T): T {
-	if (Array.isArray(value)) return value.map(stripProviderRefs) as T;
-	if (value && typeof value === 'object') {
-		const out: Record<string, unknown> = {};
-		for (const [k, v] of Object.entries(value)) {
-			if (k === 'providerOptions' || k === 'providerMetadata') continue;
-			out[k] = stripProviderRefs(v);
-		}
-		return out as T;
-	}
-	return value;
-}
+import { stripProviderRefs, carryImagesToContinuation } from './provider-refs';
 
 /** L'ultima tool call del turno, su tutti gli step — decide come si chiude il run. */
 type StepLike = { toolCalls?: ReadonlyArray<{ toolName: string; input?: unknown }> };
@@ -229,6 +258,20 @@ function lastToolCall(steps: readonly StepLike[]): { toolName: string; input?: u
 		if (calls.length) return calls[calls.length - 1];
 	}
 	return null;
+}
+
+function nativeToolApproval(
+	specs: Array<{ name: string; consequential: boolean }>,
+	config?: ActionApprovalConfig
+): Record<string, 'not-applicable' | 'approved' | 'user-approval' | 'denied'> | undefined {
+	if (!config) return undefined;
+	return Object.fromEntries(
+		specs.map((spec) => {
+			const resolved = resolveActionApprovalDetail({ toolName: spec.name, rules: config.rules ?? [] });
+			if (resolved.source === 'always_allow') return [spec.name, 'approved'];
+			return [spec.name, resolved.decision === 'ask' || spec.consequential ? 'user-approval' : 'not-applicable'];
+		})
+	);
 }
 
 /**
@@ -250,16 +293,18 @@ function shrinkChunkForBroadcast(chunk: unknown): unknown {
  */
 function closeMessageFields(
 	content: Array<{ type: string; text?: string }>,
-	attachments: string[]
+	attachments: string[],
+	speaker?: string
 ): CloseMessage {
 	const text = content.filter((p) => p.type === 'text').map((p) => p.text ?? '').join('\n\n');
 	const reasoning = content.filter((p) => p.type === 'reasoning').map((p) => p.text ?? '').join('\n');
-	const hasToolCalls = content.some((p) => p.type === 'tool-call');
+	const hasToolCalls = content.some((p) => p.type === 'tool-call' || p.type === 'tool-approval-request');
 	return {
 		content: text,
 		reasoning: reasoning || undefined,
-		toolCalls: hasToolCalls ? content.filter((p) => p.type === 'tool-call' || p.type === 'text') : undefined,
-		attachments: attachments.length ? [...attachments] : undefined
+		toolCalls: hasToolCalls ? content.filter((p) => p.type === 'tool-call' || p.type === 'tool-approval-request' || p.type === 'text') : undefined,
+		attachments: attachments.length ? [...attachments] : undefined,
+		speaker
 	};
 }
 
@@ -271,7 +316,8 @@ function queryToolAdapter(deps: QueryToolDeps) {
 		const out = (await query.execute!(args as any, {
 			toolCallId: `query:${ctx.runId}`,
 			messages: [],
-			abortSignal: ctx.signal
+			abortSignal: ctx.signal,
+			context: undefined as never
 		})) as Record<string, unknown>;
 		return { content: [{ type: 'text', text: JSON.stringify(out) }], isError: 'error' in out };
 	};
@@ -329,16 +375,16 @@ function lastAssistantText(messages: ModelMessage[]): string {
 }
 
 /** Un run `waiting_input` per questo thread, se c'è — il turno corrente ne è la risposta. */
-async function currentWaitingRun(db: SupabaseClient, threadId: string): Promise<string | null> {
+async function currentWaitingRun(db: SupabaseClient, threadId: string): Promise<{ id: string; state: string } | null> {
 	const { data } = await db
 		.from('agent_kit_runs')
-		.select('id')
+		.select('id, state')
 		.eq('thread_id', threadId)
-		.eq('state', 'waiting_input')
+		.in('state', ['waiting_input', 'waiting_takeover'])
 		.order('created_at', { ascending: false })
 		.limit(1)
 		.maybeSingle();
-	return (data as { id: string } | null)?.id ?? null;
+	return (data as { id: string; state: string } | null) ?? null;
 }
 
 /** Fa girare UN turno sul sistema nuovo e restituisce la `Response` che il client già sa leggere. */
@@ -346,46 +392,87 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 	const { supabase, admin, brand, user, threadId, spec, messages, locale } = input;
 	const mode: ChatMode = isChatMode(input.mode) ? input.mode : 'agent';
 	const isDm = !!input.dm;
+	const owner = crypto.randomUUID();
+	const busyResponse = () =>
+		new Response(JSON.stringify({ error: 'busy', user_message_saved: true }), {
+			status: 409,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	const claimOrBusy = async (runId: string): Promise<{ run: RunRow; lease: RunLease } | Response> => {
+		const claimed = await claimRun(admin, runId, owner, { ttlMs: RUN_LEASE_TTL_MS });
+		return claimed ? { run: claimed.run, lease: { owner, fence: claimed.fence } } : busyResponse();
+	};
 
 	let run: RunRow;
-	const waitingId = await currentWaitingRun(admin, threadId);
-	if (waitingId) {
-		// DOPPIO RESUME: due dispositivi rispondono insieme a una `waiting_input`. Il primo vince
-		// il compare-and-swap di `resume()`; il secondo lo trova già spostato e riceverebbe il
-		// 500 grezzo di `run: stato cambiato sotto le mani` — un'azione legittima (ha solo perso
-		// la corsa), non un errore di sistema. Risposta pulita, stesso 409 ritentabile del busy
-		// qui sotto, con un messaggio che l'utente capisce.
-		try {
-			({ run } = await resume(admin, waitingId));
-		} catch (e) {
-			if (e instanceof Error && e.message.includes('stato cambiato sotto le mani')) {
-			// API payload, non chat: nessuna persona la legge in un fumetto. In inglese comunque,
-			// come ogni nota che il backend consegna fuori dal proprio turno.
-			return new Response(
-				JSON.stringify({ error: 'resume_conflict', message: 'Someone else already replied in this conversation.' }),
-				{ status: 409, headers: { 'Content-Type': 'application/json' } }
-			);
-			}
-			throw e;
-		}
+	let lease: RunLease;
+	if (input.resumeRunId) {
+		const claimed = await claimOrBusy(input.resumeRunId);
+		if (claimed instanceof Response) return claimed;
+		({ run, lease } = claimed);
 	} else {
-		// Un turno alla volta per thread: 409 (ritentabile) invece di un secondo run concorrente.
-		if (await liveRunningRun(admin, threadId)) {
-			// `user_message_saved`: questo busy arriva DOPO che il POST ha già persistito il
-			// messaggio dell'utente (chat/+server.ts salva prima di chiamare qui). Il client
-			// ripiega sull'enqueue, e senza questo flag il drain non riconosce la riga già a terra
-			// — confronta solo il TAIL della history, che intanto è la risposta del run vincente —
-			// e la salva una seconda volta.
-			return new Response(JSON.stringify({ error: 'busy', user_message_saved: true }), {
-				status: 409,
-				headers: { 'Content-Type': 'application/json' }
-			});
+		const waiting = await currentWaitingRun(admin, threadId);
+		if (waiting) {
+			if (waiting.state === 'waiting_takeover') {
+				const response = input.approvalResponse;
+				if (!response) {
+					return new Response(JSON.stringify({ error: 'approval_required' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+				const { data: approval } = await admin
+					.from('agent_kit_approval_requests')
+					.select('status, tool_call_id')
+					.eq('run_id', waiting.id)
+					.eq('harness_approval_id', response.approvalId)
+					.maybeSingle();
+				if (!approval || !['approved', 'denied'].includes(String(approval.status))) {
+					return new Response(JSON.stringify({ error: 'approval_not_decided' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+				if (response.toolCallId && response.toolCallId !== approval.tool_call_id) {
+					return new Response(JSON.stringify({ error: 'approval_tool_mismatch' }), {
+						status: 409,
+						headers: { 'Content-Type': 'application/json' }
+					});
+				}
+			}
+			// DOPPIO RESUME: due dispositivi rispondono insieme a una `waiting_input`. La presa È il
+			// resume — porta la riga a `running` col battito fresco e il fence successivo — quindi
+			// il secondo la trova già presa e perde. Perdere qui e trovare un turno già in corso
+			// sono la stessa cosa per chi chiama, e la coda li trattava già uguali: un codice solo.
+			const claimed = await claimOrBusy(waiting.id);
+			if (claimed instanceof Response) return claimed;
+			({ run, lease } = claimed);
+		} else {
+			// Un turno alla volta per thread: 409 (ritentabile) invece di un secondo run concorrente.
+			if (await liveRunningRun(admin, threadId)) {
+				// `user_message_saved`: questo busy arriva DOPO che il POST ha già persistito il
+				// messaggio dell'utente (chat/+server.ts salva prima di chiamare qui). Il client
+				// ripiega sull'enqueue, e senza questo flag il drain non riconosce la riga già a terra
+				// — confronta solo il TAIL della history, che intanto è la risposta del run vincente —
+				// e la salva una seconda volta.
+				return busyResponse();
+			}
+			run = await createRun(admin, { brandId: brand.id, threadId, agentId: spec.id, userId: user.id });
+			run = await transition(admin, run.id, 'queued', 'running', { heartbeat_at: new Date().toISOString() });
+			const claimed = await claimOrBusy(run.id);
+			if (claimed instanceof Response) return claimed;
+			({ run, lease } = claimed);
 		}
-		run = await createRun(admin, { brandId: brand.id, threadId, agentId: spec.id, userId: user.id });
-		run = await transition(admin, run.id, 'queued', 'running', { heartbeat_at: new Date().toISOString() });
 	}
 
-	const ctx: AdapterContext = { brandId: brand.id, userId: user.id, runId: run.id, locale, agentId: spec.id };
+	const ctx: AdapterContext = {
+		brandId: brand.id,
+		userId: user.id,
+		runId: run.id,
+		locale,
+		// La macchina è dell'AGENTE CHE GIRA: per un custom agent è il suo id, non quello del
+		// mestiere che indossa — due identità non si passano lo schermo a vicenda.
+		agentId: input.persona?.id ?? spec.id
+	};
 
 	// Il run è finito (bene o male): sveglia il drain, che finché `state='running'` saltava ogni
 	// follow-up accodato su questo thread. Sempre DOPO `finish`/`closeRun`, altrimenti vede il run
@@ -399,10 +486,18 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		if (turnHeartbeat) clearInterval(turnHeartbeat);
 		turnHeartbeat = null;
 	};
+	let brandSandbox: Awaited<ReturnType<typeof openBrandHarnessSession>> | null = null;
 
 	try {
-		const modelRef = resolveHarnessModelRef({ family: input.modelFamily, tier: input.tier });
+		const modelRef = resolveHarnessModelRef({
+			family: input.modelFamily,
+			model: input.modelId,
+			tier: input.tier
+		});
 		if (!modelRef) throw new Error('harness_model_missing: nessun modello configurato per il provider attivo');
+		console.log(
+			`[AGENT_KIT] run ${run.id} start — agente=${spec.id}, modello=${modelRef.label} (${modelRef.provider}), thread=${threadId}`
+		);
 
 		// La computer del brand: `shell` accende/ripristina la VM da solo (ensureComputer) e ogni
 		// uso riprogramma il sonno; il cron sweep la spegne dopo 10' di quiete col checkpoint su
@@ -500,6 +595,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 			queryTool: queryToolAdapter({ supabase, brandId: brand.id, userId: user.id, threadId }),
 			attach: async (a, c) => attachForChat(a, c, { supabase, admin, sandbox, brandId: brand.id, userId: user.id, collect: turnAttachments }),
 			graphicalBootstrap: graphicalBootstrapDeps,
+			// Adesso un post creato/schedulato in un turno abortito NON viene ricreato al resume: il
+			// ledger ha già la chiave e il gate congelare invece di rieseguire.
+			effects: createEffectsLedger(admin),
 			plugins
 		});
 		// LO STOP DELL'UTENTE arriva da un'ALTRA invocazione (`cancelKitRun`, chiamata dall'endpoint
@@ -608,18 +706,23 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		};
 		const beat = async () => {
 			lastBeat = Date.now();
+			const alive = await renewLease(admin, run.id, lease, RUN_LEASE_TTL_MS).catch(() => true);
+			if (!alive) {
+				stopTurnHeartbeat();
+				noteRunState(RUN_LEASE_LOST);
+				return;
+			}
 			// `select('*')` e non i nomi delle colonne: i deploy non eseguono le migration, e
 			// nominare `partial` (0218) o `partial_saved_msg_id` (0219) dove non sono applicate
 			// prende un 42703 che azzera la lettura — cioè spegne in silenzio anche il
 			// riconoscimento dello Stop, che passa da qui. Stessa ragione di `cancelKitRun`.
 			await admin
 				.from('agent_kit_runs')
-				.update({ heartbeat_at: new Date().toISOString() })
-				.eq('id', run.id)
 				.select('*')
+				.eq('id', run.id)
+				.maybeSingle()
 				.then(async ({ data }) => {
-					const row = (data as Array<Record<string, unknown>> | null)?.[0];
-					noteRunState(row?.state);
+					const row = data as Record<string, unknown> | null;
 					// Best-effort: il turno non si ferma perché un checkpoint è inciampato.
 					await checkpointPartial(
 						(row?.partial as ChatPartialSnapshot | null) ?? null,
@@ -681,10 +784,12 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 
 		// La memoria si INIETTA a ogni turno: la più recente prima, dentro 32 KB
 		// di byte, marcata «dato, non istruzione» (memory-context.ts). Si scrive con `remember`.
+		// Per un custom agent la chiave è `custom:<id>` — la STESSA grammatica del motore
+		// classico (`memoryAgentKey`), o il mestiere leggerebbe la memoria di un altro.
 		const memoryMd = await loadMemoryContext(
 			createPostgresMemoryStore(supabase),
 			brand.id,
-			spec.id,
+			input.persona?.memoryKey ?? spec.id,
 			{ brandId: brand.id, userId: user.id, runId: '', locale }
 		);
 		// La squadra nel prompt: `COMMON` in specs.ts non la nomina e non può (sta in un pacchetto che
@@ -699,6 +804,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		// l'intero prompt di brand (il modello salutava l'utente per nome).
 		let system =
 			(input.dm ? `${dmBrief(input.dm.meName, input.dm.otherName, locale)}\n\n` : '') +
+			(input.persona ? `${input.persona.systemBlock.trim()}\n\n` : '') +
 			buildSystemPrompt(spec, { memoryMd, fileIndex: filesIndexFor(spec.id) }) +
 			`\n\n${chatReplyLanguageBlock(locale)}` +
 			(peer ? `\n\n${teamBlock(peer)}` : '') +
@@ -719,7 +825,15 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		const tokenBudget = chatTokenBudget();
 		let settled = false;
 		const loopGuard = createChatLoopGuard();
-		const turnTools = toolsForMode([...BUILTIN_TOOLS, ...plugins.flatMap((p) => p.tools)], mode);
+		const turnTools = toolsForMode(
+			[
+				// Il desktop grafico è fuori dal prodotto: l'agente vede il web con `browse`, non
+				// pilotando uno schermo. Con AGENT_DESKTOP_ENABLED=1 tornano com'erano.
+				...(agentDesktopEnabled() ? BUILTIN_TOOLS : BUILTIN_TOOLS.filter((t) => t.name !== 'observe' && t.name !== 'act')),
+				...plugins.flatMap((p) => p.tools)
+			],
+			mode
+		);
 		// Le esclusioni del turno non presidiato valgono per entrambi i cataloghi: nel kit la sola
 		// voce che ricade è `ask_user` — una domanda senza nessuno che possa rispondere lascerebbe
 		// il run in waiting_input per sempre.
@@ -729,7 +843,11 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				)
 			: turnTools;
 		const toolNames = turnToolsFinal.map((t) => t.name);
-		const toolSet = buildTools(turnToolsFinal, applyTool, ctx);
+		const approvedToolCallIds = new Set<string>();
+		if (input.approvalResponse?.approved && input.approvalResponse.toolCallId) {
+			approvedToolCallIds.add(input.approvalResponse.toolCallId);
+		}
+		const toolSet = buildTools(turnToolsFinal, applyTool, ctx, input.approval, approvedToolCallIds);
 
 		// Il set che i worker di delega ricevono: gli STESSI oggetti tool dell'orchestratore, quindi
 		// ogni chiamata di un worker passa dall'applyTool qui sopra — battito, Stop e
@@ -737,7 +855,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		Object.assign(scopedTools, toolSet);
 		kitHubKeys.push(...toolNames.filter((n) => !(SUBAGENT_TOOL_KEYS as readonly string[]).includes(n)));
 
-		let savedResume: unknown = null;
+		let savedResume: unknown = run.harness_continue_state ?? null;
+		let turnMessages = messages;
 		// `process.env` e non il globale di Vite: questo file lo impacchetta anche il worker, che
 		// gira su Node puro dove quel globale non esiste — leggerne un campo era un TypeError che
 		// uccideva il turno prima di cominciare. Vedi `no-vite-globals.test.ts`.
@@ -748,12 +867,12 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				.select('harness_resume')
 				.eq('id', threadId)
 				.maybeSingle();
-			savedResume = (th as { harness_resume?: unknown } | null)?.harness_resume ?? null;
+			if (!savedResume) savedResume = (th as { harness_resume?: unknown } | null)?.harness_resume ?? null;
 		} catch {
 			savedResume = null;
 		}
 		}
-		const brandSandbox = savedResume ? null : await openBrandHarnessSession(brand.id, run.id, spec.id);
+		brandSandbox = savedResume ? null : await openBrandHarnessSession(brand.id, run.id, spec.id, threadId);
 		const startTurnOnce = (fresh: boolean) => {
 			const startedTurn = startHarnessTurn({
 			runId: run.id,
@@ -768,8 +887,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
                             .join('\n')
                             .slice(-8_000),
 				resumeFrom: savedResume ?? undefined,
-			messages: stripProviderRefs(messages),
-			tools: toolSet,
+			messages: stripProviderRefs(turnMessages),
+				tools: toolSet as never,
+			toolApproval: nativeToolApproval(turnToolsFinal, input.approval),
 			abortSignal: turnAbort.signal,
 			// Un DM è un consulto fra colleghi, non una produzione: il tetto tiene il suo costo lì,
 			// come DM_REPLY_STEP_CAP fa sul motore classico.
@@ -800,11 +920,20 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		 * con sessione fresca: il riuso e` un'ottimizzazione, la risposta dell'utente no.
 		 */
 		let turn: Awaited<ReturnType<typeof startTurnOnce>>;
+		// Lo stato PRIMA del tentativo: un avvio riuscito popola la cache, e il retry deve
+		// decidere se c'era qualcosa da riusare alla partenza, non se una sessione esiste adesso.
+		const hadReusableSession = hasLiveHarnessSession(threadId);
 		try {
 			turn = await startTurnOnce(false);
 		} catch (firstStartError) {
+			// Il retry è per la sessione RIUSATA che non parte. Su un thread NUOVO non c'è nulla
+			// di riusato: `startTurnOnce(false)` ha già creato una sessione fresca, e ritentare
+			// ne crea una seconda identica — due avvii a freddo, due minuti, e un log che accusa
+			// una «sessione riusata» mai esistita. Senza cache il retry non salva niente.
+			if (!hadReusableSession) throw firstStartError;
 			await dropLiveHarnessSession(threadId).catch(() => undefined);
 			try {
+				brandSandbox = await openBrandHarnessSession(brand.id, run.id, spec.id, threadId);
 				turn = await startTurnOnce(true);
 			} catch {
 				throw firstStartError;
@@ -832,7 +961,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					admin,
 					run.id,
 					{ kind: 'finish', reason: 'aborted' },
-					closeMessageFields([{ type: 'text', text: '_(turno chiuso: il modello non ha risposto in tempo)_' }], [])
+					closeMessageFields([{ type: 'text', text: '_(turno chiuso: il modello non ha risposto in tempo)_' }], []),
+					lease
 				).catch(() => finish(admin, run.id, 'aborted').catch(() => undefined));
 				kickQueue();
 			}, HARNESS_ABORT_FORCE_CLOSE_MS);
@@ -848,6 +978,76 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				settled = true;
 				if (stoppedByUser) {
 					kickQueue();
+					return;
+				}
+				const pendingApproval = findToolApproval(steps);
+				if (pendingApproval) {
+					const content = assistantContentFromSteps(steps);
+					const approvalParts = approvalMessageParts(pendingApproval);
+					const hasCall = content.some(
+						(part) => part.type === 'tool-call' && part.toolCallId === pendingApproval.toolCallId
+					);
+					if (!hasCall) content.push(approvalParts[0]);
+					content.push(approvalParts[1]);
+					const specForApproval = turnToolsFinal.find((candidate) => candidate.name === pendingApproval.toolName);
+					const plan = input.approval && specForApproval
+						? planActionGate({
+								resolved: resolveActionApprovalDetail({ toolName: specForApproval.name, rules: input.approval.rules ?? [] }),
+								consequential: specForApproval.consequential === true,
+								autoReviewEnabled: input.approval.autoReviewEnabled,
+								checkerConfigured: input.approval.checker != null
+							})
+						: 'ask';
+					if (plan === 'judge' && specForApproval && input.approval?.checker) {
+						const gate = await gateAction({
+							spec: specForApproval,
+							call: {
+								name: pendingApproval.toolName,
+								args: (pendingApproval.input ?? {}) as Record<string, unknown>,
+								id: pendingApproval.toolCallId
+							},
+							context: ctx,
+							config: input.approval
+						});
+						if (gate.decision === 'allow') {
+							const continuationState = await turn.detach();
+							approvedToolCallIds.add(pendingApproval.toolCallId);
+							savedResume = continuationState;
+							turnMessages = [
+								...messages,
+								{ role: 'assistant', content },
+								approvalContinuationMessage({ approvalId: pendingApproval.approvalId, approved: true })
+							];
+							settled = false;
+							turn = await startTurnOnce(true);
+							const resumedResult = turn.result;
+							await resumedResult.consumeStream({
+								onError: (e) => console.error(`[AGENT_KIT] run ${run.id} judge resume error`, e)
+							});
+							await handleFinish({ steps: await resumedResult.steps, text: await resumedResult.text });
+							return;
+						}
+						if (gate.reason) pendingApproval.reason = gate.reason;
+					}
+					const continuationState = await turn.detach();
+					const waited = await waitForApproval(admin, {
+						runId: run.id,
+						harnessApprovalId: pendingApproval.approvalId,
+						toolCallId: pendingApproval.toolCallId,
+						toolName: pendingApproval.toolName,
+						toolInput: pendingApproval.input,
+						reason: pendingApproval.reason,
+						continueState: continuationState,
+						message: closeMessageFields(content, turnAttachments, input.dm?.speaker)
+					});
+					if (!waited.closed) {
+						kickQueue();
+						return;
+					}
+					try {
+						await touchThread(supabase, threadId);
+						void broadcastToBrand(brand.id, { event: 'thread-changed', payload: { threadId } });
+					} catch {}
 					return;
 				}
 				const last = lastToolCall(steps);
@@ -930,7 +1130,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					isRepeatedReply(visibleText, lastAssistantText(messages));
 				if (repeatsPreviousReplyWithoutNewWork && laps < MAX_VERDICT_LAPS) {
 					console.log(`[AGENT_KIT] risposta ripetuta senza lavoro nuovo (run ${run.id}, giro ${laps + 1}) — rilancio correttivo`);
-					const { closed } = await closeRunSaving(admin, run.id, outcome, null);
+					const { closed } = await closeRunSaving(admin, run.id, outcome, null, lease);
 					if (!closed) {
 						console.log(`[AGENT_KIT] run ${run.id} sfrattato prima della chiusura: nessun rilancio`);
 						kickQueue();
@@ -946,7 +1146,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							...input,
 							messages: [
 								...messages,
-								{ role: 'user', content: repeatedReplyContinuation(locale) } as ModelMessage
+								carryImagesToContinuation(messages, repeatedReplyContinuation(locale)) as ModelMessage
 							],
 							verdictLaps: laps + 1
 						});
@@ -1025,7 +1225,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					admin,
 					run.id,
 					outcome,
-					content.length ? closeMessageFields(content, turnAttachments) : null
+					content.length ? closeMessageFields(content, turnAttachments) : null,
+					lease
 				);
 				if (!closed) {
 					console.log(`[AGENT_KIT] run ${run.id} sfrattato prima della chiusura: nessun messaggio salvato`);
@@ -1063,7 +1264,10 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					// aperte. La riga è già a terra — un inciampo qui non vale una seconda risposta.
 					try {
 						await touchThread(supabase, threadId);
-						void broadcastToBrand(brand.id, { event: 'thread-changed', payload: { threadId } });
+						void broadcastToBrand(brand.id, {
+							event: 'thread-changed',
+							payload: { threadId, hasAssistantReply: true }
+						});
 					} catch (e) {
 						console.warn(`[AGENT_KIT] run ${run.id} post-save best-effort failed`, e);
 					}
@@ -1123,7 +1327,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 								messages: [
 									...messages,
 									...turnMessages,
-									{ role: 'user', content: verdict.continuation } as ModelMessage
+									carryImagesToContinuation(messages, verdict.continuation) as ModelMessage
 								],
 								verdictLaps: laps + 1
 							});
@@ -1177,7 +1381,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				// La sessione se ne va col turno che l'ha rotta: senza, il messaggio dopo eredita un
 				// turno non chiuso e muore uguale, e il FE non mostra niente perche` il run e` gia`
 				// chiuso. Vedi `dropLiveHarnessSession`.
-				await dropLiveHarnessSession(threadId).catch(() => undefined);
+					await dropLiveHarnessSession(threadId).catch(() => undefined);
 				const why = error instanceof Error ? error.message : String(error);
 				// English unless this chat is actually Italian — missing/en-IN/es used to dump
 				// Italian into an English thread (amazon.in, 27/8/2026). Keep the Italian template
@@ -1191,7 +1395,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						admin,
 						run.id,
 						{ kind: 'finish', reason: 'aborted' },
-						closeMessageFields([{ type: 'text', text: turnErrorText }], [])
+						closeMessageFields([{ type: 'text', text: turnErrorText }], []),
+						lease
 					);
 				} catch {}
 				reportChatError(supabase, error, {
@@ -1200,63 +1405,72 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					userId: user.id,
 					threadId,
 					tier: String(input.tier ?? ''),
-					provider: modelRef.provider,
+					provider: modelRef.provider as Parameters<typeof logAiCall>[0]['provider'],
 					model: modelRef.label,
 					kind: 'agent_kit_stream',
 					detail: `run ${run.id} · agente ${spec.id}`
 				}).catch((e) => console.error('[AGENT_KIT] report fallito', e));
 				if (brandSandbox) {
-				// Nota al MODELLO, mai all'utente: inglese, tag <system-reminder> (la convenzione di fatto:
-				// Claude Code e simili), TRANSITORIA —
-				// vive solo nella request del turno di retry e non finisce mai né in chat né nel DB.
-				// Le alternative peggio:
-				// - `role: 'system'` a metà conversazione → Google la rifiuta
-				//   ("only supported at the beginning", convertToGoogleMessages);
-				// - appenderla al system del turno di retry → cambia il primo blocco del prompt e
-				//   invalida la cache dell'intero prefisso proprio sul giro che rilegge più storia.
-				// Una user-role transitoria e marcata paga solo i token della nota.
-				const corrective = `<system-reminder>This is an automated backend note, NOT from the user. Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.</system-reminder>`;
-				try {
-					const retryTurn = await startHarnessTurn({
-						runId: `${run.id}-retry`,
-						model: modelRef ?? undefined,
-						system,
-						messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
-						tools: toolSet,
-						stopWhen: [isStepCount(TURN_MAX_STEPS)],
-						sandboxSession: brandSandbox?.session,
-						sessionKey: threadId
-					});
-					await retryTurn.result.consumeStream({
-						onError: (e) => console.error(`[AGENT_KIT] run ${run.id} retry consume error`, e)
-					});
-					await handleFinish({ steps: await retryTurn.result.steps, text: await retryTurn.result.text });
-				} catch (retryError) {
-					console.error(`[AGENT_KIT] run ${run.id} retry failed`, retryError);
-					await finish(admin, run.id, 'aborted').catch(() => {});
+					try {
+						brandSandbox = await openBrandHarnessSession(brand.id, run.id, spec.id, threadId);
+					} catch {
+						brandSandbox = null;
+					}
+					// Nota al MODELLO, mai all'utente: inglese, tag <system-reminder> (la convenzione di fatto:
+					// Claude Code e simili), TRANSITORIA —
+					// vive solo nella request del turno di retry e non finisce mai né in chat né nel DB.
+					// Le alternative peggio:
+					// - `role: 'system'` a metà conversazione → Google la rifiuta
+					//   ("only supported at the beginning", convertToGoogleMessages);
+					// - appenderla al system del turno di retry → cambia il primo blocco del prompt e
+					//   invalida la cache dell'intero prefisso proprio sul giro che rilegge più storia.
+					// Una user-role transitoria e marcata paga solo i token della nota.
+					const corrective = `<system-reminder>This is an automated backend note, NOT from the user. Your previous attempt failed with this error: ${why.slice(0, 300)}. Tell the user in one sentence, in the language of their last real message, what went wrong and retry the original action.</system-reminder>`;
+					try {
+						const retryTurn = await startHarnessTurn({
+							runId: `${run.id}-retry`,
+							model: modelRef ?? undefined,
+							system,
+							messages: stripProviderRefs([...messages, { role: 'user', content: corrective } as ModelMessage]),
+							tools: toolSet as never,
+							stopWhen: [isStepCount(TURN_MAX_STEPS)],
+							sandboxSession: brandSandbox?.session,
+							sessionKey: threadId
+						});
+						await retryTurn.result.consumeStream({
+							onError: (e) => console.error(`[AGENT_KIT] run ${run.id} retry consume error`, e)
+						});
+						await handleFinish({ steps: await retryTurn.result.steps, text: await retryTurn.result.text });
+					} catch (retryError) {
+						console.error(`[AGENT_KIT] run ${run.id} retry failed`, retryError);
+						await finish(admin, run.id, 'aborted').catch(() => {});
+						await turn.destroy();
+					}
+				} else {
 					await turn.destroy();
 				}
-			} else {
-				await turn.destroy();
-			}
 			}
 			try {
+				const usage = extractSdkUsage(await result.totalUsage);
 				logAiCall({
 					label: 'chat',
-					provider: modelRef.provider,
+					provider: modelRef.provider as Parameters<typeof logAiCall>[0]['provider'],
 					model: modelRef.id,
 					ms: Date.now() - turnT0,
 					ok: true,
-					...extractSdkUsage(await result.totalUsage),
+					...usage,
 					brandId: brand.id,
 					userId: user.id,
 					threadId,
 					context: 'agent_kit'
 				});
+				console.log(
+					`[AGENT_KIT] run ${run.id} done — ${Math.round((Date.now() - turnT0) / 1000)}s, modello=${modelRef.label}, ${usage.inputTokens ?? '?'} in / ${usage.outputTokens ?? '?'} out`
+				);
 			} catch (e) {
 				console.error(`[AGENT_KIT] run ${run.id} usage log error`, e);
 			}
-		}).finally(() => {
+			}).finally(() => {
 			stopSilenceWatch();
 			stopTurnHeartbeat();
 		});
@@ -1301,11 +1515,39 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				const decoder = new TextDecoder();
 				let sseBuf = '';
 				let lastWrite = 0;
+				/** Lo stream è finito per cosa sua (finish/error), non per un client andato via. */
+				let sawTerminal = false;
 				/** Un evento di ciclo di vita di una tool call: si scrive comunque, vedi PARTIAL_FLUSH_EVENTS. */
 				let mustWrite = false;
 				/** La scrittura in volo: una alla volta, e MAI attesa dal ciclo di lettura (v1). */
 				let inFlight: Promise<void> | null = null;
-				const writePartial = async () => {
+				let progressTick = 0;
+				let lastProgressAt = 0;
+				// Il log durevole vive dietro una migration che i deploy di questo repo non applicano.
+				// Dove non c'e`, il primo append fallisce e la corsia si chiude: il turno continua sul
+				// mirror, e non si paga un errore ogni 250ms per tutto il turno.
+				let progressLane: 'open' | 'closed' = 'open';
+				const publishProgress = async (when: 'throttled' | 'final') => {
+					if (progressLane === 'closed') return;
+					const now = Date.now();
+					if (when === 'throttled' && now - lastProgressAt < PROGRESS_EVENT_MS) return;
+					lastProgressAt = now;
+					try {
+						const seq = await appendRunProgress(admin, threadId, ++progressTick, {
+							runId: run.id,
+							status: 'running',
+							text: state.text,
+							reasoning: state.reasoning || undefined,
+							tools: toolsForMirror(state.tools)
+						});
+						void broadcastToBrand(brand.id, { event: 'thread-seq', payload: { threadId, seq } });
+					} catch (e) {
+						progressLane = 'closed';
+						console.warn(`[AGENT_KIT] run ${run.id} progress event`, e);
+					}
+				};
+				const writePartial = async (when: 'throttled' | 'final' = 'throttled') => {
+					await publishProgress(when);
 					try {
 						// La scrittura resta per id (l'ULTIMA, post-chiusura, deve comunque lasciare
 						// il testo intero — vedi sotto).
@@ -1327,6 +1569,8 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 								heartbeat_at: new Date().toISOString()
 							})
 							.eq('id', run.id)
+							.eq('lease_owner', lease.owner)
+							.eq('lease_fence', lease.fence)
 					} catch {
 						// specchio best-effort: un inciampo qui non tocca il turno
 					}
@@ -1345,6 +1589,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							const at = { text: state.text.length, reasoning: state.reasoning.length };
 							applyChatStreamEvent(state, evt);
 							signOfLife();
+							if (String((evt as { type?: unknown }).type ?? '') === 'finish' || state.failed) sawTerminal = true;
 							if (PARTIAL_FLUSH_EVENTS.has(String((evt as { type?: unknown }).type ?? ''))) mustWrite = true;
 							const raw = JSON.stringify(evt);
 							void broadcastToBrand(brand.id, {
@@ -1370,7 +1615,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 						if (mustWrite) {
 							mustWrite = false;
 							lastWrite = now;
-							const prev = inFlight ?? Promise.resolve();
+							const prev: Promise<void> = inFlight ?? Promise.resolve();
 							inFlight = prev.then(writePartial).finally(() => {
 								inFlight = null;
 							});
@@ -1381,21 +1626,34 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 							});
 						}
 					}
+				// STREAM FINITO, CHIP ANCORA APERTA = BUGIA NEL PARTIAL (27/8: `delegate_task` in
+					// loading perenne — la sessione morta a metà tool non riemette il risultato e la
+					// chip sopravviveva nel mirror per tutto il turno). Se lo stream è terminato per
+					// cosa sua, ogni chip rimasta aperta non riceverà più nulla: diventa un errore
+					// dichiarato. Se invece il client è solo andato via, il mirror si ghiaccia com'era:
+					// le chip aperte possono essere legittime, il turno continua senza di noi.
+					if (sawTerminal && closeDanglingToolCalls(state)) mustWrite = true;
 					// L'ULTIMA scrittura è INCONDIZIONATA e ATTESA (stesso motivo di chat/+server.ts:
 					// un client che pollasse in questo preciso istante deve trovare il testo intero,
 					// non quello di un attimo fa) — un turno più corto della soglia non avrebbe MAI
 					// scritto `partial` altrimenti. Si aspetta prima quella in volo, o la finale
 					// potrebbe arrivare al database PRIMA di una più vecchia e farsi sovrascrivere.
 					await inFlight;
-					await writePartial();
+					await writePartial('final');
 				} catch (e) {
 					console.error(`[AGENT_KIT] run ${run.id} mirror error`, e);
 				} finally {
+					// Lo specchio è l'ULTIMO scrittore di `progress` per questo run: il driver che
+					// chiude pota in parallelo e una scrittura in volo gli passerebbe davanti,
+					// lasciando righe orfane che nessuno supera più. Potare qui, dopo la scrittura
+					// finale, è l'unico punto in cui non ne può più arrivare una.
+					await pruneRunProgress(admin, threadId, run.id);
 					void broadcastToBrand(brand.id, { event: 'kit_stream_done', payload: { runId: run.id, threadId } });
 				}
 			})();
 		}
 	} catch (err) {
+		await dropLiveHarnessSession(threadId).catch(() => undefined);
 		stopTurnHeartbeat();
 		await finish(admin, run.id, 'aborted').catch(() => {});
 		kickQueue();

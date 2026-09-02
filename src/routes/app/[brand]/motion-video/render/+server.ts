@@ -28,7 +28,6 @@ import { CreditsExhaustedError, gateCredits } from '$lib/server/credits';
 import { renderMotionMp4 } from '$lib/server/motion-video/render-tools';
 import { isSandboxConfigured } from '$lib/server/sandbox';
 import { updateMotionPreviewUrl } from '$lib/server/motion-video/persist';
-import { kickVideoReviewWork, queueVideoReview } from '$lib/server/video-review-store';
 import { MOTION_SOURCE_MAX_CHARS } from '$lib/motion-video/source';
 import { motionMp4Scale, parseMotionMp4Quality } from '$lib/motion-video/mp4-render';
 import { compileMotionSource } from '$lib/motion-video/compile';
@@ -119,9 +118,6 @@ export const POST: RequestHandler = async ({
 			attached = saved.ok;
 			if (!saved.ok) console.error('[motion mp4] preview attach failed', saved.error);
 		}
-
-		await queueVideoReview(supabase, { brandId: brand.id, url: out.url, standard: 'ads' });
-		await kickVideoReviewWork(new URL(request.url).origin, brand.id);
 
 		return json({ url: out.url, bytes: out.bytes, seconds: out.seconds, quality, attached });
 	} catch (e) {

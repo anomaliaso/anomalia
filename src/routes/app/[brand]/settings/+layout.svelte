@@ -125,10 +125,6 @@
         title: $_('app.settings.radar.title'),
         subtitle: $_('app.settings.radar.subtitle')
       },
-      [`${base}/media-reviewer`]: {
-        title: $_('app.settings.mediaReviewer.title'),
-        subtitle: $_('app.settings.mediaReviewer.subtitle')
-      },
       [`${base}/timezone`]: {
         title: $_('app.settings.postingTimezone')
       },

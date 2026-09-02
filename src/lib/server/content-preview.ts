@@ -2,6 +2,7 @@ export {
   CAROUSEL_PLATFORMS,
   carouselMaxPerBatch,
   carouselMaxSlides,
+  clampCarousels,
   enforceHookComponents,
   faceBrandMode,
   ladderContextFrom,
@@ -17,7 +18,7 @@ export type {
   WeeklyStrategy
 } from './content-preview/seed-model';
 
-export { detectSceneCollapse, seedToPost } from './content-preview/plan-pipeline';
+export { applySeedFix, detectSceneCollapse, seedToPost } from './content-preview/plan-pipeline';
 
 export {
   CAPTION_FAILURE_MODES,
@@ -27,7 +28,8 @@ export {
   houseVoiceFor,
   ownerCaptionEditPairs,
   ownerEditPairsBlock,
-  postQcPayload
+  postQcPayload,
+  sealOnImageText
 } from './content-preview/caption-quality';
 
 export {

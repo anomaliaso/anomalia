@@ -74,7 +74,7 @@ export function createTeamActivityTools(ctx: {
 		if (threadIds.length) {
 			const msgs = await supabase
 				.from('chat_messages')
-				.select('thread_id, role, speaker, content, created_at')
+				.select('thread_id, role, speaker:name, content, created_at')
 				.in('thread_id', threadIds)
 				.order('created_at', { ascending: false })
 				.limit(threadIds.length * 5);

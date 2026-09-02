@@ -1,5 +1,5 @@
 import type { GoogleGenAI } from '@google/genai';
-import { type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
+import { STORY_FAILURE_MODES, normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { logAiCall, extractGeminiUsage } from '$lib/server/ai-log';
@@ -262,7 +262,9 @@ Straight talking-head UGC only — no surreal gimmicks. EXPRESSIVE face (pain = 
       : `VIDEO CONSTRAINT: this brand has no video budget left this month, so do NOT use the "video" format — EXCEPT YouTube, which is video-only (Shorts vs long-form is auto-detected from duration + 9:16 vs 16:9; never a separate platform). Every YouTube seed MUST still be format "video". Every other seed must be single_image, carousel, text_post or link_post — never a reel, short, video or story.`;
   const carouselLine =
     maxCarousels > 0
-      ? `CAROUSEL CONSTRAINT: AT MOST ${maxCarousels} of the ${count} seeds may use the "carousel" format, ONLY on Instagram, Facebook or LinkedIn, with a slide_count of 3-${carouselMaxSlides()}. Use a carousel ONLY when the angle genuinely sustains that many DISTINCT slides (a list, a step-by-step process, a comparison, a story arc) — never to pad a single visual idea across slides.`
+      ? `CAROUSEL CONSTRAINT: AT MOST ${maxCarousels} of the ${count} seeds may use the "carousel" format, ONLY on Instagram, Facebook or LinkedIn, with a slide_count of 3-${carouselMaxSlides()}. Use a carousel ONLY when the angle genuinely sustains that many DISTINCT slides (a list, a step-by-step process, a comparison, a story arc) — never to pad a single visual idea across slides.
+CAROUSEL BEATS (hard): every carousel seed MUST arrive with "beats" filled — one concrete beat per slide, in order, exactly slide_count of them. A beat is what THAT slide says or shows in one sentence (a moment, a turn, a line someone says, a step), never a topic label like "introduzione" or "il problema". Read together they must form a real arc: a situation, something that changes, a landing that earns the last slide. A carousel that arrives without beats is a topic, not a story, and the producer will improvise ${carouselMaxSlides()} unrelated images from one line of angle.
+${STORY_FAILURE_MODES}`
       : `CAROUSEL CONSTRAINT: do NOT use the "carousel" format in this batch.`;
 
   // I piani APPROVATI dall'utente e/o il brief di ricerca: autoritativi su DOVE mirare — il batch
@@ -281,7 +283,7 @@ Straight talking-head UGC only — no surreal gimmicks. EXPRESSIVE face (pain = 
     ? ((await Promise.all(competitorThumbUrls.slice(0, MAX_COMPETITOR_MOOD_IMAGES).map(fetchImagePart))).filter(Boolean) as ImagePart[])
     : [];
   const competitorBlock = competitorParts.length
-    ? `\nCOMPETITOR VISUAL FIELD (the ${competitorParts.length} attached image(s) are top-performing posts from this brand's COMPETITORS — an ANTI-moodboard): read the visual clichés this field repeats (subjects, compositions, backdrops, styling, on-image text) and make every seed's SUBJECT/SETTING deliberately DIFFERENT from them — claim the visual white space. NEVER imitate or echo these images' style, layouts or ideas.\n`
+    ? `\nCOMPETITOR VISUAL FIELD (the ${competitorParts.length} attached image(s) are top-performing posts from this brand's COMPETITORS — an ANTI-moodboard): read the visual clichés this field repeats (subjects, compositions, backdrops, styling, on-image text) and make every seed's SUBJECT/SETTING deliberately DIFFERENT from them — claim the visual white space. NEVER reuse their subjects, ideas or on-image copy. This is about WHAT a post shows, never about how well it is made: differentiating never licenses executing below this field — composition, type hierarchy, light, colour and finish must match or beat it.\n`
     : '';
 
   const marketBlock = marketBrief.trim() ? `\n${marketBrief.trim()}\n` : '';
@@ -311,7 +313,8 @@ Produce:
 2) RATIONALE — why this theme now, grounded in the brand's voice, what has performed, and the market strategy above. Reference concrete patterns, not generic marketing advice.
 3) DO/DON'T — 2-4 sharp, brand-specific guardrails for the copywriter.
 4) SEEDS — exactly ${count} posts. SPREAD them across the allowed platforms, across the CONTENT PILLARS above, and across DIFFERENT offerings and angles: no two seeds may be the same idea. PRODUCT VARIETY (important): when the offerings span multiple categories (see the "category:" hint on each), the batch must feature DIFFERENT categories — do NOT make every post about the same product type. The theme is a narrative lens, not a category filter: you can tell a "sensory / sound / texture" story about a monitor (reflections, sharpness), a desk (wood grain, stability) or a chair just as well as a keyboard. A batch where every post is the same kind of object is a failure even if each post is on-theme. For each seed choose platform, the best native format, media ("video" for a reel, "image" for a still, "text" only for X/Threads), day, time, the EXACT offering name from the list (or "" if the post isn't about a specific offering), a one-line ANGLE describing what THAT post says or shows, and concrete visual directives — SUBJECT (main focus), SETTING (location/environment) and PROPS (supporting styling) — so the image is grounded, not generic. When a MEDIA LIBRARY asset fits, also set media_id + media_mode (see MEDIA LIBRARY FIRST). YOUTUBE: video-only — every YouTube seed MUST be format "video" (we shoot short vertical UGC; YouTube auto-classifies ≤3 min + 9:16 as a Short — do not invent a separate Shorts platform). SCENE VARIETY (important): the brand's visual style fixes the MOOD and palette, but every seed must have a DISTINCT setting, camera distance and composition — do NOT reuse the same backdrop (e.g. "dark textured stone/asphalt") or the same extreme macro crop for every post. Vary it deliberately: a real desk setup in use, a bright minimal studio surface, a lifestyle context, a wide hero shot vs a close detail. Large products (monitors, desks, chairs) must be shown WHOLE in a believable environment, never as an isolated macro fragment. Three posts that share one identical background and framing are a failure.
-5) CROSS-POSTING — for each seed, fill "cross_platforms" with the OTHER allowed platforms where that exact post (same visual, same caption) works natively, so total distribution grows without growing the batch. Natural pairs: Instagram ↔ Facebook, X ↔ Threads. Never pair clashing registers (long-form LinkedIn never cross-posts to X). Single-platform posts get an empty array.
+5) ART DIRECTION — leave "art_direction" empty on a seed that belongs in the brand's default visual style. Fill it when THIS post needs a different MEDIUM to work: a first-person story that a stock-looking photo would flatten, an idea that only lands drawn, printed or typeset. When the seed belongs to a rubric that declares an art direction, copy that rubric's art direction VERBATIM — an episode is recognisable because it looks like its series. Name the medium, the page grammar (panels, gutters, lettering) and the palette; never an aspect ratio.
+6) CROSS-POSTING — for each seed, fill "cross_platforms" with the OTHER allowed platforms where that exact post (same visual, same caption) works natively, so total distribution grows without growing the batch. Natural pairs: Instagram ↔ Facebook, X ↔ Threads. Never pair clashing registers (long-form LinkedIn never cross-posts to X). Single-platform posts get an empty array.
 Return JSON.`;
 
   // Il campo rubrica entra nello schema SOLO se esistono rubriche approvate.
@@ -334,7 +337,11 @@ Return JSON.`;
       platforms: [primary, ...new Set(cross)].filter(Boolean),
       pillar: String(s?.pillar ?? ''),
       format: normalizeContentFormat(s?.format),
+      week: Number.isFinite(Number(s?.week)) ? Math.max(0, Math.floor(Number(s.week))) : undefined,
       slide_count: Number(s?.slide_count) || undefined,
+      beats: normalizeBeats(s?.beats),
+      art_direction: String(s?.art_direction ?? '').trim() || undefined,
+      sourced_from: String(s?.sourced_from ?? '').trim() || undefined,
       ...(rubrics.length ? { rubric: String(s?.rubric ?? '') } : {}),
       // Derivato dal FORMAT e non preso dal modello: il renderer segue il format, quindi un
       // disaccordo fra i due consegna uno still a un seed che chiedeva un reel.
@@ -415,7 +422,7 @@ Return JSON.`;
   };
 
   // Pass 1.5: un secondo modello riscrive in loco i seed deboli. Best-effort.
-  const reviewed = await reviewSeeds(ai, profile, strategy, plats);
+  const reviewed = await reviewSeeds(ai, profile, strategy, plats, rubrics);
   // Pass 1.6 — panel sui copioni UGC PRIMA di spendere un frame: il renderer rende bellissimi
   // anche i copioni deboli, ed è esattamente la trappola. Best-effort.
   const { reviewUgcScripts } = await import('$lib/server/ugc-script-review');
@@ -450,9 +457,23 @@ const SEED_REVIEW_SCHEMA = {
           media: { type: 'string' as const, enum: ['image', 'text', 'keep'] as const, description: '"image" or "text" to override, "keep" to leave unchanged.' },
           format: { type: 'string' as const, enum: ['single_image', 'carousel', 'keep'] as const, description: '"single_image" to demote a carousel whose angle cannot sustain distinct slides (or vice versa, "carousel" only if the angle clearly is a list/process/comparison); "keep" to leave unchanged.' },
           angle: { type: 'string' as const, description: 'Rewritten one-line angle, or "" to keep.' },
-          subject: { type: 'string' as const, description: 'Rewritten visual subject, or "" to keep.' }
+          subject: { type: 'string' as const, description: 'Rewritten visual subject, or "" to keep.' },
+          beats: {
+            type: 'array' as const,
+            items: {
+              type: 'object' as const,
+              properties: {
+                shows: { type: 'string' as const, description: 'What is seen in that panel, one concrete sentence.' },
+                thinks: { type: 'string' as const, description: 'The inner line, first person, six words or fewer. Empty on a guide panel that has no protagonist.' },
+                says: { type: 'string' as const, description: 'Spoken words with WHO says them, or "" when nobody speaks.' }
+              },
+              required: ['shows', 'thinks', 'says']
+            },
+            description:
+              'ONLY to repair a CAROUSEL that arrived without its story: write one beat per slide, in order, exactly slide_count of them. Prefer this over demoting — a series whose format is a carousel must stay one. Empty array for every other fix.'
+          }
         },
-        required: ['index', 'reason', 'product', 'media', 'format', 'angle', 'subject']
+        required: ['index', 'reason', 'product', 'media', 'format', 'angle', 'subject', 'beats']
       }
     }
   },
@@ -463,11 +484,36 @@ const SEED_REVIEW_SCHEMA = {
 // lista People vera) e col batch nel suo insieme, e riscrive solo le righe deboli: prodotto visivo
 // lasciato text-only, angolo che promette ciò che il prodotto non fa, batch collassato su una
 // categoria. Non lancia mai — al fallimento restano i seed sanificati.
+// Un fix del pass 1.5 applicato al seed. Puro ed esportato perché qui si è persa un'invariante che
+// altrove è legge: il formato della RUBRICA è autoritativo, e il revisore lo scavalcava in silenzio
+// declassando a immagine singola l'unico episodio narrativo del batch. resolveSeedWithRubrics
+// ristabilisce rubrica + capacità di piattaforma, e logga la degradazione quando è fisica.
+export function applySeedFix<T extends PostSeed>(
+  seed: T,
+  fix: AnyRec,
+  validProducts: Set<string>,
+  rubrics: Rubric[]
+): T {
+  const newProduct = String(fix?.product ?? '').trim();
+  if (newProduct && validProducts.has(newProduct.toLowerCase())) seed.product = newProduct;
+  else if (newProduct) seed.product = '';
+  if (fix?.media === 'image' || fix?.media === 'text' || fix?.media === 'link') seed.media = fix.media;
+  if (fix?.format === 'single_image' || fix?.format === 'carousel') seed.format = fix.format;
+  if (String(fix?.angle ?? '').trim()) seed.angle = String(fix.angle).trim();
+  if (String(fix?.subject ?? '').trim()) seed.subject = String(fix.subject).trim();
+  // Un carosello senza storia si RIPARA scrivendola, non declassando: declassare era il modo in cui
+  // l'unica rubrica narrativa del batch spariva ogni settimana.
+  const written = normalizeBeats(fix?.beats);
+  if (written) seed.beats = written;
+  return resolveSeedWithRubrics(seed, rubrics) as T;
+}
+
 async function reviewSeeds(
   ai: GoogleGenAI,
   profile: BrandProfile,
   strategy: WeeklyStrategy,
-  plats: string[]
+  plats: string[],
+  rubrics: Rubric[]
 ): Promise<WeeklyStrategy> {
   try {
     if (!strategy.seeds.length) return strategy;
@@ -496,7 +542,7 @@ async function reviewSeeds(
         : '';
 
     const seedList = strategy.seeds
-      .map((s, i) => `${i}. platform:${s.platform} format:${s.format}${s.format === 'carousel' ? `(${s.slide_count ?? 5} slides)` : ''} media:${s.media} product:"${s.product || ''}" person:"${s.person || ''}" angle:"${s.angle}"`)
+      .map((s, i) => `${i}. platform:${s.platform} format:${s.format}${s.format === 'carousel' ? `(${s.slide_count ?? 5} slides)` : ''} media:${s.media} product:"${s.product || ''}" person:"${s.person || ''}" angle:"${s.angle}"${(s.beats ?? []).length ? `\n   story: ${(s.beats ?? []).map((b) => b.shows).join(' → ')}` : ''}`)
       .join('\n');
 
     const prompt = `You are a strict senior creative director reviewing the post plan a junior strategist proposed for this brand. Audit each seed against the REAL brand facts below and list ONLY the seeds that need fixing.
@@ -519,7 +565,8 @@ Flag and fix a seed when:
 - Its ANGLE promises something the product can't deliver (e.g. a "thock"/sound/typing-feel angle on a MONITOR, DESK or CHAIR) — rewrite the angle to fit what that product actually is.
 - It names a PERSON not in the People list — the person should already be blank; if the angle leans on that person, rewrite it to be product/lifestyle instead.
 - The batch is monotonous (multiple seeds on the same product category) when other categories are available — rewrite one seed's product/angle to a different category.
-- It is a CAROUSEL whose angle cannot genuinely sustain that many DISTINCT slides (no list, process, comparison or story arc — just one visual idea padded out) — set format "single_image". A carousel must promise a sequence, not stretch a single shot.
+- It is a CAROUSEL whose angle cannot genuinely sustain that many DISTINCT slides (no list, process, comparison or story arc — just one visual idea padded out) — set format "single_image". A carousel must promise a sequence, not stretch a single shot. A seed that shows a "story:" line already HAS its sequence, one beat per slide: judge those beats, and never demote it for lacking a list. And a carousel with NO "story:" line is repaired by WRITING one — fill "beats", one per slide — not by demoting it; demote only when the angle genuinely has no sequence in it at all.
+- A "story:" seed you cannot FOLLOW. Read its beats as someone who knows nothing about this brand or this subject: by the last panel you must be able to say what happened, to whom, and why it mattered — from the panels alone, with the caption covered. If you have to already know the topic to understand it, the story is not written yet: rewrite the beats so the situation explains itself as it goes. The commonest way this fails is a line of dialogue that only makes sense to someone inside it — a rule quoted, a form named, an objection raised — with nothing in the panel showing what it means for the person in front of it.
 Leave good seeds out of "fixes". Return JSON.`;
 
     const parsed: AnyRec = await structured(ai, prompt, SEED_REVIEW_SCHEMA, undefined, { label: 'reviewSeeds' });
@@ -531,15 +578,7 @@ Leave good seeds out of "fixes". Return JSON.`;
       const i = Number(fix?.index);
       const seed = strategy.seeds[i];
       if (!seed) continue;
-      const newProduct = String(fix?.product ?? '').trim();
-      if (newProduct && validProducts.has(newProduct.toLowerCase())) seed.product = newProduct;
-      if (fix?.media === 'image' || fix?.media === 'text' || fix?.media === 'link') seed.media = fix.media;
-      if (fix?.format === 'single_image' || fix?.format === 'carousel') seed.format = fix.format;
-      if (String(fix?.angle ?? '').trim()) seed.angle = String(fix.angle).trim();
-      if (String(fix?.subject ?? '').trim()) seed.subject = String(fix.subject).trim();
-      // Ripristina ogni invariante che un fix può aver rotto; una promozione a carosello conta
-      // comunque contro il tetto del batch qui sotto.
-      clampMediaCapabilities(seed);
+      applySeedFix(seed, fix, validProducts, rubrics);
       console.warn(`[reviewSeeds] fixed seed ${i}: ${String(fix?.reason ?? '')}`);
     }
     return strategy;

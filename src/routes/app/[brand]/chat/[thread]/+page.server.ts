@@ -1,5 +1,8 @@
 import { error, fail } from '@sveltejs/kit';
-import { getThread, loadHistoryForUI } from '$lib/server/chat/persistence';
+import { chatModelChoices } from '$lib/server/chat-models';
+import { getThread, loadThreadUiHistory } from '$lib/server/chat/persistence';
+import { loadLiveRun } from '$lib/server/chat/live-run';
+import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { listThreadArtifacts } from '$lib/server/chat/artifacts';
 import { chatJobFreshSince, reapStaleChatJobs } from '$lib/server/chat/job-cancel';
 import { loadLastReads } from '$lib/server/chat/unread';
@@ -158,9 +161,16 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
   // Close out dead rows before asking what is in flight, so a thread unblocks itself on open.
   await reapStaleChatJobs(supabase, { userId: user.id, threadId: params.thread, limit: 10 });
 
-  const [thread, messages, artifacts, activeJobResult, failedJobResult, pendingToolsResult, sessionMemoryResult, lastReads] = await Promise.all([
+  const [thread, threadHistory, liveRun, artifacts, activeJobResult, failedJobResult, pendingToolsResult, approvalRowsResult, sessionMemoryResult, lastReads] = await Promise.all([
     getThread(supabase, params.thread, brand.id, user.id),
-    loadHistoryForUI(supabase, brand.id, user.id, params.thread),
+    loadThreadUiHistory(supabase, brand.id, user.id, params.thread),
+    // Il run vivo arriva col primo render: seminato solo dal client, la bolla del lavoro in
+    // corso non esisteva finché il poll non rispondeva, e il testo che il log aveva già non
+    // aveva dove essere disegnato.
+    loadLiveRun(supabase, params.thread).catch((e) => {
+      console.error('[page] loadLiveRun', e);
+      return null;
+    }),
     // Stessa consegna di GET /chat?thread=: i fotogrammi di motion_stills / render_stills
     // vivono in chat_artifacts, non nel testo del messaggio. Senza questa load la pagina
     // del thread non ha niente da disegnare e l'utente vede la chip a vuoto.
@@ -204,6 +214,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
       .order('created_at', { ascending: false })
       .limit(10),
     supabase
+      .from('agent_kit_approval_requests')
+      .select('id, harness_approval_id, status')
+      .eq('thread_id', params.thread),
+    supabase
       .from('brand_memory')
       .select('id, key, value, category')
       .eq('brand_id', brand.id)
@@ -219,13 +233,29 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
   ]);
   if (!thread) throw error(404, 'Thread not found');
 
+  const approvalStatuses = Object.fromEntries(
+    ((approvalRowsResult.data ?? []) as Array<{ id: string; harness_approval_id?: string | null; status: string }>).flatMap((row) => [
+      [row.id, row.status],
+      ...(row.harness_approval_id ? [[row.harness_approval_id, row.status]] : [])
+    ])
+  );
+
   // Dopo il 404: il pannello dipende da agent/custom_agent_id del thread risolto.
   const agentPanel = await loadAgentPanel(supabase, brand, thread);
 
   return {
     thread,
+    // Il menu dei modelli lo serve anche il layout, ma la pagina lo DICHIARA: il guardiano di
+    // shell.test.ts controlla che ogni `data.<campo>` letto qui dentro esista nel payload, e un
+    // campo che arriva solo dal layout è un campo che sparisce senza che nessun test se ne accorga.
+    chatModels: await chatModelChoices().catch(() => []),
     agentPanel,
-    messages,
+    agentDesktopEnabled: agentDesktopEnabled(),
+    messages: threadHistory.messages,
+    liveProgress: threadHistory.liveProgress,
+    eventCursor: threadHistory.eventCursor,
+    liveRun,
+    approvalStatuses,
     artifacts,
     brandSlug: brand.slug,
     brandId: brand.id,

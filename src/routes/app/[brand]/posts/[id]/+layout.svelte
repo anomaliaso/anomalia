@@ -1,6 +1,8 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { _ } from 'svelte-i18n';
+  import { backHref } from '$lib/page-modal-navigation';
+  import { pageModalOrigin } from '$lib/stores/page-modal';
 
   let { data, children } = $props();
 
@@ -8,6 +10,8 @@
   const post = $derived(data.post);
   const base = $derived(`/app/${brand.slug}/posts/${post.id}`);
   const path = $derived($page.url.pathname.replace(/\/$/, ''));
+  const calendarHref = $derived(`/app/${brand.slug}/calendar`);
+  const returnHref = $derived(backHref($pageModalOrigin, calendarHref));
 
   const nav = $derived([
     { href: `${base}/preview`, key: 'preview', label: $_('app.post.nav.preview') },
@@ -73,7 +77,7 @@
 <div class="post-page">
   <header class="chrome">
     <div class="topbar">
-      <a class="back" href={`/app/${brand.slug}/calendar`} aria-label={$_('app.post.backCalendar')}>
+      <a class="back" href={returnHref} aria-label={$_('app.post.backCalendar')}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M15 18l-6-6 6-6" />
         </svg>

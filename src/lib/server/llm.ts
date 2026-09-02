@@ -7,7 +7,9 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { embedMany, generateObject, generateText, jsonSchema } from 'ai';
 import { env } from '$env/dynamic/private';
-import { extractSdkUsage, logAiCall } from '$lib/server/ai-log';
+import { extractSdkUsage, logAiCall, noteLlmCost } from '$lib/server/ai-log';
+import { costFromJson, costFromStreamText, withUsageAccounting } from '$lib/server/llm-usage-cost';
+import { gatewayModel } from '$lib/server/openrouter-models';
 
 export const LLM_UNCONFIGURED = 'llm_unconfigured';
 export const LLM_VIDEO_UNCONFIGURED = 'llm_video_unconfigured';
@@ -68,17 +70,50 @@ export function llmModels(): string[] {
 	return def ? [def] : [];
 }
 
-/** Fast/auto = primo della lista (o default). Pro = secondo se c’è. Un id OpenRouter passa così. */
+/**
+ * L'id che va sul filo per questa scelta del picker.
+ *
+ * Un id che il gateway serve davvero passa intatto: è il modello che l'utente ha scelto dal
+ * catalogo, e cadere sul default sarebbe scrivere un nome nel menu e chiamarne un altro. Gli id
+ * ignoti al listino tornano al default invece di diventare una chiamata persa.
+ *
+ * Fast/auto = primo della lista (o default). Pro = secondo se c'è.
+ */
 export function llmModelForPicker(choice: string | null | undefined): string {
 	const models = llmModels();
 	const id = typeof choice === 'string' ? choice.trim() : '';
-	if (id && models.includes(id)) return id;
+	if (id && (models.includes(id) || gatewayModel(id)?.usable)) return id;
 	if ((id === 'pro' || id === 'deepseek-pro' || id === 'gpt-sol') && models[1]) return models[1];
 	return llmDefaultModel();
 }
 
 let cached: ReturnType<typeof createOpenAI> | null = null;
 let cachedSig = '';
+
+/**
+ * Chiede il conto al gateway e lo mette nella cassetta dello scope, senza rallentare la risposta.
+ *
+ * `res.clone()` e non `res.text()`: l'originale continua a scorrere verso l'utente alla sua
+ * velocità mentre la copia viene letta a parte. Su un turno in streaming il costo arriva
+ * nell'ultimo chunk, quindi si conosce quando l'utente ha già finito di leggere — che è esattamente
+ * quando `logAiCall` scrive la riga.
+ */
+const billedFetch: typeof fetch = async (input, init) => {
+	const patched = typeof init?.body === 'string' ? withUsageAccounting(init.body, llmBaseUrl()) : null;
+	const res = await fetch(input, patched ? { ...init, body: patched } : init);
+	if (!patched) return res;
+	const copy = res.clone();
+	void (async () => {
+		try {
+			const text = await copy.text();
+			const cost = text.trimStart().startsWith('{') ? costFromJson(JSON.parse(text)) : costFromStreamText(text);
+			if (cost != null) noteLlmCost(cost);
+		} catch {
+			// Nessun costo lasciato dal gateway: decidono le RATES, come prima di questa cassetta.
+		}
+	})();
+	return res;
+};
 
 export function llmClient(): ReturnType<typeof createOpenAI> {
 	const key = llmApiKey();
@@ -88,7 +123,8 @@ export function llmClient(): ReturnType<typeof createOpenAI> {
 	cached = createOpenAI({
 		baseURL: llmBaseUrl(),
 		apiKey: key,
-		name: 'llm'
+		name: 'llm',
+		fetch: billedFetch
 	});
 	cachedSig = sig;
 	return cached;
@@ -136,6 +172,51 @@ function userContent(
 }
 
 /** JSON vincolato sul gateway. Sostituisce structuredGemini / responseSchema Google. */
+/**
+ * Quanto ragiona il modello, DICHIARATO sempre.
+ *
+ * Il campo non veniva mandato mai, e il default non impostato del provider è patologico. Misurato
+ * l'1/09/2026 su `z-ai/glm-5.3-flash`, stesso prompt e stesso schema:
+ *
+ *   campo assente (quello che l'app faceva)   12.134 token   1 elemento su 3 richiesti
+ *   effort: low / medium / high                123-214 token   3 su 3
+ *
+ * Quello che conta è la colonna di destra: senza istruzioni il modello spende dodicimila token di
+ * ragionamento e restituisce comunque la cosa sbagliata. È CORRETTEZZA, non velocità — i tempi in
+ * quelle prove oscillavano troppo (glm fra 68s e 113s, gemini fra 4s e 27s) per dire altro, e su
+ * OpenRouter la stessa richiesta può finire su provider diversi. Un effort QUALUNQUE, anche 'high',
+ * riporta la risposta a essere giusta, ed è la ragione per cui questa costante non ha un valore
+ * "non impostato".
+ *
+ * Su questo modello il reasoning non si può nemmeno spegnere: `{enabled:false}` risponde 400,
+ * «Reasoning is mandatory for this endpoint».
+ */
+export const LLM_REASONING_EFFORT = (() => {
+  const raw = env.LLM_REASONING_EFFORT?.trim().toLowerCase();
+  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'high';
+})();
+
+/** Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT. */
+const reasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+
+/**
+ * Quanto si aspetta una risposta dal centralino prima di considerarla persa.
+ *
+ * Non c'era: una chiamata appesa non tornava mai, e la pagina che l'aspettava nemmeno.
+ *
+ * IL NUMERO È GENEROSO PERCHÉ L'OUTPUT STRUTTURATO È LENTO, NON ROTTO. Misurato l'1/09/2026 sul
+ * percorso vero (llmStructured → generateObject), stesso schema e stesso prompt:
+ *
+ *   z-ai/glm-5.3-flash        107s      (il default configurato)
+ *   google/gemini-3.7-flash    15s
+ *
+ * Sette volte più lento, su uno schema PICCOLO. Quelli veri del planner — seed con battute,
+ * venti campi — sono molto più grandi, quindi la scadenza deve stare larga o trasforma la
+ * lentezza in un guasto: è l'errore che ho già fatto una volta leggendo una chiamata lunga come
+ * un modello rotto. Si abbassa con LLM_TIMEOUT_MS quando si sa cosa si sta facendo.
+ */
+export const LLM_TIMEOUT_MS = Number(env.LLM_TIMEOUT_MS) > 0 ? Number(env.LLM_TIMEOUT_MS) : 900_000;
+
 export async function llmStructured<T>(opts: {
 	prompt: string;
 	schema: Record<string, unknown>;
@@ -155,6 +236,8 @@ export async function llmStructured<T>(opts: {
 			schema: jsonSchema(opts.schema as never),
 			system: opts.system,
 			temperature: opts.temperature,
+			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+			providerOptions: { openai: reasoningOptions() },
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }]
 		});
 		logAiCall({
@@ -199,8 +282,9 @@ export async function llmText(opts: {
 		const result = await generateText({
 			model: llmLanguageModel(modelId),
 			system: opts.system,
+			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
-			...(extra ? { providerOptions: { openai: extra } } : {})
+			providerOptions: { openai: { ...reasoningOptions(), ...(extra ?? {}) } }
 		});
 		const citations: Array<{ uri: string; title: string }> = [];
 		const seen = new Set<string>();

@@ -14,7 +14,7 @@ TYPE
 - If no brand font is listed, use a minimal clean sans-serif (${MOTION_FALLBACK_SANS}) for every headline, UI label, and CTA. Never invent a serif, script, or decorative family.
 
 STORYLINE (a kinetic ad is a story, not a slide deck)
-- Beats form an arc: hook → tension (the problem, the before) → demonstration (the product doing the thing) → proof (a number, a result, a name) → resolution (the CTA). Not five statements in a row.
+- Beats form an arc, and the arc is JOBS, not a fixed count: hook, tension (the problem, the before), demonstration (the product doing the thing), proof (a number, a result, a name), resolution (the CTA). One beat can carry two jobs, a job the brief does not need is dropped, and a job worth ten seconds gets three beats. How many beats there are follows from the length, the script and the reference — never from a template.
 - Every beat must earn its seconds and hand something to the next one. If two beats say the same thing in different words, cut one and give its time to the demonstration.
 - Give each beat room to be read: 2.5–4s. Six beats crammed into eight seconds is unreadable at any easing.
 

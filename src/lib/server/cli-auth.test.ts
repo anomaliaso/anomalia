@@ -1,7 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadBrandForUser, type ApiKeyInfo, type CliBrand } from './cli-auth';
 import { createTestSupabase } from '$lib/testkit/supabase';
+import { BOOKING_URL } from '$lib/links';
+
+const approved = vi.hoisted(() => ({ current: true }));
+vi.mock('$lib/server/access', () => ({
+  userCanEnter: async () => approved.current
+}));
+vi.mock('@supabase/ssr', () => ({
+  createServerClient: () => ({
+    auth: { getUser: async () => ({ data: { user: { id: 'user-1', email: 'a@b.c' } }, error: null }) }
+  })
+}));
 
 const BRAND: CliBrand = {
   id: 'brand-1',
@@ -83,5 +94,45 @@ describe('loadBrandForUser with API key', () => {
     const { brand, error } = await loadBrandForUser(supabase, 'missing', API_KEY);
     expect(brand).toBeUndefined();
     expect(error?.status).toBe(404);
+  });
+});
+
+/**
+ * Chiudere il browser e lasciare aperta la API non è chiudere il prodotto: la CLI e l'MCP
+ * entrano da qui, e `authenticate` è l'unico passaggio che entrambe attraversano. La guardia
+ * sta lì, una volta, non in sessanta rotte.
+ */
+describe('authenticate — prodotto chiuso', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    approved.current = true;
+  });
+
+  async function callWithJwt() {
+    const { authenticate } = await import('./cli-auth');
+    return authenticate(new Request('https://x/api/v1/brands', { headers: { authorization: 'Bearer jwt-token' } }));
+  }
+
+  it('un utente non approvato non passa', async () => {
+    approved.current = false;
+    const res = await callWithJwt();
+
+    expect(res.error?.status).toBe(403);
+    expect(res.user).toBeUndefined();
+  });
+
+  it('dice dove prenotare, invece di un 403 muto', async () => {
+    approved.current = false;
+    const res = await callWithJwt();
+    const body = await res.error!.json();
+
+    expect(JSON.stringify(body)).toContain(BOOKING_URL);
+  });
+
+  it('un utente approvato passa come prima', async () => {
+    const res = await callWithJwt();
+
+    expect(res.error).toBeUndefined();
+    expect(res.user?.id).toBe('user-1');
   });
 });

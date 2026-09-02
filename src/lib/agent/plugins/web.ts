@@ -28,56 +28,76 @@ export interface WebPluginDeps {
 	locale?: 'en' | 'it';
 }
 
-const BLOG_MAP: Record<string, { source: string; description: string; requiresMode?: ToolSpec['requiresMode'] }> = {
+const BLOG_MAP: Record<string, { source: string; description: string; requiresMode?: ToolSpec['requiresMode']; effectful: boolean; consequential: boolean }> = {
 	web_list_articles: {
 		source: 'list_articles',
+		effectful: false,
+		consequential: false,
 		description:
 			'List the brand\'s blog articles with status and schedule. draft = written, awaiting review. planned = title-only placeholder, body not written (write with web_write_planned_article). approved = scheduled, auto-publishes at scheduled_for. published = live.'
 	},
 	web_read_article: {
 		source: 'read_article',
+		effectful: false,
+		consequential: false,
 		description: 'Read a blog article in full: title, meta title/description, markdown body, status, schedule, cover image. Read before editing or optimizing.'
 	},
 	web_update_article: {
 		source: 'update_article',
+		effectful: true,
 		requiresMode: 'agent',
+		consequential: true,
 		description: 'Edit a blog article: title, meta title, meta description, and/or the full markdown body (a full replacement, not a diff). Never touches status or schedule — use web_schedule_article for that.'
 	},
 	web_schedule_article: {
 		source: 'schedule_article',
+		effectful: true,
 		requiresMode: 'agent',
+		consequential: true,
 		description:
 			'Schedule, reschedule, or unschedule a blog article. With a datetime: sets scheduled_for and marks it "approved" — ONLY "approved" ever auto-publishes, this tool never sets status to "published" directly. Without a datetime: clears the schedule back to a plain draft (refused on a "planned" placeholder — those need a slot). Refuses on an already-published article.'
 	},
 	web_optimize_article: {
 		source: 'optimize_article',
+		effectful: true,
 		requiresMode: 'agent',
+		consequential: true,
 		description:
 			'Run the quality-optimization pass on a blog article: web-grounds real sources/statistics, weaves in internal links, tightens structure and meta, adds on-brand images. Takes 1-2 min. No-op if the article already scores >= 90.'
 	},
 	web_generate_article_cover: {
 		source: 'generate_article_cover',
+		effectful: true,
 		requiresMode: 'agent',
+		consequential: true,
 		description: "Generate a new on-brand AI cover image for a blog article and set it as the article's cover. ~30s."
 	},
 	web_generate_article_images: {
 		source: 'generate_article_images',
+		effectful: true,
 		requiresMode: 'agent',
+		consequential: true,
 		description: "Generate a few on-brand images and splice them into a blog article's body as in-article illustrations. ~1 min."
 	},
 	web_write_planned_article: {
 		source: 'write_planned_article',
+		effectful: true,
 		requiresMode: 'agent',
+		consequential: true,
 		description: 'Write the full article for a "planned" placeholder (title-only slot from the month plan), keeping its calendar slot. ~1-2 min. Result is a draft — schedule or edit it after.'
 	},
 	web_seo_audit: {
 		source: 'run_seo_geo_audit',
+		effectful: true,
 		requiresMode: 'plan',
+		consequential: true,
 		description:
 			'Run a fresh SEO & GEO audit of the brand website (technical crawl + on-page content + AI citation share-of-voice). Runs in the BACKGROUND — this call returns a job id immediately, NOT the audit; the result lands later. Call web_read_seo_audit after to read the numbers, do not assume this call finished the work.'
 	},
 	web_read_seo_audit: {
 		source: 'read_seo_geo_audit',
+		effectful: false,
+		consequential: false,
 		description: 'Read the latest SEO & GEO audit: technical score, top issues, on-page summary, AI share-of-voice, and category questions where the brand is NOT cited (with which competitors ARE). Call web_seo_audit first if none exists yet.'
 	}
 };
@@ -100,7 +120,7 @@ export function createWebPlugin(deps: WebPluginDeps): ToolPlugin {
 	for (const [name, m] of Object.entries(BLOG_MAP)) {
 		if (!chatTools[m.source]) continue; // richiede estrazione? no: assente solo se createChatTools cambia forma
 		map[name] = m.source;
-		tools.push({ name, description: m.description, requiresMode: m.requiresMode, inputSchema: jsonSchemaOf(chatTools[m.source]) });
+		tools.push({ name, description: m.description, requiresMode: m.requiresMode, effectful: m.effectful, consequential: m.consequential, inputSchema: jsonSchemaOf(chatTools[m.source]) });
 	}
 
 	// I 7 dfs_* diventano web_dfs_* — stesso schema, stessa description, stessa execute.
@@ -109,7 +129,7 @@ export function createWebPlugin(deps: WebPluginDeps): ToolPlugin {
 		if (!t) continue; // dataforseoConfigured() false in questo env: createDataForSeoTools torna {}
 		const name = `web_${key}`;
 		map[name] = key;
-		tools.push({ name, description: String(t.description ?? key), inputSchema: jsonSchemaOf(t) });
+		tools.push({ name, description: String(t.description ?? key), effectful: false, consequential: false, inputSchema: jsonSchemaOf(t) });
 	}
 
 	return {

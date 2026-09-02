@@ -1,7 +1,7 @@
 import type { ChangelogEntry } from './index';
 
 const entry: ChangelogEntry = {
-  date: 'August 28, 2026',
+  date: '2026-08-28',
   title: 'Agents hand cross-craft work over without being asked',
   items: [
     'Agents now delegate by default: when your request contains work that belongs to another specialist, they hand it over immediately instead of doing it badly themselves or waiting for you to say who should do it.',

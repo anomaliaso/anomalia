@@ -1,16 +1,6 @@
 import { readPersistedSession, hydrateSessionFromStorage, beginJobPolling, watchToolJobs, isWatchingToolJobs, getSession } from '$lib/stores/chat-session';
 import { refreshThreads } from '$lib/stores/chat';
-import { consolidateMessages, parseToolCalls, redoIdOf, type ChatMessage } from '../components/transcript';
-
-type FreshRow = {
-  id?: string;
-  role: string;
-  content: string;
-  reasoning?: string | null;
-  tool_calls?: unknown;
-  tool_call_id?: string | null;
-  name?: string | null;
-};
+import { parseToolCalls, redoIdOf, type ChatMessage } from '../components/transcript';
 
 /**
  * Il ciclo di vita del turno visto dalla pagina: riaggancio dopo un refresh, poll dei job di
@@ -27,55 +17,22 @@ export function createLifecycle(io: {
   handled: () => number | null;
   touchHandled: (at: number) => void;
   finalize: (completedAt: number) => Promise<void>;
+  /** Avanza il cursore del thread sul registro degli eventi e, se serve, rilegge il transcript. */
+  syncCursor: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   send: (text?: string, meta?: any, opts?: { resend?: boolean; redoMessageId?: string; truncateFromMessageId?: string }) => Promise<void>;
 }) {
-  function applyFreshToolMessages(
-    fresh: Array<{
-      id?: string;
-      role: string;
-      content: string;
-      reasoning?: string | null;
-      tool_calls?: unknown;
-      tool_call_id?: string | null;
-      name?: string | null;
-    }>
-  ) {
-    if (!fresh?.length) return;
-    const consolidated = consolidateMessages(
-      fresh.map((m) => ({
-        // Senza l'id, redo/edit ricadono in silenzio sul percorso che non tronca.
-        id: m.id,
-        role: m.role,
-        content: typeof m.content === 'string' ? m.content : '',
-        reasoning: m.reasoning,
-        tool_calls: m.tool_calls,
-        tool_call_id: m.tool_call_id,
-        name: m.name
-      }))
-    );
-    // Si rimpiazza solo se è arrivato qualcosa di nuovo: mai cancellare la UI ottimistica.
-    if (!io.loading() && consolidated.length >= io.messages().length) {
-      io.setMessages(consolidated);
-    }
-  }
-
+  /**
+   * Il battito del watcher non porta più la cronologia: la chiede la pagina al proprio cursore
+   * sul registro del thread, che risponde con il solo delta e ricarica il transcript unicamente
+   * quando un messaggio è davvero atterrato. Prima il tick si tirava dietro tutto — 202 KB e
+   * 176 ms per cento messaggi, ogni tre secondi, quasi sempre identici a sé stessi.
+   */
   function startToolPolling() {
     watchToolJobs({
       brandSlug: io.brandSlug(),
       threadId: io.threadId(),
-      onMessages: (fresh) =>
-        applyFreshToolMessages(
-          fresh as Array<{
-            id?: string;
-            role: string;
-            content: string;
-            reasoning?: string | null;
-            tool_calls?: unknown;
-            tool_call_id?: string | null;
-            name?: string | null;
-          }>
-        ),
+      onTick: () => io.syncCursor(),
       onIdle: () => refreshThreads(io.brandSlug())
     });
   }
@@ -83,6 +40,27 @@ export function createLifecycle(io: {
   function maybeStartToolPolling(seedJobs?: Array<{ id: string; status: string }> | null) {
     const pending = seedJobs ?? io.pendingSeed() ?? [];
     if (pending.length || isWatchingToolJobs(io.threadId())) startToolPolling();
+  }
+
+  /**
+   * Il thread ha ancora un lavoro che gira FUORI dal turno?
+   *
+   * Sta qui, e non dentro il ramo felice di `send()`, perché la domanda va rifatta da più punti:
+   * la fine di OGNI turno — anche quello rotto o fermato —, un messaggio scritto altrove, il
+   * ritorno del focus. Finché la risposta arrivava da un posto solo, uno stream che si spezzava
+   * lasciava un render in corso senza nessuno che lo dicesse: il seed del server è la fotografia
+   * della load, e nient'altro chiedeva più niente.
+   */
+  async function checkPendingTools(): Promise<void> {
+    if (io.loading()) return;
+    try {
+      const res = await fetch(`/app/${io.brandSlug()}/chat?thread=${io.threadId()}&pending_tools=1`);
+      if (!res.ok) return;
+      const { jobs } = await res.json();
+      if (jobs?.length) startToolPolling();
+    } catch {
+      /* best-effort */
+    }
   }
 
   /** Si riaggancia a uno stream vivo, o fa poll del job server dopo un refresh. */
@@ -201,7 +179,7 @@ export function createLifecycle(io: {
     }
   }
 
-  return { applyFreshToolMessages, startToolPolling, maybeStartToolPolling, resumeActiveGeneration, retryLast, resendAt, redoAssistant, sendFeedback };
+  return { startToolPolling, maybeStartToolPolling, checkPendingTools, resumeActiveGeneration, retryLast, resendAt, redoAssistant, sendFeedback };
 }
 
 // VERBATIM: i report dei job sono già deterministici lato server, niente parser da inventare.

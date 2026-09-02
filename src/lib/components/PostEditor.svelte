@@ -11,14 +11,11 @@
   import { downscaleImageFile } from '$lib/chat-attachments';
   import { RASTER_IMAGE_ACCEPT, isRasterImageSource } from '$lib/raster-image';
   import ChatToolChips from '$lib/components/ChatToolChips.svelte';
-  import VideoScoreRing from '$lib/components/VideoScoreRing.svelte';
-  import VideoScoreNote from '$lib/components/VideoScoreNote.svelte';
   import { renderMd, handleChatColorBadgeClick } from '$lib/chat-markdown';
-  import { formatVideoScore, type ReviewChatKind, type VideoScoreBadge } from '$lib/video-score';
   import { YOUTUBE_THUMB_FILE_ACCEPT, prepareYoutubeThumbnailFile } from '$lib/youtube-thumbnail-client';
 
   // Shared post editor dialog — used by both Approvals and Content. The host page must define the
-  // matching form actions (?/updatePost, ?/approve, ?/reject, ?/reschedule, ?/cancelSchedule, ?/repost, ?/requestReview).
+  // matching form actions (?/updatePost, ?/approve, ?/reject, ?/reschedule, ?/cancelSchedule, ?/repost).
   type Post = {
     id: string;
     platform: string | null;
@@ -481,55 +478,6 @@
     }
   }
 
-  let mediaBadge = $state<VideoScoreBadge | null>(null);
-  $effect(() => {
-    void displayMedia;
-    untrack(() => {
-      mediaBadge = null;
-    });
-  });
-
-  function reviewPrompt(kind: ReviewChatKind): string {
-    const b = mediaBadge;
-    const score = formatVideoScore(b?.overall ?? 0);
-    const verdict = b?.verdict ? $_('app.videoReview.' + b.verdict) : '';
-    const lines = [$_('posteditor.review.promptScore', { values: { score, verdict } })];
-    if (b?.judgment) lines.push($_('posteditor.review.promptWhy', { values: { judgment: b.judgment } }));
-    if (b?.nextTest) lines.push($_('posteditor.review.promptNext', { values: { next: b.nextTest } }));
-    for (const iss of (b?.issues ?? []).slice(0, 2)) {
-      if (iss.problem || iss.fix) {
-        lines.push($_('posteditor.review.promptIssue', { values: { problem: iss.problem, fix: iss.fix } }));
-      }
-    }
-    if (kind === 'apply') {
-      lines.push($_('posteditor.review.promptApply'));
-      lines.push(isVideoMedia ? $_('posteditor.review.promptVideo') : $_('posteditor.review.promptStill'));
-    } else if (kind === 'hook') {
-      lines.push($_('posteditor.review.promptHook'));
-      lines.push($_('posteditor.review.promptVideo'));
-    } else if (kind === 'reel') {
-      lines.push($_('posteditor.review.promptReel'));
-      lines.push($_('posteditor.review.promptVideo'));
-    } else {
-      lines.push($_('posteditor.review.promptStill'));
-    }
-    return lines.filter(Boolean).join('\n');
-  }
-
-  function sendReviewPrompt(kind: ReviewChatKind) {
-    const prompt = reviewPrompt(kind);
-    if (!prompt.trim()) return;
-    if (showChat) void sendChat(prompt);
-    else {
-      feedback = prompt;
-      queueMicrotask(() => feedbackEl?.focus());
-    }
-  }
-
-  function onMediaBadge(b: VideoScoreBadge | null) {
-    mediaBadge = b;
-  }
-
   async function openBrandPicker() {
     brandPicker = !brandPicker;
     if (!brandPicker || mediaRefs || mediaLoading) return;
@@ -771,8 +719,6 @@
     eSubreddit = v.subreddit ?? '';
   }
   let saveError = $state('');
-  let reviewNote = $state('');
-  let reviewTick = $state(0);
   let showReport = $state(false);
   let reportNote = $state('');
   let reposting = $state(false);
@@ -906,22 +852,16 @@
   const runAction = (name: string): SubmitFunction => () => {
     submitting = name;
     return async ({ result, update }) => {
+      if (result.type === 'success' && name === 'reject') {
+        submitting = null;
+        close();
+        return;
+      }
+
       await update();
       submitting = null;
       if (result.type === 'success') {
-        // Reject deletes the row — leave the dashboard. Other saves stay put and refresh.
-        if (name === 'reject') close();
-        else if (name === 'requestReview') {
-          saveError = '';
-          reviewTick += 1;
-          const queued = Number((result.data as { reviewQueued?: number } | undefined)?.reviewQueued ?? 0);
-          const skipped = Number((result.data as { skippedRunning?: number } | undefined)?.skippedRunning ?? 0);
-          reviewNote = skipped && !queued
-            ? get(_)('posteditor.reviewRunning')
-            : get(_)('posteditor.reviewQueued');
-          if (embedded) await invalidateAll();
-        }
-        else if (embedded) await invalidateAll();
+        if (embedded) await invalidateAll();
         else close();
       } else if (result.type === 'failure') {
         saveError = (result.data?.error as string) ?? get(_)('posteditor.errGeneric');
@@ -1022,11 +962,6 @@
           <track kind="captions" />
         </video>
       {/if}
-      {#if displayMedia}
-        {#key `${reviewTick}:${displayMedia}`}
-          <VideoScoreRing url={displayMedia} brandSlug={brandSlug} size={36} corner="tl" onbadge={onMediaBadge} />
-        {/key}
-      {/if}
       {#if isTextOnly}<span class="ph">{$_('posteditor.textOnly')}</span>{:else if !displayMedia}<span class="ph">{$_('posteditor.noImage')}</span>{/if}
       {#if carouselSlides}
         <span class="slide-count">{activeSlide + 1}/{carouselSlides.length}</span>
@@ -1056,10 +991,6 @@
 
       {#if post.needs_attention && post.attention_reason}
         <p class="attn-flag">{post.attention_reason}</p>
-      {/if}
-
-      {#if mediaBadge?.status === 'ready'}
-        <VideoScoreNote badge={mediaBadge} video={isVideoMedia} disabled={chatBusy || regenerating} onprompt={sendReviewPrompt} />
       {/if}
 
       <!-- Reddit-specific fields: title, subreddit, link URL -->
@@ -1333,7 +1264,6 @@
       {/if}
 
       {#if saveError}<p class="err">{saveError}</p>{/if}
-      {#if reviewNote}<p class="review-note">{reviewNote}</p>{/if}
 
       <div class="editor-actions">
         {#if post.status === 'pending_user'}
@@ -1350,13 +1280,7 @@
             <button class="ctrl btn-fill" type="submit" disabled={!!submitting || capViolations.length > 0} title={capViolations.length ? $_('posteditor.overLimit.hint') : ''}>{@render spin('approve')}{$_('posteditor.approveSchedule')}</button>
           </form>
           {@render publishNowForm()}
-          {#if displayMedia}
-            <form method="POST" action="?/requestReview" use:enhance={runAction('requestReview')}>
-              <input type="hidden" name="id" value={post.id} />
-              <button class="btn-link" type="submit" disabled={!!submitting}>{@render spin('requestReview')}{$_('posteditor.requestReview')}</button>
-            </form>
-          {/if}
-          <form method="POST" action="?/reject" use:enhance={runAction('reject')}>
+                    <form method="POST" action="?/reject" use:enhance={runAction('reject')}>
             <input type="hidden" name="id" value={post.id} />
             <button class="btn-link danger" type="submit" disabled={!!submitting}>{@render spin('reject')}{$_('posteditor.reject')}</button>
           </form>
@@ -1372,24 +1296,12 @@
               <button class="ctrl btn-fill" type="submit" disabled={!!submitting}>{@render spin('reschedule')}{$_('posteditor.updateReschedule')}</button>
             </form>
             {@render publishNowForm()}
-            {#if displayMedia}
-              <form method="POST" action="?/requestReview" use:enhance={runAction('requestReview')}>
-                <input type="hidden" name="id" value={post.id} />
-                <button class="btn-link" type="submit" disabled={!!submitting}>{@render spin('requestReview')}{$_('posteditor.requestReview')}</button>
-              </form>
-            {/if}
             <form method="POST" action="?/cancelSchedule" use:enhance={runAction('cancelSchedule')}>
               <input type="hidden" name="id" value={post.id} />
               <button class="btn-link danger" type="submit" disabled={!!submitting}>{@render spin('cancelSchedule')}{$_('posteditor.cancelSchedule')}</button>
             </form>
           {/if}
-          {#if displayMedia && post.status === 'published'}
-            <form method="POST" action="?/requestReview" use:enhance={runAction('requestReview')}>
-              <input type="hidden" name="id" value={post.id} />
-              <button class="btn-link" type="submit" disabled={!!submitting}>{@render spin('requestReview')}{$_('posteditor.requestReview')}</button>
-            </form>
-          {/if}
-          <button type="button" class="btn-link" onclick={() => (showReport = !showReport)}>{$_('posteditor.somethingWrong')}</button>
+                    <button type="button" class="btn-link" onclick={() => (showReport = !showReport)}>{$_('posteditor.somethingWrong')}</button>
         {/if}
       </div>
 
@@ -1410,11 +1322,6 @@
     <!-- Full-height AI editor chat, persisted per post. Same rendering as the global chatbot. -->
     <aside class="lb-chat">
       <div class="lb-chat-head">Editor AI</div>
-      {#if !showForm && mediaBadge?.status === 'ready'}
-        <div class="lb-chat-review">
-          <VideoScoreNote badge={mediaBadge} video={isVideoMedia} disabled={chatBusy} onprompt={sendReviewPrompt} />
-        </div>
-      {/if}
       <div class="lb-chat-log" bind:this={chatScrollEl} onclick={handleChatColorBadgeClick}>
         {#if !chatMessages.length && !chatBusy}
           <div class="lb-chat-hint">{$_(graphicKind ? 'posteditor.chatHintGraphic' : 'posteditor.chatHint')}</div>
@@ -1439,11 +1346,6 @@
       </div>
       {#if chatError}<span class="regen-note err lb-chat-err">{chatError}</span>{/if}
       <div class="lb-chat-composer">
-        {#if showForm && mediaBadge?.status === 'ready'}
-          <div class="lb-chat-shortcuts">
-            <VideoScoreNote badge={mediaBadge} video={isVideoMedia} disabled={chatBusy} chipsOnly onprompt={sendReviewPrompt} />
-          </div>
-        {/if}
         <div class="regen-box" class:disabled={chatBusy}>
           {#if refImages.length || refPicks.length}
             <div class="ref-strip">

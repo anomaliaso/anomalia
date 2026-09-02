@@ -48,7 +48,6 @@ export const EXECUTABLE_TOOL_JOBS = [
   'seo_plan',
   'seo_add_initiatives',
   'analytics_review',
-  'motion_video_qc',
   'run_autopilot',
   'subagent_run'
 ] as const;
@@ -365,47 +364,6 @@ export async function executeChatToolJob(
       };
     }
 
-    case 'motion_video_qc': {
-      // La QC di un motion video, FUORI dal turno che l'ha reso. Accodata da render_motion_video
-      // (output-tools.ts) quando il turno non aveva più budget per il giudice, o quando il
-      // verdetto in banda era fix/kill: il trailer del 21/8 è uscito senza che nessuna review
-      // girasse mai, e un verdetto fix in chat produceva un flag e zero remake. Qui gira
-      // `scoreAndMaybeRewriteMotion` (qc.ts) — lo stesso loop dei banchi: review, e su fix/kill
-      // il turno di patch che riscrive il sorgente. Il tetto ai remake è già nel sistema:
-      // MAX_VIDEO_RENDERS_PER_DAY ferma la catena render→QC→patch→render al quarto giro.
-      const videoId = String(params.video_id ?? '').trim();
-      if (!videoId) return { error: 'motion_video_qc without a video_id' };
-      const { data: brand } = await supabase
-        .from('brands')
-        .select('id, name')
-        .eq('id', brandId)
-        .maybeSingle();
-      if (!brand) return { error: 'Brand not found' };
-      await cancel.assertActive();
-      const { scoreAndMaybeRewriteMotion } = await import('$lib/server/motion-video/qc');
-      const result = await scoreAndMaybeRewriteMotion({
-        // Parte da un job schedulato, non da una persona: è l'automatismo che va spento.
-        auto: true,
-        supabase,
-        userId,
-        brand: { id: brand.id as string, name: String(brand.name ?? '') },
-        videoId,
-        apply: params.apply !== false,
-        abortSignal: cancel.signal
-      });
-      await cancel.assertActive();
-      // Un errore SENZA verdetto (no_preview, giudice muto) è un lavoro non fatto: si dichiara,
-      // così il rientro nel thread dice "fermato" invece di inventare un esito.
-      if (result.error && !result.craft && !result.review) return { error: result.error };
-      return {
-        video_id: videoId,
-        applied: result.applied,
-        ...(result.rewrite_from ? { rewrite_from: result.rewrite_from } : {}),
-        ...(result.craft ? { craft: result.craft } : {}),
-        ...(result.review ? { review: result.review } : {}),
-        ...(result.error ? { note: result.error } : {})
-      };
-    }
 
     case 'run_autopilot': {
       const { data: brand } = await supabase

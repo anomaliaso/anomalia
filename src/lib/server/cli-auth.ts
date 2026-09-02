@@ -1,9 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { userCanEnter } from '$lib/server/access';
+import { BOOKING_URL } from '$lib/links';
 
 export interface ApiKeyInfo {
   id: string;
@@ -20,10 +22,34 @@ export interface ApiKeyInfo {
  *
  * Returns the Supabase client scoped to the user, or an error Response.
  */
-export async function authenticate(request: Request): Promise<
+type Caller =
   | { supabase: SupabaseClient; user: { id: string; email?: string }; apiKey?: ApiKeyInfo; error?: undefined }
-  | { supabase?: undefined; user?: undefined; apiKey?: undefined; error: Response }
-> {
+  | { supabase?: undefined; user?: undefined; apiKey?: undefined; error: Response };
+
+/**
+ * L'unica porta che CLI e MCP attraversano entrambe. Col prodotto chiuso la guardia sta qui, una
+ * volta: metterla per rotta significa dimenticarla nella prossima. Il 403 porta con sé il link
+ * alla call — la CLI stampa il corpo della risposta, e "Forbidden" secco a chi ha appena provato
+ * a lavorare è il modo peggiore di dirgli che manca un passaggio.
+ */
+export async function authenticate(request: Request): Promise<Caller> {
+  const caller = await resolveCaller(request);
+  if (caller.error) return caller;
+
+  if (await userCanEnter(caller.user.id)) return caller;
+
+  return {
+    error: json(
+      {
+        error: `Access not enabled yet — Anomalia opens after a product call. Book it: ${BOOKING_URL}`,
+        booking_url: BOOKING_URL
+      },
+      { status: 403 }
+    )
+  };
+}
+
+async function resolveCaller(request: Request): Promise<Caller> {
   const auth = request.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) {
     return { error: json({ error: 'Missing or invalid Authorization header' }, { status: 401 }) };
@@ -45,7 +71,7 @@ export async function authenticate(request: Request): Promise<
   }
 
   // ── Supabase JWT path (existing) ─────────────────────────────
-  const supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+  const supabase = createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => [],
       setAll: () => {}
@@ -71,7 +97,7 @@ async function authenticateApiKey(token: string) {
   if (!adminKey) {
     return { error: json({ error: 'Server misconfiguration' }, { status: 500 }) };
   }
-  const admin = createClient(PUBLIC_SUPABASE_URL, adminKey, {
+  const admin = createClient(publicEnv.PUBLIC_SUPABASE_URL, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
@@ -98,7 +124,7 @@ async function authenticateApiKey(token: string) {
   // Service-role client: it bypasses RLS, so the ownership check RLS would have done has to be
   // redone by hand. Registering the identity here is what lets loadBrandForUser do it — the alternative
   // (remembering a permission call in each of ~60 routes) is what left the tenant boundary open.
-  const supabase = createClient(PUBLIC_SUPABASE_URL, adminKey, {
+  const supabase = createClient(publicEnv.PUBLIC_SUPABASE_URL, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
   apiKeyIdentity.set(supabase, { userId: keyRow.user_id, apiKey });

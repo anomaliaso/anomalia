@@ -25,11 +25,28 @@ Un worktree creato dentro la cartella della repo (`anomalia/anomalia-wt/<slug>`)
 ### Verifica il `workdir` prima di ogni Edit
 Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagliato tocca dev. È successo: `live.ts` modificato nel checkout principale per un secondo, poi `git checkout --` e riapplicato nel posto giusto. Il tool Edit non ti proteggere — proteggiti tu: guarda il percorso del file che stai per toccare, sempre.
 
+### Il `git stash` è condiviso fra tutti i worktree — ora è BLOCCATO da un hook
+`git stash` legge e scrive lo STESSO ref (`refs/stash`) per l'intero repository, non per worktree: stashare dentro un worktree e fare `git stash pop` in un altro applica lì le modifiche del primo. È successo: `git stash` nella feature ha creato uno stash (e spinto via i miei edit di `live.ts`), e il `pop` eseguito dopo un timeout del tool di shell ha riesumato le modifiche di un ALTRO worktree (`video.ts`, irrelate) dentro il mio — lasciando il mio `live.ts` senza i miei edit. Segnale: dopo un `git stash`/`pop` i file modificati non corrispondono a quelli che avevi in mano, o compaiono modifiche a file mai toccati nel branch corrente. Mossa: evita `git stash` in un worktree — per sospendere delle modifiche usa il checkout dedicato (o `git diff > patch && git checkout --` e poi `git apply`), e se devi proprio stashare verifica sempre `git stash list` + `git show stash@{0} --stat` PRIMA del `pop`; un `pop` che finisce in timeout non è affidabile, riapri il file a mano e ricontrolla che i tuoi edit ci siano ancora.
+**Aggiornamento (30/8): non è più una raccomandazione.** Un agente ha stashato di nuovo dentro un worktree, e questa volta è andata bene solo per fortuna. Un hook `PreToolUse` su Bash (`~/.claude/settings.json`) ora rifiuta ogni comando che invochi `git stash`, in qualunque posizione della riga, e spiega le alternative nel messaggio di rifiuto. La regola sta anche in CLAUDE.md e AGENTS.md.
+
 ### Un test verde sul checkout principale può essere rosso nel worktree: il `.env` locale entra nei test
 `$env/dynamic/private` in vitest porta dentro il `.env` DELLA MACCHINA. Il checkout principale può passare per cache Vite stantia (env congelata prima di una variabile), il worktree con cache fresca fallisce — v. `queue-dm.test`: con `AGENT_KIT=on` locale il turno scappava nel ramo kit e il mock di `./subagents` moriva su `createSubagentTools`. Segnale: stesso codice, esito opposto fra checkout e worktree, e nessuna differenza nel diff. Mossa: il test che prova un percorso specifico fissa le variabili che gli servono spente (`vi.mock('$env/dynamic/private')` con override), non conta sul `.env` di chi lo lancia.
 
 ### **Una patch cambiata in un PR non si propaga ai worktree impilati con `npx patch-package`**
 patch-package non aggiorna uno stato già patchato: dopo un merge/rebase che tocca `patches/`, i worktree impilati falliscono sui test del parser (es. pi-stream) anche se su dev passano, e patch-package muore con "cannot apply". Mossa: dopo ogni merge che cambia `patches/`, `npm ci` + `npx patch-package` in OGNI worktree impilato — il reinstall del solo pacchetto basta se sei sicuro del lockfile.
+
+### Una sessione precedente uccisa lascia una `vite build` orfana che scrive nella STESSA `build/`
+Una sessione (agente o terminale) chiusa a metà `npm run build` non porta via il processo: il trap del genitore non lo tocca, e `vite build` resta parente di `init`, vivo per decine di minuti, a scrivere in `build/`. Rilanciare il build nello stesso worktree fa gareggiare due `vite build` sulla stessa cartella d'output — corruzione silenziosa, non un errore chiaro. Segnale: `ps -ef | grep "vite build"` mostra più di un processo con lo stesso `cwd`, uno con `PPID 1` e un'ora di avvio molto più vecchia. Mossa: prima di rilanciare un build lungo in un worktree, cerca ed elimina (`kill -9`) ogni `vite build`/`npm run build` orfano di QUEL worktree — non toccare processi di altri worktree che condividono la macchina.
+
+### Una PR «Merged» su GitHub può non essere MAI arrivata su `dev`
+La #52 («Run custom-agent turns on the Agent Kit») risulta `MERGED` su GitHub, con tanto di merge commit, e il task su Notion diceva «In production». In produzione non c'è mai stata: era aperta **contro `feat/kit-private-threads`**, non contro `dev`, e quel branch intermedio in `dev` non è mai entrato. Il merge commit è reale e irraggiungibile — un ramo staccato che nessuno ha più tirato. Il codice su `dev` continuava a portare il gate vecchio (`!personaId`) mentre tutti lo davano per migrato.
+Segnale: una feature che «è stata mergiata» ma il cui codice sul branch vivo non c'è — e `gh pr view` che mostra `baseRefName` diverso da `dev`/`main`. Il sospetto va acceso da `gh pr list --state merged` con un base branch che non è quello di destinazione: una PR impilata è mergiata nella sua pila, non nel prodotto.
+Mossa, due comandi, prima di credere a «merged»:
+```bash
+gh pr view <n> --json baseRefName,mergeCommit
+git merge-base --is-ancestor <merge-commit> origin/dev && echo LANDED || echo NEVER LANDED
+```
+Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: vanno riportate a mano sul branch di destinazione (cherry-pick del merge commit, che essendo squash ha un solo genitore), e la risoluzione dei conflitti è il prezzo di averlo scoperto tardi.
 
 ## Test: distinguere il tuo difetto dal rumore
 
@@ -59,11 +76,31 @@ Il mock scritto nell'era della PR non dichiara gli export nuovi di dev (`createS
 
 ## Testare la piattaforma nel browser: worker locale ed ambiente
 
+### Il websocket Realtime non si collega dalla stack locale: quello che arriva per broadcast non lo verifichi qui
+Il broadcast HTTP del server risponde 202 e il container lo logga, ma il browser non apre mai il canale: `channel(...).subscribe()` non risolve, e in `read_network_requests` non c'è una sola richiesta verso `localhost:8000`. Tutto quello che il prodotto consegna via `thread-changed` / `turn-state` / `kit_stream` — il turno scritto dal worker che deve comparire da solo, il pallino in sidebar, il riaggancio a uno stream partito altrove — nella stack locale non si vede, e la tentazione è di dichiararlo rotto nel codice. Segnale: il POST `/api/broadcast/...` esce 202, i log di `realtime-dev.anomalia-realtime` non mostrano nessun join di canale, e la UI resta ferma. Mossa: verifica quel percorso dal lato che NON dipende dal socket — scrivi la riga in `chat_messages` mentre la scheda è nascosta e torna sulla scheda: se il ricontrollo al focus la porta a schermo, il difetto non è lì. E dillo nel PR invece di far passare per verificato ciò che la macchina non poteva provare.
+
+### Due dev server su localhost si rubano la sessione: il 404 «Brand not found» non è un bug tuo
+Per un confronto prima/dopo viene naturale tenere due porte accese insieme (dev su 5201, branch su
+5200). I cookie però stanno sull'HOST, non sulla porta: entrambi i server ruotano lo stesso refresh
+token di GoTrue, e chi arriva secondo se lo trova già speso. Da lì la pagina risponde 404 con
+`{"error":"Brand not found"}`, oppure ti sbatte su `/app/onboarding` come se l'utente non avesse
+brand — e sembra un difetto del codice appena scritto. Segnale: la stessa URL rende su una porta e
+404 sull'altra, con lo stesso `.env` e lo stesso `PUBLIC_SUPABASE_URL=http://localhost:8000`; un
+`fetch` all'endpoint dice «Brand not found» invece di «Unauthorized». Mossa: **un dev server alla
+volta** per qualunque verifica nel browser. Il confronto prima/dopo si fa in sequenza — misuri il
+branch, spegni, accendi il baseline, misuri — non in parallelo.
+
 ### Il worker locale è un build vecchio che compete per la stessa coda
 La stack Docker porta un'app pronta (`anomalia-app`, immagine `anomalia-selfhost-app`) che prosciuga `chat_jobs` dallo stesso DB del dev server: il cron chiama `app:3000`, non la tua porta. Con l'immagine più vecchia del checkout, il codice nuovo **non gira mai** (il team contact post-onboarding non parte) e i due reaper si contendono i turni: `chat turn died mid-flight (heartbeat lost)` su turni vivi, `Failed to load url credits.ts` da moduli che nel checkout esistono. Segnale: `chat_jobs` failed con errori che il codice attuale non può produrre. Mossa: identificare chi prosciuga la coda prima di giudicare il flusso — `docker logs anomalia-app`, data dell'immagine (`docker images`) contro `git log -1` — e fermare o ricostruire il container stantio (ricordarsi di riaccenderlo).
 
 ### Le env del repo puntano all'hosted; la stack locale porta le sue chiavi in kong.yml
 Il `.env` del repo punta a un progetto Supabase hosted, mentre la compose gira da un altro checkout con le chiavi veramente valide dentro `anomalia-kong:/usr/local/kong/kong.yml`. Il seed (`scripts/db-seed.mjs`) pretende `DATABASE_URL` e fallisce con parse error leggendo `.env` a mano (contiene valori con `<...>`). Mossa: overlay env a parte — `PUBLIC_SUPABASE_URL=http://localhost:8000`, chiavi estratte da kong.yml, `DATABASE_URL` dalla compose — e avviare il dev con quello; mai puntare all'hosted "per comodità".
+
+### Misurare fuori dal percorso dell'app e concludere sull'app
+`curl` con `response_format: json_schema` strict su `z-ai/glm-5.3-flash` risponde 200 e resta aperto 180s con soli spazi di keep-alive: sembra un modello rotto. L'app però non usa quel percorso — usa `generateObject` dell'AI SDK, che negozia diversamente — e sullo stesso schema quel modello risponde in 107s (gemini in 15s). Lento, non rotto. Segnale: una conclusione su un componente tratta da una prova che quel componente non esegue mai. Mossa: misurare chiamando la FUNZIONE che il prodotto chiama (`llmStructured`), non l'endpoint a mano; e diffidare di «rotto» quando l'unico sintomo è «non è ancora tornato».
+
+### Una colonna aggiunta a mano al DB locale non esiste per PostgREST finché non ricarichi lo schema
+`alter table ... add column` via `psql` non risveglia la cache di schema di PostgREST: ogni `.update()` che nomina la colonna nuova viene rifiutato (PGRST204), e il codice che scarta l'errore (`const { data } = await supabase...`) prosegue come se non fosse successo niente — nel caso pagato, l'approvazione di una rubrica non ha scritto la modifica e ha marcato la riga `rejected`. Segnale: una scrittura che tocca SOLO la colonna nuova non ha effetto, mentre le letture della stessa tabella funzionano. Mossa: `docker exec anomalia-db psql -U postgres -d postgres -c "notify pgrst, 'reload schema';"` subito dopo ogni migration applicata a mano, prima di aprire il browser.
 
 ### La porta 5173 può appartenere al vite di un altro worktree
 Un `vite dev` di un altro worktree risponde 404 a tutto e resta lì in ascolto; il CLI ci si punta da solo. Mossa: `lsof -nP -iTCP:5173 -sTCP:LISTEN` e `ps` sul PID prima di `npm run dev`; se occupata, porta esplicita (`npm run dev -- --port 5175`).
@@ -79,6 +116,9 @@ Il turno di setup dell'onboarding consegna la prima risposta in ~20s e continua 
 
 ### I rimount (`{#key}`) rendono stale i ref dell'automazione browser
 Un click su un ref catturato prima del re-render non arriva a nessuno: il carosello dell'onboarding sembrava bloccato prima del pick — era il bottone rimontato ad ogni slide. Mossa: snapshot fresco e selettori stabili (`.wide-btn`), click lenti; un "blocco" va riprodotto con click lenti e selelettori nuovi prima di chiamarlo bug. Il falso positivo costa un'ora, la prudenza tre secondi.
+
+### Un file input SSR accetta la selezione prima dell'hydration
+`waitForSelector` può vedere il file input nel markup SSR mentre `onchange` non è ancora collegato; `setInputFiles` allora perde l'immagine senza errore, la strip non nasce e il turno parte cieco. Mossa: montare il picker solo dopo `onMount`, così il selettore trova solo un input interattivo.
 
 ### Un cookie di sessione malformato abbatte il dev server
 Una curl con `sb-<host>-auth-token` corrotto produce `Invalid Base64-URL character` non gestito nella recovery della sessione e il processo muore (`curl` → 000, niente più risposte). È un finding prodotto, non rumore: la recovery non tollera input corrotto. Mossa: quando curl dà 000, guardare il log del server prima di incolpare la rete; e la richiesta che ha ucciso il server diventa un test.
@@ -100,6 +140,35 @@ aspettare `document.body.innerText.includes(marker)` conferma anche il messaggio
 
 ## Codice
 
+### Un blocco che dichiara CHI è l'agente va in TESTA, o perde contro il prompt che lo precede
+Il brief del DM lo aveva già pagato — in coda il modello salutava l'utente per nome — e per questo
+sta in testa in `live.ts` e in `queue.ts`. Il blocco del custom agent, che è la stessa cosa (una
+dichiarazione d'identità, non un compito in più), è rimasto in coda: dopo
+`You are Content Creator (…), an Anomalia agent.`, le istruzioni del mestiere, fino a 32 KB di
+memoria e l'indice dei file. Segnale: un agente custom con una voce molto caratterizzata che **a
+volte** si presenta col nome dello specialista sottostante — intermittente, perché fra le due
+identità ci sono decine di migliaia di caratteri e vince chi capita. Mossa: ogni blocco che
+dichiara identità o cornice va prima di `buildSystemPrompt`, non appeso in fondo; e quando ne
+sposti uno, chiediti quali ALTRI blocchi hanno la stessa natura e sono rimasti indietro. Il
+motore classico ha ancora la stessa forma in due punti (`chat/queue.ts`, `chat/lib/turn-prep.ts`).
+
+### Una regola chiusa su una superficie sola resta aperta su tutte le altre
+La migration `0187` dichiarava chiuso il buco del consenso all'immagine, e sul browser lo era:
+`addPersonReal` rifiuta senza la spunta e timbra `consent_at`/`consent_source`. L'endpoint gemello
+(`POST /api/v1/.../studio/people`, la porta di CLI e MCP) continuava a scrivere `consent: true`
+incondizionatamente — e il gate a valle si fida di quella colonna, quindi passava. Nessun test era
+rosso: la regola non stava in nessun posto, stava in due call site, e uno solo è stato aggiornato.
+Segnale: una migration o un changelog che dice «da qui in poi si fa X», e un `grep` del valore che
+X scrive che trova più di un punto che lo scrive. Mossa: la decisione diventa una funzione pura che
+tutti chiamano (qui `people-consent.ts`), e il test sta sulla funzione — non su ciascuna superficie,
+che è come si è arrivati a due.
+
+### Un dettaglio eliminato non si invalida prima di uscire
+Il reject del post cancellava la riga, poi aggiornava la pagina `/posts/:id`: il layout trovava
+correttamente un 404 prima che il callback portasse al calendario. Segnale: la pagina 404 lampeggia
+solo dopo una cancellazione dal dettaglio. Mossa: sul successo distruttivo navigare subito e lasciare
+che la nuova pagina carichi i dati; `update()` resta per errori e modifiche non distruttive.
+
 ### Markdown venduto: file veri + `?raw`, non template literal
 Skill e guide upstream restano file `.md` diffabili contro upstream, inlineati con `import x from './x.md?raw'` (pattern di `agent-files.ts`). 43KB di markdown in un template literal sono mine: backtick e `${` nel testo upstream rompono la compilazione in modo opaco.
 
@@ -118,6 +187,202 @@ Il typechecker rifiuta: `Type '{ [k: string]: ... }' is missing properties from 
 ### L'ordine atteso va calcolato, non scritto a memoria
 `expect(sorted).toEqual(['a', 'z', 'm'])` fallisce perché l'hai scritto in ordine di pensiero. `[...base, extra].sort()`, come il ricevente.
 
+### La PR che dice "risolto" è verificata solo sul primo invio, non sul redo
+La PR #24 verificava l'immagine allegata al primo messaggio: viaggia come data-URL, una **stringa**, e sopravvive a ogni trasformazione. Sul redo la history ricostruita porta l'URL come **oggetto `URL`**, e `stripProviderRefs` lo ricostruiva via `Object.entries` — che per un `URL` restituisce `[]` — lasciando `image: {}`: l'adattatore pi scarta in silenzio e il modello risponde di vedere solo il testo `[attached: url]`. Il difetto visivo tornava solo sui turni ricostruiti (redo, retry, continuazione), mai su quelli che la verifica aveva coperto. Segnale: il reasoning dell'agente dice "l'utente ha allegato un'immagine via URL… non percepisso nessun contenuto visivo". Mossa: riprodurre l'INTERA catena di trasformazioni che il messaggio subisce (ricostruzione history → strip → adattatore), non solo l'invio felice; e ogni funzione che riscrive ricorsivamente i messaggi ha il suo unit test su parti multimodali, non solo su parti testuali.
+
+### Chi pota un log concorrente pota per ULTIMO, non nel punto semanticamente giusto
+I `progress` del turno kit venivano cancellati accanto alla riga definitiva — il momento in cui
+il messaggio davvero *supera* le istantanee. Ma `mirrorSseToRun` è un ramo concorrente al driver
+che chiude il run: la sua scrittura in volo passa davanti alla cancellazione e lascia righe
+orfane che nessuno supererà più. Segnale: un test di potatura che vede ancora le righe subito
+dopo la chiusura, e le vede sparire se aspetti. Mossa: potare nel `finally` dell'ULTIMO scrittore
+(lì lo specchio, che è anche l'unico a scrivere quelle righe), non dove la semantica sembra
+chiederlo — e chiedersi se l'altra chiamata non fosse codice morto: lo era.
+
+### Una migration che ELIMINA una firma rompe la produzione prima ancora del deploy
+Qui i deploy non applicano le migration, quindi fra l'apply e il deploy del codice c'è una finestra
+in cui la produzione chiama ancora la firma vecchia. `0229` toglieva `agent_kit_close_run` a cinque
+argomenti per sostituirla con quella recintata dal lease: applicata da sola avrebbe fatto fallire
+OGNI chiusura di turno finché il codice nuovo non fosse arrivato — e la chiusura è ciò che salva la
+risposta. Segnale: una migration il cui diff contiene `drop function` o un cambio di firma, su una
+funzione che il codice deployato chiama. Mossa: i parametri nuovi hanno un default e il vincolo vale
+solo quando sono valorizzati, così la chiamata vecchia continua a risolvere; renderli obbligatori è
+una migration DOPO il deploy. E la vecchia firma si elimina comunque nella stessa migration: due
+overload che accettano gli stessi nomi rendono la chiamata ambigua (`function is not unique`).
+
+### `git commit -a` non aggiunge i file NUOVI: la PR parte senza i documenti che cita
+`-a` mette in stage solo i file gia` tracciati. In una sessione sola ha lasciato fuori dalla PR #90
+due ADR, due changelog e un file di test — tutti creati in quella stessa sessione — e il corpo della
+PR rimandava a `docs/adr/0004` che nella PR non c'era. Nessun errore, nessun avviso: il commit
+riesce e il diff sembra completo. Segnale: `git status --short` dopo il commit mostra righe `??`.
+Mossa: `git add -A <percorsi>` esplicito prima del commit, e `git status --short` come ultimo gesto
+prima di aprire la PR — deve essere vuoto.
+
+### Cancellare l'utente NON distrugge il brand di prova: gli eval perdono un brand per giro
+La regola dice che il brand di prova va distrutto sempre, e `deleteEvalUser` sembrava bastare. Non
+basta: il brand pende dall'ORGANIZZAZIONE, non dall'utente, e resta a terra. In produzione ci sono
+4 brand `eval-mt*` dai giri di `eval:ux` fra il 24 e il 26 agosto, ognuno con la sua organizzazione.
+Segnale: `select count(*) from brands where slug like 'eval-%'` maggiore di zero a eval fermo.
+Mossa: nel `finally` si cancella l'ORGANIZZAZIONE per prima (il brand se ne va in cascata) e poi
+l'utente. E il caso che perde davvero è la creazione fallita a METÀ — utente già creato, nessun
+fixture restituito, `destroyFixture(null)` che esce subito: la creazione ripulisce da sola prima
+di rilanciare.
+
+### PostgREST tiene in CACHE lo schema: la migration applicata in locale non basta
+Applicate 0226/0227/0229 allo stack locale, la chat continuava a ricadere sul percorso vecchio e la
+lettura per cursore rispondeva 503. La RLS era sana (provata a mano: l'utente leggeva i suoi eventi),
+il codice era giusto, e il colpevole era il container `rest`: PostgREST aveva la cache dello schema
+di PRIMA della migration, quindi per l'API `thread_events` non esisteva. `loadThreadEvents` cattura
+l'errore e torna `null`, e tutto scivola in silenzio sul fallback. Segnale: dopo una migration
+locale, un endpoint che nomina la tabella nuova risponde vuoto o 503 mentre psql la vede benissimo.
+Mossa: `notify pgrst, 'reload schema'` e, se non basta, `docker restart anomalia-rest`.
+
+### Il `catch` muto nel load nasconde proprio la causa che ti servirà
+`loadLiveRun(supabase, thread).catch(() => null)` sembrava prudenza: un caricamento pagina non deve
+rompersi per una lettura accessoria. Ma quando il parziale non compariva, quel catch aveva ingoiato
+l'unica informazione utile, e ho perso mezz'ora a interrogare il database invece di leggere l'errore.
+Mossa: il catch che protegge il caricamento LOGGA sempre prima di tornare `null`. Ingoiare l'errore
+e ingoiare la diagnosi sono la stessa riga.
+
+### Vite: dopo aver toccato un `package.json` di `packages/`, il browser resta su hash morti
+Aggiunta una subpath export a `@anomalia/agent-kit`, la pagina ha smesso di idratarsi con
+`Failed to fetch dynamically imported module: .../nodes/150.js`. Non era il mio modulo: era
+`/node_modules/.vite/deps/@lucide_svelte.js?v=<hash>` in 404 — l'ottimizzatore aveva rigenerato le
+dipendenze con hash nuovi. Segnale: la pagina non idrata, nessun effetto gira, e in console un
+`Failed to fetch dynamically imported module` su un nodo di rotta che via `curl` risponde 200.
+Mossa: `rm -rf node_modules/.vite .svelte-kit/generated` e riavvia il dev server.
+
+### Un turno kit reale dura ~80s: il test che asserisce a 10 secondi misura il nulla
+Il primo stress nel browser dava tutto verde in 9 secondi, e in chat non c'era nessuna risposta: il
+modello (glm-5.3-flash, con reasoning) impiega ~80s e le mie asserzioni guardavano `body.innerText`,
+che comprende la barra laterale — quindi «testo presente» era sempre vero. Segnale: un turno che
+«finisce» in pochi secondi e conteggi di caratteri a quattro cifre che non cambiano. Mossa: asserire
+sulla BOLLA (`.assistant-msg-wrap`), non sul body, e considerare finito un turno solo quando la riga
+assistant esiste in `chat_messages` — il DOM dice cosa si vede, il database dice cosa è successo.
+
+### `progress` a zero dopo un turno finito è la POTATURA che funziona, non un difetto
+Cercavo le istantanee durevoli a turno concluso e ne trovavo zero, e per un momento ho creduto che
+la corsia non scrivesse. Le scrive: guardate DURANTE il turno erano 259 in 90 secondi, la cadenza dei
+250ms. A fine turno il messaggio definitivo le supera e il `finally` dello specchio le cancella —
+esattamente il disegno della ADR 0004. Mossa: una corsia potata si osserva in volo, non a terra.
+
+### Un glob di intercettazione che prende anche il MODULO col nome dell'endpoint accusa il prodotto
+`page.route('**/kit-run**')` per provare cosa succede quando il poll fallisce: intercettava anche
+`src/routes/app/[brand]/chat/components/kit-run.ts`, cioè il modulo sorgente con lo stesso nome.
+Abortito quello, la pagina non si idrata, niente si disegna, e i tre casi provati (rete caduta, 500,
+204) risultavano TUTTI E TRE rotti — compreso quello che funzionava. Segnale: intercettando qualcosa,
+il conteggio delle richieste è 1 e non decine, e il difetto sembra colpire anche i casi che il codice
+gestisce chiaramente. Mossa: intercettare per PATHNAME esatto (una regex sull'URL), mai per un glob
+che un file sorgente può soddisfare — e prima di credere a un difetto, misurare il caso base senza
+intercettazione.
+
+### Un cancello messo un livello sopra il chokepoint non è un cancello: è una delle porte
+Il consenso alla likeness era controllato in `resolvePeopleVisualRefsDetailed` — un livello sopra
+`signPersonImages`, che è il punto dove la foto di una persona reale diventa davvero un URL
+firmato. Otto chiamanti firmano quelle foto; uno solo passava dal cancello. `media-refs` non
+selezionava nemmeno la colonna `consent`, e il workbench renderizzava una persona che la chat
+rifiutava per nome: stessa regola, due risposte secondo la porta. Segnale: una regola che vale su
+un percorso e non su un altro, e un `select` che non nomina la colonna su cui la regola decide —
+la regola non è stata aggirata, non è mai stata chiamata. Mossa: il cancello sta **sul
+chokepoint**, cioè sulla funzione che tutti devono attraversare per ottenere la cosa pericolosa,
+e prende la riga intera invece del campo già estratto; se sta più in alto, prima di dirlo chiuso
+conta i chiamanti del chokepoint e verifica ciascuno.
+
+### Un trigger `after insert` su una riga che poi viene AGGIORNATA perde tutto ciò che viene dopo
+`thread_events` — il log da cui la UI della chat proietta il thread — si riempiva da
+`chat_messages_capture_event`, un trigger `after insert`. Ma il checkpoint del battito
+(`bridge/live.ts`) INSERISCE la riga dell'assistente vuota e poi la AGGIORNA a ogni battito: nel log
+restava la fotografia del primo istante. Un thread reale in produzione aveva 60.700 caratteri di
+reasoning e 10.236 di tool_calls nella riga di `chat_messages`, e `0` e `0` nell'evento — con
+`loadThreadUiHistory` che ricade su `chat_messages` solo quando gli eventi sono ZERO, quindi non ci
+ricadeva mai. Per l'utente il turno era sparito; nel database non mancava niente.
+
+Segnale: un turno che «è scomparso» ma di cui il modello ha memoria, o due messaggi identici di
+salvataggio in coda a un lavoro lungo. Confronto che chiude la diagnosi in una query:
+`length(payload->>'content')` dell'evento contro `length(content)` della riga, sullo stesso id.
+
+Mossa, e vale oltre questo caso: **prima di scrivere un trigger `after insert`, chiedi se qualcuno
+aggiorna quella riga.** Se sì, o il trigger copre anche l'UPDATE, o il log è una bugia dal secondo
+battito in poi. Qui l'evento resta immutabile (`append_thread_event` solleva sul payload diverso, ed
+è giusto): l'aggiornamento entra come evento NUOVO con la sua `source_key`, di cui se ne tiene UNA
+sola, e il reducer sostituisce il messaggio con lo stesso id invece di accodarlo.
+
+## Build e bundle
+
+### Nel bundle esbuild un modulo che lancia in cima lancia UNA volta sola
+`billingProvider()` dichiara assente il provider anomalia nel modo ESM naturale: il modulo lancia
+in valutazione, il `try/catch` assorbe e si ricade su quello aperto. In ESM standard regge per
+sempre — un modulo in errore rilancia lo stesso errore a ogni import. Nel bundle esbuild del
+worker no: `__esm` azzera il proprio flag PRIMA di eseguire il corpo, quindi dal secondo giro
+l'init non lancia piu`, torna il namespace vuoto, e la destrutturazione da` `undefined`. In
+produzione: primo job dopo ogni restart ok, tutti gli altri morti con `Cannot read properties of
+undefined (reading 'gate')`. Segnale: un errore che sul worker c'e` e su Vercel no, e che risparmia
+la prima invocazione dopo ogni deploy. Mossa: l'assenza di un modulo non si legge dal `throw` — si
+legge dall'export (`x ?? fallback`), col `try/catch` a coprire solo il primo giro.
+
+### Un chunk sovradimensionato non è il colpevole del build che muore per memoria
+`index3.js` (5,4 MB, dieci volte il secondo chunk) era `simple-icons` intero, bundlato via `ssr.noExternal` per un motivo Vercel-only (nft duplica il pacchetto per funzione) che non vale per `DEPLOY_TARGET=node`. Rimuoverlo lo porta a 295 KB (-94,5%) — ma bisecando `--max-old-space-size` (4096/4608/5120) il build muore e riesce agli stessi tetti prima e dopo: zero spostamento. Strumentando `adapter-node`'s `adapt()` (scritture sincrone `appendFileSync`, non `console.error` — l'OOM abort salta il flush dei buffer stdio e perde l'ultimo log) l'heap è già a ~3,4 GB PRIMA che `adapt()` faccia alcunché di suo, durante la sola copia/compressione asset. Segnale: bisecare il tetto di memoria prima e dopo un fix e vedere la stessa soglia di crash — il chunk grande era un difetto reale (fix corretto, va tenuto) ma non la causa del crash. Mossa: non fidarsi della dimensione di un chunk come proxy del picco di memoria; misurare il picco stesso, e quando serve isolare DOVE cresce, strumentare con scritture sincrone perché un OOM non flush-a l'output normale.
+
+### `git checkout --ours <file>` in un merge BUTTA anche le fusioni riuscite di quel file
+Un conflitto solo in `live.ts` fra il lease (dev) e la sandbox riusata (#96): risolto con
+`git checkout --ours src/lib/agent/bridge/live.ts`, che NON risolve il pezzo — riporta il file
+INTERO alla versione nostra, cancellando tutte le hunk che git aveva gia` fuso bene da `theirs`.
+Sparito in silenzio tutto il lavoro del lease appena mergiato: `claimRun`, `publishProgress`,
+`RUN_LEASE_TTL_MS`, `resumeRunId` a zero occorrenze, nessun errore, nessun marcatore residuo.
+Segnale: dopo `--ours`/`--theirs` su un file, i simboli che l'ALTRO ramo aveva portato non ci sono
+piu`. Mossa: contare le occorrenze dei simboli di ENTRAMBI i rami dopo ogni risoluzione, e risolvere
+la singola hunk (a mano o con un merge tool), mai il file intero.
+
+### `describe.skipIf` salta i TEST, non il corpo della suite
+`sandbox-leases.integration.test.ts` costruiva il client Supabase dentro il corpo della describe
+saltata: vitest esegue comunque quel corpo per raccogliere i test, quindi su ogni macchina senza
+`SANDBOX_TEST_SUPABASE_URL` la RACCOLTA moriva con «supabaseUrl is required» e si portava giu` la
+suite intera per un test che non doveva nemmeno partire. Segnale: `Test Files 1 failed` con
+`Tests: no tests` — un file che non arriva neppure a eseguire un caso. Mossa: tutto cio` che ha
+bisogno dell'ambiente nasce in `beforeAll`, che una suite saltata non esegue.
+### Una guardia su una variabile che l'harness mette SEMPRE non e` una guardia
+`onboarding.real.spec.ts` si proteggeva con `test.skip(!PUBLIC_SUPABASE_URL, ...)`, e in CI falliva
+sempre: quella variabile la mette `playwright.config.ts` come SEGNAPOSTO
+(`http://localhost:54321`), quindi c'e` sempre e lo skip non poteva scattare. La sua presenza non
+dice che dietro ci sia un database vero con l'utente seminato — dice solo che l'app ha di che
+partire. Segnale: un test «condizionale» che non salta mai, e che fallisce solo dove l'ambiente e`
+piu` povero. Mossa: consenso ESPLICITO come per gli altri test di integrazione del repo
+(`E2E_REAL_STACK=1`, come `SANDBOX_HOLDER_INTEGRATION=1`), e poi provare che con lo stack vero il
+test passa davvero — una guardia che nasconde un test rotto non vale niente.
+
+### Un finto client che IGNORA la select regala colonne che il database non ha
+`team_activity` chiedeva `speaker` a `chat_messages`, dove la colonna si chiama `name`: PostgREST
+risponde 42703, supabase-js torna `data: null` SENZA alzare, e lo strumento restituiva vuoto in
+silenzio. I test passavano perché il loro `fakeClient` restituiva l'array seminato tale e quale,
+select o no — quindi il campo inventato c'era sempre. Segnale: `schema-drift-check` che segna una
+colonna «che il codice nomina e non esiste» mentre la suite e` verde. Mossa: il finto PROIETTA le
+colonne chieste e applica gli alias `alias:colonna`, come fa PostgREST; con quello i test sono
+diventati rossi da soli, e solo dopo si corregge la query. Un finto piu` generoso del database non
+e` un finto, e` una benda.
+
+### La CI verde non dice che la produzione si COSTRUISCE: `npm ci` contro `npm install`
+Due deploy di produzione di fila in ERROR su `patch-package cannot apply`, con la CI verde sugli
+stessi commit. La CI usa `npm ci`, che CANCELLA `node_modules` prima di installare; Vercel usava
+`npm install`, che riusa l'albero ripristinato dalla cache — e su un albero gia` patchato
+patch-package si rifiuta, dicendolo esplicitamente («Try removing node_modules and trying again»).
+Segnale: build di produzione rossa su patch-package mentre `npm ci` in locale e in CI passa, e
+nessun file di patch e` cambiato nel commit incriminato. Mossa: `installCommand: "npm ci"` in
+`vercel.json`, cosi` la produzione costruisce con lo stesso comando che i test hanno provato — e un
+test che lo pinna, perche` la prossima volta il sintomo sara` di nuovo «ma la CI e` verde».
+
+E la lezione dietro la lezione: un merge in `main` che passa i check NON e` un rilascio. Il
+deployment va guardato (`state`), o si festeggia una consegna che non e` avvenuta.
+
+### La suite spediva DAVVERO: un test non sveglia nessuno
+Ops riceveva segnalazioni `agent_kit_stream` con dentro `thread: t-retry-no-sandbox`, `brand b1`,
+`user u1` e uno stack che punta a `live.test.ts`: la suite gira col `.env` di chi la lancia — chiavi
+vere di Sentry, PostHog e Resend — e `reportChatError` partiva sul serio. Segnale: una segnalazione
+il cui `detail` nomina entita` che esistono solo nei fixture. Mossa: la guardia sta nella SORGENTE
+(`reportChatError` e `sendEmail` escono subito sotto `process.env.VITEST`), mai nei mock dei singoli
+file — `live.test.ts` non mockava `report-error`, e bastera` un altro file distratto perche' ricominci.
+Il `console.error` resta: serve a chi guarda la suite. Il danno peggiore non e` il rumore, e` che una
+segnalazione finta rende sospette anche quelle vere.
+
 ## Prodotto
 
 ### La differenza per-agente si chiama mappa, non sottosistema
@@ -128,3 +393,184 @@ Motion prende `remotion-best-practices` perché è l'unico che scrive sorgente R
 
 ### La continuazione senza testo per il modello muore due volte
 Una ripresa accodata con `user_message` vuoto è morta due volte prima di chiamare il modello: prima col gate `Missing user_message`, poi — superato il gate — col prompt vuoto, perché il provider rifiuta una conversazione che non apre con un turno `user` e `dropLeadingAssistant` mangia l'apertura firmata. Il segnale: `chat_jobs.status='failed'` con errori diversi per lo stesso job. La mossa: una continuazione porta SEMPRE un testo solo-per-il-modello (mai salvato, mai mostrato), come `enqueueTurnContinuation`; `open_session_with_user` era nata rotta così ed è sopravvissuta mesi perché la coda è buio per i test unitari — è la verifica nel browser che l'ha vista.
+
+### Una media di produzione non dice che quel percorso sia ancora vivo
+`onboarding_step_jobs` dava medie perfettamente credibili — research 301s, competitors 31s — e su
+quelle stava per partire una PR che accorciava il wizard. Ma l'ultima riga di QUALUNQUE tipo era
+del 12 agosto, e la diagnosi era del 1 settembre: il percorso era morto da tre settimane, staccato
+dal flusso critico quando l'early-create ha portato l'utente dritto in chat. Una `avg()` non ha
+data; sembra viva per sempre. Segnale: numeri che descrivono un percorso che nel codice non ha
+nessun ingresso — cerca chi linka la rotta prima di crederci. Mossa: con la media chiedi SEMPRE
+`max(created_at)` e un conteggio a finestra (`count(*) filter (where created_at > now() - '7
+days')`), e incrocia con lo stato che il percorso lascia (qui: zero `onboarding_completed_at` dal
+3 agosto, mentre i piani editoriali continuavano a nascere — dalla chat).
+
+### I selettori di una pagina pubblica sono un contratto con l'eval, che in CI non gira
+Riscrivere la seconda fase di `/start` ha tolto `button.scard`, e `scripts/eval/ux/walk.ts` ci
+clicca sopra. `npm run eval:ux` costa soldi e si lancia a mano: la rottura non sarebbe diventata
+rossa in nessuna PR, sarebbe marcita fino alla prossima run manuale, che è il modo più lento
+possibile di scoprirla. Segnale: tocchi il markup di `/`, `/start`, `/login` o dell'onboarding.
+Mossa: `grep` dei selettori che cambi dentro `scripts/eval/` PRIMA di considerare finito il
+lavoro — la camminata è codice che nessun test protegge, quindi la protezione sei tu.
+
+## L'immagine del self-host non entra in un builder Docker da 8 GB
+
+**Segnale.** `docker compose build` sull'immagine app fallisce in due modi diversi, e vanno
+distinti: `ResourceExhausted: cannot allocate memory` è la VM che rifiuta, `FATAL ERROR:
+Ineffective mark-compacts near heap limit` è il tetto di heap troppo basso. Il primo dice che hai
+chiesto troppo, il secondo che hai chiesto troppo poco.
+
+**Mossa.** Non bisezionare `--max-old-space-size`: con 7,75 GiB di VM la finestra è chiusa (4096
+va in heap overflow a 3,4 GB, da 4608 in su la VM non alloca). Il consumo viene da `adapter-node`
+su un chunk server da 5,1 MB, non dal flag. Misura il picco con `/usr/bin/time -l` e riduci il
+bundle; alzare la memoria di Docker Desktop nasconde il problema senza risolverlo per chi installa.
+
+## Una funzione che pretende un ordine va chiamata col nome dell'ordine che pretende
+
+**Segnale.** La conversazione intera capovolta — la risposta sopra la domanda — e i messaggi più
+vecchi al posto dei più recenti quando il thread supera il limite. Non «ogni tanto disordinata»:
+sempre, e solo sulla lettura che passa dal log degli eventi.
+
+**Causa.** `chronologicalTail(newestFirst, limit)` fa `slice(0, limit).reverse()`: è corretta solo
+se l'input arriva `order('created_at', desc)`. Un secondo chiamante le ha passato la proiezione del
+log, che esce in ordine di `seq` — cioè al contrario. Il tipo era `T[]` in entrambi i casi, quindi
+il compilatore non aveva niente da dire, e il ramo di fallback restava giusto: la suite verde per
+tutti e due.
+
+**Mossa.** Il presupposto sta nel NOME, non in un commento: `chronologicalTail` per una lista
+`desc`, `newestTail` per una già cronologica. E un ramo di lettura aggiunto senza test è il posto
+dove questo ricapita: il test che ordina quattro messaggi costa tre righe.
+
+## Un `$effect` che legge lo stato che scrive è un cappio, non un poll
+
+**Segnale.** Ricaricando a metà turno la chat resta «attiva» ma non si muove più niente: il
+contatore fermo, nessun testo, nessun tool, nessun pensiero. Sembra uno stream perso; è il
+contrario, è troppo lavoro.
+
+**Causa.** Il corpo dell'effetto chiamava `poll()` in modo sincrono, e `poll()` leggeva `orphanRun`
+prima del primo `await` — quindi lettura tracciata. La risposta riscriveva `orphanRun`,
+invalidando l'effetto, che si smontava e rimontava chiamando subito `poll()`. Misurati **3378 giri
+in 10 secondi** contro uno ogni 350ms previsti: il thread principale saturo non ridipinge, e da
+fuori si legge come «lo stream si è perso».
+
+**Mossa.** Le letture che servono a decidere il ritmo passano da `untrack`. E la misura che
+distingue le due diagnosi opposte è una sola: contare le richieste. `window.fetch` avvolto per
+dieci secondi dice in un colpo se il problema è che non parte niente o che parte tutto.
+
+**E il test che non si può scrivere va dichiarato.** Il cappio è reattivo, e in questa suite gli
+effetti Svelte non vengono eseguiti (`$effect.root` + `flushSync` conta zero esecuzioni del corpo):
+un test lì passa identico con e senza il fix. Lasciarlo è peggio che non averlo — è una guardia
+finta che il prossimo leggerà come copertura. Va tolto e il buco va scritto qui.
+
+### In locale non gira nessun cron: il wizard che «pensa» per sempre non è un difetto del prodotto
+L'onboarding resta a *«Drafting your editorial plan…»* all'infinito sullo stack locale, e sembra un
+hang del piano editoriale. Non lo è: i job di `onboarding_step_jobs` vengono ripresi dal cron
+`*/2 * * * *` su `/api/v1/onboarding/steps/work`, che in locale **non esiste**. Il job stalla dopo
+`STALL_MS` (6 minuti), nessuno lo rimette in coda, e la pagina continua a pollare una riga
+`running` che non avanzerà più. Il `[swallowed] fetch failed` nel log è il kick fire-and-forget del
+worker che non ha risposto entro il timeout di undici — sintomo, non causa.
+Mossa: fai il cron a mano prima di diagnosticare, e tienilo acceso per tutta la camminata:
+`for i in $(seq 1 45); do curl -s --max-time 4 -X POST -H "x-autopilot-secret: $AUTOPILOT_SECRET" \
+http://localhost:5220/api/v1/onboarding/steps/work; sleep 60; done`.
+Vale per ogni `*/N` in `vercel.json` (radar, knowledge, chat queue, designer, webhooks): in locale
+nessuno di quei lavori parte da solo, e ciò che sembra un blocco è una coda che nessuno drena.
+
+### Una data «futura» scritta a mano in un test è una bomba a orologeria
+`web_schedule_article` e `content_reschedule_post` passavano `scheduled_for: '2026-09-01T10:00'`, e
+il test la chiamava «una data futura». L'1/9/2026 alle 10:00 quella data è diventata passato: i due
+tool l'hanno rifiutata, giustamente, e i test sono diventati rossi **su ogni branch nello stesso
+istante**, per sempre. La suite completa era verde alle 08:43 e alle 08:59 dello stesso giorno.
+
+Il danno peggiore non è il rosso, è il verde che c'era prima: `content_reschedule_post` asserisce
+`isError === true`, quindi ha continuato a "passare" mentre l'errore arrivava da un'altra causa —
+un test che non verificava più la regola che dichiara di verificare, e che senza l'asserzione sul
+messaggio non avrebbe mai detto niente.
+
+Segnale: **«era verde stamattina e non ho toccato niente»**, con i file rossi lontanissimi dal tuo
+diff. Prima di cercare il colpevole nel codice, guarda l'orologio e cerca date scritte a mano.
+Mossa: la data si deriva da `Date.now()`, mai si scrive — `aDateInTheFuture()` in
+`packages/agent-kit/src/testkit.ts`. Restano della stessa forma quattro `periodEnd: new
+Date('2026-09-01')` (credit-warning, tool-policy, brand-studio-tools, content/ugc plugins): oggi
+innocui perché nessuno li confronta con l'orologio, domani no.
+
+### `npm run check` esce 0 con centinaia di errori: il verde è finto, conta la DIFFERENZA
+Il typecheck di questo repo non è pulito — 346 errori su 171 file, tutti pre-esistenti — e
+`svelte-check` **esce comunque 0**. Quindi «il check passa» non significa niente: né in locale né
+in CI, dove un gate costruito sull'exit code sarebbe cieco per definizione.
+
+È già costato un difetto vero, sfuggito a una suite di 6102 test verdi. Estraendo i fetcher in
+`@anomalia/leads-core/feed` il factory era stato legato a `const sources = createSources(...)` a
+livello di modulo, ma `sources` è già il nome delle righe di `brand_news_sources` lette dal
+database in TRE funzioni di `radar.ts`: ognuna lo ombreggiava, e `sources.fetchSourceFeed(...)`
+risolveva sull'array del database. I test non l'hanno visto perché quei percorsi
+(`buildRadarFeedCache`, `radarDiagnose`, `radarScan`) toccano il DB e non hanno unit test — cioè
+proprio la forma di guasto che i commenti di quel file raccontano: una sorgente che smette di
+funzionare in silenzio e riporta «0 item».
+
+Segnale: nessuno. Non c'è un rosso da cercare — la suite è verde e l'exit code è 0. L'unico
+segnale è il **conteggio**: `COMPLETED <n> FILES <m> ERRORS` nell'ultima riga dell'output.
+Mossa: prima di dire che il typecheck regge, confronta `m` con quello della base e cerca i tuoi
+file per nome fra le righe `ERROR` (`grep ERROR out.txt | grep <i tuoi file>`). E l'output va
+rediretto su un file tuo: quello del task in background viene troncato alla coda, quindi ci leggi
+gli ultimi 40 errori e concludi il falso.
+
+Corollario di progettazione: legando in un modulo grande le funzioni che arrivano da un factory,
+**destrutturale** invece di tenere l'oggetto. Un oggetto con un nome generico (`sources`, `items`,
+`data`) prima o poi lo ombreggia una locale, e TypeScript è l'unica cosa che te lo dice.
+
+### PostgREST non risolve un overload: `is_approved()` + `is_approved(uuid)` = PGRST202 su ogni chiamata
+Due funzioni con lo STESSO nome e firme diverse: quella senza argomenti finisce nella schema cache,
+quella con il parametro no. `supabase.rpc('is_approved', { p_user })` torna
+`PGRST202 — Could not find the function public.is_approved(p_user) in the schema cache`, e un
+`notify pgrst, 'reload schema'` non la sistema. Segnale: un RPC che fallisce con PGRST202 su una
+funzione che in psql esiste ed è eseguibile. Mossa: nomi distinti (`is_approved()` /
+`is_user_approved(uuid)`), mai un overload esposto via PostgREST.
+
+### Un predicato di accesso che fallisce chiuso chiude fuori i clienti che pagano
+Corollario del precedente, ed è il difetto vero: con `return data === true` l'errore PGRST202
+diventava un 403 per OGNI utente della API, approvati e paganti compresi. Una porta commerciale
+non è un confine di sicurezza: il costo dei due lati non è lo stesso. Mossa: `if (error) return true`
+— si fallisce aperto, e il caso sta in un test che nomina l'incidente.
+
+### Il riempimento di una migrazione ri-approva tutti alla seconda esecuzione
+`alter table ... add column if not exists` seguito da `update ... where <colonna> is null` sembra
+idempotente e non lo è: la seconda applicazione riempie anche le righe nate DOPO la prima. Qui un
+utente in attesa è diventato approvato senza che nessuno lo approvasse. Segnale: un backfill
+condizionato sul valore della colonna invece che sulla sua esistenza. Mossa: il backfill sta dentro
+un `do $$ ... if not exists (select 1 from information_schema.columns ...) then ...`, così gira
+esattamente una volta, alla creazione della colonna.
+
+### L'embed di Calendly si monta DUE volte se lo lasci allo scan automatico
+Lo script `assets.calendly.com/.../widget.js` cerca da solo gli elementi `.calendly-inline-widget`.
+Con l'idratazione di SvelteKit quello scan corre contro il mount del componente e inizializza due
+iframe nello stesso div: quello che resta non finisce mai di caricare. Segnale:
+`performance.getEntriesByType('resource')` mostra DUE richieste alla pagina Calendly per un solo
+widget. Mossa: contenitore senza quella classe, script caricato in `onMount` e
+`Calendly.initInlineWidget({ url, parentElement })` chiamata una volta sola.
+
+### Una scheda vecchia lasciata aperta rimette in piedi la sessione che hai appena chiuso
+Verificando un gate con due account, una scheda ferma su `/app/<brand>` con la sessione precedente
+rinfresca il token e riscrive il cookie: il logout appena fatto nell'altra scheda viene annullato, e
+l'utente non approvato risulta di colpo dentro. Segnale: dopo un cambio account atterri su una
+dashboard a cui quell'utente non ha accesso. Mossa: chiudi ogni scheda dell'app prima di cambiare
+identità, una sola scheda per verifica.
+
+## Due app locali sulla stessa porta, una su IPv4 e una su IPv6
+
+**Segnale.** `curl http://localhost:5174/...` risponde con la tua pagina, il browser sulla
+stessa porta mostra un'altra applicazione, e `/app/...` dà 404 in browser mentre in curl è 200.
+
+**Cosa succede.** `localhost` risolve a `::1` e `127.0.0.1` a IPv4: due processi Vite possono
+tenere la *stessa* porta, uno per stack, senza che nessuno dei due dica "porta occupata". Qui
+erano `anomalia` e `anomalia-leads`, entrambi su 5174.
+
+**La mossa.** Avvia il dev server con una porta esplicita e un host esplicito, e prima di
+crederci chiedi all'app chi è:
+
+```bash
+npm run dev -- --port 5200 --host 127.0.0.1
+curl -s http://127.0.0.1:5200/login | grep -oE 'Anomalia|anomalia/leads' | head -1
+```
+
+Vite può comunque slittare di porta se trova occupato ("Port 5199 is in use, trying another
+one"): l'unica porta di cui fidarsi è quella stampata nel log, verificata con la riga sopra.

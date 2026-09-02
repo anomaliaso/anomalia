@@ -9,6 +9,13 @@ vi.mock('$env/static/public', async (originale) => ({
   PUBLIC_SUPABASE_URL: 'https://test.supabase.co'
 }));
 
+// Il self-host legge l'URL a RUNTIME (`$env/dynamic/public`), perché l'immagine si costruisce una
+// volta e il progetto Supabase lo sceglie chi la avvia. Il mock segue il codice: fermarsi a quello
+// statico lascia `OWN_HOST` vuoto, e allora NIENTE è più «nostro» — le immagini tornano link.
+vi.mock('$env/dynamic/public', () => ({
+  env: { PUBLIC_SUPABASE_URL: 'https://test.supabase.co' }
+}));
+
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import {
   normalizeMediaPayload,

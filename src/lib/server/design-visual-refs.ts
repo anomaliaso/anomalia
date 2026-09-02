@@ -19,15 +19,23 @@ const SOCIAL_THUMB_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const SOCIAL_THUMB_SIGN_TTL_S = 7 * 24 * 60 * 60;
 const MAX_SOCIAL_THUMBS = 8;
 
+export type LikenessSubject = { kind?: string | null; consent?: unknown };
+
 /**
- * Brand people (real + AI persona) → signed photo URLs, labeled for the composer.
+ * THE LIKENESS RULE. The single place that decides whether a person's photograph may become a
+ * reference an image or video model can act on. A `kind='real'` person without an attested
+ * `consent` never qualifies — a UGC clip of a real face speaking a synthetic script is a deepfake
+ * under Art. 3(60) AI Act, and image rights and the GDPR apply to it whatever the brand intends.
+ * AI personas depict nobody, so they are never gated.
  *
- * THE LIKENESS GATE LIVES HERE. This is the one place a real person's photograph turns into a
- * reference an image or video model can act on, so it is where consent is checked. A `kind='real'`
- * person without `consent` is dropped and named in `blocked` — a UGC clip of a real face speaking
- * a synthetic script is a deepfake under Art. 3(60) AI Act, and image rights and the GDPR apply to
- * it whatever the brand intends. AI personas depict nobody, so they are never gated.
+ * Every surface that signs a person's photos calls this. Re-stating the condition anywhere else
+ * is how the rule diverges.
  */
+export function likenessConsented(subject: LikenessSubject): boolean {
+  return subject.kind === 'ai' || subject.consent === true;
+}
+
+/** Brand people (real + AI persona) → signed photo URLs, labeled for the composer. */
 export async function resolvePeopleVisualRefsDetailed(
   supabase: SupabaseClient,
   brandId: string,
@@ -44,7 +52,7 @@ export async function resolvePeopleVisualRefsDetailed(
   const refs: VisualRef[] = [];
   const blocked: string[] = [];
   for (const row of data ?? []) {
-    if (row.kind !== 'ai' && row.consent !== true) {
+    if (!likenessConsented(row)) {
       blocked.push(String(row.name ?? row.id));
       continue;
     }

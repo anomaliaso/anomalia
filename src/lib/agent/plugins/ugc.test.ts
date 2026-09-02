@@ -76,7 +76,7 @@ describe('ugc plugin — mount', () => {
 		const kit = seed();
 		const plugin = createUgcPlugin({ supabase: kit.client, brandId: BRAND_ID, userId: USER_ID });
 		const names = plugin.tools.map((t) => t.name).sort();
-		expect(names).toEqual(['ugc_check_video', 'ugc_generate_video', 'ugc_list_people', 'ugc_list_talents', 'ugc_review_video']);
+		expect(names).toEqual(['motion_control_video', 'refine_video', 'ugc_check_video', 'ugc_generate_video', 'ugc_list_people', 'ugc_list_talents', 'ugc_review_video']);
 		expect(names.some((n) => n.startsWith('content_'))).toBe(false);
 	});
 
@@ -173,5 +173,22 @@ describe('ugc_list_people / ugc_list_talents — read_people/read_talents as-is'
 		const res = await plugin.execute({ name: 'ugc_list_people', args: {} }, fakeContext());
 		const out = JSON.parse((res.content[0] as { text: string }).text);
 		expect(out.people[0].id).toBe('person-1');
+	});
+});
+
+describe('i due tool video stanno in ogni mestiere che tocca video, col nome della chat', () => {
+	it('ugc e content montano gli STESSI due tool, sotto gli STESSI nomi della chat', async () => {
+		// Un agente monta un mestiere solo: se refine vivesse nel solo ugc, un agente content
+		// potrebbe creare un post video e non rifinirlo — la stessa richiesta risponderebbe in modo
+		// diverso a seconda di chi la riceve, che e' il difetto peggiore da diagnosticare.
+		const { createContentPlugin } = await import('./content');
+		const kit = seed();
+		const deps = { supabase: kit.client, brandId: BRAND_ID, userId: USER_ID };
+		const ugc = new Set(createUgcPlugin(deps).tools.map((t) => t.name));
+		const content = new Set(createContentPlugin(deps).tools.map((t) => t.name));
+		for (const name of ['refine_video', 'motion_control_video']) {
+			expect(ugc.has(name), `ugc: ${name}`).toBe(true);
+			expect(content.has(name), `content: ${name}`).toBe(true);
+		}
 	});
 });

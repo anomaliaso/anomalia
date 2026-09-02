@@ -1,5 +1,5 @@
 const entry = {
-  date: 'August 28, 2026',
+  date: '2026-08-28',
   title: 'Versions, tags and releases — automatic',
   items: [
     'Every release now carries a version and a build identity: merging to main tags `v0.3.0`-style versions and publishes GitHub release notes on its own.',

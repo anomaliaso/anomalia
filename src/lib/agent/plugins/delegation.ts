@@ -30,6 +30,8 @@ export function createDelegationPlugin(deps: DelegationPluginDeps): ToolPlugin {
 		name,
 		description: String(delegation[name]?.description ?? ''),
 		requiresMode: 'agent',
+		effectful: true,
+		consequential: true,
 		inputSchema: jsonSchemaOf(delegation[name])
 	}));
 

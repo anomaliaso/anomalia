@@ -6,6 +6,8 @@ import { EDITOR_POST_COLS, requireZernioCancellation } from '$lib/server/post-ed
 import { createSingleContent, CAROUSEL_PLATFORMS, carouselMaxPerBatch, attachBrandMoodImages, generateStandaloneImage, regeneratePost, loadBrandMoodImageUrls, type ContentPrefs } from '$lib/server/content-preview';
 import { remaining, addUsage, monthKey } from '$lib/server/usage';
 import { gateToolCall } from '$lib/server/chat/tool-policy';
+import { isVideoUrl } from '$lib/content-formats';
+import { VIDEO_BRIEF_MAX_CHARS } from '$lib/video-models';
 import { GRAPHIC_ASSET_MINT_HINT, STANDALONE_IMAGE_HINT, isVideoPostRow } from '$lib/server/media-origin';
 import { env } from '$env/dynamic/private';
 import { loadActivePlan, currentWeekIndex } from '$lib/server/editorial-plan';
@@ -17,10 +19,121 @@ import { startLongToolJob, type AnyRec } from './shared';
 
 export function createContentTools(ctx: ChatToolCtx) {
   const { supabase, brandId, tz, userId, threadId, turnRefUrls } = ctx;
+
+  /**
+   * Il corpo dei due tool che partono da un video: risolvere la sorgente, gatare i crediti,
+   * eseguire. Uno solo perche' la parte che conta e' la stessa e a scriverla due volte
+   * divergerebbe — e la meta' che diverge in silenzio e' sempre il gate.
+   *
+   * Il post NON viene toccato: entrambi restituiscono un URL. Sostituire da soli la clip di un
+   * post approvato sarebbe una modifica che nessuno ha chiesto, su qualcosa che l'utente ha gia'
+   * guardato e accettato.
+   */
+  async function transformTool(
+    role: 'refine' | 'motion',
+    args: {
+      prompt?: string;
+      post_id?: string;
+      video_url?: string;
+      aspect_ratio?: string;
+      reference_image_url?: string;
+      mode?: string;
+    }
+  ) {
+    let videoUrl = args.video_url?.trim() ?? '';
+    if (args.post_id) {
+      const { data: post } = await supabase
+        .from('posts')
+        .select('id, media_url, content_type')
+        .eq('id', args.post_id)
+        .eq('brand_id', brandId)
+        .maybeSingle();
+      if (!post) return { error: 'Post not found' };
+      const url = String(post.media_url ?? '').trim();
+      if (!url || !isVideoUrl(url)) {
+        return {
+          error: 'not_a_video',
+          message:
+            'That post has no video to work from. refine_video and motion_control_video start from a clip that already exists — create one with create_post(content_type:"video") first.'
+        };
+      }
+      videoUrl = url;
+    }
+    if (!videoUrl) return { error: "Pass post_id or video_url — there is nothing to transform without a clip." };
+    // Un URL scritto dal modello viene comunque scaricato lato server: passa dallo stesso guardiano
+    // SSRF di qualunque altro indirizzo che arriva da fuori.
+    if (!isUrlSafe(videoUrl)) return { error: 'That video URL is not reachable from here.' };
+
+    const refImage = args.reference_image_url?.trim();
+    if (refImage && !isUrlSafe(refImage)) return { error: 'That image URL is not reachable from here.' };
+    if (role === 'motion' && !refImage) {
+      return { error: 'motion_control_video needs image_url: the subject that should move.' };
+    }
+
+    const { data: brandRow } = await supabase
+      .from('brands')
+      .select('plan, timezone, activated_at, status, content_prefs')
+      .eq('id', brandId)
+      .maybeSingle();
+    const prefs = (brandRow?.content_prefs ?? {}) as Record<string, unknown>;
+    const budget = await remaining(
+      supabase,
+      brandId,
+      brandRow?.plan,
+      brandRow?.timezone ?? tz,
+      brandRow
+        ? {
+            id: brandId,
+            plan: brandRow.plan ?? null,
+            activated_at: brandRow.activated_at ?? null,
+            status: brandRow.status ?? 'active'
+          }
+        : undefined
+    );
+    const gate = gateToolCall(role === 'refine' ? 'refine_video' : 'motion_control_video', budget);
+    if (gate) return gate;
+
+    const { transformVideo } = await import('$lib/server/video');
+    const { videoModelForRole } = await import('$lib/video-models');
+    if (!videoModelForRole(prefs, role)) {
+      return {
+        error: 'no_model',
+        message:
+          role === 'refine'
+            ? 'No video refine model is set for this brand. Pick one in Settings → Images & video → Video refine.'
+            : 'No video motion model is set for this brand. Pick one in Settings → Images & video → Video motion.'
+      };
+    }
+
+    try {
+      const out = await transformVideo({
+        supabase,
+        userId,
+        role,
+        videoUrl,
+        prompt: args.prompt,
+        imageUrl: refImage,
+        aspectRatio: args.aspect_ratio,
+        mode: args.mode === 'pro' ? 'pro' : 'std',
+        prefs
+      });
+      if (!out) return { error: 'The render returned nothing. Nothing was billed for a job that did not finish.' };
+      return {
+        success: true,
+        video_url: out.url,
+        model: out.model,
+        did_not_change_post: true,
+        hint: 'This did NOT change any post. Show it with show_media, or attach it where you need it.'
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'transform_failed' };
+    }
+  }
+
   return {
     create_post: tool({
       description:
-        'Create a new social media post — caption + visual as a pending draft. MEDIA FIRST: if the brand Media library has usable assets (call read_media), pass media_ids so the post reuses those photos pixel-perfect (media_mode use_as_is) or composites them into a branded frame (composite). Only generate a brand-new AI image when no library asset fits. Set content_type to "carousel" for a multi-slide post (Instagram/Facebook/LinkedIn only), or "video" for a reel. For videos YOU choose model, duration, genre and creative brief via video_model / duration / ugc / ugc_ad / video_prompt — pass video_prompt to direct the clip freely (avoids hardcoded UGC/cinematic templates). Paid UGC ads: ugc_ad:true → 22s on Seedance 2.5. For Seedance 2.5 pass video_model="bytedance/seedance-2-5".',
+        'Create a new social media post — caption + visual as a pending draft. MEDIA FIRST: if the brand Media library has usable assets (call read_media), pass media_ids so the post reuses those photos pixel-perfect (media_mode use_as_is) or composites them into a branded frame (composite). Only generate a brand-new AI image when no library asset fits. Set content_type to "carousel" for a multi-slide post (Instagram/Facebook/LinkedIn only), or "video" for a reel. For videos YOU choose model, duration, genre and creative brief via video_model / duration / ugc / ugc_ad / video_prompt — pass video_prompt to direct the clip freely (avoids hardcoded UGC/cinematic templates). Default video model is Grok Imagine (480p); for Seedance 2.5 (up to 30s or reference video/audio) pass video_model="bytedance/seedance-2-5". Paid UGC ads: 22s on Seedance 2.5, capped at 15s on other models.',
       inputSchema: z.object({
         brief: z.string().describe('What the post should say/show — the user\'s brief or topic'),
         platform: z.string().optional().describe('Target platform (e.g. "instagram", "tiktok", "linkedin"). Omit to use brand\'s primary platform. Carousels require instagram, facebook or linkedin. A platform the brand has NOT connected is refused before any work is done — connect it first, or pass allow_unconnected to make a draft anyway.'),
@@ -36,19 +149,23 @@ export function createContentTools(ctx: ChatToolCtx) {
           .boolean()
           .optional()
           .describe(
-            'Video + UGC only. true = paid UGC AD (22s, forces Seedance 2.5, fuller Demo+Proof script ~55–66 words). false/omit = organic ≤15s. Use when the user asks for an ad/boost creative.'
+            'Video + UGC only. true = paid UGC AD (22s on Seedance 2.5 via video_model, capped at 15s on other models; fuller Demo+Proof script ~55–66 words). false/omit = organic ≤15s. Use when the user asks for an ad/boost creative.'
           ),
         video_prompt: z
           .string()
+          .max(VIDEO_BRIEF_MAX_CHARS)
           .optional()
           .describe(
-            'Video only. YOUR creative brief for THIS clip (camera, motion, energy, setting, genre). When set it REPLACES hardcoded UGC/cinematic motion templates — always prefer writing this over relying on ugc:true. Example: "Slow push-in on the product on a walnut desk, soft window light, no person, ambient room tone only." Keep under ~1200 chars. Do not ask for on-screen text (captions are burned on afterwards).'
+            'Video only. YOUR creative brief for THIS clip (camera, motion, energy, setting, genre). When set it REPLACES hardcoded UGC/cinematic motion templates — always prefer writing this over relying on ugc:true. Example: "Slow push-in on the product on a walnut desk, soft window light, no person, ambient room tone only." Keep under ' +
+              VIDEO_BRIEF_MAX_CHARS +
+              ' chars. Do not ask for on-screen text (captions are burned on afterwards).'
           ),
         instructions: z
           .string()
+          .max(600)
           .optional()
           .describe(
-            'Video only. Extra delivery direction (tone, accent, what never to do). Overrides Settings → Video instructions when set. Soft steer alongside video_prompt.'
+            'Video only. Extra delivery direction (tone, accent, what never to do), at most 600 chars. Overrides Settings → Video instructions when set. Soft steer alongside video_prompt.'
           ),
         video_model: z
           .enum([
@@ -60,7 +177,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           ])
           .optional()
           .describe(
-            'Video only. kie video model for THIS clip. Use "bytedance/seedance-2-5" when the user asks for Seedance / Seedance 2.5 (up to 30s). Use "grok-imagine-video-1-5-preview" for Grok Imagine. Omit to use the brand Settings → Video model (or platform default). NEVER claim Seedance is unavailable — this parameter IS the selector.'
+            'Video only. kie video model for THIS clip. Default is Grok Imagine ("grok-imagine-video-1-5-preview", 480p, ≤15s). Use "bytedance/seedance-2-5" when the user asks for Seedance / Seedance 2.5, longer than 15s, or reference video/audio. Omit to use the brand Settings → Video model (or the Grok Imagine default). NEVER claim Seedance is unavailable — this parameter IS the selector.'
           ),
         duration: z
           .number()
@@ -69,7 +186,7 @@ export function createContentTools(ctx: ChatToolCtx) {
           .max(30)
           .optional()
           .describe(
-            'Video only. YOU choose the clip length in seconds for THIS reel — do not default everything to 13s. Size it to the spoken script at ~3.5 words/sec with headroom (Grok/Seedance 2: 10–15s; Seedance 2.5: up to 30s). Organic UGC ≤15s; ugc_ad:true locks 22s on Seedance 2.5. Prefer 10 for a punchy hook, 15 for organic Hook→Problem→Demo→Proof→CTA. Omit only if Settings → Video has a fixed length the brand wants enforced.'
+            'Video only. YOU choose the clip length in seconds for THIS reel — do not default everything to 13s. Size it to the spoken script at ~3.5 words/sec with headroom (Grok/Seedance 2: 10–15s; Seedance 2.5: up to 30s). Organic UGC ≤15s; ugc_ad asks for 22s — only Seedance 2.5 holds it. Prefer 10 for a punchy hook, 15 for organic Hook→Problem→Demo→Proof→CTA. Omit only if Settings → Video has a fixed length the brand wants enforced.'
           ),
         slide_count: z.number().min(3).max(8).optional().describe('Number of slides for a carousel (default 5; only used when content_type is "carousel")'),
         script: z
@@ -405,7 +522,6 @@ export function createContentTools(ctx: ChatToolCtx) {
               const inFlightVideos = await countOutstandingVideoRenders(adminForCount(), brandId);
               if (env.KIE_API_KEY && budget.videos - inFlightVideos > 0) {
                 const { UGC_AD_DURATION, submitVideoRender } = await import('$lib/server/video');
-                const { SEEDANCE_25_MODEL } = await import('$lib/video-models');
                 // Submit and stop. kie holds the job; a cron collects the clip and attaches it to
                 // this post. Waiting here was the longest block in the whole tool — up to ten
                 // minutes of an invocation spent watching someone else's queue, which also capped
@@ -418,8 +534,11 @@ export function createContentTools(ctx: ChatToolCtx) {
                   // AI instructions win; else brand Settings → Video.
                   instructions: video_instructions ?? prefs.videoInstructions,
                   resolution: prefs.videoResolution,
-                  // Ads force Seedance 2.5; else AI video_model / Settings.
-                  model: isUgcAd ? SEEDANCE_25_MODEL : (video_model || prefs.videoModel),
+                  // Selected model wins; else Settings; else the Grok Imagine default.
+                  // Ads do NOT force a model — 22s only lands on Seedance 2.5, other models
+                  // clamp to the organic 15s ceiling (ugcDurationCap).
+                  model: video_model,
+                  prefs,
                   // Freeform brief replaces hardcoded MOTION templates when set (buildVideoPrompt).
                   // Ads keep the UGC template (ignore freeform) so speech rails stay on.
                   prompt: isUgcAd ? undefined : video_prompt,
@@ -980,6 +1099,43 @@ export function createContentTools(ctx: ChatToolCtx) {
           )
         );
       }
+    }),
+
+    refine_video: tool({
+      description:
+        'REWRITE a finished video: swap the subject, change the setting, restyle it — keeping the original motion and camera. Takes the clip that already exists as the base, so it is the tool for "same video but at night" / "same shot, different product". Pass post_id to work on a post\'s clip (the post is NOT changed — you get a video_url back and decide what to do with it), or video_url for any clip in this project storage. It does NOT rewrite a spoken script or remove burned-in subtitles: those are in the audio and the pixels of a talking reel, and remaking it is make_video / create_post(content_type:"video"). Runs a real render and bills credits. If credits are exhausted, explain and call offer_upgrade — do not retry.',
+      inputSchema: z.object({
+        prompt: z.string().describe('What must change in the clip. The motion is kept; describe what should look different.'),
+        post_id: z.string().optional().describe('Post whose video is the base. The post is not modified.'),
+        video_url: z.string().optional().describe('An https clip in this project storage, when not working from a post.'),
+        aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional().describe('Default 9:16. A ratio the model does not serve falls back to the nearest one it does.'),
+        reference_image_url: z.string().optional().describe('A still handed to the model as a visual reference for the rewrite.')
+      }),
+      execute: async (
+        args: { prompt: string; post_id?: string; video_url?: string; aspect_ratio?: string; reference_image_url?: string },
+        _opts: ToolExecutionOptions<unknown>
+      ) => transformTool('refine', args)
+    }),
+
+    motion_control_video: tool({
+      description:
+        'Take the MOVEMENT from one video and apply it to the subject of an image: your product, person or character performs what the reference clip does. Two different inputs and they are not interchangeable — image_url is WHO moves, video_url is HOW they move. Use it to reproduce a performance, a camera move or a dance on the brand\'s own subject. This is NOT a motion video: those are Remotion compositions rendered from TSX code (motion_write) and use no generative model at all. Runs a real render and bills credits. A real person as the subject needs recorded consent on their card in Studio → People.',
+      inputSchema: z.object({
+        image_url: z.string().describe('The SUBJECT: an https still of who or what should move.'),
+        video_url: z.string().describe('The MOVEMENT: an https clip whose motion is copied onto the subject.'),
+        prompt: z.string().optional().describe('Optional guidance on the scene around the motion.'),
+        quality: z.enum(['std', 'pro']).optional().describe('std is 720p, pro is 1080p and costs more. Default std.')
+      }),
+      execute: async (
+        args: { image_url: string; video_url: string; prompt?: string; quality?: string },
+        _opts: ToolExecutionOptions<unknown>
+      ) =>
+        transformTool('motion', {
+          prompt: args.prompt,
+          video_url: args.video_url,
+          reference_image_url: args.image_url,
+          mode: args.quality
+        })
     }),
   };
 }

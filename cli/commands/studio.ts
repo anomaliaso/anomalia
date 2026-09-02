@@ -20,6 +20,7 @@ export async function cmdStudio(slug: string, opts: {
   gender?: string;
   ageRange?: string;
   vibe?: string;
+  consent?: boolean;
   // Documents
   title?: string;
   text?: string;
@@ -216,13 +217,14 @@ async function setColors(token: string, slug: string, colorsStr?: string) {
   ok(`Colori aggiornati: ${result.colors.join(', ')}`);
 }
 
-async function addPerson(token: string, slug: string, opts: { name?: string; role?: string; description?: string }) {
+async function addPerson(token: string, slug: string, opts: { name?: string; role?: string; description?: string; consent?: boolean }) {
   if (!opts.name) { console.error('--name è obbligatorio'); process.exit(1); }
   const result = await api.addPerson(token, slug, {
     name: opts.name,
     role: opts.role,
     description: opts.description,
     kind: 'real',
+    consent: opts.consent === true,
   });
   ok(`Persona aggiunta: ${result.person.name} (${result.person.id})`);
 }

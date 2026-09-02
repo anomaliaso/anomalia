@@ -7,7 +7,7 @@
   import { dayDividers, firstUnreadIndex } from '$lib/chat-day-groups';
   import { renderMd, escapeChatText } from '$lib/chat-markdown';
   import { stripAttachedDocsForDisplay } from '$lib/chat-documents';
-  import { dmAgents, dmNames, isDmReplyBackMessage } from '$lib/chat-dm';
+  import { dmAgents, dmMemberAvatar, dmNames, isDmReplyBackMessage } from '$lib/chat-dm';
   import { roomMemberAvatar, roomMemberKeys, roomMemberName, threadIdentity } from '$lib/thread-identity';
   import { chatThreads } from '$lib/stores/chat';
   import type { ChatStreamState, StreamToolCallState } from '$lib/chat-stream-events';
@@ -17,7 +17,7 @@
   import ChatTurn from './ChatTurn.svelte';
   import ChatArtifactCard from '$lib/components/ChatArtifactCard.svelte';
   import type { AgentAvatarFace } from '$lib/agent-avatars';
-  import type { ChatArtifactUi, ChatMessage, PostPreview } from './transcript';
+  import { parseToolCalls, type ChatArtifactUi, type ChatMessage, type PostPreview } from './transcript';
   import type { KitRun } from './kit-run';
 
   let {
@@ -47,7 +47,9 @@
     onresend,
     onredo,
     onfeedback,
-    onsend
+    onsend,
+    approvalStatuses,
+    onapproval
   }: {
     messages: ChatMessage[];
     artifacts?: ChatArtifactUi[];
@@ -84,9 +86,31 @@
     onredo: (index: number) => void;
     onfeedback: (messageId: string | undefined, value: 1 | -1 | null, note?: string) => void;
     onsend: (text: string) => void;
+    approvalStatuses: Record<string, string>;
+    onapproval: (approvalId: string, approved: boolean) => void;
   } = $props();
 
   // La riga in store porta anche gli avatar dei custom agent; thread copre il primo paint.
+  const live = $derived(
+    showLivePartial
+      ? {
+          loading,
+          text: streamBuf,
+          tools: streamToolCalls,
+          reasoning: streamReasoning,
+          reasoningSegments: streamReasoningSegments
+        }
+      : orphanRun
+        ? {
+            loading: true,
+            text: orphanState.text,
+            tools: orphanState.tools,
+            reasoning: orphanState.reasoning,
+            reasoningSegments: [] as ChatReasoningSegment[]
+          }
+        : null
+  );
+
   const threadWho = $derived(
     threadIdentity($chatThreads.find((t) => t.id === thread.id) ?? thread, (k) => $_(k))
   );
@@ -119,8 +143,11 @@
   );
   const speakerLabel = (name: string | null | undefined) =>
     dmPair ? dmSpeakerLabel(name) : roomMemberName(name ?? '', roomAgentList, (k) => $_(k));
-  const speakerAvatar = (name: string | null | undefined) =>
-    roomKeys.length >= 2 && name ? roomMemberAvatar(name, roomAgentList) : threadWho;
+  const speakerAvatar = (name: string | null | undefined) => {
+    if (!name) return threadWho;
+    if (dmPair) return dmMemberAvatar(name);
+    return roomKeys.length >= 2 ? roomMemberAvatar(name, roomAgentList) : threadWho;
+  };
 
   /** Chi sta parlando ora: in una stanza la voce cambia a ogni battuta. La firma arriva dal
    * server (header `X-Chat-Speaker`, o `speaker` del job accodato). */
@@ -150,8 +177,8 @@
       // Il checkpoint vivo è saltato nel transcript (lo disegna la bolla): i suoi toolCallId
       // non contano come "già mostrati", o i fotogrammi sparirebbero per tutta la durata del turno.
       if (m.id && m.id === liveCheckpointId) continue;
-      for (const part of m.tool_calls ?? []) {
-        const id = (part as { toolCallId?: string }).toolCallId;
+      for (const part of parseToolCalls(m.tool_calls)) {
+        const id = part.toolCallId;
         if (id) ids.add(id);
       }
     }
@@ -160,6 +187,20 @@
   const looseArtifacts = $derived(
     artifacts.filter((a) => !a.tool_call_id || !renderedCallIds.has(a.tool_call_id))
   );
+
+  /**
+   * L'ultimo messaggio dell'utente, cercato UNA volta.
+   *
+   * Ogni riga se lo chiedeva scorrendo la coda della lista (`messages.slice(i + 1).some(...)`):
+   * su cento turni sono cinquemila passi e cento array nuovi a ogni ridisegno, per un indice che
+   * è lo stesso per tutti.
+   */
+  const lastUserIndex = $derived.by(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return i;
+    }
+    return -1;
+  });
 </script>
 
 <div class="chat-column">
@@ -171,6 +212,10 @@
   </div>
 {/if}
 
+<!-- La chiave resta la POSIZIONE, e non è una svista. `consolidateMessages` può emettere due
+     righe con lo stesso `id` (misurato l'1/9: 100 righe, un id ripetuto su una cronologia vera),
+     e Svelte su una chiave duplicata non disegna la lista: transcript vuoto, nessun errore a
+     schermo. Chiavare sull'id si può solo dopo che il consolidamento produce una chiave sua. -->
 {#each messages as msg, i (i)}
   {#if msg.role === 'user' && isDmReplyBackMessage(msg.content)}
     <!-- La risposta di un DM non sta in questa chat: vive nel thread privato (chip). -->
@@ -196,9 +241,7 @@
   {#if dayLines[i]}<ChatDivider label={dayLines[i]} />{/if}
   {#if i === unreadIndex}<ChatDivider label={$_('chat.newMessages')} tone="accent" />{/if}
   {#if msg.role === 'user'}
-    {@const isLastUser =
-      i === messages.length - 1 ||
-      !messages.slice(i + 1).some((m) => m.role === 'user')}
+    {@const isLastUser = i === lastUserIndex}
     <div class="self-end flex flex-col gap-1.5 items-end w-[80%] max-w-[80%] min-w-0 box-border">
       {#if msg.attachments?.length || msg.documents?.length}
         <ChatAttStrip urls={msg.attachments} docs={msg.documents} />
@@ -234,12 +277,18 @@
         {speakerLabel}
         {speakerAvatar}
         {artifactsByCall}
-        followingUserTexts={messages.slice(i + 1).filter((m) => m.role === 'user' && !isDmReplyBackMessage(m.content)).map((m) => m.content)}
+        followingUserTexts={() =>
+          messages
+            .slice(i + 1)
+            .filter((m) => m.role === 'user' && !isDmReplyBackMessage(m.content))
+            .map((m) => m.content)}
         oncopy={oncopy}
         onredo={onredo}
         onfeedback={onfeedback}
         onsend={onsend}
         onpreview={onzoompost}
+        {approvalStatuses}
+        onapproval={onapproval}
       />
     </div>
   {/if}
@@ -261,27 +310,14 @@
      bolla viva, nello stesso punto. `ChatLiveStatus` a buffer vuoto mostra gia' «sta pensando»,
      quindi non serve nessuna riga di stato accanto — e un pulsante da solo, senza il testo che
      sta arrivando, era peggio del silenzio: diceva che c'era un turno senza mostrarlo. -->
-{#if orphanRun && !showLivePartial}
+{#if live}
   <div class="assistant-msg-wrap chat-turn">
     <ChatLiveStatus
-      loading
-      streamBuf={orphanState.text}
-      streamToolCalls={orphanState.tools}
-      streamReasoning={orphanState.reasoning}
-      {brandSlug}
-      face={liveWho.face}
-      color={liveWho.color}
-    />
-  </div>
-{/if}
-{#if showLivePartial}
-  <div class="assistant-msg-wrap chat-turn">
-    <ChatLiveStatus
-      {loading}
-      {streamBuf}
-      {streamToolCalls}
-      {streamReasoning}
-      {streamReasoningSegments}
+      loading={live.loading}
+      streamBuf={live.text}
+      streamToolCalls={live.tools}
+      streamReasoning={live.reasoning}
+      streamReasoningSegments={live.reasoningSegments}
       {brandSlug}
       face={liveWho.face}
       color={liveWho.color}

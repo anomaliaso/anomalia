@@ -51,14 +51,23 @@ function createPostMintsImages(input: CreatePostGateInput): boolean {
 }
 
 const TOOL_GATES: Record<
-	'create_post' | 'generate_image' | 'produce_week' | 'create_campaign' | 'youtube_thumbnail',
+	| 'create_post'
+	| 'generate_image'
+	| 'produce_week'
+	| 'create_campaign'
+	| 'youtube_thumbnail'
+	| 'refine_video'
+	| 'motion_control_video',
 	(budget: Remaining, input?: CreatePostGateInput) => ToolGateDenial | null
 > = {
 	create_post: (b, input = {}) => posts(b) ?? (createPostMintsImages(input) ? credits(b) : null),
 	generate_image: credits,
 	produce_week: (b) => posts(b) ?? credits(b),
 	create_campaign: (b) => posts(b) ?? credits(b),
-	youtube_thumbnail: credits
+	youtube_thumbnail: credits,
+	// Entrambi spendono crediti e nessuno dei due crea un post: non toccano la quota mensile.
+	refine_video: credits,
+	motion_control_video: credits
 };
 
 export function gateToolCall(

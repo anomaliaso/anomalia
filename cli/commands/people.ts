@@ -10,6 +10,7 @@ export async function cmdPeople(slug: string, opts: {
   gender?: string;
   ageRange?: string;
   kind?: string;
+  consent?: boolean;
   id?: string;
 }) {
   const session = await loadSession();
@@ -43,6 +44,7 @@ ${c.bold('Azioni Persone:')}
     --role "Founder"              Ruolo
     --description "..."           Descrizione
     --kind ai|real                ai = genera foto AI; real = persona reale (default real)
+    --consent                     Attesti di avere il consenso della persona reale (obbligatorio)
 
   ${c.green('remove')}                  Rimuove una persona
     --id <personId>               ID persona (da \`people list\`)
@@ -70,7 +72,7 @@ async function listPeople(token: string, slug: string) {
   console.log();
 }
 
-async function addPerson(token: string, slug: string, opts: { name?: string; role?: string; description?: string; gender?: string; ageRange?: string; kind?: string }) {
+async function addPerson(token: string, slug: string, opts: { name?: string; role?: string; description?: string; gender?: string; ageRange?: string; kind?: string; consent?: boolean }) {
   if (!opts.name) { console.error('--name è obbligatorio'); process.exit(1); }
   const kind = opts.kind === 'ai' ? 'ai' : 'real';
   if (kind === 'ai') console.log(c.yellow('Generazione persona AI con foto in corso…'));
@@ -81,6 +83,7 @@ async function addPerson(token: string, slug: string, opts: { name?: string; rol
     gender: opts.gender,
     ageRange: opts.ageRange,
     kind,
+    consent: opts.consent === true,
   });
   ok(`Persona "${result.person.name}" aggiunta (${result.person.kind}).`);
   if (kind === 'real') info('Persona reale senza foto: carica le foto dalla web app perché appaia nelle immagini generate.');

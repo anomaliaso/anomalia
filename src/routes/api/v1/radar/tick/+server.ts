@@ -2,6 +2,8 @@ import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { cronAuthorized } from '$lib/server/cron-auth';
 import { radarPrefsOf, buildRadarFeedCache, kickRadarWork } from '$lib/server/radar';
+import { sweepLeadRetention } from '@anomalia/leads-core/contact';
+import { swallow } from '$lib/server/swallow';
 
 // Radar ORCHESTRATOR: fetch every distinct source ONCE → DB cache → create one job per brand →
 // fan out N workers (calculated from brand count) so the fleet drains in parallel chains, not one
@@ -36,6 +38,7 @@ async function run(request: Request, platform: Platform): Promise<Response> {
     admin.from('radar_jobs').delete().lt('created_at', old),
     admin.from('radar_feed_cache').delete().lt('fetched_at', old)
   ]);
+  await sweepLeadRetention(admin, swallow);
 
   let q = admin
     .from('brands')

@@ -1,84 +1,93 @@
-import { describe, it, expect } from 'vitest';
-import { matchScore, pickMatch, shingles, normalizeForMatch, isCheckable, MATCH_THRESHOLD } from './lead-outcomes';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-const draft =
-  'Most founders overcomplicate this. Forget paid ads when you have zero traction. For the first ten users it is pure unscalable grind, search for people complaining about the exact bottleneck you solve and reply with actual help.';
+const scrapeCreatorsGet = vi.fn();
+vi.mock('$lib/server/scrapecreators', () => ({ scrapeCreatorsGet: (path: string) => scrapeCreatorsGet(path) }));
 
-describe('normalizeForMatch', () => {
-  it('toglie url, punteggiatura e maiuscole — le prime cose che cambiano quando uno incolla', () => {
-    expect(normalizeForMatch('Guarda https://anomalia.so — è UTILE, davvero!')).toBe('guarda è utile davvero');
+const { runOutcomeChecks, pendingOutcomeChecks } = await import('./lead-outcomes');
+
+const LEAD = {
+  id: 'lead-1',
+  brand_id: 'brand-1',
+  url: 'https://www.reddit.com/r/SaaS/comments/abc/def/',
+  suggestion: 'Forget paid ads with zero traction, go talk to the people complaining about the bottleneck you solve.',
+  done_at: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+  author_handle: 'u/pippo',
+  author_platform: 'reddit'
+};
+
+type Op = { table: string; op: string; payload?: unknown };
+
+/** Un admin finto che registra ogni scrittura: è su quelle che si giudica, non sui ritorni. */
+function fakeAdmin(leads: Array<Record<string, unknown>> = [LEAD]) {
+  const ops: Op[] = [];
+  const rows: Record<string, unknown[]> = { brand_news_items: leads, lead_outcomes: [] };
+
+  const client = {
+    from: (table: string) => {
+      const op: Op = { table, op: 'select' };
+      const b: Record<string, unknown> = {};
+      const self = () => b;
+      for (const m of ['select', 'eq', 'not', 'gte', 'lte', 'order', 'limit', 'in']) b[m] = self;
+      b.upsert = (payload: unknown) => { ops.push({ table, op: 'upsert', payload }); return Promise.resolve({ error: null }); };
+      b.insert = (payload: unknown) => { ops.push({ table, op: 'insert', payload }); return Promise.resolve({ error: null }); };
+      b.then = (resolve: (v: { data: unknown[]; error: null }) => void) => {
+        ops.push(op);
+        return resolve({ data: rows[table] ?? [], error: null });
+      };
+      return b;
+    }
+  } as unknown as SupabaseClient;
+
+  return { client, ops };
+}
+
+beforeEach(() => scrapeCreatorsGet.mockReset());
+
+describe('runOutcomeChecks — il ramo opt-out arriva davvero fino alla soppressione', () => {
+  it('un "non contattarmi" nel thread sopprime l\'autore a livello globale', async () => {
+    // Il thread viene comunque riletto per cercare il nostro commento: se dentro c'è un ritiro del
+    // consenso, quella persona non va mai più proposta a nessun brand dell'istanza.
+    scrapeCreatorsGet.mockResolvedValue({
+      comments: [
+        { body: 'Please stop contacting me about this, I mean it.', author: 'pippo', ups: 2 },
+        { body: 'Unrelated chatter that is long enough to be considered.', author: 'altro', ups: 1 }
+      ]
+    });
+
+    const { client, ops } = fakeAdmin();
+    await runOutcomeChecks(client, 5);
+
+    const suppression = ops.find((o) => o.table === 'lead_suppressions' && o.op === 'upsert');
+    expect(suppression, 'nessuna soppressione scritta: il ramo opt-out non è stato raggiunto').toBeDefined();
+    expect(suppression?.payload).toMatchObject({
+      platform: 'reddit',
+      handle: 'u/pippo',
+      source: 'thread_scan'
+    });
+  });
+
+  it('un thread senza segnali non sopprime nessuno', async () => {
+    scrapeCreatorsGet.mockResolvedValue({
+      comments: [{ body: 'Great thread, this was genuinely useful to read.', author: 'tizio', ups: 5 }]
+    });
+
+    const { client, ops } = fakeAdmin();
+    await runOutcomeChecks(client, 5);
+
+    expect(ops.find((o) => o.table === 'lead_suppressions')).toBeUndefined();
+    // L'esito viene comunque registrato: non ritrovato, non "rimosso" per finta.
+    expect(ops.find((o) => o.table === 'lead_outcomes' && o.op === 'insert')).toBeDefined();
   });
 });
 
-describe('shingles', () => {
-  it('spezza in gruppi di tre parole', () => {
-    expect([...shingles('uno due tre quattro')]).toEqual(['uno due tre', 'due tre quattro']);
-  });
-
-  it('non perde i testi più corti di una shingle', () => {
-    expect([...shingles('due parole')]).toEqual(['due parole']);
-    expect(shingles('').size).toBe(0);
-  });
-});
-
-describe('matchScore', () => {
-  it('riconosce il testo incollato tale e quale', () => {
-    expect(matchScore(draft, draft)).toBe(1);
-  });
-
-  it('regge il taglio e l\'aggiunta: chi incolla riscrive', () => {
-    const edited = `Ciao! ${draft.replace('Most founders overcomplicate this. ', '')} Comunque in bocca al lupo.`;
-    expect(matchScore(draft, edited)).toBeGreaterThan(MATCH_THRESHOLD);
-  });
-
-  it('non confonde due commenti che parlano dello stesso tema con parole proprie', () => {
-    const altro =
-      'Honestly paid ads are a waste early on. Talk to users, do things that do not scale, and only then think about growth channels.';
-    expect(matchScore(draft, altro)).toBeLessThan(MATCH_THRESHOLD);
-  });
-
-  it('vale zero contro il vuoto invece di dividere per zero', () => {
-    expect(matchScore('', draft)).toBe(0);
-    expect(matchScore(draft, '')).toBe(0);
-  });
-});
-
-describe('pickMatch', () => {
-  const comments = [
-    { body: 'First! nothing to add here', author: 'tizio', ups: 3, replies: 0 },
-    { body: `${draft} Hope it helps.`, author: 'noi', ups: 12, replies: 2, permalink: '/r/SaaS/comments/x/y/' },
-    { body: 'Completely disagree with the above', author: 'caio', ups: 1, replies: 0 }
-  ];
-
-  it('trova il nostro commento per testo e riporta i suoi numeri', () => {
-    const hit = pickMatch(draft, comments);
-    expect(hit?.method).toBe('text');
-    expect(hit?.comment.ups).toBe(12);
-    expect(hit?.score).toBeGreaterThan(MATCH_THRESHOLD);
-  });
-
-  it('restituisce null quando il nostro commento non c\'è: nessun ripiego sul meno peggio', () => {
-    expect(pickMatch(draft, [comments[0], comments[2]])).toBeNull();
-    expect(pickMatch(draft, [])).toBeNull();
-  });
-
-  it('l\'handle dichiarato batte la somiglianza: è un\'identità, non un indizio', () => {
-    // Stesso testo su due account: senza handle vincerebbe il punteggio, con handle vince chi siamo.
-    const due = [
-      { body: `${draft} extra`, author: 'ladro', ups: 99, replies: 9 },
-      { body: draft.slice(0, 120), author: 'NoiStessi', ups: 4, replies: 1 }
-    ];
-    const hit = pickMatch(draft, due, { handle: 'u/noistessi' });
-    expect(hit?.method).toBe('handle');
-    expect(hit?.comment.ups).toBe(4);
-  });
-});
-
-describe('isCheckable', () => {
-  it('solo Reddit: è l\'unica superficie da cui possiamo rileggere i commenti', () => {
-    expect(isCheckable('https://www.reddit.com/r/SaaS/comments/abc/def/')).toBe(true);
-    expect(isCheckable('https://www.threads.net/@tizio/post/abc')).toBe(false);
-    expect(isCheckable('https://www.linkedin.com/posts/abc')).toBe(false);
-    expect(isCheckable('')).toBe(false);
+describe('pendingOutcomeChecks — i campi autore fanno parte del contratto', () => {
+  it('porta author_handle e author_platform, che sono ciò che rende possibile la soppressione', async () => {
+    const { client } = fakeAdmin();
+    const [lead] = await pendingOutcomeChecks(client, 5);
+    // Il tipo dichiarato li ometteva pur restituendoli: chi rimuovesse queste due righe dal mapper
+    // spegnerebbe il ramo opt-out senza un solo errore di compilazione.
+    expect(lead.author_handle).toBe('u/pippo');
+    expect(lead.author_platform).toBe('reddit');
   });
 });

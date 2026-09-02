@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
+import { personConsentColumns, CONSENT_NOT_ATTESTED } from '$lib/server/people-consent';
 
 export const POST: RequestHandler = async ({ request, params }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -12,12 +13,15 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (writeDenied) return writeDenied;
 
   const body = await request.json();
-  const { name, role, description, kind, gender, ageRange, ethnicity, vibe } = body;
+  const { name, role, description, gender, ageRange, ethnicity, vibe, consent } = body;
 
   if (!name) return json({ error: 'name is required' }, { status: 400 });
 
+  const kind = body.kind === 'ai' ? 'ai' : 'real';
+  const consentColumns = personConsentColumns(kind, consent === true ? 'owner_attested' : 'none');
+  if (!consentColumns) return json({ error: CONSENT_NOT_ATTESTED }, { status: 400 });
+
   if (kind === 'ai') {
-    // Generate AI person
     try {
       const { generateAiPersonImages } = await import('$lib/server/people');
       const images = await generateAiPersonImages({
@@ -33,9 +37,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
           role: role ?? null,
           description: description ?? null,
           kind: 'ai',
-          consent: true,
           images: images ?? [],
           attributes: { gender, ageRange, ethnicity, vibe },
+          ...consentColumns
         })
         .select('id, name, role, kind')
         .single();
@@ -46,8 +50,6 @@ export const POST: RequestHandler = async ({ request, params }) => {
       return json({ error: `AI generation failed: ${String(e)}` }, { status: 500 });
     }
   } else {
-    // Add real person (no photos via API — user can upload separately). Persist attributes
-    // (gender/age) so the image generator honours them and doesn't invent the wrong gender.
     const { data, error: insertError } = await supabase
       .from('people')
       .insert({
@@ -56,9 +58,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
         role: role ?? null,
         description: description ?? null,
         kind: 'real',
-        consent: true,
         images: [],
         attributes: { gender, ageRange, ethnicity, vibe },
+        ...consentColumns
       })
       .select('id, name, role, kind')
       .single();
