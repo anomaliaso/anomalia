@@ -75,6 +75,8 @@ describe('content plugin — mount', () => {
 			'content_reschedule_post',
 			'content_schedule',
 			'content_update_post',
+			'create_post_from_asset',
+			'generate_video',
 			'motion_control_video',
 			'refine_video'
 		]);

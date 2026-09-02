@@ -57,7 +57,8 @@ const TOOL_GATES: Record<
 	| 'create_campaign'
 	| 'youtube_thumbnail'
 	| 'refine_video'
-	| 'motion_control_video',
+	| 'motion_control_video'
+	| 'generate_video',
 	(budget: Remaining, input?: CreatePostGateInput) => ToolGateDenial | null
 > = {
 	create_post: (b, input = {}) => posts(b) ?? (createPostMintsImages(input) ? credits(b) : null),
@@ -67,7 +68,9 @@ const TOOL_GATES: Record<
 	youtube_thumbnail: credits,
 	// Entrambi spendono crediti e nessuno dei due crea un post: non toccano la quota mensile.
 	refine_video: credits,
-	motion_control_video: credits
+	motion_control_video: credits,
+	// Nessun post creato: il budget mensile dei post non si tocca, i crediti si'.
+	generate_video: credits
 };
 
 export function gateToolCall(

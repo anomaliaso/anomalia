@@ -297,6 +297,49 @@ export async function executeChatToolJob(
       return { success: true, platform: isShopifySite(html) ? 'Shopify' : 'WooCommerce', products_synced: products.length };
     }
 
+    case 'generate_video': {
+      // Un video da zero SENZA post. Il render vive fuori dal turno perche' impiega minuti, e la
+      // clip finita atterra in libreria: e' l'unico posto da cui un altro tool sa riprenderla
+      // (create_post_from_asset). Un mp4 pagato che non entra in libreria non e' raggiungibile da
+      // nulla, ed e' esattamente il difetto che questo caso esiste per non ripetere.
+      const { renderVideo } = await import('$lib/server/video');
+      const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
+      const { data: brand } = await supabase
+        .from('brands')
+        .select('content_prefs')
+        .eq('id', brandId)
+        .maybeSingle();
+      const prefs = (brand?.content_prefs ?? {}) as AnyRec;
+      const brief = String(params.brief ?? '').trim();
+      if (!brief) return { error: 'generate_video needs a brief' };
+
+      const out = await renderVideo(supabase, userId, brief, {
+        prefs,
+        model: typeof params.model === 'string' ? params.model : undefined,
+        duration: typeof params.duration === 'number' ? params.duration : undefined,
+        aspectRatio: (typeof params.aspect_ratio === 'string' ? params.aspect_ratio : '9:16') as '1:1' | '9:16' | '16:9',
+        imageUrl: typeof params.image_url === 'string' ? params.image_url : undefined,
+        prompt: brief,
+        resolution: typeof prefs.videoResolution === 'string' ? prefs.videoResolution : undefined
+      });
+      if (!out?.url) return { error: 'The render returned nothing. A job that did not finish was not billed.' };
+
+      const saved = await saveRenderedVideoToLibrary(supabase, {
+        brandId,
+        userId,
+        url: out.url,
+        title: brief.slice(0, 80),
+        durationSeconds: out.durationSeconds
+      });
+      return {
+        video_url: out.url,
+        duration_seconds: out.durationSeconds,
+        ...('mediaId' in saved
+          ? { media_id: saved.mediaId, hint: 'Pass media_id to create_post_from_asset(type:"video") to publish it.' }
+          : { library_error: saved.error, hint: 'The clip exists at video_url but is NOT in the library — say so rather than promising it is reusable.' })
+      };
+    }
+
     case 'seo_geo_audit': {
       const { createAdminClient } = await import('$lib/server/supabase-admin');
       const { geoTickForBrand } = await import('$lib/server/geo');
