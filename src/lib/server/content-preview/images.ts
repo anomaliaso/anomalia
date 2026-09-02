@@ -9,6 +9,7 @@ import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext } from '$lib/server/ai-log';
 import { googleGenaiClient, judgeThinkingLevel, NANO_BANANA_2_LITE } from '$lib/server/gemini';
+import { NANO_BANANA_2_MODEL } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
@@ -79,7 +80,7 @@ export type AspectRatio = '1:1' | '4:5' | '9:16' | '16:9';
 
 // Metà del prezzo di output immagine di Pro, e un articolo rende 3 immagini contro 1 di un post.
 // I post social usano lo stesso id quando non c'è nulla da riprodurre; con riferimenti, Lite.
-export const BLOG_IMAGE_MODEL = 'gemini-3.1-flash-image';
+export const BLOG_IMAGE_MODEL = NANO_BANANA_2_MODEL;
 
 const ASPECT_LABEL: Record<AspectRatio, string> = {
   '1:1': 'Square 1:1',

@@ -296,6 +296,24 @@ export const studioActions: Actions = {
     });
   },
 
+  // Which model renders images (Settings → Media models). Empty = the renderer keeps choosing per
+  // call, which is what every brand had before the picker existed.
+  updateImageModel: async ({ request, params, locals: { supabase } }) => {
+    return withBrand(supabase, params.brand, async (brand) => {
+      const fd = await request.formData();
+      const { isKnownImageModelId } = await import('$lib/image-models');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prefs: Record<string, any> = { ...(brand.content_prefs ?? {}) };
+      const raw = String(fd.get('imageModel') ?? '').trim();
+      if (!raw) delete prefs.imageModel;
+      else if (!isKnownImageModelId(raw)) return fail(400, { error: 'Unknown image model' });
+      else prefs.imageModel = raw;
+      const { error } = await supabase.from('brands').update({ content_prefs: prefs }).eq('id', brand.id);
+      if (error) return fail(400, { error: error.message });
+      return { saved: true };
+    });
+  },
+
   // Shipping resolution for generated videos (Settings → Video). 720p costs exactly DOUBLE per
   // second, and every draft is paid for whether or not it ever ships — which is why 480p is the
   // recommended default and this is an explicit opt-in rather than a quality ladder we climb for

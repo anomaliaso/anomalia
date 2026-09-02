@@ -18,6 +18,9 @@
   const MODELS = $derived(data.videoModels ?? []);
   const currentModel = $derived(data.videoModel ?? '');
 
+  const IMAGE_MODELS = $derived(data.imageModels ?? []);
+  const currentImageModel = $derived(data.imageModel ?? '');
+
   // 720p costs exactly double per second and every draft is billed, shipped or not — so 480p is
   // the recommendation, not merely the default. Kept a two-rung choice: kie offers nothing between.
   const RESOLUTIONS = ['480p', '720p'];
@@ -35,6 +38,21 @@
 
 <section class="panel">
   <div class="panel-head"><div class="t">{$_('app.settings.video.title')}</div></div>
+  <div class="field">
+    <div class="ftxt">
+      <div class="fh">{$_('app.settings.video.imageModel')}</div>
+      <div class="fs">{$_('app.settings.video.imageModelDesc')}</div>
+    </div>
+    <form method="POST" action="?/updateImageModel" use:enhance class="vd-form">
+      <select name="imageModel" class="vd-select">
+        <option value="" selected={!currentImageModel}>{$_('app.settings.video.modelDefault')}</option>
+        {#each IMAGE_MODELS as m (m.id)}
+          <option value={m.id} selected={m.id === currentImageModel}>{m.label}</option>
+        {/each}
+      </select>
+      <button class="mini connect" type="submit">{$_('app.settings.save')}</button>
+    </form>
+  </div>
   <div class="field">
     <div class="ftxt">
       <div class="fh">{$_('app.settings.video.model')}</div>

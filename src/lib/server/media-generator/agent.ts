@@ -30,6 +30,7 @@ import {
   brandContextPromptSection,
   createBrandContextTools
 } from '$lib/server/chat/brand-context-tools';
+import { imageModelFor } from '$lib/image-models';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
 
@@ -490,6 +491,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
               ? `${prompt}\n\nEdit the attached BASE photo (Ref ${hasExplicitBase ? baseRefIndex : 0}) in place — keep the scene, subject and composition; apply only what this prompt asks. Do not replace the photo with a blank canvas.`
               : prompt;
             const dataUrl = await renderPostImage(ai, promptText, {
+              model: imageModelFor(prefs),
               baseImage,
               referenceImages: extraRefs.length ? extraRefs : undefined,
               referenceMode: extraRefs.length ? 'product' : undefined,
