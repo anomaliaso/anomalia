@@ -6,6 +6,7 @@ import { EDITOR_POST_COLS, requireZernioCancellation } from '$lib/server/post-ed
 import { createSingleContent, CAROUSEL_PLATFORMS, carouselMaxPerBatch, attachBrandMoodImages, generateStandaloneImage, regeneratePost, loadBrandMoodImageUrls, type ContentPrefs } from '$lib/server/content-preview';
 import { remaining, addUsage, monthKey } from '$lib/server/usage';
 import { gateToolCall } from '$lib/server/chat/tool-policy';
+import { isVideoUrl } from '$lib/content-formats';
 import { VIDEO_BRIEF_MAX_CHARS } from '$lib/video-models';
 import { GRAPHIC_ASSET_MINT_HINT, STANDALONE_IMAGE_HINT, isVideoPostRow } from '$lib/server/media-origin';
 import { env } from '$env/dynamic/private';
@@ -18,6 +19,117 @@ import { startLongToolJob, type AnyRec } from './shared';
 
 export function createContentTools(ctx: ChatToolCtx) {
   const { supabase, brandId, tz, userId, threadId, turnRefUrls } = ctx;
+
+  /**
+   * Il corpo dei due tool che partono da un video: risolvere la sorgente, gatare i crediti,
+   * eseguire. Uno solo perche' la parte che conta e' la stessa e a scriverla due volte
+   * divergerebbe — e la meta' che diverge in silenzio e' sempre il gate.
+   *
+   * Il post NON viene toccato: entrambi restituiscono un URL. Sostituire da soli la clip di un
+   * post approvato sarebbe una modifica che nessuno ha chiesto, su qualcosa che l'utente ha gia'
+   * guardato e accettato.
+   */
+  async function transformTool(
+    role: 'refine' | 'motion',
+    args: {
+      prompt?: string;
+      post_id?: string;
+      video_url?: string;
+      aspect_ratio?: string;
+      reference_image_url?: string;
+      mode?: string;
+    }
+  ) {
+    let videoUrl = args.video_url?.trim() ?? '';
+    if (args.post_id) {
+      const { data: post } = await supabase
+        .from('posts')
+        .select('id, media_url, content_type')
+        .eq('id', args.post_id)
+        .eq('brand_id', brandId)
+        .maybeSingle();
+      if (!post) return { error: 'Post not found' };
+      const url = String(post.media_url ?? '').trim();
+      if (!url || !isVideoUrl(url)) {
+        return {
+          error: 'not_a_video',
+          message:
+            'That post has no video to work from. refine_video and motion_control_video start from a clip that already exists — create one with create_post(content_type:"video") first.'
+        };
+      }
+      videoUrl = url;
+    }
+    if (!videoUrl) return { error: "Pass post_id or video_url — there is nothing to transform without a clip." };
+    // Un URL scritto dal modello viene comunque scaricato lato server: passa dallo stesso guardiano
+    // SSRF di qualunque altro indirizzo che arriva da fuori.
+    if (!isUrlSafe(videoUrl)) return { error: 'That video URL is not reachable from here.' };
+
+    const refImage = args.reference_image_url?.trim();
+    if (refImage && !isUrlSafe(refImage)) return { error: 'That image URL is not reachable from here.' };
+    if (role === 'motion' && !refImage) {
+      return { error: 'motion_control_video needs image_url: the subject that should move.' };
+    }
+
+    const { data: brandRow } = await supabase
+      .from('brands')
+      .select('plan, timezone, activated_at, status, content_prefs')
+      .eq('id', brandId)
+      .maybeSingle();
+    const prefs = (brandRow?.content_prefs ?? {}) as Record<string, unknown>;
+    const budget = await remaining(
+      supabase,
+      brandId,
+      brandRow?.plan,
+      brandRow?.timezone ?? tz,
+      brandRow
+        ? {
+            id: brandId,
+            plan: brandRow.plan ?? null,
+            activated_at: brandRow.activated_at ?? null,
+            status: brandRow.status ?? 'active'
+          }
+        : undefined
+    );
+    const gate = gateToolCall(role === 'refine' ? 'refine_video' : 'motion_control_video', budget);
+    if (gate) return gate;
+
+    const { transformVideo } = await import('$lib/server/video');
+    const { videoModelForRole } = await import('$lib/video-models');
+    if (!videoModelForRole(prefs, role)) {
+      return {
+        error: 'no_model',
+        message:
+          role === 'refine'
+            ? 'No video refine model is set for this brand. Pick one in Settings → Images & video → Video refine.'
+            : 'No video motion model is set for this brand. Pick one in Settings → Images & video → Video motion.'
+      };
+    }
+
+    try {
+      const out = await transformVideo({
+        supabase,
+        userId,
+        role,
+        videoUrl,
+        prompt: args.prompt,
+        imageUrl: refImage,
+        aspectRatio: args.aspect_ratio,
+        mode: args.mode === 'pro' ? 'pro' : 'std',
+        prefs
+      });
+      if (!out) return { error: 'The render returned nothing. Nothing was billed for a job that did not finish.' };
+      return {
+        success: true,
+        video_url: out.url,
+        model: out.model,
+        did_not_change_post: true,
+        hint: 'This did NOT change any post. Show it with show_media, or attach it where you need it.'
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'transform_failed' };
+    }
+  }
+
   return {
     create_post: tool({
       description:
@@ -987,6 +1099,43 @@ export function createContentTools(ctx: ChatToolCtx) {
           )
         );
       }
+    }),
+
+    refine_video: tool({
+      description:
+        'REWRITE a finished video: swap the subject, change the setting, restyle it — keeping the original motion and camera. Takes the clip that already exists as the base, so it is the tool for "same video but at night" / "same shot, different product". Pass post_id to work on a post\'s clip (the post is NOT changed — you get a video_url back and decide what to do with it), or video_url for any clip in this project storage. It does NOT rewrite a spoken script or remove burned-in subtitles: those are in the audio and the pixels of a talking reel, and remaking it is make_video / create_post(content_type:"video"). Runs a real render and bills credits. If credits are exhausted, explain and call offer_upgrade — do not retry.',
+      inputSchema: z.object({
+        prompt: z.string().describe('What must change in the clip. The motion is kept; describe what should look different.'),
+        post_id: z.string().optional().describe('Post whose video is the base. The post is not modified.'),
+        video_url: z.string().optional().describe('An https clip in this project storage, when not working from a post.'),
+        aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional().describe('Default 9:16. A ratio the model does not serve falls back to the nearest one it does.'),
+        reference_image_url: z.string().optional().describe('A still handed to the model as a visual reference for the rewrite.')
+      }),
+      execute: async (
+        args: { prompt: string; post_id?: string; video_url?: string; aspect_ratio?: string; reference_image_url?: string },
+        _opts: ToolExecutionOptions<unknown>
+      ) => transformTool('refine', args)
+    }),
+
+    motion_control_video: tool({
+      description:
+        'Take the MOVEMENT from one video and apply it to the subject of an image: your product, person or character performs what the reference clip does. Two different inputs and they are not interchangeable — image_url is WHO moves, video_url is HOW they move. Use it to reproduce a performance, a camera move or a dance on the brand\'s own subject. This is NOT a motion video: those are Remotion compositions rendered from TSX code (motion_write) and use no generative model at all. Runs a real render and bills credits. A real person as the subject needs recorded consent on their card in Studio → People.',
+      inputSchema: z.object({
+        image_url: z.string().describe('The SUBJECT: an https still of who or what should move.'),
+        video_url: z.string().describe('The MOVEMENT: an https clip whose motion is copied onto the subject.'),
+        prompt: z.string().optional().describe('Optional guidance on the scene around the motion.'),
+        quality: z.enum(['std', 'pro']).optional().describe('std is 720p, pro is 1080p and costs more. Default std.')
+      }),
+      execute: async (
+        args: { image_url: string; video_url: string; prompt?: string; quality?: string },
+        _opts: ToolExecutionOptions<unknown>
+      ) =>
+        transformTool('motion', {
+          prompt: args.prompt,
+          video_url: args.video_url,
+          reference_image_url: args.image_url,
+          mode: args.quality
+        })
     }),
   };
 }
