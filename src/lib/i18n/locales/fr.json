@@ -4993,6 +4993,8 @@
       },
       "video": {
         "title": "Vidéo",
+        "imageModel": "Modèle d'image",
+        "imageModelDesc": "Quel modèle d'IA génère vos images. Par défaut, le moteur de rendu choisit image par image (un modèle moins cher quand il n'y a rien à reproduire, un modèle fidèle avec des références de produit ou de personne). Nano Banana Pro est le plus fidèle et le plus cher.",
         "model": "Modèle vidéo",
         "modelDesc": "Quel modèle IA génère vos clips. Les durées proposées suivent le modèle choisi — Seedance 2.5 va jusqu’à 30 secondes.",
         "modelDefault": "Défaut de la plateforme",
@@ -9382,6 +9384,7 @@
       "link": "AI Act"
     },
     "connectors": "Connecteurs",
+    "mediaModels": "Modèles d'image et vidéo",
     "toolDetail": {
       "toggle": "Ouvrir les détails de {tool}",
       "params": "Paramètres",

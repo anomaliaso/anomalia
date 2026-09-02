@@ -5,6 +5,7 @@ import {
   videoDurationOptions,
   isKnownVideoModel
 } from '$lib/server/video';
+import { IMAGE_MODEL_CHOICES, imageModelFor } from '$lib/image-models';
 
 export const load: PageServerLoad = async ({ parent }) => {
   const { brand } = await parent();
@@ -13,6 +14,8 @@ export const load: PageServerLoad = async ({ parent }) => {
   return {
     videoModels: VIDEO_MODEL_CHOICES.map((c) => ({ id: c.id, label: c.label })),
     videoModel,
+    imageModels: IMAGE_MODEL_CHOICES.map((c) => ({ id: c.id, label: c.label })),
+    imageModel: imageModelFor(prefs) ?? null,
     durationOptions: videoDurationOptions(videoModel)
   };
 };
@@ -21,5 +24,6 @@ export const actions: Actions = {
   updateVideoDuration: studioActions.updateVideoDuration,
   updateVideoResolution: studioActions.updateVideoResolution,
   updateVideoInstructions: studioActions.updateVideoInstructions,
-  updateVideoModel: studioActions.updateVideoModel
+  updateVideoModel: studioActions.updateVideoModel,
+  updateImageModel: studioActions.updateImageModel
 };

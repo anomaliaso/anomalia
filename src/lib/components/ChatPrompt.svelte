@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
-  import { Plus, ImagePlus, ImageUp, Users, Images, ChevronRight, Terminal, Bot, Check, FileText, Plug, Cpu, Brain, X } from '@lucide/svelte';
+  import { Plus, ImagePlus, ImageUp, Users, Images, ChevronRight, Terminal, Bot, Check, FileText, Plug, Cpu, Brain, Wand2, X } from '@lucide/svelte';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import { BUILTIN_AGENT_AVATARS } from '$lib/agent-avatars';
   import {
@@ -997,6 +997,14 @@
               >
                 <Plug class="size-4" />
                 <span>{$_('chat.connectors')}</span>
+              </a>
+              <a
+                class="ch-dd-item"
+                href={`/app/${brandSlug}/settings/video`}
+                onclick={() => (menu = 'none')}
+              >
+                <Wand2 class="size-4" />
+                <span>{$_('chat.mediaModels')}</span>
               </a>
             {/if}
           </div>
