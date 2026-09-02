@@ -4992,9 +4992,9 @@
         "reload": "Recargar properties"
       },
       "video": {
-        "title": "Vídeo",
+        "title": "Imágenes y vídeo",
         "imageModel": "Modelo de imagen",
-        "imageModelDesc": "Qué modelo de IA genera tus imágenes. Con el valor predeterminado, el renderizador elige imagen por imagen (uno más barato cuando no hay nada que reproducir, uno fiel con referencias de producto o persona). Nano Banana Pro es el más fiel y el más caro.",
+        "imageModelDesc": "Qué modelo de IA genera tus imágenes. Con el valor predeterminado, el renderizador elige imagen por imagen (uno más barato cuando no hay nada que reproducir, uno fiel con referencias de producto o persona). Los modelos fuera de la familia Nano Banana solo funcionan en kie y encuadran las publicaciones de Instagram en 3:4 en lugar de 4:5.",
         "model": "Modelo de vídeo",
         "modelDesc": "Qué modelo de IA genera tus clips. Las duraciones disponibles siguen el modelo elegido — Seedance 2.5 llega hasta 30 segundos.",
         "modelDefault": "Predeterminado de la plataforma",

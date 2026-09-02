@@ -73,9 +73,10 @@ type RenderPreviewOpts = {
   supabase: SupabaseClient;
   userId: string;
   brandId?: string;
-  // Force one image model for the whole batch. Absent → buildImageRequest picks as it always has.
-  // The guest preview passes the cheapest model here; a UGC cover still overrides it, because its
-  // look is the point of that format.
+  // Force one image model for the whole batch, ahead of the brand's own preference. Absent → the
+  // brand's Settings choice, and absent that too, buildImageRequest picks as it always has. The
+  // guest preview passes the cheapest model here; a UGC cover still overrides everything, because
+  // its look is the point of that format.
   imageModel?: string;
   onProgress?: Progress;
   onPost: (post: PreviewPost) => void;
@@ -374,12 +375,27 @@ export async function planPreviewPosts(
 // post (imageUrl set when rendering succeeds) via onPost. Builds the shared render context (offerings,
 // people, visual style, brand look, logo) once per batch from the profile, so this is a faithful,
 // stateless continuation of planPreviewPosts — runnable in a separate request.
+async function brandPreferredImageModel(opts: RenderPreviewOpts): Promise<string | undefined> {
+  if (!opts.brandId) return undefined;
+  const { data } = await opts.supabase
+    .from('brands')
+    .select('content_prefs')
+    .eq('id', opts.brandId)
+    .maybeSingle();
+  const { imageModelFor } = await import('$lib/image-models');
+  return imageModelFor((data?.content_prefs ?? {}) as { imageModel?: unknown });
+}
+
 export async function renderPreviewImages(
   profile: BrandProfile,
   posts: PreviewPost[],
   opts: RenderPreviewOpts
 ): Promise<void> {
   const ai = client();
+  // La preferenza del brand si legge QUI e non nei sette chiamanti: è la produzione della
+  // settimana, e sette posti da ricordare sono sette posti da dimenticare. Un `imageModel`
+  // esplicito (l'anteprima ospite) vince comunque.
+  const brandImageModel = opts.imageModel ?? (await brandPreferredImageModel(opts));
 
   opts.onProgress?.('generating', `Generating images for ${posts.length} posts…`);
 
@@ -502,7 +518,7 @@ export async function renderPreviewImages(
           const isUgc = post.format === 'video' && post.ugc !== false;
           const { UGC_VISUAL_STYLE, UGC_COVER_MODEL } = await import('$lib/server/ugc');
           const effectiveStyle = isUgc ? UGC_VISUAL_STYLE : visualStyle;
-          const forcedModel = isUgc ? UGC_COVER_MODEL : opts.imageModel;
+          const forcedModel = isUgc ? UGC_COVER_MODEL : brandImageModel;
           const renderOpts = {
             referenceImages,
             personImages: personRefs,
