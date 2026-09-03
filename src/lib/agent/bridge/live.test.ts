@@ -362,6 +362,15 @@ const { specById } = await import('../specs');
 
 type Row = Record<string, unknown>;
 
+/** Quello che `agent_kit_claim_run` consegna a chi perde la presa: ogni colonna a null. */
+function nullClaimRow(): Row {
+	return Object.fromEntries(
+		['id', 'brand_id', 'thread_id', 'agent_id', 'user_id', 'state', 'lease_owner', 'lease_fence', 'attempt'].map(
+			(column) => [column, null]
+		)
+	);
+}
+
 /**
  * Lo stesso finto client di `run-store.test.ts`, esteso con `order`/`maybeSingle` — il bridge li
  * usa per trovare un run `waiting_input` sul thread prima di aprirne uno nuovo.
@@ -557,12 +566,14 @@ type Row = Record<string, unknown>;
 		}
 		if (fn === 'agent_kit_claim_run') {
 			const claimable = rows.find((r) => r.id === params.p_run_id);
-			if (!claimable) return Promise.resolve({ data: null, error: null });
+			// La presa persa NON torna `null`: la RPC è `returns public.agent_kit_runs`, e l'UPDATE
+			// a vuoto consegna una riga composita di soli NULL.
+			if (!claimable) return Promise.resolve({ data: nullClaimRow(), error: null });
 			const openState = ['queued', 'waiting_input', 'waiting_takeover'].includes(claimable.state as string);
 			const expired =
 				claimable.state === 'running' &&
 				(claimable.lease_until == null || (claimable.lease_until as string) <= (params.p_now as string));
-			if (!openState && !expired) return Promise.resolve({ data: null, error: null });
+			if (!openState && !expired) return Promise.resolve({ data: nullClaimRow(), error: null });
 			claimable.state = 'running';
 			claimable.lease_owner = params.p_owner;
 			claimable.lease_fence = ((claimable.lease_fence as number) ?? 0) + 1;
@@ -1245,6 +1256,58 @@ describe('runKitTurn — doppio resume su una waiting_input (due dispositivi ris
 		expect(rows[0].state).toBe('running');
 		expect(rows[0].lease_owner).toBe('altro-dispositivo');
 		expect(rows[0].lease_fence).toBe(1);
+	});
+
+	it('la presa persa FRA la lettura e il claim non fa girare un run fantasma: 409, nessun messaggio', async () => {
+		toolCallModel('reply', { message: 'non dovrebbe arrivarci', delivered: [] });
+		const { db, rows, chatMessages } = fakeDb([
+			{
+				id: 'run-1',
+				brand_id: 'b1',
+				thread_id: 't1',
+				agent_id: 'content',
+				user_id: 'u1',
+				state: 'waiting_input',
+				lease_owner: null,
+				lease_fence: 0,
+				lease_until: null,
+				heartbeat_at: new Date().toISOString(),
+				reason: null,
+				question: { question: 'quale palette?' },
+				created_at: '2026-08-21T00:00:00.000Z',
+				updated_at: '2026-08-21T00:00:00.000Z'
+			}
+		]);
+		// L'ALTRO DISPOSITIVO VINCE NELL'ISTANTE FRA `currentWaitingRun` E LA PRESA: la riga che
+		// questo turno ha letto `waiting_input` è già `running` di un altro quando arriva il claim,
+		// e la RPC gli consegna la riga di soli NULL.
+		const perdente = {
+			from: (table: string) => (db as unknown as { from: (t: string) => unknown }).from(table),
+			rpc: (fn: string, params: Record<string, unknown>) =>
+				fn === 'agent_kit_claim_run'
+					? Promise.resolve({ data: nullClaimRow(), error: null })
+					: (db as unknown as { rpc: (f: string, p: Record<string, unknown>) => unknown }).rpc(fn, params)
+		} as unknown as SupabaseClient;
+
+		const res = await runKitTurn({
+			supabase: fakeSupabase,
+			admin: perdente,
+			brand: { id: 'b1' },
+			user: { id: 'u1' },
+			threadId: 't1',
+			spec,
+			messages: [
+				{ role: 'assistant', content: 'quale palette?' },
+				{ role: 'user', content: 'quella scura, dal secondo telefono' }
+			],
+			locale: 'it'
+		});
+
+		expect(res.status).toBe(409);
+		expect((await res.json()).error).toBe('busy');
+		// Il turno NON è partito: nessun messaggio depositato e la riga intatta.
+		expect(chatMessages).toHaveLength(0);
+		expect(rows[0].state).toBe('waiting_input');
 	});
 });
 
