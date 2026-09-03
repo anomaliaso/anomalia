@@ -64,6 +64,6 @@ export const MEDIA_TRANSFORM_TOOLS: Record<string, PassthroughSpec> = {
 		effectful: true,
 		consequential: true,
 		description:
-			"Apply the MOVEMENT of a reference clip to the subject of an image. The two inputs are not interchangeable: image_url is who moves, video_url is how they move — swapping them returns a plausible wrong clip and no error to catch it. Returns a video_url and touches no post. The reference video must actually contain a PERSON: kie refuses a clip with no human in it (\"No valid characters detected in the video\") after a full round trip, so a product shot or an abstract animation is not a motion reference. This is NOT a motion video: those are Remotion compositions rendered from code (motion_write) and use no generative model. Refused when the brand has no video motion model set in Settings."
+			"Apply the MOVEMENT of a reference clip to the subject of an image. The two inputs are not interchangeable: image_url is who moves, video_url is how they move — swapping them returns a plausible wrong clip and no error to catch it. Returns a video_url and touches no post. This is NOT a motion video: those are Remotion compositions rendered from code (motion_write) and use no generative model. Refused when the brand has no video motion model set in Settings."
 	}
 };
