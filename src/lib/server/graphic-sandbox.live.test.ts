@@ -15,7 +15,9 @@
  */
 import { expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { renderGraphicWithChromium } from './design-render-chromium';
+import { renderGraphicStill } from './motion-video/render-tools';
 
 const BRAND = process.env.LIVE_BRAND_ID ?? '6859115e-df6a-40f3-846e-6c577faf0e9c';
 
@@ -45,3 +47,21 @@ const Graphic = () => (
   if (out) writeFileSync('/tmp/sandbox-graphic.png', out.png);
   expect(out).toBeTruthy();
 }, 900_000);
+
+it.skipIf(process.env.GRAPHIC_RENDER_LIVE !== '1')(
+  'il bundle cachato NON serve il sorgente precedente',
+  async () => {
+    // Il difetto che questo test esiste per non far tornare: un bundle che importa `./Video` e'
+    // stantio appena il sorgente cambia — misurato, due sorgenti diversi davano PNG IDENTICI. La
+    // composizione `Graphic` riceve il sorgente come PROP proprio per questo, e il bundle e'
+    // cachato solo perche' non lo contiene.
+    const g = (bg: string) =>
+      `const Graphic = () => <div style={{width:'100%',height:'100%',background:'${bg}',display:'flex'}}>x</div>;`;
+    const h = (b: Buffer) => createHash('sha1').update(b).digest('hex');
+    const a = await renderGraphicStill({ brandId: BRAND, source: g('#ff0000'), width: 1080, height: 1080 });
+    const b = await renderGraphicStill({ brandId: BRAND, source: g('#0000ff'), width: 1080, height: 1920 });
+    expect('png' in a && 'png' in b, JSON.stringify([a, b]).slice(0, 300)).toBe(true);
+    if ('png' in a && 'png' in b) expect(h(a.png)).not.toBe(h(b.png));
+  },
+  900_000
+);

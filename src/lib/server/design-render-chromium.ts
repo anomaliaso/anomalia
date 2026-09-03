@@ -63,20 +63,19 @@ export async function renderGraphicWithChromium(
 		const { isSandboxConfigured } = await import('$lib/server/sandbox');
 		if (!isSandboxConfigured()) return undefined;
 
-		const { renderMotionStills } = await import('$lib/server/motion-video/render-tools');
-		const { rendered, failures } = await renderMotionStills({
+		const { renderGraphicStill } = await import('$lib/server/motion-video/render-tools');
+		const out = await renderGraphicStill({
 			brandId: opts.brandId,
 			userId: opts.userId ?? undefined,
-			source: wrapGraphicAsComposition(source, opts.width, opts.height),
-			frames: [0],
-			detail: 'graphic'
+			source,
+			width: opts.width,
+			height: opts.height
 		});
-		const png = rendered[0]?.png;
-		if (!png?.length) {
-			console.error('[design-render] graphic still failed, falling back to satori:', failures[0]?.error ?? 'no frame');
+		if ('error' in out || !out.png?.length) {
+			console.error('[design-render] graphic still failed, falling back to satori:', 'error' in out ? out.error : 'empty');
 			return undefined;
 		}
-		return { png, width: opts.width, height: opts.height };
+		return { png: out.png, width: opts.width, height: opts.height };
 	} catch (e) {
 		console.error('[design-render] graphic still failed, falling back to satori:', e instanceof Error ? e.message : e);
 		return undefined;

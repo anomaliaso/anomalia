@@ -48,7 +48,7 @@ import {
 	SANDBOX_MAX_LEASE_MS,
 	type SandboxHandle
 } from '$lib/server/sandbox';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
 	MOTION_REMOTION_VERSION,
 	MOTION_RENDER_PACKAGES
@@ -113,18 +113,62 @@ export type ContentPart =
 
 /** Il `Root` che Remotion si aspetta, costruito dagli export del nostro contratto TSX. */
 const ROOT_TSX = `import React from 'react';
-import { Composition } from 'remotion';
+import { Composition, continueRender, delayRender } from 'remotion';
+import { transform } from 'sucrase';
 import MotionVideo, { fps, durationInFrames, width, height } from './Video';
 
+/**
+ * La grafica: il sorgente arriva come PROP e viene compilato QUI, nel browser.
+ *
+ * E' cio' che rende il bundle indipendente da cosa si sta renderizzando, e quindi riusabile. Un
+ * bundle che importa './Video' e' STANTIO appena il sorgente cambia — misurato: due sorgenti
+ * diversi, stesso bundle, PNG identici. Cachare quello significherebbe consegnare in silenzio la
+ * grafica precedente.
+ */
+const GraphicFromSource: React.FC<{ source: string }> = ({ source }) => {
+  const [el, setEl] = React.useState(null);
+  const [handle] = React.useState(() => delayRender('compiling the graphic source'));
+  React.useEffect(() => {
+    try {
+      const code = transform(source, { transforms: ['typescript', 'jsx'], jsxRuntime: 'classic' }).code;
+      // L'a capo NON e' cosmetico: il sorgente puo' finire con un commento di riga, e senza
+      // questo il \`return\` ci finisce dentro — la funzione torna undefined e l'errore dice
+      // "the source does not define Graphic", che accusa il modello di un difetto nostro.
+      const factory = new Function('React', code + '\\n; return typeof Graphic !== "undefined" ? Graphic : null;');
+      const C = factory(React);
+      if (!C) throw new Error('the source does not define Graphic');
+      setEl(React.createElement(C));
+    } finally {
+      continueRender(handle);
+    }
+  }, [source, handle]);
+  return el;
+};
+
 export const RemotionRoot: React.FC = () => (
-  <Composition
-    id="MotionVideo"
-    component={MotionVideo as React.FC}
-    durationInFrames={durationInFrames ?? 180}
-    fps={fps ?? 30}
-    width={width ?? 1080}
-    height={height ?? 1080}
-  />
+  <>
+    <Composition
+      id="MotionVideo"
+      component={MotionVideo as React.FC}
+      durationInFrames={durationInFrames ?? 180}
+      fps={fps ?? 30}
+      width={width ?? 1080}
+      height={height ?? 1080}
+    />
+    <Composition
+      id="Graphic"
+      component={GraphicFromSource}
+      durationInFrames={1}
+      fps={30}
+      width={1080}
+      height={1080}
+      defaultProps={{ source: 'const Graphic = () => <div />;' }}
+      calculateMetadata={({ props }) => {
+        const m = /__w=(\\d{3,4}).__h=(\\d{3,4})/.exec(props.source);
+        return { width: m ? Number(m[1]) : 1080, height: m ? Number(m[2]) : 1080, durationInFrames: 1, fps: 30 };
+      }}
+    />
+  </>
 );
 `;
 
@@ -251,27 +295,44 @@ export function readSourceMeta(
  * proprio codice e proverebbe a "correggere" riscrivendo la scena. Quindi si confronta il
  * package.json che c'è con quello che vogliamo, e si reinstalla quando divergono.
  */
+/**
+ * L'impronta di TUTTO ciò che il bundle contiene: dipendenze, Root e index.
+ *
+ * Chiavare la cache sul solo `package.json` è il difetto che questo file ha già pagato due volte:
+ * cambiando `ROOT_TSX` per aggiungere una composizione, le dipendenze restavano identiche, il
+ * progetto risultava «cached» e il bundle vecchio rispondeva «Could not find composition with ID
+ * Graphic» — un errore che non nomina né il bundle né la cache. Un bundle stantio è peggio ancora
+ * quando compila: renderizza in silenzio la grafica di prima.
+ */
+function projectStamp(): string {
+	return createHash('sha1').update(packageJson()).update(ROOT_TSX).update(INDEX_TS).digest('hex');
+}
+
 async function ensureProject(
 	sb: SandboxHandle,
 	onLog?: (l: string) => void,
 	/** Quanto tempo l'installazione può prendersi senza mangiarsi il render che viene dopo. */
 	budgetMs = INSTALL_TIMEOUT_MS
 ): Promise<void> {
-	const desired = packageJson();
+	const stamp = projectStamp();
 	const installed = await sb.run('test', ['-d', `${PROJECT_DIR}/node_modules/remotion`]);
 	if (installed.exitCode === 0) {
-		const current = await sb.read(`${PROJECT_DIR}/package.json`).catch((error) => { swallow('sb.read failed', error); return null; });
-		if (current?.trim() === desired.trim()) {
+		const current = await sb.read(`${PROJECT_DIR}/.stamp`).catch((error) => { swallow('sb.read failed', error); return null; });
+		const hasBundle = await sb.run('test', ['-d', `${PROJECT_DIR}/bundle`]);
+		if (current?.trim() === stamp && hasBundle.exitCode === 0) {
 			onLog?.('render project cached');
 			return;
 		}
-		onLog?.('render project deps changed — reinstalling');
+		onLog?.(current?.trim() === stamp ? 'render project cached, bundling' : 'render project changed — reinstalling');
 	} else {
 		onLog?.('installing render project');
 	}
+
+	// Il bundle va con il progetto: uno rimasto da prima non ha le composizioni nuove.
+	await sb.run('rm', ['-rf', `${PROJECT_DIR}/bundle`]);
 	await sb.run('mkdir', ['-p', `${PROJECT_DIR}/src`, `${PROJECT_DIR}/out`]);
 	await sb.write([
-		{ path: `${PROJECT_DIR}/package.json`, content: desired },
+		{ path: `${PROJECT_DIR}/package.json`, content: packageJson() },
 		{ path: `${PROJECT_DIR}/src/Root.tsx`, content: ROOT_TSX },
 		{ path: `${PROJECT_DIR}/src/index.ts`, content: INDEX_TS }
 	]);
@@ -282,6 +343,9 @@ async function ensureProject(
 	if (install.exitCode !== 0) {
 		throw new Error(`npm install failed in the sandbox: ${install.stderr.slice(-600)}`);
 	}
+	await buildBundle(sb, onLog);
+	// Lo stamp si scrive per ULTIMO: un'installazione interrotta a metà non deve risultare valida.
+	await sb.write([{ path: `${PROJECT_DIR}/.stamp`, content: stamp }]);
 }
 
 /**
@@ -469,6 +533,92 @@ export async function renderMotionMp4(opts: {
  * ~4-5s, quindi sei scene in un'apertura sola stanno in ~30s contro i ~85s (p50) di un MP4.
  * Sei aperture separate ne costerebbero il triplo e avrebbero cambiato il progetto.
  */
+/**
+ * Il bundle webpack del progetto, una volta sola.
+ *
+ * `remotion still src/index.ts` ribundla a OGNI invocazione: misurato nella VM, 3969ms contro
+ * 1754ms partendo da un bundle già fatto. Cachearlo è lecito solo perché la composizione `Graphic`
+ * riceve il sorgente come prop invece di importarlo — con l'import, due sorgenti diversi sullo
+ * stesso bundle davano PNG IDENTICI, cioè la grafica precedente consegnata in silenzio.
+ */
+async function buildBundle(sb: SandboxHandle, onLog?: (l: string) => void): Promise<void> {
+	const res = await sb.run('npx', ['remotion', 'bundle', 'src/index.ts', '--out-dir=bundle', '--log=error'], {
+		cwd: PROJECT_DIR,
+		timeoutMs: INSTALL_TIMEOUT_MS
+	});
+	if (res.exitCode !== 0) {
+		// Non fatale: senza bundle si renderizza dall'entry, più lento ma corretto.
+		onLog?.(`bundle failed, stills will bundle per render: ${(res.stderr || res.stdout).slice(-200)}`);
+	}
+}
+
+/**
+ * Una grafica: un fotogramma, dal bundle cachato, col sorgente passato come prop.
+ *
+ * Sta accanto ai fotogrammi del motion perché è la stessa macchina, lo stesso Chromium e lo stesso
+ * progetto — una grafica È un motion video da un fotogramma. Quello che NON condivide è il modo di
+ * arrivare al sorgente: qui via `--props`, così il bundle resta riusabile.
+ */
+export async function renderGraphicStill(opts: {
+	brandId: string;
+	userId?: string;
+	source: string;
+	width: number;
+	height: number;
+	remainingMs?: () => number;
+	abortSignal?: AbortSignal;
+	onLog?: (line: string) => void;
+}): Promise<{ png: Buffer } | { error: string }> {
+	const left = opts.remainingMs?.();
+	let sb: SandboxHandle | null = null;
+	return await withSandboxBilling(
+		{ brandId: opts.brandId, userId: opts.userId, use: 'graphic_still', detail: `${opts.width}x${opts.height}` },
+		async () => {
+			const startedAt = Date.now();
+			const lease = Math.min(typeof left === 'number' ? left : 600_000, 600_000);
+			try {
+				sb = await openBrandSandbox({
+					brandId: opts.brandId,
+					mode: 'research',
+					agentId: MOTION_AGENT,
+					needsBrowser: true,
+					timeoutMs: lease,
+					runId: randomUUID(),
+					abortSignal: opts.abortSignal,
+					onLog: opts.onLog
+				});
+				await ensureProject(
+					sb,
+					opts.onLog,
+					budgetWithin(lease, Date.now() - startedAt, RENDER_TIMEOUT_MS + 15_000, INSTALL_TIMEOUT_MS)
+				);
+				opts.onLog?.(`[t] progetto pronto +${Date.now() - startedAt}ms`);
+				await sb.run('mkdir', ['-p', `${PROJECT_DIR}/out`]);
+				const out = `out/graphic-${Date.now()}.png`;
+				// Le misure viaggiano DENTRO il sorgente perché `calculateMetadata` legge da lì: un
+				// marcatore, non un parametro in più da tenere allineato in due posti.
+				const source = `${opts.source}\n// __w=${opts.width} __h=${opts.height}`;
+				const hasBundle = await sb.run('test', ['-d', `${PROJECT_DIR}/bundle`]);
+				const entry = hasBundle.exitCode === 0 ? 'bundle' : 'src/index.ts';
+				const res = await sb.run(
+					'npx',
+					['remotion', 'still', entry, 'Graphic', out, `--props=${JSON.stringify({ source })}`, '--log=error'],
+					{ cwd: PROJECT_DIR, timeoutMs: RENDER_TIMEOUT_MS }
+				);
+				opts.onLog?.(`[t] still finito +${Date.now() - startedAt}ms`);
+				if (res.exitCode !== 0) return { error: `[${sb.name}] ${res.stderr || res.stdout}`.slice(-800) };
+				const png = await sb.readBuffer(`${PROJECT_DIR}/${out}`);
+				opts.onLog?.(`[t] png letto +${Date.now() - startedAt}ms`);
+				return { png };
+			} catch (e) {
+				throw describeSandboxDeath(e);
+			} finally {
+				await sb?.release().catch((error) => { swallow('release failed', error); return undefined; });
+			}
+		}
+	);
+}
+
 export async function renderMotionStills(opts: {
 	brandId: string;
 	userId?: string;

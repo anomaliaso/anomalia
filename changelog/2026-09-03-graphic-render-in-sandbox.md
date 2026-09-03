@@ -83,3 +83,45 @@ dieci.
 `$env/dynamic/private` sotto vitest non rilegge `.env`: scriverci dentro `GRAPHIC_RENDERER` lascia
 il flag spento e il test passa **senza aver renderizzato niente**. Va passato davanti al comando.
 È annotato nel test, perché è il modo esatto in cui questa verifica poteva mentire.
+
+
+## I 20 secondi, smontati
+
+Misurato dentro la VM, non stimato:
+
+```
+apertura sandbox + progetto   5.4s
+`remotion still`              3.4s
+lettura del PNG               0.2s
+                             ─────
+lavoro                        9.0s
+totale osservato             16.8s   ← 7.8s dopo che il PNG esiste
+```
+
+**Quasi metà del tempo sta dopo il render**: `release()` e la chiusura dell'addebito. Sommati
+all'apertura fanno ~12.5s di macchina per 3.4s di lavoro — un rapporto che regge per UNA grafica in
+chat e non regge per un carosello, dove oggi si pagherebbe dieci volte.
+
+Il taglio più grosso non è quindi rendere il render più veloce: è **aprire una sandbox sola per N
+grafiche**. Non è in questa PR.
+
+## Il bundle: perché caching e correttezza si toccano
+
+`remotion still src/index.ts` ribundla a ogni invocazione — 3969ms contro 1754ms partendo da un
+bundle già fatto, misurato nella VM. Ma cachare il bundle è lecito **solo** perché la composizione
+`Graphic` riceve il sorgente come prop: un bundle che importa `./Video` è stantio appena il sorgente
+cambia, e la prova è secca — due sorgenti diversi, stesso bundle, **PNG identici**. Cachare quello
+avrebbe consegnato in silenzio la grafica precedente.
+
+E la chiave della cache non può essere il `package.json`: cambiando `ROOT_TSX` per aggiungere una
+composizione le dipendenze restano identiche, il progetto risulta «cached» e il bundle vecchio
+risponde *«Could not find composition with ID Graphic»* — un errore che non nomina né il bundle né
+la cache. La chiave è l'impronta di package.json + Root + index, e lo stamp si scrive **per ultimo**
+così un'installazione interrotta non risulta valida.
+
+## Un difetto che accusava il modello di un errore nostro
+
+Il sorgente compilato veniva chiuso con `code + '; return …'`. Se il sorgente finisce con un
+commento di riga — e il nostro ci aggiunge le misure come commento — il `return` **finisce dentro il
+commento**: la funzione torna `undefined` e l'errore che arriva è *«the source does not define
+Graphic»*, cioè la colpa data a chi ha scritto la grafica. Un `\n` prima del `return`.
