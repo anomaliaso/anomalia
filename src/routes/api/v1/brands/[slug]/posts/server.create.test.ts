@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const publishApprovedPost = vi.fn();
 const structured = vi.fn();
 const gateCredits = vi.fn();
+const findBrandMediaByIds = vi.fn();
+const publishLibraryMediaAsPostMedia = vi.fn();
 
 vi.mock('$lib/server/cli-auth', () => ({
   authenticate: vi.fn(),
@@ -21,7 +23,11 @@ vi.mock('$lib/server/publish', () => ({
 }));
 vi.mock('$lib/server/research', () => ({ structured: (...args: unknown[]) => structured(...args) }));
 vi.mock('$lib/server/ai-log', () => ({ withBrandContext: (_b: string, fn: () => unknown) => fn() }));
-vi.mock('$lib/server/brand-media', () => ({ publishLibraryImageAsPostMedia: vi.fn() }));
+vi.mock('$lib/server/brand-media', () => ({
+  publishLibraryImageAsPostMedia: vi.fn(),
+  findBrandMediaByIds: (...args: unknown[]) => findBrandMediaByIds(...args),
+  publishLibraryMediaAsPostMedia: (...args: unknown[]) => publishLibraryMediaAsPostMedia(...args)
+}));
 vi.mock('$lib/server/credits', () => ({
   gateCredits: (...args: unknown[]) => gateCredits(...args),
   CreditsExhaustedError: class extends Error {}
@@ -84,6 +90,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(checkApiKeyWriteAccess).mockReturnValue(undefined);
   publishApprovedPost.mockResolvedValue({ scheduled: 1, failed: 0 });
+  findBrandMediaByIds.mockResolvedValue([]);
 });
 
 describe('POST /api/v1/brands/:slug/posts', () => {
@@ -204,16 +211,49 @@ describe('POST /api/v1/brands/:slug/posts', () => {
     expect(rows).toEqual([]);
   });
 
-  it('rifiuta i media invece di scartarli: un post text-only silenzioso è peggio di un errore', async () => {
+  it('rifiuta un campo che il contratto non dichiara, invece di scartarlo in silenzio', async () => {
     const { res, body, rows } = await call({
       platforms: ['linkedin'],
       caption: 'copy',
-      media_ids: ['asset-1']
+      campo_che_non_esiste: 'x'
     });
 
     expect(res.status).toBe(400);
     expect(body.error).toBe('invalid_input');
     expect(rows).toEqual([]);
+  });
+
+  it('un media di un altro brand ferma la creazione invece di produrre un post senza immagine', async () => {
+    findBrandMediaByIds.mockResolvedValue([]);
+
+    const { res, body, rows } = await call({
+      platforms: ['instagram'],
+      caption: 'copy',
+      media_ids: ['asset-di-un-altro-brand']
+    });
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('media_not_found');
+    expect(rows).toEqual([]);
+  });
+
+  it('un media della libreria sblocca instagram, che da sola la copy non regge', async () => {
+    findBrandMediaByIds.mockResolvedValue([{ id: 'asset-1', kind: 'image' }]);
+    publishLibraryMediaAsPostMedia.mockResolvedValue({
+      publicUrl: 'https://cdn.test/asset-1.png',
+      media: { id: 'asset-1' }
+    });
+
+    const { res, body, rows } = await call({
+      platforms: ['instagram'],
+      caption: 'copy con immagine riusata',
+      media_ids: ['asset-1']
+    });
+
+    expect(res.status).toBe(200);
+    expect(body.status).toBe('pending_user');
+    expect(rows[0].media_url).toBe('https://cdn.test/asset-1.png');
+    expect(rows[0].content_type).toBe('uploaded_image');
   });
 
   it('rifiuta una piattaforma sconosciuta al dominio', async () => {

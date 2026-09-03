@@ -119,6 +119,25 @@ export async function probeImageDimensions(
   }
 }
 
+/**
+ * Le righe di libreria che appartengono DAVVERO a questo brand, fra quelle chieste. Chi chiama
+ * confronta con la lista che ha mandato: un id che manca è di un altro brand o non esiste, e la
+ * differenza fra i due non va detta a chi chiede — sarebbe un modo per sondare gli id altrui.
+ */
+export async function findBrandMediaByIds(
+  supabase: SupabaseClient,
+  brandId: string,
+  ids: string[]
+): Promise<BrandMediaRow[]> {
+  if (!ids.length) return [];
+  const { data } = await supabase
+    .from('brand_media')
+    .select('*')
+    .eq('brand_id', brandId)
+    .in('id', ids);
+  return (data ?? []) as BrandMediaRow[];
+}
+
 export async function listBrandMedia(
   supabase: SupabaseClient,
   brandId: string,

@@ -56,9 +56,9 @@ Non chiama nessun modello e **non consuma crediti**: niente `gateAiAction`. Non 
 programma niente — `scheduled_for` è la data **proposta**, e resta un metadato del calendario
 finché il post non viene approvato. È `POST /posts/:id/approve` ad autorizzare la distribuzione.
 
-Solo piattaforme che reggono il testo da solo: `facebook`, `linkedin`, `x`, `threads`, `bluesky`,
-`reddit`. `instagram` e `tiktok` vogliono un'immagine, `youtube` un video: senza media vengono
-rifiutate. Questo endpoint non accetta ancora media.
+Senza media valgono solo le piattaforme che reggono il testo da solo: `facebook`, `linkedin`, `x`,
+`threads`, `bluesky`, `reddit`. Con `media_ids` si sbloccano anche `instagram` e `tiktok`, e
+`youtube` se il media è un video.
 
 **Body**
 
@@ -68,6 +68,7 @@ rifiutate. Questo endpoint non accetta ancora media.
 | `caption` | string | Sì | La copy, salvata così com'è |
 | `platform_captions` | object | No | Override per piattaforma, `{"x": "…"}` |
 | `scheduled_for` | string | No | Istante proposto, ISO. Senza offset è letto sul fuso del brand; con `Z` o `±hh:mm` è preso come scritto. Almeno 2 minuti nel futuro |
+| `media_ids` | string[] | No | Fino a 8 id dalla libreria del brand (`GET /media`). Un id che non è di questo brand fa fallire la creazione: il post non nasce mai senza |
 | `title` | string | No | Obbligatorio per Reddit (max 300 char) |
 | `subreddit` | string | No | Senza `r/` |
 | `link_url` | string | No | |
@@ -102,6 +103,7 @@ post resta una bozza senza data, fuori dal calendario ma elencata da `GET /posts
 | `400` | `{"error":"reddit_title"}` |
 | `400` | `{"error":"invalid_scheduled_for","details":"…"}` — data illeggibile |
 | `400` | `{"error":"too_soon"}` — data passata o troppo vicina |
+| `400` | `{"error":"media_not_found"}` — un id media non è di questo brand, o non si è potuto copiare |
 | `403` | `{"error":"API key is read-only"}` |
 
 **Esempio**:

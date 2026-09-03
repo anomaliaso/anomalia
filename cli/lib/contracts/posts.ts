@@ -38,6 +38,14 @@ const CreatePostInputSchema = z.object({
       'Proposed publication instant, ISO. Without an offset it is read on the brand clock. ' +
         'It is a calendar proposal only: nothing is scheduled or published until the post is approved'
     ),
+  media_ids: z
+    .array(z.string().min(1))
+    .max(8)
+    .optional()
+    .describe(
+      'Ids from this brand media library (see list_media). An id that is not this brand is ' +
+        'rejected: the post is never quietly created without it'
+    ),
   title: z.string().optional().describe('Required for Reddit'),
   subreddit: z.string().optional(),
   link_url: z.string().optional()
@@ -76,7 +84,8 @@ export const CREATE_POST = {
     { error: 'over_limit', status: 400 },
     { error: 'reddit_title', status: 400 },
     { error: 'too_soon', status: 400 },
-    { error: 'invalid_scheduled_for', status: 400 }
+    { error: 'invalid_scheduled_for', status: 400 },
+    { error: 'media_not_found', status: 400 }
   ],
   destructive: false
 } satisfies BrandEndpoint;
@@ -119,6 +128,38 @@ export const GET_CALENDAR = {
     nextYM: z.string(),
     timezone: z.string()
   }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+const MediaRow = z.object({
+  id: z.string(),
+  kind: z.string(),
+  mime: z.string().nullable(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  tags: z.array(z.string()).nullable(),
+  signed_url: z.string().nullable(),
+  created_at: z.string()
+});
+
+export const LIST_MEDIA = {
+  tool: 'list_media',
+  title: 'List brand media',
+  description:
+    'Assets already in the brand library, newest first, with a preview URL. Use an id from here ' +
+    'as media_ids on create_post to reuse an asset instead of paying for a new render.',
+  method: 'GET',
+  pathUnderBrand: '/media',
+  input: z
+    .object({
+      query: z.string().optional().describe('Free-text filter over title, description and tags'),
+      limit: z.coerce.number().int().min(1).max(200).optional()
+    })
+    .strict(),
+  output: z.object({ media: z.array(MediaRow) }),
   failures: [],
   destructive: false
 } satisfies BrandEndpoint;

@@ -5,7 +5,7 @@ import { aiActCopyGuardrail } from '$lib/ai-act';
 import { platformPlaybook, houseVoiceFor, type ContentPrefs } from '$lib/server/content-preview';
 import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
 import { wallClockToUtc, zonedClock } from '$lib/server/schedule';
-import { publishLibraryImageAsPostMedia } from '$lib/server/brand-media';
+import { findBrandMediaByIds, publishLibraryMediaAsPostMedia } from '$lib/server/brand-media';
 import { EDITOR_POST_COLS } from '$lib/server/post-editing';
 import {
   PLATFORM_CHAR_LIMITS,
@@ -186,31 +186,55 @@ function earliestMs(): number {
   return Math.floor(Date.now() / 60000) * 60000 + MIN_LEAD_MS;
 }
 
+type ResolvedMedia =
+  | { ok: true; urls: string[]; video: boolean }
+  | { ok: false; error: 'media_not_found' };
+
+/**
+ * Un media che il chiamante ha indicato e che non si risolve ferma la creazione. Veniva saltato
+ * in silenzio: l'id di un altro brand diventava una bozza senza immagine che nessuno aveva
+ * chiesto, e su Instagram un `need_media` che sembrava colpa di chi chiedeva.
+ */
 async function resolveMediaUrls(
   supabase: SupabaseClient,
   userId: string,
   brandId: string,
   paths: string[],
   libraryIds: string[]
-): Promise<{ urls: string[]; video: boolean }> {
+): Promise<ResolvedMedia> {
   const urls: string[] = [];
   let video = false;
+
   for (const raw of paths.slice(0, MAX_MEDIA)) {
     const path = String(raw ?? '');
-    if (!path.startsWith(`${userId}/uploads/`)) continue;
+    if (!path.startsWith(`${userId}/uploads/`)) return { ok: false, error: 'media_not_found' };
     const publicUrl = supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
-    if (publicUrl) urls.push(publicUrl);
+    if (!publicUrl) return { ok: false, error: 'media_not_found' };
+    urls.push(publicUrl);
     if (/\.(mp4|webm|mov)(\?|$)/i.test(path)) video = true;
   }
-  for (const id of libraryIds.slice(0, MAX_MEDIA - urls.length)) {
-    const copied = await publishLibraryImageAsPostMedia(supabase, {
+
+  const wanted = libraryIds.slice(0, MAX_MEDIA - urls.length).map(String);
+  if (!wanted.length) return { ok: true, urls: urls.slice(0, MAX_MEDIA), video };
+
+  const owned = new Map(
+    (await findBrandMediaByIds(supabase, brandId, wanted)).map((row) => [row.id, row])
+  );
+  for (const id of wanted) {
+    const media = owned.get(id);
+    if (!media) return { ok: false, error: 'media_not_found' };
+    const copied = await publishLibraryMediaAsPostMedia(supabase, {
       brandId,
       userId,
-      mediaId: String(id)
+      mediaId: id,
+      kind: media.kind
     });
-    if ('publicUrl' in copied && copied.publicUrl) urls.push(copied.publicUrl);
+    if (!('publicUrl' in copied) || !copied.publicUrl) return { ok: false, error: 'media_not_found' };
+    urls.push(copied.publicUrl);
+    if (media.kind === 'video') video = true;
   }
-  return { urls: urls.slice(0, MAX_MEDIA), video };
+
+  return { ok: true, urls: urls.slice(0, MAX_MEDIA), video };
 }
 
 export async function createManualPost(opts: {
@@ -226,13 +250,15 @@ export async function createManualPost(opts: {
   const caption = String(opts.input.caption ?? '').trim();
   if (!caption) return { ok: false, error: 'need_caption' };
 
-  const { urls, video: pathVideo } = await resolveMediaUrls(
+  const media = await resolveMediaUrls(
     opts.supabase,
     opts.userId,
     opts.brandId,
     opts.input.mediaPaths ?? [],
     opts.input.libraryIds ?? []
   );
+  if (!media.ok) return { ok: false, error: media.error };
+  const { urls, video: pathVideo } = media;
   const isVideo = opts.input.isVideo === true || pathVideo;
   const hasMedia = urls.length > 0;
   const needsVisual = platforms.some((p) => VISUAL_REQUIRED_PLATFORMS.has(p));
