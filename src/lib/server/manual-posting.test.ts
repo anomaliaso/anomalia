@@ -12,8 +12,13 @@ vi.mock('$lib/server/research', () => ({
 vi.mock('$lib/server/ai-log', () => ({
   withBrandContext: (_brandId: string, fn: () => unknown) => fn()
 }));
+const findBrandMediaByIds = vi.fn();
+const publishLibraryMediaAsPostMedia = vi.fn();
+
 vi.mock('$lib/server/brand-media', () => ({
-  publishLibraryImageAsPostMedia: vi.fn()
+  publishLibraryImageAsPostMedia: vi.fn(),
+  findBrandMediaByIds: (...args: unknown[]) => findBrandMediaByIds(...args),
+  publishLibraryMediaAsPostMedia: (...args: unknown[]) => publishLibraryMediaAsPostMedia(...args)
 }));
 
 import { createManualPost } from './manual-posting';
@@ -129,5 +134,85 @@ describe('createManualPost', () => {
     await create({ platforms: ['linkedin'], caption: 'copy scritto a mano', mode: 'draft' });
 
     expect(structured).not.toHaveBeenCalled();
+  });
+});
+
+describe('createManualPost con media della libreria', () => {
+  const IMAGE = { id: 'media-img', kind: 'image' as const };
+  const VIDEO = { id: 'media-vid', kind: 'video' as const };
+
+  beforeEach(() => {
+    findBrandMediaByIds.mockResolvedValue([IMAGE, VIDEO]);
+    publishLibraryMediaAsPostMedia.mockImplementation(async (_c: unknown, o: { mediaId: string }) => ({
+      publicUrl: `https://cdn.test/${o.mediaId}.bin`,
+      media: { id: o.mediaId }
+    }));
+  });
+
+  it('attacca l immagine della libreria e la pubblica con la sua natura', async () => {
+    const { result, rows } = await create({
+      platforms: ['instagram'],
+      caption: 'copy con immagine',
+      libraryIds: [IMAGE.id],
+      mode: 'propose'
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 'pending_user' });
+    expect(rows[0].media_url).toBe('https://cdn.test/media-img.bin');
+    expect(publishLibraryMediaAsPostMedia.mock.calls[0][1]).toMatchObject({ kind: 'image' });
+  });
+
+  it('un video della libreria soddisfa una piattaforma che vuole il video', async () => {
+    const { result, rows } = await create({
+      platforms: ['youtube'],
+      caption: 'copy con video',
+      title: 'Titolo',
+      libraryIds: [VIDEO.id],
+      mode: 'propose'
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(rows[0].content_type).toBe('uploaded_video');
+  });
+
+  it('un id che non è di questo brand viene rifiutato, non scartato', async () => {
+    findBrandMediaByIds.mockResolvedValue([]);
+
+    const { result, rows } = await create({
+      platforms: ['linkedin'],
+      caption: 'copy',
+      libraryIds: ['media-di-un-altro-brand'],
+      mode: 'propose'
+    });
+
+    expect(result).toEqual({ ok: false, error: 'media_not_found' });
+    expect(rows).toEqual([]);
+    expect(publishLibraryMediaAsPostMedia).not.toHaveBeenCalled();
+  });
+
+  it('un media che esiste ma non si riesce a copiare non diventa un post senza immagine', async () => {
+    publishLibraryMediaAsPostMedia.mockResolvedValue({ error: 'Upload of library media failed' });
+
+    const { result, rows } = await create({
+      platforms: ['linkedin'],
+      caption: 'copy',
+      libraryIds: [IMAGE.id],
+      mode: 'propose'
+    });
+
+    expect(result).toEqual({ ok: false, error: 'media_not_found' });
+    expect(rows).toEqual([]);
+  });
+
+  it('un percorso fuori dagli upload di chi chiama viene rifiutato', async () => {
+    const { result, rows } = await create({
+      platforms: ['linkedin'],
+      caption: 'copy',
+      mediaPaths: ['un-altro-utente/uploads/foto.png'],
+      mode: 'propose'
+    });
+
+    expect(result).toEqual({ ok: false, error: 'media_not_found' });
+    expect(rows).toEqual([]);
   });
 });
