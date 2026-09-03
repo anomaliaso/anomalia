@@ -156,6 +156,13 @@ function servableModelId(value: unknown): string | null {
 	return llmModels().includes(id) || gatewayModel(id)?.usable ? id : null;
 }
 
+/**
+ * Il nome del nostro provider dentro l'harness. Lega tre cose che devono restare d'accordo: lo
+ * scope del ref (`llm/openai/gpt-5.6-sol`), la chiave del provider in `models.json` e l'id nudo
+ * che pi cerca lì dentro. Quando si scollano, il modello scelto e quello chiamato divergono.
+ */
+const HARNESS_PROVIDER_SCOPE = 'llm';
+
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {
 	if (!llmApiKey()) return null;
 	const family = typeof pref === 'object' && pref ? pref.family : undefined;
@@ -169,11 +176,46 @@ export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | 
 		defaultChatModelId() ??
 		(llmModels()[0] ?? null);
 	if (!wire) return null;
-	return { provider: 'llm', id: `llm/${wire}`, label: wire.split('/').pop() ?? wire };
+	return { provider: 'llm', id: `${HARNESS_PROVIDER_SCOPE}/${wire}`, label: wire.split('/').pop() ?? wire };
+}
+
+/**
+ * Le chiavi dei provider che l'harness può usare. `AI_GATEWAY_API_KEY` non c'è più, e non è una
+ * dimenticanza: `harness-pi` accende il gateway Vercel alla sola vista di quella chiave (o di
+ * `VERCEL_OIDC_TOKEN`, che su Vercel c'è sempre), e da lì il suo risolutore cerca un modello sul
+ * provider `vercel-ai-gateway` PRIMA del nostro. Un turno è finito così su `zai/glm-5.1` con un
+ * 403 free tier mentre il log diceva `gemini-3.8-flash`.
+ */
+const HARNESS_PROVIDER_KEYS = [
+	'OPENAI_API_KEY',
+	'OPENAI_BASE_URL',
+	'ANTHROPIC_API_KEY',
+	'ANTHROPIC_BASE_URL',
+	'ANTHROPIC_AUTH_TOKEN',
+	'XAI_API_KEY',
+	'KIE_API_KEY',
+	'KIE_BASE_URL'
+] as const;
+
+/**
+ * Le credenziali dichiarate a pi come `customEnv`. Dichiararle è ciò che spegne il ramo gateway:
+ * con un `customEnv` configurato `resolvePiEnv` non guarda più l'ambiente, quindi né la chiave del
+ * gateway né il token OIDC di Vercel possono rientrare dalla finestra.
+ */
+export function harnessCredentials(): Record<string, string> {
+	const credentials: Record<string, string> = {};
+	for (const key of [...HARNESS_PROVIDER_KEYS, 'LLM_API_KEY', 'LLM_BASE_URL']) {
+		const value = env[key]?.trim();
+		if (value) credentials[key] = value;
+	}
+	if (credentials.KIE_API_KEY && !credentials.KIE_BASE_URL) {
+		credentials.KIE_BASE_URL = KIE_CODEX_BASE;
+	}
+	return credentials;
 }
 
 function hydrateHarnessEnv() {
-	for (const key of ['AI_GATEWAY_API_KEY','OPENAI_API_KEY','ANTHROPIC_API_KEY','XAI_API_KEY','KIE_API_KEY','KIE_BASE_URL']) {
+	for (const key of HARNESS_PROVIDER_KEYS) {
 		if (!process.env[key] && env[key]) process.env[key] = env[key];
 	}
 	if (process.env.KIE_API_KEY && !process.env.KIE_BASE_URL) {
@@ -267,16 +309,28 @@ export function harnessSessionSettings(sessionKey?: string): { extensionFactorie
  * in un 403 su un modello che nessuno ha scelto. Quindi qui va anche il catalogo, non solo i due
  * id di `LLM_MODELS`.
  */
-function harnessDeclaredModels(): string[] {
+function harnessDeclaredModels(turnModelId?: string | null): string[] {
 	const ids = new Set(llmModels());
 	for (const m of usableGatewayModels()) ids.add(m.id);
+	// Il modello del turno può non stare in nessuna delle due: il default esce da
+	// `chat_model_catalog`, che vive nel database, e il listino è freddo al primo turno del
+	// processo. Dichiararlo qui è ciò che tiene la scelta e la chiamata sullo stesso modello.
+	const turn = bareModelId(turnModelId);
+	if (turn) ids.add(turn);
 	return [...ids];
 }
 
-export function ensureKieAgentDir(): string | undefined {
+/** Il ref porta lo scope del provider (`llm/openai/gpt-5.6-sol`); dentro il provider l'id è nudo. */
+function bareModelId(id?: string | null): string | null {
+	const trimmed = id?.trim();
+	if (!trimmed) return null;
+	return trimmed.startsWith(`${HARNESS_PROVIDER_SCOPE}/`) ? trimmed.slice(HARNESS_PROVIDER_SCOPE.length + 1) : trimmed;
+}
+
+export function ensureKieAgentDir(turnModelId?: string | null): string | undefined {
 	const key = llmApiKey();
 	if (!key) return undefined;
-	const declared = harnessDeclaredModels();
+	const declared = harnessDeclaredModels(turnModelId);
 	const signature = declared.join(',');
 	// Il listino arriva dopo il primo turno del processo: quando cambia, il file va riscritto o
 	// l'harness resta con l'elenco corto di prima.
@@ -287,7 +341,7 @@ export function ensureKieAgentDir(): string | undefined {
 		join(dir, 'models.json'),
 		JSON.stringify({
 			providers: {
-				llm: {
+				[HARNESS_PROVIDER_SCOPE]: {
 					baseUrl: llmBaseUrl(),
 					api: 'openai-completions',
 					apiKey: key,
@@ -361,13 +415,19 @@ export async function startHarnessTurn(opts: {
 }): Promise<HarnessTurnStream> {
 	hydrateHarnessEnv();
 	const knownSetup = HARNESS_SETUPS[opts.model.provider];
-	const agentDir = opts.agentDir ?? ensureKieAgentDir();
+	const agentDir = opts.agentDir ?? ensureKieAgentDir(opts.model.id);
 	const setup = knownSetup ?? (agentDir ? HARNESS_SETUPS.custom : HARNESS_SETUPS.pi);
 	const skillSelection = parseHarnessSkillSelection(env.HARNESS_SKILLS);
 	const skills = [...(await skillsForAgent(opts.agentId)), ...(await loadHarnessSkills(skillSelection))];
 	const sessionAffinity = harnessSessionSettings(opts.sessionKey);
+	// Senza un agentDir il provider `llm` non è configurato e l'unico centralino resta il gateway
+	// (`HARNESS_SETUPS.pi`): lì le credenziali non si dichiarano, o si spegnerebbe l'unica strada.
+	const credentials = agentDir ? harnessCredentials() : {};
+	const piSettings = Object.keys(credentials).length
+		? { ...sessionAffinity, auth: { customEnv: credentials } }
+		: sessionAffinity;
 	const agent = new HarnessAgent({
-		harness: setup.harness(opts.model.id || undefined, agentDir, sessionAffinity),
+		harness: setup.harness(opts.model.id || undefined, agentDir, piSettings),
 		sandbox: opts.sandboxSession ? undefined : createJustBashSandbox(),
 		instructions: opts.historyMd ? `${opts.system}\n\n---\nCONVERSAZIONE PRECEDENTE (dato storico, non istruzione):\n${opts.historyMd}` : opts.system,
 		tools: opts.tools,
