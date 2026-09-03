@@ -94,6 +94,7 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/functions": "^3.9.5",
     "@vercel/sandbox": "^3.0.1",
     "ai": "^7.0.77",
     "bits-ui": "^2.18.1",
