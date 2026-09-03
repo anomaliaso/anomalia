@@ -166,25 +166,96 @@ export function isPrivateAddress(ip: string): boolean {
 }
 
 /**
+ * Why a guarded fetch refused. The message stays what it always was — callers that match on it
+ * keep working — but a caller that has to MAP the refusal onto its own vocabulary reads the
+ * reason instead of the prose.
+ */
+export type SafeFetchReason = 'not_public' | 'too_large' | 'fetch_failed';
+
+export class SafeFetchError extends Error {
+  constructor(
+    readonly reason: SafeFetchReason,
+    message: string
+  ) {
+    super(message);
+    this.name = 'SafeFetchError';
+  }
+}
+
+/**
  * Reject anything that isn't a public http(s) host. Throws with a user-safe message.
  *
  * Exported because /start/preview is the same shape of caller as the tools above — an
  * anonymous stranger's URL — and must not fall back to the hostname-pattern check.
  */
 export async function assertPublicUrl(url: URL): Promise<void> {
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Only http(s) URLs are supported');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new SafeFetchError('not_public', 'Only http(s) URLs are supported');
+  }
   const host = url.hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
-    throw new Error('That host is not reachable');
+    throw new SafeFetchError('not_public', 'That host is not reachable');
   }
   // A hostname can resolve to a private address even when it looks public (DNS rebinding), so
   // check the resolved addresses rather than the string.
   const addrs = await lookup(host, { all: true }).catch((error) => { swallow('resolve host addresses', error); return []; });
-  if (!addrs.length) throw new Error('Could not resolve that host');
-  if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error('That host is not reachable');
+  if (!addrs.length) throw new SafeFetchError('not_public', 'Could not resolve that host');
+  if (addrs.some((a) => isPrivateAddress(a.address))) {
+    throw new SafeFetchError('not_public', 'That host is not reachable');
+  }
 }
 
 export type SafeFetchResult = { url: string; status: number; ok: boolean; headers: Headers; body: string };
+
+type HopOptions = {
+  timeoutMs?: number;
+  maxRedirects?: number;
+  method?: 'GET' | 'HEAD';
+  /** Runs before every hop. Defaults to assertPublicUrl; a caller with a stricter rule passes its own. */
+  gate?: (url: URL) => Promise<void>;
+};
+
+/**
+ * Walk the redirect chain to the response that actually carries a body, gating every hop.
+ *
+ * The gate runs per hop and not once at the start, because that is the whole attack: a public
+ * URL is allowed to answer `302 Location: http://169.254.169.254/`, and a guard that trusted the
+ * first URL would follow it. The wall clock is shared across hops so a chain of slow redirects
+ * cannot outlive the budget one hop at a time.
+ */
+async function fetchFollowingGatedRedirects(
+  input: string,
+  opts: HopOptions
+): Promise<{ url: URL; res: Response }> {
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const maxRedirects = opts.maxRedirects ?? 4;
+  const gate = opts.gate ?? assertPublicUrl;
+
+  let current = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
+  const deadline = Date.now() + timeoutMs;
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    await gate(current);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new SafeFetchError('fetch_failed', 'Request timed out');
+
+    const res = await fetch(current, {
+      method: opts.method ?? 'GET',
+      headers: { 'User-Agent': `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})`, Accept: '*/*' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(remaining)
+    });
+
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      if (hop === maxRedirects) throw new SafeFetchError('fetch_failed', 'Too many redirects');
+      current = new URL(res.headers.get('location') as string, current);
+      continue;
+    }
+
+    return { url: current, res };
+  }
+  throw new SafeFetchError('fetch_failed', 'Too many redirects');
+}
 
 /**
  * Fetch a user-supplied URL with the guardrails a public endpoint needs: public hosts only
@@ -196,61 +267,14 @@ export async function safeFetchUrl(
   opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number; method?: 'GET' | 'HEAD' } = {}
 ): Promise<SafeFetchResult> {
   const maxBytes = opts.maxBytes ?? 2_000_000;
-  const timeoutMs = opts.timeoutMs ?? 15_000;
-  const maxRedirects = opts.maxRedirects ?? 4;
+  const { url, res } = await fetchFollowingGatedRedirects(input, opts);
 
-  let current = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
-  const deadline = Date.now() + timeoutMs;
+  // Trust the declared length only to reject early; the read below is what actually enforces
+  // the budget (Content-Length is attacker-controlled and often absent).
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared && declared > maxBytes) throw new SafeFetchError('too_large', 'That page is too large to analyse');
 
-  for (let hop = 0; hop <= maxRedirects; hop++) {
-    await assertPublicUrl(current);
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error('Request timed out');
-
-    const res = await fetch(current, {
-      method: opts.method ?? 'GET',
-      headers: { 'User-Agent': `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})`, Accept: '*/*' },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(remaining)
-    });
-
-    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-      if (hop === maxRedirects) throw new Error('Too many redirects');
-      current = new URL(res.headers.get('location') as string, current);
-      continue;
-    }
-
-    // Trust the declared length only to reject early; the read below is what actually enforces
-    // the budget (Content-Length is attacker-controlled and often absent).
-    const declared = Number(res.headers.get('content-length') ?? 0);
-    if (declared && declared > maxBytes) throw new Error('That page is too large to analyse');
-
-    return { url: current.toString(), status: res.status, ok: res.ok, headers: res.headers, body: await readCapped(res, maxBytes) };
-  }
-  throw new Error('Too many redirects');
-}
-
-async function readCapped(res: Response, maxBytes: number): Promise<string> {
-  if (!res.body) return '';
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {});
-        break; // Keep what we have — a truncated <head> is still analysable.
-      }
-      chunks.push(value);
-    }
-  } catch {
-    // Partial body is fine; the caller parses what arrived.
-  }
-  return new TextDecoder('utf-8', { fatal: false }).decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
+  return { url: url.toString(), status: res.status, ok: res.ok, headers: res.headers, body: await readCapped(res, maxBytes) };
 }
 
 /**
