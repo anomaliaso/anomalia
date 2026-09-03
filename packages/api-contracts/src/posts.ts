@@ -56,7 +56,7 @@ const CreatePostResultSchema = z.object({
 export type CreatePostInput = z.infer<typeof CreatePostInputSchema>;
 export type CreatePostResult = z.infer<typeof CreatePostResultSchema>;
 
-export const CREATE_POST: BrandEndpoint = {
+export const CREATE_POST = {
   tool: 'create_post',
   title: 'Create post',
   description:
@@ -79,9 +79,9 @@ export const CREATE_POST: BrandEndpoint = {
     { error: 'invalid_scheduled_for', status: 400 }
   ],
   destructive: false
-};
+} satisfies BrandEndpoint;
 
-export const LIST_POSTS: BrandEndpoint = {
+export const LIST_POSTS = {
   tool: 'list_posts',
   title: 'List posts',
   description: 'Posts for a brand, newest first, with an optional status filter.',
@@ -93,9 +93,9 @@ export const LIST_POSTS: BrandEndpoint = {
   output: z.array(PostRow),
   failures: [],
   destructive: false
-};
+} satisfies BrandEndpoint;
 
-export const GET_CALENDAR: BrandEndpoint = {
+export const GET_CALENDAR = {
   tool: 'get_calendar',
   title: 'Calendar',
   description:
@@ -121,4 +121,4 @@ export const GET_CALENDAR: BrandEndpoint = {
   }),
   failures: [],
   destructive: false
-};
+} satisfies BrandEndpoint;
