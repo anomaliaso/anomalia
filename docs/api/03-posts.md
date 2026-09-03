@@ -739,7 +739,7 @@ forma della risposta: due kit si confrontano solo se hanno la stessa versione.
 | Sezione | Da dove viene | Come è selezionata |
 |---|---|---|
 | `constraints` | `platform-limits.ts` | Solo le piattaforme richieste |
-| `brand` | `brand_kit`, `products`, `people` | Prodotti ordinati per sovrapposizione lessicale col `goal`, massimo 5. Solo le persone con `consent = true` |
+| `brand` | `brand_kit`, `products`, `people` | Prodotti ordinati per sovrapposizione lessicale col `goal`, massimo 5. Solo le persone che passano `likenessConsented` (reali con consenso attestato, più le persona AI, che non ritraggono nessuno) |
 | `voice` | `houseVoiceFor` | La personalità approvata quando c'è, altrimenti la house voice |
 | `rubric` | `rubrics` (approvate) | Solo quelle del `format` richiesto, poi la più vicina al `goal` |
 | `template` | `post-templates.md` | Un gruppo dal formato+piattaforma, un blocco dal `goal`, più una famiglia di hook |

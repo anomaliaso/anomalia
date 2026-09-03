@@ -255,6 +255,18 @@ describe('il creation kit è tracciabile e chiuso sul brand', () => {
     expect(kit.history?.winners[0]?.id).toBe('h-win');
   });
 
+  it('nomina solo le persone che la regola del likeness lascia passare', async () => {
+    const people = [
+      { id: 'pe-real-no', brand_id: BRAND.id, name: 'Volto Senza Consenso', kind: 'real', consent: false },
+      { id: 'pe-real-yes', brand_id: BRAND.id, name: 'Marta Rossi', kind: 'real', consent: true },
+      { id: 'pe-ai', brand_id: BRAND.id, name: 'Persona AI', kind: 'ai', consent: false }
+    ];
+    const kit = await buildCreationKit(fakeSupabase(tables({ people })) as never, BRAND as never, job());
+
+    expect(kit.brand?.people?.map((p) => p.id).sort()).toEqual(['pe-ai', 'pe-real-yes']);
+    expect(JSON.stringify(kit)).not.toContain('Volto Senza Consenso');
+  });
+
   it('non fa entrare il materiale di un altro brand', async () => {
     const kit = await buildCreationKit(
       fakeSupabase(

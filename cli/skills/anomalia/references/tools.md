@@ -49,7 +49,7 @@ nothing there, so do not go looking for it elsewhere:
 - **constraints** — per requested platform: `char_limit`, `needs_media`, `video_only`; plus the
   brand's `avoid` list. Never dropped.
 - **brand** — name, language, about, audience, the products closest to your goal, and only the
-  people who consented to appear.
+  people the brand may depict — a real person who attested consent, or an AI persona.
 - **voice** — the brand's approved personality when set, otherwise the house voice. Write to it.
 - **rubric** — the approved recurring series matching your format, with its art direction. When
   present, this post is an episode of it.

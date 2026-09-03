@@ -23,6 +23,7 @@ import {
 } from '$lib/platform-limits';
 import { houseVoiceFor, ownerCaptionEditPairs } from '$lib/server/content-preview/caption-quality';
 import { platformPlaybook, type ContentPrefs } from '$lib/server/content-preview/seed-model';
+import { likenessConsented } from '$lib/server/design-visual-refs';
 import { currentWeekIndex } from '$lib/server/editorial-plan';
 import { openingLine } from '$lib/server/hook-tactics';
 import { loadOwnPostHistory, type OwnHistoryRow } from '$lib/server/own-post-history';
@@ -63,6 +64,7 @@ const CAPS = {
   untestedHooks: 3,
   occupied: 8,
   historyScan: 60,
+  peopleScan: 50,
   productScan: 200
 } as const;
 
@@ -198,7 +200,7 @@ async function loadSources(supabase: SupabaseClient, brand: KitBrand): Promise<K
   const [kit, products, people, rubrics, history, plan, occupied] = await Promise.all([
     supabase.from('brand_kit').select('about, target_audience').eq('brand_id', brand.id).maybeSingle(),
     supabase.from('products').select('id, title, pricing').eq('brand_id', brand.id).limit(CAPS.productScan),
-    supabase.from('people').select('id, name, role').eq('brand_id', brand.id).eq('consent', true).limit(CAPS.people),
+    supabase.from('people').select('id, name, role, kind, consent').eq('brand_id', brand.id).limit(CAPS.peopleScan),
     loadApprovedRubrics(supabase, brand.id),
     loadOwnPostHistory(supabase, brand.id, { limit: CAPS.historyScan }),
     supabase.from('editorial_plans').select('weeks').eq('brand_id', brand.id).eq('status', 'active').maybeSingle(),
@@ -215,7 +217,7 @@ async function loadSources(supabase: SupabaseClient, brand: KitBrand): Promise<K
   return {
     kit: kit.data ?? null,
     products: (products.data ?? []) as Row[],
-    people: (people.data ?? []) as Row[],
+    people: ((people.data ?? []) as Row[]).filter(likenessConsented),
     rubrics,
     history,
     weeks: (plan.data?.weeks ?? []) as Row[],

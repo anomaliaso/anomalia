@@ -118,3 +118,12 @@ slower or more expensive». Quel confronto — stesso modello, stesso task, con 
 brand reali e abbastanza ripetizioni — **non è stato fatto**. Quello che questa PR porta è la
 dimensione misurata e il costo misurato (zero chiamate a modello, zero crediti, provato da una spia
 nei test). Che aiuti la qualità resta da verificare.
+
+## La regola del likeness, non una mia copia
+
+La prima versione del kit selezionava le persone con `.eq('consent', true)` nella query. È
+sbagliata due volte: esclude le persona AI, che non ritraggono nessuno e non vanno mai gated, e
+soprattutto **riscrive una regola che ha già una casa**. `likenessConsented` in
+`design-visual-refs.ts` lo dice nel proprio docblock: «Re-stating the condition anywhere else is
+how the rule diverges». Adesso il kit chiama quella funzione. Il test che lo tiene fallisce con la
+condizione riscritta e passa con la regola vera.
