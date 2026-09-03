@@ -38,6 +38,7 @@ import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
 import { defaultChatModelId } from '$lib/server/chat-model-catalog';
+import { reuseDecision } from './harness-reuse';
 import { gatewayModel, usableGatewayModels } from '$lib/server/openrouter-models';
 import { isGatewayModelTier } from '$lib/chat-tiers';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
@@ -381,25 +382,20 @@ export async function startHarnessTurn(opts: {
 		/**
 		 * RIUSARE UNA SESSIONE E` UN'OTTIMIZZAZIONE, NON UN OBBLIGO — e da quando Stop aborta il
 		 * turno davvero, la sessione viva resta con un turno NON finito. Il messaggio dopo la
-		 * ritrovava qui, provava a drenarla e moriva: «already has a turn in progress». Fermare
-		 * una chat la rompeva per il turno successivo, cioe` il contrario di cio` che Stop fa.
+		 * ritrovava qui e provava a drenarla; la regola di `harness-reuse.ts` dice invece di
+		 * sfrattarla, perche' quel drain costava 60 secondi al primo token e non salvava niente.
 		 *
-		 * `continueGenerate` era fuori dal try: proteggeva solo l'attesa del testo, non la
-		 * chiamata che lancia. Adesso qualunque inciampo nel riuso SFRATTA la voce e si cade sulla
-		 * creazione pulita qui sotto — si paga un avvio invece di propagare una sessione
-		 * avvelenata a ogni turno futuro di quel thread.
+		 * Qualunque inciampo nel riuso SFRATTA la voce e si cade sulla creazione pulita qui sotto
+		 * — si paga un avvio invece di propagare una sessione avvelenata a ogni turno futuro di
+		 * quel thread.
 		 */
 		try {
-			const rawSession = cached.session as {
-				hasUnfinishedTurn?: () => boolean;
-			};
-			if (rawSession.hasUnfinishedTurn?.() && !hasApprovalResponse(opts.messages)) {
-				const drained = await (cached.agent as {
-					continueGenerate: (o: { session: unknown }) => Promise<{ text?: Promise<string> }>;
-				}).continueGenerate({ session: cached.session });
-				try {
-					await drained.text;
-				} catch {}
+			const rawSession = cached.session as { hasUnfinishedTurn?: () => boolean };
+			// Un turno non finito NON si drena qui: `continueGenerate` non tornava, il guardiano a
+			// 60 secondi era l'unica cosa che sbloccava la chat, e si ripartiva comunque da zero.
+			// Si sfratta e si paga l'avvio subito — che è ciò che si pagava comunque, un minuto prima.
+			if (reuseDecision(rawSession, { isApprovalResponse: hasApprovalResponse(opts.messages) }) === 'evict') {
+				throw new Error('stale_harness_session');
 			}
 			return {
 				result: await (cached.agent as typeof agent).stream({
