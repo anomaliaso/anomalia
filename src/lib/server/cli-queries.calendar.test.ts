@@ -64,10 +64,11 @@ const UNDATED = {
   slot: null
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseLike = Parameters<typeof getCalendar>[0];
+
 const calendar = (rows: Record<string, unknown>[], year: number, month: number) => {
   const { client } = fakeSupabase(rows);
-  return getCalendar(client as any, 'brand-1', 'Europe/Rome', year, month);
+  return getCalendar(client as unknown as SupabaseLike, 'brand-1', 'Europe/Rome', year, month);
 };
 
 describe('getCalendar con un post proposto dall esterno', () => {
