@@ -1,0 +1,105 @@
+diff --git a/node_modules/@ai-sdk/harness/dist/utils/index.js b/node_modules/@ai-sdk/harness/dist/utils/index.js
+index c6dc6e3..1e1bca8 100644
+--- a/node_modules/@ai-sdk/harness/dist/utils/index.js
++++ b/node_modules/@ai-sdk/harness/dist/utils/index.js
+@@ -548,6 +548,13 @@ async function writeSkills({
+     command: `mkdir -p ${shellQuote(rootDir)}`,
+     abortSignal
+   });
++  // anomalia: ogni writeTextFile e` un round-trip nella sandbox — due, in realta`: `mkdir -p` del
++  // padre, poi il file. In fila costavano ~450ms l'uno: 14 file = 6.9 secondi prima che la chat
++  // potesse rispondere. Qui i file partono TUTTI INSIEME, in un solo comando: le cartelle in una
++  // `mkdir -p` sola, i contenuti via base64 (nessun problema di quoting, il markdown puo`
++  // contenere qualunque cosa). Il fallback per riga esiste perche' `writeSkills` e` codice
++  // generico: una sandbox senza `base64` deve continuare a funzionare, piu` lenta ma giusta.
++  const writes = [];
+   for (const skill of skills) {
+     const name = validateSkillName({
+       name: skill.name,
+@@ -555,10 +562,9 @@ async function writeSkills({
+       message: invalidSkillNameMessage
+     });
+     const skillDir = path2.posix.join(rootDir, name);
+-    await sandbox.writeTextFile({
++    writes.push({
+       path: path2.posix.join(skillDir, "SKILL.md"),
+-      content: renderSkillFile({ skill, trailingNewline }),
+-      abortSignal
++      content: renderSkillFile({ skill, trailingNewline })
+     });
+     for (const file of (_b = skill.files) != null ? _b : []) {
+       const filePath = normalizeSkillFilePath({
+@@ -567,13 +573,70 @@ async function writeSkills({
+         mode: filePathMode,
+         message: invalidSkillFilePathMessage
+       });
+-      await sandbox.writeTextFile({
++      writes.push({
+         path: path2.posix.join(skillDir, filePath),
+-        content: file.content,
+-        abortSignal
++        content: file.content
+       });
+     }
+   }
++  const writeOneByOne = (list) =>
++    Promise.all(
++      list.map((w) => sandbox.writeTextFile({ path: w.path, content: w.content, abortSignal }))
++    );
++  if (writes.length === 0) {
++    return;
++  }
++  // Un comando solo sarebbe il minimo dei round-trip, ma bash rifiuta un argomento oltre
++  // MAX_ARG_STRLEN (128KB): «argument list too long», e si finiva nel fallback senza accorgersene.
++  // Quindi si spezza sotto quella soglia, con margine, e i pezzi partono insieme.
++  const MAX_SCRIPT_BYTES = 96 * 1024;
++  const encoded = writes.map((w) => ({
++    path: w.path,
++    content: w.content,
++    line: `printf %s ${shellQuote(Buffer.from(w.content, "utf8").toString("base64"))} | base64 -d > ${shellQuote(w.path)}`
++  }));
++  const dirs = [...new Set(writes.map((w) => path2.posix.dirname(w.path)))];
++  const chunks = [];
++  let current = [];
++  let size = 0;
++  for (const e of encoded) {
++    // Un singolo file oltre la soglia non stara` mai in un comando: va per la sua strada.
++    if (e.line.length > MAX_SCRIPT_BYTES) {
++      chunks.push([e]);
++      continue;
++    }
++    if (size + e.line.length > MAX_SCRIPT_BYTES && current.length > 0) {
++      chunks.push(current);
++      current = [];
++      size = 0;
++    }
++    current.push(e);
++    size += e.line.length + 4;
++  }
++  if (current.length > 0) {
++    chunks.push(current);
++  }
++  const runChunk = async (chunk, withDirs) => {
++    const script = [
++      ...withDirs ? [`mkdir -p ${dirs.map(shellQuote).join(" ")}`] : [],
++      ...chunk.map((e) => e.line)
++    ].join(" && ");
++    if (script.length > MAX_SCRIPT_BYTES) {
++      await writeOneByOne(chunk);
++      return;
++    }
++    try {
++      const result = await sandbox.run({ command: script, abortSignal });
++      if (result != null && typeof result === "object" && "exitCode" in result && result.exitCode !== 0) {
++        throw new Error(`writeSkills batch exited ${result.exitCode}`);
++      }
++    } catch {
++      await writeOneByOne(chunk);
++    }
++  };
++  // Le cartelle nel primo pezzo: gli altri ci scrivono dentro, e partono dopo.
++  await runChunk(chunks[0], true);
++  await Promise.all(chunks.slice(1).map((chunk) => runChunk(chunk, false)));
+ }
+ function validateSkillName({
+   name,
