@@ -328,14 +328,22 @@ export async function renderGraphicSource(
     import(/* @vite-ignore */ '@resvg/resvg-js')
   ]);
 
+
   const { tree, width, height } = await sourceToSatoriTree(inlined, kind);
 
-  const svg = await satori(tree as never, {
-    width,
-    height,
-    fonts: packed.satoriFonts
-  });
-  const png = Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng());
+  // Chromium PRIMA, quando l'operatore l'ha acceso: satori e' un sottoinsieme stretto di flexbox e
+  // il compositore chiede al modello «full HTML with <style>», quindi `grid`, `clamp()` e
+  // `text-wrap` — che un browser impagina — li' traboccano. Torna `undefined` se la via non c'e',
+  // e si scende su satori: un renderer assente non deve diventare un post senza immagine.
+  const { renderGraphicWithChromium } = await import('$lib/server/design-render-chromium');
+  const viaChromium = await renderGraphicWithChromium(inlined, { width, height });
+
+  // L'albero serve comunque: e' quello che il gate ispeziona. L'SVG no, quando Chromium ha reso.
+  const svg = viaChromium
+    ? ''
+    : await satori(tree as never, { width, height, fonts: packed.satoriFonts });
+  const png =
+    viaChromium?.png ?? Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng());
   const canvas = parseGraphicCanvasSize(durable);
   const spec = graphicHtmlMeta(canvas.aspect, kind);
 
