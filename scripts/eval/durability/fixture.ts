@@ -41,8 +41,8 @@ export async function createFixture(tag: string): Promise<Fixture> {
 
 /**
  * Cancellare l'utente NON basta: il brand pende dall'organizzazione, non da lui, e resta a
- * terra. Gli avanzi di `eval:ux` in produzione — un brand per giro dal 24 agosto — sono
- * esattamente questo. L'organizzazione se ne va per prima e porta via il brand in cascata.
+ * terra. È così che in produzione si sono accumulati brand usa e getta, uno per giro di eval.
+ * L'organizzazione se ne va per prima e porta via il brand in cascata.
  */
 export async function destroyFixture(fixture: Fixture | null): Promise<void> {
   if (!fixture) return;

@@ -201,21 +201,22 @@ The evaluation (`scripts/eval/`) is the only thing that verifies **the product w
 the real agents to work on a disposable trial brand, with real requests, and judges FACTS before
 tastes — does the artifact exist? is the number right? how many text blocks? what did it cost?
 
-**What exists today. Only these two commands are real:**
+**What exists today. Only this command is real:**
 
 ```bash
-npm run eval:ux           # the onboarding walk: a real browser, 6 deterministic gates + 4 judged criteria
 npm run eval:durability   # the work does not vanish: 3 scenarios against the real database and the real plpgsql
 npm run eval:durability -- --only=<scenario>
 ```
 
-`eval:ux` measures whether the product is *good*. `eval:durability` measures whether it *keeps
-what it produced* — a turn killed mid-work, the salvage when it gives up, and a taken-over run
-that must not deposit a second message. Those run against real SQL, which is the whole point:
-the two defects that slipped through in one session were a changed function signature and a
-reaper whose contract had moved under its own tests, and a fake client cannot see either.
+`eval:durability` measures whether the product *keeps what it produced* — a turn killed
+mid-work, the salvage when it gives up, and a taken-over run that must not deposit a second
+message. It runs against real SQL, which is the whole point: the two defects that slipped
+through in one session were a changed function signature and a reaper whose contract had moved
+under its own tests, and a fake client cannot see either.
 
-**What does NOT exist, so nobody writes it in a report as if it had run:** `npm run eval`, the
+**What does NOT exist, so nobody writes it in a report as if it had run:** `npm run eval`,
+`npm run eval:ux` — the onboarding walk was removed: it cost real money on every run and graded
+the in-app chat, which is not where the product is going — the
 `--all` / `--budget` / `--jobs` / `--compare` flags, cost read from `ai_calls`, `docs/EVAL_PLAN.md`,
 and the browser engine with a throttled network. The richer scenario catalogue described in the
 frozen `CHANGELOG.md` (`brand-nudo`, `conteggio-secco`, …) was designed and never merged. Reading
