@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ensureOrgForUser, OWNER_CONSTRAINT } from './org';
+import { ensureOrgForUser } from './org';
 
 type Row = Record<string, any>;
 
-/** organizations with the unique index production enforces on owner_id. */
-function makeDb() {
-	const orgs: Row[] = [];
+/** organizations as production has it: several rows may share one owner_id, no unique constraint. */
+function makeDb(seed: Row[] = []) {
+	const orgs: Row[] = seed.map((r) => ({ ...r }));
 	const members: Row[] = [];
-	let orgInsertCalls = 0;
+	let clock = orgs.length;
 
 	const client = {
 		from: (table: string) => {
@@ -15,21 +15,28 @@ function makeDb() {
 				return {
 					select: () => {
 						const filters: Record<string, unknown> = {};
+						const sorts: { col: string; asc: boolean }[] = [];
 						const chain = {
 							eq: (k: string, v: unknown) => {
 								filters[k] = v;
 								return chain;
 							},
+							order: (col: string, opts?: { ascending?: boolean }) => {
+								sorts.push({ col, asc: opts?.ascending !== false });
+								return chain;
+							},
 							limit: () => chain,
 							maybeSingle: async () => {
-								const row = orgs.find((r) => Object.entries(filters).every(([k, v]) => r[k] === v));
-								return { data: row ? { id: row.id } : null, error: null };
-							},
-							single: async () => {
-								const row = orgs.find((r) => Object.entries(filters).every(([k, v]) => r[k] === v));
-								return row
-									? { data: { id: row.id }, error: null }
-									: { data: null, error: { message: 'no rows returned' } };
+								const rows = orgs
+									.filter((r) => Object.entries(filters).every(([k, v]) => r[k] === v))
+									.sort((a, b) => {
+										for (const { col, asc } of sorts) {
+											if (a[col] === b[col]) continue;
+											return (a[col] < b[col] ? -1 : 1) * (asc ? 1 : -1);
+										}
+										return 0;
+									});
+								return { data: rows[0] ? { id: rows[0].id } : null, error: null };
 							}
 						};
 						return chain;
@@ -37,18 +44,10 @@ function makeDb() {
 					insert: (row: Row) => ({
 						select: () => ({
 							single: async () => {
-								orgInsertCalls++;
-								if (orgs.some((r) => r.owner_id === row.owner_id)) {
-									return {
-										data: null,
-										error: {
-											message: `duplicate key value violates unique constraint "${OWNER_CONSTRAINT}"`
-										}
-									};
-								}
-								const id = `org-${orgs.length + 1}`;
-								orgs.push({ id, ...row });
-								return { data: { id }, error: null };
+								const n = ++clock;
+								const created = { id: `org-${n}`, created_at: `2026-09-0${n}`, ...row };
+								orgs.push(created);
+								return { data: { id: created.id }, error: null };
 							}
 						})
 					})
@@ -66,32 +65,50 @@ function makeDb() {
 		}
 	};
 
-	return { client, orgs, members, get orgInsertCalls() { return orgInsertCalls; } };
+	return { client, orgs, members };
 }
 
+const USER = { id: 'u1', email: 'ana@example.com' } as never;
+
 describe('ensureOrgForUser', () => {
-	it('gives two concurrent calls for the same user the same org, not two', async () => {
+	it('always answers with the same org when the owner has several', async () => {
+		// Stored newest-first on purpose: picking "whatever row comes back" answers wrong.
+		const db = makeDb([
+			{ id: 'org-new', owner_id: 'u1', created_at: '2026-09-01' },
+			{ id: 'org-mid', owner_id: 'u1', created_at: '2026-05-01' },
+			{ id: 'org-old', owner_id: 'u1', created_at: '2026-01-01' }
+		]);
+
+		const answers = [
+			await ensureOrgForUser(db.client as never, USER),
+			await ensureOrgForUser(db.client as never, USER),
+			await ensureOrgForUser(db.client as never, USER)
+		];
+
+		expect(answers).toEqual(['org-old', 'org-old', 'org-old']);
+		expect(db.orgs).toHaveLength(3);
+	});
+
+	it('gives two concurrent first calls the same org id', async () => {
 		const db = makeDb();
-		const user = { id: 'u1', email: 'ana@example.com' } as never;
 
 		const [a, b] = await Promise.all([
-			ensureOrgForUser(db.client as never, user),
-			ensureOrgForUser(db.client as never, user)
+			ensureOrgForUser(db.client as never, USER),
+			ensureOrgForUser(db.client as never, USER)
 		]);
 
 		expect(a).not.toBeNull();
 		expect(a).toBe(b);
-		expect(db.orgs).toHaveLength(1);
 	});
 
-	it('still returns the existing org id on a normal, non-concurrent second call', async () => {
+	it('creates the org on a first call and reuses it on the next', async () => {
 		const db = makeDb();
-		const user = { id: 'u1', email: 'ana@example.com' } as never;
 
-		const first = await ensureOrgForUser(db.client as never, user);
-		const second = await ensureOrgForUser(db.client as never, user);
+		const first = await ensureOrgForUser(db.client as never, USER);
+		const second = await ensureOrgForUser(db.client as never, USER);
 
 		expect(first).toBe(second);
 		expect(db.orgs).toHaveLength(1);
+		expect(db.members).toEqual([{ org_id: first, user_id: 'u1', role: 'owner' }]);
 	});
 });
