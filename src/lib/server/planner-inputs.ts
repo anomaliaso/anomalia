@@ -4,7 +4,7 @@ import { genaiClient, strategyBriefFromReport, type Benchmark, type StrategyRepo
 import { rankRecentWinners } from '$lib/server/scheduler';
 import { ensureBrandHistory } from '$lib/server/scrapecreators';
 import { attachBrandPages } from '$lib/server/content-library';
-import { proposePlan, cadenceAllowed } from '$lib/server/editorial-plan';
+import { proposePlan, cadenceAllowed, saveProposedPlan } from '$lib/server/editorial-plan';
 import { activeGtmBrief } from '$lib/server/gtm';
 import { loadApprovedRubrics } from '$lib/server/rubrics';
 import { localeLanguageName } from '$lib/i18n/locale';
@@ -169,22 +169,7 @@ export async function proposeFirstPlan(
     planTier: brand.plan,
     timezone: brand.timezone
   });
-  await supabase.from('editorial_plans').update({ status: 'rejected' }).eq('brand_id', brand.id).eq('status', 'proposed');
-  const { data: row, error: err } = await supabase
-    .from('editorial_plans')
-    .insert({
-      brand_id: brand.id,
-      status: 'proposed',
-      strategy: proposal.strategy || null,
-      voice: proposal.voice,
-      cadence: proposal.cadence,
-      platform_mix: proposal.platform_mix,
-      gtm: proposal.gtm,
-      weeks: proposal.weeks,
-      source: 'manual'
-    })
-    .select('id')
-    .single();
-  if (err || !row) throw new Error(err?.message ?? 'editorial_plans insert failed');
-  return { id: row.id as string };
+  const saved = await saveProposedPlan(supabase, brand.id, proposal);
+  if (!saved.ok) throw new Error(saved.message);
+  return { id: saved.id };
 }
