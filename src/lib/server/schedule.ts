@@ -176,6 +176,10 @@ export type CalendarConflictGroup = {
   }>;
 };
 
+// The statuses that make a post OCCUPY its minute. Published is behind us and failed never went
+// out, so neither books anything; every reader of "is this slot taken" asks this one list.
+export const SLOT_OCCUPYING_STATUSES = ['pending_user', 'approved', 'scheduled'] as const;
+
 // Groups of 2+ live posts landing on the same minute. A post occupies its scheduled_for, or (for a
 // draft that has none) its slot's next occurrence — matching exactly what the calendar renders.
 export function listCalendarConflicts(
@@ -183,7 +187,7 @@ export function listCalendarConflicts(
   tz: string,
   now = new Date()
 ): CalendarConflictGroup[] {
-  const live = new Set(['pending_user', 'approved', 'scheduled']);
+  const live = new Set<string>(SLOT_OCCUPYING_STATUSES);
   const buckets = new Map<string, { scheduled_for: string; posts: CalendarConflictGroup['posts'] }>();
   for (const p of posts) {
     if (!live.has(p.status)) continue;

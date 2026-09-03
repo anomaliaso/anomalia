@@ -36,8 +36,9 @@ export type HistoryInsights = {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Engagement weight for a post: prefer a real engagement rate, else likes + comments. Comments are
-// a stronger signal than likes, so weight them a touch higher.
-function weight(m?: HistoryPost['metrics']): number {
+// a stronger signal than likes, so weight them a touch higher. Exported because "which post won"
+// is asked in more than one place, and a second copy of this formula would rank a different post.
+export function engagementWeight(m?: HistoryPost['metrics']): number {
   if (!m) return 0;
   if (typeof m.engagementRate === 'number' && m.engagementRate > 0) return m.engagementRate;
   return (m.likes ?? 0) + (m.comments ?? 0) * 2;
@@ -60,7 +61,7 @@ export function analyzePostHistory(posts: HistoryPost[]): HistoryInsights {
   // Hashtags weighted by engagement (baseline 1 so a tag counts even on a zero-metric post).
   const tagW = new Map<string, number>();
   for (const p of list) {
-    const w = weight(p.metrics) || 1;
+    const w = engagementWeight(p.metrics) || 1;
     for (const m of (p.content ?? '').matchAll(/#[\p{L}0-9_]{2,50}/gu)) {
       const t = m[0].toLowerCase();
       tagW.set(t, (tagW.get(t) ?? 0) + w);
@@ -72,13 +73,13 @@ export function analyzePostHistory(posts: HistoryPost[]): HistoryInsights {
   const fmtW = new Map<string, number>();
   for (const p of list) {
     const f = normFormat(p.mediaType);
-    if (f) fmtW.set(f, (fmtW.get(f) ?? 0) + (weight(p.metrics) || 1));
+    if (f) fmtW.set(f, (fmtW.get(f) ?? 0) + (engagementWeight(p.metrics) || 1));
   }
   const topFormats = [...fmtW.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([f]) => f);
 
   // Best weekday+hour slots (weight + a frequency baseline) and posting cadence — need timestamps.
   const dated = list
-    .map((p) => ({ d: p.publishedAt ? new Date(p.publishedAt) : null, w: weight(p.metrics) }))
+    .map((p) => ({ d: p.publishedAt ? new Date(p.publishedAt) : null, w: engagementWeight(p.metrics) }))
     .filter((x): x is { d: Date; w: number } => !!x.d && !isNaN(x.d.getTime()));
 
   const slotW = new Map<string, number>();
@@ -100,7 +101,7 @@ export function analyzePostHistory(posts: HistoryPost[]): HistoryInsights {
   // "this one won" flag from engagement against the brand's own mean — but only once there are
   // enough posts for "won" to mean anything. Under the floor every post is just a post, and the map
   // still answers the question it exists for: what have we never tried?
-  const weights = list.map((p) => weight(p.metrics));
+  const weights = list.map((p) => engagementWeight(p.metrics));
   const meanWeight = weights.length ? weights.reduce((a, b) => a + b, 0) / weights.length : 0;
   const winnersAreMeaningful = sampleVerdict(list.length) !== 'insufficient' && meanWeight > 0;
   const usages: HookUsage[] = list.map((p, i) => ({
