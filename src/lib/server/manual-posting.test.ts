@@ -68,7 +68,7 @@ describe('createManualPost', () => {
       mode: 'draft'
     });
 
-    expect(result).toEqual({ ok: true, id: 'post-1', status: 'pending_user' });
+    expect(result).toEqual({ ok: true, id: 'post-1', status: 'pending_user', slot: null });
     expect(rows[0].status).toBe('pending_user');
     expect(rows[0].scheduled_for).toBeNull();
     expect(rows[0].slot).toBeNull();
