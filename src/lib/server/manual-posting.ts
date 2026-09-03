@@ -179,15 +179,15 @@ function slotAt(iso: string, tz: string): string {
   return `${dow} ${time}`;
 }
 
+export type MediaFailure = 'media_not_found' | 'media_unavailable';
+
 type ResolvedMedia =
   | { ok: true; urls: string[]; video: boolean }
-  | { ok: false; error: 'media_not_found' };
+  | { ok: false; error: MediaFailure };
 
-/**
- * Un media che il chiamante ha indicato e che non si risolve ferma la creazione. Veniva saltato
- * in silenzio: l'id di un altro brand diventava una bozza senza immagine che nessuno aveva
- * chiesto, e su Instagram un `need_media` che sembrava colpa di chi chiedeva.
- */
+const NOT_THIS_CALLERS_MEDIA: ResolvedMedia = { ok: false, error: 'media_not_found' };
+const MEDIA_PIPELINE_BROKEN: ResolvedMedia = { ok: false, error: 'media_unavailable' };
+
 async function resolveMediaUrls(
   supabase: SupabaseClient,
   userId: string,
@@ -200,9 +200,9 @@ async function resolveMediaUrls(
 
   for (const raw of paths.slice(0, MAX_MEDIA)) {
     const path = String(raw ?? '');
-    if (!path.startsWith(`${userId}/uploads/`)) return { ok: false, error: 'media_not_found' };
+    if (!path.startsWith(`${userId}/uploads/`)) return NOT_THIS_CALLERS_MEDIA;
     const publicUrl = supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
-    if (!publicUrl) return { ok: false, error: 'media_not_found' };
+    if (!publicUrl) return NOT_THIS_CALLERS_MEDIA;
     urls.push(publicUrl);
     if (/\.(mp4|webm|mov)(\?|$)/i.test(path)) video = true;
   }
@@ -215,14 +215,14 @@ async function resolveMediaUrls(
   );
   for (const id of wanted) {
     const media = owned.get(id);
-    if (!media) return { ok: false, error: 'media_not_found' };
+    if (!media) return NOT_THIS_CALLERS_MEDIA;
     const copied = await publishLibraryMediaAsPostMedia(supabase, {
       brandId,
       userId,
       mediaId: id,
       kind: media.kind
     });
-    if (!('publicUrl' in copied) || !copied.publicUrl) return { ok: false, error: 'media_not_found' };
+    if (!('publicUrl' in copied) || !copied.publicUrl) return MEDIA_PIPELINE_BROKEN;
     urls.push(copied.publicUrl);
     if (media.kind === 'video') video = true;
   }

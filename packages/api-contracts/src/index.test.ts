@@ -58,6 +58,12 @@ describe('il registry degli endpoint di brand', () => {
     expect(statusForFailure(createPost, 'insert_failed')).toBe(500);
   });
 
+  it('un guasto della pipeline media non è colpa di chi chiama: 5xx, non 400', () => {
+    const createPost = byTool('create_post');
+    expect(statusForFailure(createPost, 'media_not_found')).toBe(400);
+    expect(statusForFailure(createPost, 'media_unavailable')).toBe(502);
+  });
+
   it('create_post accetta la copy e rifiuta una richiesta senza piattaforme', () => {
     const { input } = byTool('create_post');
     expect(input.safeParse({ platforms: ['linkedin'], caption: 'ciao' }).success).toBe(true);

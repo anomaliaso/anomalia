@@ -190,7 +190,26 @@ describe('createManualPost con media della libreria', () => {
     expect(publishLibraryMediaAsPostMedia).not.toHaveBeenCalled();
   });
 
-  it('un media che esiste ma non si riesce a copiare non diventa un post senza immagine', async () => {
+  it('un id malformato non si distingue da un id di un altro brand', async () => {
+    findBrandMediaByIds.mockResolvedValue([]);
+
+    const { result: altroBrand } = await create({
+      platforms: ['linkedin'],
+      caption: 'copy',
+      libraryIds: ['media-di-un-altro-brand'],
+      mode: 'propose'
+    });
+    const { result: malformato } = await create({
+      platforms: ['linkedin'],
+      caption: 'copy',
+      libraryIds: ['%%%'],
+      mode: 'propose'
+    });
+
+    expect(malformato).toEqual(altroBrand);
+  });
+
+  it('un media che esiste ma che non riusciamo a materializzare è un guasto nostro, non un id sbagliato', async () => {
     publishLibraryMediaAsPostMedia.mockResolvedValue({ error: 'Upload of library media failed' });
 
     const { result, rows } = await create({
@@ -200,7 +219,7 @@ describe('createManualPost con media della libreria', () => {
       mode: 'propose'
     });
 
-    expect(result).toEqual({ ok: false, error: 'media_not_found' });
+    expect(result).toEqual({ ok: false, error: 'media_unavailable' });
     expect(rows).toEqual([]);
   });
 

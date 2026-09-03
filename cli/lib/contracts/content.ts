@@ -16,7 +16,10 @@ const CheckContentInputSchema = z
       .array(z.string().min(1))
       .max(8)
       .optional()
-      .describe('Ids from this brand media library (see list_media). An id that is not this brand is reported'),
+      .describe(
+        'Full ids from this brand media library (see list_media) — unlike a post id, a media id ' +
+          'is never resolved from a prefix. An id that is not this brand is reported'
+      ),
     title: z.string().optional().describe('Required for Reddit'),
     scheduled_for: z
       .string()

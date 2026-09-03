@@ -49,6 +49,12 @@ Nessun blocco `registerTool` scritto a mano, nessun tipo ricopiato in `cli/lib/a
 Il tetto di 8 media resta un taglio silenzioso: la UI non limita i file selezionati, quindi
 trasformarlo in errore romperebbe a distanza chi ne carica nove. Resta com'era.
 
+> **Correzione — vedi `2026-09-03-media-failure-is-ours.md`.** La frase sopra vale solo per il
+> manual posting dalla UI, dove `resolveMediaUrls` taglia a 8 in silenzio. Sul contratto esterno
+> non c'è nessun taglio: `media_ids` porta `.max(8)` in zod, quindi il nono id fa fallire tutta
+> la richiesta con `invalid_input` prima ancora di arrivare al servizio. Due percorsi, due
+> comportamenti: uno tronca, l'altro rifiuta.
+
 ## Fuori da questo giro
 
 `import_media_url` — la slice 4 — ha una superficie di sicurezza sua (reti private, redirect,
