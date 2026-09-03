@@ -1517,6 +1517,12 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 				let inFlight: Promise<void> | null = null;
 				let progressTick = 0;
 				let lastProgressAt = 0;
+				// L'IDENTITÀ DI QUESTO SPECCHIO, non del run: la chiave di un evento `progress` deve
+				// restare unica anche quando dello stesso run ne girano due — la sessione riusata che
+				// non parte e riprova fresca, o un worker sfrattato che sta ancora scaricando lo
+				// stream. Senza, i due ripartono dal tick 1, la seconda scrittura è un conflitto di
+				// chiave e la corsia durevole si chiude per tutto il turno.
+				const mirrorId = crypto.randomUUID().slice(0, 8);
 				// Il log durevole vive dietro una migration che i deploy di questo repo non applicano.
 				// Dove non c'e`, il primo append fallisce e la corsia si chiude: il turno continua sul
 				// mirror, e non si paga un errore ogni 250ms per tutto il turno.
@@ -1527,7 +1533,7 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 					if (when === 'throttled' && now - lastProgressAt < PROGRESS_EVENT_MS) return;
 					lastProgressAt = now;
 					try {
-						const seq = await appendRunProgress(admin, threadId, ++progressTick, {
+						const seq = await appendRunProgress(admin, threadId, { id: mirrorId, tick: ++progressTick }, {
 							runId: run.id,
 							status: 'running',
 							text: state.text,

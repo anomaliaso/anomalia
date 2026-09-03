@@ -102,13 +102,13 @@ describe('thread event writer', () => {
 });
 
 describe('run progress lane', () => {
-	it('appends an absolute snapshot under a per-tick source key', async () => {
+	it('appends an absolute snapshot under a per-mirror, per-tick source key', async () => {
 		const rpc = vi.fn(async () => ({
-			data: [{ thread_id: 'thread-1', seq: 9, source_key: 'run-1:progress:3', kind: 'progress', payload: {} }],
+			data: [{ thread_id: 'thread-1', seq: 9, source_key: 'run-1:progress:mirror-a:3', kind: 'progress', payload: {} }],
 			error: null
 		}));
 
-		const seq = await appendRunProgress({ rpc } as unknown as SupabaseClient, 'thread-1', 3, {
+		const seq = await appendRunProgress({ rpc } as unknown as SupabaseClient, 'thread-1', { id: 'mirror-a', tick: 3 }, {
 			runId: 'run-1',
 			status: 'running',
 			text: 'half a sentence'
@@ -117,22 +117,36 @@ describe('run progress lane', () => {
 		expect(seq).toBe(9);
 		expect(rpc).toHaveBeenCalledWith('append_thread_event', {
 			p_thread_id: 'thread-1',
-			p_source_key: 'run-1:progress:3',
+			p_source_key: 'run-1:progress:mirror-a:3',
 			p_kind: 'progress',
 			p_payload: { runId: 'run-1', status: 'running', text: 'half a sentence' }
 		});
 	});
 
+	it('two mirrors of one run never share a key, even on the same tick', async () => {
+		const keys: string[] = [];
+		const rpc = vi.fn(async (_fn: string, params: Record<string, unknown>) => {
+			keys.push(params.p_source_key as string);
+			return { data: [{ thread_id: 'thread-1', seq: keys.length, source_key: params.p_source_key, kind: 'progress', payload: {} }], error: null };
+		});
+		const db = { rpc } as unknown as SupabaseClient;
+
+		await appendRunProgress(db, 'thread-1', { id: 'mirror-a', tick: 1 }, { runId: 'run-1', status: 'running', text: 'primo' });
+		await appendRunProgress(db, 'thread-1', { id: 'mirror-b', tick: 1 }, { runId: 'run-1', status: 'running', text: 'secondo' });
+
+		expect(new Set(keys).size).toBe(2);
+	});
+
 	it('replays one tick to the same sequence instead of appending twice', async () => {
 		const rpc = vi.fn(async () => ({
-			data: [{ thread_id: 'thread-1', seq: 9, source_key: 'run-1:progress:3', kind: 'progress', payload: {} }],
+			data: [{ thread_id: 'thread-1', seq: 9, source_key: 'run-1:progress:mirror-a:3', kind: 'progress', payload: {} }],
 			error: null
 		}));
 		const db = { rpc } as unknown as SupabaseClient;
 		const snapshot = { runId: 'run-1', status: 'running', text: 'half a sentence' };
 
-		expect(await appendRunProgress(db, 'thread-1', 3, snapshot)).toBe(9);
-		expect(await appendRunProgress(db, 'thread-1', 3, snapshot)).toBe(9);
+		expect(await appendRunProgress(db, 'thread-1', { id: 'mirror-a', tick: 3 }, snapshot)).toBe(9);
+		expect(await appendRunProgress(db, 'thread-1', { id: 'mirror-a', tick: 3 }, snapshot)).toBe(9);
 	});
 
 	it('prunes only the progress of the finished run', async () => {

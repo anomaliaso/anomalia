@@ -91,13 +91,20 @@ export async function appendThreadEvent(
 	return row as StoredThreadEvent;
 }
 
+/**
+ * Chi scrive questo snapshot: uno specchio, non un run. Il tick è un contatore che vive quanto
+ * l'istanza dello specchio, quindi da solo non basta a fare una chiave — due specchi dello stesso
+ * run (un worker sfrattato che non lo sa ancora, o una sessione ripresa) ripartono entrambi da 1.
+ */
+export type RunProgressMirror = { id: string; tick: number };
+
 export async function appendRunProgress(
 	db: SupabaseClient,
 	threadId: string,
-	tick: number,
+	mirror: RunProgressMirror,
 	progress: ThreadProgress
 ): Promise<number> {
-	const event = progressEvent(threadId, `${progress.runId}:progress:${tick}`, progress);
+	const event = progressEvent(threadId, `${progress.runId}:progress:${mirror.id}:${mirror.tick}`, progress);
 	const stored = await appendThreadEvent(db, event);
 	return stored.seq;
 }
