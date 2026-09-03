@@ -8,28 +8,63 @@ import {
 	grepSource,
 	sliceSource
 } from '$lib/motion-video/source-ops';
-import type { EditorTarget } from '$lib/agent/tools/post-editor-tools';
+import type { EditorTarget, EditorContext } from '$lib/agent/tools/post-editor-tools';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { noteRead, requireFreshRead } from './read-guards';
+
+/**
+ * DUE POSTI DOVE PUÒ VIVERE UNA GRAFICA, e un solo modo di modificarla.
+ *
+ * Il sorgente sta in `graphic_designs`, che indirizza `{ kind, id }` — un post o un asset di
+ * libreria — da sempre. Questi strumenti però conoscevano solo il post, quindi una grafica
+ * standalone si poteva rifare a parole e non correggere di una parola: aveva il codice e nessuno
+ * sapeva aprirlo.
+ */
+export type StandaloneTarget = {
+	supabase: SupabaseClient;
+	brandId: string;
+	userId: string;
+	ctx: EditorContext;
+	mediaId: string;
+};
+
+export type GraphicEditTarget = EditorTarget | StandaloneTarget;
+
+const isStandalone = (t: GraphicEditTarget): t is StandaloneTarget => 'mediaId' in t;
+
+/** Il risultato nomina il bersaglio VERO: `post_id: undefined` su un asset era una risposta rotta. */
+const targetEcho = (t: GraphicEditTarget) =>
+	isStandalone(t) ? { media_id: t.mediaId } : { post_id: t.postId };
+
+const graphicTarget = (t: GraphicEditTarget, slideIndex?: number | null) =>
+	isStandalone(t)
+		? ({ kind: 'media_item' as const, id: t.mediaId })
+		: ({ kind: 'post' as const, id: t.postId, slideIndex: slideIndex ?? null });
 
 export { MOTION_READ_DEFAULT_CHARS as GRAPHIC_READ_DEFAULT_CHARS, MOTION_READ_MAX_CHARS as GRAPHIC_READ_MAX_CHARS };
 
 type SlideArgs = { slide_index?: number };
 
 /** La chiave del receipt: stessa derivazione da args in lettura e in scrittura. */
-const receiptId = (t: EditorTarget, slideIndex?: number | null) => `${t.postId}|${slideIndex ?? ''}`;
+const receiptId = (t: GraphicEditTarget, slideIndex?: number | null) =>
+	isStandalone(t) ? `media:${t.mediaId}` : `${t.postId}|${slideIndex ?? ''}`;
 
 const SOURCE_READ_TOOL = 'read_source({ slide_index })';
 
-async function loadWorkingGraphicSource(t: EditorTarget, slideIndex?: number | null) {
+async function loadWorkingGraphicSource(t: GraphicEditTarget, slideIndex?: number | null) {
 	const { latestGraphic, versionSource } = await import('$lib/server/design-store');
-	const load = (idx: number | null) =>
-		latestGraphic(t.supabase, { kind: 'post', id: t.postId, slideIndex: idx });
-	let graphic = await load(slideIndex ?? null);
-	if (!graphic && (slideIndex == null || slideIndex === 0)) {
-		graphic = await load(slideIndex == null ? 0 : null);
+	let graphic = await latestGraphic(t.supabase, graphicTarget(t, slideIndex));
+	// Le carousel indirizzano uno slot; una cover puo` essere salvata con `null` o con `0`, e le
+	// due scritture convivono da prima che lo slot esistesse. Non vale per un asset standalone.
+	if (!graphic && !isStandalone(t) && (slideIndex == null || slideIndex === 0)) {
+		graphic = await latestGraphic(t.supabase, graphicTarget(t, slideIndex == null ? 0 : null));
 	}
 	if (!graphic) {
-		return { error: 'No graphic source on this post. Compose one with design_graphic first.' };
+		return {
+			error: isStandalone(t)
+				? 'No graphic source on this library asset. Compose one with design_graphic first.'
+				: 'No graphic source on this post. Compose one with design_graphic first.'
+		};
 	}
 	return {
 		source: versionSource(graphic),
@@ -49,7 +84,7 @@ async function loadWorkingGraphicSource(t: EditorTarget, slideIndex?: number | n
  * Solo `text_below_feed_floor` blocca: il px è letterale nel sorgente e si corregge alzandolo.
  * Il resto torna come `design_warnings` nel risultato — vedi l'intestazione di graphic-check.ts.
  */
-async function inspectSource(t: EditorTarget, source: string) {
+async function inspectSource(t: GraphicEditTarget, source: string) {
 	try {
 		const [{ sourceToSatoriTree }, { inspectGraphicTree }] = await Promise.all([
 			import('$lib/server/design-render'),
@@ -61,6 +96,21 @@ async function inspectSource(t: EditorTarget, source: string) {
 		// Sorgente illeggibile: il render lo dirà con l'errore vero. Il gate non inventa il suo.
 		return [];
 	}
+}
+
+/** L'unica differenza fra i due posti: dove il PNG viene scritto. */
+async function applyGraphicSource(
+	t: GraphicEditTarget,
+	source: string,
+	slideIndex: number | undefined,
+	brief: string
+) {
+	if (isStandalone(t)) {
+		const { applyStandaloneGraphicSource } = await import('$lib/agent/tools/post-editor-tools');
+		return applyStandaloneGraphicSource(t, { source, brief });
+	}
+	const { applyPostGraphicSource } = await import('$lib/agent/tools/post-editor-tools');
+	return applyPostGraphicSource(t, { source, slide_index: slideIndex, brief });
 }
 
 function refusal(issues: Array<{ blocking: boolean; detail: string }>) {
@@ -94,7 +144,7 @@ export function compactGraphicPersist(result: object, extra: Record<string, unkn
 }
 
 export async function grepPostGraphicSource(
-	t: EditorTarget,
+	t: GraphicEditTarget,
 	args: SlideArgs & { query: string; regex?: boolean; ignore_case?: boolean }
 ) {
 	const working = await loadWorkingGraphicSource(t, args.slide_index);
@@ -105,7 +155,7 @@ export async function grepPostGraphicSource(
 			ignoreCase: args.ignore_case === true
 		});
 		return {
-			post_id: t.postId,
+			...targetEcho(t),
 			slide_index: args.slide_index ?? null,
 			kind: working.kind,
 			query: args.query,
@@ -117,7 +167,7 @@ export async function grepPostGraphicSource(
 }
 
 export async function readPostGraphicSource(
-	t: EditorTarget,
+	t: GraphicEditTarget,
 	args: SlideArgs & { start_from?: number; max_chars?: number }
 ) {
 	const working = await loadWorkingGraphicSource(t, args.slide_index);
@@ -129,7 +179,7 @@ export async function readPostGraphicSource(
 	);
 	noteRead('graphic', receiptId(t, args.slide_index), working.version);
 	return {
-		post_id: t.postId,
+		...targetEcho(t),
 		slide_index: args.slide_index ?? null,
 		kind: working.kind,
 		...page
@@ -137,7 +187,7 @@ export async function readPostGraphicSource(
 }
 
 export async function replacePostGraphicSource(
-	t: EditorTarget,
+	t: GraphicEditTarget,
 	args: SlideArgs & { old_str: string; new_str: string; replace_all?: boolean; count?: number }
 ) {
 	const working = await loadWorkingGraphicSource(t, args.slide_index);
@@ -163,12 +213,7 @@ export async function replacePostGraphicSource(
 	const issues = await inspectSource(t, next);
 	const refused = refusal(issues);
 	if (refused) return refused;
-	const { applyPostGraphicSource } = await import('$lib/agent/tools/post-editor-tools');
-	const saved = await applyPostGraphicSource(t, {
-		source: next,
-		slide_index: args.slide_index,
-		brief: 'replace_source'
-	});
+	const saved = await applyGraphicSource(t, next, args.slide_index, 'replace_source');
 	const out = compactGraphicPersist(saved, { replaced, ...warnings(issues) });
 	if ('success' in saved && typeof saved.version !== 'undefined') {
 		noteRead('graphic', receiptId(t, args.slide_index), saved.version);
@@ -176,7 +221,7 @@ export async function replacePostGraphicSource(
 	return out;
 }
 
-export async function writePostGraphicSource(t: EditorTarget, args: SlideArgs & { source: string }) {
+export async function writePostGraphicSource(t: GraphicEditTarget, args: SlideArgs & { source: string }) {
 	const staleGate = await loadWorkingGraphicSource(t, args.slide_index);
 	if (!('error' in staleGate)) {
 		const stale = requireFreshRead(
@@ -192,12 +237,7 @@ export async function writePostGraphicSource(t: EditorTarget, args: SlideArgs & 
 	const issues = await inspectSource(t, source);
 	const refused = refusal(issues);
 	if (refused) return refused;
-	const { applyPostGraphicSource } = await import('$lib/agent/tools/post-editor-tools');
-	const saved = await applyPostGraphicSource(t, {
-		source,
-		slide_index: args.slide_index,
-		brief: 'write_source'
-	});
+	const saved = await applyGraphicSource(t, source, args.slide_index, 'write_source');
 	const out = compactGraphicPersist(saved, warnings(issues));
 	if ('success' in saved && typeof saved.version !== 'undefined') {
 		noteRead('graphic', receiptId(t, args.slide_index), saved.version);
@@ -207,20 +247,32 @@ export async function writePostGraphicSource(t: EditorTarget, args: SlideArgs & 
 
 type ResolveTarget = (args: {
 	post_id?: string;
+	media_id?: string;
 	slide_index?: number;
-}) => Promise<EditorTarget | { error: string }>;
+}) => Promise<GraphicEditTarget | { error: string }>;
 
 /**
  * grep_source / read_source / replace_source / write_source — same contract as motion-video.
  * Post editor: resolve ignores post_id. Brand chat: requirePostId.
  */
 export function createGraphicSourceEditTools(resolve: ResolveTarget, opts: { requirePostId?: boolean } = {}) {
+	// Nella chat il bersaglio va nominato, e ci sono due modi di nominarlo: il post che porta la
+	// grafica, o l'asset di libreria quando la grafica non appartiene a nessun post. Nell'editor
+	// il bersaglio è la pagina stessa, quindi restano entrambi opzionali e ignorati.
 	const postId = opts.requirePostId
 		? {
-				post_id: z.string().describe('Post id from read_posts')
+				post_id: z
+					.string()
+					.optional()
+					.describe('Post id from read_posts. Give this OR media_id.'),
+				media_id: z
+					.string()
+					.optional()
+					.describe('Library asset id from read_media, for a graphic that belongs to no post. Give this OR post_id.')
 			}
 		: {
-				post_id: z.string().optional()
+				post_id: z.string().optional(),
+				media_id: z.string().optional()
 			};
 	const slide = {
 		slide_index: z
@@ -237,7 +289,7 @@ export function createGraphicSourceEditTools(resolve: ResolveTarget, opts: { req
 	return {
 		grep_source: tool({
 			description:
-				'Find a word or snippet in this post\'s graphic HTML/TSX. Returns char indexes for read_source start_from. Literal match by default. Max 40 hits.',
+				"Find a word or snippet in a graphic's HTML/TSX — the post's (post_id) or a standalone library asset's (media_id). Returns char indexes for read_source start_from. Literal match by default. Max 40 hits.",
 			inputSchema: z.object({
 				query: z.string().min(1).max(500),
 				regex: z.boolean().optional(),
@@ -252,7 +304,7 @@ export function createGraphicSourceEditTools(resolve: ResolveTarget, opts: { req
 			}
 		}),
 		read_source: tool({
-			description: `Read a slice of this post's graphic HTML/TSX. Default ${MOTION_READ_DEFAULT_CHARS} chars from start_from (0-based). If next_start is set, call again with start_from=next_start. Cap ${MOTION_READ_MAX_CHARS}.`,
+			description: `Read a slice of a graphic's HTML/TSX — the post's (post_id) or a standalone library asset's (media_id). Default ${MOTION_READ_DEFAULT_CHARS} chars from start_from (0-based). If next_start is set, call again with start_from=next_start. Cap ${MOTION_READ_MAX_CHARS}.`,
 			inputSchema: z.object({
 				start_from: z.number().int().min(0).optional(),
 				max_chars: z.number().int().min(1).max(MOTION_READ_MAX_CHARS).optional(),
