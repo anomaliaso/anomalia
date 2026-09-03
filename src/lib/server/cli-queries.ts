@@ -468,11 +468,13 @@ export async function getCalendar(supabase: SupabaseClient, brandId: string, bra
   const startStr = firstDay.toISOString().slice(0, 10);
   const endStr = lastDay.toISOString().slice(0, 10);
 
-  // Posts with scheduled_for in range
+  // Una data proposta è già una posizione nel calendario, anche se il post aspetta ancora
+  // l'approvazione: entra nel mese per cui è datato e in nessun altro. Resta bozza solo chi
+  // una data non ce l'ha.
   const [schedRes, slotRes, draftRes] = await Promise.all([
     supabase.from('posts')
       .select('id, platform, caption, media_url, scheduled_for, status, slot')
-      .eq('brand_id', brandId).not('status', 'eq', 'pending_user')
+      .eq('brand_id', brandId)
       .not('scheduled_for', 'is', null)
       .gte('scheduled_for', `${startStr}T00:00:00`).lte('scheduled_for', `${endStr}T23:59:59`)
       .order('scheduled_for', { ascending: true }).limit(100),
@@ -485,6 +487,7 @@ export async function getCalendar(supabase: SupabaseClient, brandId: string, bra
     supabase.from('posts')
       .select('id, platform, caption, media_url, scheduled_for, status, slot')
       .eq('brand_id', brandId).eq('status', 'pending_user')
+      .is('scheduled_for', null)
       .limit(50),
   ]);
 
