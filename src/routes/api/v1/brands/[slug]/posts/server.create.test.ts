@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-/**
- * POST /posts — un agente esterno deposita la copy che ha già scritto. Anomalia non chiama
- * nessun modello, non spende crediti, non pubblica e non programma niente: il post nasce
- * pending_user e `scheduled_for` è solo la data proposta finché qualcuno non lo approva.
- */
-
 const publishApprovedPost = vi.fn();
 const structured = vi.fn();
 const gateCredits = vi.fn();
@@ -38,6 +32,13 @@ import { POST } from './+server';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess, gateAiAction } from '$lib/server/cli-auth';
 
 type Row = Record<string, unknown>;
+
+const THURSDAY_0900_IN_ROME = {
+  wallClock: '2030-05-16T09:00',
+  utc: '2030-05-16T07:00:00.000Z',
+  local: '2030-05-16 09:00 (Europe/Rome)',
+  slot: 'Thu 09:00'
+};
 
 function fakeSupabase(): { client: unknown; rows: Row[] } {
   const rows: Row[] = [];
@@ -122,18 +123,17 @@ describe('POST /api/v1/brands/:slug/posts', () => {
     expect(gateCredits).not.toHaveBeenCalled();
   });
 
-  // 2030-05-16 è un giovedì; le 09:00 di Roma in maggio (CEST, UTC+2) sono le 07:00 UTC.
   it('una data senza offset è letta sull orologio del brand, non su quello del server', async () => {
     const { body, rows } = await call({
       platforms: ['linkedin'],
       caption: 'copy già scritta',
-      scheduled_for: '2030-05-16T09:00'
+      scheduled_for: THURSDAY_0900_IN_ROME.wallClock
     });
 
-    expect(body.scheduled_for).toBe('2030-05-16T07:00:00.000Z');
-    expect(body.scheduled_for_local).toBe('2030-05-16 09:00 (Europe/Rome)');
-    expect(body.slot).toBe('Thu 09:00');
-    expect(rows[0].scheduled_for).toBe('2030-05-16T07:00:00.000Z');
+    expect(body.scheduled_for).toBe(THURSDAY_0900_IN_ROME.utc);
+    expect(body.scheduled_for_local).toBe(THURSDAY_0900_IN_ROME.local);
+    expect(body.slot).toBe(THURSDAY_0900_IN_ROME.slot);
+    expect(rows[0].scheduled_for).toBe(THURSDAY_0900_IN_ROME.utc);
     expect(rows[0].status).toBe('pending_user');
     expect(publishApprovedPost).not.toHaveBeenCalled();
   });
@@ -204,6 +204,18 @@ describe('POST /api/v1/brands/:slug/posts', () => {
     expect(rows).toEqual([]);
   });
 
+  it('rifiuta i media invece di scartarli: un post text-only silenzioso è peggio di un errore', async () => {
+    const { res, body, rows } = await call({
+      platforms: ['linkedin'],
+      caption: 'copy',
+      media_ids: ['asset-1']
+    });
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('invalid_input');
+    expect(rows).toEqual([]);
+  });
+
   it('rifiuta una piattaforma sconosciuta al dominio', async () => {
     const { res, body, rows } = await call({ platforms: ['mastodon'], caption: 'copy' });
 
@@ -223,8 +235,6 @@ describe('POST /api/v1/brands/:slug/posts', () => {
     }
   );
 
-  // X e Threads vengono tagliate da sole, quindi non sforano mai. LinkedIn no: la sua copy
-  // arriva intera o viene rifiutata.
   it('rifiuta una copy oltre il limite di una piattaforma che non taglia da sola', async () => {
     const { res, body, rows } = await call({ platforms: ['linkedin'], caption: 'a'.repeat(3001) });
 

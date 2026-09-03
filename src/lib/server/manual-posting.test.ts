@@ -20,6 +20,13 @@ import { createManualPost } from './manual-posting';
 
 const TZ = 'Europe/Rome';
 
+const THURSDAY_0900_IN_ROME = {
+  date: '2030-05-16',
+  time: '09:00',
+  utc: '2030-05-16T07:00:00.000Z',
+  slot: 'Thu 09:00'
+};
+
 type Row = Record<string, unknown>;
 
 function fakeSupabase(): { client: SupabaseLike; rows: Row[] } {
@@ -75,18 +82,17 @@ describe('createManualPost', () => {
     expect(publishApprovedPost).not.toHaveBeenCalled();
   });
 
-  // 2030-05-16 è un giovedì; le 09:00 di Roma in maggio (CEST, UTC+2) sono le 07:00 UTC.
   it('lo scheduling fissa istante e slot sull orologio del brand, poi pubblica', async () => {
     const { result, rows } = await create({
       platforms: ['linkedin'],
       caption: 'copy scritto a mano',
       mode: 'schedule',
-      date: '2030-05-16',
-      time: '09:00'
+      date: THURSDAY_0900_IN_ROME.date,
+      time: THURSDAY_0900_IN_ROME.time
     });
 
-    expect(rows[0].scheduled_for).toBe('2030-05-16T07:00:00.000Z');
-    expect(rows[0].slot).toBe('Thu 09:00');
+    expect(rows[0].scheduled_for).toBe(THURSDAY_0900_IN_ROME.utc);
+    expect(rows[0].slot).toBe(THURSDAY_0900_IN_ROME.slot);
     expect(rows[0].status).toBe('pending_user');
     expect(publishApprovedPost).toHaveBeenCalledTimes(1);
     expect(publishApprovedPost.mock.calls[0][3]).toEqual({ now: false });

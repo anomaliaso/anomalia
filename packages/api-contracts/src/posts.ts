@@ -41,7 +41,7 @@ const CreatePostInputSchema = z.object({
   title: z.string().optional().describe('Required for Reddit'),
   subreddit: z.string().optional(),
   link_url: z.string().optional()
-});
+}).strict();
 
 const CreatePostResultSchema = z.object({
   ok: z.literal(true),
@@ -89,7 +89,7 @@ export const LIST_POSTS = {
   pathUnderBrand: '/posts',
   input: z.object({
     status: z.enum(POST_STATUSES).optional().describe('Optional status filter')
-  }),
+  }).strict(),
   output: z.array(PostRow),
   failures: [],
   destructive: false
@@ -109,7 +109,7 @@ export const GET_CALENDAR = {
       .regex(/^\d{4}-\d{2}$/)
       .optional()
       .describe('Month YYYY-MM')
-  }),
+  }).strict(),
   output: z.object({
     posts: z.array(z.record(z.string(), z.unknown())),
     year: z.number(),

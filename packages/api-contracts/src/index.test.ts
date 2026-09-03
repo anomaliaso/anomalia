@@ -65,6 +65,19 @@ describe('il registry degli endpoint di brand', () => {
     expect(input.safeParse({ platforms: ['linkedin'], caption: '' }).success).toBe(false);
   });
 
+  it('un campo che nessun endpoint dichiara viene rifiutato, non scartato in silenzio', () => {
+    for (const e of BRAND_ENDPOINTS) {
+      expect(e.input.safeParse({ media_ids: ['abc'] }).success, e.tool).toBe(false);
+    }
+    expect(
+      byTool('create_post').input.safeParse({
+        platforms: ['linkedin'],
+        caption: 'ciao',
+        media_ids: ['abc']
+      }).success
+    ).toBe(false);
+  });
+
   it('create_post promette un post pending_user con la data proposta', () => {
     const { output } = byTool('create_post');
     const ok = output.safeParse({

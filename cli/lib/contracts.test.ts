@@ -2,11 +2,6 @@ import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
-/**
- * La CLI non importa niente fuori da sé: si spedisce come binario e la sua build Vercel ha per
- * radice cli/mcp. Quindi porta una COPIA dei contratti invece di raggiungere il workspace — e una
- * copia senza guardia è solo deriva che non si vede ancora.
- */
 const ROOT = join(import.meta.dir, '..');
 const CANONICAL = join(ROOT, '..', 'packages', 'api-contracts', 'src');
 const MIRROR = join(ROOT, 'lib', 'contracts');

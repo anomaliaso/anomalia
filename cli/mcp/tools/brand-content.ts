@@ -6,10 +6,6 @@ import { resolvePostId, withAuth } from '../util.ts';
 
 const slug = z.string().min(1).describe('Brand URL slug');
 
-/**
- * I tool che il registry sa già descrivere: nome, schema, annotazioni e chiamata vengono da lì,
- * così un endpoint nuovo non ha bisogno di un blocco scritto a mano qui.
- */
 function registerDeclaredEndpoints(server: McpServer) {
   for (const endpoint of BRAND_ENDPOINTS) {
     server.registerTool(

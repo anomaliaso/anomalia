@@ -468,9 +468,6 @@ export async function getCalendar(supabase: SupabaseClient, brandId: string, bra
   const startStr = firstDay.toISOString().slice(0, 10);
   const endStr = lastDay.toISOString().slice(0, 10);
 
-  // Una data proposta è già una posizione nel calendario, anche se il post aspetta ancora
-  // l'approvazione: entra nel mese per cui è datato e in nessun altro. Resta bozza solo chi
-  // una data non ce l'ha.
   const [schedRes, slotRes, draftRes] = await Promise.all([
     supabase.from('posts')
       .select('id, platform, caption, media_url, scheduled_for, status, slot')

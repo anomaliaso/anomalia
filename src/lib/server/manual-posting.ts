@@ -32,6 +32,8 @@ export type ManualPostMode = 'now' | 'schedule' | 'draft' | 'propose';
 
 export type ManualPostOutcome = 'pending_user' | 'scheduled' | 'published';
 
+export type PostAuthorship = 'manual' | 'external';
+
 type DateSource = (input: CreateManualPostInput, tz: string) => string | null;
 
 const NO_DATE: DateSource = () => null;
@@ -165,10 +167,8 @@ export type CreateManualPostInput = {
   mode: ManualPostMode;
   date?: string;
   time?: string;
-  /** Istante UTC già risolto, per chi propone una data invece di comporla da data+ora. */
   scheduledFor?: string;
-  /** Chi ha scritto il post: 'manual' dalla UI, 'external' da un agente fuori da Anomalia. */
-  source?: string;
+  source?: PostAuthorship;
 };
 
 export type CreateManualPostResult =

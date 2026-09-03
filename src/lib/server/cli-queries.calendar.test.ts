@@ -1,13 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getCalendar } from './cli-queries';
 
-/**
- * Un post proposto da un agente esterno ha una data e non è ancora approvato. Prima, i pending
- * erano esclusi dalle query sul mese e ripescati tutti insieme senza filtro: un post datato
- * ottobre compariva anche a gennaio. La data proposta vale come posizione nel calendario; senza
- * data il post resta una bozza a parte.
- */
-
 type Filter = { op: string; column: string; value: unknown };
 type Query = { filters: Filter[]; rows: Record<string, unknown>[] };
 

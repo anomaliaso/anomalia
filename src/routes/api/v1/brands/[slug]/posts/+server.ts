@@ -21,9 +21,6 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
   return json(posts);
 };
 
-// Un agente esterno deposita la copy che ha già scritto: nessun modello, nessun credito, nessuna
-// pubblicazione. `scheduled_for` è la data PROPOSTA — resta metadato finché il post non è
-// approvato, ed è l'approvazione a mandarlo allo scheduler.
 export const POST: RequestHandler = async ({ request, params, url }) => {
   const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;

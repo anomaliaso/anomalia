@@ -1,12 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { handleMcpFetch } from './http-app.ts';
 
-/**
- * I tool derivati dal registry devono arrivare al client con lo stesso contratto dell'endpoint:
- * stesso nome, stesso schema, e l'annotazione giusta. create_post NON è distruttivo — deposita
- * una bozza in revisione — e la sua descrizione deve dirlo, perché è l'unica cosa che il
- * modello dall'altra parte legge prima di chiamarlo.
- */
 async function rpc(method: string, params: unknown, id = 1) {
   const res = await handleMcpFetch(
     new Request('http://localhost/mcp', {

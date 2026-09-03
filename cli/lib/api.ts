@@ -37,11 +37,6 @@ function post<T>(path: string, token: string, body?: unknown): Promise<T> {
   });
 }
 
-/**
- * Chiama un endpoint dichiarato nel registry. Una GET porta i campi in query, una POST nel body:
- * chi aggiunge un endpoint non scrive più un metodo qui: lo dichiara una volta e questo lo sa
- * già chiamare.
- */
 export function callEndpoint<T>(
   endpoint: BrandEndpoint,
   token: string,
