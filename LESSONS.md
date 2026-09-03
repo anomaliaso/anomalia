@@ -618,3 +618,21 @@ curl -s http://127.0.0.1:5200/login | grep -oE 'Anomalia|anomalia/leads' | head 
 
 Vite può comunque slittare di porta se trova occupato ("Port 5199 is in use, trying another
 one"): l'unica porta di cui fidarsi è quella stampata nel log, verificata con la riga sopra.
+
+## Un test che mocka il cancello di cui parla non dimostra niente
+
+**Segnale.** Un test di route asserisce un comportamento di autorizzazione — «una chiave di sola
+lettura passa», «un utente scaduto viene fermato» — e passa al primo colpo, senza essere mai stato
+rosso per la ragione giusta. In cima al file c'è `vi.mock('$lib/server/cli-auth', …)`.
+
+**Cosa succede.** Il verdetto che il test crede di misurare lo produce il mock, non il sistema.
+È capitato con `check_content`: la route non chiama `checkApiKeyWriteAccess` perché sarebbe
+ridondante, e il test concludeva che quindi una chiave di sola lettura arriva a calcolare. Falso:
+`resolveCaller` nega **ogni** non-GET a una chiave `read` prima che la route parta. Il test
+asseriva uno stato che la produzione non può produrre, quindi non poteva fallire mai — e intanto
+diceva al prossimo lettore l'opposto della verità, che è peggio di non dire niente.
+
+**La mossa.** Prima di asserire su un permesso, leggi dove il permesso viene deciso davvero, e
+chiediti se il mock lo sta scavalcando. Se lo scavalca, resta una sola asserzione onesta: dato il
+verdetto che l'upstream produce sul serio, la route lo rispetta e non lavora. Il resto — che
+l'upstream produca quel verdetto — è un test dell'upstream, e va scritto lì o non va scritto.

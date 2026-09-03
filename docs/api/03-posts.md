@@ -121,6 +121,105 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts" \
 
 ---
 
+## `POST /api/v1/brands/:slug/content/check`
+
+Fa girare su una copy che hai scritto tu **gli stessi controlli deterministici** che Anomalia fa
+sulla propria: requisiti di piattaforma, tenuta della caption, punteggio di qualità, calendario.
+
+Non chiama nessun modello, non consuma crediti e **non scrive niente**: è una POST solo perché
+porta un body. La stessa richiesta restituisce sempre lo stesso verdetto. Non guarda i pixel:
+giudicare un'immagine o un video è un'azione separata e a pagamento.
+
+**Una API key di sola lettura oggi non può chiamarlo** e riceve `403`. Non è una proprietà di
+questo endpoint: `resolveCaller` nega a una chiave `read` **ogni** richiesta che non sia `GET` o
+`HEAD`, perché finora ogni route che muta era una non-GET. `check_content` è il primo POST che
+calcola senza scrivere, quindi il primo controesempio a quella regola; cambiarla è una decisione
+a parte, con un raggio d'azione molto più ampio di questo endpoint.
+
+Un verdetto negativo è comunque un `200` con `ok: false` — è un referto, non un cancello.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `platforms` | string[] | Sì | Dove uscirebbe. Le sconosciute → `no_platforms` |
+| `caption` | string | Sì | La copy. Letta, punteggiata e restituita intatta |
+| `platform_captions` | object | No | Override per piattaforma: ognuna è controllata sulla copy che pubblicherebbe davvero |
+| `media_ids` | string[] | No | Fino a 8 id della libreria del brand. Un id che non è di questo brand è riportato |
+| `title` | string | No | Obbligatorio per Reddit |
+| `scheduled_for` | string | No | Istante proposto, ISO. Senza offset è letto sul fuso del brand |
+
+Sono i campi che portano una regola: `subreddit` e `link_url`, che `create_post` accetta, qui non
+hanno nessun controllo dietro e vengono rifiutati dallo schema invece di essere ignorati.
+
+**Response** `200`:
+
+```json
+{
+  "ok": false,
+  "errors": [
+    { "code": "over_limit", "field": "caption", "detail": "X: 812 characters, limit 280" }
+  ],
+  "warnings": [
+    { "code": "calendar_conflict", "field": "scheduled_for", "detail": "2030-05-16T07:00 is already taken by a1b2c3d4-…" }
+  ],
+  "scores": [
+    {
+      "platform": "linkedin",
+      "index": 62.4,
+      "checks": [
+        { "id": "hook_strength", "value": 0.4, "weight": 18, "note": "apre parlando del brand" }
+      ]
+    }
+  ],
+  "versions": { "rules": 1, "scorer": 3 }
+}
+```
+
+**Errori bloccanti** (dentro `errors`, ognuno col campo da riparare)
+
+| `code` | `field` | Quando |
+|---|---|---|
+| `no_platforms` | `platforms` | Nessuna piattaforma riconosciuta |
+| `caption_empty` | `caption` | Caption senza testo |
+| `caption_placeholder` | `caption` | Lorem ipsum, `TODO`, solo hashtag |
+| `caption_needs_proof` | `caption` | Resta un marcatore `[NEED: …]`. Si riempie con il fatto, non si cancella |
+| `need_media` | `media_ids` | `instagram` / `tiktok` / `youtube` senza asset |
+| `need_video` | `media_ids` | `youtube` con un asset che non è un video |
+| `over_limit` | `caption` | Copy oltre il limite di una piattaforma (dice quale e di quanto) |
+| `reddit_title` | `title` | Reddit senza titolo |
+| `media_not_found` | `media_ids` | Un id non è nella libreria di questo brand |
+| `invalid_scheduled_for` | `scheduled_for` | Data illeggibile |
+| `too_soon` | `scheduled_for` | Data passata o troppo vicina |
+
+**Avvisi** (dentro `warnings`, non bloccano): `calendar_conflict` — quel minuto è già occupato da
+un altro post vivo; `reach_chasing_hashtags` — `#fyp`, `#viral` e simili.
+
+**Punteggi**: uno per piattaforma richiesta, con l'indice 0–100 e i dodici check pesati dello
+scorer interno (hook, tell da AI, ripetizione rispetto ai post recenti del brand, concretezza,
+CTA, lunghezza, leggibilità, hashtag, emoji). `versions` fissa il ruleset e lo scorer: due
+verdetti sono confrontabili solo se coincidono.
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — body fuori schema |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/content/check" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "platforms": ["linkedin","x"],
+    "caption": "Tre cose che abbiamo imparato spedendo di venerdì."
+  }'
+```
+
+---
+
 ## `DELETE /api/v1/brands/:slug/posts`
 
 Elimina in blocco i post di uno status (default `pending_user`). Rifiuta `published`.

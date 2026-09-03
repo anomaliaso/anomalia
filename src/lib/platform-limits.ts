@@ -203,9 +203,8 @@ export type PublishBlockerCode = 'need_media' | 'need_video' | 'over_limit' | 'r
 
 export type PublishBlocker = { code: PublishBlockerCode; field: string; detail: string };
 
-// Ogni requisito di piattaforma che impedisce la pubblicazione sta qui, in una riga sola: il
-// percorso che crea un post e quello che lo controlla senza crearlo leggono la stessa tabella,
-// nello stesso ordine, e una piattaforma nuova si aggiunge in un posto solo.
+// Il percorso che crea un post e quello che lo controlla senza crearlo leggono questa tabella,
+// nello stesso ordine: una piattaforma nuova si aggiunge in un posto solo.
 const PUBLISH_REQUIREMENTS: {
   code: PublishBlockerCode;
   field: string;
