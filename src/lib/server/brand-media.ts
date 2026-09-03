@@ -342,8 +342,22 @@ export type InsertBrandMediaInput = {
   height?: number | null;
   durationSeconds?: number | null;
   source?: string;
+  sourceRef?: string | null;
   title?: string | null;
 };
+
+/** Il bucket della libreria è privato e vive qui: chi deposita un file passa da questa funzione. */
+export async function storeBrandMediaBytes(
+  supabase: SupabaseClient,
+  storagePath: string,
+  bytes: Buffer,
+  mime: string
+): Promise<{ error?: string }> {
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(storagePath, bytes, { contentType: mime, upsert: false });
+  return error ? { error: error.message } : {};
+}
 
 export async function insertBrandMedia(
   supabase: SupabaseClient,
@@ -360,6 +374,7 @@ export async function insertBrandMedia(
       // Private bucket: store path as url; UI signs via storage_path.
       url: input.storagePath,
       source: input.source ?? 'upload',
+      source_ref: input.sourceRef ?? null,
       mime: input.mime,
       bytes: input.bytes ?? null,
       width: input.width ?? null,

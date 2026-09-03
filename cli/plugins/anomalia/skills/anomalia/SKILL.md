@@ -58,6 +58,10 @@ calendar time, and `approve_post` is what authorizes distribution. Hand the oper
 **Reuse an asset instead of paying for a render** → `list_media` → pass its id to `create_post`
 as `media_ids`. That is also how you post to Instagram or TikTok, which never accept text alone.
 
+**Use a visual you made elsewhere** → `import_media_url` with its public https URL → pass the id
+it returns to `create_post` as `media_ids`. The file is copied into the brand library, so the post
+still has its image the day the original link dies.
+
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).

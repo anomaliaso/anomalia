@@ -93,6 +93,27 @@ describe('il registry degli endpoint di brand', () => {
     expect(listMedia.input.safeParse({ limit: 500 }).success).toBe(false);
   });
 
+  it('import_media_url dichiara ogni rifiuto della guardia, e nessuno di essi resta un 500', () => {
+    const importMedia = byTool('import_media_url');
+    expect(importMedia.method).toBe('POST');
+    expect(importMedia.destructive).toBe(false);
+    expect(importMedia.failures.map((f) => f.error).sort()).toEqual(
+      ['blocked_host', 'empty', 'fetch_failed', 'not_https', 'store_failed', 'too_large', 'unsupported_type'].sort()
+    );
+    expect(statusForFailure(importMedia, 'blocked_host')).toBe(400);
+    expect(statusForFailure(importMedia, 'unsupported_type')).toBe(415);
+    expect(statusForFailure(importMedia, 'too_large')).toBe(413);
+  });
+
+  it('import_media_url chiede un URL, e niente che non abbia dichiarato', () => {
+    const { input } = byTool('import_media_url');
+    expect(input.safeParse({ url: 'https://cdn.example.com/a.png' }).success).toBe(true);
+    expect(input.safeParse({ url: 'https://cdn.example.com/a.png', title: 'Scatto' }).success).toBe(true);
+    expect(input.safeParse({}).success).toBe(false);
+    expect(input.safeParse({ url: '' }).success).toBe(false);
+    expect(input.safeParse({ url: 'https://cdn.example.com/a.png', quality: 'high' }).success).toBe(false);
+  });
+
   it('create_post promette un post pending_user con la data proposta', () => {
     const { output } = byTool('create_post');
     const ok = output.safeParse({

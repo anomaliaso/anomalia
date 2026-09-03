@@ -163,3 +163,50 @@ export const LIST_MEDIA = {
   failures: [],
   destructive: false
 } satisfies BrandEndpoint;
+
+const ImportMediaUrlInputSchema = z
+  .object({
+    url: z
+      .string()
+      .min(1)
+      .describe('Public https URL of an image (jpeg, png, webp, gif) or video (mp4, mov, webm)'),
+    title: z.string().optional().describe('The name the asset carries in the library')
+  })
+  .strict();
+
+const ImportMediaUrlResultSchema = z.object({
+  ok: z.literal(true),
+  id: z.string(),
+  kind: z.string(),
+  mime: z.string(),
+  bytes: z.number(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  source_url: z.string(),
+  signed_url: z.string().nullable()
+});
+
+export const IMPORT_MEDIA_URL = {
+  tool: 'import_media_url',
+  title: 'Import media from a URL',
+  description:
+    'Copy an image or video you produced elsewhere into the brand media library, then use the id ' +
+    'it returns as media_ids on create_post. Anomalia calls no model and spends no credits: the ' +
+    'file is copied, not generated. The URL must be public https and stay public across every ' +
+    'redirect; jpeg, png, webp and gif up to 12MB, mp4, mov and webm up to 64MB. Anything else ' +
+    'is refused and nothing is stored.',
+  method: 'POST',
+  pathUnderBrand: '/media',
+  input: ImportMediaUrlInputSchema,
+  output: ImportMediaUrlResultSchema,
+  failures: [
+    { error: 'not_https', status: 400 },
+    { error: 'blocked_host', status: 400 },
+    { error: 'fetch_failed', status: 400 },
+    { error: 'unsupported_type', status: 415 },
+    { error: 'too_large', status: 413 },
+    { error: 'empty', status: 400 },
+    { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
