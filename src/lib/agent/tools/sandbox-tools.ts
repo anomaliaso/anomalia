@@ -633,7 +633,7 @@ export function createSandboxTools(opts: SandboxToolsOptions): SandboxSession {
             bytes: buf.length,
             fileName: p.split('/').pop() ?? `sandbox.${ext}`,
             title: input.title,
-            source: 'sandbox'
+            source: 'agent'
           });
           if (insErr || !row) return { error: insErr ?? 'Could not register the asset' };
           void catalogBrandMedia(supabase, row.id, brandId).catch(() => {});

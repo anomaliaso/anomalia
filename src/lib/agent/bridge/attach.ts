@@ -120,7 +120,7 @@ export async function attachForChat(
 		const url = deps.supabase.storage.from('media').getPublicUrl(storagePath).data.publicUrl;
 
 		// In galleria (e quindi in artifacts/): un allegato dell'agente è un asset del brand.
-		await deps.supabase
+		const { error: galleryErr } = await deps.supabase
 			.from('brand_media')
 			.insert({
 				brand_id: deps.brandId,
@@ -131,8 +131,9 @@ export async function attachForChat(
 				source: 'agent',
 				mime,
 				bytes: bytes.byteLength
-			})
-			.then(() => {}, () => {}); // la galleria è un di-più: se la insert fallisce, l'allegato resta valido
+			});
+		// la galleria è un di-più: se la insert fallisce l'allegato resta valido, ma si sente dire.
+		if (galleryErr) console.error('[AGENT_KIT] attach: allegato fuori dalla galleria', galleryErr.message);
 
 		deps.collect.push(url);
 		return ok(`allegato in chat (visibile nella tua bolla): ${url}`);
