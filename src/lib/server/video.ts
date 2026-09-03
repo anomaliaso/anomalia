@@ -262,6 +262,13 @@ export function buildTransformInput(
     videoUrl: string;
     imageUrl?: string;
     aspectRatio?: string;
+    /**
+     * ACCETTATO E IGNORATO, di proposito. Misurato su kie il 2026-09-03: motion control rifiuta
+     * `mode` con QUALUNQUE valore — "std", "pro", "standard", "professional" tornano tutti 500
+     * "mode is not within the range of allowed options" — e passa solo senza il campo. La pagina
+     * docs del modello documenta std|pro, e si sbaglia. Il parametro resta nella firma perche' i
+     * tool lo espongono all'utente; quello che non deve fare e' raggiungere il provider.
+     */
     mode?: 'std' | 'pro';
   }
 ): Record<string, unknown> {
@@ -286,8 +293,7 @@ export function buildTransformInput(
     // Il soggetto, non il movimento.
     ...(args.imageUrl ? { input_urls: [args.imageUrl] } : {}),
     // Il movimento, non il soggetto.
-    video_urls: [args.videoUrl],
-    mode: args.mode ?? 'std'
+    video_urls: [args.videoUrl]
   };
 }
 
@@ -636,6 +642,24 @@ export function buildJobInput(
       ...(imageUrl ? { image_urls: [imageUrl] } : { aspect_ratio: aspectRatio })
     };
   }
+  // Kling 3.0 pretende due campi che i suoi docs danno per OPZIONALI. Misurato su kie il
+  // 2026-09-03: senza `multi_shots` il task e' rifiutato ("multi_shots cannot be empty"), e
+  // appena aggiunto arriva "sound cannot be empty". Con entrambi passa e il video esce. Sono
+  // esattamente i due campi che una lettura dei docs lascia fuori, quindi stanno qui espliciti e
+  // non fra i default: toglierli rompe OGNI clip Kling, e il messaggio non dice che mancavano
+  // dalla nostra richiesta.
+  if (/^kling-3\.0\//.test(model) || /^kling\/v3-turbo/.test(model)) {
+    const isTurbo = /^kling\/v3-turbo/.test(model);
+    return {
+      prompt: clampedPrompt,
+      ...(imageUrl ? { image_urls: [imageUrl] } : {}),
+      // Turbo prende `duration` intero e `resolution`; kling-3.0/video la vuole STRINGA.
+      ...(isTurbo
+        ? { duration: durationSeconds, resolution: resolution === '480p' ? '720p' : resolution }
+        : { duration: String(durationSeconds), aspect_ratio: aspectRatio, mode: 'std', multi_shots: false, sound: false })
+    };
+  }
+
   // kie tratta i2v con first/last frame e reference-to-video come MUTUAMENTE ESCLUSIVI: con dei
   // reference presenti vincono loro. Seedance 2.5 con first/last frame accetta solo
   // aspect_ratio "adaptive" (altrimenti 422).
@@ -938,9 +962,14 @@ async function runPreparedRender(
 }
 
 /**
- * Runway vive su un percorso suo: `/aleph/generate` per inviare e `/runway/record-detail` per
- * chiedere, con lo stato in `data.state` e l'URL in `data.videoInfo.videoUrl`. Nessuno dei due
- * combacia con l'API a job, e questa e' l'unica ragione per cui la tabella dichiara `endpoint`.
+ * Runway Aleph INVIA su un percorso suo (`/aleph/generate`, campi in camelCase) e si INTERROGA
+ * come tutti gli altri, su `jobs/recordInfo`.
+ *
+ * Le due meta' non combaciano, e la seconda e' quella che si sbaglia in silenzio: misurato su kie
+ * il 2026-09-03, `runway/record-detail` risponde 200 con `data: null` per un task Aleph — non un
+ * errore, un vuoto. Chiedere li' significa aspettare fino al timeout e poi dire "non ha restituito
+ * niente" di un render che INVECE e' stato eseguito e fatturato. Su `jobs/recordInfo` lo stesso
+ * task torna completo, sotto il nome `runway/gen4-aleph`.
  */
 async function runAlephJob(
   input: Record<string, unknown>,
@@ -962,28 +991,7 @@ async function runAlephJob(
     console.error(`[video.transform] aleph rifiutata: ${String(created?.msg ?? JSON.stringify(created)).slice(0, 400)}`);
     return undefined;
   }
-
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-  let first = true;
-  while (Date.now() < deadline) {
-    if (signal?.aborted) return undefined;
-    if (!first) await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    first = false;
-    const infoRes = await fetch(`${KIE_BASE}/runway/record-detail?taskId=${encodeURIComponent(taskId)}`, {
-      headers: authHeaders(),
-      signal
-    });
-    if (!infoRes.ok) continue;
-    const info = await infoRes.json();
-    const state = info?.data?.state;
-    if (state === 'fail') {
-      console.error(`[video.transform] aleph fallita: ${String(info?.data?.failMsg ?? '').slice(0, 400)}`);
-      return undefined;
-    }
-    const url = info?.data?.videoInfo?.videoUrl;
-    if (state === 'success' && url) return { url: String(url), taskId };
-  }
-  return undefined;
+  return pollKieTask(taskId, POLL_TIMEOUT_MS, signal, 'video.transform', POLL_INTERVAL_MS);
 }
 
 /**

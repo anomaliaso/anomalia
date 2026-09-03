@@ -602,3 +602,17 @@ curl -s http://127.0.0.1:5200/login | grep -oE 'Anomalia|anomalia/leads' | head 
 
 Vite può comunque slittare di porta se trova occupato ("Port 5199 is in use, trying another
 one"): l'unica porta di cui fidarsi è quella stampata nel log, verificata con la riga sopra.
+
+## Due test della suite vogliono ambienti OPPOSTI
+
+**Segnale.** La suite è verde, aggiungi un `.env` al worktree e diventa rossa — su un file che non
+hai toccato. Lo togli e diventa rossa da un'altra parte.
+
+**Cosa succede.** `src/hooks.server.test.ts` fa `new URL(PUBLIC_SUPABASE_URL)` all'import: senza
+`.env` non compila. `src/lib/server/chat-models.test.ts` verifica il catalogo dei modelli
+configurati: con un `.env` reale ne trova di più di quanti ne attende. Non possono essere verdi
+insieme, e quale dei due è rosso dice solo se il worktree ha un `.env`.
+
+**La mossa.** Prima di dare la colpa al tuo diff, rifai la stessa run sul branch da cui sei
+partito, con lo stesso `.env` (o senza). Se il conteggio dei fallimenti coincide, il rosso non è
+tuo. Vale anche per `tsc`: il numero da confrontare non è zero, è quello del branch di partenza.
