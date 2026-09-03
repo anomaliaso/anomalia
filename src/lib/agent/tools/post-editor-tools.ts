@@ -912,6 +912,120 @@ export async function graphicImageCatalog(
  * quindi «accorcia il titolo» è una revisione e non una ricomposizione. Da lì `create_post_from_asset`
  * lo trasforma in un post quando — e se — l'utente lo chiede.
  */
+/**
+ * DOVE FINISCE UNA GRAFICA CHE NON HA UN POST: nella libreria, come asset, con la sua versione.
+ *
+ * Il gemello di `persistRenderedGraphic`, che invece scrive sulla riga del post. Sta qui accanto a
+ * lui apposta: sono le DUE destinazioni possibili di un render, e tenerle vicine è ciò che impedisce
+ * a una delle due di dimenticare un pezzo — la versione, per esempio, senza la quale l'immagine
+ * esiste ma non è più modificabile.
+ */
+async function persistStandaloneGraphic(
+  t: { supabase: SupabaseClient; brandId: string; userId: string },
+  out: RenderedGraphic,
+  opts: { mediaId?: string | null; brief: string }
+): Promise<{ url: string; mediaId: string | null; tileWarning?: string } | { error: string }> {
+  const { uploadPostImage } = await import('$lib/server/content-preview');
+  const { saveGraphicVersion } = await import('$lib/server/design-store');
+
+  const url = await uploadPostImage(
+    t.supabase,
+    t.userId,
+    `data:image/png;base64,${out.png.toString('base64')}`
+  );
+  if (!url) return { error: 'Upload failed' };
+
+  // La revisione resta sulla STESSA tessera, o la cronologia si spezza in una pila di tentativi.
+  let mediaId = opts.mediaId ?? null;
+  let tileWarning: string | undefined;
+  if (mediaId) {
+    const { updateMediaGeneratorItemUrl } = await import('$lib/server/media-generator/persist');
+    const upd = await updateMediaGeneratorItemUrl(t.supabase, {
+      brandId: t.brandId,
+      itemId: mediaId,
+      url,
+      prompt: opts.brief
+    });
+    if (!upd.ok) {
+      tileWarning = `The revised graphic is saved (image_url below) but the library tile still shows the old one: ${upd.error}.`;
+    }
+  } else {
+    const { insertMediaGeneratorItem } = await import('$lib/server/media-generator/persist');
+    const saved = await insertMediaGeneratorItem(t.supabase, {
+      brandId: t.brandId,
+      userId: t.userId,
+      kind: 'image',
+      url,
+      prompt: opts.brief,
+      aspect: out.aspect
+    });
+    if ('row' in saved) mediaId = saved.row.id;
+  }
+
+  // Senza tessera l'immagine esiste ma non è più modificabile: va detto, non taciuto.
+  if (mediaId) {
+    await saveGraphicVersion(t.supabase, {
+      brandId: t.brandId,
+      userId: t.userId,
+      target: { kind: 'media_item', id: mediaId },
+      spec: out.spec,
+      source: out.source,
+      mediaUrl: url,
+      brief: opts.brief
+    });
+  }
+  return { url, mediaId, ...(tileWarning ? { tileWarning } : {}) };
+}
+
+/**
+ * Scrivi un SORGENTE su una grafica standalone: renderizza, salva, versiona.
+ *
+ * È il gemello di `applyPostGraphicSource`, e senza di lui `replace_source` / `write_source` non
+ * potevano toccare una grafica che non appartiene a un post — la si poteva rifare a parole e non
+ * correggere una parola. Una feature a metà.
+ */
+export async function applyStandaloneGraphicSource(
+  t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; mediaId: string },
+  args: { source: string; brief?: string | null }
+) {
+  const source = unwrapGraphicSource(args.source);
+  if (!source) return { error: 'Empty source' };
+  if (source.length > GRAPHIC_SOURCE_MAX_CHARS) {
+    return { error: `Source exceeds ${GRAPHIC_SOURCE_MAX_CHARS} characters` };
+  }
+
+  const { renderGraphicSource } = await import('$lib/server/design-render');
+  let out: RenderedGraphic;
+  try {
+    out = await renderGraphicSource(source, {
+      brandId: t.brandId,
+      userId: t.userId,
+      brandColors: t.ctx.brandColors,
+      typography: { display: t.ctx.typography.display, body: t.ctx.typography.body }
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Render failed' };
+  }
+
+  const stored = await persistStandaloneGraphic(t, out, {
+    mediaId: t.mediaId,
+    brief: args.brief ?? 'source editor'
+  });
+  if ('error' in stored) return stored;
+
+  const { latestGraphic } = await import('$lib/server/design-store');
+  const current = await latestGraphic(t.supabase, { kind: 'media_item', id: t.mediaId });
+  return {
+    success: true as const,
+    media_origin: 'typographic_graphic' as const,
+    media_url: stored.url,
+    media_id: stored.mediaId,
+    version: current?.version,
+    graphic_source: out.source,
+    ...(stored.tileWarning ? { warning: stored.tileWarning } : {})
+  };
+}
+
 export async function designStandaloneGraphic(
   t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; refUrls?: string[] },
   args: GraphicRefArgs & { brief: string; media_id?: string }
@@ -948,53 +1062,13 @@ export async function designStandaloneGraphic(
     return { error: e instanceof Error ? e.message : 'The graphic could not be composed.' };
   }
 
+  const stored = await persistStandaloneGraphic(t, composed.rendered, {
+    mediaId: args.media_id ?? null,
+    brief: args.brief
+  });
+  if ('error' in stored) return stored;
+  const { url, mediaId, tileWarning } = stored;
   const out = composed.rendered;
-  const url = await uploadPostImage(
-    t.supabase,
-    t.userId,
-    `data:image/png;base64,${out.png.toString('base64')}`
-  );
-  if (!url) return { error: 'Upload failed' };
-
-  // La revisione resta sulla STESSA tessera, o la cronologia si spezza in una pila di tentativi.
-  let mediaId = args.media_id ?? null;
-  let tileWarning: string | undefined;
-  if (mediaId) {
-    const { updateMediaGeneratorItemUrl } = await import('$lib/server/media-generator/persist');
-    const upd = await updateMediaGeneratorItemUrl(t.supabase, {
-      brandId: t.brandId,
-      itemId: mediaId,
-      url,
-      prompt: args.brief
-    });
-    if (!upd.ok) {
-      tileWarning = `The revised graphic is saved (image_url below) but the library tile still shows the old one: ${upd.error}.`;
-    }
-  } else {
-    const { insertMediaGeneratorItem } = await import('$lib/server/media-generator/persist');
-    const saved = await insertMediaGeneratorItem(t.supabase, {
-      brandId: t.brandId,
-      userId: t.userId,
-      kind: 'image',
-      url,
-      prompt: args.brief,
-      aspect: out.aspect
-    });
-    if ('row' in saved) mediaId = saved.row.id;
-  }
-
-  // Senza tessera l'immagine esiste ma non è più modificabile: va detto, non taciuto.
-  if (mediaId) {
-    await saveGraphicVersion(t.supabase, {
-      brandId: t.brandId,
-      userId: t.userId,
-      target: { kind: 'media_item', id: mediaId },
-      spec: out.spec,
-      source: out.source,
-      mediaUrl: url,
-      brief: args.brief
-    });
-  }
 
   if (args.media_ids?.length && !args.generate_prompt?.trim()) {
     const { recordBrandMediaUse } = await import('$lib/server/brand-media');
