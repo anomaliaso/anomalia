@@ -17,7 +17,7 @@ import { expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { renderGraphicWithChromium } from './design-render-chromium';
-import { renderGraphicStill } from './motion-video/render-tools';
+import { renderGraphicStill, renderGraphicStills } from './motion-video/render-tools';
 
 const BRAND = process.env.LIVE_BRAND_ID ?? '6859115e-df6a-40f3-846e-6c577faf0e9c';
 
@@ -62,6 +62,29 @@ it.skipIf(process.env.GRAPHIC_RENDER_LIVE !== '1')(
     const b = await renderGraphicStill({ brandId: BRAND, source: g('#0000ff'), width: 1080, height: 1920 });
     expect('png' in a && 'png' in b, JSON.stringify([a, b]).slice(0, 300)).toBe(true);
     if ('png' in a && 'png' in b) expect(h(a.png)).not.toBe(h(b.png));
+  },
+  900_000
+);
+
+it.skipIf(process.env.GRAPHIC_RENDER_LIVE !== '1')(
+  'quattro grafiche su UNA sandbox, tutte distinte',
+  async () => {
+    // Il numero che giustifica il plurale: misurato, quattro grafiche in 22.9s su una apertura
+    // sola, contro ~67s facendole una per volta (17s l'una, di cui ~14 di apertura e chiusura).
+    // E l'isolamento: un fallimento su una slide non porta via le altre.
+    const g = (bg: string) => ({
+      source: `const Graphic = () => <div style={{width:'100%',height:'100%',background:'${bg}',display:'flex'}}>x</div>;`,
+      width: 1080,
+      height: 1080
+    });
+    const out = await renderGraphicStills({
+      brandId: BRAND,
+      graphics: [g('#ff0000'), g('#00ff00'), g('#0000ff'), g('#ffff00')]
+    });
+    expect(out).toHaveLength(4);
+    expect(out.every((o) => 'png' in o), JSON.stringify(out).slice(0, 300)).toBe(true);
+    const hashes = out.map((o) => ('png' in o ? createHash('sha1').update(o.png).digest('hex') : ''));
+    expect(new Set(hashes).size, 'quattro sorgenti diversi, quattro PNG diversi').toBe(4);
   },
   900_000
 );
