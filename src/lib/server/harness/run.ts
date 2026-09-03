@@ -32,11 +32,15 @@ type AnyOpts = Record<string, any>;
  * al primo step `toolChoice: 'required'`. Ed è vincolato due volte, perché forzare uno strumento
  * dove non serve è peggio del difetto che ripara:
  *   · solo la chat (`surface: 'chat'`) — gli agenti di batch hanno i loro gate;
- *   · solo se il messaggio è una richiesta di PRODUZIONE, secondo `isHeavyProductionAsk` — lo
- *     stesso classificatore deterministico (regex it/en, zero chiamate modello) che decide la
- *     scalata Auto→Pro. Una domanda («cos'è un gatto», «come va il brand?») resta libera di essere
- *     risposta e basta: è il TRIAGE di WORK_ETHIC_BLOCK, e forzarle una chiamata produrrebbe un
- *     turno assurdo.
+ *   · solo se il messaggio è una richiesta di PRODUZIONE, secondo `isHeavyProductionAsk`
+ *     (regex it/en, zero chiamate modello). Una domanda («cos'è un gatto», «come va il brand?»)
+ *     resta libera di essere risposta e basta: è il TRIAGE di WORK_ETHIC_BLOCK, e forzarle una
+ *     chiamata produrrebbe un turno assurdo;
+ *   · e mai quando l'utente ha detto di NO. «Non fare alcun post» ha le stesse parole di «fai un
+ *     post»: finché la negazione non veniva guardata, `required` obbligava l'agente a generare
+ *     un'immagine mentre gli si diceva di non farne nessuna. Il filtro qui sotto toglie solo
+ *     `ask_user_questions`, quindi `generate_image` è fra i candidati e il modello sceglieva
+ *     proprio quello.
  *
  * `ask_user_questions` è tolto dallo step forzato: è in `stopWhen`, quindi chiuderebbe il turno —
  * sarebbe l'unico modo di obbedire al `required` senza fare niente, cioè il difetto con un'altra

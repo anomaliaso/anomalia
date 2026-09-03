@@ -82,9 +82,19 @@ export function modelSeesImages(m: ChatModelResolved): boolean {
 /**
  * True quando il messaggio è una richiesta di produzione (post/immagini/video/motion/UGC e simili).
  *
- * Non sceglie piu` il modello: l'escalation Auto→Pro e` morta coi preset, e non c'e` piu` un "Pro"
- * su cui scalare. Resta perche' l'harness la usa per decidere cosa mettere a disposizione del
- * turno — un incarico di produzione e una domanda non chiedono gli stessi strumenti.
+ * Ha UN solo consumatore, `forcedFirstStepTools`, e su un "sì" quel consumatore OBBLIGA il modello
+ * a chiamare un tool al primo step. Quindi la domanda vera non è «parla di produzione?» ma
+ * «possiamo costringerlo a produrre?».
+ *
+ * Ed è per questo che la negazione conta. «Non fare alcun post» ha le stesse parole di «fai un
+ * post», e senza guardarla l'agente generava un'immagine mentre l'utente gli diceva di non farne
+ * nessuna — non ignorando l'istruzione, ma perché gliela facevamo ignorare noi.
+ *
+ * I due errori non costano uguale, ed è questo che decide la regola: non forzare quando avremmo
+ * potuto lascia il modello libero di chiamare il tool lo stesso; forzare quando l'utente ha detto
+ * di no scavalca un'istruzione esplicita. Nel dubbio non si forza — quindi basta una negazione in
+ * qualunque punto del messaggio, senza provare a capire su cosa cade.
+ *
  * Classificatore DETERMINISTICO (regex it/en, zero chiamate modello).
  */
 const HEAVY_VERB_RE =
@@ -94,9 +104,13 @@ const HEAVY_NOUN_RE =
 /** Termini che da soli dicono già "produzione pesante" — non servono verbi attorno. */
 const HEAVY_ALONE_RE = /\b(motion|ugc|trailer|render|storyboard|carousel(s)?|carosell[oi])\b/i;
 
+const NEGATION_RE =
+  /\b(non|senza|evita(re|ndo)?|niente|nessun[aeio]?|mai|no(n)?\s+voglio|don'?t|do\s+not|without|avoid(ing)?|never|no\s+need)\b/i;
+
 export function isHeavyProductionAsk(text: string | null | undefined): boolean {
   if (!text) return false;
   const t = text.slice(0, 4000);
+  if (NEGATION_RE.test(t)) return false;
   if (HEAVY_ALONE_RE.test(t)) return true;
   return HEAVY_VERB_RE.test(t) && HEAVY_NOUN_RE.test(t);
 }
