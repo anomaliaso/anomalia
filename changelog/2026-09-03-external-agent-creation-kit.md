@@ -47,7 +47,7 @@ regola ce l'ha già:
 | Sezione | Da dove | Selezione |
 |---|---|---|
 | `constraints` | `platform-limits.ts` | solo le piattaforme richieste |
-| `brand` | `brand_kit`, `products`, `people` | prodotti ordinati per sovrapposizione col goal (max 5); solo persone con `consent = true` |
+| `brand` | `brand_kit`, `products`, `people` | prodotti ordinati per sovrapposizione col goal (max 5); solo persone che passano `likenessConsented` |
 | `voice` | `houseVoiceFor` (`caption-quality.ts`) | personalità approvata quando c'è |
 | `rubric` | `loadApprovedRubrics` (`rubrics.ts`) | solo quelle del formato richiesto |
 | `template` | `agent-docs/skills/social/references/post-templates.md` | un gruppo da formato+piattaforma, un blocco dal goal |
