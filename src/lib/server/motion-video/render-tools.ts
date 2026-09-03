@@ -559,23 +559,40 @@ async function buildBundle(sb: SandboxHandle, onLog?: (l: string) => void): Prom
  * progetto — una grafica È un motion video da un fotogramma. Quello che NON condivide è il modo di
  * arrivare al sorgente: qui via `--props`, così il bundle resta riusabile.
  */
-export async function renderGraphicStill(opts: {
+/**
+ * Una o PIÙ grafiche, su UNA sola apertura di sandbox.
+ *
+ * Il plurale non è comodità: misurato, aprire la macchina e chiuderla costa ~12.5s contro i 3.4s
+ * del render. Una grafica sola paga quel rapporto una volta e va bene; un carosello da dieci slide
+ * lo pagherebbe DIECI volte — tre minuti di macchina per trentaquattro secondi di lavoro. Con una
+ * apertura sola diventa 12.5s + 10×3.4s.
+ *
+ * L'ordine dell'array è l'ordine dei risultati, e un fallimento su una slide non porta via le
+ * altre: torna il suo errore al suo posto. Perdere nove slide perché la decima non compila
+ * sarebbe pagare un render intero per niente.
+ */
+export async function renderGraphicStills(opts: {
 	brandId: string;
 	userId?: string;
-	source: string;
-	width: number;
-	height: number;
+	graphics: Array<{ source: string; width: number; height: number }>;
 	remainingMs?: () => number;
 	abortSignal?: AbortSignal;
 	onLog?: (line: string) => void;
-}): Promise<{ png: Buffer } | { error: string }> {
+}): Promise<Array<{ png: Buffer } | { error: string }>> {
+	if (!opts.graphics.length) return [];
 	const left = opts.remainingMs?.();
 	let sb: SandboxHandle | null = null;
 	return await withSandboxBilling(
-		{ brandId: opts.brandId, userId: opts.userId, use: 'graphic_still', detail: `${opts.width}x${opts.height}` },
+		{
+			brandId: opts.brandId,
+			userId: opts.userId,
+			use: 'graphic_still',
+			detail: opts.graphics.length > 1 ? `x${opts.graphics.length}` : `${opts.graphics[0].width}x${opts.graphics[0].height}`
+		},
 		async () => {
 			const startedAt = Date.now();
 			const lease = Math.min(typeof left === 'number' ? left : 600_000, 600_000);
+			const out: Array<{ png: Buffer } | { error: string }> = [];
 			try {
 				sb = await openBrandSandbox({
 					brandId: opts.brandId,
@@ -592,24 +609,36 @@ export async function renderGraphicStill(opts: {
 					opts.onLog,
 					budgetWithin(lease, Date.now() - startedAt, RENDER_TIMEOUT_MS + 15_000, INSTALL_TIMEOUT_MS)
 				);
-				opts.onLog?.(`[t] progetto pronto +${Date.now() - startedAt}ms`);
 				await sb.run('mkdir', ['-p', `${PROJECT_DIR}/out`]);
-				const out = `out/graphic-${Date.now()}.png`;
-				// Le misure viaggiano DENTRO il sorgente perché `calculateMetadata` legge da lì: un
-				// marcatore, non un parametro in più da tenere allineato in due posti.
-				const source = `${opts.source}\n// __w=${opts.width} __h=${opts.height}`;
+				opts.onLog?.(`[t] progetto pronto +${Date.now() - startedAt}ms`);
+
 				const hasBundle = await sb.run('test', ['-d', `${PROJECT_DIR}/bundle`]);
 				const entry = hasBundle.exitCode === 0 ? 'bundle' : 'src/index.ts';
-				const res = await sb.run(
-					'npx',
-					['remotion', 'still', entry, 'Graphic', out, `--props=${JSON.stringify({ source })}`, '--log=error'],
-					{ cwd: PROJECT_DIR, timeoutMs: RENDER_TIMEOUT_MS }
-				);
-				opts.onLog?.(`[t] still finito +${Date.now() - startedAt}ms`);
-				if (res.exitCode !== 0) return { error: `[${sb.name}] ${res.stderr || res.stdout}`.slice(-800) };
-				const png = await sb.readBuffer(`${PROJECT_DIR}/${out}`);
-				opts.onLog?.(`[t] png letto +${Date.now() - startedAt}ms`);
-				return { png };
+
+				for (const [i, g] of opts.graphics.entries()) {
+					const budget = budgetWithin(lease, Date.now() - startedAt, 10_000, RENDER_TIMEOUT_MS);
+					if (budget < 15_000) {
+						// Meglio tornare con quelle rese che farsi spegnere la macchina a metà.
+						out.push({ error: 'sandbox lease exhausted before this graphic' });
+						continue;
+					}
+					const file = `out/graphic-${Date.now()}-${i}.png`;
+					// Le misure viaggiano DENTRO il sorgente perché `calculateMetadata` legge da lì: un
+					// marcatore, non un parametro in più da tenere allineato in due posti.
+					const source = `${g.source}\n// __w=${g.width} __h=${g.height}`;
+					const res = await sb.run(
+						'npx',
+						['remotion', 'still', entry, 'Graphic', file, `--props=${JSON.stringify({ source })}`, '--log=error'],
+						{ cwd: PROJECT_DIR, timeoutMs: budget }
+					);
+					if (res.exitCode !== 0) {
+						out.push({ error: `[${sb.name}] ${res.stderr || res.stdout}`.slice(-800) });
+						continue;
+					}
+					out.push({ png: await sb.readBuffer(`${PROJECT_DIR}/${file}`) });
+					opts.onLog?.(`[t] grafica ${i + 1}/${opts.graphics.length} +${Date.now() - startedAt}ms`);
+				}
+				return out;
 			} catch (e) {
 				throw describeSandboxDeath(e);
 			} finally {
@@ -617,6 +646,28 @@ export async function renderGraphicStill(opts: {
 			}
 		}
 	);
+}
+
+/** Una sola grafica: la forma comoda sopra {@link renderGraphicStills}. */
+export async function renderGraphicStill(opts: {
+	brandId: string;
+	userId?: string;
+	source: string;
+	width: number;
+	height: number;
+	remainingMs?: () => number;
+	abortSignal?: AbortSignal;
+	onLog?: (line: string) => void;
+}): Promise<{ png: Buffer } | { error: string }> {
+	const [only] = await renderGraphicStills({
+		brandId: opts.brandId,
+		userId: opts.userId,
+		graphics: [{ source: opts.source, width: opts.width, height: opts.height }],
+		remainingMs: opts.remainingMs,
+		abortSignal: opts.abortSignal,
+		onLog: opts.onLog
+	});
+	return only ?? { error: 'no graphic rendered' };
 }
 
 export async function renderMotionStills(opts: {
