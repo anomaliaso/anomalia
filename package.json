@@ -112,6 +112,7 @@
     "satori": "^0.29.0",
     "sharp": "^0.35.3",
     "simple-icons": "^16.22.0",
+    "stripe": "^22.6.1",
     "sucrase": "^3.35.1",
     "svelte-i18n": "^4.0.1",
     "tailwind-merge": "^3.6.0",
