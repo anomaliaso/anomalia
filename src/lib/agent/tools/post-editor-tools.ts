@@ -702,11 +702,16 @@ export async function persistRenderedGraphic(
 
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
 
+  const { attachRenderForReview, routeCarriesMedia } = await import('$lib/server/graphic-review');
+
   return {
     success: true,
     media_origin: 'typographic_graphic',
     media_url: url,
     post_id: t.postId,
+    // Il render torna a chi l'ha chiesto: e' l'unico modo di accorgersi di ciò che il gate non
+    // misura — testo fuori tela, blocchi sovrapposti, righe che collidono.
+    ...attachRenderForReview(out.png, routeCarriesMedia()),
     font: out.font,
     size: `${out.width}×${out.height}`,
     width: out.width,
