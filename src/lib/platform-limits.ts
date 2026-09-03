@@ -190,6 +190,76 @@ export function ensureShortNetworkCuts(
   return cuts;
 }
 
+export type PublishTarget = {
+  platforms: string[];
+  caption: string;
+  platformCaptions?: PlatformCaptions;
+  hasMedia: boolean;
+  hasVideo: boolean;
+  title?: string | null;
+};
+
+export type PublishBlockerCode = 'need_media' | 'need_video' | 'over_limit' | 'reddit_title';
+
+export type PublishBlocker = { code: PublishBlockerCode; field: string; detail: string };
+
+// Il percorso che crea un post e quello che lo controlla senza crearlo leggono questa tabella,
+// nello stesso ordine: una piattaforma nuova si aggiunge in un posto solo.
+const PUBLISH_REQUIREMENTS: {
+  code: PublishBlockerCode;
+  field: string;
+  blocking: (target: PublishTarget) => string | null;
+}[] = [
+  {
+    code: 'need_media',
+    field: 'media_ids',
+    blocking: ({ platforms, hasMedia }) => {
+      const need = platforms.filter((p) => VISUAL_REQUIRED_PLATFORMS.has(p));
+      return need.length && !hasMedia
+        ? `${need.map(platformLabel).join(', ')} cannot publish text alone: attach at least one asset`
+        : null;
+    }
+  },
+  {
+    code: 'need_video',
+    field: 'media_ids',
+    blocking: ({ platforms, hasVideo }) => {
+      const need = platforms.filter((p) => VIDEO_ONLY_PLATFORMS.has(p));
+      return need.length && !hasVideo
+        ? `${need.map(platformLabel).join(', ')} accepts video only: the attached asset is not a video`
+        : null;
+    }
+  },
+  {
+    code: 'over_limit',
+    field: 'caption',
+    blocking: ({ caption, platforms, platformCaptions }) => {
+      const over = captionViolations(caption, platforms, platformCaptions);
+      return over.length
+        ? over.map((v) => `${v.label}: ${v.length} characters, limit ${v.limit}`).join('; ')
+        : null;
+    }
+  },
+  {
+    code: 'reddit_title',
+    field: 'title',
+    blocking: ({ platforms, title }) =>
+      platforms.includes('reddit') && !String(title ?? '').trim()
+        ? 'Reddit needs a title of its own, max 300 characters'
+        : null
+  }
+];
+
+/** Which platform requirements this content fails (empty = publishable). No I/O, no model. */
+export function publishBlockers(target: PublishTarget): PublishBlocker[] {
+  const out: PublishBlocker[] = [];
+  for (const rule of PUBLISH_REQUIREMENTS) {
+    const detail = rule.blocking(target);
+    if (detail) out.push({ code: rule.code, field: rule.field, detail });
+  }
+  return out;
+}
+
 export type CaptionViolation = { platform: string; label: string; limit: number; length: number };
 
 // Which target platforms' char limit the post exceeds (empty = all good). Each platform is checked

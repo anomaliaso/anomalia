@@ -4,6 +4,14 @@
 const NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const SHORT: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
+/** Minimum notice a proposed slot needs: closer than this and the pipeline cannot honour it. */
+export const MIN_SCHEDULE_LEAD_MS = 2 * 60 * 1000;
+
+/** The earliest instant a post may still be scheduled for, rounded down to the current minute. */
+export function earliestScheduleMs(nowMs = Date.now()): number {
+  return Math.floor(nowMs / 60000) * 60000 + MIN_SCHEDULE_LEAD_MS;
+}
+
 // Convert a wall-clock time in `tz` to the matching UTC Date (derives the offset via Intl).
 function zonedToUtc(y: number, m: number, d: number, h: number, min: number, tz: string): Date {
   const asUtc = Date.UTC(y, m - 1, d, h, min, 0);

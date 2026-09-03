@@ -58,6 +58,11 @@ calendar time, and `approve_post` is what authorizes distribution. Hand the oper
 **Reuse an asset instead of paying for a render** → `list_media` → pass its id to `create_post`
 as `media_ids`. That is also how you post to Instagram or TikTok, which never accept text alone.
 
+**Check your copy before you create it** → `check_content` with the same spec you would send to
+`create_post`. It returns blocking errors, warnings and a 0–100 score per platform, each naming
+the field to repair. It costs nothing and calls no model, so run it on every draft and fix what
+it names before creating.
+
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).

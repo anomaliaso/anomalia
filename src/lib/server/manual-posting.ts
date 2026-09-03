@@ -4,15 +4,13 @@ import { withBrandContext } from '$lib/server/ai-log';
 import { aiActCopyGuardrail } from '$lib/ai-act';
 import { platformPlaybook, houseVoiceFor, type ContentPrefs } from '$lib/server/content-preview';
 import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
-import { wallClockToUtc, zonedClock } from '$lib/server/schedule';
+import { earliestScheduleMs, wallClockToUtc, zonedClock } from '$lib/server/schedule';
 import { findBrandMediaByIds, publishLibraryMediaAsPostMedia } from '$lib/server/brand-media';
 import { EDITOR_POST_COLS } from '$lib/server/post-editing';
 import {
   PLATFORM_CHAR_LIMITS,
   assemblePlatformCaptions,
-  captionViolations,
-  VISUAL_REQUIRED_PLATFORMS,
-  VIDEO_ONLY_PLATFORMS,
+  publishBlockers,
   youtubeTitleFrom
 } from '$lib/platform-limits';
 import {
@@ -24,7 +22,6 @@ import {
 export { clampGeneratedCaptions, normalizePlatforms };
 export type { GeneratedCaptions };
 
-const MIN_LEAD_MS = 2 * 60 * 1000;
 const MAX_MEDIA = 8;
 const DOW_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -182,10 +179,6 @@ function slotAt(iso: string, tz: string): string {
   return `${dow} ${time}`;
 }
 
-function earliestMs(): number {
-  return Math.floor(Date.now() / 60000) * 60000 + MIN_LEAD_MS;
-}
-
 type ResolvedMedia =
   | { ok: true; urls: string[]; video: boolean }
   | { ok: false; error: 'media_not_found' };
@@ -261,17 +254,8 @@ export async function createManualPost(opts: {
   const { urls, video: pathVideo } = media;
   const isVideo = opts.input.isVideo === true || pathVideo;
   const hasMedia = urls.length > 0;
-  const needsVisual = platforms.some((p) => VISUAL_REQUIRED_PLATFORMS.has(p));
-  if (needsVisual && !hasMedia) return { ok: false, error: 'need_media' };
-  const needsVideo = platforms.some((p) => VIDEO_ONLY_PLATFORMS.has(p));
-  if (needsVideo && !isVideo) return { ok: false, error: 'need_video' };
 
   const assembled = assemblePlatformCaptions(caption, opts.input.platformCaptions ?? {}, platforms);
-  const violations = captionViolations(assembled.caption, platforms, assembled.platform_captions);
-  if (violations.length) {
-    return { ok: false, error: 'over_limit' };
-  }
-
   const reddit = platforms.includes('reddit');
   const youtube = platforms.includes('youtube');
   const title = reddit
@@ -279,7 +263,17 @@ export async function createManualPost(opts: {
     : youtube
       ? youtubeTitleFrom(assembled.caption, opts.input.title)
       : '';
-  if (reddit && !title) return { ok: false, error: 'reddit_title' };
+
+  const blockers = publishBlockers({
+    platforms,
+    caption: assembled.caption,
+    platformCaptions: assembled.platform_captions,
+    hasMedia,
+    hasVideo: isVideo,
+    title
+  });
+  if (blockers.length) return { ok: false, error: blockers[0].code };
+
   const subreddit = reddit
     ? String(opts.input.subreddit ?? '')
         .trim()
@@ -295,7 +289,7 @@ export async function createManualPost(opts: {
   const behaviour = MODE_BEHAVIOUR[opts.input.mode];
   const when = behaviour.dateFrom(opts.input, opts.timezone);
   if (!when && behaviour.dateRequired) return { ok: false, error: 'too_soon' };
-  if (when && new Date(when).getTime() < earliestMs()) return { ok: false, error: 'too_soon' };
+  if (when && new Date(when).getTime() < earliestScheduleMs()) return { ok: false, error: 'too_soon' };
   const scheduledFor = when;
   const slot = when ? slotAt(when, opts.timezone) : null;
 

@@ -25,6 +25,7 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `list_posts` | `anomalia content <slug> [--status …]` |
 | `create_post` | (MCP only) |
 | `list_media` | (MCP only) |
+| `check_content` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
 | `edit_post` | `anomalia post <slug> <id> edit …` |
@@ -48,6 +49,26 @@ only (`facebook`, `linkedin`, `x`, `threads`, `bluesky`, `reddit`) unless you pa
 `platform_captions`, `scheduled_for` (ISO — no offset means the brand's timezone), `title`
 (required for Reddit), `subreddit`, `link_url`. The result carries the post id, its
 `pending_user` status, the stored instant and a `review_url` the operator can open.
+
+`check_content` runs the checks Anomalia runs on its own copy against a spec you wrote, before
+you create anything. It calls no model, spends no credits and writes nothing, so the same spec
+always returns the same verdict. Required: `slug`, `platforms`, `caption`. Optional:
+`platform_captions`, `media_ids`, `title`, `scheduled_for` — the fields that carry a rule.
+
+It answers with `ok`, `errors`, `warnings`, `scores` and `versions`:
+
+- **errors** block: `no_platforms`, `caption_empty`, `caption_placeholder`, `caption_needs_proof`
+  (a `[NEED: …]` marker — supply the fact, never delete the marker), `need_media`, `need_video`,
+  `over_limit`, `reddit_title`, `media_not_found`, `invalid_scheduled_for`, `too_soon`. Each one
+  names the `field` to repair.
+- **warnings** do not block: `calendar_conflict` (that minute is already taken),
+  `reach_chasing_hashtags`.
+- **scores** carry, per platform, the 0–100 quality index and the twelve weighted checks with a
+  note each — hook, AI tells, self-repetition against the brand's recent posts, specificity, CTA,
+  length, readability, hashtags, emoji. Fix the low value with the highest weight first.
+- **versions** pins the ruleset and the scorer: two verdicts compare only when they match.
+
+It never looks at pixels — judging an image or a video is a separate, explicitly paid action.
 
 ## Plans
 

@@ -108,6 +108,32 @@ describe('il registry degli endpoint di brand', () => {
     expect(output.safeParse({ ok: true, id: 'post-1', status: 'approved' }).success).toBe(false);
   });
 
+  it('check_content è una POST per forma e una lettura per effetto', () => {
+    const check = byTool('check_content');
+    expect(check.method).toBe('POST');
+    expect(check.destructive).toBe(false);
+    expect(pathFor(check, 'demo')).toBe('/api/v1/brands/demo/content/check');
+  });
+
+  it('check_content promette errori, avvisi, punteggi e le versioni delle regole', () => {
+    const { output } = byTool('check_content');
+    const ok = output.safeParse({
+      ok: false,
+      errors: [{ code: 'over_limit', field: 'caption', detail: 'LinkedIn: 3001 characters, limit 3000' }],
+      warnings: [],
+      scores: [
+        {
+          platform: 'linkedin',
+          index: 42.5,
+          checks: [{ id: 'hook_strength', value: 0.4, weight: 18, note: 'hook generico' }]
+        }
+      ],
+      versions: { rules: 1, scorer: 3 }
+    });
+    expect(ok.success).toBe(true);
+    expect(output.safeParse({ ok: true, errors: [], warnings: [], scores: [] }).success).toBe(false);
+  });
+
   it('una response con outputSchema è un oggetto: MCP non sa trasportare un array', () => {
     for (const e of BRAND_ENDPOINTS) {
       if (!(e.output instanceof z.ZodObject)) continue;

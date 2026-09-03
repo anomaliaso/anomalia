@@ -83,6 +83,17 @@ describe('i tool di brand derivati dal registry', () => {
     expect(Object.keys(createPost.inputSchema?.properties ?? {})).toContain('media_ids');
   });
 
+  test('check_content compare da solo e si dichiara gratuito e senza modello', async () => {
+    const check = find(await tools(), 'check_content');
+
+    expect(Object.keys(check.inputSchema?.properties ?? {}).sort()).toEqual(
+      ['caption', 'media_ids', 'platform_captions', 'platforms', 'scheduled_for', 'slug', 'title'].sort(),
+    );
+    expect((check.inputSchema?.required ?? []).sort()).toEqual(['caption', 'platforms', 'slug']);
+    expect(check.annotations?.destructiveHint).toBe(false);
+    expect(check.description ?? '').toContain('spends no credits');
+  });
+
   test('nessun tool è registrato due volte dopo la migrazione', async () => {
     const names = (await tools()).map((t) => t.name);
 
