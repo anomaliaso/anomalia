@@ -819,6 +819,86 @@ export async function loadGraphicEditorSystemSuffix(
  *
  * Writes to a carousel slot when `slide_index` is given, otherwise replaces the post's single cover.
  */
+type GraphicImg = { url: string; label?: string | null };
+
+type GraphicRefArgs = {
+  media_ids?: string[];
+  people_ids?: string[];
+  talent_ids?: string[];
+  image_urls?: string[];
+  generate_prompt?: string;
+};
+
+/**
+ * LE IMMAGINI CHE IL COMPOSITORE PUÒ USARE, raccolte una volta sola.
+ *
+ * Allegati del turno, url passati a mano, libreria media, persone e talent firmati, le foto del
+ * prodotto quando c'è un prodotto, e infine il marchio ufficiale del brand kit — che va per primo
+ * nel catalogo (`ref:0`) perché il compositore piazzi il lockup vero invece di disegnarne uno.
+ *
+ * Sta qui, e non dentro il percorso del post, perché una grafica senza post ha bisogno esattamente
+ * dello stesso catalogo: le uniche cose che cambiano sono il prodotto e la piattaforma, che un
+ * asset a sé non ha.
+ */
+export async function graphicImageCatalog(
+  t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; refUrls?: string[] },
+  args: GraphicRefArgs,
+  from: { productName?: string | null; platform?: string | null } = {}
+): Promise<{ catalog: GraphicImg[]; generatedUrl?: string }> {
+  const { withBrandKitLogos } = await import('$lib/server/design-compose');
+  const { isUrlSafe } = await import('$lib/server/brand-analysis');
+  const { resolvePeopleVisualRefs, resolveTalentVisualRefs, pushVisualRefs } = await import(
+    '$lib/server/design-visual-refs'
+  );
+
+  const available: GraphicImg[] = [];
+  const pushImg = (url: string, label?: string | null) => {
+    if (!url || available.some((a) => a.url === url)) return;
+    if (url.startsWith('data:image/') || (url.startsWith('http') && isUrlSafe(url))) {
+      available.push({ url, label: label ?? null });
+    }
+  };
+
+  for (const u of t.refUrls ?? []) pushImg(u, 'attachment');
+  for (const u of args.image_urls ?? []) pushImg(u);
+
+  if (args.media_ids?.length) {
+    const { resolveBrandImageIds } = await import('$lib/server/brand-media');
+    const urls = await resolveBrandImageIds(t.supabase, t.brandId, args.media_ids);
+    for (const u of urls) pushImg(u, 'media library');
+  }
+
+  pushVisualRefs(available, await resolvePeopleVisualRefs(t.supabase, t.brandId, args.people_ids));
+  pushVisualRefs(available, await resolveTalentVisualRefs(t.supabase, args.talent_ids));
+
+  if (from.productName) {
+    const productUrls = await loadProductImages(t.supabase, t.brandId, from.productName);
+    for (const u of productUrls.slice(0, 4)) pushImg(u, `product:${from.productName}`);
+  }
+
+  let generatedUrl: string | undefined;
+  if (args.generate_prompt?.trim()) {
+    const { generateStandaloneImage } = await import('$lib/server/content-preview');
+    const gen = await generateStandaloneImage({
+      supabase: t.supabase,
+      userId: t.userId,
+      brandId: t.brandId,
+      prompt: args.generate_prompt.trim(),
+      platform: from.platform ?? undefined,
+      mediaIds: args.media_ids,
+      referenceUrls: available.map((a) => a.url).slice(0, 4)
+    });
+    if (gen.imageUrl) {
+      generatedUrl = gen.imageUrl;
+      pushImg(gen.imageUrl, 'ai generated');
+    }
+  }
+
+  // Il marchio ufficiale per primo: ref:0 è il logo del brand.
+  const catalog = withBrandKitLogos(available, { logos: t.ctx.logos, favicon_url: t.ctx.faviconUrl });
+  return { catalog, ...(generatedUrl ? { generatedUrl } : {}) };
+}
+
 export async function designPostGraphic(
   t: EditorTarget,
   args: {
@@ -847,64 +927,12 @@ export async function designPostGraphic(
   const blocked = designGraphicVideoBlock(row, args.convert_from_video === true);
   if (blocked) return blocked;
 
-  const { composeAndRenderGraphic, withBrandKitLogos } = await import('$lib/server/design-compose');
+  const { composeAndRenderGraphic } = await import('$lib/server/design-compose');
   const { latestGraphic, versionSource } = await import('$lib/server/design-store');
-  const { isUrlSafe } = await import('$lib/server/brand-analysis');
-  const {
-    resolvePeopleVisualRefs,
-    resolveTalentVisualRefs,
-    pushVisualRefs
-  } = await import('$lib/server/design-visual-refs');
 
-  type Img = { url: string; label?: string | null };
-  const available: Img[] = [];
-  const pushImg = (url: string, label?: string | null) => {
-    if (!url || available.some((a) => a.url === url)) return;
-    if (url.startsWith('data:image/') || (url.startsWith('http') && isUrlSafe(url))) {
-      available.push({ url, label: label ?? null });
-    }
-  };
-
-  for (const u of t.refUrls ?? []) pushImg(u, 'attachment');
-  for (const u of args.image_urls ?? []) pushImg(u);
-
-  if (args.media_ids?.length) {
-    const { resolveBrandImageIds } = await import('$lib/server/brand-media');
-    const urls = await resolveBrandImageIds(t.supabase, t.brandId, args.media_ids);
-    for (const u of urls) pushImg(u, 'media library');
-  }
-
-  pushVisualRefs(available, await resolvePeopleVisualRefs(t.supabase, t.brandId, args.people_ids));
-  pushVisualRefs(available, await resolveTalentVisualRefs(t.supabase, args.talent_ids));
-
-  // Product images tied to the post, if any — useful refs for a product-in-graphic composition.
-  if (row.product_name) {
-    const productUrls = await loadProductImages(t.supabase, t.brandId, row.product_name);
-    for (const u of productUrls.slice(0, 4)) pushImg(u, `product:${row.product_name}`);
-  }
-
-  let generatedUrl: string | undefined;
-  if (args.generate_prompt?.trim()) {
-    const { generateStandaloneImage } = await import('$lib/server/content-preview');
-    const gen = await generateStandaloneImage({
-      supabase: t.supabase,
-      userId: t.userId,
-      brandId: t.brandId,
-      prompt: args.generate_prompt.trim(),
-      platform: row.platform ?? undefined,
-      mediaIds: args.media_ids,
-      referenceUrls: available.map((a) => a.url).slice(0, 4)
-    });
-    if (gen.imageUrl) {
-      generatedUrl = gen.imageUrl;
-      pushImg(gen.imageUrl, 'ai generated');
-    }
-  }
-
-  // Official brand kit marks first (ref:0 = brand logo) so the composer can place the real lockup.
-  const catalog = withBrandKitLogos(available, {
-    logos: t.ctx.logos,
-    favicon_url: t.ctx.faviconUrl
+  const { catalog, generatedUrl } = await graphicImageCatalog(t, args, {
+    productName: row.product_name,
+    platform: row.platform
   });
 
   const target = { kind: 'post' as const, id: t.postId, slideIndex: args.slide_index ?? null };
