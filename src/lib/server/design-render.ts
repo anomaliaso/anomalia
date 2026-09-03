@@ -188,6 +188,9 @@ export async function renderGraphic(
     /** Catalog used to expand `ref:N` image srcs before fetch. */
     availableImages?: Array<{ url: string }> | null;
     format?: 'png' | 'jpeg';
+    /** La sandbox è PER BRAND e il tempo macchina si addebita: senza questi, niente browser. */
+    brandId?: string | null;
+    userId?: string | null;
   } = {}
 ): Promise<RenderedGraphic> {
   if (typeof input === 'string' || isSourceBag(input)) {
@@ -315,6 +318,9 @@ export async function renderGraphicSource(
     typography?: FontRoles;
     availableImages?: Array<{ url: string }> | null;
     format?: 'png' | 'jpeg';
+    /** La sandbox è PER BRAND e il tempo macchina si addebita: senza questi, niente browser. */
+    brandId?: string | null;
+    userId?: string | null;
   } = {}
 ): Promise<RenderedGraphic> {
   const durable = resolveSourceImageRefs(unwrapGraphicSource(raw), opts.availableImages);
@@ -336,7 +342,12 @@ export async function renderGraphicSource(
   // `text-wrap` — che un browser impagina — li' traboccano. Torna `undefined` se la via non c'e',
   // e si scende su satori: un renderer assente non deve diventare un post senza immagine.
   const { renderGraphicWithChromium } = await import('$lib/server/design-render-chromium');
-  const viaChromium = await renderGraphicWithChromium(inlined, { width, height });
+  const viaChromium = await renderGraphicWithChromium(inlined, {
+    width,
+    height,
+    brandId: opts.brandId,
+    userId: opts.userId
+  });
 
   // L'albero serve comunque: e' quello che il gate ispeziona. L'SVG no, quando Chromium ha reso.
   const svg = viaChromium

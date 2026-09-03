@@ -763,6 +763,8 @@ export async function applyPostGraphicSource(
   let out: RenderedGraphic;
   try {
     out = await renderGraphicSource(source, {
+      brandId: t.brandId,
+      userId: t.userId,
       brandColors: t.ctx.brandColors,
       typography: { display: t.ctx.typography.display, body: t.ctx.typography.body },
       format: args.format === 'jpeg' ? 'jpeg' : 'png'

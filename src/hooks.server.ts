@@ -64,17 +64,6 @@ const csrf: Handle = async ({ event, resolve }) => {
   return resolve(event);
 };
 
-/**
- * Il bundle Remotion si prepara all'AVVIO, non alla prima grafica.
- *
- * Vale su un server lungo (`DEPLOY_TARGET=node`): senza, il primo utente dopo ogni deploy paga
- * 1.35s che nessun altro pagherà. Su serverless non cambia nulla — ogni container lo rifarebbe
- * comunque — e non fallisce mai: se non riesce, il primo render riprova e sotto c'è satori.
- */
-void import('$lib/server/design-render-chromium')
-  .then((m) => m.warmGraphicRenderer())
-  .catch(() => {});
-
 export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ event, resolve }) => {
   // Il catalogo dei modelli, caldo PRIMA di ogni handler.
   //

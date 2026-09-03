@@ -90,7 +90,10 @@ export const MOTION_RENDER_PACKAGES: Record<string, string> = {
 	remotion: MOTION_REMOTION_VERSION,
 	'@remotion/shapes': MOTION_REMOTION_VERSION,
 	'@remotion/paths': MOTION_REMOTION_VERSION,
-	'@remotion/transitions': MOTION_REMOTION_VERSION
+	'@remotion/transitions': MOTION_REMOTION_VERSION,
+	// Serve alla composizione `Graphic`, che compila il sorgente NEL BROWSER invece di importarlo:
+	// e' cio' che rende il bundle indipendente dal sorgente, e quindi cachabile.
+	sucrase: '3.35.0'
 };
 
 /** La sezione del contratto TSX che elenca cosa si può importare, generata dalla lista sopra. */
