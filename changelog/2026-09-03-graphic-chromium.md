@@ -64,6 +64,28 @@ e finché un deploy non lo dimostra montato e caldo, un percorso che fallisce se
 toglierebbe le grafiche invece di migliorarle. Il test che conta è proprio quello: acceso ma rotto,
 torna `undefined`.
 
+## Sul server lungo i dubbi del serverless non esistono
+
+Il repo ha già `DEPLOY_TARGET=node` (`svelte.config.js`, `npm run build:node`, `infra/app/Dockerfile`,
+`docs/SELF_HOSTING.md`). Lì Chromium si installa una volta nell'immagine, il bundle si fa all'avvio
+e i 220ms valgono sempre: niente cold start, niente `includeFiles`, e i 215 MB non contano contro
+nessun limite di pacchetto.
+
+Due cose che quel percorso pretende, e nessuna è ovvia:
+
+**L'immagine è Alpine, quindi musl.** Il Chromium che Remotion scarica è compilato per glibc e su
+musl NON parte — e il sintomo è un render che fallisce senza mai nominare la libc. Il compositor
+nativo un musl ce l'ha (`compositor-linux-x64-musl` fra le optionalDependencies), quindi manca solo
+il browser: `apk add chromium` e `CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser`. Verificato
+costruendo l'immagine: Chromium 152.0.7977.64 su Alpine.
+
+**I font non sono un extra.** Un Alpine nudo non ne ha nessuno: il testo esce a quadratini dentro un
+PNG che per il resto sembra riuscito — un difetto che passa ogni controllo automatico e si vede solo
+guardando. `font-noto`, `font-noto-emoji`, `ttf-dejavu`.
+
+E il bundle si prepara all'AVVIO, non alla prima grafica: senza, il primo utente dopo ogni deploy
+paga 1.35s che nessun altro pagherà.
+
 ## Cosa manca prima di accenderlo
 
 **Non l'ho misurato dentro una funzione Vercel.** Servono tre cose che solo un deploy di preview può

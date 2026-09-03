@@ -19,6 +19,21 @@ import { env } from '$env/dynamic/private';
 
 export const GRAPHIC_CHROMIUM_FLAG = 'GRAPHIC_RENDERER';
 
+/**
+ * Il Chrome da usare, quando non è quello che Remotion si scarica.
+ *
+ * Serve su Alpine, che è l'immagine di questo prodotto (`infra/app/Dockerfile`, `node:22-alpine`):
+ * il binario che Remotion scarica è compilato per glibc e su musl NON parte — il sintomo è un
+ * render che fallisce senza dire che il problema è la libc. Il compositor nativo invece un musl ce
+ * l'ha (`compositor-linux-x64-musl` fra le optionalDependencies), quindi basta il browser di
+ * sistema: `apk add chromium`, e questa variabile lo indica.
+ */
+export const CHROMIUM_PATH_ENV = 'CHROMIUM_EXECUTABLE_PATH';
+
+function browserExecutable(): string | null {
+	return (env[CHROMIUM_PATH_ENV] ?? '').trim() || null;
+}
+
 /** Acceso solo quando l'operatore lo chiede: il default resta satori finché una preview non misura. */
 export function chromiumGraphicsEnabled(): boolean {
 	return (env[GRAPHIC_CHROMIUM_FLAG] ?? '').trim().toLowerCase() === 'chromium';
@@ -42,6 +57,24 @@ async function serveUrl(): Promise<string> {
 		});
 	}
 	return bundled;
+}
+
+/**
+ * Prepara il bundle PRIMA che serva.
+ *
+ * Su un server lungo (`DEPLOY_TARGET=node`) si chiama all'avvio: senza, il primo utente che chiede
+ * una grafica dopo ogni deploy paga 1.35s che nessun altro pagherà mai. Non fallisce mai: se il
+ * bundle non si fa, il primo render ci riprova e in ultima istanza c'è satori.
+ */
+export async function warmGraphicRenderer(): Promise<boolean> {
+	if (!chromiumGraphicsEnabled()) return false;
+	try {
+		await serveUrl();
+		return true;
+	} catch (e) {
+		console.warn('[design-render] graphic renderer warm-up failed, first render will retry:', e instanceof Error ? e.message : e);
+		return false;
+	}
 }
 
 export type ChromiumRenderResult = { png: Buffer; width: number; height: number };
@@ -69,7 +102,11 @@ export async function renderGraphicWithChromium(
 			serveUrl: url,
 			inputProps,
 			imageFormat: 'png',
-			output: null
+			output: null,
+			...(browserExecutable() ? { browserExecutable: browserExecutable()! } : {}),
+			// In un container si gira senza sandbox del kernel: con `USER node` e senza privilegi
+			// Chrome non riesce ad aprirla e muore all'avvio, prima di qualunque render.
+			chromiumOptions: { headless: true, gl: 'swangle' }
 		});
 		if (!buffer?.length) return undefined;
 		return { png: Buffer.from(buffer), width: opts.width, height: opts.height };
