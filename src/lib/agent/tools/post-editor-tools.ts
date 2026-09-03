@@ -1015,6 +1015,7 @@ export async function applyStandaloneGraphicSource(
 
   const { latestGraphic } = await import('$lib/server/design-store');
   const current = await latestGraphic(t.supabase, { kind: 'media_item', id: t.mediaId });
+  const { attachRenderForReview, routeCarriesMedia } = await import('$lib/server/graphic-review');
   return {
     success: true as const,
     media_origin: 'typographic_graphic' as const,
@@ -1022,6 +1023,9 @@ export async function applyStandaloneGraphicSource(
     media_id: stored.mediaId,
     version: current?.version,
     graphic_source: out.source,
+    // `media` è ciò che la chat rende: senza, la grafica esisteva e l'utente non la vedeva.
+    media: [{ url: stored.url, caption: args.brief ?? 'graphic' }],
+    ...attachRenderForReview(out.png, routeCarriesMedia()),
     ...(stored.tileWarning ? { warning: stored.tileWarning } : {})
   };
 }
@@ -1075,9 +1079,14 @@ export async function designStandaloneGraphic(
     await recordBrandMediaUse(t.supabase, t.brandId, args.media_ids);
   }
 
+  const { attachRenderForReview, routeCarriesMedia } = await import('$lib/server/graphic-review');
   return {
     ok: true,
     image_url: url,
+    // La chat rende un media SOLO da `media: [{url}]`: senza questa riga la grafica veniva
+    // composta, salvata, e l'utente non la vedeva — «nessuna immagine in chat, nulla».
+    media: [{ url, caption: args.brief.slice(0, 140) }],
+    ...attachRenderForReview(out.png, routeCarriesMedia()),
     media_id: mediaId,
     editable: !!mediaId,
     post_created: false,
