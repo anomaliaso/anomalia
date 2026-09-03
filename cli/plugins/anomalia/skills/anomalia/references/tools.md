@@ -26,6 +26,7 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `create_post` | (MCP only) |
 | `list_media` | (MCP only) |
 | `check_content` | (MCP only) |
+| `import_media_url` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
 | `edit_post` | `anomalia post <slug> <id> edit …` |
@@ -46,6 +47,17 @@ The two media failures of `create_post` mean opposite things. `media_not_found` 
 the id is not this brand's, so check it against `list_media`. `media_unavailable` (502) is ours:
 the media is this brand's and we could not attach it. Trying other ids, a shorter id or another
 platform changes nothing — retry later, or create the post without the media.
+
+`import_media_url` puts an image or video you made elsewhere into that same library, and returns
+the id `create_post` accepts. Required: `slug`, `url`; optional `title`. Anomalia copies the file
+and calls no model, so it spends no credits. The URL must be public **https** and stay public
+across every redirect: a private, loopback or link-local target — including a public hostname
+that resolves to one, and a redirect that walks into one or drops back to http — is refused as
+`blocked_host`. Accepted types are jpeg, png, webp, gif (up to 12MB) and mp4, mov, webm (up to
+64MB); anything else is `unsupported_type`, anything bigger is `too_large`. Every refusal happens
+before a byte is stored, so a rejected import leaves nothing behind. The result carries the id,
+the resolved `source_url` kept as the asset's origin, and a `signed_url` you can open to check
+that the right file arrived.
 
 `create_post` stores copy **you** wrote: Anomalia calls no model and spends no credits. It does
 not publish and does not schedule — `scheduled_for` is the proposed calendar time and stays a

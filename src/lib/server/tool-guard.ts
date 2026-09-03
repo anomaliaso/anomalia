@@ -277,6 +277,78 @@ export async function safeFetchUrl(
   return { url: url.toString(), status: res.status, ok: res.ok, headers: res.headers, body: await readCapped(res, maxBytes) };
 }
 
+export type SafeFetchBytesResult = { url: string; status: number; ok: boolean; mime: string; bytes: Buffer };
+
+/**
+ * The same guarded walk, for a body that is not text.
+ *
+ * It differs from safeFetchUrl in the one place that matters for a file: passing the ceiling
+ * TRUNCATES a page (a cut `<head>` still parses) and must REJECT a download (a cut JPEG is a
+ * corrupt asset stored as if it were whole).
+ */
+export async function safeFetchBytes(
+  input: string,
+  opts: { maxBytes: number; timeoutMs?: number; maxRedirects?: number; gate?: (url: URL) => Promise<void> }
+): Promise<SafeFetchBytesResult> {
+  const { url, res } = await fetchFollowingGatedRedirects(input, opts);
+
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared && declared > opts.maxBytes) throw new SafeFetchError('too_large', 'That file is too large');
+
+  const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  return {
+    url: url.toString(),
+    status: res.status,
+    ok: res.ok,
+    mime,
+    bytes: await readAllOrReject(res, opts.maxBytes)
+  };
+}
+
+async function readAllOrReject(res: Response, maxBytes: number): Promise<Buffer> {
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new SafeFetchError('too_large', 'That file is too large');
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readCapped(res: Response, maxBytes: number): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        break; // Keep what we have — a truncated <head> is still analysable.
+      }
+      chunks.push(value);
+    }
+  } catch {
+    // Partial body is fine; the caller parses what arrived.
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
+}
+
 /**
  * The whole body of a URL-in / report-out tool route: cap the caller, validate the URL, run the
  * analysis, and turn any failure into a clean 4xx. Every free tool follows this shape, so the
