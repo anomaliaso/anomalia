@@ -505,8 +505,8 @@ export async function startChatSession(opts: {
     tabs: Array<{ href: string; label: string }>;
   };
   mode?: 'agent' | 'plan' | 'ask';
-  /** Auto = the app picks, Fast = Gemini 3.7 Flash, Pro = Grok via kie, plus named custom models (DeepSeek Pro, GPT 5.6 Terra/Sol). */
-  tier?: ChatTier;
+  /** Un id del catalogo, o un custom model. `null` = nessuna scelta: decide il default. */
+  tier?: ChatTier | null;
   /** Reasoning effort for this turn; mapped per provider server-side. */
   reasoning?: ChatReasoning;
   /** Specialized agent id (publish/brand/grow/web) — scopes prompt + tools for this turn. */
@@ -1075,7 +1075,7 @@ export async function enqueueChatMessage(opts: {
   threadId: string;
   userText: string;
   mode?: 'agent' | 'plan' | 'ask';
-  tier?: ChatTier;
+  tier?: ChatTier | null;
   reasoning?: ChatReasoning;
   agent?: string | null;
   documents?: Array<{ name: string; markdown?: string; title?: string | null; path?: string }>;

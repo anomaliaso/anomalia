@@ -89,7 +89,7 @@
     /** Chiave sessionStorage per far sopravvivere il testo non inviato a un refresh. Vuota = off. */
     draftKey = '',
     mode = $bindable<ChatMode>('agent'),
-    tier = $bindable<ChatTier>('fast'),
+    tier = $bindable<ChatTier | null>(null),
     reasoning = $bindable<ChatReasoning>(defaultReasoningFor(null)),
     onsubmit = (_text: string, _meta?: ChatSubmitMeta) => {},
     onstop = () => {},

@@ -31,7 +31,8 @@ import { hasWebHub } from '$lib/server/plans';
 import { reportChatError, CHAT_USER_ERROR } from '$lib/server/chat/report-error';
 import { withStepDeadline } from '$lib/server/chat/step-deadline';
 import { getChatRateUsage, chatRateLimitResponse, chatCreditsBlocked } from '$lib/server/chat/rate-limits';
-import { isChatTier } from '$lib/chat-tiers';
+import { coerceChatTier, isChatTier } from '$lib/chat-tiers';
+import { policyForChoice } from '$lib/chat-model-policy';
 import { threadModelPreference } from '$lib/server/chat/model-preference';
 import { withBrandContext } from '$lib/server/ai-log';
 import { shouldUseKit, runKitTurn } from '$lib/agent/bridge/live';
@@ -99,18 +100,25 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
     threadRoomAgents = thread.room_agents ?? null;
     threadModel = (thread as { model?: unknown }).model ?? null;
   } else {
+    // Il thread nasce con la scelta fatta nel composer: da `/app/<brand>` il thread non esiste
+    // ancora, quindi `createModelChoiceSave` non ha nessuno a cui scriverla e viaggia solo qui.
+    const bornWith = policyForChoice(coerceChatTier(body.tier), body.reasoning);
     const thread = await createThread(
       supabase,
       brand.id,
       user.id,
       'Nuova chat',
       null,
-      resolveAgentForPlan(body.agent, webHubEnabled)
+      resolveAgentForPlan(body.agent, webHubEnabled),
+      null,
+      null,
+      bornWith
     );
     if (!thread) return new Response('Failed to create thread', { status: 500 });
     threadId = thread.id;
     threadAgent = thread.agent;
     threadCustomAgentId = thread.custom_agent_id ?? null;
+    threadModel = bornWith;
   }
 
   type ApprovalRecord = { id: string; run_id: string; status: string; tool_call_id: string; harness_approval_id: string };

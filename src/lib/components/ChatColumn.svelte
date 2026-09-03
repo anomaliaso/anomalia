@@ -87,6 +87,7 @@
   import type { ChatMode } from '$lib/chat-modes';
   import { coerceChatTier, type ChatTier } from '$lib/chat-tiers';
   import { defaultReasoningFor, type ChatReasoning } from '$lib/chat-reasoning';
+  import { policyForChoice } from '$lib/chat-model-policy';
   import type { ChatAttachmentsPayload } from '$lib/chat-attachments';
   import {
     attachedDocNamesFromContent,
@@ -280,7 +281,8 @@
   const catalogModels = $derived(
     ($page.data as { chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }> }).chatModels ?? []
   );
-  let chatTier = $state<ChatTier>('auto');
+  // null = nessuna scelta: la chat parte dal default del catalogo, e lo segue quando cambia.
+  let chatTier = $state<ChatTier | null>(null);
   let chatReasoning = $state<ChatReasoning>(defaultReasoningFor(null));
   const saveModelChoice = createModelChoiceSave({
     brandSlug: () => brandSlug,
@@ -855,7 +857,14 @@
     if (liveSendThreadId) return liveSendThreadId;
     // Chat di gruppo: la stanza scelta nel picker nasce insieme al thread, al primo messaggio.
     // Se il server la rifiuta (feature spenta, meno di due membri) resta un thread normale.
-    const id = await createThread(brandSlug, undefined, agentSel, roomSel, roomSel.length ? null : customAgentSel);
+    const id = await createThread(
+      brandSlug,
+      undefined,
+      agentSel,
+      roomSel,
+      roomSel.length ? null : customAgentSel,
+      policyForChoice(chatTier, chatReasoning)
+    );
     if (id) {
       liveSendThreadId = id;
       // Da qui in poi la stanza è il thread: la memoria del campo "A" copre solo l'attesa fra
@@ -1028,7 +1037,7 @@
     text?: string,
     meta?: {
       mode: ChatMode;
-      tier?: ChatTier;
+      tier?: ChatTier | null;
       reasoning?: ChatReasoning;
       command?: string;
       attachments?: ChatAttachmentsPayload;

@@ -52,6 +52,8 @@ describe('recipientsAgent — chi risponde lo dice il campo "A"', () => {
 
 describe('il composer usa QUESTA regola, non una copia', () => {
   const src = readFileSync(join(__dirname, 'components/ChatColumn.svelte'), 'utf8');
+  /** La chiamata su una riga sola: cosi` un a capo in piu` non spegne la guardia. */
+  const call = src.slice(src.indexOf('await createThread('), src.indexOf('await createThread(') + 400).replace(/\s+/g, ' ');
 
   it('il ramo senza thread chiede al campo "A" invece di riscrivere il default', () => {
     expect(src).toContain("from '$lib/chat-recipients'");
@@ -61,10 +63,15 @@ describe('il composer usa QUESTA regola, non una copia', () => {
   });
 
   it('il thread nasce con l’agente selezionato, non con una costante', () => {
-    expect(src).toMatch(/createThread\(brandSlug, undefined, agentSel, roomSel, /);
+    expect(call).toMatch(/^await createThread\( brandSlug, undefined, agentSel, roomSel, /);
   });
 
   it('l’agente custom scelto viaggia con la CREAZIONE del thread, non con una PATCH dopo', () => {
-    expect(src).toMatch(/createThread\(brandSlug, undefined, agentSel, roomSel, roomSel\.length \? null : customAgentSel\)/);
+    expect(call).toMatch(/roomSel\.length \? null : customAgentSel/);
+  });
+
+  /** Come l'agente, anche il modello: sceglierlo dalla home e ritrovare il default era un bug. */
+  it('e con lui la scelta di modello, per la stessa ragione', () => {
+    expect(call).toMatch(/policyForChoice\(chatTier, chatReasoning\)/);
   });
 });
