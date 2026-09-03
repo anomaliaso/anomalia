@@ -54,6 +54,7 @@ export const POST: RequestHandler = async ({ request, params, url }) => {
       platforms: input.platforms,
       caption: input.caption,
       platformCaptions: input.platform_captions,
+      libraryIds: input.media_ids,
       title: input.title,
       subreddit: input.subreddit,
       linkUrl: input.link_url,

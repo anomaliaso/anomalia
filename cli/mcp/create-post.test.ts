@@ -40,7 +40,7 @@ describe('i tool di brand derivati dal registry', () => {
     const createPost = find(await tools(), 'create_post');
 
     expect(Object.keys(createPost.inputSchema?.properties ?? {}).sort()).toEqual(
-      ['caption', 'link_url', 'platform_captions', 'platforms', 'scheduled_for', 'slug', 'subreddit', 'title'].sort(),
+      ['caption', 'link_url', 'media_ids', 'platform_captions', 'platforms', 'scheduled_for', 'slug', 'subreddit', 'title'].sort(),
     );
     expect((createPost.inputSchema?.required ?? []).sort()).toEqual(['caption', 'platforms', 'slug']);
   });
@@ -63,6 +63,24 @@ describe('i tool di brand derivati dal registry', () => {
       'month',
       'slug',
     ]);
+  });
+
+  test('list_media compare senza una riga di codice scritta a mano', async () => {
+    const listMedia = find(await tools(), 'list_media');
+
+    expect(listMedia.annotations?.readOnlyHint).toBe(true);
+    expect(Object.keys(listMedia.inputSchema?.properties ?? {}).sort()).toEqual([
+      'limit',
+      'query',
+      'slug',
+    ]);
+    expect((listMedia.inputSchema?.required ?? [])).toEqual(['slug']);
+  });
+
+  test('create_post accetta i media della libreria', async () => {
+    const createPost = find(await tools(), 'create_post');
+
+    expect(Object.keys(createPost.inputSchema?.properties ?? {})).toContain('media_ids');
   });
 
   test('nessun tool è registrato due volte dopo la migrazione', async () => {

@@ -55,6 +55,9 @@ Setup details: [references/mcp.md](references/mcp.md).
 calendar time, and `approve_post` is what authorizes distribution. Hand the operator the
 `review_url` that comes back.
 
+**Reuse an asset instead of paying for a render** → `list_media` → pass its id to `create_post`
+as `media_ids`. That is also how you post to Instagram or TikTok, which never accept text alone.
+
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).

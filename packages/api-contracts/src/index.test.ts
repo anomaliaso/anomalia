@@ -67,15 +67,30 @@ describe('il registry degli endpoint di brand', () => {
 
   it('un campo che nessun endpoint dichiara viene rifiutato, non scartato in silenzio', () => {
     for (const e of BRAND_ENDPOINTS) {
-      expect(e.input.safeParse({ media_ids: ['abc'] }).success, e.tool).toBe(false);
+      expect(e.input.safeParse({ campo_che_non_esiste: 'x' }).success, e.tool).toBe(false);
     }
     expect(
       byTool('create_post').input.safeParse({
         platforms: ['linkedin'],
         caption: 'ciao',
-        media_ids: ['abc']
+        campo_che_non_esiste: 'x'
       }).success
     ).toBe(false);
+  });
+
+  it('create_post accetta i media della libreria, che prima non avevano dove passare', () => {
+    const { input } = byTool('create_post');
+    expect(
+      input.safeParse({ platforms: ['instagram'], caption: 'ciao', media_ids: ['asset-1'] }).success
+    ).toBe(true);
+  });
+
+  it('list_media è una lettura e non dichiara fallimenti propri', () => {
+    const listMedia = byTool('list_media');
+    expect(listMedia.method).toBe('GET');
+    expect(listMedia.destructive).toBe(false);
+    expect(listMedia.input.safeParse({ query: 'logo', limit: 10 }).success).toBe(true);
+    expect(listMedia.input.safeParse({ limit: 500 }).success).toBe(false);
   });
 
   it('create_post promette un post pending_user con la data proposta', () => {

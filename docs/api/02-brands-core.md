@@ -359,3 +359,45 @@ Note: `skipped > 0` indica brand non "due" per cadenza o run già in corso; `err
 ```bash
 curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/tick" -H "Authorization: Bearer $TOKEN"
 ```
+
+---
+
+## `GET /api/v1/brands/:slug/media`
+
+Elenca la libreria media del brand, dalla più recente, con una URL firmata per l'anteprima.
+Gli id restituiti sono quelli che `POST /posts` accetta in `media_ids`.
+
+**Query params**
+
+| Param | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `query` | string | No | Filtro libero su titolo, descrizione e tag |
+| `limit` | number | No | 1–200, default 100 |
+
+**Response** `200`:
+
+```json
+{
+  "media": [
+    {
+      "id": "a1b2c3d4-…",
+      "kind": "image",
+      "mime": "image/png",
+      "width": 1080,
+      "height": 1350,
+      "title": "Foto prodotto",
+      "description": "…",
+      "tags": ["prodotto"],
+      "signed_url": "https://…",
+      "created_at": "2026-08-13T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/media?query=logo&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```

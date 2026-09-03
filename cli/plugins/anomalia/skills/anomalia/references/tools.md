@@ -24,6 +24,7 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `list_products` | (studio / products views) |
 | `list_posts` | `anomalia content <slug> [--status …]` |
 | `create_post` | (MCP only) |
+| `list_media` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
 | `edit_post` | `anomalia post <slug> <id> edit …` |
@@ -35,11 +36,15 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `reorder_slides` | `anomalia post <slug> <id> reorder --order "0,2,1"` |
 | `make_video` | `anomalia post <slug> <id> video …` |
 
+`list_media` lists what is already in the brand library; an id from there goes into `create_post`
+as `media_ids` and costs no render. A media id that is not this brand's stops the creation —
+the post is never made without it.
+
 `create_post` stores copy **you** wrote: Anomalia calls no model and spends no credits. It does
 not publish and does not schedule — `scheduled_for` is the proposed calendar time and stays a
 proposal until `approve_post`, which is what authorizes distribution. Text-capable platforms
-only (`facebook`, `linkedin`, `x`, `threads`, `bluesky`, `reddit`); `instagram` and `tiktok` need
-an image, `youtube` a video. Required: `slug`, `platforms`, `caption`. Optional:
+only (`facebook`, `linkedin`, `x`, `threads`, `bluesky`, `reddit`) unless you pass `media_ids`;
+`instagram` and `tiktok` need an image, `youtube` a video. Required: `slug`, `platforms`, `caption`. Optional:
 `platform_captions`, `scheduled_for` (ISO — no offset means the brand's timezone), `title`
 (required for Reddit), `subreddit`, `link_url`. The result carries the post id, its
 `pending_user` status, the stored instant and a `review_url` the operator can open.
