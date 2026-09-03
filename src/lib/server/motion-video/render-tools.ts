@@ -55,6 +55,7 @@ import {
 } from '$lib/motion-video/modules';
 import { compileMotionSource } from '$lib/motion-video/compile';
 import { withSandboxBilling } from '$lib/server/sandbox-credits';
+import { runInBackground } from '$lib/server/background-work';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Di chi è la macchina su cui Remotion gira: la stessa chiave con cui il pannello nomina l'agente. */
@@ -642,7 +643,16 @@ export async function renderGraphicStills(opts: {
 			} catch (e) {
 				throw describeSandboxDeath(e);
 			} finally {
-				await sb?.release().catch((error) => { swallow('release failed', error); return undefined; });
+				// La pulizia NON si aspetta: quando parte, i PNG sono gia' in mano al chiamante, e
+				// `release()` costa ~8s dei ~17.5s di un render — rm -rf della directory di run e
+				// rilascio dell'holder, un giro di rete l'uno. Deve comunque AVVENIRE, o restano una
+				// directory e un holder che nessuno spegne: per questo passa da `runInBackground`,
+				// che su Vercel lo dichiara con `waitUntil` invece di lasciarlo a una Promise che
+				// l'istanza congelata non finirebbe mai.
+				const toRelease = sb;
+				if (toRelease) {
+					runInBackground(() => toRelease.release(), `sandbox-release:${toRelease.name}`);
+				}
 			}
 		}
 	);
