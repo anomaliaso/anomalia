@@ -8,7 +8,7 @@ import type { TeamAgentId } from '$lib/agent-owners';
 /**
  * IL TEAM SI PRESENTA (2026-08-28).
  *
- * Fino a oggi solo l'Analyst contattava l'utente nuovo: l'eval:ux lo misura come FAIL
+ * Fino a oggi solo l'Analyst contattava l'utente nuovo, e l'eval di allora lo misurava come FAIL
  * (criterio team-of-agents). Il contatto degli specialisti ora è una PROMESSA DEL PRODOTTO,
  * non un comportamento sperato del modello: quando il primo turno di setup chiude, il server
  * semina deterministicamente il primo contatto degli agenti mappati sul piano del brand.

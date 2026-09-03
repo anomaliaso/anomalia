@@ -1,11 +1,33 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { api } from '../../lib/api.ts';
+import { api, callEndpoint } from '../../lib/api.ts';
+import { BRAND_ENDPOINTS } from '../../lib/contracts/index.ts';
 import { resolvePostId, withAuth } from '../util.ts';
 
 const slug = z.string().min(1).describe('Brand URL slug');
 
+function registerDeclaredEndpoints(server: McpServer) {
+  for (const endpoint of BRAND_ENDPOINTS) {
+    server.registerTool(
+      endpoint.tool,
+      {
+        title: endpoint.title,
+        description: endpoint.description,
+        inputSchema: endpoint.input.extend({ slug }),
+        annotations: {
+          readOnlyHint: endpoint.method === 'GET',
+          destructiveHint: endpoint.destructive,
+        },
+      },
+      async ({ slug: brandSlug, ...input }) =>
+        withAuth((token) => callEndpoint(endpoint, token, brandSlug as string, input)),
+    );
+  }
+}
+
 export function registerBrandTools(server: McpServer) {
+  registerDeclaredEndpoints(server);
+
   server.registerTool(
     'get_dashboard',
     {
@@ -55,20 +77,6 @@ export function registerBrandTools(server: McpServer) {
       annotations: { readOnlyHint: true },
     },
     async ({ slug }) => withAuth((token) => api.getAnalytics(token, slug)),
-  );
-
-  server.registerTool(
-    'get_calendar',
-    {
-      title: 'Calendar',
-      description: 'Content calendar for a brand. Optional month as YYYY-MM.',
-      inputSchema: z.object({
-        slug,
-        month: z.string().regex(/^\d{4}-\d{2}$/).optional().describe('Month YYYY-MM'),
-      }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug, month }) => withAuth((token) => api.getCalendar(token, slug, month)),
   );
 
   server.registerTool(
@@ -123,24 +131,6 @@ export function registerBrandTools(server: McpServer) {
       annotations: { readOnlyHint: true },
     },
     async ({ slug }) => withAuth((token) => api.listProducts(token, slug)),
-  );
-
-  server.registerTool(
-    'list_posts',
-    {
-      title: 'List posts',
-      description:
-        'List posts for a brand. Filter by status: pending_user, approved, scheduled, published, failed.',
-      inputSchema: z.object({
-        slug,
-        status: z
-          .enum(['pending_user', 'approved', 'scheduled', 'published', 'failed'])
-          .optional()
-          .describe('Optional status filter'),
-      }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug, status }) => withAuth((token) => api.getPosts(token, slug, status)),
   );
 
   server.registerTool(

@@ -50,6 +50,11 @@ Setup details: [references/mcp.md](references/mcp.md).
 
 ## Quick workflows
 
+**Write a post yourself** → `create_post`. You write the copy; Anomalia stores it as
+`pending_user` and calls no model. Creating does not publish: `scheduled_for` is the proposed
+calendar time, and `approve_post` is what authorizes distribution. Hand the operator the
+`review_url` that comes back.
+
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).

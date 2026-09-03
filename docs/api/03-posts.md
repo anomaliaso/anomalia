@@ -48,6 +48,77 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/posts?status=pending_user" 
 
 ---
 
+## `POST /api/v1/brands/:slug/posts`
+
+Salva una copy già scritta come **un post `pending_user`**, pronto per la revisione.
+
+Non chiama nessun modello e **non consuma crediti**: niente `gateAiAction`. Non pubblica e non
+programma niente — `scheduled_for` è la data **proposta**, e resta un metadato del calendario
+finché il post non viene approvato. È `POST /posts/:id/approve` ad autorizzare la distribuzione.
+
+Solo piattaforme che reggono il testo da solo: `facebook`, `linkedin`, `x`, `threads`, `bluesky`,
+`reddit`. `instagram` e `tiktok` vogliono un'immagine, `youtube` un video: senza media vengono
+rifiutate. Questo endpoint non accetta ancora media.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `platforms` | string[] | Sì | Almeno una. Le sconosciute vengono scartate → `no_platforms` |
+| `caption` | string | Sì | La copy, salvata così com'è |
+| `platform_captions` | object | No | Override per piattaforma, `{"x": "…"}` |
+| `scheduled_for` | string | No | Istante proposto, ISO. Senza offset è letto sul fuso del brand; con `Z` o `±hh:mm` è preso come scritto. Almeno 2 minuti nel futuro |
+| `title` | string | No | Obbligatorio per Reddit (max 300 char) |
+| `subreddit` | string | No | Senza `r/` |
+| `link_url` | string | No | |
+
+**Response** `200`:
+
+```json
+{
+  "ok": true,
+  "id": "a1b2c3d4-…",
+  "status": "pending_user",
+  "scheduled_for": "2030-05-16T07:00:00.000Z",
+  "scheduled_for_local": "2030-05-16 09:00 (Europe/Rome)",
+  "slot": "Thu 09:00",
+  "review_url": "https://anomalia.so/app/mio-brand/posts/a1b2c3d4-…"
+}
+```
+
+Senza `scheduled_for`, i campi `scheduled_for`, `scheduled_for_local` e `slot` sono `null`: il
+post resta una bozza senza data, fuori dal calendario ma elencata da `GET /posts`.
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — body fuori schema |
+| `400` | `{"error":"no_platforms"}` — nessuna piattaforma riconosciuta |
+| `400` | `{"error":"need_caption"}` |
+| `400` | `{"error":"need_media"}` — piattaforma che non regge il solo testo |
+| `400` | `{"error":"need_video"}` |
+| `400` | `{"error":"over_limit"}` — copy oltre il limite della piattaforma |
+| `400` | `{"error":"reddit_title"}` |
+| `400` | `{"error":"invalid_scheduled_for","details":"…"}` — data illeggibile |
+| `400` | `{"error":"too_soon"}` — data passata o troppo vicina |
+| `403` | `{"error":"API key is read-only"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "platforms": ["linkedin","x"],
+    "caption": "Tre cose che abbiamo imparato spedendo di venerdì.",
+    "scheduled_for": "2030-05-16T09:00"
+  }'
+```
+
+---
+
 ## `DELETE /api/v1/brands/:slug/posts`
 
 Elimina in blocco i post di uno status (default `pending_user`). Rifiuta `published`.

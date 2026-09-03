@@ -4,7 +4,7 @@ import { withBrandContext } from '$lib/server/ai-log';
 import { aiActCopyGuardrail } from '$lib/ai-act';
 import { platformPlaybook, houseVoiceFor, type ContentPrefs } from '$lib/server/content-preview';
 import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
-import { wallClockToUtc } from '$lib/server/schedule';
+import { wallClockToUtc, zonedClock } from '$lib/server/schedule';
 import { publishLibraryImageAsPostMedia } from '$lib/server/brand-media';
 import { EDITOR_POST_COLS } from '$lib/server/post-editing';
 import {
@@ -28,7 +28,33 @@ const MIN_LEAD_MS = 2 * 60 * 1000;
 const MAX_MEDIA = 8;
 const DOW_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export type ManualPostMode = 'now' | 'schedule' | 'draft';
+export type ManualPostMode = 'now' | 'schedule' | 'draft' | 'propose';
+
+export type ManualPostOutcome = 'pending_user' | 'scheduled' | 'published';
+
+export type PostAuthorship = 'manual' | 'external';
+
+type DateSource = (input: CreateManualPostInput, tz: string) => string | null;
+
+const NO_DATE: DateSource = () => null;
+
+const FROM_WALL_CLOCK: DateSource = (input, tz) => {
+  const date = String(input.date ?? '').trim();
+  const time = String(input.time ?? '').trim();
+  return date && time ? wallClockToUtc(date, time, tz) : null;
+};
+
+const FROM_INSTANT: DateSource = (input) => input.scheduledFor ?? null;
+
+const MODE_BEHAVIOUR: Record<
+  ManualPostMode,
+  { dateFrom: DateSource; dateRequired: boolean; outcome: ManualPostOutcome }
+> = {
+  now: { dateFrom: NO_DATE, dateRequired: false, outcome: 'published' },
+  schedule: { dateFrom: FROM_WALL_CLOCK, dateRequired: true, outcome: 'scheduled' },
+  draft: { dateFrom: NO_DATE, dateRequired: false, outcome: 'pending_user' },
+  propose: { dateFrom: FROM_INSTANT, dateRequired: false, outcome: 'pending_user' }
+};
 
 export type GenerateCaptionsInput = {
   platforms: string[];
@@ -141,13 +167,16 @@ export type CreateManualPostInput = {
   mode: ManualPostMode;
   date?: string;
   time?: string;
+  scheduledFor?: string;
+  source?: PostAuthorship;
 };
 
 export type CreateManualPostResult =
-  | { ok: true; id: string; status: string; noAccount?: boolean }
+  | { ok: true; id: string; status: string; slot: string | null; noAccount?: boolean }
   | { ok: false; error: string };
 
-function slotFromDate(date: string, time: string): string {
+function slotAt(iso: string, tz: string): string {
+  const { date, time } = zonedClock(tz, new Date(iso));
   const [y, m, d] = date.split('-').map(Number);
   const dow = DOW_EN[new Date(Date.UTC(y, m - 1, d)).getUTCDay()] ?? 'Mon';
   return `${dow} ${time}`;
@@ -237,18 +266,12 @@ export async function createManualPost(opts: {
   const contentType = !hasMedia ? (linkUrl ? 'link' : 'text') : isVideo ? 'uploaded_video' : 'uploaded_image';
   const format = !hasMedia ? (linkUrl ? 'link_post' : 'text_post') : isVideo ? 'reel' : carousel ? 'carousel' : 'post';
 
-  const mode = opts.input.mode;
-  let scheduledFor: string | null = null;
-  let slot: string | null = null;
-  if (mode === 'schedule') {
-    const date = String(opts.input.date ?? '').trim();
-    const time = String(opts.input.time ?? '').trim();
-    if (!date || !time) return { ok: false, error: 'too_soon' };
-    const iso = wallClockToUtc(date, time, opts.timezone);
-    if (new Date(iso).getTime() < earliestMs()) return { ok: false, error: 'too_soon' };
-    scheduledFor = iso;
-    slot = slotFromDate(date, time);
-  }
+  const behaviour = MODE_BEHAVIOUR[opts.input.mode];
+  const when = behaviour.dateFrom(opts.input, opts.timezone);
+  if (!when && behaviour.dateRequired) return { ok: false, error: 'too_soon' };
+  if (when && new Date(when).getTime() < earliestMs()) return { ok: false, error: 'too_soon' };
+  const scheduledFor = when;
+  const slot = when ? slotAt(when, opts.timezone) : null;
 
   const row = {
     brand_id: opts.brandId,
@@ -260,7 +283,7 @@ export async function createManualPost(opts: {
     media_urls: carousel ? urls : null,
     content_type: contentType,
     format,
-    source: 'manual',
+    source: opts.input.source ?? 'manual',
     title: title || null,
     subreddit,
     link_url: linkUrl,
@@ -272,20 +295,21 @@ export async function createManualPost(opts: {
   const { data: inserted, error: insErr } = await opts.supabase.from('posts').insert(row).select('id').single();
   if (insErr || !inserted) return { ok: false, error: insErr?.message ?? 'insert_failed' };
 
-  if (mode === 'draft') {
-    return { ok: true, id: inserted.id, status: 'pending_user' };
+  if (behaviour.outcome === 'pending_user') {
+    return { ok: true, id: inserted.id, status: 'pending_user', slot };
   }
 
   const { data: post } = await opts.supabase.from('posts').select(EDITOR_POST_COLS).eq('id', inserted.id).maybeSingle();
-  if (!post) return { ok: true, id: inserted.id, status: 'pending_user' };
+  if (!post) return { ok: true, id: inserted.id, status: 'pending_user', slot };
 
   const res = await publishApprovedPost(opts.supabase, post as ApprovablePost, opts.timezone, {
-    now: mode === 'now'
+    now: behaviour.outcome === 'published'
   });
   return {
     ok: true,
     id: inserted.id,
-    status: mode === 'now' ? 'published' : 'scheduled',
+    status: behaviour.outcome,
+    slot,
     noAccount: res.noAccount
   };
 }

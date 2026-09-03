@@ -34,6 +34,7 @@
     "build:all": "bun run scripts/build.ts --all",
     "build:npm": "bun run scripts/build-npm.ts",
     "vercel-build": "node scripts/build-vercel.mjs",
+    "sync:contracts": "bash scripts/sync-contracts.sh",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
