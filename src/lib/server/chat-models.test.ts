@@ -1,4 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+/**
+ * La vetrina viene dalla TABELLA quando c'e`, e da `LLM_MODELS` quando non c'e`. Qui si prova il
+ * secondo caso, quindi la tabella deve essere davvero assente — non "assente sul database che
+ * questa macchina riesce a raggiungere". Senza questo mock la suite passava solo finche' la
+ * migration non era applicata, e ha iniziato a fallire il giorno in cui lo e` stata.
+ */
+vi.mock('$lib/server/supabase-admin', () => ({
+  createAdminClient: () => {
+    throw new Error('nessun catalogo in questo test');
+  }
+}));
 import { __resetGatewayModels, ensureGatewayModels } from './openrouter-models';
 import { chatModelChoices } from './chat-models';
 

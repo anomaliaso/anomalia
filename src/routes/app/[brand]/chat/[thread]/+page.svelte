@@ -145,7 +145,8 @@
   let input = $state('');
   let chatMode = $state<ChatMode>('agent');
   const brandDefaultTier = $derived(coerceChatTier($page.data.brand?.chat_default_tier));
-  let chatTier = $state<ChatTier>('auto');
+  // null = nessuna scelta: la chat parte dal default del catalogo, e lo segue quando cambia.
+  let chatTier = $state<ChatTier | null>(null);
   let chatReasoning = $state<ChatReasoning>(defaultReasoningFor(null));
   const saveModelChoice = createModelChoiceSave({
     brandSlug: () => data.brandSlug,
@@ -710,7 +711,7 @@
     text?: string,
     meta?: {
       mode: ChatMode;
-      tier?: ChatTier;
+      tier?: ChatTier | null;
       reasoning?: ChatReasoning;
       command?: string;
       attachments?: ChatAttachmentsPayload;

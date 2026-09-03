@@ -181,7 +181,10 @@ export async function createThread(
   title?: string,
   agent?: string,
   agents?: string[],
-  customAgentId?: string | null
+  customAgentId?: string | null,
+  // La scelta di modello fatta nel composer prima che il thread esistesse: senza, il thread nasce
+  // senza preferenza e il picker torna al default appena l'app ci naviga sopra.
+  model?: unknown
 ): Promise<string | null> {
   try {
     console.log('[createThread] Creating thread for:', brandSlug);
@@ -192,6 +195,7 @@ export async function createThread(
         title: title ?? undefined,
         agent: agent ?? undefined,
         custom_agent_id: customAgentId ?? undefined,
+        ...(model ? { model } : {}),
         ...(agents && agents.length >= 2 ? { agents } : {})
       })
     });

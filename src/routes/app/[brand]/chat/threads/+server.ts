@@ -109,7 +109,10 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
   // Optional: bind the specialized agent right at creation (multi-agent chat).
   const agent = resolveAgentForPlan(body.agent, hasWebHub(brand.plan));
 
-  const thread = await createThread(supabase, brand.id, user.id, title, null, agent);
+  // Il thread nasce con la scelta gia` fatta nel composer: da `/app/<brand>` il picker non ha
+  // ancora un thread a cui scriverla, e senza questa riga si perde al primo passo.
+  const bornWith = body.model === undefined || body.model === null ? null : turnModelFamily(body.model);
+  const thread = await createThread(supabase, brand.id, user.id, title, null, agent, null, null, bornWith);
 
   const customAgentId =
     typeof body.custom_agent_id === 'string' && body.custom_agent_id ? body.custom_agent_id : null;

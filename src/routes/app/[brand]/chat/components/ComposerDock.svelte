@@ -20,7 +20,7 @@
 
   type SubmitMeta = {
     mode: ChatMode;
-    tier?: ChatTier;
+    tier?: ChatTier | null;
     chatModels?: Array<{ id: string; label: string; contextLength: number; inputUsdPerM: number; outputUsdPerM: number }>;
     reasoning?: ChatReasoning;
     command?: string;
@@ -40,7 +40,7 @@
     queueBusy,
     value = $bindable(''),
     mode = $bindable('agent' as ChatMode),
-    tier = $bindable('auto' as ChatTier),
+    tier = $bindable<ChatTier | null>(null),
     reasoning = $bindable(),
     chatModels = [],
     agentOptions,
@@ -68,7 +68,7 @@
     queueBusy: boolean;
     value?: string;
     mode?: ChatMode;
-    tier?: ChatTier;
+    tier?: ChatTier | null;
     reasoning?: ChatReasoning;
     agentOptions: AgentMeta[] | null;
     agentLocked: boolean;
@@ -77,7 +77,7 @@
     onsubmit: (text?: string, meta?: SubmitMeta, opts?: { resend?: boolean; redoMessageId?: string; truncateFromMessageId?: string }) => void | Promise<void>;
     onstop: () => void;
     onagentchange: (id: string) => void | Promise<void>;
-    onmodelchange?: (choice: { tier: ChatTier; reasoning: ChatReasoning }) => void;
+    onmodelchange?: (choice: { tier: ChatTier | null; reasoning: ChatReasoning }) => void;
     onqueueedit: (jobId: string, text: string) => void | Promise<void>;
     onqueuedelete: (jobId: string) => void | Promise<void>;
     onqueuesendnow: (jobId: string) => void | Promise<void>;

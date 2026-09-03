@@ -71,7 +71,11 @@ export async function createThread(
   // I thread di squadra nascono con surface='team' + surface_key=<agentId>, per essere ritrovabili
   // senza ambiguità fra le normali chat dell'utente con lo stesso specialista.
   surface: string | null = null,
-  surfaceKey: string | null = null
+  surfaceKey: string | null = null,
+  // La scelta di modello fatta nel composer PRIMA che il thread esistesse: senza, il thread nasce
+  // senza preferenza e il picker torna al default appena l'app ci naviga sopra — da fuori sembra
+  // che la selezione non abbia avuto effetto.
+  model: unknown = null
 ): Promise<ChatThreadRow | null> {
   const { data } = await supabase
     .from('chat_threads')
@@ -81,7 +85,8 @@ export async function createThread(
       title,
       post_id: postId,
       agent,
-      ...(surface ? { surface, surface_key: surfaceKey } : {})
+      ...(surface ? { surface, surface_key: surfaceKey } : {}),
+      ...(model ? { model } : {})
     })
     .select('*')
     .single();
