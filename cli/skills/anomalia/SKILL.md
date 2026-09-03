@@ -50,6 +50,12 @@ Setup details: [references/mcp.md](references/mcp.md).
 
 ## Quick workflows
 
+**Before you write anything** → `get_creation_kit` with the goal, the platforms and the format.
+It returns the smallest brief for that one job: platform limits, brand facts and approved voice,
+the matching rubric, ONE template with its hook family, the operator's own rewrites, what has
+worked on this brand, and which calendar minutes are taken. It is a selection, not the library —
+sections with nothing in them are absent. Reads only: no model, no credits.
+
 **Write a post yourself** → `create_post`. You write the copy; Anomalia stores it as
 `pending_user` and calls no model. Creating does not publish: `scheduled_for` is the proposed
 calendar time, and `approve_post` is what authorizes distribution. Hand the operator the

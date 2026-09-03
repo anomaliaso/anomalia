@@ -150,6 +150,15 @@ describe('i tool di brand derivati dal registry', () => {
     expect(importMedia.description ?? '').toContain('https');
   });
 
+  test('get_creation_kit compare da solo, in sola lettura e senza modello', async () => {
+    const kit = find(await tools(), 'get_creation_kit');
+
+    expect(Object.keys(kit.inputSchema?.properties ?? {}).sort()).toEqual(['format', 'goal', 'platforms', 'slug']);
+    expect((kit.inputSchema?.required ?? []).sort()).toEqual(['format', 'goal', 'platforms', 'slug']);
+    expect(kit.annotations?.readOnlyHint).toBe(true);
+    expect(kit.description ?? '').toContain('no model call, no credits');
+  });
+
   test('nessun tool è registrato due volte dopo la migrazione', async () => {
     const names = (await tools()).map((t) => t.name);
 

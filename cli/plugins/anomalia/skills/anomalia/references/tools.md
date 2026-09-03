@@ -23,6 +23,7 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `get_voice` / `update_voice` | `anomalia voice <slug>` |
 | `list_products` | (studio / products views) |
 | `list_posts` | `anomalia content <slug> [--status …]` |
+| `get_creation_kit` | (MCP only) |
 | `create_post` | (MCP only) |
 | `list_media` | (MCP only) |
 | `check_content` | (MCP only) |
@@ -37,6 +38,36 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `regenerate_slide` | `anomalia post <slug> <id> slide --index N --instruction "…"` |
 | `reorder_slides` | `anomalia post <slug> <id> reorder --order "0,2,1"` |
 | `make_video` | `anomalia post <slug> <id> video …` |
+
+`get_creation_kit` is what you read BEFORE writing. Required: `slug`, `goal` (one line saying
+what the post has to do), `platforms` (comma-separated) and `format` (`single_image`, `carousel`,
+`text_post`, `link_post`, `video`). It calls no model, spends no credits and writes nothing.
+
+It answers with only the sections that have something in them — an absent key means the brand has
+nothing there, so do not go looking for it elsewhere:
+
+- **constraints** — per requested platform: `char_limit`, `needs_media`, `video_only`; plus the
+  brand's `avoid` list. Never dropped.
+- **brand** — name, language, about, audience, the products closest to your goal, and only the
+  people who consented to appear.
+- **voice** — the brand's approved personality when set, otherwise the house voice. Write to it.
+- **rubric** — the approved recurring series matching your format, with its art direction. When
+  present, this post is an episode of it.
+- **template** — ONE structure chosen for your format, platform and goal, its hook family, and the
+  playbook for exactly the platforms you asked about.
+- **calendar** — the minutes already taken, with the campaign they belong to. Do not double-book.
+- **week** — the current editorial week's theme.
+- **operator_edits** — real before → after rewrites by the owner. Absorb the difference, never the
+  wording: it belongs to other posts.
+- **history** — what has worked on this brand: best times, formats, hashtags, cadence, the opening
+  lines that won, and `untested_hooks` — angles this brand has never opened with.
+
+`size_bytes` / `budget_bytes` / `trimmed` say how big the kit is and what, if anything, was
+dropped to fit. Everything selected carries a stable id, and `versions.kit` pins the ruleset.
+
+Past winners are evidence, not orders: they may suggest a direction, they never override a brand
+fact or authorize copying. When two things conflict, platform constraints win, then the operator's
+instruction for this artifact, then brand facts and voice, then the rubric, then the template.
 
 `list_media` lists what is already in the brand library; an id from there goes into `create_post`
 as `media_ids` and costs no render. Pass the **full** id: unlike a post id, a media id is never

@@ -658,3 +658,116 @@ Note: i fallimenti per singolo post finiscono in `results`, non nello status HTT
 curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts/approve-all" \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+---
+
+## `GET /api/v1/brands/:slug/creation-kit`
+
+Il **brief minimo** da leggere *prima* di scrivere un post: vincoli di piattaforma, fatti e voce
+del brand, la rubrica che calza, **un solo** template Anomalia scelto per questo obiettivo e
+formato, le riscritture del proprietario, cosa ha funzionato su questo brand e quali minuti del
+calendario sono già occupati.
+
+Non chiama nessun modello, non consuma crediti e non scrive niente: una API key di sola lettura
+può chiamarla. Gli asset stanno in `GET /media`; controllare una bozza è `POST /content/check`.
+
+**La selezione è la funzione.** Il kit non è la libreria: le sezioni senza contenuto sono
+**assenti** (mai presenti e vuote), e l'intera risposta è tagliata a `budget_bytes`. Un kit tipico
+pesa 3,8–5,4 KB.
+
+**Query**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `goal` | string (≤300) | Sì | Cosa deve fare questo post, in una riga. Sceglie il template e ordina prodotti ed esempi |
+| `platforms` | string | Sì | Separate da virgola: `instagram,linkedin`. Normalizzate e deduplicate |
+| `format` | enum | Sì | `single_image` \| `carousel` \| `text_post` \| `link_post` \| `video` |
+
+**Response** `200`:
+
+```json
+{
+  "job": { "goal": "launch the espresso grinder", "platforms": ["linkedin"], "format": "text_post" },
+  "versions": { "kit": 1 },
+  "size_bytes": 5378,
+  "budget_bytes": 8192,
+  "trimmed": [],
+  "constraints": {
+    "platforms": [{ "platform": "linkedin", "char_limit": 3000, "needs_media": false, "video_only": false }],
+    "avoid": ["eccellenza", "sinergia"]
+  },
+  "brand": {
+    "name": "Caffè Nero",
+    "language": "it",
+    "about": "Torrefazione artigianale a Trieste dal 1998…",
+    "audience": "Bar indipendenti e uffici…",
+    "products": [{ "id": "…", "title": "Espresso grinder Mk II", "pricing": "890 €" }],
+    "people": [{ "id": "…", "name": "Marta Rossi", "role": "Head roaster" }]
+  },
+  "voice": { "text": "BRAND PERSONALITY (authoritative — …)" },
+  "rubric": { "id": "…", "name": "Lettere dal lab", "format": "text_post", "art_direction": "foto in bianco e nero" },
+  "template": {
+    "id": "linkedin-post-templates/the-story-post",
+    "name": "The Story Post",
+    "group": "LinkedIn Post Templates",
+    "body": "[Hook: Unexpected outcome or lesson]…",
+    "hooks": { "id": "hook-formulas/story-hooks", "name": "Story Hooks", "body": "- \"Last week, …\"" },
+    "playbook": "PLATFORM PLAYBOOK (…): - linkedin — …"
+  },
+  "calendar": { "occupied": [{ "scheduled_for": "2026-09-05T07:00:00.000Z", "platforms": ["linkedin"], "campaign": "Grinder launch", "step": "announcement" }] },
+  "week": { "index": 0, "theme": "La settimana del grinder" },
+  "operator_edits": [{ "before": "Siamo entusiasti di annunciare…", "after": "Nuovo grinder. Macina 18g in 4 secondi." }],
+  "history": {
+    "post_count": 24,
+    "best_times": ["Sat 09:00"],
+    "top_formats": ["image"],
+    "top_hashtags": ["#caffe", "#tostatura"],
+    "cadence": "~8 posts/week",
+    "untested_hooks": ["contrast", "confession"],
+    "winners": [{ "id": "…", "platform": "linkedin", "opening": "Abbiamo rotto il grinder 23 volte." }]
+  }
+}
+```
+
+**Identificatori stabili.** Ogni pezzo selezionato è citabile: `template.id` e `template.hooks.id`
+(dal file di riferimento `post-templates.md`), `rubric.id`, `brand.products[].id`,
+`brand.people[].id`, `history.winners[].id`. `versions.kit` sale quando cambia la selezione o la
+forma della risposta: due kit si confrontano solo se hanno la stessa versione.
+
+**Come sceglie**
+
+| Sezione | Da dove viene | Come è selezionata |
+|---|---|---|
+| `constraints` | `platform-limits.ts` | Solo le piattaforme richieste |
+| `brand` | `brand_kit`, `products`, `people` | Prodotti ordinati per sovrapposizione lessicale col `goal`, massimo 5. Solo le persone con `consent = true` |
+| `voice` | `houseVoiceFor` | La personalità approvata quando c'è, altrimenti la house voice |
+| `rubric` | `rubrics` (approvate) | Solo quelle del `format` richiesto, poi la più vicina al `goal` |
+| `template` | `post-templates.md` | Un gruppo dal formato+piattaforma, un blocco dal `goal`, più una famiglia di hook |
+| `calendar` | `posts` | Solo i minuti già occupati da qui in avanti, massimo 8 |
+| `week` | `editorial_plans` attivo | Solo la settimana corrente |
+| `operator_edits` | `content_prefs.captionEditPairs` | Le ultime 3 riscritture reali del proprietario |
+| `history` | `social_post_history` (`source='zernio'`) | Solo i post del brand, vincitori filtrati sulle piattaforme richieste |
+
+**Il budget.** Ogni campo ha un tetto in caratteri, quindi il kit sta nel budget *per
+costruzione*. Se dovesse comunque sforare, le sezioni cedono dalla meno autorevole alla più —
+`history`, `operator_edits`, `week`, `calendar`, `template`, `rubric`, `voice`, `brand` — e
+`trimmed` elenca cosa è caduto. `constraints` non cade mai. L'ordine è la precedenza dichiarata nel
+piano: i vincoli di piattaforma vincono su tutto, e i vincitori passati sono *evidenza*, non
+istruzioni.
+
+**Errori**
+
+| `error` | Status | Quando |
+|---|---|---|
+| `invalid_input` | 400 | Campo mancante, formato sconosciuto o campo non previsto (lo schema è `.strict()`) |
+| `no_platforms` | 400 | `platforms` non contiene nessuna piattaforma |
+
+**Esempio**:
+
+```bash
+curl -s -G "https://anomalia.so/api/v1/brands/mio-brand/creation-kit" \
+  --data-urlencode "goal=launch the espresso grinder" \
+  --data-urlencode "platforms=linkedin,instagram" \
+  --data-urlencode "format=text_post" \
+  -H "Authorization: Bearer $TOKEN"
+```
