@@ -1,5 +1,5 @@
 diff --git a/node_modules/@ai-sdk/harness/dist/utils/index.js b/node_modules/@ai-sdk/harness/dist/utils/index.js
-index c6dc6e3..1e1bca8 100644
+index c6dc6e3..8618175 100644
 --- a/node_modules/@ai-sdk/harness/dist/utils/index.js
 +++ b/node_modules/@ai-sdk/harness/dist/utils/index.js
 @@ -548,6 +548,13 @@ async function writeSkills({
@@ -29,7 +29,7 @@ index c6dc6e3..1e1bca8 100644
      });
      for (const file of (_b = skill.files) != null ? _b : []) {
        const filePath = normalizeSkillFilePath({
-@@ -567,13 +573,70 @@ async function writeSkills({
+@@ -567,13 +573,108 @@ async function writeSkills({
          mode: filePathMode,
          message: invalidSkillFilePathMessage
        });
@@ -97,9 +97,47 @@ index c6dc6e3..1e1bca8 100644
 +      await writeOneByOne(chunk);
 +    }
 +  };
-+  // Le cartelle nel primo pezzo: gli altri ci scrivono dentro, e partono dopo.
-+  await runChunk(chunks[0], true);
-+  await Promise.all(chunks.slice(1).map((chunk) => runChunk(chunk, false)));
++  // Le skill NON cambiano fra un turno e l'altro, e la sandbox del brand vive fra i turni:
++  // riscriverle ogni volta e` lavoro gia` fatto. Il marcatore porta l'impronta del contenuto e sta
++  // DENTRO la cartella delle skill, quindi una sandbox nuova non ce l'ha e una modifica lo
++  // invalida. Sta qui, e non nel chiamante, perche' non passare le skill all'agent le toglierebbe
++  // anche dal catalogo del modello: qui si salta la SCRITTURA, non la dichiarazione.
++  const identity = fingerprintSkillWrites(writes);
++  const markerPath = path2.posix.join(rootDir, ".harness-skills-id");
++  try {
++    const seen = await sandbox.run({
++      command: `cat ${shellQuote(markerPath)} 2>/dev/null || true`,
++      abortSignal
++    });
++    const stdout = seen != null && typeof seen === "object" && "stdout" in seen ? String(seen.stdout) : "";
++    if (stdout.trim() === identity) {
++      return;
++    }
++  } catch {
++    // Non sapere se ci sono non e` una ragione per non scriverle.
++  }
++  // Le cartelle prima, poi tutti i pezzi insieme.
++  await sandbox.run({ command: `mkdir -p ${dirs.map(shellQuote).join(" ")}`, abortSignal });
++  await Promise.all(chunks.map((chunk) => runChunk(chunk, false)));
++  // Il marcatore per ULTIMO: se una scrittura fallisce non deve restare scritto che ci sono.
++  await sandbox
++    .run({ command: `printf %s ${shellQuote(identity)} > ${shellQuote(markerPath)}`, abortSignal })
++    .catch(() => {});
++}
++function fingerprintSkillWrites(writes) {
++  const payload = writes
++    .map((w) => `${w.path}\0${w.content}`)
++    .sort()
++    .join("\0\0");
++  // FNV-1a: serve a dire "e` cambiato", non a resistere a un avversario.
++  let h1 = 2166136261;
++  let h2 = 2166136261 ^ payload.length;
++  for (let i = 0; i < payload.length; i++) {
++    const c = payload.charCodeAt(i);
++    h1 = Math.imul(h1 ^ c, 16777619);
++    h2 = Math.imul(h2 ^ (c + i), 16777619);
++  }
++  return `${(h1 >>> 0).toString(16)}${(h2 >>> 0).toString(16)}`;
  }
  function validateSkillName({
    name,
