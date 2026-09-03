@@ -4,6 +4,7 @@
  */
 
 import { appUrl } from './config.ts';
+import { pathFor, type BrandEndpoint } from './contracts/index.ts';
 
 async function request<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   // Resolved per call, not at import time: loadEnv() sets PUBLIC_APP_URL after the module
@@ -34,6 +35,28 @@ function post<T>(path: string, token: string, body?: unknown): Promise<T> {
     method: 'POST',
     body: body ? JSON.stringify(body) : undefined,
   });
+}
+
+/**
+ * Chiama un endpoint dichiarato nel registry. Una GET porta i campi in query, una POST nel body:
+ * chi aggiunge un endpoint non scrive più un metodo qui: lo dichiara una volta e questo lo sa
+ * già chiamare.
+ */
+export function callEndpoint<T>(
+  endpoint: BrandEndpoint,
+  token: string,
+  slug: string,
+  input: Record<string, unknown> = {},
+): Promise<T> {
+  const path = pathFor(endpoint, slug);
+  if (endpoint.method === 'POST') return post<T>(path, token, input);
+
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined && value !== null) query.set(key, String(value));
+  }
+  const qs = query.toString();
+  return get<T>(qs ? `${path}?${qs}` : path, token);
 }
 
 // ── Types ───────────────────────────────────────────────────────────────
