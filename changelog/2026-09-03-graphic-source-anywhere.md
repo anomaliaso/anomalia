@@ -40,3 +40,18 @@ del resolver, perché il difetto stava lì e non nelle funzioni.
 L'upload in Storage resta rotto in locale (`extended attributes disabled`, v.
 [`LESSONS.md`](../LESSONS.md)), quindi un `replace_source` completo su questa macchina non arriva
 in fondo comunque.
+
+## Due difetti trovati provandola davvero
+
+**La grafica non si vedeva.** Composta, salvata, descritta a parole — e nessuna immagine in chat.
+La chat rende un media SOLO da `media: [{ url }]` nell'output del tool (`chat-media.ts`,
+`rowsFromRecord`); il percorso standalone restituiva `image_url`, che non è la stessa cosa. La
+descrizione di `show_media` lo diceva da sempre: *«what you create shows itself»* — il mio non lo
+faceva. Ora restituisce `media` e allega il render con `attachRenderForReview`, così anche il
+modello guarda quello che ha appena composto prima di parlarne.
+
+**La strada chirurgica era nascosta.** Reso `media_id` accettabile dalle quattro tool, in chat non
+cambiava niente: l'agente continuava a rifare la grafica intera da un brief di 900 caratteri, una
+sola chiamata. La riga che dice QUANDO preferire la patch finiva con «(pass post_id)» — su una
+grafica senza post il modello leggeva che quella strada non era disponibile. Un tool raggiungibile
+e non annunciato è un tool che non esiste, e adesso c'è un test che tiene la descrizione onesta.

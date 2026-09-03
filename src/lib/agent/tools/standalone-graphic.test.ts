@@ -63,6 +63,10 @@ vi.mock('$lib/server/brand-media', () => ({
   resolveBrandImageIds: async () => [],
   recordBrandMediaUse: async () => {}
 }));
+vi.mock('$lib/server/graphic-review', () => ({
+  attachRenderForReview: () => ({ reviewed: true }),
+  routeCarriesMedia: () => true
+}));
 
 const { designStandaloneGraphic } = await import('./post-editor-tools');
 
@@ -109,6 +113,25 @@ describe('una grafica che non appartiene a nessun post', () => {
 
     expect(out).toMatchObject({ ok: true, image_url: 'https://cdn.test/grafica.png', post_created: false });
     expect(s.touched).not.toContain('posts');
+  });
+
+  /**
+   * LA CHAT RENDE UN MEDIA SOLO DA `media: [{url}]` (chat-media.ts, `rowsFromRecord`). Senza questa
+   * riga la grafica veniva composta, salvata, e l'utente non la vedeva: «nessuna immagine in chat,
+   * nulla». Un risultato che esiste e non si vede è un risultato che non è stato consegnato.
+   */
+  it('si mostra da sola in chat', async () => {
+    mocks.inserted = [];
+    const s = supabaseSpy();
+
+    const out = (await designStandaloneGraphic(
+      { supabase: s.client, brandId: 'brand-1', userId: 'user-1', ctx: CTX as never },
+      { brief: 'una citazione su fondo blu' }
+    )) as Record<string, unknown>;
+
+    expect(out.media).toEqual([
+      { url: 'https://cdn.test/grafica.png', caption: 'una citazione su fondo blu' }
+    ]);
   });
 
   /** Resta SORGENTE, o «accorcia il titolo» tornerebbe a essere una ricomposizione da zero. */
