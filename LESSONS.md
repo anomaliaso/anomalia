@@ -667,3 +667,24 @@ dove non lo è: resta non fatale, smette di essere muto.
 23514, non rigetta. Un `.then(() => {}, () => {})` o un `.catch(() => {})` su una insert non vede il
 vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
 risolto.
+
+## Un `catch` muto su un percorso di ricavi nasconde il difetto finché non lo cerchi a mano
+
+**Segnale.** Nessun errore, nessun allarme, tutto verde — e un limite che non limita niente. Qui:
+il gating crediti è stato spento in produzione per circa una settimana, l'AI girava senza quota
+per chiunque, e non esisteva **una sola riga di log** che lo dicesse. È emerso solo perché
+qualcuno è andato a leggere `billingProvider()` per un altro motivo.
+
+**Cosa succede.** Un fallback permissivo scritto per un caso legittimo (il fork self-hosted senza
+billing) copre anche il caso illegittimo (il provider a pagamento che non si carica in
+produzione), e i due sono indistinguibili da fuori: entrambi restituiscono lo stesso provider che
+concede tutto. Il `catch` senza log li appiattisce.
+
+**La mossa.** Su un percorso che decide se si può spendere o incassare, il fallback si riporta —
+`swallow()` (console + Sentry), una volta per processo se il chiamante è un hot path. E si
+distingue sempre **la scelta** dall'**incidente**: `BILLING_PROVIDER=open` impostato di proposito
+resta silenzioso, il fallback non voluto no. Un allarme che suona anche quando va tutto bene viene
+ignorato, e allora tanto valeva il silenzio.
+
+**Il test che lo tiene.** `src/lib/server/billing/fallback-report.test.ts`: il fallback riporta,
+la scelta esplicita no, e riporta una volta sola.

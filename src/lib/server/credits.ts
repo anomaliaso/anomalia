@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { FREE_CREDITS, PLANS } from '$lib/plans';
+import { swallow } from '$lib/server/swallow';
 
 // ── AI Credits: consumption tracking per billing period ─────────────────────────
 // Every AI call logs cost_usd in ai_calls (tagged by brand_id via the AsyncLocalStorage
@@ -441,6 +442,15 @@ export async function gateCredits(brandId: string): Promise<void> {
 }
 
 /**
+ * Both fail-open paths below give up on the same thing — evaluating the ledger — and both let the
+ * action through on purpose: a transient Supabase error must not block a paying customer. Neither
+ * may do it silently. Unmetered AI nobody is told about is exactly how a week of it went unnoticed.
+ */
+function reportFailOpen(brandId: string, err: unknown): void {
+  swallow(`credits: allowed brand ${brandId} without evaluating its ledger`, err);
+}
+
+/**
  * The real enforcement, moved out of gateCredits() unchanged so the anomalia provider can call
  * it without gateCredits recursing back through itself. Not for direct use — call gateCredits().
  */
@@ -458,8 +468,9 @@ export async function gateCreditsCore(brandId: string): Promise<void> {
     admin = createAdminClient();
     const org = await resolveOrgBilling(admin, brandId);
     if (org) cacheKey = org.orgId;
-  } catch {
-    return; // fail-open: cannot evaluate → allow
+  } catch (e) {
+    reportFailOpen(brandId, e);
+    return;
   }
 
   // Outside the try on purpose: a denial here is the gate doing its job, and must not be
@@ -480,8 +491,9 @@ export async function gateCreditsCore(brandId: string): Promise<void> {
     if (!brand) return;
     usage = await getCreditsUsage(admin, brand as Brand);
     gateCache.set(cacheKey, { usage, at: Date.now() });
-  } catch {
-    return; // fail-open: cannot evaluate → allow
+  } catch (e) {
+    reportFailOpen(brandId, e);
+    return;
   }
   assertCreditsAvailable(usage);
 }
