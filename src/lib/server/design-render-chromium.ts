@@ -1,117 +1,84 @@
 /**
- * La grafica renderizzata da un BROWSER vero, invece che da satori.
+ * La grafica renderizzata da un BROWSER, nella sandbox che il brand ha già.
  *
  * Satori è un sottoinsieme stretto di flexbox — niente `grid`, `clamp()`, `text-wrap: balance`,
  * percentuali su `max-width` — e il compositore chiede al modello «full HTML with <style>». Un
  * sorgente che in Chrome sta in piedi lì trabocca e si sovrappone, e `inspectGraphicTree` ispeziona
- * l'albero DICHIARATO: non misura larghezze né estensioni, quindi non lo vede. È così che è uscita
- * una headline tagliata su due lati con `success: true`, due volte di fila.
+ * l'albero DICHIARATO: non misura, quindi non lo vede. Così è uscita una headline tagliata su due
+ * lati con `success: true`.
  *
- * IL BUNDLE SI PAGA UNA VOLTA. Misurato: 1.35s il bundle, ~220ms lo still riusando lo stesso
- * serveUrl. Il primo giro che sembrava costare 6.6s era boot di Chromium più bundle insieme —
- * numeri che, presi per il costo a grafica, avrebbero fatto scartare la strada giusta.
+ * DOVE GIRA, E PERCHÉ NON ALTROVE. Remotion documenta la Vercel Sandbox come la strada per chi sta
+ * su Vercel, e qui c'è già: `render-tools.ts` lancia `npx remotion still` per i fotogrammi del
+ * motion, sulla stessa VM per brand, con gli stessi `node_modules` in cache e lo stesso Chromium.
+ * Una grafica È un motion video da UN fotogramma, quindi non serve nessuna macchina nuova, nessun
+ * Chromium nel pacchetto della funzione e nessun ciclo di vita da gestire: la VM è condivisa, ha
+ * holder e lease, e un turno di chat che compone una grafica spesso ce l'ha già aperta.
  *
- * Il ripiego su satori resta e NON è una formalità: `@remotion/renderer` porta un Chromium da
- * 193 MB, e finché un deploy non lo dimostra montato e caldo, un percorso che fallisce senza rete
- * di sicurezza toglierebbe le grafiche invece di migliorarle.
+ * La strada in-process (`@remotion/bundler` + `renderStill` dentro la funzione) è quella che
+ * Remotion mette per ultima, ed è quella che avevo scritto: portava Chromium dove non deve stare.
  */
 import { env } from '$env/dynamic/private';
 
 export const GRAPHIC_CHROMIUM_FLAG = 'GRAPHIC_RENDERER';
 
-/**
- * Il Chrome da usare, quando non è quello che Remotion si scarica.
- *
- * Serve su Alpine, che è l'immagine di questo prodotto (`infra/app/Dockerfile`, `node:22-alpine`):
- * il binario che Remotion scarica è compilato per glibc e su musl NON parte — il sintomo è un
- * render che fallisce senza dire che il problema è la libc. Il compositor nativo invece un musl ce
- * l'ha (`compositor-linux-x64-musl` fra le optionalDependencies), quindi basta il browser di
- * sistema: `apk add chromium`, e questa variabile lo indica.
- */
-export const CHROMIUM_PATH_ENV = 'CHROMIUM_EXECUTABLE_PATH';
-
-function browserExecutable(): string | null {
-	return (env[CHROMIUM_PATH_ENV] ?? '').trim() || null;
-}
-
-/** Acceso solo quando l'operatore lo chiede: il default resta satori finché una preview non misura. */
+/** Acceso solo quando l'operatore lo chiede: il default resta satori finché non è misurato. */
 export function chromiumGraphicsEnabled(): boolean {
 	return (env[GRAPHIC_CHROMIUM_FLAG] ?? '').trim().toLowerCase() === 'chromium';
-}
-
-/**
- * Il sito bundlato, una volta per processo. Una Promise e non un valore: due render concorrenti
- * al primo colpo devono ASPETTARE lo stesso bundle, non farne due.
- */
-let bundled: Promise<string> | null = null;
-
-async function serveUrl(): Promise<string> {
-	if (!bundled) {
-		bundled = (async () => {
-			const { bundle } = await import('@remotion/bundler');
-			return bundle({ entryPoint: 'src/remotion/graphic-entry.tsx' });
-		})().catch((e) => {
-			// Un bundle fallito non deve restare memorizzato: il prossimo render riprova.
-			bundled = null;
-			throw e;
-		});
-	}
-	return bundled;
-}
-
-/**
- * Prepara il bundle PRIMA che serva.
- *
- * Su un server lungo (`DEPLOY_TARGET=node`) si chiama all'avvio: senza, il primo utente che chiede
- * una grafica dopo ogni deploy paga 1.35s che nessun altro pagherà mai. Non fallisce mai: se il
- * bundle non si fa, il primo render ci riprova e in ultima istanza c'è satori.
- */
-export async function warmGraphicRenderer(): Promise<boolean> {
-	if (!chromiumGraphicsEnabled()) return false;
-	try {
-		await serveUrl();
-		return true;
-	} catch (e) {
-		console.warn('[design-render] graphic renderer warm-up failed, first render will retry:', e instanceof Error ? e.message : e);
-		return false;
-	}
 }
 
 export type ChromiumRenderResult = { png: Buffer; width: number; height: number };
 
 /**
- * Renderizza il sorgente e torna il PNG, o `undefined` se questa via non è disponibile.
+ * Il sorgente del modello nella forma che il progetto di render si aspetta.
  *
- * `undefined` e non un'eccezione: il chiamante ripiega su satori e la grafica esce comunque. Una
- * eccezione qui trasformerebbe un renderer assente in un post senza immagine.
+ * `Video.tsx` deve esportare il componente di default e le misure, perché è da quegli export che
+ * `ROOT_TSX` costruisce la `<Composition>` — i numeri renderizzati sono per costruzione quelli
+ * dichiarati qui, e una grafica è un fotogramma solo.
+ */
+export function wrapGraphicAsComposition(source: string, width: number, height: number): string {
+	return `${source}
+
+export const width = ${width};
+export const height = ${height};
+export const fps = 30;
+export const durationInFrames = 1;
+export default (typeof Graphic !== 'undefined' ? Graphic : (() => null));
+`;
+}
+
+/**
+ * Renderizza e torna il PNG, o `undefined` se questa via non è disponibile.
+ *
+ * `undefined` e non un'eccezione: il chiamante ripiega su satori e la grafica esce comunque. Senza
+ * sandbox configurata — un self-host, una preview senza credenziali — un'eccezione qui
+ * trasformerebbe un renderer assente in un post senza immagine.
  */
 export async function renderGraphicWithChromium(
 	source: string,
-	opts: { width: number; height: number }
+	opts: { width: number; height: number; brandId?: string | null; userId?: string | null }
 ): Promise<ChromiumRenderResult | undefined> {
 	if (!chromiumGraphicsEnabled()) return undefined;
+	if (!opts.brandId) return undefined;
 	try {
-		const [{ selectComposition, renderStill }, url] = await Promise.all([
-			import('@remotion/renderer'),
-			serveUrl()
-		]);
-		const inputProps = { source };
-		const composition = await selectComposition({ serveUrl: url, id: 'Graphic', inputProps });
-		const { buffer } = await renderStill({
-			composition: { ...composition, width: opts.width, height: opts.height },
-			serveUrl: url,
-			inputProps,
-			imageFormat: 'png',
-			output: null,
-			...(browserExecutable() ? { browserExecutable: browserExecutable()! } : {}),
-			// In un container si gira senza sandbox del kernel: con `USER node` e senza privilegi
-			// Chrome non riesce ad aprirla e muore all'avvio, prima di qualunque render.
-			chromiumOptions: { headless: true, gl: 'swangle' }
+		const { isSandboxConfigured } = await import('$lib/server/sandbox');
+		if (!isSandboxConfigured()) return undefined;
+
+		const { renderMotionStills } = await import('$lib/server/motion-video/render-tools');
+		const { rendered, failures } = await renderMotionStills({
+			brandId: opts.brandId,
+			userId: opts.userId ?? undefined,
+			source: wrapGraphicAsComposition(source, opts.width, opts.height),
+			frames: [0],
+			detail: 'graphic'
 		});
-		if (!buffer?.length) return undefined;
-		return { png: Buffer.from(buffer), width: opts.width, height: opts.height };
+		const png = rendered[0]?.png;
+		if (!png?.length) {
+			console.error('[design-render] graphic still failed, falling back to satori:', failures[0]?.error ?? 'no frame');
+			return undefined;
+		}
+		return { png, width: opts.width, height: opts.height };
 	} catch (e) {
-		console.error('[design-render] chromium still failed, falling back to satori:', e instanceof Error ? e.message : e);
+		console.error('[design-render] graphic still failed, falling back to satori:', e instanceof Error ? e.message : e);
 		return undefined;
 	}
 }

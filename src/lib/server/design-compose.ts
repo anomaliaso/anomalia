@@ -510,7 +510,9 @@ export async function composeAndRenderGraphic(
     ? await reviseGraphicSource(previousSource, brief, composeOpts)
     : await composeGraphicSource(brief, composeOpts);
 
-  let rendered = await renderGraphicSource(composed.source, render);
+  // Il brand porta la sandbox: e' per brand, e il tempo macchina si addebita a lui.
+  const renderWithBrand = { ...render, brandId: composeOpts.brandId, userId: composeOpts.userId };
+  let rendered = await renderGraphicSource(composed.source, renderWithBrand);
   let issues = withLogoIssue(rendered.issues, rendered.source, composeOpts.availableImages);
   let repaired = false;
 
@@ -526,7 +528,7 @@ export async function composeAndRenderGraphic(
         `The rendered graphic has defects that make it unusable in a feed. Fix ONLY these, changing nothing else:\n${fix}`,
         composeOpts
       );
-      const retry = await renderGraphicSource(patched.source, render);
+      const retry = await renderGraphicSource(patched.source, renderWithBrand);
       const after = withLogoIssue(retry.issues, retry.source, composeOpts.availableImages);
       // Si tiene la riparazione solo se ha davvero tolto qualcosa. Un modello a cui si chiede di
       // alzare un corpo di testo può riscrivere mezza tela e introdurne due nuovi: in quel caso
