@@ -4,7 +4,7 @@
  * l'unica garanzia che regge anche quando lo scenario muore a metà.
  */
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { createEvalUser, deleteEvalUser } from '../ux/user';
+import { createEvalUser, deleteEvalUser } from '../user';
 
 export type Fixture = {
   userId: string;

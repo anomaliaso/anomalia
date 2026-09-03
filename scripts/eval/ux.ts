@@ -4,7 +4,7 @@ import { generateText } from 'ai';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { geminiFast } from '$lib/server/chat/model';
 import { Browser } from './ux/browser';
-import { createEvalUser, deleteEvalUser } from './ux/user';
+import { createEvalUser, deleteEvalUser } from './user';
 import { brandForUser, planFacts, waitForAssistantReply, waitForTeamContact, waitForDelegation } from './ux/facts';
 import { walkOnboarding, sendCrossCraftAsk } from './ux/walk';
 import { RUBRIC, grade, parseJudgment } from './ux/grader';
