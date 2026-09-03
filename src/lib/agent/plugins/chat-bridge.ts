@@ -63,8 +63,20 @@ export async function execChatTool(
 			abortSignal: signal,
 			context: {}
 		} as ToolExecutionOptions<unknown>)) as Record<string, unknown>;
+
+		// `_images` esce dal JSON e diventa una parte immagine vera. Prima ogni ritorno veniva
+		// stringificato in blocco: un PNG allegato da un tool finiva come base64 dentro il testo,
+		// illeggibile per il modello e enorme. E' il motivo per cui l'agente non ha mai guardato
+		// una grafica appena composta — la vedeva come `source_chars: 4312`.
+		const { _images, ...payload } = (out ?? {}) as Record<string, unknown>;
+		const images = Array.isArray(_images) ? (_images as Array<{ mimeType?: string; base64?: string }>) : [];
 		return {
-			content: [{ type: 'text', text: JSON.stringify(out) }],
+			content: [
+				{ type: 'text', text: JSON.stringify(payload) },
+				...images
+					.filter((i) => typeof i?.base64 === 'string' && i.base64.length > 0)
+					.map((i) => ({ type: 'image' as const, mimeType: i.mimeType ?? 'image/png', base64: i.base64! }))
+			],
 			isError: !!out && typeof out === 'object' && 'error' in out
 		};
 	} catch (e) {

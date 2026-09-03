@@ -82,6 +82,8 @@ const warnings = (issues: Array<{ blocking: boolean; detail: string }>) => {
 export function compactGraphicPersist(result: object, extra: Record<string, unknown> = {}) {
 	const rec = result as Record<string, unknown>;
 	if (rec.error && rec.success !== true) return { error: String(rec.error) };
+	// `_images` sopravvive al compattamento: e' il render, non un dettaglio di implementazione, ed
+	// e' la sola cosa che permette al modello di vedere quello che ha appena composto.
 	const { graphic_source, graphic_spec: _spec, ...rest } = rec;
 	return {
 		ok: true as const,
