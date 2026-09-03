@@ -91,6 +91,77 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/editorial-plan/prop
 
 ---
 
+## `POST /api/v1/brands/:slug/editorial-plan/save`
+
+Salva un piano **scritto fuori da Anomalia**: nessuna chiamata al modello, nessun credito. La riga
+prodotta è la stessa di `propose` — `status: "proposed"`, `source: "manual"` — quindi il piano si
+legge, si revisiona e si approva dalle stesse superfici. Le proposte precedenti passano a
+`rejected`; **il piano attivo non viene toccato**: resta `approve` il passo che attiva.
+
+Il body è validato in modo stretto (`invalid_input` nomina il campo). Un ciclo più corto di 4
+settimane viene completato con settimane vuote, come per un piano generato.
+
+**Body**:
+
+```json
+{
+  "strategy": "Portare fuori il lavoro vero di chi monta le tastiere.",
+  "voice": { "mood": "diretto", "tone": "asciutto", "goal": "far provare", "personality": "un artigiano che spiega" },
+  "cadence": "3/week",
+  "platform_mix": [{ "platform": "instagram", "share": "70%", "role": "vetrina" }],
+  "gtm": {
+    "stage": "zero_to_one",
+    "summary": "…",
+    "platform_recs": [{ "platform": "instagram", "priority": "primary", "why": "…", "organic_potential": "…" }],
+    "plays": ["…"]
+  },
+  "weeks": [
+    {
+      "theme": "Il banco di lavoro",
+      "focus": "Mostrare il montaggio a mano",
+      "content_mix": [{ "type": "behind the scenes", "count": 3 }],
+      "rationale": "…",
+      "brief": null,
+      "products": ["Tastiera 65%"]
+    }
+  ]
+}
+```
+
+Obbligatori: `strategy`, `voice` (tutti e quattro i campi), `cadence` (`3/week` | `5/week` |
+`daily`), `platform_mix` (almeno una voce), `weeks` (1–4, ciascuna con `theme`, `focus` e un
+`content_mix` non vuoto). Opzionali: `gtm`, e per settimana `rationale`, `brief`, `products`.
+
+**Response** `200`:
+
+```json
+{
+  "ok": true,
+  "plan_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890",
+  "status": "proposed",
+  "weeks": 4,
+  "review_url": "https://anomalia.so/app/mio-brand/editorial"
+}
+```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — `details[0].path` nomina il campo |
+| `403` | `{"error":"API key is read-only"}` |
+| `500` | `{"error":"insert_failed","details":"…"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/editorial-plan/save" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"strategy":"…","voice":{"mood":"…","tone":"…","goal":"…","personality":"…"},"cadence":"3/week","platform_mix":[{"platform":"instagram","share":"70%","role":"vetrina"}],"weeks":[{"theme":"…","focus":"…","content_mix":[{"type":"educational","count":3}]}]}'
+```
+
+---
+
 ## `POST /api/v1/brands/:slug/editorial-plan/approve`
 
 Attiva la proposta più recente: diventa il piano `active` (con `week_start` calcolati dal lunedì corrente nel timezone del brand), il piano attivo precedente passa a `superseded`, voice+cadence sincronizzati nelle preferenze del brand.

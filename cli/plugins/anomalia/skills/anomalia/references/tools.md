@@ -79,6 +79,29 @@ It never looks at pixels — judging an image or a video is a separate, explicit
 | `save_brief` / `replan_week` | `anomalia plan <slug> save-brief\|replan --week N …` |
 | `get_weekly_plan` | `anomalia weekly-plan <slug>` |
 | `plan_week` / `produce_week` | `anomalia weekly-plan <slug> plan\|produce --week N` |
+| `save_plan` | (MCP only) |
+| `save_week_seeds` | (MCP only) |
+
+`propose_plan` and `plan_week` ask Anomalia's model to write the strategy and the week's rows,
+and they bill it. `save_plan` and `save_week_seeds` are the other half: you wrote them, Anomalia
+only stores them — no model call, no credits. Both paths land in the same place, so a saved plan
+is reviewed, approved and produced exactly like a generated one.
+
+`save_plan` deposits the plan as the brand's **pending proposal**. The active plan is left alone:
+`approve_plan` stays the step that activates one, and saving replaces an earlier pending proposal,
+never an active plan. Required: `strategy`, `voice` (`mood`, `tone`, `goal`, `personality`),
+`cadence` (`3/week`, `5/week`, `daily`), `platform_mix` (`platform`, `share`, `role`), and
+`weeks` — up to 4, each with `theme`, `focus` and a `content_mix` whose counts are the week's
+volume. Optional per week: `rationale`, `brief`, `products`. Optional `gtm`. A short cycle is
+padded to 4 weeks, like a generated one.
+
+`save_week_seeds` deposits the week's rows — one per planned post, no copy and no image yet.
+Required: `week_index` (0–3), `theme`, `seeds` (each needs `platform` and `angle`). Optional per
+seed: `platforms`, `pillar`, `format`, `media`, `slide_count`, `day`, `time`, `subject`,
+`setting`, `props`, `product`, `person`, `title`, `subreddit`, `link_url`, `art_direction`,
+`sourced_from`, and the video script (`hook`, `hook_visual`, `hook_text`, `body`, `cta`, `ugc`).
+A brand keeps one draft in review, so saving replaces the one that is there (`replaced` says so).
+`produce_week` is the separate, paid step that turns the rows into posts.
 
 ## Studio
 
