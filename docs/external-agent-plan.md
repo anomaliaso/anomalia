@@ -1019,9 +1019,15 @@ Completion criteria:
 - The Anomalia skill and MCP tool catalogue include the new workflow.
 - An external agent can edit a post created by social autopilot without
   regenerating its text or media.
-- `npm run eval:ux` runs before merge because the tool surface changed. If the
-  environment prevents it, the PR reports the scenario as unrun rather than
-  green.
+- The tool is exercised from a real external client against a local stack
+  before merge, and the PR records which tools the model chose and with what
+  arguments. A contract test proves the tool is registered; only a real client
+  proves the description is usable.
+
+`npm run eval:ux` was the gate here and no longer exists. It graded the in-app
+onboarding chat, not the MCP surface, and it built a whole stack and spent real
+model money on every run — a gate nobody could afford to run is a line a report
+can cite without anyone having executed it.
 
 ### Creative support
 
