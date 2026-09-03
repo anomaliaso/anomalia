@@ -899,6 +899,126 @@ export async function graphicImageCatalog(
   return { catalog, ...(generatedUrl ? { generatedUrl } : {}) };
 }
 
+/**
+ * UNA GRAFICA CHE NON APPARTIENE A NESSUN POST.
+ *
+ * `design_graphic` chiedeva un `post_id` obbligatorio, quindi «fammi una grafica ma niente post»
+ * non era esprimibile: l'unico strumento capace di produrre un'immagine senza toccare un post era
+ * `generate_image`, che però fa una FOTO. L'agente non stava disobbedendo — dava l'unica cosa che
+ * poteva, e non era quella chiesta.
+ *
+ * L'asset nasce nella libreria media come qualunque altra immagine generata, e la versione della
+ * grafica viaggia con lui (`kind: 'media_item'`, che il magazzino conosceva già): resta SORGENTE,
+ * quindi «accorcia il titolo» è una revisione e non una ricomposizione. Da lì `create_post_from_asset`
+ * lo trasforma in un post quando — e se — l'utente lo chiede.
+ */
+export async function designStandaloneGraphic(
+  t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; refUrls?: string[] },
+  args: GraphicRefArgs & { brief: string; media_id?: string }
+) {
+  const { composeAndRenderGraphic } = await import('$lib/server/design-compose');
+  const { latestGraphic, versionSource, saveGraphicVersion } = await import('$lib/server/design-store');
+  const { uploadPostImage } = await import('$lib/server/content-preview');
+
+  const { catalog, generatedUrl } = await graphicImageCatalog(t, args);
+
+  // Un `media_id` che porta già una grafica è una REVISIONE: si riparte dal suo sorgente, così
+  // quello che l'utente non ha nominato sopravvive.
+  const previous = args.media_id
+    ? await latestGraphic(t.supabase, { kind: 'media_item', id: args.media_id })
+    : null;
+
+  let composed: Awaited<ReturnType<typeof composeAndRenderGraphic>>;
+  try {
+    composed = await composeAndRenderGraphic(args.brief, {
+      language: t.ctx.language,
+      instructions: t.ctx.typography.instructions,
+      brandId: t.brandId,
+      userId: t.userId,
+      availableImages: catalog,
+      previousSource: previous ? versionSource(previous) : null,
+      context: null,
+      render: {
+        brandColors: t.ctx.brandColors,
+        typography: { display: t.ctx.typography.display, body: t.ctx.typography.body },
+        availableImages: catalog
+      }
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'The graphic could not be composed.' };
+  }
+
+  const out = composed.rendered;
+  const url = await uploadPostImage(
+    t.supabase,
+    t.userId,
+    `data:image/png;base64,${out.png.toString('base64')}`
+  );
+  if (!url) return { error: 'Upload failed' };
+
+  // La revisione resta sulla STESSA tessera, o la cronologia si spezza in una pila di tentativi.
+  let mediaId = args.media_id ?? null;
+  let tileWarning: string | undefined;
+  if (mediaId) {
+    const { updateMediaGeneratorItemUrl } = await import('$lib/server/media-generator/persist');
+    const upd = await updateMediaGeneratorItemUrl(t.supabase, {
+      brandId: t.brandId,
+      itemId: mediaId,
+      url,
+      prompt: args.brief
+    });
+    if (!upd.ok) {
+      tileWarning = `The revised graphic is saved (image_url below) but the library tile still shows the old one: ${upd.error}.`;
+    }
+  } else {
+    const { insertMediaGeneratorItem } = await import('$lib/server/media-generator/persist');
+    const saved = await insertMediaGeneratorItem(t.supabase, {
+      brandId: t.brandId,
+      userId: t.userId,
+      kind: 'image',
+      url,
+      prompt: args.brief,
+      aspect: out.aspect
+    });
+    if ('row' in saved) mediaId = saved.row.id;
+  }
+
+  // Senza tessera l'immagine esiste ma non è più modificabile: va detto, non taciuto.
+  if (mediaId) {
+    await saveGraphicVersion(t.supabase, {
+      brandId: t.brandId,
+      userId: t.userId,
+      target: { kind: 'media_item', id: mediaId },
+      spec: out.spec,
+      source: out.source,
+      mediaUrl: url,
+      brief: args.brief
+    });
+  }
+
+  if (args.media_ids?.length && !args.generate_prompt?.trim()) {
+    const { recordBrandMediaUse } = await import('$lib/server/brand-media');
+    await recordBrandMediaUse(t.supabase, t.brandId, args.media_ids);
+  }
+
+  return {
+    ok: true,
+    image_url: url,
+    media_id: mediaId,
+    editable: !!mediaId,
+    post_created: false,
+    aspect: out.aspect,
+    available_images: catalog.length,
+    brand_logo_in_catalog: catalog.some((a) => a.label === 'brand logo'),
+    generated_image_url: generatedUrl,
+    edited: !!previous,
+    ...(mediaId ? {} : { warning: 'Saved as an image but not as an editable graphic: no library tile was created.' }),
+    ...(tileWarning ? { warning: tileWarning } : {}),
+    ...(composed.issues.length ? { design_warnings: composed.issues.map((i) => i.detail) } : {}),
+    ...(composed.repaired ? { repaired_after_gate: true } : {})
+  };
+}
+
 export async function designPostGraphic(
   t: EditorTarget,
   args: {

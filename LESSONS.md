@@ -20,6 +20,16 @@ riempita da un chiamante di passaggio. O lo si legge dove si puo` aspettare, o l
 punto per cui passano tutti. La terza via — «tanto qualcuno l'avra` letta» — e` il difetto piu`
 silenzioso che ci sia, perche' il prodotto continua a funzionare.
 
+### Lo Storage locale non salva immagini: «extended attributes disabled»
+Verificando una grafica dalla chat, ogni upload falliva e l'agente riferiva onestamente «Upload
+failed». Nel log del dev server: `[uploadPostImage] storage upload failed: The file system does not
+support extended attributes or has the feature disabled`. Non e` il codice: il container Storage
+del self-hosted, sul filesystem montato da Docker su macOS, non riesce a scrivere gli xattr.
+Segnale: OGNI upload fallisce allo stesso modo, anche su percorsi che non hai toccato — la prova
+decisiva e` chiedere una foto AI (percorso vecchio) e vedere lo stesso errore. Mossa: verifica la
+LOGICA con i test (il caricamento si mocka) e nel browser verifica quello che il difetto riguardava
+— quale tool viene scelto, quali righe nascono — senza pretendere che il file arrivi in Storage.
+
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 
