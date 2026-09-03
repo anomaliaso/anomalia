@@ -57,8 +57,29 @@ la sandbox è **per brand** e il tempo macchina si **addebita** (`withSandboxBil
 brand non c'è né la macchina giusta né a chi fatturarla, e infatti senza brand il renderer non parte
 — con il suo test.
 
-## Cosa manca ancora
+## Provato davvero, da localhost
 
-Un render vero attraverso questa strada. La macchina che uso è quella che il motion usa in
-produzione ogni giorno, e il wrapper è testato, ma la prima grafica renderizzata in sandbox è ancora
-da fare. Per questo il flag resta spento.
+```
+esito: 83914 bytes in 20768ms   (prima volta)
+esito: 83914 bytes in 19072ms   (seconda)
+```
+
+Con `VERCEL_TOKEN` + `VERCEL_TEAM_ID` + `VERCEL_PROJECT_ID` in `.env` — le stesse credenziali che il
+motion usa — `isSandboxConfigured()` è vero anche in locale, e il render gira. Il PNG è corretto:
+tre righe di headline contenute, sottotitolo che va a capo da solo, footer in basso — con `grid`,
+`clamp()` e `text-wrap: balance`, che satori non regge.
+
+**~20s, non 220ms.** I 220ms erano in-process, senza VM. Qui il tempo è la macchina: apertura del
+lease, scrittura del sorgente, `npx remotion still`. Le due misure quasi identiche dicono che non è
+il boot a dominare — è il ciclo del comando dentro la sandbox.
+
+Venti secondi vanno bene per una grafica chiesta in chat, e vanno misurati per `produce_week` con i
+caroselli: dieci slide sono tre minuti abbondanti. Il flag resta spento anche per quello — prima
+serve capire se le slide di un carosello possono condividere un solo `remotion still` invece di
+dieci.
+
+## Il flag va passato dall'ambiente
+
+`$env/dynamic/private` sotto vitest non rilegge `.env`: scriverci dentro `GRAPHIC_RENDERER` lascia
+il flag spento e il test passa **senza aver renderizzato niente**. Va passato davanti al comando.
+È annotato nel test, perché è il modo esatto in cui questa verifica poteva mentire.
