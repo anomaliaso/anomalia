@@ -9,6 +9,7 @@ import {
   clampVideoAspectRatio,
   videoModelCaps,
   buildTransformInput,
+  buildJobInput,
   videoDurationOptions,
   ugcDurationCap,
   suggestVideoDuration,
@@ -679,9 +680,10 @@ describe('buildTransformInput — i due mestieri con un video in ingresso', () =
     });
     expect(input).toMatchObject({
       input_urls: ['https://x/subject.png'],
-      video_urls: ['https://x/drive.mp4'],
-      mode: 'pro'
+      video_urls: ['https://x/drive.mp4']
     });
+    // `mode` NON parte: kie lo rifiuta con qualunque valore, vedi il test piu' sotto.
+    expect(input.mode).toBeUndefined();
   });
 
   it('riporta un rapporto che il modello non serve al più vicino che serve', () => {
@@ -694,5 +696,35 @@ describe('buildTransformInput — i due mestieri con un video in ingresso', () =
   it('rifiuta un modello che quel mestiere non lo fa', () => {
     expect(() => buildTransformInput(GROK_IMAGINE_VIDEO_MODEL, 'refine', { videoUrl: 'https://x/c.mp4' }))
       .toThrow(/refine/);
+  });
+});
+
+describe('quello che kie pretende davvero, non quello che i docs dicono', () => {
+  it('non manda `mode` a motion control: nessun valore e\' accettato', () => {
+    // Misurato su kie il 2026-09-03: `mode` "std", "pro", "standard" e "professional" tornano
+    // tutti 500 "mode is not within the range of allowed options"; senza il campo, il task e'
+    // accettato. La pagina docs del modello documenta std|pro, e si sbaglia. Rimetterlo qui
+    // significa che OGNI motion control fallisce dopo un giro di rete intero.
+    const input = buildTransformInput(KLING_3_VIDEO_MODEL, 'motion', {
+      videoUrl: 'https://x/drive.mp4',
+      imageUrl: 'https://x/subject.png',
+      mode: 'pro'
+    });
+    expect(input.mode).toBeUndefined();
+    expect(input).toMatchObject({ input_urls: ['https://x/subject.png'], video_urls: ['https://x/drive.mp4'] });
+  });
+
+  it('manda a Kling 3.0 i due campi che i docs danno per opzionali', () => {
+    // Stessa sessione: senza `multi_shots` il task e' rifiutato con "multi_shots cannot be empty",
+    // e appena aggiunto arriva "sound cannot be empty". Entrambi sono documentati opzionali.
+    // Con tutti e due il task passa e il video esce (42 crediti).
+    const input = buildJobInput(KLING_3_VIDEO_MODEL, {
+      prompt: 'a red cube on white',
+      durationSeconds: 3,
+      resolution: '480p',
+      aspectRatio: '9:16'
+    });
+    expect(input.multi_shots).toBe(false);
+    expect(input.sound).toBe(false);
   });
 });
