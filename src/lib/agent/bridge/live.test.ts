@@ -384,6 +384,9 @@ function nullClaimRow(): Row {
 	const chatMessages: Row[] = [];
 	// Gli eventi durevoli (`append_thread_event`/`thread_events`): progress dello specchio e messaggi.
 	const threadEvents: Row[] = [];
+	// Ogni append TENTATO, potatura compresa: `threadEvents` dice cosa è sopravvissuto, questo
+	// dice cosa è stato chiesto — ed è lì che si vede una chiave scritta due volte.
+	const appendCalls: Array<{ source_key: string; kind: string; payload: unknown }> = [];
 	let eventSeq = 0;
 
 	function from(_table: string) {
@@ -518,6 +521,20 @@ function nullClaimRow(): Row {
 	// `chatMessages` vive in testa a `fakeDb`: `from('chat_messages')` ci opera sopra.
 	function rpc(fn: string, params: Record<string, unknown>) {
 		if (fn === 'append_thread_event') {
+			appendCalls.push({ source_key: params.p_source_key as string, kind: params.p_kind as string, payload: params.p_payload });
+			// LA STESSA SEMANTICA DEL PLPGSQL (0226): la chiave è unica per thread, e una seconda
+			// scrittura sotto la stessa chiave o è identica — e allora torna la riga di prima — o
+			// è un conflitto che ALZA. Un fake che accodava e basta rendeva verde un chiamante che
+			// in produzione si vedeva chiudere la corsia in faccia.
+			const existing = threadEvents.find(
+				(e) => e.thread_id === params.p_thread_id && e.source_key === params.p_source_key
+			);
+			if (existing) {
+				if (existing.kind !== params.p_kind || JSON.stringify(existing.payload) !== JSON.stringify(params.p_payload)) {
+					return Promise.resolve({ data: null, error: { message: 'thread event source key conflict' } });
+				}
+				return Promise.resolve({ data: [{ ...existing }], error: null });
+			}
 			const row: Row = {
 				thread_id: params.p_thread_id,
 				seq: ++eventSeq,
@@ -612,7 +629,7 @@ function nullClaimRow(): Row {
 		return Promise.resolve({ data: { closed: true, message_id: msgId }, error: null });
 	}
 
-	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages, approvals, threadEvents };
+	return { db: { from, rpc } as unknown as SupabaseClient, rows, chatMessages, approvals, threadEvents, appendCalls };
 }
 
 /** Un turno che chiama UN tool (e unico) e basta. */
@@ -1993,6 +2010,70 @@ describe('runKitTurn — resumeRunId (il reaper lascia la riga viva, un worker n
 		expect(rows[0].lease_owner).not.toBe('dead-owner');
 		expect(rows[0].state).toBe('done');
 		expect(staleClose?.closed).toBe(false);
+	});
+
+	it('due specchi dello stesso run non si contendono la stessa chiave: la corsia progress regge il secondo giro', async () => {
+		const morto = {
+			id: 'run-dead',
+			brand_id: 'b1',
+			thread_id: 't-reap',
+			agent_id: 'content',
+			user_id: 'u1',
+			state: 'running',
+			reason: null,
+			question: null,
+			lease_owner: 'dead-owner',
+			lease_fence: 3,
+			lease_until: '2020-01-01T00:00:00.000Z',
+			created_at: '2026-08-21T00:00:00.000Z',
+			updated_at: '2026-08-21T00:00:00.000Z'
+		};
+		const { db, rows, appendCalls } = fakeDb([morto]);
+
+		textThenReplyModel(['primo giro'], 'fatto');
+		await (
+			await runKitTurn({
+				supabase: fakeSupabase,
+				admin: db,
+				brand: { id: 'b1' },
+				user: { id: 'u1' },
+				threadId: 't-reap',
+				spec,
+				messages: [{ role: 'user', content: 'ciao' }],
+				locale: 'it',
+				resumeRunId: 'run-dead'
+			})
+		).text();
+
+		// IL REAPER LASCIA LA RIGA VIVA UN'ALTRA VOLTA: stesso run, secondo worker, secondo
+		// specchio. `MAX_RUN_ATTEMPTS` ne ammette tre — e ogni specchio riparte dal suo tick 1.
+		rows[0].state = 'running';
+		rows[0].lease_until = '2020-01-01T00:00:00.000Z';
+
+		textThenReplyModel(['secondo giro, testo diverso'], 'rifatto');
+		await (
+			await runKitTurn({
+				supabase: fakeSupabase,
+				admin: db,
+				brand: { id: 'b1' },
+				user: { id: 'u1' },
+				threadId: 't-reap',
+				spec,
+				messages: [{ role: 'user', content: 'e allora?' }],
+				locale: 'it',
+				resumeRunId: 'run-dead'
+			})
+		).text();
+
+		const perChiave = new Map<string, Set<string>>();
+		for (const call of appendCalls.filter((c) => c.kind === 'progress')) {
+			const payloads = perChiave.get(call.source_key) ?? new Set<string>();
+			payloads.add(JSON.stringify(call.payload));
+			perChiave.set(call.source_key, payloads);
+		}
+		const contese = [...perChiave].filter(([, payloads]) => payloads.size > 1).map(([key]) => key);
+
+		expect(contese).toEqual([]);
 	});
 
 	it('la riga già ripresa da un altro non parte una seconda volta', async () => {
