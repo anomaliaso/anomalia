@@ -165,6 +165,37 @@ describe('le richieste di produzione pesanti riconosciute senza chiamate modello
     expect(isHeavyProductionAsk('render the motion trailer')).toBe(true);
   });
 
+  /**
+   * IL DIFETTO PAGATO, 2026-09-03. «Non fare alcun post» e l'agente generava un'immagine lo
+   * stesso. Non e` che ignorasse l'istruzione: gliela facevamo ignorare noi. Questo classificatore
+   * ha un solo consumatore, `forcedFirstStepTools`, che su un "si" OBBLIGA il modello a chiamare
+   * un tool al primo step — e le stesse parole ci sono in «crea un post» e in «non creare un
+   * post», perche' la negazione non veniva guardata.
+   *
+   * Il costo dei due errori non e` simmetrico, ed e` questo che decide la regola: non forzare
+   * quando avremmo potuto lascia il modello libero di chiamare il tool lo stesso; forzare quando
+   * l'utente ha detto di no scavalca un'istruzione esplicita. Nel dubbio non si forza.
+   */
+  it('una negazione toglie la forzatura, comunque sia scritta', () => {
+    expect(isHeavyProductionAsk('non fare alcun post')).toBe(false);
+    expect(isHeavyProductionAsk('non creare nessun post')).toBe(false);
+    expect(isHeavyProductionAsk('senza generare immagini')).toBe(false);
+    expect(isHeavyProductionAsk('non generare immagini, dimmi solo cosa faresti')).toBe(false);
+    expect(isHeavyProductionAsk("non voglio che tu crei un post, voglio solo un'analisi")).toBe(false);
+    expect(isHeavyProductionAsk('evita di creare post')).toBe(false);
+    expect(isHeavyProductionAsk('do not create any post')).toBe(false);
+    expect(isHeavyProductionAsk("don't generate images")).toBe(false);
+    expect(isHeavyProductionAsk('without creating a carousel')).toBe(false);
+    expect(isHeavyProductionAsk('avoid generating the video')).toBe(false);
+  });
+
+  /** Anche i termini che da soli valgono "produzione" si spengono davanti a un no. */
+  it('la negazione vale anche sui termini forti da soli', () => {
+    expect(isHeavyProductionAsk('serve un UGC per TikTok')).toBe(true);
+    expect(isHeavyProductionAsk('non fare nessun UGC')).toBe(false);
+    expect(isHeavyProductionAsk('niente carosello, solo il piano')).toBe(false);
+  });
+
   it('NON scala su domande e conversazione normale', () => {
     expect(isHeavyProductionAsk("com'è andata la settimana?")).toBe(false);
     expect(isHeavyProductionAsk('what does my plan include?')).toBe(false);
