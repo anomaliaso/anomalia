@@ -64,6 +64,14 @@ const MOTION_AGENT = 'motion';
 /** Il progetto di render, nella home della VM: sopravvive alla run, non ai riavvii della macchina. */
 const PROJECT_DIR = '.anomalia/motion-render';
 
+/**
+ * Quanto la macchina resta in piedi dopo una grafica, in attesa della prossima.
+ *
+ * Abbastanza da coprire due richieste dello stesso turno di chat, abbastanza poco da non tenere
+ * una VM accesa per niente. Non e' un tetto di vita: il lease della sandbox la spegne comunque.
+ */
+const GRAPHIC_RELEASE_GRACE_MS = 25_000;
+
 /** Fotogrammi per chiamata. Oltre, il contesto si riempie di PNG e il modello smette di guardarli. */
 export const MAX_STILLS_PER_RENDER = 4;
 /** Render per turno: ognuno è una VM, un render e dei megabyte di immagini nel contesto. */
@@ -651,7 +659,15 @@ export async function renderGraphicStills(opts: {
 				// l'istanza congelata non finirebbe mai.
 				const toRelease = sb;
 				if (toRelease) {
-					runInBackground(() => toRelease.release(), `sandbox-release:${toRelease.name}`);
+					runInBackground(async () => {
+						// GRAZIA prima di rilasciare. `releaseHolder` chiama `stopWhenIdle`, che spegne
+						// la VM quando nessun holder resta: senza attesa, la pulizia della prima
+						// grafica spegne la macchina mentre la seconda la sta chiedendo, e quella
+						// paga il risveglio. Misurato: tre render di fila hanno dato 13.5s, 25.6s e
+						// 4.4s — il picco centrale e' esattamente questa collisione.
+						await new Promise((r) => setTimeout(r, GRAPHIC_RELEASE_GRACE_MS));
+						await toRelease.release();
+					}, `sandbox-release:${toRelease.name}`);
 				}
 			}
 		}
