@@ -87,6 +87,9 @@ Dopo un merge da dev, un test della PR entra in timeout di 30s invece di fallire
 ### Le factory `vi.mock` invecchiano col merge, non col typecheck
 Il mock scritto nell'era della PR non dichiara gli export nuovi di dev (`createSubagentTools`, `MAX_CRITERION_CHARS`, `loadMemoryEntries`): l'errore `No "X" export is defined on the "Y" mock` esplode a runtime a metà test, mai in compilazione. Stesso segno per il fake supabase che manca di un metodo nuovo (`query.or is not a function`). Mossa: a ogni errore di quel tipo aggiungi l'export — o meglio `...actual` via `importOriginal` e override selettivi.
 
+### Il fake di una RPC che torna `null` dove il plpgsql torna una riga di NULL
+Una funzione `returns public.<tabella>` che non prende righe NON torna `null`: la riga composita esce tutta NULL e PostgREST la consegna come oggetto con ogni colonna a `null`. Un fake che risponde `{ data: null }` rende verde un client che controlla `if (!data)` e lascia passare in produzione un record fantasma — `agent_kit_claim_run` faceva girare turni interi con `run.id === null`: ogni scrittura filtrata per `id` toccava zero righe e la chiusura non depositava il messaggio, quindi il turno spariva dalla chat dopo aver speso il modello. Segnale: `run null` nei log, o «sfrattato prima della chiusura» su un run che nessuno ha sfrattato. Mossa: nel fake torna la riga di NULL, e nel client controlla la CHIAVE (`if (!row?.id)`), mai la sola presenza dell'oggetto.
+
 ### Il test della PR può aspettare il vecchio contratto
 `toHaveBeenCalledWith` con 6 argomenti contro un executor passato a 7 (dev ha aggiunto la riga `job`): fallisce nel merge senza che nessuno abbia toccato il file. Mossa: nel riesame di un merge, fai girare PRIMA i test dei file in conflitto — sono gli unici che fanno da spec su entrambi i lati.
 

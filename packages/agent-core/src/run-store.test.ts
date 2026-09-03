@@ -21,6 +21,33 @@ import {
 
 type Row = Record<string, unknown>;
 
+/**
+ * `agent_kit_claim_run` è `returns public.agent_kit_runs`: quando l'UPDATE non prende righe la
+ * riga composita esce TUTTA NULL, e PostgREST la consegna come oggetto con ogni colonna a null.
+ * Non come `null` — ed è la differenza fra una presa persa e un run fantasma.
+ */
+function nullComposite(): Row {
+	return Object.fromEntries(
+		[
+			'id',
+			'brand_id',
+			'thread_id',
+			'agent_id',
+			'user_id',
+			'state',
+			'reason',
+			'question',
+			'lease_until',
+			'lease_owner',
+			'lease_fence',
+			'attempt',
+			'heartbeat_at',
+			'created_at',
+			'updated_at'
+		].map((column) => [column, null])
+	);
+}
+
 function fakeDb(seed: Row[] = []) {
 	const rows: Row[] = seed.map((r) => ({ ...r }));
 	const calls: Array<{ method: string; args: unknown[] }> = [];
@@ -114,12 +141,12 @@ function fakeDb(seed: Row[] = []) {
 		const run = rows.find((r) => r.id === params.p_run_id);
 
 		if (fn === 'agent_kit_claim_run') {
-			if (!run) return Promise.resolve({ data: null, error: null });
+			if (!run) return Promise.resolve({ data: nullComposite(), error: null });
 			const openState = ['queued', 'waiting_input', 'waiting_takeover'].includes(run.state as string);
 			const expired =
 				['running'].includes(run.state as string) &&
 				(run.lease_until == null || (run.lease_until as string) <= (params.p_now as string));
-			if (!openState && !expired) return Promise.resolve({ data: null, error: null });
+			if (!openState && !expired) return Promise.resolve({ data: nullComposite(), error: null });
 			run.state = 'running';
 			run.lease_owner = params.p_owner;
 			run.lease_fence = ((run.lease_fence as number) ?? 0) + 1;
@@ -325,6 +352,33 @@ describe('il lease del run: proprietario e fence', () => {
 		expect(claimed).toBeNull();
 		expect(rows[0].lease_owner).toBe('worker-vecchio');
 		expect(rows[0].lease_fence).toBe(3);
+	});
+
+	it('la riga di NULL che torna dal plpgsql è una presa PERSA, non un run senza id', async () => {
+		const rpc = async () => ({
+			data: {
+				id: null,
+				brand_id: null,
+				thread_id: null,
+				agent_id: null,
+				user_id: null,
+				state: null,
+				lease_owner: null,
+				lease_fence: null,
+				attempt: null,
+				heartbeat_at: null,
+				created_at: null,
+				updated_at: null
+			},
+			error: null
+		});
+
+		const claimed = await claimRun({ rpc } as unknown as SupabaseClient, 'run-1', 'worker-nuovo', {
+			ttlMs: 300_000,
+			now: new Date('2026-08-30T10:05:00.000Z')
+		});
+
+		expect(claimed).toBeNull();
 	});
 
 	it('LO ZOMBIE NON CHIUDE: dopo la presa, il worker sfrattato non salva niente', async () => {
