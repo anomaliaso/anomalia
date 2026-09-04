@@ -60,4 +60,24 @@ describe('BRAND_ENDPOINTS', () => {
 
     expect(wrongVerb).toEqual([]);
   });
+
+  // Un contratto che tace su `credits_exhausted` mentre la rotta lo restituisce mente a chi legge
+  // le varianti d'errore per decidere cosa fare — e `statusForFailure` degrada quel 402 a 500, che
+  // si legge come "guasto nostro" invece che "crediti finiti". Peggio di un contratto assente.
+  it('chi chiama gateAiAction dichiara credits_exhausted', () => {
+    const silent = BRAND_ENDPOINTS
+      .filter((e) => {
+        // Il gate vive sempre nell'handler che scrive: una GET condivide il file con la POST che
+        // spende, ma legge e basta. Il metodo distingue i due senza analizzare il sorgente.
+        if (e.method === 'GET') return false;
+
+        const file = join(REPO_ROOT, routeFile(e));
+        if (!existsSync(file) || !readFileSync(file, 'utf8').includes('gateAiAction')) return false;
+
+        return !e.failures.some((f) => f.error === 'credits_exhausted');
+      })
+      .map((e) => `${e.tool} -> spende crediti ma non dichiara credits_exhausted`);
+
+    expect(silent).toEqual([]);
+  });
 });

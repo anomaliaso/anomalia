@@ -323,7 +323,7 @@ export const RESEARCH_COMPETITORS = {
   pathUnderBrand: '/studio/competitors/research',
   input: z.object({}).strict(),
   output: z.object({ ok: z.literal(true), found: z.number(), added: z.number() }),
-  failures: [],
+  failures: [{ error: 'credits_exhausted', status: 402 }],
   destructive: false,
   openWorld: true
 } satisfies BrandEndpoint;

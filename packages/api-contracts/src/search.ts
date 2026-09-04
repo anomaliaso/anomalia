@@ -25,7 +25,7 @@ export const SEO_ACTION = {
     articleId: z.string().optional(),
     techScore: z.number().nullable().optional()
   }),
-  failures: [],
+  failures: [{ error: 'credits_exhausted', status: 402 }],
   destructive: false
 } satisfies BrandEndpoint;
 
@@ -42,7 +42,7 @@ export const GEO_ACTION = {
     shareOfVoice: z.number().optional(),
     generated: z.number().optional()
   }),
-  failures: [],
+  failures: [{ error: 'credits_exhausted', status: 402 }],
   destructive: false
 } satisfies BrandEndpoint;
 
@@ -54,6 +54,6 @@ export const REFRESH_KEYWORDS = {
   pathUnderBrand: '/keywords',
   input: z.object({}).strict(),
   output: z.object({ ok: z.literal(true), keywords: z.number() }),
-  failures: [],
+  failures: [{ error: 'credits_exhausted', status: 402 }],
   destructive: false
 } satisfies BrandEndpoint;

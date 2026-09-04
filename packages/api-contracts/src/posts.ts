@@ -171,7 +171,7 @@ export const RENDER_POST = {
     z.object({ ok: z.literal(true), url: z.string().nullable(), error: z.string().nullable() }),
     z.object({ error: z.string(), url: z.string() })
   ]),
-  failures: [],
+  failures: [{ error: 'credits_exhausted', status: 402 }],
   destructive: false
 } satisfies BrandEndpoint;
 
