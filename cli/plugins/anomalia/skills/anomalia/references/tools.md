@@ -256,6 +256,33 @@ posts for it are produced and then sit unpublished until an account exists. Say 
 An unknown IANA zone is refused (`unknown_timezone`), and so is a platform outside the list —
 `twitter` is not a name here, it is `x`. The post language lives on `update_brand_kit`, not here.
 
+## Recurring jobs
+
+| MCP | CLI |
+|-----|-----|
+| `get_automations` | (MCP only) |
+| `set_automation` | (MCP only) |
+
+The nine jobs included with the product — `autopilot`, `analytics_review`, `weekly_recap`, `seo`,
+`geo`, `radar_recap`, `market_refs`, `strategy_review`, `library` — with what each does, its
+cadence, whether it is on, how it went last time, whether it is behind, and `runs_30d`: how many
+times it actually ran in the last 30 days (runs a gate stopped are not counted, because they spent
+nothing).
+
+**Turning one ON is a spending decision, not a preference.** From that moment the job runs by
+itself on its cadence, and every run calls AI models and spends the brand's credits, with nobody
+looking. Before you turn one on, say which job it is, how often it will run, and that it spends —
+to the person whose credits they are. Turning one OFF spends nothing, takes effect at the next
+tick, and destroys nothing: it is the safe direction, so do not make it hard.
+
+`get_automations` deliberately does **not** report a cost per job, and that is not an omission to
+work around: AI spend is logged per call with no column naming the job, and the same labels are
+shared between jobs, so any per-job figure would be invented. Use `runs_30d` with `cadence` to
+describe the commitment, and point at the usage page for the brand-wide bill.
+
+A brand without a paid plan runs none of them however many are on — `scheduled_work_allowed` says
+so. The calls themselves spend no credits.
+
 ## Media models
 
 | MCP | CLI |

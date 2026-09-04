@@ -93,6 +93,13 @@ does not move posts that already have a time (their local hour shifts instead), 
 platform does not cancel posts already scheduled on it. If a target platform has no connected
 account the write says so in `without_account` — its posts will be produced and then wait.
 
+**Turn a recurring job on or off** → `get_automations` lists the nine included jobs with their
+cadence, state and `runs_30d`; `set_automation` flips one. Turning one ON commits the brand to
+recurring AI spend with nobody watching, so say which job, how often, and that it spends before
+you do it. Turning one OFF is free and safe. There is no per-job cost figure — spend is not
+attributable to one job — so describe the commitment with cadence and `runs_30d`, and never
+invent a number.
+
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion
 transfer) with the models each one accepts; `set_media_model` pins one. A model that cannot do
