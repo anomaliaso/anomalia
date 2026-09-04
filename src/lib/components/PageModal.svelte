@@ -247,7 +247,7 @@
 
   // Il marker su <html> dice "da adesso un click su una pagina del brand apre la modal invece di
   // navigare": prima dell'idratazione i link sono link normali e nessun JS può impedirlo, quindi
-  // lo si dichiara invece di fingere. scripts/settings-modal-check.mjs lo aspetta prima di cliccare.
+  // lo si dichiara invece di fingere.
   $effect(() => {
     if (!desktop) return;
     registerOpener(openTarget);

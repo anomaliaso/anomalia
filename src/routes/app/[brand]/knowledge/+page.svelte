@@ -278,8 +278,6 @@
       </div>
       <ul class="doc-list">
         {#each visibleDocuments as d (d.id)}
-          <!-- L'id in chiaro: scripts/modal-query-check.mjs deve poter costruire un
-               link `?doc=<id>` senza indovinare. -->
           <li class="doc-row" data-doc-id={d.id}>
             <button type="button" class="doc-main" onclick={() => openDoc(d.id)}>
               <span class="chip status-{d.status ?? 'ready'}">{statusLabel(d.status)}</span>
