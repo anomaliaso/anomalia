@@ -82,6 +82,7 @@ anomalia content my-brand --status pending_user
 anomalia approve my-brand --all
 anomalia seo my-brand
 anomalia web my-brand generate --topic "..."
+anomalia ads my-brand --remix
 anomalia ai my-brand --message "..." --pipe
 ```
 
@@ -95,7 +96,7 @@ prefixes error instead of guessing.
 | Planning | `plan`, `weekly-plan`, `calendar`, `gtm` |
 | Brand | `studio`, `voice`, `people`, `products` |
 | Web | `seo`, `geo`, `keywords`, `web` |
-| Ads | `ads` — campaigns, spend, boost proposals, duplicate/delete (`--sync`, `--propose`, `--create`, `--approve`, `--pause`, `--resume`, `--duplicate`, `--delete`, `--reject`, `--ad` per singola creatività) |
+| Ads | `ads` — campaigns, spend, boost proposals, remix, duplicate/delete (`--sync`, `--propose`, `--remix`, `--create`, `--approve`, `--pause`, `--resume`, `--duplicate`, `--delete`, `--reject`, `--ad` per singola creatività) |
 | Insight | `dashboard`, `status`, `analytics` |
 | AI | `ai --message "..."` — natural language, full read/write access |
 

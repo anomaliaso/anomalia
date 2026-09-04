@@ -1,7 +1,21 @@
 import ora from 'ora';
 import { loadSession } from '../lib/auth.ts';
-import { api } from '../lib/api.ts';
-import { ok, warn, c, table } from '../lib/display.ts';
+import { api, callEndpoint } from '../lib/api.ts';
+import { ADS_REMIX } from '../lib/contracts/index.ts';
+import { ok, warn, c, table, section, info } from '../lib/display.ts';
+
+type RemixBrief = {
+  rank: number;
+  strategy: string;
+  keep?: string | null;
+  change?: string | null;
+  hook: string;
+  headline: string;
+  body?: string | null;
+  cta?: string | null;
+  productName?: string | null;
+  visualPrompt?: string | null;
+};
 
 export async function cmdAds(
   slug: string,
@@ -17,6 +31,7 @@ export async function cmdAds(
     sync?: boolean;
     budget?: string;
     create?: boolean;
+    remix?: boolean;
     platform?: string;
     name?: string;
     headline?: string;
@@ -32,6 +47,25 @@ export async function cmdAds(
     process.exit(1);
   }
   const token = session.access_token;
+
+  if (opts.remix) {
+    const spinner = ora('Remix ads: harvest + vision analysis…').start();
+    try {
+      const r = await callEndpoint<{ error?: string; briefs?: RemixBrief[] }>(ADS_REMIX, token, slug);
+      spinner.stop();
+      if (r.error) {
+        warn(r.error);
+        process.exit(1);
+      }
+      const briefs = [...(r.briefs ?? [])].sort((a, b) => a.rank - b.rank);
+      ok(`${briefs.length} remix brief${briefs.length === 1 ? '' : 's'}`);
+      printRemixBriefs(briefs);
+    } catch (e) {
+      spinner.fail(String(e));
+      process.exit(1);
+    }
+    return;
+  }
 
   if (opts.sync) {
     const spinner = ora('Sync ad accounts + metrics…').start();
@@ -213,4 +247,41 @@ export async function cmdAds(
     spinner.fail(String(e));
     process.exit(1);
   }
+}
+
+function printRemixBriefs(briefs: RemixBrief[]) {
+  if (!briefs.length) {
+    warn('Nessun brief. Controlla competitor ads / brand kit / catalogo prodotti.');
+    return;
+  }
+
+  section('Ads remix briefs');
+  table(
+    ['#', 'Hook', 'Headline', 'Product', 'Strategy'],
+    briefs.map((b) => [
+      b.rank,
+      truncate(b.hook, 36),
+      truncate(b.headline, 36),
+      truncate(b.productName ?? '—', 20),
+      truncate(b.strategy, 40),
+    ])
+  );
+
+  for (const b of briefs) {
+    console.log(`\n${c.bold(`#${b.rank}`)} ${c.dim(b.productName ?? '—')}`);
+    console.log(`  Hook      ${b.hook}`);
+    console.log(`  Headline  ${b.headline}`);
+    if (b.body) console.log(`  Body      ${b.body}`);
+    if (b.cta) console.log(`  CTA       ${b.cta}`);
+    console.log(`  Strategy  ${b.strategy}`);
+    if (b.keep) console.log(`  Keep      ${b.keep}`);
+    if (b.change) console.log(`  Change    ${b.change}`);
+    if (b.visualPrompt) info(`  Visual    ${b.visualPrompt}`);
+  }
+  console.log('');
+}
+
+function truncate(s: string, n: number): string {
+  const t = s.replace(/\s+/g, ' ').trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 }
