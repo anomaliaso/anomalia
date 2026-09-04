@@ -3766,8 +3766,12 @@
       "backToTeam": "Volver al equipo",
       "spaces": "Espacios",
       "tools": "Herramientas",
+      "home": "Inicio",
+      "materials": "Materiales",
+      "results": "Resultados",
       "library": "Biblioteca",
-      "site": "Blog",
+      "site": "Auto blog",
+      "seoGeo": "SEO/GEO",
       "talkTo": "Habla con {name}",
       "agentOffer": "Aún no hay nada aquí — {name} puede encargarse. Abre el chat."
     },

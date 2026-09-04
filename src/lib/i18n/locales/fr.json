@@ -3766,8 +3766,12 @@
       "backToTeam": "Retour à l’équipe",
       "spaces": "Espaces",
       "tools": "Outils",
+      "home": "Accueil",
+      "materials": "Matériaux",
+      "results": "Résultats",
       "library": "Bibliothèque",
-      "site": "Blog",
+      "site": "Blog auto",
+      "seoGeo": "SEO/GEO",
       "talkTo": "Parler à {name}",
       "agentOffer": "Rien ici pour l’instant — {name} peut s’en charger. Ouvrez le chat."
     },
