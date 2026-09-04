@@ -1,16 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import {
-  buildMonthGrid,
-  distributionNote,
-  momentInZone,
-  stateOf,
-  timeInZone
-} from './calendar-month';
-import type { CalendarPost } from './calendar-month';
+import { buildMonthGrid, timeInZone } from './calendar-month';
+import { distributionNote, momentInZone, stateOf } from '../post-state';
+import type { PostRow } from '../post-state';
 
 const ROME = 'Europe/Rome';
 
-function post(overrides: Partial<CalendarPost> & { id: string }): CalendarPost {
+function post(overrides: Partial<PostRow> & { id: string }): PostRow {
   return {
     platform: 'instagram',
     caption: 'copy',

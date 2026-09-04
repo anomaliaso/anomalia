@@ -1,4 +1,4 @@
-import { platformsOf, stateOf, summarise, type PostRow } from './posts/post-state';
+import { platformsOf, stateOf, summarise, type PostRow } from './post-state';
 
 export type DashboardFacts = {
   pending: number;

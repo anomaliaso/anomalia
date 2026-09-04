@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
+  captionFields,
   distributionNote,
+  extrasOf,
   filterFor,
   platformsOf,
+  previewOf,
   stateOf,
   summarise,
+  viewFor,
   whenLabel,
+  type PostDetail,
   type PostRow
 } from './post-state';
 
@@ -123,5 +128,97 @@ describe('cosa succede davvero quando approvi', () => {
 
   it('senza data dice che esce al primo slot utile', () => {
     expect(distributionNote(post(), ROME, now)).toContain('possibly right away');
+  });
+});
+
+describe('la vista sta nell URL, e il default è il calendario', () => {
+  it('accetta solo le viste che esistono', () => {
+    expect(viewFor('list')).toBe('list');
+    expect(viewFor('calendar')).toBe('calendar');
+  });
+
+  it('ricade sul calendario quando il parametro manca o è inventato', () => {
+    expect(viewFor(null)).toBe('calendar');
+    expect(viewFor('gantt')).toBe('calendar');
+  });
+});
+
+function detail(over: Partial<PostDetail> = {}): PostDetail {
+  return {
+    status: 'pending_user',
+    platform: 'instagram',
+    caption: null,
+    scheduled_for: null,
+    media_url: null,
+    ...over
+  };
+}
+
+describe('l anteprima mostra quello che c e, non quello che ci si aspetta', () => {
+  it('senza media non mostra nulla', () => {
+    expect(previewOf(detail())).toEqual({ kind: 'none', urls: [] });
+  });
+
+  it('una sola immagine', () => {
+    expect(previewOf(detail({ media_url: 'https://cdn/a.png' }))).toEqual({
+      kind: 'image',
+      urls: ['https://cdn/a.png']
+    });
+  });
+
+  it('un video si riconosce dal flag, non dall estensione', () => {
+    expect(previewOf(detail({ media_url: 'https://cdn/clip.mp4', is_video: true }))).toEqual({
+      kind: 'video',
+      urls: ['https://cdn/clip.mp4']
+    });
+  });
+
+  it('il carosello mostra le slide, non la copertina', () => {
+    const preview = previewOf(
+      detail({
+        media_url: 'https://cdn/cover.png',
+        is_carousel: true,
+        slides: [
+          { index: 0, url: 'https://cdn/1.png' },
+          { index: 1, url: null },
+          { index: 2, url: 'https://cdn/3.png' }
+        ]
+      })
+    );
+
+    expect(preview).toEqual({ kind: 'carousel', urls: ['https://cdn/1.png', 'https://cdn/3.png'] });
+  });
+
+  it('un carosello ancora senza slide renderizzate ricade sulla copertina', () => {
+    expect(previewOf(detail({ media_url: 'https://cdn/cover.png', is_carousel: true }))).toEqual({
+      kind: 'image',
+      urls: ['https://cdn/cover.png']
+    });
+  });
+});
+
+describe('le caption modificabili sono quelle che il post ha davvero', () => {
+  it('senza override c è solo la caption principale', () => {
+    expect(captionFields(detail({ caption: 'ciao' }))).toEqual([
+      { name: 'caption', label: 'Caption', value: 'ciao' }
+    ]);
+  });
+
+  it('una casella per piattaforma, in ordine stabile', () => {
+    const fields = captionFields(
+      detail({ caption: 'lunga', platform_captions: { x: 'corta', threads: 'media' } })
+    );
+
+    expect(fields.map((f) => f.name)).toEqual(['caption', 'caption_threads', 'caption_x']);
+    expect(fields[2].value).toBe('corta');
+  });
+});
+
+describe('il resto del testo che esce si vede, ma non si modifica', () => {
+  it('salta i campi vuoti e tiene l ordine della tabella', () => {
+    expect(extrasOf(detail({ title: 'Titolo', subreddit: 'r/x', first_comment: '  ' }))).toEqual([
+      { label: 'Title', value: 'Titolo' },
+      { label: 'Subreddit', value: 'r/x' }
+    ]);
   });
 });
