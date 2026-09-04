@@ -57,8 +57,7 @@ describe('agent-owners', () => {
     expect(owningJobForPath(`${base}/keywords`, base)).toBe('seo');
     expect(owningJobForPath(`${base}/geo`, base)).toBe('geo');
     expect(owningJobForPath(`${base}/competitors`, base)).toBe('market_refs');
-    // Le rotte senza proprietario chiaro non mostrano niente — chat inclusa (il topbar
-    // del thread ha già il toggle di AgentComputerPanel, nessuna collisione).
+    // Le rotte senza proprietario chiaro non mostrano niente, chat inclusa.
     expect(owningJobForPath(`${base}/chat/abc`, base)).toBeNull();
     expect(owningJobForPath(`${base}/settings`, base)).toBeNull();
   });
@@ -75,18 +74,6 @@ describe('agent-owners', () => {
     // Senza thread di squadra si ripiega sul vecchio thread per-job (pre-unificazione).
     expect(jobThreadHref(threads.slice(0, 3), 'acme', 'radar_recap')).toBe('/app/acme/chat/t1');
     expect(jobThreadHref(threads, 'acme', 'seo')).toBe('/app/acme');
-  });
-
-  it('la mappa vive SOLO qui: AgentComputerPanel la importa, non la ridefinisce', () => {
-    // Stessa tecnica di ui-tokens.test.ts: il sorgente come contratto. Se qualcuno
-    // reincolla una JOB_HOME inline nel pannello, questo test lo dice subito.
-    const src = readFileSync(
-      join(__dirname, 'components/AgentComputerPanel.svelte'),
-      'utf8'
-    );
-    expect(src).toContain("from '$lib/agent-owners'");
-    expect(src).not.toMatch(/const\s+(JOB_HOME|AGENT_HOME)\s*[:=]/);
-    expect(AGENT_HOME.motion).toBe('/motion-video');
   });
 });
 

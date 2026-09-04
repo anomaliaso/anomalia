@@ -43,13 +43,6 @@ function fakeSandbox(config: {
 const getOrCreate = vi.fn();
 vi.mock('@vercel/sandbox', () => ({ Sandbox: { getOrCreate: (...a: unknown[]) => getOrCreate(...a) } }));
 
-/** La pubblicazione dello stato passa dal service role: qui si guarda solo CHE succeda. */
-const published: Array<{ brandId: string; refName: string; agentId?: string }> = [];
-vi.mock('$lib/server/agent-desktop', () => ({
-  publishComputerRunning: async (_db: unknown, brandId: string, refName: string, agentId?: string) => {
-    published.push({ brandId, refName, agentId });
-  }
-}));
 vi.mock('$lib/server/supabase-admin', () => ({ createAdminClient: () => ({}) }));
 
 const WEEK = 7 * 24 * 60 * 60_000;
@@ -271,27 +264,23 @@ describe('la rete della VM unica', () => {
 
 
 /**
- * IL PANNELLO SA CHE LA MACCHINA È ACCESA, chiunque l'abbia accesa.
- *
- * Prima la riga di `agent_computers` la scriveva solo la rotta del desktop: un render Motion
- * apriva la VM per dieci minuti e la card continuava a dire «non è mai stata accesa». Lo stato lo
- * pubblica il PUNTO in cui la macchina si apre — uno solo, così nessun chiamante può scordarselo.
+/**
+ * LA VM SI APRE COL NOME DELL'AGENTE CHE LA CHIEDE — la proprieta' che reggeva la pubblicazione
+ * dello stato del computer, e che resta vera adesso che quella riga non si scrive piu'.
  */
-describe('aprire una VM pubblica lo stato del computer', () => {
-  it('pubblica per l’agente che l’ha aperta', async () => {
-    published.length = 0;
+describe('aprire una VM la nomina per agente', () => {
+  it('col nome dell’agente che l’ha aperta', async () => {
     getOrCreate.mockResolvedValue(fakeSandbox());
     const { openBrandSandbox } = await import('./sandbox');
     await openBrandSandbox({ brandId: 'b1', mode: 'research', agentId: 'motion', timeoutMs: 300_000, runId: 'r1' });
-    expect(published).toEqual([{ brandId: 'b1', refName: 'anomalia-b1-motion-g5', agentId: 'motion' }]);
+    expect(getOrCreate.mock.calls.at(-1)?.[0]?.name).toBe('anomalia-b1-motion-g5');
   });
 
-  it('senza agente pubblica la macchina del brand', async () => {
-    published.length = 0;
+  it('senza agente resta la macchina del brand', async () => {
     getOrCreate.mockResolvedValue(fakeSandbox());
     const { openBrandSandbox } = await import('./sandbox');
     await openBrandSandbox({ brandId: 'b1', mode: 'research', timeoutMs: 300_000, runId: 'r1' });
-    expect(published[0]?.agentId).toBeUndefined();
+    expect(getOrCreate.mock.calls.at(-1)?.[0]?.name).toBe('anomalia-b1-g5');
   });
 });
 

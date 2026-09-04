@@ -119,8 +119,7 @@ vi.mock('$lib/server/realtime', async (importOriginal) => {
 });
 
 // La strumentazione del computer (agent_computers) qui non deve scrivere: chi la marca running e`
-// `agent-desktop.ts` quando l'utente apre il desktop, e i casi veri stanno in computer.test.ts e
-// agent-desktop.test.ts. Il turno la tocca soltanto dai tool della VM (shell/observe/act).
+// i casi veri stanno in computer.test.ts. Il turno la tocca soltanto dai tool della VM (shell).
 vi.mock('@anomalia/agent-core/computer', async (importOriginal) => {
 	const actual = (await importOriginal()) as Record<string, unknown>;
 	return { ...actual, markComputerRunning: async () => {}, touchComputer: async () => {} };
@@ -1335,7 +1334,7 @@ describe('i tool dei plugin sono ANNUNCIATI al modello, non solo eseguibili', ()
 		// Dichiarare un plugin senza esporlo era il buco: l'executor rispondeva a motion_*,
 		// il modello non sapeva di poterlo chiedere. Questo pinna la fusione nel catalogo.
 		// Il filtro observe/act (desktop tolto dal prodotto) non spezza la fusione.
-		expect(src).toMatch(/\.\.\.\(?agentDesktopEnabled\(\) \? BUILTIN_TOOLS : BUILTIN_TOOLS\.filter\(\(t\) => t\.name !== 'observe' && t\.name !== 'act'\)\)?,?\s*\.\.\.plugins\.flatMap\(\(p\) => p\.tools\)/);
+		expect(src).toMatch(/\.\.\.BUILTIN_TOOLS\.filter\(\(t\) => t\.name !== 'observe' && t\.name !== 'act'\),?\s*\.\.\.plugins\.flatMap\(\(p\) => p\.tools\)/);
 	});
 
 	it('il catalogo che arriva al modello porta i builtin E quelli del mestiere', async () => {

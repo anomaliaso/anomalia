@@ -33,7 +33,6 @@ import {
 	type KitRunLiveness
 } from '$lib/server/chat/turn-limits';
 import { DM_REPLY_STEP_CAP, dmBrief } from '$lib/chat-dm';
-import { agentDesktopEnabled } from '$lib/server/agent-desktop';
 import { UNATTENDED_TOOL_EXCLUSIONS, UNATTENDED_KIT_TOOL_EXCLUSIONS } from '$lib/server/chat/unattended';
 import { logAiCall, extractSdkUsage } from '$lib/server/ai-log';
 import { filesIndexFor } from '$lib/server/chat/agent-files';
@@ -821,9 +820,9 @@ export async function runKitTurn(input: RunKitTurnInput): Promise<Response> {
 		const loopGuard = createChatLoopGuard();
 		const turnTools = toolsForMode(
 			[
-				// Il desktop grafico è fuori dal prodotto: l'agente vede il web con `browse`, non
-				// pilotando uno schermo. Con AGENT_DESKTOP_ENABLED=1 tornano com'erano.
-				...(agentDesktopEnabled() ? BUILTIN_TOOLS : BUILTIN_TOOLS.filter((t) => t.name !== 'observe' && t.name !== 'act')),
+				// Il desktop grafico non esiste più: l'agente vede il web con `browse`, non pilotando
+				// uno schermo, quindi `observe` e `act` non entrano nel catalogo del turno.
+				...BUILTIN_TOOLS.filter((t) => t.name !== 'observe' && t.name !== 'act'),
 				...plugins.flatMap((p) => p.tools)
 			],
 			mode
