@@ -82,6 +82,8 @@ vi.mock('$lib/server/supabase-admin', () => ({
   })
 }));
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { runDirector } from './director';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,6 +169,30 @@ beforeEach(() => {
   groundedText.mockResolvedValue({ text: 'risposta verificata', citations: [{ uri: 'https://esempio.it/a' }] });
   structured.mockResolvedValue({ caption: 'Didascalia riscritta.' });
   renderPreviewImages.mockResolvedValue(undefined);
+});
+
+// `harness/index` riesporta `harness/run`, che importa `chat/model` e `chat/controller`: chi
+// prende la traccia dall'indice si porta dentro la chat e `$lib/agent` senza usarli. I moduli
+// foglia non li toccano, e questo test è l'unica cosa che impedisce di «riordinare» l'import.
+describe('da dove arriva la traccia', () => {
+  const src = readFileSync(join(process.cwd(), 'src/lib/server/director.ts'), 'utf8');
+
+  it('il Director guida l SDK e non passa dall indice del framework', () => {
+    expect(src).toMatch(/await generateText\(/);
+    expect(src).not.toContain('harnessGenerateText(');
+    expect(src).not.toMatch(/from '\$lib\/server\/harness'/);
+    expect(src).toMatch(/from '\$lib\/server\/harness\/session'/);
+    expect(src).toMatch(/from '\$lib\/server\/harness\/persist'/);
+  });
+
+  it.each(['session.ts', 'persist.ts', 'pipeline.ts', 'steward.ts'])(
+    'harness/%s non importa la chat né $lib/agent',
+    (file) => {
+      const leaf = readFileSync(join(process.cwd(), `src/lib/server/harness/${file}`), 'utf8');
+      expect(leaf).not.toMatch(/from '\$lib\/server\/chat\//);
+      expect(leaf).not.toMatch(/from '\$lib\/agent\//);
+    }
+  );
 });
 
 describe('un batch vuoto', () => {

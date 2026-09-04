@@ -1,8 +1,11 @@
 import { KIE_GROK_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createOpenAI } from '@ai-sdk/openai';
-import { tool, stepCountIs, hasToolCall, type LanguageModel } from 'ai';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText, tool, stepCountIs, hasToolCall, type LanguageModel } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
 import { llmConfigured, llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
@@ -197,7 +200,7 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
         })
       };
 
-      const run = (m: LanguageModel, runProvider: string, runModelId: string) => {
+      const run = async (m: LanguageModel, runProvider: string, runModelId: string) => {
         const content: Array<{ type: 'text'; text: string } | { type: 'image'; image: string }> = [
           { type: 'text', text: intro }
         ];
@@ -208,32 +211,57 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
             image: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`
           });
         }
-        return harnessGenerateText(
-          {
-            brandId: opts.brandId,
-            userId: opts.userId,
-            agent: 'director',
-            mode: runProvider,
-            model: runModelId,
-            provider: runProvider,
-            surface: 'batch'
-          },
-          {
+
+        const messages = [{ role: 'user' as const, content }];
+        const session = createHarnessSession({
+          brandId: opts.brandId,
+          userId: opts.userId,
+          agent: 'director',
+          mode: runProvider,
+          model: runModelId,
+          provider: runProvider,
+          surface: 'batch'
+        });
+        session.captureRequest({ system: SYSTEM, messages });
+
+        const steward = createSessionSteward(session, Object.keys(tools));
+        const watchedTools = wrapTools(session, tools, steward.pipeline());
+
+        try {
+          const result = await generateText({
             model: m,
             // Runs on either kie Grok or the Gemini fallback — 64k on both.
             maxOutputTokens: KIE_GROK_MAX_OUTPUT_TOKENS,
             system: SYSTEM,
-            messages: [{ role: 'user', content }],
-            tools,
+            messages,
+            allowSystemInMessages: true,
+            tools: watchedTools,
             // kie has no server-side item store — without this every step after the first replays
             // `item_reference` and dies. `forceReasoning` è l'altra metà: senza, l'SDK butta le
             // reasoning part fra uno step e l'altro perché non riconosce `grok-*` dal nome, e su 8
             // step il Director rivaluta il batch da capo ogni volta. Ignorato dal ripiego Gemini.
             providerOptions: { openai: { ...KIE_GROK_NO_STORE } },
             // finish() is the intended exit; the step cap is the backstop when the model rambles.
-            stopWhen: [stepCountIs(MAX_STEPS), hasToolCall('finish')]
-          }
-        );
+            stopWhen: [stepCountIs(MAX_STEPS), hasToolCall('finish')],
+            prepareStep: () => {
+              const patched = applyStewardPrepareStep(session, steward, {}, SYSTEM) ?? {};
+              session.capturePrepareStep(patched);
+              return patched;
+            },
+            onStepFinish: (event) => {
+              session.recordStep(event);
+            }
+          });
+          session.recordAssistantText(result.text);
+          session.recordUsage(result.totalUsage ?? result.usage);
+          session.finish('finished');
+          return result;
+        } catch (e) {
+          session.finish('failed', e);
+          throw e;
+        } finally {
+          persistHarnessSession(session);
+        }
       };
 
       // The Director is the LAST gate before the approval queue. Losing it because kie is out of
