@@ -25,6 +25,37 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* Self-hosted Fraunces — display face dei titoli, in prova. Stessa forma di Inter e stessi due
+   subset, serviti da noi: il CSS di Google costa un dominio in piu' nel percorso critico e manda
+   l'IP di ogni visitatore a Google.
+
+   Fraunces nasce con quattro assi; qui ne restano due. SOFT e WONK sono le manopole che gli danno
+   il caratterino anni 70 — a zero e' un serif qualunque — ma non le animiamo mai, quindi sono
+   fissate a SOFT=100 / WONK=1 nel file: due assi in meno dimezzano il peso (124.876 -> 63.992 byte
+   sul solo latin) e le lettere sono le stesse identiche.
+
+   opsz resta variabile perche' e' la ragione per cui si sceglie questo font: il disegno cambia
+   con la dimensione, robusto in piccolo e delicato in grande. Non serve CSS — `font-optical-sizing`
+   vale `auto` di suo e nessuno qui lo tocca, quindi opsz segue da solo il font-size.
+
+   SIL Open Font License 1.1 — il testo sta accanto ai file, in static/fonts/Fraunces-OFL.txt. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/fraunces-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/fraunces-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --ink:        #1d1d1f;
   --ink-soft:   #6e6e73;
@@ -67,10 +98,14 @@
   /* Token reale per il codice in chat & co. — prima ogni file usava var(--mono, fallback)
      con un token mai definito (voce LEGACY_STRAYS in ui-tokens.test.ts, ora ripulita). */
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  --serif: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  /* Esperimento: togliere "Fraunces", da qui riporta ogni titolo su Inter. */
+  --serif: "Fraunces", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* --serif: "Halant", Georgia, "Times New Roman", "Times", serif; */
-  --heading-weight: 300;   /* single knob for all h1/h2 serif weight */
+  /* Con Fraunces 300 e' troppo esile: a 24px le aste si assottigliano e il caratterino anni 70
+     si spegne proprio dove dovrebbe vedersi. Era 300 per Inter — togliendo l'esperimento questa
+     riga torna a 300 insieme a quella sopra. */
+  --heading-weight: 400;   /* single knob for all h1/h2 serif weight */
   --heading-tracking: -0.04em;  /* single knob for all h1/h2 serif tracking */
   /* Unified page / subpage title — compact in the global sticky top bar */
   --page-title-size: 0.95rem;
