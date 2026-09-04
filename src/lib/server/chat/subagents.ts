@@ -489,7 +489,7 @@ export async function runSubagentRun(
     const { data } = await supabase
       .from('brands')
       .select(
-        'id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id'
+        'id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id, organizations(plan, stripe_customer_id, stripe_subscription_id)'
       )
       .eq('id', brandId)
       .maybeSingle();
