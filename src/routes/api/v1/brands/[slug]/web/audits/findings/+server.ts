@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
-import { LIST_EVIDENCE_ARTIFACTS } from '@anomalia/api-contracts';
-import { listEvidenceArtifacts } from '$lib/server/seo-geo-evidence';
+import { GET_AUDIT_FINDINGS } from '@anomalia/api-contracts';
+import { getAuditFindings } from '$lib/server/web-evidence';
 
 export const GET: RequestHandler = async ({ request, params, url }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -11,11 +11,10 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
 
-  const parsed = LIST_EVIDENCE_ARTIFACTS.input.safeParse(Object.fromEntries(url.searchParams));
+  const parsed = GET_AUDIT_FINDINGS.input.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
     return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }
-  const { artifact_id: artifactId, status, limit, offset } = parsed.data;
 
-  return json(await listEvidenceArtifacts(supabase, brand.id, { artifactId, status, limit, offset }));
+  return json(await getAuditFindings(supabase, brand.id, parsed.data.audit_id));
 };

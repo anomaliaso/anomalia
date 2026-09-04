@@ -15,16 +15,18 @@ vi.mock('$lib/server/credits', () => ({
   CreditsExhaustedError: class extends Error {}
 }));
 
-import { GET as runsRoute } from './runs/+server';
-import { GET as runRoute } from './run/+server';
-import { GET as artifactsRoute } from './artifacts/+server';
+import { GET as auditsRoute } from './audits/+server';
+import { GET as findingsRoute } from './audits/findings/+server';
+import { GET as citationsRoute } from './audits/citations/+server';
+import { GET as fixesRoute } from './fixes/+server';
 import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 
 type Handler = (event: unknown) => Promise<Response>;
 
-const getRuns = runsRoute as unknown as Handler;
-const getRun = runRoute as unknown as Handler;
-const getArtifacts = artifactsRoute as unknown as Handler;
+const getAudits = auditsRoute as unknown as Handler;
+const getFindings = findingsRoute as unknown as Handler;
+const getCitations = citationsRoute as unknown as Handler;
+const getFixes = fixesRoute as unknown as Handler;
 
 type Row = Record<string, unknown>;
 type Tables = { brand_geo_audits?: Row[]; brand_geo_artifacts?: Row[] };
@@ -105,7 +107,7 @@ function call(handler: Handler, path: string, tables: Tables = {}, slug = 'demo'
 }
 
 const AUDIT_AUGUST = {
-  id: 'run-august',
+  id: 'audit-august',
   brand_id: BRAND,
   created_at: '2026-08-10T08:00:00Z',
   tech_score: 61,
@@ -121,7 +123,7 @@ const AUDIT_AUGUST = {
 };
 
 const AUDIT_SEPTEMBER_CITATIONS_ONLY = {
-  id: 'run-september',
+  id: 'audit-september',
   brand_id: BRAND,
   created_at: '2026-09-01T08:00:00Z',
   tech_score: null,
@@ -133,101 +135,120 @@ const AUDIT_SEPTEMBER_CITATIONS_ONLY = {
   ai_overview: null
 };
 
-const OTHER_BRAND_AUDIT = { ...AUDIT_AUGUST, id: 'run-altrui', brand_id: OTHER_BRAND };
+const OTHER_BRAND_AUDIT = { ...AUDIT_AUGUST, id: 'audit-altrui', brand_id: OTHER_BRAND };
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/v1/brands/:slug/evidence/runs', () => {
-  it('elenca le run dalla più recente, con quanto ha misurato ciascuna', async () => {
-    const { res, body } = await call(getRuns, '/evidence/runs', {
+describe('GET /api/v1/brands/:slug/web/audits', () => {
+  it('elenca gli audit dal più recente, con quanto ha misurato ciascuno', async () => {
+    const { res, body } = await call(getAudits, '/web/audits', {
       brand_geo_audits: [AUDIT_AUGUST, AUDIT_SEPTEMBER_CITATIONS_ONLY]
     });
 
     expect(res.status).toBe(200);
-    expect(body.runs.map((r: Row) => r.id)).toEqual(['run-september', 'run-august']);
-    expect(body.runs[1]).toEqual({
-      id: 'run-august',
+    expect(body.audits.map((a: Row) => a.id)).toEqual(['audit-september', 'audit-august']);
+    expect(body.audits[1]).toEqual({
+      id: 'audit-august',
       at: '2026-08-10T08:00:00Z',
       tech_score: 61,
       share_of_voice: 42,
       citability_score: 44,
       binding_constraint: 'Densità di evidenza',
       citation_count: 1,
-      issue_count: 1
+      finding_count: 1
     });
   });
 
   it('un brand senza audit torna una lista vuota, non un errore', async () => {
-    const { res, body } = await call(getRuns, '/evidence/runs', { brand_geo_audits: [] });
+    const { res, body } = await call(getAudits, '/web/audits', { brand_geo_audits: [] });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ runs: [] });
+    expect(body).toEqual({ audits: [] });
   });
 
-  it('non arriva alle prove di un altro brand', async () => {
-    const { body } = await call(getRuns, '/evidence/runs', {
+  it('non arriva agli audit di un altro brand', async () => {
+    const { body } = await call(getAudits, '/web/audits', {
       brand_geo_audits: [OTHER_BRAND_AUDIT, AUDIT_AUGUST]
     });
 
-    expect(body.runs.map((r: Row) => r.id)).toEqual(['run-august']);
+    expect(body.audits.map((a: Row) => a.id)).toEqual(['audit-august']);
   });
 
   it('rifiuta un limite oltre il tetto invece di riversare la storia intera nel contesto', async () => {
-    const { res, body } = await call(getRuns, '/evidence/runs?limit=100');
+    const { res, body } = await call(getAudits, '/web/audits?limit=100');
 
     expect(res.status).toBe(400);
     expect(body.error).toBe('invalid_input');
   });
 
-  it('salta le run già lette quando gliene si chiede altre', async () => {
-    const { body } = await call(getRuns, '/evidence/runs?limit=1&offset=1', {
+  it('salta gli audit già letti quando gliene si chiede altri', async () => {
+    const { body } = await call(getAudits, '/web/audits?limit=1&offset=1', {
       brand_geo_audits: [AUDIT_AUGUST, AUDIT_SEPTEMBER_CITATIONS_ONLY]
     });
 
-    expect(body.runs.map((r: Row) => r.id)).toEqual(['run-august']);
+    expect(body.audits.map((a: Row) => a.id)).toEqual(['audit-august']);
   });
 });
 
-describe('GET /api/v1/brands/:slug/evidence/run', () => {
-  it('senza run_id apre la run più recente, non una più vecchia che ha più dati', async () => {
-    const { res, body } = await call(getRun, '/evidence/run', {
+describe('GET /api/v1/brands/:slug/web/audits/findings', () => {
+  it('senza audit_id apre il più recente, non uno più vecchio che ha più dati', async () => {
+    const { res, body } = await call(getFindings, '/web/audits/findings', {
       brand_geo_audits: [AUDIT_AUGUST, AUDIT_SEPTEMBER_CITATIONS_ONLY]
     });
 
     expect(res.status).toBe(200);
-    expect(body.run.id).toBe('run-september');
-    expect(body.run.tech).toBeNull();
+    expect(body.audit.id).toBe('audit-september');
+    expect(body.audit.technical).toBeNull();
   });
 
-  it('restituisce la run richiesta com è stata registrata', async () => {
-    const { body } = await call(getRun, '/evidence/run?run_id=run-august', {
+  it('restituisce le osservazioni com erano state registrate', async () => {
+    const { body } = await call(getFindings, '/web/audits/findings?audit_id=audit-august', {
       brand_geo_audits: [AUDIT_AUGUST, AUDIT_SEPTEMBER_CITATIONS_ONLY]
     });
 
-    expect(body.run).toEqual({
-      id: 'run-august',
+    expect(body.audit).toEqual({
+      id: 'audit-august',
       at: '2026-08-10T08:00:00Z',
       tech_score: 61,
       share_of_voice: 42,
-      tech: AUDIT_AUGUST.tech,
+      technical: AUDIT_AUGUST.tech,
       search: AUDIT_AUGUST.search,
       backlinks: AUDIT_AUGUST.backlinks,
       ai_overview: AUDIT_AUGUST.ai_overview
     });
   });
 
+  it('l audit di un altro brand non è raggiungibile nemmeno conoscendone l id', async () => {
+    const { res, body } = await call(getFindings, '/web/audits/findings?audit_id=audit-altrui', {
+      brand_geo_audits: [OTHER_BRAND_AUDIT]
+    });
+
+    expect(res.status).toBe(200);
+    expect(body.audit).toBeNull();
+  });
+
+  it('un brand senza audit torna audit null invece di rompersi', async () => {
+    const { res, body } = await call(getFindings, '/web/audits/findings', { brand_geo_audits: [] });
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ audit: null });
+  });
+});
+
+describe('GET /api/v1/brands/:slug/web/audits/citations', () => {
   it('ogni citazione porta istante, motore, domanda, verdetto e domini citati', async () => {
-    const { body } = await call(getRun, '/evidence/run?run_id=run-august', {
+    const { body } = await call(getCitations, '/web/audits/citations?audit_id=audit-august', {
       brand_geo_audits: [AUDIT_AUGUST]
     });
 
-    expect(body.citations.items).toEqual([
+    expect(body.audit_id).toBe('audit-august');
+    expect(body.citations).toEqual([
       {
         observed_at: '2026-08-10T08:00:00Z',
-        engine: 'gemini',
-        query: 'miglior crm per agenzie',
+        answer_engine: 'gemini',
+        question: 'miglior crm per agenzie',
         brand_mentioned: true,
         rank: 2,
         competitors: ['altro-brand'],
@@ -235,44 +256,65 @@ describe('GET /api/v1/brands/:slug/evidence/run', () => {
         error: null
       }
     ]);
-    expect(body.citations.total).toBe(1);
+    expect(body.total).toBe(1);
+  });
+
+  it('senza audit_id legge le sonde del più recente', async () => {
+    const { body } = await call(getCitations, '/web/audits/citations', {
+      brand_geo_audits: [AUDIT_AUGUST, AUDIT_SEPTEMBER_CITATIONS_ONLY]
+    });
+
+    expect(body.audit_id).toBe('audit-september');
+    expect(body.citations[0].answer_engine).toBe('exa');
   });
 
   it('pagina le citazioni senza perdere il totale', async () => {
-    const many = { ...AUDIT_AUGUST, citations: Array.from({ length: 7 }, (_, i) => citation({ prompt: `domanda ${i}` })) };
-    const { body } = await call(getRun, '/evidence/run?limit=2&offset=4', { brand_geo_audits: [many] });
+    const many = {
+      ...AUDIT_AUGUST,
+      citations: Array.from({ length: 7 }, (_, i) => citation({ prompt: `domanda ${i}` }))
+    };
+    const { body } = await call(getCitations, '/web/audits/citations?limit=2&offset=4', {
+      brand_geo_audits: [many]
+    });
 
-    expect(body.citations).toMatchObject({ total: 7, offset: 4, limit: 2 });
-    expect(body.citations.items.map((c: Row) => c.query)).toEqual(['domanda 4', 'domanda 5']);
+    expect(body).toMatchObject({ total: 7, offset: 4, limit: 2 });
+    expect(body.citations.map((c: Row) => c.question)).toEqual(['domanda 4', 'domanda 5']);
   });
 
-  it('la run di un altro brand non è raggiungibile nemmeno conoscendone l id', async () => {
-    const { res, body } = await call(getRun, '/evidence/run?run_id=run-altrui', {
+  it('le citazioni di un altro brand non sono raggiungibili nemmeno con l id', async () => {
+    const { res, body } = await call(getCitations, '/web/audits/citations?audit_id=audit-altrui', {
       brand_geo_audits: [OTHER_BRAND_AUDIT]
     });
 
     expect(res.status).toBe(200);
-    expect(body.run).toBeNull();
-    expect(body.citations.items).toEqual([]);
+    expect(body.audit_id).toBeNull();
+    expect(body.citations).toEqual([]);
   });
 
   it('un brand senza audit torna una risposta coerente invece di rompersi', async () => {
-    const { res, body } = await call(getRun, '/evidence/run', { brand_geo_audits: [] });
+    const { res, body } = await call(getCitations, '/web/audits/citations', { brand_geo_audits: [] });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ run: null, citations: { total: 0, offset: 0, limit: 50, items: [] } });
+    expect(body).toEqual({
+      audit_id: null,
+      observed_at: null,
+      total: 0,
+      offset: 0,
+      limit: 50,
+      citations: []
+    });
   });
 
   it('rifiuta un limite oltre il tetto delle citazioni', async () => {
-    const { res } = await call(getRun, '/evidence/run?limit=500');
+    const { res } = await call(getCitations, '/web/audits/citations?limit=500');
 
     expect(res.status).toBe(400);
   });
 });
 
-describe('GET /api/v1/brands/:slug/evidence/artifacts', () => {
+describe('GET /api/v1/brands/:slug/web/fixes', () => {
   const GEO_FIX = {
-    id: 'art-geo',
+    id: 'fix-geo',
     brand_id: BRAND,
     kind: 'llms_txt',
     title: 'llms.txt',
@@ -284,7 +326,7 @@ describe('GET /api/v1/brands/:slug/evidence/artifacts', () => {
     created_at: '2026-08-11T08:00:00Z'
   };
   const SEO_ASSET = {
-    id: 'art-seo',
+    id: 'fix-seo',
     brand_id: BRAND,
     kind: 'blog_article',
     title: 'Guida ai CRM',
@@ -297,72 +339,77 @@ describe('GET /api/v1/brands/:slug/evidence/artifacts', () => {
   };
 
   it('restituisce il fix per intero, corpo compreso', async () => {
-    const { res, body } = await call(getArtifacts, '/evidence/artifacts', {
-      brand_geo_artifacts: [GEO_FIX]
-    });
+    const { res, body } = await call(getFixes, '/web/fixes', { brand_geo_artifacts: [GEO_FIX] });
 
     expect(res.status).toBe(200);
-    expect(body.artifacts).toEqual([
+    expect(body.fixes).toEqual([
       {
-        id: 'art-geo',
+        id: 'fix-geo',
         surface: 'geo',
         kind: 'llms_txt',
         title: 'llms.txt',
         format: 'txt',
         status: 'draft',
         target_path: '/llms.txt',
-        source_finding: 'no-llms-txt',
+        answers_finding: 'no-llms-txt',
         created_at: '2026-08-11T08:00:00Z',
         body: '# Demo Brand\n\n- /prodotti'
       }
     ]);
   });
 
-  it('dice a quale superficie appartiene un artefatto senza far leggere il prefisso a chi chiama', async () => {
-    const { body } = await call(getArtifacts, '/evidence/artifacts', {
-      brand_geo_artifacts: [GEO_FIX, SEO_ASSET]
-    });
+  it('dice a quale superficie appartiene un fix senza far leggere il prefisso a chi chiama', async () => {
+    const { body } = await call(getFixes, '/web/fixes', { brand_geo_artifacts: [GEO_FIX, SEO_ASSET] });
 
-    expect(body.artifacts.map((a: Row) => [a.id, a.surface])).toEqual([
-      ['art-seo', 'seo'],
-      ['art-geo', 'geo']
+    expect(body.fixes.map((f: Row) => [f.id, f.surface])).toEqual([
+      ['fix-seo', 'seo'],
+      ['fix-geo', 'geo']
     ]);
   });
 
-  it('apre un artefatto solo, quando si sa già quale', async () => {
-    const { body } = await call(getArtifacts, '/evidence/artifacts?artifact_id=art-geo', {
+  it('apre un fix solo, quando si sa già quale', async () => {
+    const { body } = await call(getFixes, '/web/fixes?fix_id=fix-geo', {
       brand_geo_artifacts: [GEO_FIX, SEO_ASSET]
     });
 
-    expect(body.artifacts.map((a: Row) => a.id)).toEqual(['art-geo']);
+    expect(body.fixes.map((f: Row) => f.id)).toEqual(['fix-geo']);
   });
 
   it('filtra per stato, così le bozze non arrivano mischiate a quelle già scartate', async () => {
-    const { body } = await call(getArtifacts, '/evidence/artifacts?status=accepted', {
+    const { body } = await call(getFixes, '/web/fixes?status=accepted', {
       brand_geo_artifacts: [GEO_FIX, SEO_ASSET]
     });
 
-    expect(body.artifacts.map((a: Row) => a.id)).toEqual(['art-seo']);
+    expect(body.fixes.map((f: Row) => f.id)).toEqual(['fix-seo']);
+  });
+
+  it('non arriva ai fix di un altro brand', async () => {
+    const { body } = await call(getFixes, '/web/fixes', {
+      brand_geo_artifacts: [{ ...GEO_FIX, id: 'fix-altrui', brand_id: OTHER_BRAND }, GEO_FIX]
+    });
+
+    expect(body.fixes.map((f: Row) => f.id)).toEqual(['fix-geo']);
   });
 
   it('rifiuta un limite oltre il tetto: i corpi sono lunghi', async () => {
-    const { res } = await call(getArtifacts, '/evidence/artifacts?limit=50');
+    const { res } = await call(getFixes, '/web/fixes?limit=50');
 
     expect(res.status).toBe(400);
   });
 
-  it('un brand senza artefatti torna una lista vuota', async () => {
-    const { body } = await call(getArtifacts, '/evidence/artifacts', { brand_geo_artifacts: [] });
+  it('un brand senza fix torna una lista vuota', async () => {
+    const { body } = await call(getFixes, '/web/fixes', { brand_geo_artifacts: [] });
 
-    expect(body).toEqual({ artifacts: [] });
+    expect(body).toEqual({ fixes: [] });
   });
 });
 
 describe('le letture delle prove non spendono e non modificano', () => {
   const HANDLERS: Array<[string, Handler, string]> = [
-    ['runs', getRuns, '/evidence/runs'],
-    ['run', getRun, '/evidence/run'],
-    ['artifacts', getArtifacts, '/evidence/artifacts']
+    ['audits', getAudits, '/web/audits'],
+    ['findings', getFindings, '/web/audits/findings'],
+    ['citations', getCitations, '/web/audits/citations'],
+    ['fixes', getFixes, '/web/fixes']
   ];
 
   it.each(HANDLERS)('%s non chiama il modello e non tocca i crediti', async (_name, handler, path) => {

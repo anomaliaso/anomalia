@@ -187,34 +187,39 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/geo" \
 
 ---
 
-## Prove SEO/GEO (`/evidence/*`)
+## Prove del web (`/web/audits`, `/web/fixes`)
 
-`GET /seo` e `GET /geo` rispondono su **l'ultimo** audit. Le tre letture qui sotto servono a
-risalire da un'affermazione alla prova che la sostiene: la storia delle run, una run com'è stata
-registrata, e il corpo dei fix generati.
+`GET /seo` e `GET /geo` rispondono su **l'ultimo** audit. Le quattro letture qui sotto servono a
+risalire da un'affermazione alla prova che la sostiene: la storia degli audit, quello che un audit
+ha osservato, le sonde di citazione che stanno dietro alla share of voice, e il corpo dei fix
+generati.
 
 Sono **solo letture** — nessuna chiama un modello, nessuna spende crediti, nessuna scrive. Le
 osservazioni di audit, gli istanti e i valori misurati non si modificano da qui.
 
+Stanno sotto `/web/` di proposito: `/seo`, `/geo`, `/keywords`, `/backlinks`, `/ranks`, `/gsc`
+sono la stessa famiglia — la presenza del brand sul web e nella ricerca — ma dall'URL non si
+capisce. Il rinomino di quelle rotte è un cambio a parte; queste nascono già raggruppate.
+
 ---
 
-## `GET /api/v1/brands/:slug/evidence/runs`
+## `GET /api/v1/brands/:slug/web/audits`
 
-Indice delle run di audit SEO/GEO, dalla più recente. Una riga per run: serve a scegliere quale
-aprire, non a leggerla.
+Indice degli audit, dal più recente. Una riga per audit: serve a scegliere quale aprire, non a
+leggerlo.
 
 **Query params**
 
 | Campo | Tipo | Default | Descrizione |
 |---|---|---|---|
-| `limit` | int 1–24 | 12 | Quante run |
-| `offset` | int ≥ 0 | 0 | Quante saltare |
+| `limit` | int 1–24 | 12 | Quanti audit |
+| `offset` | int ≥ 0 | 0 | Quanti saltarne |
 
 **Response** `200`:
 
 ```json
 {
-  "runs": [
+  "audits": [
     {
       "id": "33333333-3333-3333-3333-333333333333",
       "at": "2026-08-10T08:00:00Z",
@@ -223,13 +228,13 @@ aprire, non a leggerla.
       "citability_score": 44,
       "binding_constraint": "Densità di evidenza",
       "citation_count": 96,
-      "issue_count": 7
+      "finding_count": 7
     }
   ]
 }
 ```
 
-Un brand senza audit risponde `{"runs":[]}`.
+Un brand senza audit risponde `{"audits":[]}`.
 
 **Errori specifici**
 
@@ -240,58 +245,85 @@ Un brand senza audit risponde `{"runs":[]}`.
 **Esempio**:
 
 ```bash
-curl -s "https://anomalia.so/api/v1/brands/mio-brand/evidence/runs?limit=6" -H "Authorization: Bearer $TOKEN"
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/web/audits?limit=6" -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## `GET /api/v1/brands/:slug/evidence/run`
+## `GET /api/v1/brands/:slug/web/audits/findings`
 
-Una run com'è stata registrata — `tech`, `search`, `backlinks`, `ai_overview` escono **identici a
-come sono stati salvati** — più le sue sonde di citazione, paginate.
+Quello che un audit ha osservato, **identico a come è stato salvato**: `technical` (il crawl),
+`search`, `backlinks`, `ai_overview`.
 
-Senza `run_id` torna la run **più recente**, mai una più vecchia che ha più dati. Una run che non
-appartiene al brand (o che non esiste) risponde `run: null`, non un 404.
+Senza `audit_id` torna l'audit **più recente**, mai uno più vecchio che ha più dati. Un audit che
+non appartiene al brand (o che non esiste) risponde `audit: null`, non un 404.
 
 **Query params**
 
 | Campo | Tipo | Default | Descrizione |
 |---|---|---|---|
-| `run_id` | string | — | Un id da `/evidence/runs`; assente = la run più recente |
-| `limit` | int 1–200 | 50 | Quante citazioni |
-| `offset` | int ≥ 0 | 0 | Quante saltarne |
+| `audit_id` | string | — | Un id da `/web/audits`; assente = il più recente |
 
-**Response** `200` (blocchi `tech`, `search`, `backlinks`, `ai_overview` dinamici):
+**Response** `200` (blocchi dinamici):
 
 ```json
 {
-  "run": {
+  "audit": {
     "id": "33333333-3333-3333-3333-333333333333",
     "at": "2026-08-10T08:00:00Z",
     "tech_score": 61,
     "share_of_voice": 42,
-    "tech": { "issues": ["<osservazioni dell audit>"], "citability": { "score": 44 } },
+    "technical": { "issues": ["<osservazioni dell audit>"], "citability": { "score": 44 } },
     "search": { "organicKeywords": 380 },
     "backlinks": { "referringDomains": 87 },
     "ai_overview": { "checked": 10, "cited": 1, "rows": [] }
-  },
-  "citations": {
-    "total": 96,
-    "offset": 0,
-    "limit": 50,
-    "items": [
-      {
-        "observed_at": "2026-08-10T08:00:00Z",
-        "engine": "gemini",
-        "query": "miglior crm per agenzie",
-        "brand_mentioned": true,
-        "rank": 2,
-        "competitors": ["<altro brand>"],
-        "source_domains": ["esempio.it"],
-        "error": null
-      }
-    ]
   }
+}
+```
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/web/audits/findings?audit_id=33333333-3333-3333-3333-333333333333" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/web/audits/citations`
+
+Le domande poste ai motori di risposta durante un audit e quello che è tornato: è la prova dietro
+alla share of voice. Paginate.
+
+**Query params**
+
+| Campo | Tipo | Default | Descrizione |
+|---|---|---|---|
+| `audit_id` | string | — | Un id da `/web/audits`; assente = il più recente |
+| `limit` | int 1–200 | 50 | Quante citazioni |
+| `offset` | int ≥ 0 | 0 | Quante saltarne |
+
+**Response** `200`:
+
+```json
+{
+  "audit_id": "33333333-3333-3333-3333-333333333333",
+  "observed_at": "2026-08-10T08:00:00Z",
+  "total": 96,
+  "offset": 0,
+  "limit": 50,
+  "citations": [
+    {
+      "observed_at": "2026-08-10T08:00:00Z",
+      "answer_engine": "gemini",
+      "question": "miglior crm per agenzie",
+      "brand_mentioned": true,
+      "rank": 2,
+      "competitors": ["<altro brand>"],
+      "source_domains": ["esempio.it"],
+      "error": null
+    }
+  ]
 }
 ```
 
@@ -301,34 +333,33 @@ momento della raccolta. `error` valorizzato significa sonda fallita, non "non ci
 **Esempio**:
 
 ```bash
-curl -s "https://anomalia.so/api/v1/brands/mio-brand/evidence/run?run_id=33333333-3333-3333-3333-333333333333" \
-  -H "Authorization: Bearer $TOKEN"
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/web/audits/citations?limit=20" -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## `GET /api/v1/brands/:slug/evidence/artifacts`
+## `GET /api/v1/brands/:slug/web/fixes`
 
 I fix e gli asset generati dagli audit, **con il corpo per intero**. `GET /seo` e `GET /geo` ne
 danno solo l'intestazione.
 
-`surface` vale `seo` per gli asset di crescita legati a un'iniziativa del piano (`source_finding`
+`surface` vale `seo` per gli asset di crescita legati a un'iniziativa del piano (`answers_finding`
 `seo:<initiativeId>`), `geo` per i fix di citabilità.
 
 **Query params**
 
 | Campo | Tipo | Default | Descrizione |
 |---|---|---|---|
-| `artifact_id` | string | — | Solo questo artefatto |
+| `fix_id` | string | — | Solo questo fix |
 | `status` | string | — | `draft` \| `accepted` \| `dismissed` |
-| `limit` | int 1–10 | 3 | Quanti artefatti (i corpi sono lunghi) |
+| `limit` | int 1–10 | 3 | Quanti fix (i corpi sono lunghi) |
 | `offset` | int ≥ 0 | 0 | Quanti saltarne |
 
 **Response** `200`:
 
 ```json
 {
-  "artifacts": [
+  "fixes": [
     {
       "id": "22222222-2222-2222-2222-222222222222",
       "surface": "geo",
@@ -337,7 +368,7 @@ danno solo l'intestazione.
       "format": "txt",
       "status": "draft",
       "target_path": "/llms.txt",
-      "source_finding": "no-llms-txt",
+      "answers_finding": "no-llms-txt",
       "created_at": "2026-08-11T08:00:00Z",
       "body": "<contenuto del fix, verbatim>"
     }
@@ -348,7 +379,7 @@ danno solo l'intestazione.
 **Esempio**:
 
 ```bash
-curl -s "https://anomalia.so/api/v1/brands/mio-brand/evidence/artifacts?status=draft" -H "Authorization: Bearer $TOKEN"
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/web/fixes?status=draft" -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
