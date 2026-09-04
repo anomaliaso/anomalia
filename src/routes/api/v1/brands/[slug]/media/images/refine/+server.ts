@@ -40,5 +40,5 @@ export const POST: RequestHandler = async ({ request, params }) => {
     );
   }
 
-  return json({ ok: true, media: result.media, model: result.model });
+  return json({ ok: true, media: result.media, model: result.model, renders: result.renders });
 };

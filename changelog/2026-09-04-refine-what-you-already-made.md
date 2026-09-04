@@ -80,3 +80,36 @@ sua descrizione ora dice di preferire i due tool espliciti.
 `SKILL.md` portava un agente a concludere che l'editing non esiste — è successo davvero. Ora la
 riga c'è, e nomina l'errore: usare `generate_image` per modificare qualcosa paga un render nuovo e
 restituisce un soggetto diverso.
+
+## Il conto dichiarato raccontava le immagini, non i render
+
+Tre righe in `ai_calls` per la sessione di Andrea, tutte `ok = true`, tutte con costo, per
+un'immagine sola. La prima ipotesi — kie renderizza e fattura, noi non scarichiamo il risultato,
+`flatCostUsd` scritto lo stesso — **è stata smentita dai dati**: `ok` è `!!dataUrl`, e `ok: true`
+significa che il dataUrl c'era. Resta un difetto reale in quel ramo, ma non è questo.
+
+Quello che i dati dicono è peggio: **render riusciti, pagati, e scartati a valle**. In
+`renderWithQC` ce ne sono due sorgenti, entrambe attive:
+
+- `HIGH_STAKES_CANDIDATES = 2` — due render **in parallelo**, il critico ne sceglie uno, l'altro si
+  butta. Entrambi pagati. È il motivo per cui in `ai_calls` compaiono chiamate a mezzo secondo di
+  distanza: sono paralleli, non ritentativi.
+- `MAX_QC_RETRIES = 2` — un render riuscito che il critico boccia viene **ridisegnato a prezzo
+  pieno**, fino a due volte.
+
+Nel caso peggiore sono **quattro render fatturati** per un'immagine che `IMAGE_CREDITS` prezza
+come uno. `QcVerdict.attempts` li conta già — «quanti render sono stati prodotti in totale
+(candidati paralleli + ritentativi)» — ma quel numero non è mai arrivato a chi chiama, e `ai_calls`
+non dice da nessuna parte che un render è stato scartato. Il conto sale in silenzio.
+
+Qui la risposta porta `renders`: **quanti render sono stati pagati**, non quante immagini sono
+tornate. I due numeri divergono ogni volta che qualcosa a valle butta via un successo, ed è
+esattamente quando serve saperlo.
+
+E porta `model`: **quale modello ha disegnato davvero**, dopo la scelta del brand e il default di
+piattaforma. `env.IMAGE_MODEL_NO_REF` può ancora scavalcare tutto, quindi il fatto va reso
+visibile invece che sperato — si vede dalla prima chiamata, non da un'indagine.
+
+Il percorso di questi tool chiama `renderPostImage` direttamente, senza QC: un render chiesto, un
+render pagato. I due candidati e i ritentativi vivono sul percorso dei post e del blog, e restano
+da sistemare lì.

@@ -46,8 +46,15 @@ export type GenerateMediaOpts = {
 };
 
 export type GenerateMediaResult =
-  | { ok: true; status: 'ready'; media: GeneratedMedia[]; jobId: null; model: string | null }
-  | { ok: true; status: 'rendering'; media: []; jobId: string; model: string | null }
+  | {
+      ok: true;
+      status: 'ready';
+      media: GeneratedMedia[];
+      jobId: null;
+      model: string | null;
+      renders: number;
+    }
+  | { ok: true; status: 'rendering'; media: []; jobId: string; model: string | null; renders: 0 }
   | { ok: false; error: 'render_failed' | 'store_failed' | 'video_budget_exhausted' }
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
@@ -162,7 +169,7 @@ export type ImageJob = {
 };
 
 export type ImageJobResult =
-  | { ok: true; media: GeneratedMedia[]; model: string | null }
+  | { ok: true; media: GeneratedMedia[]; model: string | null; renders: number }
   | { ok: false; error: 'render_failed' | 'store_failed' | 'source_not_found' }
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
@@ -222,7 +229,12 @@ async function runImageJob(
   const chosen = buildImageRequest(job.prompt, opts).model ?? null;
 
   const media: GeneratedMedia[] = [];
+  // Quanti render sono stati PAGATI, non quanti ne sono stati chiesti. Un render riuscito che
+  // qualcosa a valle scarta si paga lo stesso, e finche' il conto dichiarato racconta le immagini
+  // invece dei render, mente — in silenzio, perche' `ai_calls` si riempie di `ok: true`.
+  let renders = 0;
   for (let i = 0; i < (job.count ?? 1); i++) {
+    renders += 1;
     const dataUrl = await renderPostImage(null as never, job.prompt, opts).catch(() => undefined);
     if (!dataUrl) break;
 
@@ -236,7 +248,7 @@ async function runImageJob(
   // credere che qualcosa esista.
   if (!media.length) return { ok: false, error: 'render_failed' };
 
-  return { ok: true, media, model: chosen };
+  return { ok: true, media, model: chosen, renders };
 }
 
 export async function generateBrandImages(
@@ -328,7 +340,8 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     status: 'rendering',
     media: [],
     jobId: job.id as string,
-    model: submitted.model ?? null
+    model: submitted.model ?? null,
+    renders: 0
   };
 }
 
@@ -349,7 +362,7 @@ export async function generateBrandMedia(
   const out = await generateBrandImages(supabase, opts);
   if (!out.ok) return out;
 
-  return { ok: true, status: 'ready', media: out.media, jobId: null, model: out.model };
+  return { ok: true, status: 'ready', media: out.media, jobId: null, model: out.model, renders: out.renders };
 }
 
 export type MediaJob = {

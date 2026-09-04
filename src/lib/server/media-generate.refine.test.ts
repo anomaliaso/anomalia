@@ -154,6 +154,37 @@ describe('rifinire un asset della libreria', () => {
     expect(renderPostImage).not.toHaveBeenCalled();
   });
 
+  // Il conto dichiarato deve raccontare i RENDER, non le immagini consegnate. Un render riuscito
+  // che qualcosa a valle scarta e' pagato lo stesso, e la sessione che ha aperto questa indagine
+  // aveva tre righe `ok: true` con costo per un'immagine sola: `ai_calls` non dice mai che un
+  // render e' stato buttato, quindi se non lo dice la risposta non lo dice nessuno.
+  it('dice quanti render sono stati PAGATI, non quante immagini consegna', async () => {
+    const out = await generateBrandImages(supabaseWith({}), {
+      brandId: 'brand-1',
+      userId: 'user-1',
+      prompt: 'tre direzioni',
+      count: 3
+    });
+
+    expect(out.ok && out.renders).toBe(3);
+    expect(out.ok && out.media.length).toBe(3);
+  });
+
+  it('un render pagato che non torna con un immagine resta nel conto', async () => {
+    renderPostImage.mockResolvedValueOnce(PNG_DATA_URL).mockResolvedValueOnce(undefined);
+
+    const out = await generateBrandImages(supabaseWith({}), {
+      brandId: 'brand-1',
+      userId: 'user-1',
+      prompt: 'due direzioni',
+      count: 2
+    });
+
+    // Una immagine consegnata, due render partiti: dichiarare "1" nasconderebbe il secondo conto.
+    expect(out.ok && out.media.length).toBe(1);
+    expect(out.ok && out.renders).toBe(2);
+  });
+
   it('l originale non viene sovrascritto: esce un asset NUOVO', async () => {
     await refineBrandImage(supabaseWith({}), {
       brandId: 'brand-1',

@@ -58,7 +58,8 @@ beforeEach(() => {
     status: 'ready',
     media: [GENERATED],
     jobId: null,
-    model: 'nano-banana-2-lite'
+    model: 'nano-banana-2-lite',
+    renders: 1
   });
 });
 
@@ -72,7 +73,8 @@ describe('POST /api/v1/brands/:slug/media/generate', () => {
       status: 'ready',
       media: [GENERATED],
       job_id: null,
-      model: 'nano-banana-2-lite'
+      model: 'nano-banana-2-lite',
+      renders: 1
     });
   });
 
@@ -145,7 +147,8 @@ describe('POST /api/v1/brands/:slug/media/generate', () => {
       status: 'rendering',
       media: [],
       jobId: 'job-1',
-      model: 'grok-imagine/text-to-video'
+      model: 'grok-imagine/text-to-video',
+      renders: 0
     });
 
     const { res, body } = await call({ prompt: 'un carrello lento sul prodotto', kind: 'video' });
@@ -156,7 +159,8 @@ describe('POST /api/v1/brands/:slug/media/generate', () => {
       status: 'rendering',
       media: [],
       job_id: 'job-1',
-      model: 'grok-imagine/text-to-video'
+      model: 'grok-imagine/text-to-video',
+      renders: 0
     });
   });
 
