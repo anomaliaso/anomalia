@@ -53,7 +53,6 @@ export const defaultManifest = [
   { path: '/api/v1/leads/outcomes', schedule: '20 7 * * *' },
   { path: '/api/v1/market/trends', schedule: '20 */4 * * *' },
   { path: '/api/v1/webhooks/work', schedule: '*/10 * * * *' },
-  { path: '/api/v1/billing/reconcile/tick', schedule: '0 3 * * *' },
   { path: '/api/v1/memory/dream', schedule: '30 4 * * *' },
   { path: '/api/v1/agents/computers/sweep', schedule: '*/5 * * * *' },
 ];

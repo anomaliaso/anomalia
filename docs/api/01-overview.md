@@ -104,5 +104,4 @@ checkout. Restano scope `write`: il link porta anche a un bottone di disdetta.
 
 - Gli endpoint **cron** (`/tick`, `/work`) protetti da `CRON_SECRET` non fanno parte della API pubblica
   e sono documentati nelle rispettive doc di feature.
-- `GET /api/v1/brands/:slug/strategy-lab` esiste ma è dev-only, senza auth — non documentato qui.
 - I comandi CLI che consumano questi endpoint sono in `cli/` (fonte unica di CLI, MCP e skill).
