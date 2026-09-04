@@ -21,7 +21,7 @@ const LOOP_DRIVER: Record<string, 'harness' | 'sdk'> = {
 	'image-agent.ts': 'harness',
 	'produce-agent.ts': 'harness',
 	'strategy-agent.ts': 'sdk',
-	'week-planner-agent.ts': 'harness'
+	'week-planner-agent.ts': 'sdk'
 };
 
 const loopFiles = Object.keys(LOOP_DRIVER);

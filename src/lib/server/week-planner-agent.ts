@@ -1,6 +1,9 @@
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
-import { tool, stepCountIs, type StopCondition } from 'ai';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText, tool, stepCountIs, type StopCondition } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -462,9 +465,10 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
   let loopModel = agentModel();
 
   try {
-    await withAgentFallback('week-planner-agent', (chosen, markDirty) => {
+    await withAgentFallback('week-planner-agent', async (chosen, markDirty) => {
       loopModel = chosen;
-      return harnessGenerateText({
+
+      const session = createHarnessSession({
         brandId: opts.brandId,
         userId: opts.userId,
         agent: 'week_planner',
@@ -472,55 +476,80 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
         model: loopModel.modelId,
         provider: loopModel.provider,
         surface: 'batch'
-      }, {
-        // Gemini 3.7 Flash by default, DeepSeek as fallback — see agentModel().
-        model: loopModel.model,
-        maxOutputTokens: maxOutputTokensFor(loopModel.provider),
-        system,
-        prompt: `${userPrompt}\n\nStart with read_rubrics and read_editorial_plan before drafting.`,
-        tools,
-        stopWhen: [
-          () => finished !== null,
-          stepCountIs(MAX_WEEK_PLANNER_STEPS),
-          stallStop,
-          () => deadlineReached(loopT0, deadlineMs)
-        ],
-        temperature: 0.35,
-        prepareStep: () => {
-          const remainingSec = Math.max(0, Math.round((deadlineMs - (Date.now() - loopT0)) / 1000));
-          const stepSystem = appendBudgetToSystem(system, budget, remainingSec);
-          if ((budget.usdRemaining <= 0 || remainingSec <= 30) && working) {
-            return { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem };
-          }
-          return { system: stepSystem };
-        },
-        onStepFinish: ({ usage, toolCalls, toolResults, text }) => {
-          addStrategyStepCost(budget, usage, loopModel);
-          stallFingerprints.push(
-            stepFingerprint(
-              seedFingerprint(working?.seeds ?? null, budget),
-              toolCalls?.map((tc) => ({ toolName: tc.toolName, input: 'input' in tc ? tc.input : undefined }))
-            )
-          );
-          stepNum += 1;
-          stepLog.push({
-            step: stepNum,
-            toolCalls: toolCalls?.map((tc) => ({ name: tc.toolName, input: 'input' in tc ? tc.input : undefined })),
-            toolResults: toolResults?.map((tr) => ({ name: tr.toolName, output: 'output' in tr ? tr.output : undefined })),
-            text: text?.trim() || undefined
-          });
-          if (opts.verbose) {
-            console.log('\n[week-planner-agent] step');
-            for (const tc of toolCalls ?? []) {
-              console.log(`  → ${tc.toolName}`, JSON.stringify('input' in tc ? tc.input : {}, null, 2).slice(0, 1200));
+      });
+      const prompt = `${userPrompt}\n\nStart with read_rubrics and read_editorial_plan before drafting.`;
+      session.captureRequest({ system, prompt });
+
+      const steward = createSessionSteward(session, Object.keys(tools));
+      const watchedTools = wrapTools(session, tools, {
+        before: [...(steward.pipeline().before ?? []), () => { markDirty(); }]
+      });
+
+      try {
+        const result = await generateText({
+          // Gemini 3.7 Flash by default, DeepSeek as fallback — see agentModel().
+          model: loopModel.model,
+          maxOutputTokens: maxOutputTokensFor(loopModel.provider),
+          system,
+          prompt,
+          allowSystemInMessages: true,
+          tools: watchedTools,
+          stopWhen: [
+            () => finished !== null,
+            stepCountIs(MAX_WEEK_PLANNER_STEPS),
+            stallStop,
+            () => deadlineReached(loopT0, deadlineMs)
+          ],
+          temperature: 0.35,
+          prepareStep: () => {
+            const remainingSec = Math.max(0, Math.round((deadlineMs - (Date.now() - loopT0)) / 1000));
+            const stepSystem = appendBudgetToSystem(system, budget, remainingSec);
+            const step =
+              (budget.usdRemaining <= 0 || remainingSec <= 30) && working
+                ? { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem }
+                : { system: stepSystem };
+            const patched = applyStewardPrepareStep(session, steward, step, system) ?? {};
+            session.capturePrepareStep(patched);
+            return patched;
+          },
+          onStepFinish: ({ usage, toolCalls, toolResults, text }) => {
+            session.recordStep({ usage, toolCalls, text });
+            addStrategyStepCost(budget, usage, loopModel);
+            stallFingerprints.push(
+              stepFingerprint(
+                seedFingerprint(working?.seeds ?? null, budget),
+                toolCalls?.map((tc) => ({ toolName: tc.toolName, input: 'input' in tc ? tc.input : undefined }))
+              )
+            );
+            stepNum += 1;
+            stepLog.push({
+              step: stepNum,
+              toolCalls: toolCalls?.map((tc) => ({ name: tc.toolName, input: 'input' in tc ? tc.input : undefined })),
+              toolResults: toolResults?.map((tr) => ({ name: tr.toolName, output: 'output' in tr ? tr.output : undefined })),
+              text: text?.trim() || undefined
+            });
+            if (opts.verbose) {
+              console.log('\n[week-planner-agent] step');
+              for (const tc of toolCalls ?? []) {
+                console.log(`  → ${tc.toolName}`, JSON.stringify('input' in tc ? tc.input : {}, null, 2).slice(0, 1200));
+              }
+              for (const tr of toolResults ?? []) {
+                console.log(`  ← ${tr.toolName}`, JSON.stringify('output' in tr ? tr.output : {}, null, 2).slice(0, 2000));
+              }
+              if (text?.trim()) console.log(`  · ${text.trim().slice(0, 300)}`);
             }
-            for (const tr of toolResults ?? []) {
-              console.log(`  ← ${tr.toolName}`, JSON.stringify('output' in tr ? tr.output : {}, null, 2).slice(0, 2000));
-            }
-            if (text?.trim()) console.log(`  · ${text.trim().slice(0, 300)}`);
           }
-        }
-      }, { before: [() => { markDirty(); }] });
+        });
+        session.recordAssistantText(result.text);
+        session.recordUsage(result.totalUsage ?? result.usage);
+        session.finish('finished');
+        return result;
+      } catch (e) {
+        session.finish('failed', e);
+        throw e;
+      } finally {
+        persistHarnessSession(session);
+      }
     });
 
     if (!finished && working?.seeds?.length) {
