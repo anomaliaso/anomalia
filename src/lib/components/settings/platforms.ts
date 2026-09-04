@@ -52,7 +52,6 @@ export const SETTINGS_SECTIONS = [
   'profile',
   'appearance',
   'billing',
-  'usage',
   'referrals',
   'danger'
 ] as const;
@@ -90,7 +89,7 @@ export type SettingsNavEntry = {
   /** Sezione sotto /app/<slug>/settings/. */
   section: string;
   labelKey: string;
-  flag?: 'ads' | 'connectors';
+  flag?: 'ads';
 };
 
 export const SETTINGS_GROUPS: readonly {
@@ -132,11 +131,9 @@ export const SETTINGS_GROUPS: readonly {
     labelKey: 'app.nav.sectionPublishing',
     items: [
       { section: 'connected-accounts', labelKey: 'app.settings.connectedAccounts' },
-      { section: 'connectors', labelKey: 'app.settings.connectors.nav', flag: 'connectors' },
       { section: 'autopilot', labelKey: 'app.settings.autopilot' },
       { section: 'radar', labelKey: 'app.settings.radar.nav' },
       { section: 'video', labelKey: 'app.settings.video.title' },
-      { section: 'publishing', labelKey: 'app.settings.publishing.title' },
       { section: 'timezone', labelKey: 'app.settings.postingTimezone' }
     ]
   },
@@ -154,7 +151,6 @@ export const SETTINGS_GROUPS: readonly {
       { section: 'profile', labelKey: 'app.settings.profile.title' },
       { section: 'appearance', labelKey: 'app.settings.appearance.title' },
       { section: 'billing', labelKey: 'app.settings.billing.title' },
-      { section: 'usage', labelKey: 'app.settings.usage.title' },
       { section: 'referrals', labelKey: 'app.settings.referrals.title' },
       { section: 'danger', labelKey: 'app.settings.del.title' }
     ]

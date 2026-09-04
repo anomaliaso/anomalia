@@ -24,13 +24,12 @@
 
   const settingsBase = $derived(`${base}/settings`);
   const adsOn = $derived(!!$page.data.flags?.ads);
-  const connectorsOn = $derived($page.data.flags?.connectors !== false);
 
   const groups = $derived(
     SETTINGS_GROUPS.map((g) => ({
       label: $_(g.labelKey),
       items: g.items
-        .filter((i) => !i.flag || (i.flag === 'ads' ? adsOn : connectorsOn))
+        .filter((i) => !i.flag || adsOn)
         .map((i) => ({
           section: i.section,
           href: `${settingsBase}/${i.section}`,
