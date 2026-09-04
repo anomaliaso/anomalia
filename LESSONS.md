@@ -282,6 +282,24 @@ l'utente. E il caso che perde davvero è la creazione fallita a METÀ — utente
 fixture restituito, `destroyFixture(null)` che esce subito: la creazione ripulisce da sola prima
 di rilanciare.
 
+### Una `list()` piatta su un bucket non pulisce uno Storage che annida per brand
+Stessa pulizia, un piano più sotto. `deleteEvalUser` faceva `storage.from('media').list(userId)` e
+cancellava `${userId}/${nome}`: ma sotto `<userId>/` ci sono CARTELLE, quindi chiedeva di
+cancellare `<userId>/library` — che non è un oggetto — e Supabase rispondeva `200` con una lista
+vuota. Intanto `brand-knowledge/<userId>/<brandId>/media/` non veniva nemmeno aperto. Segnale: la
+pulizia "riesce" sempre e `storage.objects` continua a crescere; in produzione l'asset importato
+di un giro di eval era ancora lì. Mossa: attraversare RICORSIVO (in `list` una cartella torna con
+`id` nullo) su OGNI bucket — `listBuckets()`, non una lista di nomi scritta a mano che ricomincia
+a perdere al primo tipo di asset nuovo — sempre sotto `<userId>/`, che è il prefisso imposto dalle
+policy di Storage e non una convenzione. E il test che vede il difetto asserisce QUALI percorsi
+sono stati cancellati: «la pulizia è stata chiamata» passa anche quando non cancella niente.
+
+### Una pulizia best effort che fallisce in silenzio si accumula per mesi
+Il `.catch()` muto sulla pulizia dello Storage è la ragione per cui nessuno ha visto i file
+restare: best effort è giusto — un eval non deve fallire perché la pulizia è fallita — ma muto no.
+Segnale: nessun errore da nessuna parte e lo spazio che cresce. Mossa: `swallow('…')` invece di
+`catch(() => {})`, così l'errore finisce su stderr e su Sentry e la pulizia resta non bloccante.
+
 ### PostgREST tiene in CACHE lo schema: la migration applicata in locale non basta
 Applicate 0226/0227/0229 allo stack locale, la chat continuava a ricadere sul percorso vecchio e la
 lettura per cursore rispondeva 503. La RLS era sana (provata a mano: l'utente leggeva i suoi eventi),
