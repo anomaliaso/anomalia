@@ -6109,7 +6109,16 @@
       "workspace": "Workspace",
       "lightMode": "Tema chiaro",
       "darkMode": "Tema scuro",
-      "language": "Lingua"
+      "language": "Lingua",
+      "billing": {
+        "poolTitle": "Pool di crediti condiviso",
+        "poolDesc": "Un solo abbonamento copre tutti i brand del tuo account.",
+        "periodLabel": "Periodo {start} – {end}",
+        "breakdownTitle": "Consumo per brand",
+        "brandCol": "Brand",
+        "creditsCol": "Crediti usati",
+        "noBrands": "Crea un brand per iniziare."
+      }
     },
     "radar": {
       "title": "Radar",
