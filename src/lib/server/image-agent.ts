@@ -1,9 +1,12 @@
 import IMAGE_PROMPTS_GUIDE from '$lib/agent-docs/how/WRITE-IMAGE-PROMPTS.md?raw';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
-import { tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
+import { generateText, tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
 import { resolveUserTurnMediaParts } from '$lib/media-parts';
-import { harnessGenerateText } from '$lib/server/harness';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import sharp from 'sharp';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -734,54 +737,71 @@ async function runImageAgentInner(opts: ImageAgentOpts): Promise<ImageAgentResul
   // Images / clips linked in the brief itself — otherwise the model is blind to them.
   const briefMedia = await resolveUserTurnMediaParts(opts.brief);
   let loopError: string | undefined;
+  const messages = [
+    {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: `Produce the best image for this brief. Start by searching assets relevant to: ${opts.brief.slice(0, 500)}`
+        },
+        // Any image or clip linked in the brief itself — otherwise the model is blind to it.
+        ...briefMedia
+      ]
+    }
+  ];
+  const session = createHarnessSession({
+    brandId: opts.brandId,
+    userId: opts.userId,
+    agent: 'image',
+    mode: opts.platform ?? 'standalone',
+    model: IMAGE_AGENT_MODEL(),
+    provider: 'llm',
+    surface: 'batch'
+  });
+  session.captureRequest({ system: baseSystem, messages });
+
+  const steward = createSessionSteward(session, Object.keys(tools));
+  const watchedTools = wrapTools(session, tools, steward.pipeline());
+
   try {
-    result = await harnessGenerateText({
-      brandId: opts.brandId,
-      userId: opts.userId,
-      agent: 'image',
-      mode: opts.platform ?? 'standalone',
-      model: IMAGE_AGENT_MODEL(),
-      provider: 'llm',
-      surface: 'batch'
-    }, {
+    result = await generateText({
       model: llmLanguageModel(),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system: baseSystem,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Produce the best image for this brief. Start by searching assets relevant to: ${opts.brief.slice(0, 500)}`
-            },
-            // Any image or clip linked in the brief itself — otherwise the model is blind to it.
-            ...briefMedia
-          ]
-        }
-      ],
-      tools,
+      messages,
+      allowSystemInMessages: true,
+      tools: watchedTools,
       stopWhen: [hasToolCall('finish'), stepCountIs(MAX_AGENT_STEPS), stallStop],
       temperature: 0.35,
       prepareStep: () => {
         const elapsed = Date.now() - t0;
         const remainingSec = Math.max(0, Math.round((deadlineMs - elapsed) / 1000));
         const stepSystem = buildPrepareStepSystem(baseSystem, budget, maxRenders, maxInspects, remainingSec);
-        if (budget.usdRemaining <= 0 && outcome.best) {
-          return { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem };
-        }
-        return { system: stepSystem };
+        const step =
+          budget.usdRemaining <= 0 && outcome.best
+            ? { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem }
+            : { system: stepSystem };
+        const patched = applyStewardPrepareStep(session, steward, step, baseSystem) ?? {};
+        session.capturePrepareStep(patched);
+        return patched;
       },
-      onStepFinish: ({ usage }) => {
-        if (usage) addStepCost(budget, usage);
+      onStepFinish: (event) => {
+        session.recordStep(event);
+        if (event.usage) addStepCost(budget, event.usage);
         stallFingerprints.push(fingerprint(outcome.best, budget));
       }
     });
+    session.recordAssistantText(result.text);
+    session.recordUsage(result.totalUsage ?? result.usage);
+    session.finish('finished');
   } catch (e) {
+    session.finish('failed', e);
     loopOk = false;
     loopError = e instanceof Error ? e.message : String(e);
     throw e;
   } finally {
+    persistHarnessSession(session);
     const totalUsage = extractSdkUsage(result?.totalUsage);
     logAiCall({
       label: 'image-agent',
