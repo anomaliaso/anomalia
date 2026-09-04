@@ -14,7 +14,6 @@ import { isKnownTimezone } from '$lib/brand-fields';
 import { invalidateBrandNav } from '$lib/server/nav-cache';
 import { readUploadImage } from '$lib/server/raster-image';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { setJobEnabled } from '$lib/server/job-roster';
 import { orgBillingForBrand } from '$lib/server/org-billing';
 import { billingLink } from '$lib/server/billing-links';
 
@@ -282,38 +281,6 @@ export async function disconnect({ request, params, locals: { supabase } }: Ev) 
   await supabase.from('social_accounts').delete().eq('id', acc.id).eq('brand_id', brand.id);
   invalidateBrandNav(params.brand!);
   return { disconnected: true };
-}
-
-export async function setAutopilot({ request, params, locals: { supabase } }: Ev) {
-  const data = await request.formData();
-  const enabled = String(data.get('enabled') ?? '') === 'true';
-  // Il toggle scrive l'opt-out del roster (chiave 'autopilot'), non più il booleano
-  // `brands.autopilot_enabled` — ritirato: il producer è un agente della squadra come gli altri,
-  // e questo interruttore e quello sulla pagina /agents devono essere LO STESSO interruttore.
-  // La lettura del brand col client utente è l'autorizzazione (RLS); la scrittura passa
-  // dall'admin perché brand_job_optouts è solo service-role.
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand) return { autopilotError: 'Brand not found' };
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  const res = await setJobEnabled(createAdminClient(), {
-    brandId: brand.id,
-    jobKey: 'autopilot',
-    enabled,
-    userId: user?.id ?? null
-  });
-  if (!res.ok) return { autopilotError: 'Could not save the toggle — try again.' };
-  if (enabled) {
-    // Riaccendere azzera anche la serie di fallimenti: il watchdog riparte da zero.
-    await supabase.from('brands').update({ autopilot_failure_count: 0 }).eq('id', brand.id);
-  }
-  invalidateBrandNav(params.brand!);
-  return { autopilotSaved: true, autopilotEnabled: enabled };
 }
 
 export async function invite({ request, params, url, cookies, locals: { supabase } }: Ev) {

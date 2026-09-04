@@ -36,7 +36,6 @@ export const SETTINGS_SECTIONS = [
   'connectors',
   'ads',
   'ads-accounts',
-  'autopilot',
   'radar',
   'video',
   'timezone',
@@ -131,7 +130,6 @@ export const SETTINGS_GROUPS: readonly {
     labelKey: 'app.nav.sectionPublishing',
     items: [
       { section: 'connected-accounts', labelKey: 'app.settings.connectedAccounts' },
-      { section: 'autopilot', labelKey: 'app.settings.autopilot' },
       { section: 'radar', labelKey: 'app.settings.radar.nav' },
       { section: 'video', labelKey: 'app.settings.video.title' },
       { section: 'timezone', labelKey: 'app.settings.postingTimezone' }
