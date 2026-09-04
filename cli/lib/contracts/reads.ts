@@ -370,3 +370,35 @@ export const LIST_PRODUCTS = {
   failures: [],
   destructive: false
 } satisfies BrandEndpoint;
+
+// La dashboard è il brand stesso: `GET /api/v1/brands/:slug`, nessun segmento sotto. Con
+// `pathUnderBrand` vuoto `pathFor` produce già quell'URL — non serve un secondo registro per gli
+// endpoint fuori dal brand, ne resta fuori uno solo (`list_brands`, che di brand non ne ha uno).
+export const GET_DASHBOARD = {
+  tool: 'get_dashboard',
+  title: 'Brand dashboard',
+  description:
+    'Full brand overview: pending count, plan, products, accounts, kit, recent autopilot runs.',
+  method: 'GET',
+  pathUnderBrand: '',
+  input: z.object({}).strict(),
+  output: z.looseObject({
+    brand: z.looseObject({ id: z.string(), name: z.string(), slug: z.string() }),
+    pendingCount: z.number(),
+    runs: z.array(z.looseObject({ status: z.string(), posts_created: z.number() })),
+    plan: z
+      .looseObject({ id: z.string(), status: z.string(), cadence: z.string() })
+      .nullable(),
+    productCount: z.number(),
+    accountCount: z.number(),
+    scheduledCount: z.number(),
+    publishedCount: z.number(),
+    hasGtm: z.boolean(),
+    hasContentPlans: z.boolean(),
+    hasHistory: z.boolean(),
+    kit: z.looseObject({ about: z.string().nullable() }).nullable(),
+    logoUrl: z.string().nullable()
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;

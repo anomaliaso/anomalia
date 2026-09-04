@@ -43,11 +43,15 @@ describe('il registry degli endpoint di brand', () => {
     expect(names).toEqual([...new Set(names)]);
   });
 
-  it('ogni path parte da / e resta sotto il brand', () => {
+  it('ogni path parte da / e resta sotto il brand, o è il brand stesso', () => {
+    // Lo slash iniziale che manca incolla il segmento allo slug: `posts` darebbe
+    // `/api/v1/brands/demoposts`. L'unica eccezione è il path vuoto, che non incolla niente
+    // perché non c'è niente da incollare: è il brand, `GET /api/v1/brands/:slug`.
     for (const e of BRAND_ENDPOINTS) {
-      expect(e.pathUnderBrand.startsWith('/'), e.tool).toBe(true);
+      expect(e.pathUnderBrand === '' || e.pathUnderBrand.startsWith('/'), e.tool).toBe(true);
     }
     expect(pathFor(byTool('create_post'), 'demo')).toBe('/api/v1/brands/demo/posts');
+    expect(pathFor(byTool('get_dashboard'), 'demo')).toBe('/api/v1/brands/demo');
   });
 
   it('un endpoint di risorsa mette l id risolto al posto del segmento', () => {

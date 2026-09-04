@@ -473,3 +473,42 @@ export const MAKE_VIDEO = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+export const EDIT_POST = {
+  tool: 'edit_post',
+  title: 'Edit post',
+  description:
+    'Edit post fields without rendering (no credits). Editing a scheduled post re-syncs to ' +
+    'Zernio. id accepts a short prefix.',
+  method: 'PUT',
+  pathUnderBrand: '/posts/:id',
+  resource: 'post',
+  input: z
+    .object({
+      caption: z.string().optional(),
+      title: z.string().optional(),
+      link_url: z.string().nullable().optional(),
+      subreddit: z.string().optional(),
+      first_comment: z.string().optional(),
+      image_prompt: z.string().optional(),
+      format: z.string().optional(),
+      slot: z.string().optional(),
+      product_name: z.string().optional(),
+      platforms: z.array(z.string()).optional(),
+      media_url: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Set null to clear image (text-only)'),
+      platform_captions: z.record(z.string(), z.string()).nullable().optional()
+    })
+    .strict(),
+  // `patch` è quello che la rotta ha scritto davvero, filtrato sui campi che sa applicare: una
+  // conferma, non l'eco della richiesta. Un campo che non esiste non ci finisce dentro.
+  output: z.object({ ok: z.literal(true), patch: z.record(z.string(), z.unknown()) }),
+  failures: [
+    { error: 'No fields to update', status: 400 },
+    { error: 'Post not found', status: 404 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;

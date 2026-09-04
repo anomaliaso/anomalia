@@ -58,17 +58,6 @@ export function registerBrandTools(server: McpServer) {
   registerDeclaredEndpoints(server);
 
   server.registerTool(
-    'get_dashboard',
-    {
-      title: 'Brand dashboard',
-      description: 'Full brand overview: pending count, plan, products, accounts, kit, recent autopilot runs.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getBrand(token, slug)),
-  );
-
-  server.registerTool(
     'get_status',
     {
       title: 'Brand status',
@@ -106,38 +95,6 @@ export function registerBrandTools(server: McpServer) {
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
     async ({ slug }) => withAuth((token) => api.approveAll(token, slug)),
-  );
-
-  server.registerTool(
-    'edit_post',
-    {
-      title: 'Edit post',
-      description:
-        'Edit post fields without rendering (no credits). Editing a scheduled post re-syncs to Zernio. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1).describe('Post id or unambiguous prefix'),
-        caption: z.string().optional(),
-        title: z.string().optional(),
-        link_url: z.string().nullable().optional(),
-        subreddit: z.string().optional(),
-        first_comment: z.string().optional(),
-        image_prompt: z.string().optional(),
-        format: z.string().optional(),
-        slot: z.string().optional(),
-        product_name: z.string().optional(),
-        platforms: z.array(z.string()).optional(),
-        media_url: z.string().nullable().optional().describe('Set null to clear image (text-only)'),
-        platform_captions: z.record(z.string(), z.string()).nullable().optional(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, id, ...patch }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        await api.updatePost(token, slug, postId, patch);
-        return { ok: true, id: postId, patch };
-      }),
   );
 
   server.registerTool(
