@@ -61,8 +61,8 @@ beforeEach(() => {
     error: null
   } as never);
   vi.mocked(gateAiAction).mockResolvedValue(undefined as never);
-  generateBrandImages.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite' });
-  refineBrandImage.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-pro' });
+  generateBrandImages.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite', renders: 1 });
+  refineBrandImage.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-pro', renders: 1 });
 });
 
 describe('POST /media/images — generate_image', () => {
@@ -70,7 +70,7 @@ describe('POST /media/images — generate_image', () => {
     const { res, body } = await generate({ prompt: 'un banco di lavoro in noce' });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite' });
+    expect(body).toEqual({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite', renders: 1 });
   });
 
   it('un brand senza crediti non disegna', async () => {
@@ -152,7 +152,7 @@ describe('POST /media/images/refine — refine_image', () => {
     const { res, body } = await refine({ base_media_id: 'media-0', instruction: 'sfondo più caldo' });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, media: [DRAWN], model: 'nano-banana-2-pro' });
+    expect(body).toEqual({ ok: true, media: [DRAWN], model: 'nano-banana-2-pro', renders: 1 });
     expect(refineBrandImage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ baseMediaId: 'media-0', prompt: 'sfondo più caldo' })

@@ -64,6 +64,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     status: result.status,
     media: result.media,
     job_id: result.jobId,
-    model: result.model
+    model: result.model,
+    renders: result.renders
   });
 };

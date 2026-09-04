@@ -133,8 +133,11 @@ nothing is stored; `store_failed` (502) means it was drawn but could not be file
 optional `count` (1-4 alternatives, **each one billed**), `aspect_ratio`, `model`, `title`. It
 bills a render per image — roughly 8 credits each — and creates nothing in the calendar, so ask
 for two or three, look at them with `list_media`, and pass only the id you keep to `create_post`.
-The response carries `model`: the model that actually drew it, so an agent that chose nothing
-still knows what it got.
+The response carries two facts worth reading. `model` is the model that **actually** drew it,
+after the brand's choice and the platform default — read it rather than assuming your request won,
+because an environment override can still outrank it. `renders` is how many renders were **billed**,
+which can exceed the images you got back: a render that succeeds and is then discarded downstream
+is paid for all the same, so trust `renders` over your own count when reconciling spend.
 
 `refine_image` changes an image that is already in the library and files the result as a **new**
 asset — the original is never overwritten, so a refinement cannot destroy what it started from.

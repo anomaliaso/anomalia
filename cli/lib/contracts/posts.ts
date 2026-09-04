@@ -349,7 +349,8 @@ export const GENERATE_MEDIA = {
     model: z
       .string()
       .nullable()
-      .describe('The model that made it; null when the platform default chose')
+      .describe('The model that ACTUALLY made it, after brand and platform defaults'),
+    renders: z.number().describe('How many renders were BILLED; 0 for a video, which bills when the clip lands')
   }),
   failures: [
     { error: 'credits_exhausted', status: 402 },
@@ -560,7 +561,11 @@ function modelField(slot: string) {
 const ImageResult = z.object({
   ok: z.literal(true),
   media: z.array(GeneratedMediaSchema),
-  model: z.string().nullable().describe('The model that drew it; null when the platform default chose')
+  model: z.string().nullable().describe('The model that ACTUALLY drew it, after brand and platform defaults — read it rather than assuming your request won'
+    + "'" + 't'),
+  renders: z
+    .number()
+    .describe('How many renders were BILLED. Can exceed the images returned: a render that fails downstream is still paid for.')
 });
 
 const MODEL_FAILURE = { error: 'model_not_for_slot', status: 400 } as const;
