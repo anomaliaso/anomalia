@@ -69,7 +69,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { supabase
 
   const { data: brand } = await supabase
     .from('brands')
-    .select('id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id, content_prefs, brand_kit(*)')
+    .select('id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id, organizations(plan, stripe_customer_id, stripe_subscription_id), content_prefs, brand_kit(*)')
     .eq('slug', params.brand)
     .maybeSingle();
   if (!brand) return new Response('Brand not found', { status: 404 });

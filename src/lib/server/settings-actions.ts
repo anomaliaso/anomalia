@@ -14,6 +14,7 @@ import { invalidateBrandNav } from '$lib/server/nav-cache';
 import { readUploadImage } from '$lib/server/raster-image';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { setJobEnabled } from '$lib/server/job-roster';
+import { orgBillingForBrand } from '$lib/server/org-billing';
 
 const stripeApi = () => import('$lib/server/stripe');
 
@@ -43,22 +44,18 @@ export async function billingPortal({ request, params, url, locals: { supabase }
   const flowRaw = String(data.get('flow') ?? 'invoices');
   const flow = flowRaw === 'payment_method' || flowRaw === 'upgrade' ? flowRaw : undefined;
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('slug, stripe_customer_id, stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand) return fail(404, { billingError: 'Brand not found' });
-  if (!brand.stripe_customer_id) throw redirect(303, `/app/${brand.slug}/activate`);
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!billing) return fail(404, { billingError: 'Brand not found' });
+  if (!billing.customerId) throw redirect(303, `/app/${params.brand}/activate`);
 
   let portalUrl: string;
   try {
     const { createBillingPortalSession } = await stripeApi();
     portalUrl = await createBillingPortalSession({
-      customerId: brand.stripe_customer_id,
-      returnUrl: `${url.origin}/app/${brand.slug}/settings/billing`,
+      customerId: billing.customerId,
+      returnUrl: `${url.origin}/app/${params.brand}/settings/billing`,
       flow,
-      subscriptionId: brand.stripe_subscription_id
+      subscriptionId: billing.subscriptionId
     });
   } catch (e) {
     return fail(500, { billingError: e instanceof Error ? e.message : 'Could not open billing' });
@@ -71,28 +68,24 @@ export async function upgrade({ request, params, url, locals: { supabase } }: Ev
   const data = await request.formData();
   const plan = String(data.get('plan') ?? '');
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('slug, plan, stripe_customer_id, stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand) return fail(404, { billingError: 'Brand not found' });
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!billing) return fail(404, { billingError: 'Brand not found' });
   // Same ladder as the settings modal / chat widget — Go included only while FEATURE_PLAN_GO is on.
-  if (!plansAbove(brand.plan).some((p) => p.key === plan)) {
+  if (!plansAbove(billing.plan).some((p) => p.key === plan)) {
     return fail(400, { billingError: 'Unknown plan' });
   }
-  if (!brand.stripe_customer_id || !brand.stripe_subscription_id) {
-    throw redirect(303, `/app/${brand.slug}/activate?plan=${encodeURIComponent(plan)}`);
+  if (!billing.customerId || !billing.subscriptionId) {
+    throw redirect(303, `/app/${params.brand}/activate?plan=${encodeURIComponent(plan)}`);
   }
 
   let upgradeUrl: string;
   try {
     const { createBillingPortalSession } = await stripeApi();
     upgradeUrl = await createBillingPortalSession({
-      customerId: brand.stripe_customer_id,
-      subscriptionId: brand.stripe_subscription_id,
+      customerId: billing.customerId,
+      subscriptionId: billing.subscriptionId,
       flow: 'upgrade',
-      returnUrl: `${url.origin}/app/${brand.slug}/settings/billing`
+      returnUrl: `${url.origin}/app/${params.brand}/settings/billing`
     });
   } catch (e) {
     return fail(500, { billingError: e instanceof Error ? e.message : 'Could not start the upgrade' });
@@ -105,16 +98,12 @@ export async function applyRetention({ params, locals: { supabase } }: Ev) {
   const coupon = env.STRIPE_RETENTION_COUPON;
   if (!coupon) return fail(400, { billingError: 'Retention offer is not configured.' });
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand?.stripe_subscription_id) return fail(400, { billingError: 'No active subscription.' });
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!billing?.subscriptionId) return fail(400, { billingError: 'No active subscription.' });
 
   try {
     const { applyRetentionCoupon } = await stripeApi();
-    await applyRetentionCoupon(brand.stripe_subscription_id, coupon);
+    await applyRetentionCoupon(billing.subscriptionId, coupon);
   } catch (e) {
     return fail(500, { billingError: e instanceof Error ? e.message : 'Could not apply the offer' });
   }
@@ -127,18 +116,14 @@ export async function cancelPlan({ request, params, locals: { supabase } }: Ev) 
   const reason = String(data.get('reason') ?? '');
   const comment = String(data.get('explanation') ?? '').trim();
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('plan, stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!isPaidPlan(brand?.plan)) return fail(400, { billingError: 'No paid plan to cancel.' });
-  if (!brand?.stripe_subscription_id) return fail(400, { billingError: 'No active subscription.' });
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!isPaidPlan(billing?.plan)) return fail(400, { billingError: 'No paid plan to cancel.' });
+  if (!billing?.subscriptionId) return fail(400, { billingError: 'No active subscription.' });
 
   let endsAt: string | null = null;
   try {
     const { cancelSubscriptionAtPeriodEnd } = await stripeApi();
-    ({ endsAt } = await cancelSubscriptionAtPeriodEnd(brand.stripe_subscription_id, {
+    ({ endsAt } = await cancelSubscriptionAtPeriodEnd(billing.subscriptionId, {
       feedback: FEEDBACK[reason],
       comment
     }));
@@ -155,16 +140,19 @@ export async function deleteBrand({ request, params, locals: { supabase } }: Ev)
 
   const { data: brand } = await supabase
     .from('brands')
-    .select('id, name, slug, stripe_subscription_id')
+    .select('id, name, slug')
     .eq('slug', params.brand!)
     .maybeSingle();
   if (!brand) return fail(404, { deleteError: 'failed' });
   if (confirm !== brand.name) return fail(400, { deleteError: 'nameMismatch' });
 
-  if (brand.stripe_subscription_id) {
+  // The subscription belongs to the org and covers every brand under it, so deleting one of
+  // several leaves the others paid for: only the last brand out takes the subscription with it.
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (billing?.subscriptionId && billing.brandCount <= 1) {
     try {
       const { ensureSubscriptionCanceled } = await stripeApi();
-      await ensureSubscriptionCanceled(brand.stripe_subscription_id);
+      await ensureSubscriptionCanceled(billing.subscriptionId);
     } catch (e) {
       return fail(400, {
         deleteError: e instanceof Error && e.message === 'active_plan' ? 'activePlan' : 'failed'

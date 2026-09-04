@@ -578,12 +578,19 @@ VIDEO ENGINE NOTE: the default engine is Grok Imagine (grok-imagine-video-1-5-pr
 
   // Subscription identity — changes only when the brand's plan actually changes.
   {
-    const planKey = (brand.plan as string | null) ?? null;
+    // Billing belongs to the org and covers all its brands, so read it there first and fall back
+    // to the brand's own columns while the org waits its turn in the rollout. `organizations` is
+    // absent for a guest who cannot read it — the fallback answers for them as it always did.
+    const org = brand.organizations as
+      | { plan?: string | null; stripe_customer_id?: string | null; stripe_subscription_id?: string | null }
+      | null
+      | undefined;
+    const planKey = org?.plan ?? (brand.plan as string | null) ?? null;
     const planLabel = planKey ? (PLAN_LABELS[planKey] ?? planKey) : 'none (free / unpaid)';
     const subStatus = (brand.status as string) || 'trial';
     const activatedAt = (brand.activated_at as string | null) ?? null;
-    const hasStripeCustomer = !!(brand.stripe_customer_id as string | null);
-    const hasStripeSub = !!(brand.stripe_subscription_id as string | null);
+    const hasStripeCustomer = !!(org?.stripe_customer_id ?? (brand.stripe_customer_id as string | null));
+    const hasStripeSub = !!(org?.stripe_subscription_id ?? (brand.stripe_subscription_id as string | null));
     const paid = isPaidPlan(planKey);
     const socialPublishing = hasSocialPublishing(planKey);
     const socialOk = canConnectSocials(planKey, subStatus);

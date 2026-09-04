@@ -563,7 +563,7 @@ export async function processNextQueuedChatJob(
 		const { data: brand } = await admin
 			.from('brands')
 			.select(
-				'id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id, brand_kit(*)'
+				'id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id, organizations(plan, stripe_customer_id, stripe_subscription_id), brand_kit(*)'
 			)
 			.eq('id', job.brand_id)
 			.maybeSingle();
