@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
+import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
+import { withBrandContext } from '$lib/server/ai-log';
 
 export const POST: RequestHandler = async ({ request, params }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -17,6 +18,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (!post) return json({ error: 'Post not found' }, { status: 404 });
   if (!post.image_prompt) return json({ error: 'Post has no image_prompt' }, { status: 400 });
   if (post.media_url) return json({ error: 'Post already has an image', url: post.media_url });
+
+  const gate = await gateAiAction(brand, apiKey);
+  if (gate) return gate;
 
   // Build profile
   const { data: kit } = await supabase
@@ -55,53 +59,55 @@ export const POST: RequestHandler = async ({ request, params }) => {
     }))
   };
 
-  try {
-    const { renderPreviewImages } = await import('$lib/server/content-preview');
-    const { normalizeContentFormat } = await import('$lib/content-formats');
+  return withBrandContext(brand.id, async () => {
+    try {
+      const { renderPreviewImages } = await import('$lib/server/content-preview');
+      const { normalizeContentFormat } = await import('$lib/content-formats');
 
-    const previewPost = {
-      platform: post.platform,
-      platforms: post.platforms,
-      format: normalizeContentFormat(post.format),
-      media: post.content_type === 'text' ? 'text' as const : post.content_type === 'link' ? 'text' as const : 'image' as const,
-      day: '',
-      time: '',
-      caption: post.caption ?? '',
-      image_prompt: post.image_prompt,
-      // Persisted carousel slide prompts → the renderer produces the whole series.
-      image_prompts: Array.isArray(post.image_prompts) && post.image_prompts.length ? post.image_prompts.map(String) : undefined,
-      product: post.product_name ?? '',
-      person: '',
-      pillar: post.pillar ?? '',
-    };
+      const previewPost = {
+        platform: post.platform,
+        platforms: post.platforms,
+        format: normalizeContentFormat(post.format),
+        media: post.content_type === 'text' ? 'text' as const : post.content_type === 'link' ? 'text' as const : 'image' as const,
+        day: '',
+        time: '',
+        caption: post.caption ?? '',
+        image_prompt: post.image_prompt,
+        // Persisted carousel slide prompts → the renderer produces the whole series.
+        image_prompts: Array.isArray(post.image_prompts) && post.image_prompts.length ? post.image_prompts.map(String) : undefined,
+        product: post.product_name ?? '',
+        person: '',
+        pillar: post.pillar ?? '',
+      };
 
-    let renderError: string | null = null;
-    await renderPreviewImages(profile, [previewPost], {
-      supabase,
-      userId: brand.id,
-      onProgress: () => {},
-      onPost: async (p) => {
-        if (p.imageUrl) {
-          const { error: updateErr } = await supabase.from('posts').update({
-            media_url: p.imageUrl,
-            media_urls: p.imageUrls && p.imageUrls.length > 1 ? p.imageUrls : null,
-            // The renderer may have downgraded a failed carousel to a single image.
-            format: p.format ?? null
-          }).eq('id', post.id);
-          if (updateErr) renderError = updateErr.message;
-        } else {
-          renderError = (p as any).__renderError ?? 'no image produced';
+      let renderError: string | null = null;
+      await renderPreviewImages(profile, [previewPost], {
+        supabase,
+        userId: brand.id,
+        onProgress: () => {},
+        onPost: async (p) => {
+          if (p.imageUrl) {
+            const { error: updateErr } = await supabase.from('posts').update({
+              media_url: p.imageUrl,
+              media_urls: p.imageUrls && p.imageUrls.length > 1 ? p.imageUrls : null,
+              // The renderer may have downgraded a failed carousel to a single image.
+              format: p.format ?? null
+            }).eq('id', post.id);
+            if (updateErr) renderError = updateErr.message;
+          } else {
+            renderError = (p as any).__renderError ?? 'no image produced';
+          }
         }
-      }
-    });
+      });
 
-    // Reload to get the image URL
-    const { data: updated } = await supabase
-      .from('posts').select('media_url')
-      .eq('id', post.id).maybeSingle();
+      // Reload to get the image URL
+      const { data: updated } = await supabase
+        .from('posts').select('media_url')
+        .eq('id', post.id).maybeSingle();
 
-    return json({ ok: true, url: updated?.media_url ?? null, error: updated?.media_url ? null : renderError });
-  } catch (e) {
-    return json({ error: `Render failed: ${String(e)}` }, { status: 500 });
-  }
+      return json({ ok: true, url: updated?.media_url ?? null, error: updated?.media_url ? null : renderError });
+    } catch (e) {
+      return json({ error: `Render failed: ${String(e)}` }, { status: 500 });
+    }
+  });
 };
