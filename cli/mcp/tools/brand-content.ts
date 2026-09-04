@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { api, callEndpoint } from '../../lib/api.ts';
-import { BRAND_ENDPOINTS, BRAND_RESOURCES, type BrandResource } from '../../lib/contracts/index.ts';
+import {
+  acceptsIdPrefix,
+  BRAND_ENDPOINTS,
+  BRAND_RESOURCES,
+  type BrandResource,
+} from '../../lib/contracts/index.ts';
 import { resolvePostId, resolveResourceId, withAuth } from '../util.ts';
 
 const slug = z.string().min(1).describe('Brand URL slug');
@@ -11,16 +16,15 @@ const resourceId = (resource: BrandResource) =>
 
 function registerDeclaredEndpoints(server: McpServer) {
   for (const endpoint of BRAND_ENDPOINTS) {
-    const resource = endpoint.resource;
+    const byPrefix = acceptsIdPrefix(endpoint);
     server.registerTool(
       endpoint.tool,
       {
         title: endpoint.title,
         description: endpoint.description,
-        inputSchema:
-          resource === undefined
-            ? endpoint.input.extend({ slug })
-            : endpoint.input.extend({ slug, id: resourceId(resource) }),
+        inputSchema: byPrefix
+          ? endpoint.input.extend({ slug, id: resourceId(endpoint.resource) })
+          : endpoint.input.extend({ slug }),
         annotations: {
           readOnlyHint: endpoint.method === 'GET',
           destructiveHint: endpoint.destructive,
@@ -34,7 +38,9 @@ function registerDeclaredEndpoints(server: McpServer) {
           }
 
           const { id, ...payload } = input as { id: string } & Record<string, unknown>;
-          const resolved = await resolveResourceId(endpoint.resource, token, brandSlug as string, id);
+          const resolved = byPrefix
+            ? await resolveResourceId(endpoint.resource, token, brandSlug as string, id)
+            : id;
           const body = await callEndpoint<Record<string, unknown>>(
             endpoint,
             token,

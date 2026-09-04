@@ -3,6 +3,10 @@ import type { BrandEndpoint } from './index';
 
 const id = z.string().min(1).describe('Row id, verbatim from get_studio or list_products');
 
+// Una cancellazione non accetta prefissi: un prefisso ambiguo colpisce la riga sbagliata e non
+// c'è nessun modo di annullarla. Serve l'UUID pieno, come get_studio e list_products lo danno.
+const OnlyRowUuid = z.object({ id: z.uuid() }).strict();
+
 const PRODUCT_FIELDS = {
   title: z.string().min(1).describe('What the offer is called'),
   description: z.string().describe('What it is, in the brand’s own words'),
@@ -90,9 +94,48 @@ export const DELETE_PRODUCT = {
   method: 'DELETE',
   pathUnderBrand: '/products/:id',
   resource: 'product',
-  input: z.object({ id }).strict(),
+  input: OnlyRowUuid,
   output: Ok,
   failures: [NOT_FOUND, { error: 'delete_failed', status: 500 }],
+  destructive: true
+} satisfies BrandEndpoint;
+
+export const DELETE_PERSON = {
+  tool: 'delete_person',
+  title: 'Delete person',
+  description: 'Delete a studio person by UUID.',
+  method: 'DELETE',
+  pathUnderBrand: '/studio/people/:id',
+  resource: 'person',
+  input: OnlyRowUuid,
+  output: Ok,
+  failures: [{ error: 'Person not found', status: 404 }],
+  destructive: true
+} satisfies BrandEndpoint;
+
+export const DELETE_DOCUMENT = {
+  tool: 'delete_document',
+  title: 'Delete studio document',
+  description: 'Delete a knowledge document by UUID.',
+  method: 'DELETE',
+  pathUnderBrand: '/studio/documents/:id',
+  resource: 'document',
+  input: OnlyRowUuid,
+  output: Ok,
+  failures: [{ error: 'Document not found', status: 404 }],
+  destructive: true
+} satisfies BrandEndpoint;
+
+export const DELETE_COMPETITOR = {
+  tool: 'delete_competitor',
+  title: 'Delete competitor',
+  description: 'Delete a competitor by UUID.',
+  method: 'DELETE',
+  pathUnderBrand: '/studio/competitors/:id',
+  resource: 'competitor',
+  input: OnlyRowUuid,
+  output: Ok,
+  failures: [NOT_FOUND],
   destructive: true
 } satisfies BrandEndpoint;
 

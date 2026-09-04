@@ -74,6 +74,9 @@ import {
 import {
   ADD_COMPETITOR,
   CREATE_PRODUCT,
+  DELETE_COMPETITOR,
+  DELETE_DOCUMENT,
+  DELETE_PERSON,
   DELETE_PRODUCT,
   GET_BIO,
   RESEARCH_COMPETITORS,
@@ -93,7 +96,8 @@ export const BRAND_RESOURCES = {
   article: 'Article',
   product: 'Product',
   person: 'Person',
-  competitor: 'Competitor'
+  competitor: 'Competitor',
+  document: 'Document'
 } as const;
 
 export type BrandResource = keyof typeof BRAND_RESOURCES;
@@ -136,6 +140,9 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CREATE_POST,
   CREATE_PRODUCT,
   CREATE_SHARE,
+  DELETE_COMPETITOR,
+  DELETE_DOCUMENT,
+  DELETE_PERSON,
   DELETE_PRODUCT,
   DIAGNOSE_BRAND,
   DIAGNOSE_RADAR,
@@ -214,6 +221,13 @@ export function pathFor(endpoint: BrandEndpoint, slug: string, id?: string): str
   if (endpoint.resource === undefined) return `${base}${endpoint.pathUnderBrand}`;
   if (!id) throw new Error(`${endpoint.tool} needs a ${endpoint.resource} id`);
   return `${base}${endpoint.pathUnderBrand.replace(RESOURCE_SEGMENT, encodeURIComponent(id))}`;
+}
+
+// Un id accorciato è una comodità di lettura: la lista dice quale riga, il prefisso basta a
+// indicarla. Su una cancellazione non basta — il prefisso ambiguo colpisce la riga sbagliata e
+// non si torna indietro — quindi la DELETE prende l'id che il contratto dichiara, per intero.
+export function acceptsIdPrefix(endpoint: BrandEndpoint): endpoint is ResourceEndpoint {
+  return endpoint.resource !== undefined && endpoint.method !== 'DELETE';
 }
 
 export function statusForFailure(endpoint: BrandEndpoint, error: string): number {
@@ -312,6 +326,9 @@ export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {
   ADD_COMPETITOR,
   CREATE_PRODUCT,
+  DELETE_COMPETITOR,
+  DELETE_DOCUMENT,
+  DELETE_PERSON,
   DELETE_PRODUCT,
   GET_BIO,
   RESEARCH_COMPETITORS,
