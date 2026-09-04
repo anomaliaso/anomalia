@@ -907,6 +907,38 @@ export async function syncPrefsFromPlan(supabase: SupabaseClient, brandId: strin
   await supabase.from('brands').update({ content_prefs: prefsFromPlan(plan, existing) }).eq('id', brandId);
 }
 
+export type ProposalSaved = { ok: true; id: string } | { ok: false; error: 'insert_failed'; message: string };
+
+// Deposit a plan as the brand's pending proposal — the ONE writer both the generated and the
+// externally authored path use, so the two produce the same row. The active plan is not touched:
+// only an earlier pending proposal is superseded, and activatePlan stays the step that flips it.
+export async function saveProposedPlan(
+  supabase: SupabaseClient,
+  brandId: string,
+  plan: EditorialPlan
+): Promise<ProposalSaved> {
+  await supabase.from('editorial_plans').update({ status: 'rejected' }).eq('brand_id', brandId).eq('status', 'proposed');
+
+  const { data, error } = await supabase
+    .from('editorial_plans')
+    .insert({
+      brand_id: brandId,
+      status: 'proposed',
+      strategy: plan.strategy || null,
+      voice: plan.voice,
+      cadence: plan.cadence,
+      platform_mix: plan.platform_mix,
+      gtm: plan.gtm,
+      weeks: plan.weeks,
+      source: 'manual'
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) return { ok: false, error: 'insert_failed', message: error?.message ?? 'editorial_plans insert failed' };
+  return { ok: true, id: data.id as string };
+}
+
 // Activate a proposed plan: supersede the current active one, stamp week_starts from this week's
 // Monday (brand tz), flip status, and sync content_prefs. Every approval path goes through here.
 export async function activatePlan(

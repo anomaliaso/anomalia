@@ -63,6 +63,15 @@ as `media_ids`. That is also how you post to Instagram or TikTok, which never ac
 the field to repair. It costs nothing and calls no model, so run it on every draft and fix what
 it names before creating.
 
+**Write the plan yourself** → `save_plan`. You write the strategy, voice, cadence, platform mix
+and the four weeks; Anomalia stores them and calls no model. It lands as the pending proposal —
+the active plan is untouched, and `approve_plan` is what activates it. `propose_plan` remains
+there for when you want Anomalia to write one and bill it.
+
+**Plan a week yourself** → `save_week_seeds` (`week_index`, `theme`, one seed per planned post).
+No model call, no credits. The rows become the week draft the plan page shows; `produce_week` is
+the separate paid step that turns them into posts.
+
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).
