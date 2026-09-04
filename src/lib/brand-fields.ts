@@ -52,3 +52,25 @@ export function normalizeHashtags(raw: string): string[] {
   }
   return out;
 }
+
+/**
+ * Un fuso che il runtime sa risolvere davvero.
+ *
+ * La colonna `brands.timezone` decide l'ora locale di ogni slot futuro: una stringa che non e' un
+ * fuso non fallisce al salvataggio, fallisce piu' tardi, quando qualcosa prova a calcolare un
+ * orario. Il `<select>` del browser ne offre quindici e non puo' sbagliare; un tool che riceve una
+ * stringa da un agente si'.
+ *
+ * Chiedere a `Intl` invece di tenere un elenco: cosi' gli alias storici (`Asia/Calcutta`) restano
+ * validi, e nessuno deve aggiornare una lista quando IANA ne aggiunge uno.
+ */
+export function isKnownTimezone(value: unknown): boolean {
+  const tz = String(value ?? '').trim();
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}

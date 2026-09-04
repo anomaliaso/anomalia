@@ -10,6 +10,7 @@ import { emailLocale } from '$lib/server/email-i18n';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RequestEvent } from '@sveltejs/kit';
 import { isChatTier, isGatewayModelTier } from '$lib/chat-tiers';
+import { isKnownTimezone } from '$lib/brand-fields';
 import { invalidateBrandNav } from '$lib/server/nav-cache';
 import { readUploadImage } from '$lib/server/raster-image';
 import { createAdminClient } from '$lib/server/supabase-admin';
@@ -204,7 +205,7 @@ export async function setChatDefaultTier({ request, params, locals: { supabase }
 export async function setTimezone({ request, params, locals: { supabase } }: Ev) {
   const data = await request.formData();
   const tz = String(data.get('timezone') ?? '').trim();
-  if (!tz) return { error: 'Pick a timezone' };
+  if (!isKnownTimezone(tz)) return { error: 'Pick a timezone' };
   const { error } = await supabase.from('brands').update({ timezone: tz }).eq('slug', params.brand!);
   if (error) return { error: error.message };
   invalidateBrandNav(params.brand!);
