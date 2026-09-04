@@ -14,6 +14,43 @@ export type BlogTermKind = (typeof BLOG_TERM_KINDS)[number];
 
 const term = z.enum(BLOG_TERM_KINDS).describe('Which list the entry belongs to');
 
+/**
+ * Gli unici script di terze parti che il blog di un brand puo' caricare. E' un elenco CHIUSO, e la
+ * chiusura e' il punto: un campo `<script>` libero sarebbe esecuzione di codice arbitrario sulle
+ * pagine del cliente, e su `/blog/<slug>` — che sta sulla nostra origine, insieme alla sessione di
+ * chi e' loggato in `/app` — sarebbe una presa di controllo dell'account.
+ *
+ * Ogni id finisce dentro lo snippet del fornitore, quindi il pattern non e' una validazione di
+ * comodo: e' cio' che impedisce a una virgoletta o a un `<` di uscire dal contesto previsto.
+ */
+export const BLOG_ANALYTICS_ID_PATTERNS = {
+  ga4: /^G-[A-Z0-9]{4,20}$/,
+  meta_pixel: /^[0-9]{6,20}$/,
+  plausible: /^[a-z0-9][a-z0-9.-]{1,78}[a-z0-9]$/,
+  hotjar: /^[0-9]{5,12}$/
+} as const;
+
+export const BLOG_ANALYTICS_PROVIDERS = Object.keys(
+  BLOG_ANALYTICS_ID_PATTERNS
+) as unknown as readonly BlogAnalyticsProvider[];
+
+export type BlogAnalyticsProvider = keyof typeof BLOG_ANALYTICS_ID_PATTERNS;
+
+export function blogAnalyticsIdOk(provider: string, id: string): boolean {
+  const pattern = BLOG_ANALYTICS_ID_PATTERNS[provider as BlogAnalyticsProvider];
+  return pattern !== undefined && pattern.test(id);
+}
+
+const AnalyticsEntry = z
+  .object({
+    provider: z.enum(Object.keys(BLOG_ANALYTICS_ID_PATTERNS) as [BlogAnalyticsProvider, ...BlogAnalyticsProvider[]]),
+    id: z.string().min(1).describe('Measurement id: G-XXXXXXX (ga4), numeric (meta_pixel, hotjar), domain (plausible)')
+  })
+  .strict()
+  .refine((e) => blogAnalyticsIdOk(e.provider, e.id), {
+    message: 'id does not match the shape that provider issues'
+  });
+
 const NavbarLink = z.object({ label: z.string(), url: z.string() });
 
 const BlogConfig = z.object({
@@ -31,7 +68,8 @@ const BlogConfig = z.object({
   default_locale: z.string().nullable(),
   locales: z.array(z.string()),
   navbar_links: z.array(NavbarLink),
-  icon_url: z.string().nullable()
+  icon_url: z.string().nullable(),
+  analytics: z.array(z.object({ provider: z.string(), id: z.string() }))
 });
 
 export const GET_BLOG_SETTINGS = {
@@ -87,9 +125,14 @@ export const SET_BLOG_SETTINGS = {
     'Change how the blog looks and how it writes. Only the fields you send change; every other ' +
     'one keeps its value. `articles_per_week` is CLAMPED to the plan’s ceiling rather than ' +
     'refused, and the answer says what was actually saved — read it back instead of assuming ' +
-    'your number was taken. `locales` and `navbar_links` replace their whole list. Turning ' +
-    '`enabled` off takes the public blog down; it deletes no article. The blog icon and an ' +
-    'author’s avatar are images and cannot be set here. Calls no model and spends no credits.',
+    'your number was taken. `locales`, `navbar_links` and `analytics` replace their whole list. ' +
+    'Turning `enabled` off takes the public blog down; it deletes no article. The blog icon and an ' +
+    'author’s avatar are images and cannot be set here. `analytics` takes a CLOSED list of ' +
+    'providers with their measurement id — there is no field for arbitrary JavaScript, and asking ' +
+    'for one is refused: a script tag here would run on every visitor’s page. Those trackers load ' +
+    'ONLY on a verified custom domain and ONLY after the visitor accepts cookies; on the default ' +
+    '/blog/<slug> address they are stored and never emitted, because that address is Anomalia’s ' +
+    'own origin. Calls no model and spends no credits.',
   method: 'PUT',
   pathUnderBrand: '/settings/blog',
   input: z
@@ -122,7 +165,15 @@ export const SET_BLOG_SETTINGS = {
         .array(z.string())
         .optional()
         .describe('Extra languages articles are translated into. Replaces the whole list'),
-      navbar_links: z.array(NavbarLink).optional().describe('Up to 6 custom nav links. Replaces the whole list')
+      navbar_links: z.array(NavbarLink).optional().describe('Up to 6 custom nav links. Replaces the whole list'),
+      analytics: z
+        .array(AnalyticsEntry)
+        .max(4)
+        .optional()
+        .describe(
+          'Third-party analytics, one entry per provider. Replaces the whole list; [] removes them all, ' +
+            'which is how a tracker is taken off a live site without us'
+        )
     })
     .strict(),
   output: z.object({ ok: z.literal(true), config: BlogConfig }),

@@ -15,6 +15,7 @@ import { storeSecrets, loadSecrets } from '$lib/server/integration-secrets';
 import { blogArticlesPerWeek, blogArticlesPerWeekMax } from '$lib/server/plans';
 import { isBlogLocale, resolveBlogLocales, type BlogLocaleConfig } from '$lib/server/blog-locales';
 import { readUploadImage } from '$lib/server/raster-image';
+import { BLOG_ANALYTICS_PROVIDERS, blogAnalyticsIdOk } from '@anomalia/api-contracts';
 
 type Ev = RequestEvent;
 
@@ -62,6 +63,7 @@ export type BlogConfigView = {
   humanizerEnabled: boolean;
   backlinkNetwork: boolean;
   locales: BlogLocaleConfig;
+  analytics: { provider: string; id: string }[];
 };
 
 export function parseBlogConfig(
@@ -87,8 +89,21 @@ export function parseBlogConfig(
     showBlogLink: cfg.showBlogLink !== false,
     humanizerEnabled: cfg.humanizerEnabled !== false,
     backlinkNetwork: cfg.backlinkNetwork !== false,
-    locales: resolveBlogLocales(cfg, plan)
+    locales: resolveBlogLocales(cfg, plan),
+    analytics: blogAnalytics(cfg)
   };
+}
+
+/**
+ * I tracker che il brand ha scelto, gia' ridotti a quelli che sanno essere resi. La lettura non si
+ * fida di cio' che sta nel jsonb: una riga scritta prima che il fornitore esistesse, o da una mano
+ * che non e' passata dal contratto, non deve diventare uno script.
+ */
+export function blogAnalytics(cfg: Record<string, unknown>): { provider: string; id: string }[] {
+  const raw = Array.isArray(cfg.analytics) ? cfg.analytics : [];
+  return raw
+    .map((e) => ({ provider: String((e as { provider?: unknown })?.provider ?? ''), id: String((e as { id?: unknown })?.id ?? '') }))
+    .filter((e) => blogAnalyticsIdOk(e.provider, e.id));
 }
 
 /** Shared load payload for blog settings pages (appearance / domain / integrations). */
@@ -327,6 +342,23 @@ const BLOG_CONFIG_FIELDS: Record<string, (v: unknown, plan?: string | null) => u
       .map((l) => ({ label: str((l as { label?: unknown })?.label, 60), url: str((l as { url?: unknown })?.url, 300) }))
       .filter((l) => l.label && l.url)
       .slice(0, 6);
+  },
+  // Ultima linea prima che un id finisca dentro lo snippet di un fornitore. Il contratto lo rifiuta
+  // gia', ma la regola sta qui, accanto al modello: un chiamante futuro che scrivesse `blog_config`
+  // senza passare dal contratto non porta comunque uno script dentro una pagina pubblica.
+  analytics: (v) => {
+    const raw = Array.isArray(v) ? v : [];
+    const seen = new Set<string>();
+    const kept: { provider: string; id: string }[] = [];
+    for (const e of raw) {
+      const provider = str((e as { provider?: unknown })?.provider, 20);
+      const id = str((e as { id?: unknown })?.id, 80);
+      if (!blogAnalyticsIdOk(provider, id) || seen.has(provider)) continue;
+      seen.add(provider);
+      kept.push({ provider, id });
+      if (kept.length === BLOG_ANALYTICS_PROVIDERS.length) break;
+    }
+    return kept;
   }
 };
 

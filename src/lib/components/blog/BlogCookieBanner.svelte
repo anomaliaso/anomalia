@@ -3,8 +3,8 @@
   import { _ } from 'svelte-i18n';
   import { blogBannerOpen, initBlogConsent, setBlogConsent } from './blog-consent.svelte';
 
-  let { base = '' } = $props();
-  onMount(initBlogConsent);
+  let { base = '', analytics = [] } = $props();
+  onMount(() => initBlogConsent(analytics));
 </script>
 
 {#if blogBannerOpen()}

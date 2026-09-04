@@ -125,3 +125,41 @@ describe('blogConfigPatch — una regola per campo, due chiamanti', () => {
     expect(links).toEqual([{ label: 'Home', url: 'https://x.test' }]);
   });
 });
+
+describe('analytics del blog — un elenco chiuso, mai codice', () => {
+  it('tiene una coppia fornitore/id che quel fornitore emette davvero', () => {
+    expect(blogConfigPatch({ analytics: [{ provider: 'ga4', id: 'G-ABC1234567' }] })).toEqual({
+      analytics: [{ provider: 'ga4', id: 'G-ABC1234567' }]
+    });
+  });
+
+  /**
+   * Ultima linea prima che l'id finisca dentro uno snippet. Lo zod del contratto lo rifiuta gia',
+   * ma questa regola sta accanto al modello: se domani un altro chiamante scrive `blog_config`
+   * senza passare dal contratto, non porta uno script dentro una pagina pubblica.
+   */
+  it('scarta un id che non ha la forma del suo fornitore', () => {
+    expect(blogConfigPatch({ analytics: [{ provider: 'ga4', id: "G-X';alert(1);//" }] })).toEqual({ analytics: [] });
+    expect(blogConfigPatch({ analytics: [{ provider: 'hotjar', id: 'G-ABC123' }] })).toEqual({ analytics: [] });
+  });
+
+  it('scarta un fornitore che non conosciamo, invece di renderlo', () => {
+    expect(blogConfigPatch({ analytics: [{ provider: 'custom', id: '<script>x</script>' }] })).toEqual({
+      analytics: []
+    });
+  });
+
+  it('tiene un fornitore solo per tipo: due id dello stesso contano una volta', () => {
+    const patch = blogConfigPatch({
+      analytics: [
+        { provider: 'ga4', id: 'G-AAAAAAA' },
+        { provider: 'ga4', id: 'G-BBBBBBB' }
+      ]
+    });
+    expect(patch.analytics).toEqual([{ provider: 'ga4', id: 'G-AAAAAAA' }]);
+  });
+
+  it('una lista vuota toglie tutto: e’ cosi’ che si stacca un tracker rotto senza di noi', () => {
+    expect(blogConfigPatch({ analytics: [] })).toEqual({ analytics: [] });
+  });
+});

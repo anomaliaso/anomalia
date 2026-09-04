@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADD_BLOG_TERM,
+  BLOG_ANALYTICS_PROVIDERS,
   BLOG_FONTS,
   BLOG_TERM_KINDS,
   GET_BLOG_SETTINGS,
   REMOVE_BLOG_TERM,
-  SET_BLOG_SETTINGS
+  SET_BLOG_SETTINGS,
+  blogAnalyticsIdOk
 } from './blog-settings';
 import { BRAND_ENDPOINTS, statusForFailure } from './index';
 
@@ -82,6 +84,48 @@ describe('le impostazioni del blog come contratto', () => {
     expect(ADD_BLOG_TERM.description).toMatch(/avatar is an image and cannot be/);
   });
 
+  /**
+   * Il campo che Andrea ha chiesto — "script js nell'head" — esiste SOLO come elenco chiuso di
+   * fornitori con un id. Un campo `<script>` libero sarebbe esecuzione di codice arbitrario sulle
+   * pagine del cliente, e su `/blog/<slug>` anche sulla nostra origine.
+   */
+  it('non esiste nessun campo che accetti markup o codice', () => {
+    const fields = Object.keys(SET_BLOG_SETTINGS.input.shape);
+    for (const forbidden of ['head_scripts', 'head_html', 'custom_script', 'scripts', 'html']) {
+      expect(fields, forbidden).not.toContain(forbidden);
+    }
+    expect(SET_BLOG_SETTINGS.input.safeParse({ analytics: [{ provider: 'ga4', id: 'G-ABC123' }] }).success).toBe(true);
+    expect(
+      SET_BLOG_SETTINGS.input.safeParse({ analytics: [{ provider: 'custom', id: '<script>x</script>' }] }).success
+    ).toBe(false);
+  });
+
+  it('un id di misurazione non può contenere niente che chiuda un tag o una stringa', () => {
+    // L'id finisce dentro uno snippet del fornitore: se accettasse una virgoletta o un `<`,
+    // l'elenco chiuso non servirebbe a niente.
+    expect(blogAnalyticsIdOk('ga4', 'G-ABC1234567')).toBe(true);
+    expect(blogAnalyticsIdOk('ga4', "G-X';alert(1);//")).toBe(false);
+    expect(blogAnalyticsIdOk('ga4', 'G-X</script><script>alert(1)</script>')).toBe(false);
+    expect(blogAnalyticsIdOk('meta_pixel', '1234567890')).toBe(true);
+    expect(blogAnalyticsIdOk('meta_pixel', 'abc')).toBe(false);
+    expect(blogAnalyticsIdOk('plausible', 'example.com')).toBe(true);
+    expect(blogAnalyticsIdOk('plausible', 'example.com"/><img onerror=x>')).toBe(false);
+    expect(blogAnalyticsIdOk('hotjar', '3512345')).toBe(true);
+    expect(blogAnalyticsIdOk('hotjar', '35_12345')).toBe(false);
+  });
+
+  it('lo schema rifiuta un id sbagliato per il fornitore, non lo salva e basta', () => {
+    expect(SET_BLOG_SETTINGS.input.safeParse({ analytics: [{ provider: 'ga4', id: '1234' }] }).success).toBe(false);
+    expect(SET_BLOG_SETTINGS.input.safeParse({ analytics: [{ provider: 'hotjar', id: 'G-ABC123' }] }).success).toBe(
+      false
+    );
+  });
+
+  it('la descrizione dice dove gli script girano davvero, perché non è dove sembra', () => {
+    expect(SET_BLOG_SETTINGS.description).toMatch(/verified custom domain/);
+    expect(BLOG_ANALYTICS_PROVIDERS).toContain('ga4');
+  });
+
   it('la lettura porta i limiti del piano, non solo la configurazione', () => {
     const parsed = GET_BLOG_SETTINGS.output.safeParse({
       brand: 'demo',
@@ -101,7 +145,8 @@ describe('le impostazioni del blog come contratto', () => {
         default_locale: 'it',
         locales: [],
         navbar_links: [],
-        icon_url: null
+        icon_url: null,
+        analytics: [{ provider: 'ga4', id: 'G-ABC1234567' }]
       },
       limits: { articles_per_week_max: 8, translation_languages: 0, custom_domain: true },
       choices: { fonts: [...BLOG_FONTS], layouts: ['navbar', 'sidebar'], locales: ['it', 'en'] },

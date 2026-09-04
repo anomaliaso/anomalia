@@ -398,7 +398,38 @@ you do it: a **category** leaves its articles filed under nothing, a **tag** com
 article that carried it, an **author** leaves their articles with no byline. The answer counts
 `articles_affected`.
 
+`analytics` is a **closed** list of providers with their measurement id — `ga4` (`G-XXXXXXX`),
+`meta_pixel` (numeric), `plausible` (a domain), `hotjar` (numeric). There is no field for arbitrary
+JavaScript and there will not be one: a script tag here runs on every visitor's page, and on the
+default `/blog/<slug>` address that page is served from Anomalia's own origin, alongside the
+session of anyone signed into `/app`. Those trackers therefore load **only on a verified custom
+domain** and **only after the visitor accepts cookies**; on `/blog/<slug>` they are stored and
+never emitted. Sending `analytics: []` takes them all off a live site without us.
+
 The blog icon and an author's avatar are images and cannot be set through these tools.
+
+## Brand appearance
+
+| MCP | CLI |
+|-----|-----|
+| `get_appearance` | (MCP only) |
+| `set_appearance` | (MCP only) |
+
+The look every render follows: logo, favicon, colour palette, the two Google Fonts graphics are
+composed with, and the visual brief.
+
+**Read `get_appearance` first** — a font it does not carry is a font Google Fonts will not serve,
+and the graphics would silently come out in Inter.
+
+`logo_url` and `favicon_url` are **downloaded and re-hosted**, not linked: the answer carries the
+address we stored, which is the one every graphic will use. A private, redirecting or oversized
+address is refused (`image_rejected`) rather than half-saved, and `remove_logo` clears the logo —
+the two cannot be combined (`logo_conflict`). `display_font` and `body_font` go together
+(`font_pair_incomplete`) and are checked against Google Fonts before saving (`font_not_available`,
+which names the missing family). Setting `visual_style` **locks** it: the nightly rebuild stops
+rewriting the brand's visual brief until someone regenerates it from the browser.
+
+Colours stay with `set_colors` (three or six hex digits, up to 8 — the list replaces the palette).
 
 ## Media models
 

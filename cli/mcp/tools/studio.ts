@@ -10,10 +10,13 @@ export function registerStudioTools(server: McpServer) {
     'set_colors',
     {
       title: 'Set brand colors',
-      description: 'Set brand colors as hex values, e.g. ["#7c5cff","#ffffff"].',
+      description:
+        'Set brand colors as hex values, e.g. ["#7c5cff","#ffffff"]. Three or six digits, up to 8 colours; the list replaces the whole palette.',
       inputSchema: z.object({
         slug,
-        colors: z.array(z.string().regex(/^#?[0-9a-fA-F]{3,8}$/)).min(1),
+        // Stessa forma che la rotta salva: un `#aabbccdd` che passa di qui e prende un 400 di la'
+        // lascia l'agente convinto di aver salvato un colore. studio-writes.test.ts le confronta.
+        colors: z.array(z.string().regex(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)).min(1).max(8),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
