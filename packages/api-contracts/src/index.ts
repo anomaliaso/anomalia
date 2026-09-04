@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
 import { CHECK_CONTENT } from './content';
+import { GET_CREATION_KIT } from './creation-kit';
 import {
   GET_AUDIT_FINDINGS,
   LIST_AUDIT_CITATIONS,
@@ -75,6 +76,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_CALENDAR,
+  GET_CREATION_KIT,
   GET_GEO,
   GET_KEYWORDS,
   GET_PLAN,
@@ -115,6 +117,7 @@ export {
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_CALENDAR,
+  GET_CREATION_KIT,
   GET_POST,
   IMPORT_MEDIA_URL,
   LIST_AUDIT_CITATIONS,
@@ -154,6 +157,8 @@ export type {
   WebAuditIndexRow,
   WebFixRow
 } from './evidence';
+export { KIT_FORMATS } from './creation-kit';
+export type { GetCreationKitInput, GetCreationKitResult } from './creation-kit';
 export type { CreatePostInput, CreatePostResult } from './posts';
 export { PLAN_CADENCES, PLAN_CYCLE_WEEKS, SAVE_PLAN, SAVE_WEEK_SEEDS };
 export type { SavePlanInput, SavePlanResult, SaveWeekSeedsInput, SaveWeekSeedsResult } from './plans';
