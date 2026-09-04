@@ -4182,6 +4182,12 @@
           "gsc": "Connecter Google Search Console"
         }
       },
+      "todo": {
+        "title": "À faire",
+        "count": "{n, plural, one {# chose demande votre attention} other {# choses demandent votre attention}}",
+        "empty": "Rien n’attend. Les nouveaux brouillons, les signaux du radar et les leads apparaissent ici dès leur arrivée.",
+        "noSocial": "Aucun compte connecté pour l’instant"
+      },
       "overview": {
         "title": "Aperçu",
         "subtitle": "Ce qui demande votre attention, ce qui est planifié, les perfs web et comment vont vos contenus.",

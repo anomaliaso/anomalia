@@ -4,6 +4,7 @@
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
   import GrowthReadiness from '$lib/components/GrowthReadiness.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
+  import { homeTodos } from '$lib/home-todos';
 
   type Extras = {
     pendingCount?: number;
@@ -129,116 +130,22 @@
     }
   );
 
-  const reviewTotal = $derived(pendingPostCount + pendingBlogCount);
-  const controlOk = $derived(reviewTotal === 0);
-
-  type ReviewItem = {
-    key: string;
-    kind: 'social' | 'blog';
-    id: string;
-    href: string;
-    title: string;
-    meta: string;
-    media: string | null;
-    placeholder: string;
-  };
-
-  const REVIEW_PREVIEW = 5;
-  const REVIEW_PAGE_SIZE = 5;
-
-  const reviewItems = $derived.by((): ReviewItem[] => {
-    const social: ReviewItem[] = pendingPosts.map((post) => ({
-      key: `social-${post.id}`,
-      kind: 'social',
-      id: post.id,
-      href: `${base}/calendar?status=pending_user`,
-      title: captionPreview(post.caption, 90) || '—',
-      meta: post.platform ?? 'social',
-      media: post.media_url,
-      placeholder: (post.platform ?? '?').slice(0, 2).toUpperCase()
-    }));
-    const blogs: ReviewItem[] = pendingBlogs.map((art) => ({
-      key: `blog-${art.id}`,
-      kind: 'blog',
-      id: art.id,
-      href: `${base}/site/edit/${art.id}`,
-      title: captionPreview(art.title, 90) || '—',
-      meta: art.status,
-      media: art.cover_url,
-      placeholder: 'B'
-    }));
-    return [...social, ...blogs];
-  });
-
-  const loadedReviewCount = $derived(reviewItems.length);
-  const reviewTruncated = $derived(reviewTotal > loadedReviewCount);
-
-  let reviewExpanded = $state(false);
-  let reviewPage = $state(0);
-
-  const reviewPageCount = $derived(
-    Math.max(1, Math.ceil(loadedReviewCount / REVIEW_PAGE_SIZE))
-  );
-  const visibleReviewItems = $derived.by(() => {
-    if (!reviewExpanded) return reviewItems.slice(0, REVIEW_PREVIEW);
-    const start = reviewPage * REVIEW_PAGE_SIZE;
-    return reviewItems.slice(start, start + REVIEW_PAGE_SIZE);
-  });
-  const canExpandReview = $derived(loadedReviewCount > REVIEW_PREVIEW || reviewTruncated);
-
-  $effect(() => {
-    if (reviewPage > reviewPageCount - 1) reviewPage = Math.max(0, reviewPageCount - 1);
-  });
-
-  function expandReview() {
-    reviewExpanded = true;
-    reviewPage = 0;
-  }
-  function collapseReview() {
-    reviewExpanded = false;
-    reviewPage = 0;
-  }
-
-  function gradeToScore(grade: string | null): number | null {
-    if (!grade) return null;
-    const g = grade.trim().toUpperCase();
-    const map: Record<string, number> = {
-      'A+': 97,
-      A: 92,
-      'A-': 88,
-      'B+': 84,
-      B: 78,
-      'B-': 72,
-      'C+': 68,
-      C: 62,
-      'C-': 55,
-      D: 45,
-      F: 25
-    };
-    return map[g] ?? null;
-  }
-
-  const seoGauge = $derived(
-    overview.web.techScore != null
-      ? Math.max(0, Math.min(100, overview.web.techScore))
-      : (gradeToScore(overview.web.seoGrade) ?? 0)
-  );
-  const seoGaugeLabel = $derived(
-    overview.web.techScore != null
-      ? String(Math.round(overview.web.techScore))
-      : (overview.web.seoGrade ?? '—')
-  );
-  const geoGauge = $derived(
-    overview.web.citationsTotal > 0
-      ? Math.round((overview.web.citationsMentioned / overview.web.citationsTotal) * 100)
-      : (overview.web.shareOfVoice ?? 0)
-  );
-  const geoGaugeLabel = $derived(
-    overview.web.citationsTotal > 0
-      ? `${overview.web.citationsMentioned}/${overview.web.citationsTotal}`
-      : overview.web.shareOfVoice != null
-        ? `${overview.web.shareOfVoice}%`
-        : '—'
+  // Le cose da fare in cima: la SELEZIONE e l'ORDINE stanno in `$lib/home-todos`, puro e sotto
+  // test; qui si aggiunge solo ciò che quel modulo non può sapere — l'href col brand e la
+  // traduzione. Ha preso il posto di tre gauge (setup, SEO, GEO) e di una coda paginata dei
+  // singoli post: i primi erano ornamento, la seconda diceva la stessa cosa della riga
+  // «N da approvare» con un clic in più e una paginazione da mantenere.
+  const todos = $derived(
+    homeTodos({
+      queue: { pending: pendingPostCount },
+      blog: { pending: pendingBlogCount },
+      automations: {
+        radarEnabled: auto.radarEnabled,
+        radarReview: auto.radarReview,
+        leadsPending: auto.leadsPending
+      },
+      setup: { socialAccounts: setup.socialAccounts }
+    })
   );
 
   const socialPipeMax = $derived(
@@ -371,150 +278,36 @@
     <GrowthReadiness checks={overview.growth.checks} compact={overview.growth.ready} />
   {/if}
 
-  <!-- Command center: status + gauges -->
-  <section class="control-hero" class:ok={controlOk}>
-    <div class="control-copy">
-      <span class="ov-kicker">{$_('app.home.overview.sectionAttention')}</span>
-      <h2 class="control-title">
-        {#if controlOk}
-          {$_('app.home.overview.controlOk')}
-        {:else}
-          {$_('app.home.overview.controlNeedsReview', { values: { n: reviewTotal } })}
-        {/if}
-      </h2>
-      <p class="control-desc">
-        {#if controlOk}
-          {$_('app.home.overview.controlOkDesc')}
-        {:else}
-          {$_('app.home.overview.controlNeedsDesc')}
-        {/if}
-      </p>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge">
-        <div class="gauge-ring" style={`--v:${Math.round(setupPct)}`} aria-hidden="true">
-          <span><AnimatedNum value={Math.round(setupPct)} format={(n) => String(Math.round(n))} /></span>
-        </div>
-        <span class="gauge-label">{$_('app.home.overview.setupGauge')}</span>
-      </div>
-      <a class="gauge" href={`${base}/seo`}>
-        <div class="gauge-ring" style={`--v:${Math.round(seoGauge)}`} aria-hidden="true">
-          <span>
-            {#if overview.web.techScore != null}
-              <AnimatedNum value={Math.round(overview.web.techScore)} format={(n) => String(Math.round(n))} />
-            {:else}
-              {seoGaugeLabel}
-            {/if}
-          </span>
-        </div>
-        <span class="gauge-label">{$_('app.home.overview.seoGauge')}</span>
-      </a>
-      <a class="gauge" href={`${base}/geo`}>
-        <div class="gauge-ring" style={`--v:${Math.round(geoGauge)}`} aria-hidden="true">
-          <span>
-            {#if overview.web.citationsTotal > 0}
-              <AnimatedNum value={overview.web.citationsMentioned} format={(n) => String(Math.round(n))} />/{overview.web.citationsTotal}
-            {:else if overview.web.shareOfVoice != null}
-              <AnimatedNum value={overview.web.shareOfVoice} format={(n) => String(Math.round(n))} suffix="%" />
-            {:else}
-              {geoGaugeLabel}
-            {/if}
-          </span>
-        </div>
-        <span class="gauge-label">{$_('app.home.overview.geoGauge')}</span>
-      </a>
+  <!-- IL BLOCCO DEL MOCKUP: ciò che richiede attenzione sta in cima, con quante sono. Il resto
+       della pagina scende sotto, invariato. -->
+  <section class="todo" aria-labelledby="todo-title">
+    <div class="todo-head">
+      <h2 id="todo-title">{$_('app.home.todo.title')}</h2>
+      {#if todos.length > 0}
+        <p class="todo-count">{$_('app.home.todo.count', { values: { n: todos.length } })}</p>
+      {/if}
     </div>
 
-    {#if reviewTotal > 0}
-      <div class="review-queue">
-        <div class="review-queue-head">
-          <div class="review-queue-copy">
-            <span class="review-queue-title">{$_('app.home.overview.toReview')}</span>
-            <span class="review-queue-meta">
-              {#if pendingPostCount > 0}
-                {$_('app.home.overview.postsToAccept', { values: { n: pendingPostCount } })}
-              {/if}
-              {#if pendingPostCount > 0 && pendingBlogCount > 0}
-                <span aria-hidden="true"> · </span>
-              {/if}
-              {#if pendingBlogCount > 0}
-                {$_('app.home.overview.blogsToAccept', { values: { n: pendingBlogCount } })}
-              {/if}
-            </span>
-          </div>
-        </div>
-
-        <ul class="review-list">
-          {#each visibleReviewItems as item (item.key)}
-            <li>
-              <a href={item.href}>
-                <span class="up-thumb">
-                  {#if item.media}
-                    <img src={item.media} alt="" loading="lazy" />
-                  {:else}
-                    <span class="up-ph">{item.placeholder}</span>
-                  {/if}
-                </span>
-                <span class="up-body">
-                  <span class="up-meta">
-                    <span class="ov-kind"
-                      >{item.kind === 'social'
-                        ? $_('app.home.overview.kindSocial')
-                        : $_('app.home.overview.kindBlog')}</span
-                    >
-                    {item.meta}
-                  </span>
-                  <span class="up-title">{item.title}</span>
-                </span>
-              </a>
-            </li>
-          {/each}
-        </ul>
-
-        <div class="review-queue-foot">
-          {#if !reviewExpanded && canExpandReview}
-            <button type="button" class="ov-link review-toggle" onclick={expandReview}>
-              {$_('app.home.overview.showAllReview', { values: { n: reviewTotal } })} →
-            </button>
-          {:else if reviewExpanded}
-            <div class="review-pager">
-              <button
-                type="button"
-                class="ov-ai"
-                disabled={reviewPage <= 0}
-                onclick={() => (reviewPage = Math.max(0, reviewPage - 1))}
-              >
-                {$_('app.home.overview.prev')}
-              </button>
-              <span class="review-page-label"
-                >{$_('app.home.overview.pageOf', {
-                  values: { page: reviewPage + 1, pages: reviewPageCount }
-                })}</span
-              >
-              <button
-                type="button"
-                class="ov-ai"
-                disabled={reviewPage >= reviewPageCount - 1}
-                onclick={() => (reviewPage = Math.min(reviewPageCount - 1, reviewPage + 1))}
-              >
-                {$_('app.home.overview.next')}
-              </button>
-            </div>
-            <button type="button" class="ov-link review-toggle" onclick={collapseReview}>
-              {$_('app.home.overview.showLessReview')}
-            </button>
-            {#if reviewTruncated}
-              <a class="ov-link" href={`${base}/calendar?status=pending_user`}
-                >{$_('app.home.overview.seeAll')} →</a
-              >
-            {/if}
-          {/if}
-        </div>
-      </div>
+    {#if todos.length === 0}
+      <!-- Uno stato vuoto che dice PERCHÉ è vuoto e cosa lo riempirà, invece di una riga muta. -->
+      <p class="todo-empty">{$_('app.home.todo.empty')}</p>
+    {:else}
+      <ul class="todo-list">
+        {#each todos as todo (todo.key)}
+          <li>
+            <a href={`${base}${todo.path}`}>
+              <span class="todo-body">
+                <span class="todo-what">{$_(todo.labelKey, { values: { n: todo.count } })}</span>
+                <span class="todo-where">{$_(todo.hintKey)}</span>
+              </span>
+              <span class="todo-cta">{$_('app.home.overview.review')}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </section>
 
-  <!-- Pipeline -->
   <section class="ov-section">
     <div class="ov-section-head">
       <div class="ov-section-copy">
@@ -845,6 +638,82 @@
 </div>
 
 <style>
+  /* IL BLOCCO DELLE COSE DA FARE. Niente cornici, niente riempimenti: la gerarchia la fanno
+     spaziatura, dimensione e peso — che è la regola del mockup, dove l'unico bordo è quello
+     della riga che chiede qualcosa. */
+  .todo {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .todo-head h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .todo-count {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .todo-empty {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 62ch;
+  }
+  .todo-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .todo-list a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 16px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+    text-decoration: none;
+    transition: border-color 140ms ease;
+  }
+  .todo-list a:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  }
+  .todo-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .todo-what {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .todo-where {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  .todo-cta {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
   /* Registering the angle is what makes the rotating border possible at all: an unregistered
      custom property has no type, so CSS jumps it 0deg→360deg instead of interpolating and the
      gradient never moves. Where @property is unsupported the border simply sits still — the
@@ -1002,204 +871,6 @@
     font-weight: 650;
     color: var(--accent);
     text-decoration: none;
-  }
-
-  /* ── Control hero ─────────────────────────────────────────── */
-  .control-hero {
-    display: grid;
-    gap: 18px;
-    margin: 0 0 64px;
-    padding: 18px 18px 16px;
-    border-radius: 18px;
-    border: 1px solid var(--line);
-    min-width: 0;
-    max-width: 100%;
-    overflow-x: clip;
-    background:
-      radial-gradient(
-        120% 80% at 100% 0%,
-        color-mix(in srgb, var(--accent) 10%, transparent) 0%,
-        transparent 55%
-      ),
-      var(--paper);
-  }
-  .control-hero.ok {
-    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-  }
-  .control-copy {
-    min-width: 0;
-  }
-  .control-title {
-    margin: 4px 0 6px;
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
-  }
-  .control-desc {
-    margin: 0;
-    font-size: 13.5px;
-    color: var(--ink-soft);
-    max-width: 42ch;
-  }
-  .gauge-row {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .gauge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 8px;
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--paper-2) 70%, var(--paper));
-    border: 1px solid transparent;
-    text-decoration: none;
-    color: inherit;
-  }
-  a.gauge:hover {
-    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-  }
-  .gauge-ring {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: conic-gradient(var(--accent) calc(var(--v) * 1%), color-mix(in srgb, var(--ink) 8%, transparent) 0);
-    transition: background 0.6s ease;
-  }
-  .gauge-ring span {
-    width: 54px;
-    height: 54px;
-    border-radius: 50%;
-    background: var(--paper);
-    display: grid;
-    place-items: center;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--ink);
-  }
-  .gauge-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink-soft);
-    text-align: center;
-  }
-
-  .review-queue {
-    margin-top: 4px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .review-queue-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .review-queue-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1 1 12rem;
-  }
-  .review-queue-title {
-    font-size: 14px;
-    font-weight: 650;
-    letter-spacing: -0.02em;
-  }
-  .review-queue-meta {
-    font-size: 12.5px;
-    color: var(--ink-soft);
-    overflow-wrap: anywhere;
-  }
-  .review-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--paper-2) 55%, var(--paper));
-    overflow: hidden;
-    min-width: 0;
-    max-width: 100%;
-    width: 100%;
-  }
-  .review-list li {
-    min-width: 0;
-  }
-  .review-list li + li {
-    border-top: 1px solid var(--line);
-  }
-  .review-list a {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    text-decoration: none;
-    color: inherit;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-  .review-list a:hover {
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
-  }
-  .review-list .up-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .review-queue-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .review-pager {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .review-pager .ov-ai:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .review-page-label {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--ink-soft);
-    min-width: 4.5ch;
-    text-align: center;
-  }
-  button.review-toggle {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    cursor: pointer;
-    font: inherit;
   }
 
   /* ── Pipeline ─────────────────────────────────────────────── */
@@ -1374,23 +1045,6 @@
     flex-wrap: wrap;
     min-width: 0;
     max-width: 100%;
-  }
-  .ov-ai {
-    appearance: none;
-    border: 1px solid var(--line);
-    background: var(--paper);
-    color: var(--ink);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 6px 10px;
-    border-radius: 999px;
-    cursor: pointer;
-    max-width: 100%;
-    white-space: nowrap;
-  }
-  .ov-ai:hover {
-    border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
   }
   .ov-ai-strong {
     background: color-mix(in srgb, var(--accent) 12%, var(--paper));
@@ -1668,44 +1322,17 @@
     .mini-bar span,
     .likes-bars span,
     .setup-bar span,
-    .gauge-ring,
     .mini-ring {
       transition: none;
     }
   }
 
   @container workbench (max-width: 640px) {
-    .gauge-row {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
-    }
-    .gauge-ring {
-      width: 58px;
-      height: 58px;
-    }
-    .gauge-ring span {
-      width: 44px;
-      height: 44px;
-      font-size: 12px;
-    }
     .pipe-grid {
       grid-template-columns: 1fr;
     }
     .perf-layout {
       grid-template-columns: 1fr;
-    }
-    .control-hero {
-      padding: 14px 12px 12px;
-    }
-    .control-title {
-      font-size: 1.2rem;
-    }
-    .review-queue-head {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .review-queue-copy {
-      flex: 1 1 auto;
     }
     .ov-panel-actions {
       width: 100%;
@@ -1715,10 +1342,6 @@
       text-align: center;
       white-space: normal;
     }
-    .review-list a {
-      padding: 10px;
-      gap: 8px;
-    }
     .up-title {
       white-space: normal;
       display: -webkit-box;
@@ -1726,34 +1349,8 @@
       -webkit-box-orient: vertical;
       text-overflow: ellipsis;
     }
-    .review-queue-foot {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .review-pager {
-      justify-content: space-between;
-      width: 100%;
-    }
   }
 
   @container workbench (max-width: 420px) {
-    .gauge-row {
-      gap: 4px;
-    }
-    .gauge {
-      padding: 10px 4px;
-    }
-    .gauge-ring {
-      width: 52px;
-      height: 52px;
-    }
-    .gauge-ring span {
-      width: 40px;
-      height: 40px;
-      font-size: 11px;
-    }
-    .gauge-label {
-      font-size: 11px;
-    }
   }
 </style>

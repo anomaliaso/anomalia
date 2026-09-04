@@ -4522,6 +4522,12 @@
           "gsc": "Collega Google Search Console"
         }
       },
+      "todo": {
+        "title": "Da fare",
+        "count": "{n, plural, one {# cosa richiede la tua attenzione} other {# cose richiedono la tua attenzione}}",
+        "empty": "Non c’è niente in attesa. Bozze nuove, segnali del radar e lead compaiono qui appena arrivano.",
+        "noSocial": "Nessun account ancora collegato"
+      },
       "overview": {
         "title": "Panoramica",
         "subtitle": "Cosa richiede la tua attenzione, cosa è in programma, come sta andando il web e come performano i contenuti.",
