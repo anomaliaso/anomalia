@@ -1,10 +1,3 @@
-/**
- * Deterministic article editing. No model runs here and no credit is spent: every field the
- * caller sends is stored as it arrived, and every field it did not send is left untouched.
- *
- * ARTICLE_EDIT_RULES is the only place that says what a status allows. Adding a status is a row,
- * not another `if` scattered over the chat tool, the web editor and the API.
- */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Article } from '@anomalia/api-contracts';
 import { BLOG_LOCALE_LANGUAGE, isBlogLocale } from '$lib/blog-locales';
