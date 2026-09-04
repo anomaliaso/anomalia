@@ -8,6 +8,7 @@ vi.mock('$lib/server/cli-auth', () => ({
 import { GET } from './+server';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
 import { brandSkills } from '$lib/server/brand-skills';
+import { DEFAULT_SKILLS, defaultSkillsFor } from '$lib/server/default-skills';
 import { TEAM_AGENT_IDS } from '$lib/agent-owners';
 import { WRITING_DECK_AGENTS } from '@anomalia/api-contracts';
 
@@ -88,6 +89,13 @@ function call(query: Record<string, string> = {}, slug = 'demo') {
   }).then(async (res) => ({ res, body: await res.json() }));
 }
 
+/** Il mazzo dei markdown del mestiere, separato dalle skill di default in codice. */
+const craftDeck = (body: { skills: { name: string }[] }) =>
+  body.skills
+    .filter((skill) => brandSkills.some((craft) => craft.name === skill.name))
+    .map((skill) => skill.name)
+    .sort();
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -105,12 +113,54 @@ describe('GET /writing-skills', () => {
     const reachable = new Set<string>();
     for (const agent of WRITING_DECK_AGENTS) {
       const { body } = await call({ agent });
-      for (const skill of body.skills) {
-        if (skill.source === 'product') reachable.add(skill.name);
-      }
+      for (const name of craftDeck(body)) reachable.add(name);
     }
 
     expect([...reachable].sort()).toEqual(brandSkills.map((s) => s.name).sort());
+  });
+
+  /**
+   * Le skill di default sono TECNICA DEL PRODOTTO in codice — i gate che fanno rifiutare un
+   * render. Arrivavano a un modello solo da `read_memory` in `agent/tools/`, cioè dallo stesso
+   * perimetro in smantellamento: senza questo, un agente esterno scrive uno script che il voice
+   * gate boccia e non sa perché.
+   */
+  it('anche le skill di default in codice escono dal perimetro che sta per sparire', async () => {
+    signedIn();
+
+    const reachable = new Set<string>();
+    for (const agent of WRITING_DECK_AGENTS) {
+      const { body } = await call({ agent });
+      for (const skill of body.skills) reachable.add(skill.name);
+    }
+
+    for (const skill of DEFAULT_SKILLS) {
+      expect([...reachable], skill.key).toContain(skill.key);
+    }
+  });
+
+  it('ogni agente vede solo le skill di default che lo riguardano', async () => {
+    signedIn();
+
+    const { body } = await call({ agent: 'analyst' });
+    const served = body.skills.map((s: { name: string }) => s.name);
+
+    expect(defaultSkillsFor('analyst')).toEqual([]);
+    for (const skill of DEFAULT_SKILLS) {
+      expect(served, skill.key).not.toContain(skill.key);
+    }
+  });
+
+  it('una skill di default porta il trigger come descrizione e i passi come corpo', async () => {
+    signedIn();
+
+    const { body } = await call({ agent: 'motion' });
+    const voice = body.skills.find((s: { name: string }) => s.name === 'motion-voiceover-fit');
+
+    expect(voice.source).toBe('product');
+    expect(voice.description).toBe('Use when a motion video has (or should have) a voice-over.');
+    expect(voice.body).toContain('generate_voiceover');
+    expect(voice.body).not.toContain('Use when a motion video has');
   });
 
   it('serve il testo, non un riferimento a un file che il modello non può aprire', async () => {
@@ -130,8 +180,7 @@ describe('GET /writing-skills', () => {
 
     const { body } = await call();
 
-    expect(body.skills.filter((s: { source: string }) => s.source === 'product').map((s: { name: string }) => s.name).sort())
-      .toEqual(['humanizer', 'stop-slop']);
+    expect(craftDeck(body)).toEqual(['humanizer', 'stop-slop']);
   });
 
   it('ogni agente porta il suo mazzo, e chi scrive social porta `social`', async () => {
@@ -140,11 +189,8 @@ describe('GET /writing-skills', () => {
     const content = await call({ agent: 'content' });
     const web = await call({ agent: 'web' });
 
-    const names = (r: { body: { skills: { name: string; source: string }[] } }) =>
-      r.body.skills.filter((s) => s.source === 'product').map((s) => s.name).sort();
-
-    expect(names(content)).toEqual(['humanizer', 'social', 'stop-slop']);
-    expect(names(web)).toEqual(['humanizer', 'seo-audit', 'stop-slop']);
+    expect(craftDeck(content.body)).toEqual(['humanizer', 'social', 'stop-slop']);
+    expect(craftDeck(web.body)).toEqual(['humanizer', 'seo-audit', 'stop-slop']);
   });
 
   it('elenca i riferimenti senza spedirli: 145 KB non stanno in una risposta', async () => {
@@ -224,6 +270,6 @@ describe('GET /writing-skills', () => {
     const { body } = await call();
 
     expect(body.skills.every((s: { source: string }) => s.source === 'product')).toBe(true);
-    expect(body.skills.length).toBe(2);
+    expect(craftDeck(body)).toEqual(['humanizer', 'stop-slop']);
   });
 });

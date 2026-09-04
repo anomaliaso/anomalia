@@ -2,16 +2,19 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
 import { brandSkills, brandSkillsForAgent } from '$lib/server/brand-skills';
-import { loadMemoryEntries } from '$lib/server/brand-memory';
+import { loadMemoryEntries, skillTrigger } from '$lib/server/brand-memory';
+import { defaultSkillEntries } from '$lib/server/default-skills';
 import type { HarnessRepoSkill } from '$lib/server/harness-skills';
 
-// LE SKILL DI SCRITTURA, SERVITE A UN MODELLO CHE STA FUORI. Fino a qui raggiungevano un modello
-// solo attraverso `skillsForAgent`, il cui unico chiamante vive nel bridge in smantellamento:
-// tolto quello, il testo che impedisce alla copy di suonare da chatbot smetteva di arrivare a
-// chiunque, senza che niente fallisse. Un agente esterno non ha l'harness — ha da leggere.
+// LE SKILL, SERVITE A UN MODELLO CHE STA FUORI. Fino a qui raggiungevano un modello per due
+// strade che muoiono insieme: `skillsForAgent`, il cui unico chiamante vive nel bridge in
+// smantellamento, e `read_memory` in `agent/tools/`, che sta nello stesso perimetro. Tolti quelli,
+// il testo che impedisce alla copy di suonare da chatbot — e quello che impedisce a un render di
+// essere rifiutato — smetteva di arrivare a chiunque. Un agente esterno non ha l'harness: legge.
 //
-// Due sorgenti, un elenco solo, distinte da `source`:
-//   product → i markdown del prodotto, uguali per ogni brand
+// Tre sorgenti, un elenco solo, due valori di `source`:
+//   product → i markdown del mestiere (`agent-docs/skills`) e le skill di default in codice
+//             (`DEFAULT_SKILLS`): uguali per ogni brand, si aggiornano col deploy
 //   brand   → le procedure di QUESTO brand (`brand_memory`, categoria `skill`)
 
 type Served = {
@@ -34,14 +37,20 @@ function serveProduct(skill: HarnessRepoSkill): Served {
   };
 }
 
-/** Il valore di una skill del brand è markdown la cui PRIMA RIGA è il trigger; il resto sono i passi. */
-function serveBrand(entry: { key: string; value: string }): Served {
-  const [trigger, ...rest] = entry.value.split('\n');
+/**
+ * Il valore di una skill è markdown la cui prima riga utile è il trigger e il resto sono i passi.
+ * Il trigger lo estrae `skillTrigger`, lo stesso che riempie l'indice del prompt interno: due
+ * modi di tagliare la stessa riga divergerebbero al primo titolo scritto come `## Use when …`.
+ */
+function serveSkillEntry(entry: { key: string; value: string }, source: Served['source']): Served {
+  const lines = entry.value.split('\n');
+  const trigger = lines.findIndex((line) => line.trim());
+
   return {
     name: entry.key,
-    source: 'brand',
-    description: trigger.trim(),
-    body: rest.join('\n').trim(),
+    source,
+    description: skillTrigger(entry.value),
+    body: lines.slice(trigger + 1).join('\n').trim(),
     references: []
   };
 }
@@ -75,12 +84,14 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
     return json({ skills: [], reference });
   }
 
+  const agent = url.searchParams.get('agent');
   const entries = await loadMemoryEntries(supabase, brand.id, { category: 'skill' });
 
   return json({
     skills: [
-      ...brandSkillsForAgent(url.searchParams.get('agent')).map(serveProduct),
-      ...entries.map(serveBrand)
+      ...brandSkillsForAgent(agent).map(serveProduct),
+      ...defaultSkillEntries(agent).map((entry) => serveSkillEntry(entry, 'product')),
+      ...entries.map((entry) => serveSkillEntry(entry, 'brand'))
     ],
     reference: null
   });
