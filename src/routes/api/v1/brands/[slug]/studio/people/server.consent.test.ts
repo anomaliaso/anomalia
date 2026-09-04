@@ -10,6 +10,8 @@ vi.mock('$lib/server/people', () => ({
 }));
 
 import { POST } from './+server';
+import { CONSENT_NOT_ATTESTED as DECLARED } from '@anomalia/api-contracts';
+import { CONSENT_NOT_ATTESTED } from '$lib/server/people-consent';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
 
 function fakeSupabase() {
@@ -82,5 +84,11 @@ describe('POST /api/v1/brands/:slug/studio/people', () => {
     expect(res.status).toBe(200);
     expect(inserts[0]).toMatchObject({ consent: true, consent_source: 'ai_generated' });
     expect(inserts[0].consent_at).toBeUndefined();
+  });
+});
+
+describe('il contratto di add_person', () => {
+  it('dichiara la stessa frase che la rotta restituisce, parola per parola', () => {
+    expect(DECLARED).toBe(CONSENT_NOT_ATTESTED);
   });
 });

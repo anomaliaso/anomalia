@@ -320,7 +320,7 @@ Salva sul piano attivo il brief utente (e opzionalmente i prodotti in evidenza) 
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `week_index` | number | Sì | Indice della settimana (0–3) |
+| `week_index` | number | Sì | Indice della settimana (0–3). Accettato anche come `week` |
 | `brief` | string | No | Brief per la settimana; `null` lo azzera |
 | `products` | string[] | No | Titoli esatti dei prodotti in evidenza |
 
@@ -358,7 +358,7 @@ Rigenera via AI una singola settimana del piano attivo attorno a un nuovo brief,
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `week_index` | number | Sì | Indice della settimana (0–3) |
+| `week_index` | number | Sì | Indice della settimana (0–3). Accettato anche come `week` |
 | `brief` | string | Sì | Nuovo brief autorevole |
 
 **Response** `200`:

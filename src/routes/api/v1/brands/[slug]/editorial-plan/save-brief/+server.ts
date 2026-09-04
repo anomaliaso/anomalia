@@ -11,7 +11,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
   const writeDenied = checkApiKeyWriteAccess(apiKey);
   if (writeDenied) return writeDenied;
 
-  const { week_index, brief, products } = await request.json();
+  const body = await request.json();
+  const { brief, products } = body;
+  const week_index = body.week_index ?? body.week;
   if (week_index === undefined) return json({ error: 'week_index is required' }, { status: 400 });
 
   // Load active plan
