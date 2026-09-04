@@ -3,7 +3,7 @@
 Il registry (`packages/api-contracts/src/`, specchiato in `cli/lib/contracts/`) genera i tool
 MCP da una dichiarazione sola; tutto il resto è `server.registerTool(...)` ricopiato a mano, con
 il contratto della rotta scritto in tre posti — la rotta, `lib/api.ts`, il tool. Su `dev` erano
-**36 generati su 85 tool**: 49 a mano.
+**39 generati su 88 tool**: 49 a mano.
 
 Questa PR ne porta su **16**. Restano 33 a mano, e sotto c'è il motivo di ciascuno.
 
@@ -32,10 +32,10 @@ toccare niente.
 ## Come è stata provata l'equivalenza
 
 Non a parole: `tools/list` catturato attraverso `handleMcpFetch` prima e dopo, confrontato campo
-per campo su tutti e 85 i tool.
+per campo su tutti e 88 i tool.
 
 ```
-before 85 after 85
+before 88 after 88
 added: []      removed: []
 tools with any delta: 16
 ```
