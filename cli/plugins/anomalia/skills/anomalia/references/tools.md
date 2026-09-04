@@ -129,8 +129,28 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 | `update_brand_kit` / `set_colors` | `anomalia studio <slug> kit-update\|colors …` |
 | `add_note` / `delete_document` | `anomalia studio <slug> add-note\|delete-doc …` |
 | `add_person` / `generate_person` / `delete_person` | `anomalia studio <slug> people-*` |
+| `update_person` | (MCP only) |
 | `add_competitor` / `delete_competitor` / `research_competitors` | `anomalia studio <slug> add-competitor\|…\|research` |
+| `update_competitor` | (MCP only) |
+| `create_product` / `update_product` / `delete_product` | (MCP only) |
+| `get_bio` / `set_bio` | (MCP only) |
 | `sync_history` | `anomalia studio <slug> sync-history` |
+
+`create_product` adds ONE offer. The e-commerce resync behind `sync_products` replaces the whole
+catalog and would erase a hand-made row.
+
+`update_product`, `update_person` and `update_competitor` take the row `id` verbatim from
+`get_studio` or `list_products` — no short prefixes here. They change only the fields you send:
+every other column keeps the value it had. An id from another brand answers `not_found`, exactly
+like one that does not exist anywhere.
+
+`update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
+real person's face stays withheld from every generator until the operator states the consent in
+their own words.
+
+`set_bio` records the link in bio; no publishing API writes a profile bio, so a person still
+pastes it on the profile by hand. `get_bio` also returns the short link worth putting there — the
+one with the most clicks in the last seven days.
 
 ## SEO / GEO / blog / ads / AI
 
