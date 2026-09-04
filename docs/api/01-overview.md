@@ -63,6 +63,7 @@ Gli endpoint che spendono AI richiedono **piano a pagamento + crediti** e scope 
 | `POST /brands/:slug/geo` | Audit/fix GEO |
 | `POST /brands/:slug/keywords` | Rigenera keyword research |
 | `POST /brands/:slug/backlinks` | Rigenera opportunità backlink |
+| `POST /brands/:slug/market/field` | Passata field watch (scopri → smonta → distilla) |
 | `POST /brands/:slug/studio/competitors/research` | Ricerca competitor AI |
 | `POST /brands/:slug/studio/people` (kind `ai`) | Ritratti AI |
 | `POST /brands/:slug/ads/remix` | Remix brief da ad competitor |
@@ -98,7 +99,7 @@ checkout. Restano scope `write`: il link porta anche a un bottone di disdetta.
 | [05 — Editorial plan](05-editorial-plan.md) | Propose, approve, discard, revise, update, save-brief, replan-week |
 | [06 — Weekly plan](06-weekly-plan.md) | Plan, produce, render, save |
 | [07 — Growth: SEO/GEO/web](07-growth-seo-geo.md) | SEO, GEO, keywords, backlinks, web, articles, GSC, ranks, library, video review |
-| [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | Ads, remix, voice, GTM, rubrics, products, api-keys |
+| [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | Ads, remix, voice, GTM, rubrics, products, api-keys, ideas, field watch, radar diagnose |
 
 ## Note
 
