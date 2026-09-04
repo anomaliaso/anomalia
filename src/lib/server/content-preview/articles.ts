@@ -392,31 +392,6 @@ Return JSON with the improved "caption"${imagePromptInstruction}.`;
       logoImage = (await loadBrandLogoImagePart(logoKit?.logos)) ?? undefined;
     }
 
-    if ((await import('$lib/server/image-agent')).isImageAgentEnabled() && opts.brandId) {
-      const { runImageAgent } = await import('$lib/server/image-agent');
-      const agent = await runImageAgent({
-        supabase: opts.supabase,
-        userId: opts.userId,
-        brandId: opts.brandId,
-        brief: imagePrompt,
-        platform: opts.platform,
-        feedback: opts.feedback,
-        baseImageUrl: opts.baseImageUrl,
-        userRefUrls: opts.userReferenceImageUrls,
-        productName: opts.productName,
-        productKind: opts.productKind,
-        visualStyle: opts.visualStyle ?? undefined,
-        brandLook: brandVisualDirective(opts.brandColors, opts.brandFonts) || undefined,
-        moodImageUrls: opts.moodImageUrls,
-        logoImage,
-        deadlineMs: 110_000
-      });
-      imageUrl = agent.imageUrl;
-      imagePrompt = agent.imagePrompt || imagePrompt;
-      notes = agent.notes;
-      costUsd = agent.costUsd;
-      credits = agent.credits;
-    } else {
     // Fetch product refs, the current image (the edit base) and the brand mood refs together;
     // all are best-effort.
     const [refs, baseImage, moodImages, userRefs] = await Promise.all([
@@ -439,12 +414,9 @@ Return JSON with the improved "caption"${imagePromptInstruction}.`;
       brandLook: brandVisualDirective(opts.brandColors, opts.brandFonts) || undefined,
       aspectRatio: aspectRatioFor(opts.platform)
     };
-    // Same render + QC loop as the batch path: critique the regenerated image (fidelity,
-    // composition, generic-AI look, brand-style match) and retry with cumulative corrective
-    // hints, keeping the best-scoring result.
+    // Un render, come ovunque: niente critico e niente anello che ridisegna.
     const dataUrl = await renderBrandImage(ai, imagePrompt, renderOpts);
     if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, aspectRatioFor(opts.platform));
-    }
   }
   return { caption, imagePrompt, imageUrl, notes, costUsd, credits };
 }

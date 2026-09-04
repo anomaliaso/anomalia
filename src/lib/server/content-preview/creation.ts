@@ -505,35 +505,6 @@ export async function generateStandaloneImage(opts: {
     ? `${opts.prompt}\n\nEdit the attached BASE photo in place — keep the scene, subject and composition; apply only what this prompt asks (e.g. place the official brand logo). Do not replace the photo with a blank canvas.`
     : opts.prompt;
 
-  if ((await import('$lib/server/image-agent')).isImageAgentEnabled()) {
-    const { runImageAgent } = await import('$lib/server/image-agent');
-    const moodUrls = await loadBrandMoodImageUrls(opts.supabase, opts.brandId).catch((error) => { swallow('load mood image urls', error); return []; });
-    const agent = await runImageAgent({
-      supabase: opts.supabase,
-      userId: opts.userId,
-      brandId: opts.brandId,
-      brief: editBrief,
-      platform: opts.platform ?? null,
-      aspectRatio: opts.aspectRatio,
-      baseImageUrl: baseUrl ?? null,
-      // Base is already baseImageUrl — don't also pin it as a library ref (would double-attach).
-      pinnedLibraryMediaIds: baseUrl ? undefined : opts.mediaIds,
-      userRefUrls: extraUrls,
-      moodImageUrls: moodUrls,
-      visualStyle: (kit?.visual_style as string | undefined) || undefined,
-      visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
-      brandLook: brandLook || undefined,
-      logoImage,
-      deadlineMs: 280_000
-    });
-    return doneStandalone({
-      imageUrl: agent.imageUrl,
-      notes: agent.notes,
-      costUsd: agent.costUsd,
-      credits: agent.credits
-    });
-  }
-
   // Load mood images as style anchors
   const moodUrls = await loadBrandMoodImageUrls(opts.supabase, opts.brandId).catch((error) => { swallow('load mood image urls', error); return []; });
   const [moodImages, baseImage, extraParts] = await Promise.all([

@@ -9,7 +9,7 @@ import { tool, stepCountIs, hasToolCall } from 'ai';
 import { harnessStreamText } from '$lib/server/harness';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { llmLanguageModel } from '$lib/server/llm';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { resolveUserTurnMediaParts, type MediaPart } from '$lib/media-parts';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { extractSdkUsage, logAiCall, withBrandContext } from '$lib/server/ai-log';
@@ -23,7 +23,6 @@ import {
   uploadPostImage,
   type AspectRatio
 } from '$lib/server/content-preview';
-import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
 import { createAgentBase } from '$lib/server/agent-base';
 import { geminiFast } from '$lib/server/chat/model';
 import {
@@ -405,7 +404,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
     threadId: opts.threadId,
     model: (() => {
       const b = geminiFast();
-      const id = IMAGE_AGENT_MODEL();
+      const id = llmDefaultModel();
       return id === b.modelId ? b : { ...b, model: llmLanguageModel(id), modelId: id };
     })(),
     defaultAgent: 'media',
@@ -878,11 +877,11 @@ If editing attached photos, call generate_image once per target × variants with
     userId: opts.userId,
     agent: 'media_generator',
     mode: `${kind}:v${variants}`,
-    model: IMAGE_AGENT_MODEL(),
+    model: llmDefaultModel(),
     provider: 'llm',
     surface: 'chat'
   }, {
-    model: llmLanguageModel(IMAGE_AGENT_MODEL()),
+    model: llmLanguageModel(llmDefaultModel()),
     maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
     system,
     messages: [{ role: 'user', content: userContent }],
@@ -896,7 +895,7 @@ If editing attached photos, call generate_image once per target × variants with
       logAiCall({
         label: 'media-generator',
         provider: 'llm',
-        model: IMAGE_AGENT_MODEL(),
+        model: llmDefaultModel(),
         ms: Date.now() - t0,
         ok: true,
         ...extractSdkUsage(totalUsage),

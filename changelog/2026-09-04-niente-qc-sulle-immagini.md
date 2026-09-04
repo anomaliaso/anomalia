@@ -59,11 +59,50 @@ Verificato: `RATES` in `ai-log.ts` è indicizzato per **modello**, non per label
 esisteva una riga `critiqueImage` da rimuovere. L'unico posto che nominava il critico era il
 commento delle misure in `content-cost.ts`, tolto insieme al resto.
 
-## Fuori portata, e da decidere a parte
+## E via anche l'agente immagini
 
-`isImageAgentEnabled()` è **acceso di default** e su due chiamanti — `generateStandaloneImage` e le
-immagini degli articoli — il ramo che passava dal critico era già morto in produzione: quei
-percorsi eseguono `runImageAgent`, che ha `MAX_AGENT_RENDERS = 4`. È un secondo meccanismo di
-controllo qualità sulle stesse immagini, e i ~4 render misurati gli corrispondono almeno quanto
-corrispondono alla QC. Andrea ha deciso sulle immagini, non su quell'agente: va deciso a parte,
-sapendo che finché resta acceso una parte del risparmio non si vedrà.
+Segnalato come fuori portata, e Andrea ha deciso subito dopo: **«Togli anche l'image agent, se fa
+reviews, in quanto non ci serve proprio.»**
+
+Era il secondo meccanismo di controllo qualità sulle stesse immagini, ed era **acceso di default**:
+su `generateStandaloneImage` e sulle immagini degli articoli il ramo del critico era già morto in
+produzione, perché quei percorsi eseguivano `runImageAgent` — un anello LLM con
+`MAX_AGENT_RENDERS = 4`. I ~4 render misurati gli corrispondevano almeno quanto corrispondevano
+alla QC.
+
+Il criterio applicato a ogni pezzo, con le parole di Andrea:
+
+- **giudica?** → via. Punteggi, verdetti, soglie, l'anello che ridisegna in base a un parere.
+- **serve a disegnare?** → resta. Contesto del brand, riferimenti visivi, il `craftFloor`.
+
+Non c'è una terza categoria, e i pezzi che sembrano starci in mezzo sono quasi sempre ingredienti
+travestiti da giudizio — è successo col `craftFloor` un'ora prima.
+
+Qui il taglio è stato pulito perché **il ramo non-agente assemblava già gli stessi ingredienti**:
+`logoImage`, `visualStyle`, `visualPlaybook`, `brandLook`, `baseImage`, i riferimenti, il rapporto
+d'aspetto. Quello che spariva con l'anello era solo la sua facoltà di **scegliere** — quali
+riferimenti pescare dal catalogo e quando rifare. Verificato riga per riga prima di cancellare.
+
+**Il flag è tolto, non spento.** `IMAGE_AGENT_ENABLED` è uscito da `.env.example` insieme al
+codice: un interruttore morto lasciato a `false` sembra una manopola, invita a girarla, e dietro non
+c'è più niente. **Da verificare in produzione**: se quella variabile è impostata nell'ambiente, ora
+non fa nulla e va rimossa di là.
+
+`IMAGE_AGENT_MODEL` non è morto con l'agente perché non era suo: era un alias di `llmDefaultModel`
+sotto un nome che adesso mentirebbe, e i tre file del media generator che lo importavano ora
+puntano alla cosa vera. (Sono file di `media-generator/`, toccati solo per questo cambio di import
+— segnalato come da accordi.)
+
+
+## Dopo i due tagli: l'immagine è a colpo singolo
+
+Non resta nessun anello che ridisegni. **Quello che esce è quello che il cliente vede**, e il
+rimedio è `refine_image`, che l'agente esterno chiama **guardando** il risultato.
+
+È una riduzione di qualità **scelta**, e va scritta come scelta: è coerente con la direzione —
+giudica l'AI del cliente, non un nostro anello — ma senza questa riga, fra sei mesi, sembrerà che
+qualcuno abbia dimenticato un pezzo.
+
+Il ritentativo legittimo sopravvive a entrambi i tagli: un 200 senza parte immagine è un fallimento
+vero, non un verdetto, e il test che tiene la distinzione regge anche dopo la rimozione
+dell'agente.
