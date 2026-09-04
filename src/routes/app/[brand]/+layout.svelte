@@ -11,8 +11,7 @@
   import Target from '@lucide/svelte/icons/target';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import BarChart3 from '@lucide/svelte/icons/chart-column';
-  import Wrench from '@lucide/svelte/icons/wrench';
-  import SettingsIcon from '@lucide/svelte/icons/settings';
+  import Radio from '@lucide/svelte/icons/radio';
   import { setCredits, refreshCredits } from '$lib/stores/credits';
   import WarningCenter from '$lib/components/WarningCenter.svelte';
   import WorkbenchPageShimmer from '$lib/components/WorkbenchPageShimmer.svelte';
@@ -20,12 +19,7 @@
   import PageTopBar from '$lib/components/PageTopBar.svelte';
   import { IsMobile, SHELL_MOBILE_BREAKPOINT } from '$lib/hooks/is-mobile.svelte';
   import { closePlanPanel } from '$lib/stores/plan-panel';
-  import {
-    NAV_TEAM_SPACES,
-    NAV_TEAM_TOOLS,
-    workbenchPageHref,
-    type NavTeamItem
-  } from '$lib/workbench-paths';
+  import { NAV_TEAM_SPACES, workbenchPageHref, type NavTeamItem } from '$lib/workbench-paths';
   import {
     SHELL_LAYOUT,
     readSidebarPanePx,
@@ -214,34 +208,12 @@
             : undefined
     };
   }
-  const SPACE_ICONS = [House, Images, Target, CalendarDays, BarChart3];
+  const SPACE_ICONS = [House, Images, Target, CalendarDays, Radio, BarChart3];
+  // Una sola sezione, senza intestazione: sei voci non hanno bisogno di essere raggruppate, e
+  // «Impostazioni» non e' una riga — e' l'ingranaggio in fondo alla barra, che ha gia' il suo
+  // nome accessibile (`aria-label` + `title` in DashboardSidebar).
   function teamSidebarGroups(): NavGroup[] {
-    const tools = NAV_TEAM_TOOLS.filter((t) => adsOn || !t.adsOnly);
-    return [
-      {
-        label: $_('app.nav2.spaces'),
-        section: true,
-        items: [
-          ...NAV_TEAM_SPACES.map((t, i) => navTeamItem(t, SPACE_ICONS[i])),
-        ]
-      },
-      {
-        label: $_('app.nav2.tools'),
-        groupIcon: Wrench,
-        items: tools.map((t) => navTeamItem(t))
-      },
-      {
-        items: [
-          {
-            href: `${base}/settings`,
-            label: $_('app.nav.settings'),
-            icon: SettingsIcon,
-            active: isSubActive(`${base}/settings`) && !isSubActive(`${base}/settings/brand`),
-            key: '/settings'
-          }
-        ]
-      }
-    ];
+    return [{ items: NAV_TEAM_SPACES.map((t, i) => navTeamItem(t, SPACE_ICONS[i])) }];
   }
 
   const sidebarGroups = $derived(teamSidebarGroups());

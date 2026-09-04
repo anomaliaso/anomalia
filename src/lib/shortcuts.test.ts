@@ -11,7 +11,7 @@ import {
   seqLetter,
   type SeqTarget
 } from './shortcuts';
-import { NAV_TEAM_SPACES, NAV_TEAM_TOOLS } from './workbench-paths';
+import { NAV_TEAM_SPACES, NAV_OFF_SIDEBAR } from './workbench-paths';
 
 /** Un evento tastiera finto: bastano i campi che il registro guarda. */
 function ev(key: string, opts: Omit<Partial<KeyboardEvent>, 'target'> & { target?: unknown } = {}) {
@@ -109,7 +109,7 @@ describe('matchShortcut', () => {
 
 describe('le destinazioni vengono dalla nav vera, non da una lista a mano', () => {
   it('ogni `g <lettera>` punta a una voce che esiste nella nav', () => {
-    const navPaths = new Set([...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS].map((i) => i.path));
+    const navPaths = new Set([...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR].map((i) => i.path));
     for (const t of GO_TARGETS) {
       expect(navPaths.has(t.path), `${t.key} → ${t.path} non è nella nav`).toBe(true);
       expect(goTargetLabelKey(t.path)).toBeTruthy();
