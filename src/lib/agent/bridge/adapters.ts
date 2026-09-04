@@ -9,7 +9,7 @@
  * `$lib/server/*` insieme: ogni fabbrica qui sotto passa le funzioni vere alle deps che l'adapter
  * dichiara. Nessuna logica si è spostata da `$lib/server/*` — solo la direzione della dipendenza.
  *
- * Chi chiama: `bridge/live.ts` (il turno in chat) e le route sotto `agent-lab/`, `agents/computer/`
+ * Chi chiama: `craft-model.ts` (motion video e UGC, via `harnessSdkModel`) e la sweep dei computer
  * e `api/v1/agents/computers/sweep` — tutte app, tutte libere di importare `$lib/server/*`.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
