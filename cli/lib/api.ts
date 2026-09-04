@@ -64,7 +64,10 @@ export function callEndpoint<T>(
 ): Promise<T> {
   const path =
     endpoint.resource === undefined ? pathFor(endpoint, slug) : pathFor(endpoint, slug, id ?? '');
-  if (endpoint.method === 'POST') return post<T>(path, token, input);
+  if (endpoint.method === 'DELETE') return request<T>(path, token, { method: 'DELETE' });
+  if (endpoint.method !== 'GET') {
+    return request<T>(path, token, { method: endpoint.method, body: JSON.stringify(input) });
+  }
 
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(input)) {
@@ -316,9 +319,6 @@ export const api = {
   addCompetitor: (t: string, slug: string, data: { name: string; website?: string; kind?: string; rationale?: string }) =>
     post<{ ok: boolean; competitor: { id: string; name: string; website: string | null; kind: string; source: string } }>(`/api/v1/brands/${slug}/studio/competitors`, t, data),
 
-  updateCompetitor: (t: string, slug: string, compId: string, data: { name?: string; website?: string; kind?: string; rationale?: string }) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/studio/competitors/${compId}`, t, { method: 'PUT', body: JSON.stringify(data) }),
-
   deleteCompetitor: (t: string, slug: string, compId: string) =>
     request<{ ok: boolean }>(`/api/v1/brands/${slug}/studio/competitors/${compId}`, t, { method: 'DELETE' }),
 
@@ -427,19 +427,6 @@ export const api = {
 
   updateVoice: (t: string, slug: string, data: { mood?: string; tone?: string; register?: number; emotion?: string; character?: string; syntax?: string; platform_instructions?: Record<string, string>; avoid?: string[] }) =>
     post<{ ok: boolean }>(`/api/v1/brands/${slug}/voice/update`, t, data),
-
-  // ── Product editing ───────────────────────────────────────────────────
-
-  updateProduct: (t: string, slug: string, productId: string, data: { title?: string; description?: string; pricing?: string; featured?: boolean }) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/products/${productId}`, t, { method: 'PUT', body: JSON.stringify(data) }),
-
-  deleteProduct: (t: string, slug: string, productId: string) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/products/${productId}`, t, { method: 'DELETE' }),
-
-  // ── Person editing ────────────────────────────────────────────────────
-
-  updatePerson: (t: string, slug: string, personId: string, data: { name?: string; role?: string; description?: string; attributes?: unknown }) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/people/${personId}`, t, { method: 'PUT', body: JSON.stringify(data) }),
 
   // ── SEO ───────────────────────────────────────────────────────────────
 

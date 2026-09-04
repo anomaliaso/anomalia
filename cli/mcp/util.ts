@@ -74,39 +74,37 @@ export async function withAuth(
   }
 }
 
-export async function resolvePostId(token: string, slug: string, idOrPrefix: string): Promise<string> {
-  const posts = await api.getPosts(token, slug);
-  const match = resolveByPrefix(posts, idOrPrefix);
-  if (!match.ok) {
-    if (match.reason === 'ambiguous') {
-      throw new Error(
-        `Ambiguous post id prefix "${idOrPrefix}" (${match.count} matches). Use a longer prefix.`,
-      );
-    }
-    throw new Error(`No post found for id/prefix "${idOrPrefix}". List posts first.`);
-  }
-  return match.item.id;
-}
-
-export async function resolveArticleId(token: string, slug: string, idOrPrefix: string): Promise<string> {
-  const { articles } = await api.getWeb(token, slug, 'all');
-  const match = resolveByPrefix(articles, idOrPrefix);
-  if (!match.ok) {
-    if (match.reason === 'ambiguous') {
-      throw new Error(
-        `Ambiguous article id prefix "${idOrPrefix}" (${match.count} matches). Use a longer prefix.`,
-      );
-    }
-    throw new Error(`No article found for id/prefix "${idOrPrefix}". List articles first.`);
-  }
-  return match.item.id;
-}
-
 type IdResolver = (token: string, slug: string, idOrPrefix: string) => Promise<string>;
+
+function byPrefix<T extends { id: string }>(
+  noun: string,
+  list: (token: string, slug: string) => Promise<T[]>,
+): IdResolver {
+  return async (token, slug, idOrPrefix) => {
+    const match = resolveByPrefix(await list(token, slug), idOrPrefix);
+    if (match.ok) return match.item.id;
+    if (match.reason === 'ambiguous') {
+      throw new Error(
+        `Ambiguous ${noun} id prefix "${idOrPrefix}" (${match.count} matches). Use a longer prefix.`,
+      );
+    }
+    throw new Error(`No ${noun} found for id/prefix "${idOrPrefix}". List ${noun}s first.`);
+  };
+}
+
+export const resolvePostId: IdResolver = byPrefix('post', (token, slug) => api.getPosts(token, slug));
+
+export const resolveArticleId: IdResolver = byPrefix('article', async (token, slug) => {
+  const { articles } = await api.getWeb(token, slug, 'all');
+  return articles;
+});
 
 const RESOLVE_ID: Record<BrandResource, IdResolver> = {
   post: resolvePostId,
   article: resolveArticleId,
+  product: byPrefix('product', async (token, slug) => (await api.listProducts(token, slug)).products),
+  person: byPrefix('person', async (token, slug) => (await api.getStudio(token, slug)).people),
+  competitor: byPrefix('competitor', async (token, slug) => (await api.getStudio(token, slug)).competitors),
 };
 
 export function resolveResourceId(

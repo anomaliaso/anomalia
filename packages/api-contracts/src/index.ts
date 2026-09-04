@@ -33,12 +33,24 @@ import {
   GET_WEEKLY_PLAN,
   LIST_ARTICLES
 } from './reads';
+import {
+  CREATE_PRODUCT,
+  DELETE_PRODUCT,
+  GET_BIO,
+  SET_BIO,
+  UPDATE_COMPETITOR,
+  UPDATE_PERSON,
+  UPDATE_PRODUCT
+} from './studio';
 
 export type EndpointFailure = { readonly error: string; readonly status: number };
 
 export const BRAND_RESOURCES = {
   post: 'Post',
-  article: 'Article'
+  article: 'Article',
+  product: 'Product',
+  person: 'Person',
+  competitor: 'Competitor'
 } as const;
 
 export type BrandResource = keyof typeof BRAND_RESOURCES;
@@ -49,7 +61,7 @@ type EndpointShape = {
   readonly tool: string;
   readonly title: string;
   readonly description: string;
-  readonly method: 'GET' | 'POST';
+  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   readonly input: z.ZodObject<z.ZodRawShape>;
   readonly output: z.ZodType;
   readonly failures: readonly EndpointFailure[];
@@ -71,9 +83,12 @@ export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CHECK_CONTENT,
   CREATE_POST,
+  CREATE_PRODUCT,
+  DELETE_PRODUCT,
   GET_ADS,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
+  GET_BIO,
   GET_CALENDAR,
   GET_GEO,
   GET_KEYWORDS,
@@ -93,7 +108,11 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   RESCHEDULE_POST,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
+  SET_BIO,
   UPDATE_ARTICLE,
+  UPDATE_COMPETITOR,
+  UPDATE_PERSON,
+  UPDATE_PRODUCT,
 ];
 
 export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;
@@ -147,6 +166,15 @@ export {
   GET_WEEKLY_PLAN,
   LIST_ARTICLES
 };
+export {
+  CREATE_PRODUCT,
+  DELETE_PRODUCT,
+  GET_BIO,
+  SET_BIO,
+  UPDATE_COMPETITOR,
+  UPDATE_PERSON,
+  UPDATE_PRODUCT
+} from './studio';
 export type { CheckContentInput, CheckContentResult } from './content';
 export type {
   AuditCitationRow,
@@ -157,3 +185,4 @@ export type {
 export type { CreatePostInput, CreatePostResult } from './posts';
 export { PLAN_CADENCES, PLAN_CYCLE_WEEKS, SAVE_PLAN, SAVE_WEEK_SEEDS };
 export type { SavePlanInput, SavePlanResult, SaveWeekSeedsInput, SaveWeekSeedsResult } from './plans';
+export type { CreateProductInput, CreateProductResult } from './studio';
