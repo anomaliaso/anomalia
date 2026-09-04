@@ -15,6 +15,10 @@ import {
   CHAT_CONTEXT_CAP_TOKENS,
   leadEngagePlatforms,
   radarSourceLimit,
+  isRadarKindAllowed,
+  RADAR_BASE_KINDS,
+  RADAR_PRO_LEAD_KINDS,
+  RADAR_PLATFORM_KEYS,
   RADAR_SOURCE_LIMITS,
   visiblePlans,
   planByKey,
@@ -24,6 +28,11 @@ import {
   VIDEO_COST_USD_HD,
   VIDEO_COST_CREDITS
 } from './plans';
+import {
+  RADAR_BASE_SOURCE_KINDS,
+  RADAR_PLATFORMS,
+  RADAR_PRO_SOURCE_KINDS
+} from '@anomalia/api-contracts';
 
 describe('Go plan helpers', () => {
   it('recognises go as a plan key and a paid tier', () => {
@@ -206,6 +215,27 @@ describe('Go plan helpers', () => {
     }
     for (const p of PLANS) {
       expect(Object.keys(p).filter((k) => /^apiValue/.test(k))).toEqual([]);
+    }
+  });
+});
+
+describe('il vocabolario del Radar che un agente puo usare', () => {
+  it('e esattamente quello del prodotto: piattaforme e tipi di fonte', () => {
+    // Il contratto non puo' importare `$lib`, quindi i tre elenchi vivono anche li'. Uno che
+    // diverge sarebbe un tool che offre una fonte che il salvataggio rifiuta, o che ne nasconde
+    // una che esiste.
+    expect([...RADAR_PLATFORMS]).toEqual([...RADAR_PLATFORM_KEYS]);
+    expect([...RADAR_BASE_SOURCE_KINDS]).toEqual([...RADAR_BASE_KINDS]);
+    expect([...RADAR_PRO_SOURCE_KINDS]).toEqual([...RADAR_PRO_LEAD_KINDS]);
+  });
+
+  it('i tipi che il piano Pro sblocca sono gli stessi che il gate sblocca', () => {
+    for (const kind of RADAR_PRO_SOURCE_KINDS) {
+      expect(isRadarKindAllowed(kind, 'starter'), kind).toBe(false);
+      expect(isRadarKindAllowed(kind, 'pro'), kind).toBe(true);
+    }
+    for (const kind of RADAR_BASE_SOURCE_KINDS) {
+      expect(isRadarKindAllowed(kind, 'go'), kind).toBe(true);
     }
   });
 });

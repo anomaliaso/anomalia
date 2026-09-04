@@ -49,6 +49,12 @@ import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
+import {
+  ADD_RADAR_SOURCE,
+  GET_RADAR,
+  REMOVE_RADAR_SOURCE,
+  SET_RADAR_PLATFORM
+} from './radar';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 import {
@@ -112,6 +118,7 @@ export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   ADD_COMPETITOR,
+  ADD_RADAR_SOURCE,
   ADS_REMIX,
   APPROVE_PLAN,
   BILLING_PORTAL_LINK,
@@ -144,6 +151,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_MEDIA_MODELS,
   GET_PLAN,
   GET_POST,
+  GET_RADAR,
   GET_RANKS,
   GET_SEO,
   GET_STUDIO,
@@ -161,6 +169,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_WEB_FIXES,
   PROPOSE_PLAN,
   REFRESH_KEYWORDS,
+  REMOVE_RADAR_SOURCE,
   RENDER_POST,
   RESCHEDULE_POST,
   RESEARCH_COMPETITORS,
@@ -171,6 +180,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SEO_ACTION,
   SET_AUTOMATION,
   SET_BIO,
+  SET_RADAR_PLATFORM,
   SET_BRAND_SETTINGS,
   SET_MEDIA_MODEL,
   SYNC_HISTORY,
@@ -263,6 +273,17 @@ export {
   SET_MEDIA_MODEL
 } from './media-models';
 export type { MediaModelSlotId } from './media-models';
+export {
+  ADD_RADAR_SOURCE,
+  GET_RADAR,
+  RADAR_BASE_SOURCE_KINDS,
+  RADAR_PLATFORMS,
+  RADAR_PRO_SOURCE_KINDS,
+  RADAR_SOURCE_KINDS,
+  REMOVE_RADAR_SOURCE,
+  SET_RADAR_PLATFORM
+} from './radar';
+export type { RadarPlatform, RadarSourceKindName } from './radar';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {
