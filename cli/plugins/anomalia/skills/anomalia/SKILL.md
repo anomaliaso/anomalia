@@ -78,10 +78,11 @@ the separate paid step that turns them into posts.
 
 **Blog draft** → `generate_article` → optional `optimize_article` → `publish_article` when asked.
 
-**Back a SEO/GEO claim with its evidence** → `list_evidence_runs` to see every audit run →
-`get_evidence_run` for the one you mean (its citations carry the engine, the question asked, the
-verdict and the domains cited) → `list_evidence_artifacts` for the fix body, verbatim. All three
-are free reads: never run a new audit just to see what a past one already measured.
+**Back a SEO/GEO claim with the audit behind it** → `list_web_audits` to see every audit →
+`get_audit_findings` for what one of them observed → `list_audit_citations` for the probes behind
+the share of voice (engine, question asked, verdict, domains cited) → `list_web_fixes` for the fix
+body, verbatim. All four are free reads: never run a new audit just to see what a past one already
+measured.
 
 ## References (load on demand)
 
