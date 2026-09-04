@@ -44,31 +44,32 @@ da qualche altra parte. Nello stesso posto sta anche "un patch vuoto non è una 
 
 ## Il registry e il segmento `:id`
 
-`BRAND_ENDPOINTS` copriva solo `/<path>` senza segmenti dinamici, e un test lo imponeva. La
-ragione scritta lì era la risoluzione del prefisso (`resolvePostId`): un id di post si scrive
-abbreviato e va risolto prima che il path esista. Quella ragione vale per i post e basta — l'id di
-un prodotto, di una persona o di un competitor torna per intero da `get_studio` o
-`list_products`, e non c'è niente da risolvere.
+Questa parte è stata scritta due volte in parallelo, e la versione che resta non è la mia. Il
+branch di questa PR aveva insegnato al registry a sostituire `:id` con `addressesRow` e un terzo
+argomento opzionale a `pathFor`; mentre era aperto, la #218 ha portato su `dev` un modello più
+forte per la stessa cosa: un campo `resource` con una tassonomia (`BRAND_RESOURCES`), un
+`pathUnderBrand` tipizzato come template literal e un `pathFor` **overloaded**, così
+`pathFor(GET_POST, slug)` non compila nemmeno — dove la mia versione lanciava a runtime. La mia
+implementazione è stata cancellata dal branch, non fusa: due meccanismi per la stessa cosa sono
+un debito che si paga a ogni endpoint nuovo.
 
-Due strade erano possibili: portare l'id nel body (semplice, ma avrebbe richiesto un secondo
-endpoint per quattro capacità che ne hanno già uno) o insegnare al registry a sostituire `:id`. È
-stata scelta la seconda, perché è l'unica che non duplica niente. `pathFor` prende un terzo
-argomento opzionale, `callEndpoint` sposta l'id dal body al path, e i metodi ammessi diventano
-anche `PUT` e `DELETE`.
+Quello che il modello della #218 non copriva sono esattamente le scritture di questa PR, e sono
+due aggiunte piccole:
 
-Il test guardiano non è stato indebolito: al posto di *"nessun endpoint può avere `:id`"* ora ci
-sono tre asserzioni più strette — un endpoint che indirizza una riga deve dichiarare `id` nel
-proprio input, nessun altro segmento dinamico è ammesso, e un id mancante fa **eccezione** invece
-di chiamare la collezione intera (che per `/products` è la risincronizzazione e-commerce: un
-`DELETE` mal costruito lì sarebbe stato un incidente).
+- `method` ammetteva solo `GET | POST`. Ora anche `PUT` e `DELETE`, e `callEndpoint` li manda
+  (una `DELETE` non porta body).
+- `BRAND_RESOURCES` conosceva `post` e `article`. Ora anche `product`, `person` e `competitor`.
 
-Un branch parallelo, `feat/registry-id-endpoints`, ha scritto lo stesso meccanismo in un altro
-modo: un campo `resource` con una tassonomia (`post`, `article`) e una tabella di resolver lato
-client. Non è pushato e non ha una PR. Quella forma serve ai post, che hanno davvero un prefisso
-da risolvere; qui non serve — l'id torna per intero — e i suoi metodi ammessi restano
-`GET | POST`, quindi non può esprimere nessuna delle scritture di questa PR. Le due parti si
-compongono: la tassonomia e il rifiuto a compile-time di un `pathFor` senza id vanno sopra a
-questo, quando i tool dei post entreranno nel registry.
+I resolver di quei tre non sono identità. `RESOLVE_ID` esisteva già come tabella, ma le due voci
+dentro erano due copie della stessa funzione di dodici righe; una terza, quarta e quinta copia
+sarebbero state il momento in cui la tabella smette di essere una tabella. Ora c'è un solo
+`byPrefix(noun, list)` e cinque righe che lo istanziano — quindi anche un id di prodotto, persona
+o competitor accetta un prefisso, che è ciò che la descrizione del tool generato promette già
+("id or unambiguous prefix"). Un resolver identità avrebbe reso quella descrizione una bugia.
+
+L'alternativa, portare l'id nel body, è stata scartata: avrebbe richiesto un secondo endpoint di
+collezione accanto al `PUT /…/:id` che esiste già, che è esattamente il doppione che questa PR
+evita altrove.
 
 ## Il consenso
 
