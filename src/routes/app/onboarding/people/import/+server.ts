@@ -1,55 +1,34 @@
 import type { RequestHandler } from './$types';
 import { canEnter } from '$lib/server/access';
 import { logOnboardingError } from '$lib/server/onboarding-errors';
+import { safeFetchBytes, SafeFetchError, type SafeFetchReason, type SafeFetchBytesResult } from '$lib/server/tool-guard';
 
 // Import a team member's photo from an EXTERNAL url (detected during brand analysis) into the
 // private brand-knowledge bucket — the same place manual uploads land — so a detected person can
-// be used as an image reference and persisted just like a manually-added one. SSRF-safe.
+// be used as an image reference and persisted just like a manually-added one.
+//
+// The URL comes from outside, so the fetch goes through the shared guard: it RESOLVES the host
+// instead of matching its name, re-checks every redirect hop (social CDNs almost always 302),
+// and refuses a body past the ceiling while it streams rather than after buffering it.
 const MAX_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
+const IMPORT_USER_AGENT = 'Mozilla/5.0 (compatible; DalNullaBot/1.0)';
 
-function isPrivateHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  return (
-    h === 'localhost' || h === '0.0.0.0' || h === '::1' ||
-    /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) ||
-    /^169\.254\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-    /^f[cd]/.test(h) || /^fe[89ab]/.test(h)
-  );
-}
+// What the browser is told, per refusal — one row per reason, so a new one cannot be answered
+// with a message invented at the call site.
+const REFUSAL_BY_REASON: Record<SafeFetchReason, string> = {
+  not_public: 'Forbidden host',
+  too_large: 'Bad size',
+  fetch_failed: 'Fetch failed'
+};
 
-function assertPublicUrl(raw: string): URL {
-  const parsed = new URL(raw);
-  if (!['http:', 'https:'].includes(parsed.protocol) || isPrivateHost(parsed.hostname)) {
-    throw new Error('Forbidden host');
+function hostOf(raw: string): string {
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return '';
   }
-  return parsed;
-}
-
-// Social CDNs (IG/TikTok/X) almost always 302 — reject-all redirects dropped every thumb. Follow
-// redirects manually and re-check each hop so we never land on a private IP.
-async function fetchPublicImage(startUrl: string): Promise<Response> {
-  let current = startUrl;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    assertPublicUrl(current);
-    const res = await fetch(current, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      redirect: 'manual',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; DalNullaBot/1.0)',
-        Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
-      }
-    });
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get('location');
-      if (!loc) throw new Error('Bad redirect');
-      current = new URL(loc, current).href;
-      continue;
-    }
-    return res;
-  }
-  throw new Error('Too many redirects');
 }
 
 function sniffImageExt(buf: Buffer, contentType: string): string | null {
@@ -74,29 +53,32 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
 
   const body = await request.json().catch(() => ({}));
   const raw = String(body?.url ?? '').trim();
-  let start: URL;
-  try {
-    start = assertPublicUrl(raw);
-  } catch {
-    return new Response('Forbidden host', { status: 400 });
-  }
+  const host = hostOf(raw);
 
-  let res: Response;
+  let fetched: SafeFetchBytesResult;
   try {
-    res = await fetchPublicImage(start.href);
+    fetched = await safeFetchBytes(raw, {
+      maxBytes: MAX_BYTES,
+      timeoutMs: TIMEOUT_MS,
+      maxRedirects: MAX_REDIRECTS,
+      userAgent: IMPORT_USER_AGENT
+    });
   } catch (e) {
-    await logOnboardingError(supabase, user.id, 'people_import', e, { host: start.hostname });
-    return new Response('Fetch failed', { status: 400 });
+    const reason: SafeFetchReason = e instanceof SafeFetchError ? e.reason : 'fetch_failed';
+    if (reason !== 'not_public') {
+      await logOnboardingError(supabase, user.id, 'people_import', e, { host });
+    }
+    return new Response(REFUSAL_BY_REASON[reason], { status: 400 });
   }
-  if (!res.ok) {
-    await logOnboardingError(supabase, user.id, 'people_import', `Fetch failed: HTTP ${res.status}`, { host: start.hostname });
+
+  if (!fetched.ok) {
+    await logOnboardingError(supabase, user.id, 'people_import', `Fetch failed: HTTP ${fetched.status}`, { host });
     return new Response('Fetch failed', { status: 400 });
   }
 
-  const contentType = res.headers.get('content-type') ?? '';
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length === 0 || buf.length > MAX_BYTES) return new Response('Bad size', { status: 400 });
-  const ext = sniffImageExt(buf, contentType);
+  const buf = fetched.bytes;
+  if (buf.length === 0) return new Response('Bad size', { status: 400 });
+  const ext = sniffImageExt(buf, fetched.mime);
   if (!ext) return new Response('Not an image', { status: 400 });
 
   const path = `${user.id}/onboarding/${crypto.randomUUID()}.${ext}`;
@@ -104,7 +86,7 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
     .from('brand-knowledge')
     .upload(path, buf, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: false });
   if (up.error) {
-    await logOnboardingError(supabase, user.id, 'people_import', up.error.message, { host: start.hostname, size: buf.length });
+    await logOnboardingError(supabase, user.id, 'people_import', up.error.message, { host, size: buf.length });
     return new Response(up.error.message, { status: 400 });
   }
 
