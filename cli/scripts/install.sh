@@ -22,6 +22,8 @@ BINARY_NAME="anomalia"
 DEFAULT_DIR="/usr/local/bin"
 FALLBACK_DIR="$HOME/.local/bin"
 VERSION="latest"
+TAG_PREFIX="cli-v"          # release tags: cli-v0.1.0
+CHECKSUMS_FILE="SHA256SUMS.txt"
 
 # ── Colors ─────────────────────────────────────────────────────────────
 
@@ -137,52 +139,92 @@ else
   SUDO=""
 fi
 
-# Determine download URL
+# Determine download URL. Release tags are prefixed cli-v (the repo is a monorepo).
 if [[ "$VERSION" == "latest" ]]; then
-  DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/anomalia-${PLATFORM}"
+  RELEASE_BASE="https://github.com/${REPO}/releases/latest/download"
 else
-  DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${VERSION}/anomalia-${PLATFORM}"
+  RELEASE_BASE="https://github.com/${REPO}/releases/download/${TAG_PREFIX}${VERSION#v}"
+fi
+DOWNLOAD_URL="${RELEASE_BASE}/anomalia-${PLATFORM}"
+CHECKSUMS_URL="${RELEASE_BASE}/${CHECKSUMS_FILE}"
+
+# ── Download helpers ───────────────────────────────────────────────────
+
+if command -v curl &> /dev/null; then
+  fetch() { curl -fsSL -o "$1" "$2"; }
+elif command -v wget &> /dev/null; then
+  fetch() { wget -qO "$1" "$2"; }
+else
+  fatal "Neither curl nor wget found. Please install one."
+fi
+
+if command -v sha256sum &> /dev/null; then
+  sha256() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum &> /dev/null; then
+  sha256() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  fatal "Neither sha256sum nor shasum found: cannot verify the download."
 fi
 
 info "Downloading Anomalia CLI..."
 info "URL: ${DOWNLOAD_URL}"
 
-# Download
 TEMP_FILE="$(mktemp)"
-if command -v curl &> /dev/null; then
-  curl -sSL -o "$TEMP_FILE" "$DOWNLOAD_URL" || fatal "Download failed"
-elif command -v wget &> /dev/null; then
-  wget -qO "$TEMP_FILE" "$DOWNLOAD_URL" || fatal "Download failed"
-else
-  fatal "Neither curl nor wget found. Please install one."
-fi
+CHECKSUMS_FL="$(mktemp)"
+trap 'rm -f "$TEMP_FILE" "$CHECKSUMS_FL"' EXIT
 
-# Verify download
-FILE_SIZE="$(wc -c < "$TEMP_FILE" | tr -d ' ')"
-if [[ "$FILE_SIZE" -lt 1000 ]]; then
-  error "Downloaded file is too small ($FILE_SIZE bytes). Release may not exist for $PLATFORM."
-  cat "$TEMP_FILE"
-  rm -f "$TEMP_FILE"
-  fatal "Download verification failed"
-fi
+fetch "$TEMP_FILE" "$DOWNLOAD_URL" \
+  || fatal "Download failed. No release asset anomalia-${PLATFORM} at ${RELEASE_BASE}"
 
-# Make executable
-chmod +x "$TEMP_FILE"
+# Verify the binary against the checksums published with the release. Refusing to
+# install an unverified executable is the whole point of shipping SHA256SUMS.txt.
+fetch "$CHECKSUMS_FL" "$CHECKSUMS_URL" \
+  || fatal "Could not download ${CHECKSUMS_FILE} from ${RELEASE_BASE}: refusing to install unverified."
+
+EXPECTED="$(awk -v f="anomalia-${PLATFORM}" '$2 == f || $2 == "*" f {print $1}' "$CHECKSUMS_FL" | head -1)"
+[[ -n "$EXPECTED" ]] || fatal "${CHECKSUMS_FILE} has no entry for anomalia-${PLATFORM}: refusing to install unverified."
+
+ACTUAL="$(sha256 "$TEMP_FILE")"
+if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+  error "Checksum mismatch for anomalia-${PLATFORM}"
+  error "  expected: $EXPECTED"
+  error "  actual:   $ACTUAL"
+  fatal "Refusing to install a binary that does not match the published checksum."
+fi
+success "Checksum verified (${ACTUAL:0:16}…)"
+
+chmod 755 "$TEMP_FILE"
 
 # Install
 info "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
 $SUDO mv "$TEMP_FILE" "${INSTALL_DIR}/${BINARY_NAME}" || fatal "Installation failed"
+trap 'rm -f "$CHECKSUMS_FL"' EXIT
 
 success "Anomalia CLI installed to ${INSTALL_DIR}/${BINARY_NAME}"
 
-# Install AI skill (ask user)
+# Install AI skill (ask user).
+#
+# Under `curl … | bash` the script itself is on stdin, so a bare `read` consumes the
+# next lines of the installer instead of the user's answer. Prompt on /dev/tty, and
+# skip the whole block when there is no terminal — a non-interactive run must not
+# silently drop files (.cursorrules, llms.txt) into whatever the current directory is.
 echo ""
-read -p "  Installare la skill per AI coding assistants? [Y/n]: " install_skill
-if [[ "$install_skill" != "n" && "$install_skill" != "N" ]]; then
+install_skill=""
+skill_choice=""
+TTY_OK=false
+if { exec 3< /dev/tty; } 2>/dev/null; then
+  TTY_OK=true
+  read -r -u 3 -p "  Installare la skill per AI coding assistants? [Y/n]: " install_skill || true
+else
+  info "Shell non interattiva: skill non installata."
+  info "Per installarla: curl -sSL https://raw.githubusercontent.com/${REPO}/main/cli/scripts/install-skill.sh | bash"
+fi
+
+if [[ "$TTY_OK" == true && "$install_skill" != "n" && "$install_skill" != "N" ]]; then
   echo ""
   echo "  1) Progetto corrente (.claude/skills/, .cursorrules, etc.)"
   echo "  2) Globale (~/.claude/skills/)"
-  read -p "  Scelta [1/2]: " skill_choice
+  read -r -u 3 -p "  Scelta [1/2]: " skill_choice || true
   echo ""
 
   SKILL_URL="https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/skills/anomalia-cli.md"
@@ -191,24 +233,24 @@ if [[ "$install_skill" != "n" && "$install_skill" != "N" ]]; then
     # Global install
     CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
     mkdir -p "$CLAUDE_SKILLS_DIR"
-    curl -sSL "$SKILL_URL" -o "$CLAUDE_SKILLS_DIR/anomalia-cli.md" 2>/dev/null && \
+    fetch "$CLAUDE_SKILLS_DIR/anomalia-cli.md" "$SKILL_URL" 2>/dev/null && \
       success "Skill installata globalmente → $CLAUDE_SKILLS_DIR/anomalia-cli.md" || \
       warn "Could not install skill (non-critical)"
   else
     # Project install
     mkdir -p ".claude/skills"
-    curl -sSL "$SKILL_URL" -o ".claude/skills/anomalia-cli.md" 2>/dev/null && \
+    fetch ".claude/skills/anomalia-cli.md" "$SKILL_URL" 2>/dev/null && \
       success "Skill installata nel progetto → .claude/skills/anomalia-cli.md" || \
       warn "Could not install skill (non-critical)"
 
     # Also install for Cursor if .cursor exists
     if [[ -d ".cursor" ]] || command -v cursor &> /dev/null; then
-      curl -sSL "$SKILL_URL" -o ".cursorrules" 2>/dev/null && \
+      fetch ".cursorrules" "$SKILL_URL" 2>/dev/null && \
         success "Cursor rules installato → .cursorrules" || true
     fi
 
     # Also install llms.txt
-    curl -sSL "https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/llms.txt" -o "llms.txt" 2>/dev/null && \
+    fetch "llms.txt" "https://raw.githubusercontent.com/anomaliaso/anomalia/main/cli/llms.txt" 2>/dev/null && \
       success "llms.txt installato" || true
   fi
 fi
