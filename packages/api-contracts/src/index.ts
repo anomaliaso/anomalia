@@ -65,6 +65,7 @@ import {
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 import { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
 import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
+import { GET_WRITING_SKILLS } from './writing-skills';
 import {
   CREATE_SHARE,
   LIST_SHARES,
@@ -168,6 +169,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_STUDIO,
   GET_VOICE,
   GET_WEEKLY_PLAN,
+  GET_WRITING_SKILLS,
   IMPORT_MEDIA_URL,
   LIST_ARTICLES,
   LIST_AUDIT_CITATIONS,
@@ -313,6 +315,12 @@ export {
 export type { KnowledgeCollection } from './knowledge';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
+export {
+  GET_WRITING_SKILLS,
+  WRITING_DECK_AGENTS,
+  WRITING_SKILL_SOURCES
+} from './writing-skills';
+export type { WritingDeckAgent } from './writing-skills';
 export {
   ADD_COMPETITOR,
   CREATE_PRODUCT,

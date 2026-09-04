@@ -44,11 +44,22 @@ Setup details: [references/mcp.md](references/mcp.md).
 1. Start with `list_brands` (or `anomalia brands`) to learn **slugs**.
 2. Pass `slug` on every brand-scoped call.
 3. Post/article ids accept **short unambiguous prefixes** from list output — never guess if ambiguous.
+4. **Before writing ANY copy** — caption, carousel, script, article, bio — call
+   `get_writing_skills`. It returns the craft text Anomalia writes with, plus this brand's own
+   procedures. Skipping it is how output starts reading as generated.
 5. Confirm before reject / delete / discard unless the user clearly asked.
 
 ## Quick workflows
 
-**Before you write anything** → `get_creation_kit` with the goal, the platforms and the format.
+**Before you write anything** → two reads, and they answer different questions.
+
+`get_writing_skills` is **how to write**: `humanizer` and `stop-slop` always, `social` or
+`seo-audit` depending on `agent`, plus the brand's own procedures (`source: "brand"`, and those
+overrule a product skill when they disagree). Bodies come inline; references are listed by path
+and fetched one at a time with `reference: "<skill>/<path>"`. A few thousand tokens, no credits —
+and the difference between copy a person would publish and copy that reads as generated.
+
+`get_creation_kit` is **what to say** — with the goal, the platforms and the format.
 It returns the smallest brief for that one job: platform limits, brand facts and approved voice,
 the matching rubric, ONE template with its hook family, the operator's own rewrites, what has
 worked on this brand, and which calendar minutes are taken. It is a selection, not the library —

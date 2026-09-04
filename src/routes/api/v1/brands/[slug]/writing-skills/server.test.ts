@@ -8,6 +8,8 @@ vi.mock('$lib/server/cli-auth', () => ({
 import { GET } from './+server';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
 import { brandSkills } from '$lib/server/brand-skills';
+import { TEAM_AGENT_IDS } from '$lib/agent-owners';
+import { WRITING_DECK_AGENTS } from '@anomalia/api-contracts';
 
 type Row = Record<string, unknown>;
 
@@ -101,9 +103,11 @@ describe('GET /writing-skills', () => {
     signedIn();
 
     const reachable = new Set<string>();
-    for (const agent of ['content', 'ugc', 'web', 'analyst', 'auto', 'motion']) {
+    for (const agent of WRITING_DECK_AGENTS) {
       const { body } = await call({ agent });
-      for (const skill of body.skills) reachable.add(skill.name);
+      for (const skill of body.skills) {
+        if (skill.source === 'product') reachable.add(skill.name);
+      }
     }
 
     expect([...reachable].sort()).toEqual(brandSkills.map((s) => s.name).sort());
@@ -208,6 +212,10 @@ describe('GET /writing-skills', () => {
     const { body } = await call();
 
     expect(JSON.stringify(body)).not.toContain('Milano');
+  });
+
+  it('gli agenti dichiarati nel contratto sono quelli che il team ha davvero', () => {
+    expect([...WRITING_DECK_AGENTS].sort()).toEqual([...TEAM_AGENT_IDS].sort());
   });
 
   it('un brand senza procedure proprie riceve comunque quelle di prodotto', async () => {

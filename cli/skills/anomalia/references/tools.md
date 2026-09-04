@@ -197,6 +197,26 @@ seed: `platforms`, `pillar`, `format`, `media`, `slide_count`, `day`, `time`, `s
 A brand keeps one draft in review, so saving replaces the one that is there (`replaced` says so).
 `produce_week` is the separate, paid step that turns the rows into posts.
 
+## Writing
+
+| MCP | CLI |
+|-----|-----|
+| `get_writing_skills` | (MCP only) |
+
+**Call this before writing any copy.** It returns the craft text itself, not a pointer to it:
+`humanizer` and `stop-slop` always — why the output must not read as a chatbot — plus `social`
+(captions, carousels, hooks, platform limits) or `seo-audit` depending on `agent`. Omit `agent`
+for the writing deck alone; `content` and `ugc` add `social`, `web` adds `seo-audit`.
+
+It also returns this brand's OWN procedures — what its team wrote down or the system distilled
+from repeated lessons. `source` tells them apart, and **a brand procedure overrules a product
+skill when the two disagree**: the product skill is how everyone writes, the brand procedure is
+how this one does.
+
+Bodies arrive inline. Each skill lists its `references` by path without sending them; fetch one
+with `reference: "social/references/platform-limits.md"`, which returns that file alone and no
+deck. No credits, no writes.
+
 ## Studio
 
 | MCP | CLI |
