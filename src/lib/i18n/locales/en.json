@@ -58,49 +58,8 @@
       "urlLabel": "Your website URL",
       "urlSubmit": "Start",
       "urlSubmitAria": "Continue with your website",
-      "connectClaude": "Connect to Claude",
-      "claudeConnect": {
-        "title": "Connect Anomalia to Claude",
-        "subtitle": "Three steps to plug Anomalia into Claude.",
-        "tabs": {
-          "claude": "Claude",
-          "code": "Claude Code"
-        },
-        "close": "Close",
-        "copy": "Copy",
-        "copied": "Copied!",
-        "claude": {
-          "s1": {
-            "title": "Open Claude settings",
-            "body": "Launch the app or open claude.ai and go to Customize → Connectors.",
-            "chip": "Customize → Connectors"
-          },
-          "s2": {
-            "title": "Add a custom connector",
-            "body": "Name it Anomalia and paste the URL below.",
-            "value": "https://mcp.anomalia.so/mcp"
-          },
-          "s3": {
-            "title": "Connect and sign in",
-            "body": "Click Add → Connect, sign in to your Anomalia account, and you're in. Now ask Claude to run your social media."
-          }
-        },
-        "code": {
-          "s1": {
-            "title": "Run the command",
-            "body": "Paste this in your terminal. Claude Code registers Anomalia as an MCP server.",
-            "value": "claude mcp add --transport http anomalia https://mcp.anomalia.so/mcp"
-          },
-          "s2": {
-            "title": "Authenticate",
-            "body": "A browser tab opens — sign in to your Anomalia account to authorize."
-          },
-          "s3": {
-            "title": "You're connected",
-            "body": "Restart Claude Code, then ask it to run your social media with Anomalia."
-          }
-        }
-      }
+      "agentCopy": "Copy instructions for your agent",
+      "agentCopied": "Copied — paste it to your AI"
     },
     "problems": {
       "kicker": "The hard truth",
@@ -344,11 +303,11 @@
       },
       "mcp": {
         "q": "How do I connect it?",
-        "a": "Anomalia is an MCP server. You add it as a connector in Claude, or with a single command in Claude Code, and your AI gets the Anomalia tools. Press “Connect to Claude” at the top of this page for the exact steps."
+        "a": "Anomalia is an MCP server. Press “Copy instructions for your agent” at the top of this page and paste the result into Claude, ChatGPT or Cursor: it carries the URL, the command and the first calls to make."
       },
       "which": {
         "q": "Which AI can I use?",
-        "a": "Anything that speaks MCP over HTTP. Claude and Claude Code have a guided setup on this page; Cursor and ChatGPT’s custom connectors take the same URL. It runs on your subscription — your provider bills the thinking and the writing, not us."
+        "a": "Anything that speaks MCP over HTTP — Claude, Claude Code, Cursor, ChatGPT’s custom connectors. They all take the same URL. It runs on your subscription: your provider bills the thinking and the writing, not us."
       },
       "cost": {
         "q": "What am I paying for?",
@@ -1994,26 +1953,24 @@
       "cta": "Book a call"
     },
     "split": {
-      "kicker": "Before / after",
-      "titleLead": "The retainer, the briefs, the waiting.",
-      "titleAccent": "Gone.",
-      "punch": "It works from what you give it. It won’t invent your positioning, and it won’t publish behind your back.",
+      "kicker": "Or build it yourself",
+      "titleLead": "You could build this.",
+      "titleAccent": "You know what it costs.",
       "before": {
-        "title": "An agency",
-        "note": "Every month, whether you needed them or not.",
-        "i1": "A retainer that doesn’t move when your month is quiet",
-        "i2": "Briefs to write and calls to sit through",
-        "i3": "A tone that is nearly yours",
-        "i4": "You find out what worked a month later"
+        "title": "Build it yourself",
+        "i1": "OAuth for nine platforms",
+        "i2": "The limit each one enforces, and changes without telling you",
+        "i3": "Image and video rendering, a publish queue, the retries for when a post is refused",
+        "i4": "The metrics collected and handed back to the model",
+        "foot": "Weeks. Then maintenance, forever."
       },
       "after": {
-        "title": "Your AI + Anomalia",
-        "note": "The subscription you already pay for, plus a plan.",
-        "i1": "You ask, in the thread you already work in",
+        "title": "Plug it in",
+        "i1": "One MCP URL in the AI you already pay for",
         "i2": "It writes from your real context — your site, your products, your voice",
-        "i3": "Anomalia checks each platform’s rules, renders the work and holds the slot",
-        "i4": "Publishes to your real accounts, once you approve",
-        "i5": "The numbers come straight back to the same AI"
+        "i3": "Anomalia checks, renders, holds the slot and publishes",
+        "i4": "The numbers come straight back to the same AI",
+        "foot": "One command. Today."
       }
     },
     "channels": {
@@ -2026,23 +1983,16 @@
       "titleAccent": "Your AI can do all three.",
       "social": {
         "title": "Organic social",
-        "body": "Posts, carousels and video for nine channels, written in your voice, checked against each platform’s rules and scheduled across the week."
+        "body": "Posts, carousels and video for nine channels — written in your voice, checked against each platform's rules, spread across your week."
       },
       "web": {
         "title": "Your site’s growth",
-        "body": "Blog articles written from your site’s own pages and published on your domain, keyword strategy with real search volume, and audits of whether AI engines cite you."
+        "body": "Articles published on your own domain, keyword strategy on real search volume, and whether the AI engines cite you."
       },
       "ads": {
         "title": "Ads",
-        "body": "Your AI reads what competitors are running in Meta’s public ad library and drafts the creative. Launching campaigns on Meta and Google is set up with our team — that part is not self-serve yet."
+        "body": "Your AI reads what competitors are running in Meta's ad library and drafts the creative. Launching the campaigns is set up with our team — that part is not self-serve yet."
       }
-    },
-    "diy": {
-      "kicker": "Or build it yourself",
-      "titleLead": "You could build this yourself.",
-      "titleAccent": "You know what it costs.",
-      "body": "Your model already writes — that part you have. What’s missing is the plumbing: OAuth for nine platforms, the character limit each one enforces and changes without warning, image and video rendering, a publish queue, the retries for when a platform refuses a post, and the metrics coming back afterwards.",
-      "punch": "Weeks of that before one post goes out, and maintenance forever after. We don’t replace the thinking. We replace the plumbing, and it is already built."
     }
   },
   "usecases": {

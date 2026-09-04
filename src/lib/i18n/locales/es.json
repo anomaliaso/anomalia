@@ -39,68 +39,27 @@
       "pricing": "Precios"
     },
     "hero": {
-      "eyebrow": "Open source · Cloud or self-hosted",
-      "titleLead": "Your marketing agency is now",
+      "eyebrow": "Open source · Cloud o self-hosted",
+      "titleLead": "Tu agencia de marketing ahora es",
       "titleMain": "",
-      "titleEm": "Claude, ChatGPT or Cursor.",
+      "titleEm": "Claude, ChatGPT o Cursor.",
       "titleCalm": "",
-      "subhead": "Organic social, your site’s growth, your ads — run by the AI you already pay for. Nothing goes out until you approve it.",
+      "subhead": "Social orgánico, el crecimiento de tu web, tus anuncios — los hace la IA que ya pagas. Nada sale hasta que lo apruebas.",
       "seeHow": "Descubre cómo funciona",
-      "note": "Or just ask your AI to start using Anomalia",
+      "note": "O simplemente pídele a tu IA que empiece a usar Anomalia",
       "ctaSecondary": "Agenda una llamada",
       "urlLabel": "URL de tu sitio",
       "urlSubmit": "Empezar",
       "urlSubmitAria": "Continuar con tu sitio",
-      "connectClaude": "Connect to Claude",
-      "claudeConnect": {
-        "title": "Conecta Anomalia a Claude",
-        "subtitle": "Tres pasos para conectar Anomalia a Claude.",
-        "tabs": {
-          "claude": "Claude",
-          "code": "Claude Code"
-        },
-        "close": "Cerrar",
-        "copy": "Copiar",
-        "copied": "¡Copiado!",
-        "claude": {
-          "s1": {
-            "title": "Abre la configuración de Claude",
-            "body": "Inicia la app o abre claude.ai y ve a Customize → Connectors.",
-            "chip": "Customize → Connectors"
-          },
-          "s2": {
-            "title": "Añade un conector personalizado",
-            "body": "Nómbralo Anomalia y pega la URL de abajo.",
-            "value": "https://mcp.anomalia.so/mcp"
-          },
-          "s3": {
-            "title": "Conecta e inicia sesión",
-            "body": "Haz clic en Add → Connect, inicia sesión en tu cuenta de Anomalia y listo. Ahora pídele a Claude que gestione tus redes sociales."
-          }
-        },
-        "code": {
-          "s1": {
-            "title": "Ejecuta el comando",
-            "body": "Pégalo en tu terminal. Claude Code registra Anomalia como servidor MCP.",
-            "value": "claude mcp add --transport http anomalia https://mcp.anomalia.so/mcp"
-          },
-          "s2": {
-            "title": "Autentícate",
-            "body": "Se abre una pestaña del navegador: inicia sesión en tu cuenta de Anomalia para autorizar."
-          },
-          "s3": {
-            "title": "Estás conectado",
-            "body": "Reinicia Claude Code y pídele que gestione tus redes sociales con Anomalia."
-          }
-        }
-      },
       "phrases": [
         "en todas partes donde buscan lo que vendes.",
         "donde se decide a quién comprar.",
         "en todas partes donde te buscan tus clientes.",
         "donde de verdad cuenta estar.",
         "donde te encuentran antes que a tus competidores."
-      ]
+      ],
+      "agentCopy": "Copia las instrucciones para tu agente",
+      "agentCopied": "Copiado — pégalo en tu IA"
     },
     "geoAudit": {
       "eyebrow": "Auditoría GEO gratuita",
@@ -311,38 +270,38 @@
     },
     "faq": {
       "kicker": "FAQ",
-      "title": "Questions you might have.",
+      "title": "Las preguntas que te estás haciendo.",
       "review": {
-        "q": "Can I review everything before it goes live?",
-        "a": "Yes, and there is no way around it. Your AI can write and schedule, but a post stays pending until you approve it. Edit the caption, swap the image, move it or delete it."
+        "q": "¿Puedo revisarlo todo antes de que salga?",
+        "a": "Sí, y no hay forma de saltárselo. Tu IA puede escribir y programar, pero el post queda pendiente hasta que lo apruebas. Cambias el texto, sustituyes la imagen, lo mueves o lo borras."
       },
       "platforms": {
-        "q": "Which platforms?",
-        "a": "Nine for social: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky and Reddit. Carousels fan out on Instagram, Facebook and LinkedIn; the others get the cover. Articles publish to a blog on your own domain."
+        "q": "¿Qué plataformas?",
+        "a": "Nueve para social: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky y Reddit. Los carruseles salen enteros en Instagram, Facebook y LinkedIn; en las demás sale la portada. Los artículos van a un blog en tu propio dominio."
       },
       "mcp": {
-        "q": "How do I connect it?",
-        "a": "Anomalia is an MCP server. You add it as a connector in Claude, or with a single command in Claude Code, and your AI gets the Anomalia tools. Press “Connect to Claude” at the top of this page for the exact steps."
+        "q": "¿Cómo lo conecto?",
+        "a": "Anomalia es un servidor MCP. Pulsa «Copia las instrucciones para tu agente» en la parte superior de esta página y pega el resultado en Claude, ChatGPT o Cursor: lleva la URL, el comando y las primeras llamadas."
       },
       "which": {
-        "q": "Which AI can I use?",
-        "a": "Anything that speaks MCP over HTTP. Claude and Claude Code have a guided setup on this page; Cursor and ChatGPT’s custom connectors take the same URL. It runs on your subscription — your provider bills the thinking and the writing, not us."
+        "q": "¿Qué IA puedo usar?",
+        "a": "Cualquiera que hable MCP sobre HTTP — Claude, Claude Code, Cursor, los conectores personalizados de ChatGPT. Todos usan la misma URL. Funciona con tu suscripción: el razonamiento y la escritura los factura tu proveedor, no nosotros."
       },
       "cost": {
-        "q": "What am I paying for?",
-        "a": "Your AI subscription covers the thinking and the writing. Anomalia’s plan covers what comes after: the renders, the calendar, the publishing and the analytics."
+        "q": "¿Por qué estoy pagando?",
+        "a": "Tu suscripción de IA cubre el razonamiento y la escritura. El plan de Anomalia cubre lo que viene después: los renders, el calendario, la publicación y las analíticas."
       },
       "selfhost": {
-        "q": "Can I run it myself?",
-        "a": "Yes. Anomalia is open source — Docker Compose on your own server, your own keys, the same tools and the same MCP server, unlimited brands."
+        "q": "¿Puedo alojarlo yo?",
+        "a": "Sí. Anomalia es open source — Docker Compose en tu propio servidor, tus claves, las mismas herramientas y el mismo servidor MCP, marcas ilimitadas."
       },
       "agency": {
-        "q": "Can this really replace my agency?",
-        "a": "For the making and the shipping, yes: the posts, the blog, the scheduling, the publishing and the reporting all run from your own AI. Two honest limits. It works from the brand context you give it — your site, your products, your voice — so it articulates your positioning rather than inventing it. And running paid campaigns on Meta and Google is still set up with our team, not self-serve."
+        "q": "¿Esto puede sustituir de verdad a mi agencia?",
+        "a": "Para hacer las cosas y sacarlas, sí: los posts, el blog, la programación, la publicación y los informes salen todos de tu propia IA. Dos límites, dichos claros. Trabaja con el contexto de marca que le des — tu web, tus productos, tu voz — así que articula tu posicionamiento, no se lo inventa. Y lanzar campañas de pago en Meta y Google se activa con nuestro equipo, no es self-serve."
       },
       "diy": {
-        "q": "Why wouldn’t I just build this myself?",
-        "a": "You might well manage it. The work isn’t the AI — your model already writes. It’s OAuth for nine platforms, per-platform limits that change without notice, image and video rendering, a publish queue with retries when a platform refuses a post, and collecting the metrics afterwards. That is weeks before the first post goes out, and maintenance after it. Here it exists already, and your AI calls it as tools."
+        "q": "¿Por qué no me lo construyo yo?",
+        "a": "Podrías conseguirlo perfectamente. El trabajo no es la IA — tu modelo ya escribe. Es OAuth para nueve plataformas, límites por plataforma que cambian sin avisar, el renderizado de imagen y vídeo, una cola de publicación con reintentos cuando una plataforma rechaza un post, y recoger las métricas después. Son semanas antes de que salga el primer post, y mantenimiento después. Aquí ya existe, y tu IA lo llama como herramientas."
       }
     },
     "grow": {
@@ -1994,55 +1953,46 @@
       }
     },
     "split": {
-      "kicker": "Before / after",
-      "titleLead": "The retainer, the briefs, the waiting.",
-      "titleAccent": "Gone.",
-      "punch": "It works from what you give it. It won’t invent your positioning, and it won’t publish behind your back.",
+      "kicker": "O constrúyelo tú",
+      "titleLead": "Podrías construirlo.",
+      "titleAccent": "Ya sabes lo que cuesta.",
       "before": {
-        "title": "An agency",
-        "note": "Every month, whether you needed them or not.",
-        "i1": "A retainer that doesn’t move when your month is quiet",
-        "i2": "Briefs to write and calls to sit through",
-        "i3": "A tone that is nearly yours",
-        "i4": "You find out what worked a month later"
+        "title": "Constrúyelo tú",
+        "i1": "OAuth para nueve plataformas",
+        "i2": "El límite que impone cada una, y que cambia sin avisar",
+        "i3": "El renderizado de imagen y vídeo, una cola de publicación, los reintentos para cuando rechazan un post",
+        "i4": "Las métricas recogidas y devueltas al modelo",
+        "foot": "Semanas. Y mantenimiento, para siempre."
       },
       "after": {
-        "title": "Your AI + Anomalia",
-        "note": "The subscription you already pay for, plus a plan.",
-        "i1": "You ask, in the thread you already work in",
-        "i2": "It writes from your real context — your site, your products, your voice",
-        "i3": "Anomalia checks each platform’s rules, renders the work and holds the slot",
-        "i4": "Publishes to your real accounts, once you approve",
-        "i5": "The numbers come straight back to the same AI"
+        "title": "Conéctalo",
+        "i1": "Una URL MCP en la IA que ya pagas",
+        "i2": "Escribe desde tu contexto real — tu web, tus productos, tu voz",
+        "i3": "Anomalia comprueba, renderiza, reserva el hueco y publica",
+        "i4": "Los números vuelven directos a la misma IA",
+        "foot": "Un comando. Hoy."
       }
     },
     "channels": {
-      "label": "Publishes to",
-      "note": "Nothing goes live until you approve it."
+      "label": "Publica en",
+      "note": "Nada se publica hasta que lo apruebas."
     },
     "jobs": {
-      "kicker": "What you were paying for",
-      "titleLead": "An agency does three jobs.",
-      "titleAccent": "Your AI can do all three.",
+      "kicker": "Por lo que pagabas",
+      "titleLead": "Una agencia hace tres trabajos.",
+      "titleAccent": "Tu IA puede hacer los tres.",
       "social": {
-        "title": "Organic social",
-        "body": "Posts, carousels and video for nine channels, written in your voice, checked against each platform’s rules and scheduled across the week."
+        "title": "Social orgánico",
+        "body": "Publicaciones, carruseles y vídeo para nueve canales — con tu voz, comprobados contra las reglas de cada plataforma y repartidos por tu semana."
       },
       "web": {
-        "title": "Your site’s growth",
-        "body": "Blog articles written from your site’s own pages and published on your domain, keyword strategy with real search volume, and audits of whether AI engines cite you."
+        "title": "El crecimiento de tu web",
+        "body": "Artículos publicados en tu propio dominio, estrategia de keywords con volumen de búsqueda real, y si los motores de IA te citan."
       },
       "ads": {
-        "title": "Ads",
-        "body": "Your AI reads what competitors are running in Meta’s public ad library and drafts the creative. Launching campaigns on Meta and Google is set up with our team — that part is not self-serve yet."
+        "title": "Anuncios",
+        "body": "Tu IA lee lo que están publicando tus competidores en la biblioteca de anuncios de Meta y redacta las creatividades. Lanzar las campañas se activa con nuestro equipo — esa parte aún no es self-serve."
       }
-    },
-    "diy": {
-      "kicker": "Or build it yourself",
-      "titleLead": "You could build this yourself.",
-      "titleAccent": "You know what it costs.",
-      "body": "Your model already writes — that part you have. What’s missing is the plumbing: OAuth for nine platforms, the character limit each one enforces and changes without warning, image and video rendering, a publish queue, the retries for when a platform refuses a post, and the metrics coming back afterwards.",
-      "punch": "Weeks of that before one post goes out, and maintenance forever after. We don’t replace the thinking. We replace the plumbing, and it is already built."
     }
   },
   "usecases": {

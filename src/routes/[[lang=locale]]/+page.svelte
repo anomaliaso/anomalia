@@ -1,7 +1,6 @@
 <script lang="ts">
   import { _, locale } from 'svelte-i18n';
   import { page } from '$app/stores';
-  import { siClaude } from 'simple-icons';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import AskAiCta from '$lib/components/AskAiCta.svelte';
   import WhyUs from '$lib/components/WhyUs.svelte';
@@ -11,7 +10,7 @@
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
-  import ConnectClaudeDialog from '$lib/components/ConnectClaudeDialog.svelte';
+  import { AGENT_INSTRUCTIONS } from '$lib/agent-instructions';
   import { marketingStartHref } from '$lib/start-href';
   import '$lib/styles/landing.css';
 
@@ -20,15 +19,28 @@
   const cta = $derived(waitlistActive ? $_('landing.cta.waitlist') : $_('landing.cta.getStarted'));
   const startHref = $derived(marketingStartHref({ loggedIn: Boolean(data.session), waitlistActive }));
 
-  let claudeOpen = $state(false);
+  let copied = $state(false);
+  let clipboardRefused = $state(false);
+
+  // Fuori da https la clipboard non c'è e il browser la nega: il fallimento non resta muto,
+  // il testo compare sotto il tasto e si può selezionare a mano.
+  async function copyInstructions() {
+    try {
+      await navigator.clipboard.writeText(AGENT_INSTRUCTIONS);
+      copied = true;
+      setTimeout(() => (copied = false), 2400);
+    } catch {
+      clipboardRefused = true;
+    }
+  }
 
   // The channel strip reads the same table the publisher does, so it cannot promise a platform
   // the product can't post to.
   const channels = PLATFORM_KEYS.map((k) => PLATFORM_META[k].label);
 
   const JOBS = ['social', 'web', 'ads'];
-  const BEFORE = ['i1', 'i2', 'i3', 'i4'];
-  const AFTER = ['i1', 'i2', 'i3', 'i4', 'i5'];
+  const BUILD = ['i1', 'i2', 'i3', 'i4'];
+  const PLUG = ['i1', 'i2', 'i3', 'i4'];
 
   const siteUrl = $derived($page.url.origin);
   const jsonLd = $derived(
@@ -97,10 +109,12 @@
         <HeroUrlCta loggedIn={!!data.session} {waitlistActive} />
       </div>
       <p class="gr-note">{$_('landing.hero.note')}</p>
-      <button class="connect-claude" type="button" onclick={() => (claudeOpen = true)}>
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={siClaude.path} /></svg>
-        {$_('landing.hero.connectClaude')}
+      <button class="connect-claude" type="button" onclick={copyInstructions}>
+        {copied ? $_('landing.hero.agentCopied') : $_('landing.hero.agentCopy')}
       </button>
+      {#if clipboardRefused}
+        <pre class="agent-fallback" tabindex="0">{AGENT_INSTRUCTIONS}</pre>
+      {/if}
     </div>
   </section>
 
@@ -122,19 +136,7 @@
     </div>
   </section>
 
-  <!-- ============ OR BUILD IT YOURSELF ============ -->
-  <section class="diy-sec">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="kicker">{$_('landing.diy.kicker')}</div>
-        <h2>{$_('landing.diy.titleLead')} <span class="gr-accent">{$_('landing.diy.titleAccent')}</span></h2>
-      </div>
-      <p class="diy-body reveal">{$_('landing.diy.body')}</p>
-      <p class="diy-punch reveal">{$_('landing.diy.punch')}</p>
-    </div>
-  </section>
-
-  <!-- ============ BEFORE / AFTER ============ -->
+  <!-- ============ BUILD IT / PLUG IT IN ============ -->
   <section class="split-sec">
     <div class="wrap">
       <div class="sec-head reveal">
@@ -144,24 +146,23 @@
       <div class="split-cols">
         <div class="split-col reveal" data-d="1">
           <h3>{$_('landing.split.before.title')}</h3>
-          <p class="split-note">{$_('landing.split.before.note')}</p>
           <ul>
-            {#each BEFORE as k (k)}
+            {#each BUILD as k (k)}
               <li>{$_(`landing.split.before.${k}`)}</li>
             {/each}
           </ul>
+          <p class="split-foot">{$_('landing.split.before.foot')}</p>
         </div>
         <div class="split-col is-ours reveal" data-d="2">
           <h3>{$_('landing.split.after.title')}</h3>
-          <p class="split-note">{$_('landing.split.after.note')}</p>
           <ul>
-            {#each AFTER as k (k)}
+            {#each PLUG as k (k)}
               <li>{$_(`landing.split.after.${k}`)}</li>
             {/each}
           </ul>
+          <p class="split-foot">{$_('landing.split.after.foot')}</p>
         </div>
       </div>
-      <p class="split-punch reveal">{$_('landing.split.punch')}</p>
     </div>
   </section>
 
@@ -185,8 +186,6 @@
   <LandingFaq />
 
 </main>
-
-<ConnectClaudeDialog bind:open={claudeOpen} />
 
 <section class="featured-on" aria-label="Featured on">
   <div class="wrap">
@@ -424,6 +423,22 @@
      largo: 100% e poi ci pensa il max-width di .wrap. */
   .gr-hero-inner { width: 100%; }
 
+  /* Il ripiego quando la clipboard non c'è: stesso testo, selezionabile a mano. */
+  .agent-fallback {
+    margin-top: 14px;
+    max-width: min(100%, 62ch);
+    max-height: 240px;
+    overflow: auto;
+    text-align: left;
+    white-space: pre-wrap;
+    font-size: 12px; line-height: 1.55;
+    color: var(--ink-soft);
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
   /* ---------- THE THREE JOBS ----------
      Type only, no cards: this section has to read as one breath — the three things an agency
      is paid for — and a border around each one would make them look like three products. */
@@ -444,26 +459,10 @@
     .jobs-cols { flex-direction: column; gap: 30px; }
   }
 
-  /* ---------- OR BUILD IT YOURSELF ----------
-     Prose, deliberately: the objection is answered by the length of one sentence listing the
-     plumbing, and a bulleted list would read as a feature tour instead of an accumulation. */
-  .diy-sec { padding-block: 100px 0; }
-  .diy-body, .diy-punch {
-    max-width: 54ch; margin-inline: auto; text-align: center;
-    font-size: 1.15rem; line-height: 1.6;
-  }
-  .diy-body { color: var(--ink-soft); }
-  .diy-punch { margin-top: 26px; color: var(--ink); text-wrap: balance; }
-
-  @media (max-width: 760px) {
-    .diy-sec { padding-block: 64px 0; }
-    .diy-body, .diy-punch { font-size: 1.05rem; }
-  }
-
-  /* ---------- BEFORE / AFTER ----------
-     What you pay an agency for, against what replaces it. Flex and not grid: app.css owns a
-     global `.grid` (1.7fr 1fr) that hijacks anything carrying that class. 940px is the same
-     cap as the three jobs above, so the page keeps one vertical spine. */
+  /* ---------- BUILD IT / PLUG IT IN ----------
+     Flex and not grid: app.css owns a global `.grid` (1.7fr 1fr) that hijacks anything
+     carrying that class. 940px is the same cap as the three jobs above, so the page keeps one
+     vertical spine. */
   .split-sec { padding-block: 100px 72px; }
   .split-cols {
     display: flex; gap: 24px; align-items: stretch;
@@ -471,6 +470,7 @@
   }
   .split-col {
     flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column;
     border: 1px solid var(--line); border-radius: 22px;
     padding: 30px 28px;
     background: var(--paper-2);
@@ -479,11 +479,10 @@
   .split-col.is-ours { background: var(--paper); border-color: rgba(var(--accent-rgb), 0.32); }
   .split-col h3 {
     font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em;
-    margin: 0 0 4px;
+    margin: 0 0 20px;
   }
   .split-col.is-ours h3 { color: var(--accent); }
-  .split-note { margin: 0 0 20px; font-size: 13px; color: var(--ink-faint); }
-  .split-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .split-col ul { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
   .split-col li {
     font-size: 1rem; line-height: 1.45; color: var(--ink-soft);
     padding-left: 20px; position: relative;
@@ -495,16 +494,21 @@
   }
   .split-col.is-ours li { color: var(--ink); }
   .split-col.is-ours li::before { background: var(--accent); }
-  .split-punch {
-    max-width: 44ch; margin: 48px auto 0; text-align: center;
-    font-size: 1.15rem; line-height: 1.5; color: var(--ink-soft);
-    text-wrap: balance;
+  /* The footer line is the whole argument: weeks against minutes. It gets the serif and the
+     size the numbers get on /grow. */
+  .split-foot {
+    margin: 26px 0 0; padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-family: var(--serif);
+    font-size: 1.4rem; font-weight: var(--heading-weight);
+    letter-spacing: var(--heading-tracking);
+    color: var(--ink-faint);
   }
+  .split-col.is-ours .split-foot { color: var(--accent); border-top-color: rgba(var(--accent-rgb), 0.24); }
 
   @media (max-width: 760px) {
     .split-sec { padding-block: 64px; }
     .split-cols { flex-direction: column; }
-    .split-punch { margin-top: 32px; font-size: 1.05rem; }
   }
 
   /* ---------- CHANNELS ----------

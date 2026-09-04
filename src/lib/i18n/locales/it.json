@@ -58,49 +58,8 @@
       "urlLabel": "URL del tuo sito",
       "urlSubmit": "Inizia",
       "urlSubmitAria": "Continua con il tuo sito",
-      "connectClaude": "Connect to Claude",
-      "claudeConnect": {
-        "title": "Connetti Anomalia a Claude",
-        "subtitle": "Tre passaggi per collegare Anomalia a Claude.",
-        "tabs": {
-          "claude": "Claude",
-          "code": "Claude Code"
-        },
-        "close": "Chiudi",
-        "copy": "Copia",
-        "copied": "Copiato!",
-        "claude": {
-          "s1": {
-            "title": "Apri le impostazioni di Claude",
-            "body": "Avvia l'app o apri claude.ai e vai su Customize → Connectors.",
-            "chip": "Customize → Connectors"
-          },
-          "s2": {
-            "title": "Aggiungi un connettore personalizzato",
-            "body": "Chiamalo Anomalia e incolla l'URL qui sotto.",
-            "value": "https://mcp.anomalia.so/mcp"
-          },
-          "s3": {
-            "title": "Connetti e accedi",
-            "body": "Clicca Add → Connect, accedi al tuo account Anomalia e sei dentro. Ora chiedi a Claude di gestire i tuoi social."
-          }
-        },
-        "code": {
-          "s1": {
-            "title": "Esegui il comando",
-            "body": "Incolla questo nel terminale. Claude Code registra Anomalia come server MCP.",
-            "value": "claude mcp add --transport http anomalia https://mcp.anomalia.so/mcp"
-          },
-          "s2": {
-            "title": "Autenticati",
-            "body": "Si apre una scheda del browser: accedi al tuo account Anomalia per autorizzare."
-          },
-          "s3": {
-            "title": "Sei connesso",
-            "body": "Riavvia Claude Code e chiedigli di gestire i tuoi social con Anomalia."
-          }
-        }
-      }
+      "agentCopy": "Copia le istruzioni per il tuo agente",
+      "agentCopied": "Copiato — incollalo alla tua AI"
     },
     "problems": {
       "kicker": "La verità scomoda",
@@ -344,11 +303,11 @@
       },
       "mcp": {
         "q": "Come lo collego?",
-        "a": "Anomalia è un server MCP. Lo aggiungi come connettore in Claude, o con un solo comando in Claude Code, e la tua AI si ritrova gli strumenti di Anomalia. Premi “Connect to Claude” in cima alla pagina per i passaggi esatti."
+        "a": "Anomalia è un server MCP. Premi «Copia le istruzioni per il tuo agente» in cima a questa pagina e incolla il risultato in Claude, ChatGPT o Cursor: contiene l’URL, il comando e le prime chiamate da fare."
       },
       "which": {
         "q": "Quale AI posso usare?",
-        "a": "Qualsiasi client che parli MCP su HTTP. Claude e Claude Code hanno la procedura guidata in questa pagina; Cursor e i connettori custom di ChatGPT usano lo stesso URL. Gira sul tuo abbonamento: il ragionamento e la scrittura li fattura il tuo provider, non noi."
+        "a": "Qualsiasi client che parli MCP su HTTP — Claude, Claude Code, Cursor, i connettori custom di ChatGPT. Usano tutti lo stesso URL. Gira sul tuo abbonamento: il ragionamento e la scrittura li fattura il tuo provider, non noi."
       },
       "cost": {
         "q": "Per cosa sto pagando?",
@@ -1994,26 +1953,24 @@
       "cta": "Prenota una call"
     },
     "split": {
-      "kicker": "Prima / dopo",
-      "titleLead": "Il canone, i brief, l’attesa.",
-      "titleAccent": "Finito.",
-      "punch": "Lavora da quello che gli dai. Non si inventa il tuo posizionamento, e non pubblica alle tue spalle.",
+      "kicker": "Oppure te lo costruisci",
+      "titleLead": "Potresti costruirtelo.",
+      "titleAccent": "Sai quanto costa.",
       "before": {
-        "title": "Un’agenzia",
-        "note": "Ogni mese, che ti servisse o no.",
-        "i1": "Un canone che non scende quando il mese è vuoto",
-        "i2": "Brief da scrivere e call da fare",
-        "i3": "Un tono che è quasi il tuo",
-        "i4": "Scopri cos’ha funzionato un mese dopo"
+        "title": "Te lo costruisci",
+        "i1": "OAuth per nove piattaforme",
+        "i2": "Il limite che ognuna impone, e cambia senza dirtelo",
+        "i3": "Il rendering di immagini e video, una coda di pubblicazione, i retry per quando un post viene rifiutato",
+        "i4": "Le metriche raccolte e riportate al modello",
+        "foot": "Settimane. Poi manutenzione, per sempre."
       },
       "after": {
-        "title": "La tua AI + Anomalia",
-        "note": "L’abbonamento che paghi già, più un piano.",
-        "i1": "Lo chiedi, nel thread in cui già lavori",
-        "i2": "Scrive dal tuo contesto vero — il tuo sito, i tuoi prodotti, la tua voce",
-        "i3": "Anomalia verifica le regole di ogni piattaforma, genera il lavoro e tiene lo slot",
-        "i4": "Pubblica sui tuoi account veri, dopo la tua approvazione",
-        "i5": "I numeri tornano dritti alla stessa AI"
+        "title": "Lo colleghi",
+        "i1": "Un URL MCP nell’AI che paghi già",
+        "i2": "Scrive dal tuo contesto reale — il tuo sito, i tuoi prodotti, la tua voce",
+        "i3": "Anomalia verifica, renderizza, tiene lo slot e pubblica",
+        "i4": "I numeri tornano dritti alla stessa AI",
+        "foot": "Un comando. Oggi."
       }
     },
     "channels": {
@@ -2026,23 +1983,16 @@
       "titleAccent": "La tua AI può farli tutti e tre.",
       "social": {
         "title": "Social organico",
-        "body": "Post, caroselli e video per nove canali, scritti nella tua voce, verificati contro le regole di ogni piattaforma e distribuiti sulla settimana."
+        "body": "Post, caroselli e video per nove canali — scritti con la tua voce, verificati contro le regole di ogni piattaforma, distribuiti sulla settimana."
       },
       "web": {
         "title": "La crescita del sito",
-        "body": "Articoli scritti a partire dalle pagine vere del tuo sito e pubblicati sul tuo dominio, strategia di keyword con volumi di ricerca reali, e audit su quanto i motori AI ti citano."
+        "body": "Articoli pubblicati sul tuo dominio, strategia di keyword su volumi di ricerca reali, e se i motori AI ti citano."
       },
       "ads": {
         "title": "Ads",
-        "body": "La tua AI legge cosa stanno girando i concorrenti nella libreria pubblica di Meta e scrive i creativi. Le campagne su Meta e Google si attivano con il nostro team — quella parte non è ancora self-serve."
+        "body": "La tua AI legge cosa stanno girando i concorrenti nella libreria inserzioni di Meta e scrive le creatività. Lanciare le campagne si attiva con il nostro team — quella parte non è ancora self-serve."
       }
-    },
-    "diy": {
-      "kicker": "Oppure te lo costruisci",
-      "titleLead": "Potresti costruirtelo da solo.",
-      "titleAccent": "Sai quanto costa.",
-      "body": "Il tuo modello scrive già — quella parte ce l’hai. Quello che manca è l’idraulica: OAuth per nove piattaforme, il limite di caratteri che ognuna impone e cambia senza avvisare, il rendering di immagini e video, una coda di pubblicazione, i tentativi da rifare quando una piattaforma rifiuta un post, e le metriche che tornano indietro.",
-      "punch": "Settimane, prima che esca un solo post, e poi manutenzione per sempre. Non sostituiamo il ragionamento. Sostituiamo l’idraulica, ed è già costruita."
     }
   },
   "usecases": {
