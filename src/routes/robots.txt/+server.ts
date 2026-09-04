@@ -44,6 +44,7 @@ Disallow: /app
 Disallow: /api
 Disallow: /auth
 Disallow: /approve
+Disallow: /share
 Disallow: /waitlist
 Disallow: /it/waitlist
 

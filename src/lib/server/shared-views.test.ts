@@ -1,0 +1,363 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const getCalendar = vi.fn();
+vi.mock('./cli-queries', () => ({ getCalendar: (...args: unknown[]) => getCalendar(...args) }));
+
+import { SHARED_VIEW_TYPES } from '@anomalia/api-contracts';
+import {
+  CALENDAR_POST_FIELDS,
+  CALENDAR_SNAPSHOT_FIELDS,
+  REPORT_POST_FIELDS,
+  REPORT_SNAPSHOT_FIELDS,
+  SHARE_SNAPSHOT_VERSION,
+  SharedViewsNotMigrated,
+  buildSnapshot,
+  createSharedView,
+  hashShareToken,
+  listSharedViews,
+  mintShareToken,
+  readSharedView,
+  revokeSharedView
+} from './shared-views';
+
+type Row = Record<string, unknown>;
+type Result = { data: unknown; error: unknown };
+
+const BRAND = { id: 'brand-1', name: 'Demo Brand', timezone: 'Europe/Rome', content_prefs: { language: 'it' } };
+const MISSING_TABLE = { code: 'PGRST205', message: "Could not find the table 'public.shared_views' in the schema cache" };
+
+function fakeTable(result: Result | (() => Result)) {
+  const calls: { method: string; args: unknown[] }[] = [];
+  const q: Row = { calls };
+  for (const method of ['select', 'eq', 'neq', 'not', 'gte', 'lte', 'lt', 'gt', 'is', 'or', 'order', 'limit', 'insert', 'update']) {
+    q[method] = (...args: unknown[]) => {
+      calls.push({ method, args });
+      return q;
+    };
+  }
+  const settle = async () => (typeof result === 'function' ? result() : result);
+  q.single = settle;
+  q.maybeSingle = settle;
+  q.then = (onOk: (v: Result) => unknown, onErr?: (e: unknown) => unknown) => settle().then(onOk, onErr);
+  return q as Row & { calls: { method: string; args: unknown[] }[] };
+}
+
+function fakeSupabase(tables: Record<string, ReturnType<typeof fakeTable>>) {
+  return {
+    tables,
+    from: (name: string) => tables[name] ?? fakeTable({ data: null, error: null })
+  } as never;
+}
+
+function argsOf(table: ReturnType<typeof fakeTable>, method: string) {
+  return table.calls.filter((c) => c.method === method).map((c) => c.args);
+}
+
+const A_POST_ROW_WITH_EVERYTHING = {
+  id: 'post-1',
+  brand_id: 'brand-1',
+  platform: 'linkedin',
+  caption: 'Copy che il cliente può leggere',
+  media_url: 'https://cdn.test/a.png',
+  scheduled_for: '2026-09-10T07:00:00.000Z',
+  slot: '2026-09-10',
+  status: 'approved',
+  image_prompt: 'un prompt interno',
+  qc: { verdict: 'borderline' },
+  approval_token: 'token-di-approvazione',
+  attention_reason: 'nota interna',
+  design: { layers: [] },
+  plan_id: 'plan-1'
+};
+
+const A_HISTORY_ROW_WITH_EVERYTHING = {
+  id: 'history-1',
+  brand_id: 'brand-1',
+  source: 'zernio',
+  platform: 'instagram',
+  content: 'Il post pubblicato',
+  platform_post_url: 'https://instagram.com/p/abc',
+  thumbnail_url: 'https://cdn.test/t.jpg',
+  thumbnail_path: 'brand-knowledge/brand-1/t.jpg',
+  published_at: '2026-09-04T10:00:00.000Z',
+  zernio_external_post_id: 'zzz-1',
+  metrics: { views: 1000, likes: 50, comments: 4, shares: 2, saves: 9, impressions: 1200 }
+};
+
+function calendarReturns(posts: Row[]) {
+  getCalendar.mockResolvedValue({
+    posts,
+    year: 2026,
+    month: 9,
+    monthLabel: 'settembre 2026',
+    prevYM: '2026-08',
+    nextYM: '2026-10',
+    timezone: 'Europe/Rome'
+  });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  calendarReturns([A_POST_ROW_WITH_EVERYTHING]);
+});
+
+describe('il token di una vista condivisa', () => {
+  it('è opaco, ad alta entropia e non si ripete', () => {
+    const a = mintShareToken();
+    const b = mintShareToken();
+
+    expect(a.token).toMatch(/^[A-Za-z0-9_-]{43,}$/);
+    expect(a.token).not.toBe(b.token);
+    expect(a.token_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(a.token_hash).not.toBe(b.token_hash);
+  });
+
+  it('non è ricavabile dall impronta che il database conserva', () => {
+    const { token, token_hash } = mintShareToken();
+
+    expect(token_hash).not.toContain(token);
+    expect(token_hash).toBe(hashShareToken(token));
+    expect(hashShareToken(`${token}x`)).not.toBe(token_hash);
+  });
+});
+
+describe('creare una vista condivisa', () => {
+  it('restituisce il token una volta sola e scrive solo la sua impronta', async () => {
+    const shares = fakeTable({ data: { id: 'share-1' }, error: null });
+    const created = await createSharedView(fakeSupabase({ shared_views: shares }), {
+      brand: BRAND,
+      authorId: 'user-1',
+      view: 'calendar',
+      month: '2026-09'
+    });
+
+    const [[written]] = argsOf(shares, 'insert') as [[Row]];
+    expect(JSON.stringify(written)).not.toContain(created.token);
+    expect(written.token_hash).toBe(hashShareToken(created.token));
+    expect(Object.keys(written)).not.toContain('token');
+    expect(written.brand_id).toBe('brand-1');
+    expect(written.author_id).toBe('user-1');
+    expect(written.snapshot_version).toBe(SHARE_SNAPSHOT_VERSION);
+  });
+
+  it('senza scadenza dichiarata il link non scade, con una la porta scritta', async () => {
+    const shares = fakeTable({ data: { id: 'share-1' }, error: null });
+    const supabase = fakeSupabase({ shared_views: shares });
+
+    await createSharedView(supabase, { brand: BRAND, authorId: 'user-1', view: 'calendar', month: '2026-09' });
+    await createSharedView(supabase, {
+      brand: BRAND,
+      authorId: 'user-1',
+      view: 'calendar',
+      month: '2026-09',
+      expiresInDays: 7
+    });
+
+    const [[first], [second]] = argsOf(shares, 'insert') as [[Row], [Row]];
+    expect(first.expires_at).toBeNull();
+    expect(typeof second.expires_at).toBe('string');
+    expect(Date.parse(second.expires_at as string)).toBeGreaterThan(Date.now());
+  });
+
+  it('dice che la migration manca invece di far passare un errore Postgres', async () => {
+    const shares = fakeTable({ data: null, error: MISSING_TABLE });
+
+    await expect(
+      createSharedView(fakeSupabase({ shared_views: shares }), {
+        brand: BRAND,
+        authorId: 'user-1',
+        view: 'calendar',
+        month: '2026-09'
+      })
+    ).rejects.toBeInstanceOf(SharedViewsNotMigrated);
+  });
+});
+
+describe('lo snapshot del calendario', () => {
+  it('porta solo i campi dichiarati, anche se il post ne ha trenta', async () => {
+    const { snapshot } = await buildSnapshot(fakeSupabase({}), BRAND, 'calendar', '2026-09');
+
+    expect(Object.keys(snapshot).sort()).toEqual([...CALENDAR_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys((snapshot.posts as Row[])[0]).sort()).toEqual([...CALENDAR_POST_FIELDS].sort());
+  });
+
+  it('non fa uscire prompt, qc, note interne o identificatori privati', async () => {
+    const { snapshot } = await buildSnapshot(fakeSupabase({}), BRAND, 'calendar', '2026-09');
+    const serialized = JSON.stringify(snapshot);
+
+    for (const secret of ['un prompt interno', 'borderline', 'token-di-approvazione', 'nota interna', 'post-1', 'brand-1', 'plan-1']) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
+  it('mostra al cliente uno stato suo, non il workflow interno', async () => {
+    calendarReturns([
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'pending_user' },
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'failed', scheduled_for: '2026-09-11T07:00:00.000Z' },
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'published', scheduled_for: '2026-09-12T07:00:00.000Z' }
+    ]);
+
+    const { snapshot } = await buildSnapshot(fakeSupabase({}), BRAND, 'calendar', '2026-09');
+
+    expect((snapshot.posts as Row[]).map((p) => p.status)).toEqual(['planned', 'planned', 'published']);
+  });
+
+  it('lascia fuori le bozze senza data: un calendario è fatto di giorni', async () => {
+    calendarReturns([
+      { ...A_POST_ROW_WITH_EVERYTHING, scheduled_for: null, slot: null, isDraft: true },
+      A_POST_ROW_WITH_EVERYTHING
+    ]);
+
+    const { snapshot } = await buildSnapshot(fakeSupabase({}), BRAND, 'calendar', '2026-09');
+
+    expect((snapshot.posts as Row[]).length).toBe(1);
+  });
+});
+
+describe('lo snapshot del report mensile', () => {
+  function reportSupabase(rows: Row[]) {
+    return fakeSupabase({ social_post_history: fakeTable({ data: rows, error: null }) });
+  }
+
+  it('porta solo i campi dichiarati, in cima e su ogni post', async () => {
+    const { snapshot } = await buildSnapshot(reportSupabase([A_HISTORY_ROW_WITH_EVERYTHING]), BRAND, 'monthly_report', '2026-09');
+
+    expect(Object.keys(snapshot).sort()).toEqual([...REPORT_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys((snapshot.top_posts as Row[])[0]).sort()).toEqual([...REPORT_POST_FIELDS].sort());
+  });
+
+  it('non fa uscire identificatori privati né la provenienza dei dati', async () => {
+    const { snapshot } = await buildSnapshot(reportSupabase([A_HISTORY_ROW_WITH_EVERYTHING]), BRAND, 'monthly_report', '2026-09');
+    const serialized = JSON.stringify(snapshot);
+
+    for (const secret of ['history-1', 'brand-1', 'zernio', 'zzz-1', 'brand-knowledge']) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
+  it('somma il mese chiesto e lo chiede al database, non tutta la storia', async () => {
+    const history = fakeTable({ data: [A_HISTORY_ROW_WITH_EVERYTHING], error: null });
+    const { snapshot } = await buildSnapshot(fakeSupabase({ social_post_history: history }), BRAND, 'monthly_report', '2026-09');
+
+    expect(snapshot.totals).toEqual({ views: 1000, likes: 50, comments: 4, shares: 2 });
+    expect(snapshot.published).toBe(1);
+    expect(argsOf(history, 'eq')).toContainEqual(['brand_id', 'brand-1']);
+    expect(argsOf(history, 'gte')[0][0]).toBe('published_at');
+    expect(argsOf(history, 'lt')[0][0]).toBe('published_at');
+  });
+});
+
+describe('la tabella dei tipi di vista', () => {
+  it('ogni vista che il contratto dichiara sa costruire il proprio snapshot', async () => {
+    for (const view of SHARED_VIEW_TYPES) {
+      const supabase = fakeSupabase({ social_post_history: fakeTable({ data: [], error: null }) });
+      const { snapshot, version } = await buildSnapshot(supabase, BRAND, view, '2026-09');
+
+      expect(version, view).toBe(SHARE_SNAPSHOT_VERSION);
+      expect(snapshot.month, view).toBe('2026-09');
+      expect(snapshot.brand_name, view).toBe('Demo Brand');
+    }
+  });
+});
+
+describe('leggere una vista condivisa dal token', () => {
+  const LIVE = {
+    view_type: 'calendar',
+    snapshot: { brand_name: 'Demo Brand', posts: [] },
+    snapshot_version: 1,
+    created_at: '2026-09-01T00:00:00.000Z',
+    expires_at: null,
+    revoked_at: null
+  };
+
+  function readWith(row: Row | null) {
+    const shares = fakeTable({ data: row, error: null });
+    return readSharedView(fakeSupabase({ shared_views: shares }), 'un-token-qualunque');
+  }
+
+  it('restituisce lo snapshot per un token valido', async () => {
+    await expect(readWith(LIVE)).resolves.toEqual({
+      view: 'calendar',
+      version: 1,
+      snapshot: LIVE.snapshot,
+      created_at: LIVE.created_at
+    });
+  });
+
+  it('revocato, scaduto e mai esistito sono la stessa risposta', async () => {
+    const results = await Promise.all([
+      readWith({ ...LIVE, revoked_at: '2026-09-02T00:00:00.000Z' }),
+      readWith({ ...LIVE, expires_at: '2026-09-02T00:00:00.000Z' }),
+      readWith(null)
+    ]);
+
+    expect(results).toEqual([null, null, null]);
+    expect(new Set(results.map((r) => JSON.stringify(r))).size).toBe(1);
+  });
+
+  it('cerca per impronta: il token in chiaro non arriva mai al database', async () => {
+    const shares = fakeTable({ data: null, error: null });
+    await readSharedView(fakeSupabase({ shared_views: shares }), 'un-token-qualunque');
+
+    const filters = argsOf(shares, 'eq');
+    expect(filters).toEqual([['token_hash', hashShareToken('un-token-qualunque')]]);
+    expect(JSON.stringify(filters)).not.toContain('un-token-qualunque');
+  });
+
+  it('non legge nessuna tabella viva: lo snapshot è tutto quello che esce', async () => {
+    const tables: string[] = [];
+    const shares = fakeTable({ data: LIVE, error: null });
+    await readSharedView(
+      { from: (name: string) => (tables.push(name), shares) } as never,
+      'un-token-qualunque'
+    );
+
+    expect(tables).toEqual(['shared_views']);
+  });
+});
+
+describe('la lista e la revoca', () => {
+  it('elenca solo il brand chiesto e non mostra mai l impronta del token', async () => {
+    const shares = fakeTable({
+      data: [
+        {
+          id: 'share-1',
+          view_type: 'calendar',
+          snapshot_version: 1,
+          created_at: '2026-09-01T00:00:00.000Z',
+          expires_at: null,
+          revoked_at: null,
+          snapshot: { month: '2026-09' }
+        }
+      ],
+      error: null
+    });
+
+    const list = await listSharedViews(fakeSupabase({ shared_views: shares }), 'brand-1');
+
+    expect(argsOf(shares, 'eq')).toEqual([['brand_id', 'brand-1']]);
+    expect(JSON.stringify(argsOf(shares, 'select'))).not.toContain('token_hash');
+    expect(JSON.stringify(list)).not.toContain('token_hash');
+    expect(Object.keys(list[0]).sort()).toEqual(
+      ['created_at', 'expires_at', 'id', 'month', 'revoked_at', 'status', 'view'].sort()
+    );
+  });
+
+  it('la revoca tocca solo la riga di quel brand', async () => {
+    const shares = fakeTable({ data: { id: 'share-1', revoked_at: '2026-09-04T00:00:00.000Z' }, error: null });
+
+    const revoked = await revokeSharedView(fakeSupabase({ shared_views: shares }), 'brand-1', 'share-1');
+
+    expect(argsOf(shares, 'eq')).toEqual([
+      ['id', 'share-1'],
+      ['brand_id', 'brand-1']
+    ]);
+    expect(revoked).toEqual({ id: 'share-1', revoked_at: '2026-09-04T00:00:00.000Z' });
+  });
+
+  it('una share di un altro brand non si revoca: non risulta', async () => {
+    const shares = fakeTable({ data: null, error: null });
+
+    await expect(revokeSharedView(fakeSupabase({ shared_views: shares }), 'brand-1', 'share-di-un-altro')).resolves.toBeNull();
+  });
+});
