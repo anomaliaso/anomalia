@@ -50,6 +50,7 @@ import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
+import { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
 import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 import {
   CREATE_SHARE,
@@ -157,6 +158,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_POSTS,
   LIST_PRODUCTS,
   LIST_SHARES,
+  LIST_SOCIAL_ACCOUNTS,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
   PROPOSE_PLAN,
@@ -173,6 +175,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SET_BIO,
   SET_BRAND_SETTINGS,
   SET_MEDIA_MODEL,
+  SOCIAL_CONNECT_LINK,
   SYNC_HISTORY,
   UPDATE_ARTICLE,
   UPDATE_BRAND_KIT,
@@ -293,6 +296,7 @@ export {
   SET_AUTOMATION
 } from './automations';
 export type { AutomationJob } from './automations';
+export { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
 export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
 export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
