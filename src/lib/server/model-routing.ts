@@ -19,10 +19,10 @@ import { env } from '$env/dynamic/private';
 export type ModelFamily = 'gemini' | 'mimo' | 'grok' | 'gpt' | 'deepseek' | 'nano-banana' | 'gemini-tts';
 
 /** L'endpoint: chi serve la famiglia e chi ci manda il conto. */
-export type Endpoint = 'google' | 'kie' | 'xiaomi' | 'deepseek';
+export type Endpoint = 'google' | 'kie' | 'xiaomi' | 'deepseek' | 'openrouter';
 
 /** Il valore che finisce in `ai_calls.provider`. Uno per endpoint, non uno per famiglia. */
-export type LogProvider = 'gemini' | 'kie' | 'xiaomi' | 'deepseek';
+export type LogProvider = 'gemini' | 'kie' | 'xiaomi' | 'deepseek' | 'openrouter';
 
 /** Fatti MISURATI, non ipotesi di listino: ogni assenza qui sotto è una regressione vista. */
 export type Capability =
@@ -64,6 +64,7 @@ const ALL: Capability[] = [
  */
 const MISSING: Record<Endpoint, Partial<Record<Capability, string>>> = {
   google: {},
+  openrouter: {},
   kie: {
     grounding: 'kie non restituisce groundingMetadata: le citazioni tornano vuote',
     'media-in-tool-result': 'kie scarta i media dentro i risultati dei tool, in silenzio',
@@ -112,6 +113,7 @@ const HOME: Record<ModelFamily, Endpoint> = {
 /** Quale riga di `ai_calls.provider` scrive ogni endpoint. */
 const LOG_PROVIDER: Record<Endpoint, LogProvider> = {
   google: 'gemini',
+  openrouter: 'openrouter',
   kie: 'kie',
   xiaomi: 'xiaomi',
   deepseek: 'deepseek'
@@ -124,6 +126,7 @@ function endpointConfigured(endpoint: Endpoint): boolean {
     case 'kie': return !!env.KIE_API_KEY;
     case 'xiaomi': return !!env.XIAOMI_MIMO_API_KEY;
     case 'deepseek': return !!env.DEEPSEEK_API_KEY;
+    case 'openrouter': return !!(env.OPENROUTER_API_KEY || env.LLM_API_KEY);
   }
 }
 
