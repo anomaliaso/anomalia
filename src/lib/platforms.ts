@@ -16,4 +16,3 @@ export const PLATFORM_IDS = {
   gnews: 'gnews'
 } as const;
 
-export type PlatformId = keyof typeof PLATFORM_IDS;

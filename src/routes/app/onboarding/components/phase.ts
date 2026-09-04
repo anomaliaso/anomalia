@@ -33,8 +33,6 @@ export const PHASE_STEP: Record<Phase, number> = {
   preview: 6
 };
 
-export const PUBLISH_STEPS = ['lockingIn', 'preparing', 'connecting', 'almostLive'];
-
 export const backTargets = (isContinueMode: boolean): Partial<Record<Phase, Phase>> => ({
   ...(isContinueMode ? {} : { people: 'input' as Phase }),
   competitors: 'people',

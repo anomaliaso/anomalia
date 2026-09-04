@@ -23,10 +23,6 @@ const KIE_CLAUDE_BASE = `${KIE_HOST}/claude/v1`;
 
 export const KIE_MODEL = env.KIE_MODEL || 'grok-4-5';
 
-// Chat Pro is pinned to Grok 4.6 on kie (`POST /grok/v1/responses`). Not `KIE_MODEL`:
-// GTM / director / design still use grok-4-5, and env must not silently downgrade chat.
-export const KIE_GROK_PRO_MODEL = 'grok-4-6';
-
 // GPT 5.6 Luna on kie Codex Responses — multimodale
 // (misurato: legge un PNG e ne descrive i quadranti). Serve ANCHE come motore GPT dell'audit di
 // citazione GEO (KIE_CITATION_GPT), ma e' un riuso, non la sua identita'.

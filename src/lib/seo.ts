@@ -159,24 +159,8 @@ export const STATIC_SITEMAP_PATHS = [
   '/usecases.md'
 ] as const;
 
-/** Pain / problem landings — linked from footer for crawl paths. */
-export const PAIN_PATHS = [
-  '/no-time',
-  '/overwhelmed',
-  '/burnout',
-  '/cant-afford',
-  '/not-working',
-  '/no-results',
-  '/consistency',
-  '/multiple-accounts'
-] as const;
-
 /** Localized path for any supported marketing locale. */
 export function localizedPath(path: string, lang: Locale): string {
   return localePath(path, lang);
 }
 
-/** @deprecated Prefer localizedPath(path, 'it') */
-export function itPath(path: string): string {
-  return localePath(path, 'it');
-}

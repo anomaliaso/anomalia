@@ -81,27 +81,3 @@ export async function browserlessContent(
     return await res.text();
 }
 
-/** Capture a PNG screenshot of the page. Returns the bytes as a Buffer. */
-export async function browserlessScreenshot(
-  url: string,
-  opts: {
-    fullPage?: boolean;
-    waitForSelector?: string;
-    waitForTimeout?: number;
-    cookies?: Array<{ name: string; value: string; domain?: string; path?: string }>;
-    gotoOptions?: { waitUntil?: string; timeout?: number };
-  } = {}
-): Promise<Buffer> {
-  const body: Record<string, unknown> = {
-    url,
-    options: { fullPage: opts.fullPage ?? false, type: 'png' }
-  };
-  if (opts.waitForSelector) {
-    body.waitForSelector = { selector: opts.waitForSelector, visible: true };
-  }
-  if (opts.waitForTimeout) body.waitForTimeout = opts.waitForTimeout;
-  if (opts.cookies?.length) body.cookies = opts.cookies;
-  if (opts.gotoOptions) body.gotoOptions = opts.gotoOptions;
-  const res = await postJson(`/screenshot`, body);
-  return Buffer.from(await res.arrayBuffer());
-}

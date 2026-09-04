@@ -9,7 +9,6 @@ import { signPersonImages, type PersonImage } from '$lib/server/people';
 import { listTalents } from '$lib/server/talent';
 import { fetchSocialProfile } from '$lib/server/scrapecreators';
 import { archiveImageToBucket, signKnowledgePaths } from '$lib/server/media-archive';
-import { loadCompetitorThumbUrls } from '$lib/server/content-preview';
 import { isUrlSafe } from '$lib/server/brand-analysis';
 import type { AvailableGraphicImage } from '$lib/server/design-compose';
 
@@ -149,18 +148,6 @@ export async function fetchSocialVisualRefs(
     .filter((u): u is string => !!u)
     .map((url) => ({ url, label: `social:${plat}/@${h}` }));
   return { thumbs };
-}
-
-/** Already-archived competitor top-post thumbs (from discover / market refresh). */
-export async function resolveCompetitorVisualRefs(
-  supabase: SupabaseClient,
-  brandId: string,
-  limit = 8
-): Promise<VisualRef[]> {
-  const urls = await loadCompetitorThumbUrls(supabase, brandId, limit);
-  return urls
-    .filter((u) => u.startsWith('data:image/') || isUrlSafe(u))
-    .map((url) => ({ url, label: 'competitor post' }));
 }
 
 /** Append refs into an available-images catalog (dedupe by URL). */

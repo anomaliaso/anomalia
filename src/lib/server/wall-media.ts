@@ -26,16 +26,11 @@
  * separates "this was always a still" from "we tried and could not", because those two look
  * identical from a null column and call for completely different fixes.
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync, rmSync, mkdtempSync, existsSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import sharp from 'sharp';
-import { ensureFfmpegPath } from '$lib/server/ffmpeg-bin';
 
-/** Where the archive lives (private). Mirrors market-media.ts. */
-const SOURCE_BUCKET = 'brand-knowledge';
 /** Where the public copies live. Created in migration 0199, `public = true`. */
 export const WALL_BUCKET = 'wall';
 
@@ -68,8 +63,6 @@ export const PREVIEW_START_SECONDS = 0.5;
 /** Frame grabbed for the still, on the same reasoning. */
 export const POSTER_FRAME_SECONDS = 1;
 
-/** A derivative bigger than this is a bug, not a preview. Also the bucket's own ceiling. */
-const MAX_DERIVATIVE_BYTES = 12 * 1024 * 1024;
 /** ffmpeg wall-clock per clip. A short-form source that takes longer than this is pathological. */
 const FFMPEG_TIMEOUT_MS = 60_000;
 
@@ -188,109 +181,3 @@ function animate(bin: string, src: string, dir: string): { file: string; ext: st
   return { error: `webp: ${w.stderr || 'no output'} | gif: ${g.stderr || 'no output'}` };
 }
 
-const MIME: Record<string, string> = { webp: 'image/webp', gif: 'image/gif' };
-
-/**
- * Build and upload both derivatives for one harvested post.
- *
- * Idempotent by `upsert`: a re-run overwrites in place rather than accumulating a second copy of a
- * file we already hold, which matters because the worker retries and because the rubric version can
- * move under a row that already has media.
- */
-export async function buildWallMedia(
-  supabase: SupabaseClient,
-  row: { platform: string; external_id: string; media_path: string | null; media_kind: string | null }
-): Promise<BuildResult> {
-  const source = row.media_path;
-  if (!source) return { ok: false, reason: 'no_source' };
-
-  const { data: blob, error: dlErr } = await supabase.storage.from(SOURCE_BUCKET).download(source);
-  if (dlErr || !blob) {
-    return { ok: false, reason: 'download_failed', detail: dlErr?.message?.slice(0, 200) };
-  }
-  const bytes = Buffer.from(await blob.arrayBuffer());
-  if (!bytes.length) return { ok: false, reason: 'download_failed', detail: 'empty' };
-
-  const isVideo = row.media_kind === 'video' || /\.(mp4|mov|webm)$/i.test(source);
-  const dir = mkdtempSync(join(tmpdir(), 'wall-'));
-
-  try {
-    let posterSource: Buffer;
-    let animation: { file: string; ext: string } | { error: string } | null = null;
-
-    if (isVideo) {
-      const bin = await ensureFfmpegPath();
-      if (!bin) return { ok: false, reason: 'unsupported_source', detail: 'ffmpeg unavailable' };
-
-      const src = join(dir, 'src' + (source.match(/\.[a-z0-9]+$/i)?.[0] ?? '.mp4'));
-      writeFileSync(src, bytes);
-
-      const frame = join(dir, 'frame.png');
-      const f = ffmpeg(bin, ['-ss', String(POSTER_FRAME_SECONDS), '-i', src, '-frames:v', '1', frame]);
-      // A clip shorter than the seek point yields nothing; try again from the very first frame
-      // rather than declaring a perfectly good 0.8s loop unshowable.
-      if (!f.ok || !existsSync(frame)) ffmpeg(bin, ['-i', src, '-frames:v', '1', frame]);
-      if (!existsSync(frame)) return { ok: false, reason: 'poster_failed', detail: f.stderr };
-
-      posterSource = readFileSync(frame);
-      animation = animate(bin, src, dir);
-    } else {
-      posterSource = bytes;
-    }
-
-    let poster: Buffer;
-    try {
-      poster = await toPoster(posterSource);
-    } catch (e) {
-      return {
-        ok: false,
-        reason: 'poster_failed',
-        detail: (e instanceof Error ? e.message : String(e)).slice(0, 200)
-      };
-    }
-    if (poster.length > MAX_DERIVATIVE_BYTES) {
-      return { ok: false, reason: 'poster_failed', detail: `poster ${poster.length} bytes` };
-    }
-
-    const pKey = posterKey(row.platform, row.external_id);
-    const up = await supabase.storage
-      .from(WALL_BUCKET)
-      .upload(pKey, poster, { contentType: 'image/webp', upsert: true, cacheControl: '31536000' });
-    if (up.error) return { ok: false, reason: 'upload_failed', detail: up.error.message.slice(0, 200) };
-
-    const media: WallDerivatives = {
-      posterPath: pKey,
-      posterBytes: poster.length,
-      previewPath: null,
-      previewBytes: null,
-      state: isVideo ? 'failed' : 'still'
-    };
-
-    if (animation && 'file' in animation) {
-      const buf = readFileSync(animation.file);
-      if (buf.length > MAX_DERIVATIVE_BYTES) {
-        media.error = `preview ${buf.length} bytes`;
-      } else {
-        const aKey = previewKey(row.platform, row.external_id, animation.ext);
-        const upA = await supabase.storage.from(WALL_BUCKET).upload(aKey, buf, {
-          contentType: MIME[animation.ext],
-          upsert: true,
-          cacheControl: '31536000'
-        });
-        if (upA.error) {
-          media.error = upA.error.message.slice(0, 200);
-        } else {
-          media.previewPath = aKey;
-          media.previewBytes = buf.length;
-          media.state = 'ready';
-        }
-      }
-    } else if (animation) {
-      media.error = animation.error.slice(0, 300);
-    }
-
-    return { ok: true, media };
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}

@@ -41,7 +41,6 @@ export const POST_CONTENT_TYPES = [
   'text',
   'link'
 ] as const;
-export type PostContentType = (typeof POST_CONTENT_TYPES)[number];
 
 // ── update_post ──────────────────────────────────────────────────────────────
 

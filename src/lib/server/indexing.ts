@@ -4,7 +4,6 @@
 // (robots.txt Sitemap: lines per blog) is what makes crawls start promptly.
 import { swallow } from '$lib/server/swallow';
 import { env } from '$env/dynamic/private';
-import { createAdminClient } from './supabase-admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 
@@ -110,7 +109,3 @@ export async function notifyIndexers(admin: SupabaseClient, brandId: string, slu
   } catch (error) { swallow('notify indexers', error); }
 }
 
-// Small helper so callers don't need to import createAdminClient twice.
-export async function notifyIndexersForBrand(brandId: string, slugs: string[]): Promise<void> {
-  await notifyIndexers(createAdminClient(), brandId, slugs);
-}

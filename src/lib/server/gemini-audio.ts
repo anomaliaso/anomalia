@@ -46,11 +46,6 @@ export function ttsModel(): string {
 	return env.GEMINI_TTS_MODEL?.trim() || 'gemini-2.5-flash-preview-tts';
 }
 
-/** Alias del clip Lyria sul centralino (test / log). */
-export function musicModel(): string {
-	return lyriaModel('clip');
-}
-
 /**
  * Le voci che offriamo, non tutte quelle che esistono: trenta nomi in un tool è un elenco che il
  * modello sceglie a caso. Poche e caratterizzate — si sceglie un REGISTRO, non un nome proprio.

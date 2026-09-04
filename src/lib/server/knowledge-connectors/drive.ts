@@ -37,10 +37,6 @@ export function driveMimeFilter(): string {
   return `(${mimes})`;
 }
 
-export function driveListQuery(): string {
-  return `trashed = false and ${driveMimeFilter()}`;
-}
-
 export function driveFolderListQuery(): string {
   return `trashed = false and mimeType = '${DRIVE_FOLDER}'`;
 }
@@ -59,17 +55,6 @@ export function escapeDriveQueryLiteral(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-/** Live chat search: name or fullText, ingestible mimes only, not trashed. */
-export function driveLiveSearchQuery(query: string): string {
-  const q = escapeDriveQueryLiteral(query.trim());
-  return `trashed = false and (name contains '${q}' or fullText contains '${q}') and ${driveMimeFilter()}`;
-}
-
-export function driveLiveSearchInFoldersQuery(query: string, folderIds: string[]): string {
-  const q = escapeDriveQueryLiteral(query.trim());
-  return `(${driveFilesInFoldersQuery(folderIds)}) and (name contains '${q}' or fullText contains '${q}')`;
-}
-
 export function driveFilesByIdsQuery(fileIds: string[]): string {
   const ids = fileIds.map((id) => id.trim()).filter(Boolean);
   if (!ids.length) return 'id = ""';
@@ -83,18 +68,6 @@ export function driveLiveSearchAmongIdsQuery(query: string, fileIds: string[]): 
     ? ` and (name contains '${q}' or fullText contains '${q}')`
     : '';
   return `${driveFilesByIdsQuery(fileIds)}${text} and ${driveMimeFilter()}`;
-}
-
-/** File id from a Drive/Docs URL or a raw id. */
-export function parseDriveFileId(input: string): string | null {
-  const t = input.trim();
-  if (!t) return null;
-  const fromPath = t.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
-  if (fromPath?.[1]) return fromPath[1];
-  const fromQuery = t.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
-  if (fromQuery?.[1]) return fromQuery[1];
-  if (/^[a-zA-Z0-9_-]{10,}$/.test(t)) return t;
-  return null;
 }
 
 export type DriveFile = {
@@ -156,8 +129,3 @@ export function parseDriveFolderList(data: unknown): { folders: DriveFolder[]; n
   return { folders, nextPageToken: o.nextPageToken ? String(o.nextPageToken) : null };
 }
 
-export function parseDriveParents(data: unknown): string[] {
-  const o = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-  const raw = Array.isArray(o.parents) ? o.parents : [];
-  return raw.map((p) => String(p ?? '').trim()).filter(Boolean);
-}

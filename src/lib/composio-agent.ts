@@ -4,7 +4,6 @@
  */
 import { listedForToolkit, type ConnectorKind } from '$lib/composio-catalog';
 
-export const MAX_AGENT_TOOL_CALLS = 8;
 export const MAX_AGENT_RESULT_CHARS = 16_000;
 export const MAX_AGENT_TOOLS_LISTED = 80;
 

@@ -173,11 +173,6 @@ export type CompetitorCandidate = {
   rationale: string;
 };
 
-export type CompetitorResolved = CompetitorCandidate & {
-  handles: ScrapeTarget[];
-  source: 'ai' | 'user';
-};
-
 export type PostStats = {
   count: number;
   medianEngagement: number;

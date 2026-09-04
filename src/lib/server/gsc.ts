@@ -21,28 +21,6 @@ export function gscOAuthRedirectUri(origin: string): string {
   return `${base}${GSC_OAUTH_CALLBACK_PATH}`;
 }
 
-export type GscConnection = {
-  brand_id: string;
-  site_url: string | null;
-  permission_level: string | null;
-  active: boolean;
-  synced_at: string | null;
-  last_error: string | null;
-  connected_at: string;
-};
-
-export type GscMetricRow = {
-  date: string;
-  query: string;
-  page: string;
-  country: string;
-  device: string;
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  position: number;
-};
-
 export type GscSite = { siteUrl: string; permissionLevel: string };
 
 export type GscSummary = {

@@ -10,7 +10,7 @@
 // così la risposta è identica e non conferma nemmeno che il brand esista.
 import { createHash, randomBytes } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { SHARED_VIEW_TYPES, type SharedViewType } from '@anomalia/api-contracts';
+import { type SharedViewType } from '@anomalia/api-contracts';
 import { getCalendar } from './cli-queries';
 import { dedupeSocialHistory, metricNum, type SocialHistoryRow } from './social-history-metrics';
 import { monthKey } from './usage';
@@ -272,10 +272,6 @@ const SNAPSHOT_BUILDERS: Record<
   dashboard: buildDashboard,
   monthly_report: buildMonthlyReport
 };
-
-export function isSharedViewType(value: unknown): value is SharedViewType {
-  return SHARED_VIEW_TYPES.includes(value as SharedViewType);
-}
 
 export async function buildSnapshot(
   supabase: SupabaseClient,

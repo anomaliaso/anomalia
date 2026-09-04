@@ -32,10 +32,7 @@
  * di un cliente.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { llmConfigured, llmText } from '$lib/server/llm';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { minDesignScore } from '$lib/server/design-judge';
-import { TRENDING_MIN_OUTPERFORMANCE, TRENDING_WINDOW_DAYS } from '$lib/server/wall';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -187,118 +184,10 @@ export async function readWallDigest(admin: SupabaseClient, kind: WallDigestKind
   }
 }
 
-async function writeWallDigest(admin: SupabaseClient, digest: WallDigest): Promise<void> {
-  const buf = Buffer.from(JSON.stringify(digest));
-  const { error } = await admin.storage
-    .from(BUCKET)
-    .upload(digestPath(digest.kind), buf, { contentType: 'application/json', upsert: true });
-  if (error) console.warn(`[wall-digest] write ${digest.kind} failed: ${error.message}`);
-}
-
-async function distillText(label: string, prompt: string): Promise<string | null> {
-  if (!llmConfigured()) return null;
-  try {
-    const { text } = await llmText({ prompt, label });
-    return text.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
 export type DistillResult = {
   design: 'refreshed' | 'fresh_skip' | 'no_items' | 'failed';
   trending: 'refreshed' | 'fresh_skip' | 'no_items' | 'failed';
 };
-
-/**
- * Rigenera i due digest se hanno più di DIGEST_REFRESH_AFTER_DAYS. Senza chiamante da quando il
- * muro pubblico è stato spento: i digest restano leggibili e, superati i 30 giorni, degradano a
- * sezione vuota come hanno sempre fatto. Resta esportata perché la si possa lanciare a mano.
- */
-export async function distillWallDigests(
-  admin: SupabaseClient,
-  opts: { force?: boolean; now?: number } = {}
-): Promise<DistillResult> {
-  const now = opts.now ?? Date.now();
-  const out: DistillResult = { design: 'failed', trending: 'failed' };
-
-  const due = async (kind: WallDigestKind): Promise<boolean> => {
-    if (opts.force) return true;
-    const existing = await readWallDigest(admin, kind);
-    if (!existing) return true;
-    const t = Date.parse(existing.generatedAt);
-    return !Number.isFinite(t) || now - t > DIGEST_REFRESH_AFTER_DAYS * DAY_MS;
-  };
-
-  // — Design: il top del wall secondo il suo stesso bar (stesso filtro della pagina pubblica).
-  try {
-    if (!(await due('design'))) {
-      out.design = 'fresh_skip';
-    } else {
-      const { data } = await admin
-        .from('market_posts')
-        .select('design_note, design_tags, design_scores, design_score, category, content_form')
-        .eq('is_design', true)
-        .eq('design_publishable', true)
-        .neq('wall_state', 'hidden')
-        .gte('design_score', minDesignScore())
-        .order('design_score', { ascending: false })
-        .limit(DIGEST_ITEMS);
-      const rows = (data ?? []) as AnyRec[];
-      if (!rows.length) {
-        out.design = 'no_items';
-      } else {
-        const text = await distillText('wall.digest_design', buildDesignDigestPrompt(rows.map(designItemLine)));
-        const digest = text ? finalizeDigest('design', text, rows.length, now) : null;
-        if (digest) {
-          await writeWallDigest(admin, digest);
-          out.design = 'refreshed';
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[wall-digest] design distill failed:', e instanceof Error ? e.message : e);
-  }
-
-  // — Trending: i clip che hanno battuto il proprio account, con l'analisi già pagata.
-  try {
-    if (!(await due('trending'))) {
-      out.trending = 'fresh_skip';
-    } else {
-      const since = new Date(now - TRENDING_WINDOW_DAYS * DAY_MS).toISOString();
-      const { data } = await admin
-        .from('market_posts')
-        .select('id, platform, category, outperformance, views')
-        .gte('outperformance', TRENDING_MIN_OUTPERFORMANCE)
-        .gte('published_at', since)
-        .order('outperformance', { ascending: false })
-        .limit(DIGEST_ITEMS);
-      const posts = (data ?? []) as AnyRec[];
-      if (!posts.length) {
-        out.trending = 'no_items';
-      } else {
-        const { data: analyses } = await admin
-          .from('market_video_analyses')
-          .select(
-            'market_post_id, hook_type, hook_at_s, hook_line, hook_open_loop, reveal_at_s, cta_at_s, dead_seconds, duration_s, summary'
-          )
-          .in('market_post_id', posts.map((p) => p.id));
-        const byPost = new Map((analyses ?? []).map((a: AnyRec) => [a.market_post_id, a]));
-        const lines = posts.map((p) => trendingItemLine(p, byPost.get(p.id) ?? null));
-        const text = await distillText('wall.digest_trending', buildTrendingDigestPrompt(lines));
-        const digest = text ? finalizeDigest('trending', text, posts.length, now) : null;
-        if (digest) {
-          await writeWallDigest(admin, digest);
-          out.trending = 'refreshed';
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[wall-digest] trending distill failed:', e instanceof Error ? e.message : e);
-  }
-
-  return out;
-}
 
 // ————————————————————————— Sezioni prompt per i produttori —————————————————————————
 

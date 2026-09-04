@@ -40,7 +40,7 @@
  * nostra. Un URL di kie in una riga che dura più di un giorno è un'immagine che sparisce da sola.
  */
 import { env } from '$env/dynamic/private';
-import { NANO_BANANA_2_LITE_MODEL, NANO_BANANA_2_MODEL, imageModelSpec, kieAspectRatio } from '$lib/image-models';
+import { NANO_BANANA_2_MODEL, imageModelSpec, kieAspectRatio } from '$lib/image-models';
 import { logAiCall } from '$lib/server/ai-log';
 import { KIE_CREDIT_USD } from '$lib/server/kie';
 
@@ -48,8 +48,6 @@ export const KIE_JOBS_BASE = 'https://api.kie.ai/api/v1';
 
 /** Il ponte base64→URL. Host diverso dalla API dei job: non è un errore di battitura. */
 const KIE_UPLOAD_URL = 'https://kieai.redpandaai.co/api/file-base64-upload';
-
-export const kieJobsConfigured = () => !!env.KIE_API_KEY;
 
 export function kieJobHeaders(): Record<string, string> {
   return {
@@ -225,10 +223,6 @@ export function kieImageModel(model: string | undefined, refCount = 0): string {
   if (/pro/i.test(model ?? '')) return 'nano-banana-pro';
   if (/lite/i.test(model ?? '')) return 'nano-banana-2-lite';
   return 'nano-banana-2';
-}
-
-export function isKieLiteImageModel(model: string): boolean {
-  return imageModelSpec(model)?.id === NANO_BANANA_2_LITE_MODEL;
 }
 
 /**

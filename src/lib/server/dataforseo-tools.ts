@@ -29,8 +29,6 @@ export const DATAFORSEO_TOOL_KEYS = [
   'dfs_backlink_history'
 ] as const;
 
-export type DataForSeoToolKey = (typeof DATAFORSEO_TOOL_KEYS)[number];
-
 /** Cheap/live Labs+SERP tools — safe for every chat turn. History endpoints are opt-in (costlier). */
 export const DATAFORSEO_CHAT_TOOL_KEYS = DATAFORSEO_TOOL_KEYS.filter(
   (k) => k !== 'dfs_traffic_history' && k !== 'dfs_backlink_history'

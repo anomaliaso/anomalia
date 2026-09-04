@@ -108,20 +108,6 @@ export function notionPageTitle(page: Record<string, unknown>): string {
   return 'Untitled';
 }
 
-/** Page UUID from a Notion URL, 32-hex id, or dashed UUID. */
-export function parseNotionPageId(input: string): string | null {
-  const t = input.trim();
-  if (!t) return null;
-  const dashed = t.match(
-    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-  );
-  if (dashed) return dashed[0].toLowerCase();
-  const hex = t.match(/[0-9a-f]{32}/i);
-  if (!hex) return null;
-  const h = hex[0].toLowerCase();
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-
 export function parseNotionUser(data: unknown): string | null {
   const o = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
   const name = String(o.name ?? '').trim();

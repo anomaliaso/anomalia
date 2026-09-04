@@ -6,9 +6,6 @@ export type NotionScopeKind = 'page' | 'database';
 
 export type NotionPageOption = { id: string; title: string; kind: NotionScopeKind };
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function normalizeNotionId(raw: string): string | null {
   const t = raw.trim();
   if (!t) return null;
@@ -73,6 +70,3 @@ export function notionFormValue(item: NotionPageOption): string {
   return `${item.id}\t${item.kind}\t${item.title}`;
 }
 
-export function isNotionUuid(id: string): boolean {
-  return UUID_RE.test(id);
-}

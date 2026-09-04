@@ -28,13 +28,6 @@ export function anchorFor(target: { title?: string }, _keywordStrategy?: unknown
   return anchor || 'this guide';
 }
 
-/** Pure: 0–100 overlap of two topic lists (Jaccard on token sets). */
-export function topicOverlapScore(a: string[], b: string[]): number {
-  const ta = tokenize(a.join(' '));
-  const tb = tokenize(b.join(' '));
-  return Math.round(tokenOverlap(ta, tb) * 100);
-}
-
 function hostnameOf(url: string): string {
   try {
     return new URL(url.startsWith('http') ? url : `https://${url}`).hostname;

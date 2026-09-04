@@ -168,15 +168,6 @@ export async function listComposioToolkits(search?: string): Promise<ComposioToo
   return out;
 }
 
-export async function getComposioToolkit(slug: string): Promise<ComposioToolkit | null> {
-  try {
-    const raw = await composioFetch<Json>('GET', `/toolkits/${encodeURIComponent(slug.toLowerCase())}`);
-    return parseToolkit(asObject(raw.item ?? raw));
-  } catch {
-    return null;
-  }
-}
-
 // ── Auth configs ──────────────────────────────────────────────────────────
 
 export type ComposioAuthConfig = {
@@ -253,8 +244,6 @@ export async function ensureAuthConfig(toolkitSlug: string): Promise<ComposioAut
 
 // ── Connected accounts ────────────────────────────────────────────────────
 
-export const COMPOSIO_ACTIVE_STATUSES = ['ACTIVE'] as const;
-
 export type ComposioAccountStatus =
   | 'INITIALIZING'
   | 'INITIATED'
@@ -303,20 +292,6 @@ export async function listConnectedAccounts(opts: {
     if (parsed) out.push(parsed);
   }
   return out;
-}
-
-export async function getConnectedAccount(
-  connectedAccountId: string
-): Promise<ComposioConnectedAccount | null> {
-  try {
-    const raw = await composioFetch<Json>(
-      'GET',
-      `/connected_accounts/${encodeURIComponent(connectedAccountId)}`
-    );
-    return parseConnectedAccount(asObject(raw.item ?? raw));
-  } catch {
-    return null;
-  }
 }
 
 export type ComposioConnectLink = {

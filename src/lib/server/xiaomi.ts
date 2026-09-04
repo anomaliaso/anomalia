@@ -2,7 +2,7 @@ import { XIAOMI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import type { GoogleGenAI } from '@google/genai';
 import { structuredKie, textKie } from '$lib/server/kie';
 import { logAiCall, extractXiaomiUsage, requireBrandContext } from '$lib/server/ai-log';
-import { geminiFlash, type GeminiThinkingLevel } from '$lib/server/gemini';
+import { type GeminiThinkingLevel } from '$lib/server/gemini';
 import { env } from '$env/dynamic/private';
 import { route } from '$lib/server/model-routing';
 import { llmBaseUrl, llmConfigured, llmImagesFromInline, llmModels, llmStructured, llmText } from '$lib/server/llm';
@@ -22,8 +22,6 @@ export const XIAOMI_MODEL = env.XIAOMI_MODEL || 'mimo-v2.5-pro';
 export const XIAOMI_VISION_MODEL = env.XIAOMI_VISION_MODEL || 'mimo-v2.5';
 // Faster (pricier) text tier — used for conversion-critical onboarding stages (strategy + PE).
 export const XIAOMI_ULTRASPEED_MODEL = 'mimo-v2.5-pro-ultraspeed';
-// Blog long-form writing — always the cheaper pro tier (not ultraspeed), to keep article tokens down.
-export const XIAOMI_BLOG_MODEL = 'mimo-v2.5-pro';
 
 // Gemini-style inline image part — the format every call site in the app already builds.
 // Converted to OpenAI image_url data URIs for the Xiaomi path.

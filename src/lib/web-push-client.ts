@@ -105,18 +105,3 @@ export async function enableWebPush(): Promise<NotificationPermission | 'unsuppo
 	return 'granted';
 }
 
-export async function disableWebPush(): Promise<void> {
-	const sub = await getPushSubscription();
-	if (!sub) return;
-	const endpoint = sub.endpoint;
-	try {
-		await sub.unsubscribe();
-	} catch {
-		/* ignore */
-	}
-	await fetch('/api/push/subscribe', {
-		method: 'DELETE',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ endpoint })
-	}).catch(() => {});
-}

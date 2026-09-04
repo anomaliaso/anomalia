@@ -138,16 +138,3 @@ export async function archiveMarketMedia(
   return { ok: true, media: { path, bytes: res.bytes.length, kind } };
 }
 
-/** Signed read URLs for archived market media. Same bucket helper the rest of the app uses. */
-export async function signMarketMedia(
-  supabase: SupabaseClient,
-  paths: string[],
-  ttlSeconds = 60 * 60 * 2
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  const clean = [...new Set(paths.filter(Boolean))];
-  if (!clean.length) return out;
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrls(clean, ttlSeconds);
-  for (const row of data ?? []) if (row.signedUrl && row.path) out.set(row.path, row.signedUrl);
-  return out;
-}

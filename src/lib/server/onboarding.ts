@@ -86,8 +86,6 @@ export function getOnboardingState(raw: any): OnboardingState {
   };
 }
 
-export const isOnboardingActive = (s: OnboardingState) => s.status === 'in_progress';
-
 // The three review-and-approve sections of the build phase. When the agent finishes gathering a
 // section it flips it to 'waiting_review' (→ the *_review phase), which surfaces the approval card
 // in the Panoramica. The user's "Approva" then stamps 'approved' and jumps to the next *_generation
