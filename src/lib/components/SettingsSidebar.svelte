@@ -33,7 +33,6 @@
     Trash2,
     UserRound,
     Users,
-    Zap,
     Clock,
     Megaphone,
     Radar,
@@ -248,12 +247,6 @@
           href: `${settingsBase}/connected-accounts`,
           label: $_('app.settings.connectedAccounts'),
           icon: Link2,
-        },
-        {
-          id: 'autopilot',
-          href: `${settingsBase}/autopilot`,
-          label: $_('app.settings.autopilot'),
-          icon: Zap,
         },
         {
           id: 'radar',
