@@ -47,6 +47,32 @@ attiva con il team — `ADS_SELF_SERVE` è `false` e le pagine ads mostrano un
 placeholder «prenota una call». Prometterle self-serve significa un click che non
 porta da nessuna parte.
 
+## Il test della navbar diceva la regola di ieri
+
+`tests/e2e/landing.spec.ts:13` teneva la CI rossa su `dev`, e non per colpa di una
+PR. Il commit `24848113` («Drop theme, language and sign-in from the desktop nav»)
+ha tolto il link testuale «Sign in» da `nav-right` — decisione presa apposta, con il
+costo scritto nel corpo: *«the door is labelled "Get started", so a returning
+customer has to infer it»*. Ha spostato tutto nel drawer, ha ripulito il CSS morto,
+e ha lasciato l'asserzione dov'era: un comportamento sotto guardia cambiato senza
+toccare la guardia.
+
+Andrea ha confermato la decisione — la CTA resta il bottone, il link testuale
+accanto non torna. Quindi cede il test, non il codice, e cede **il nome insieme
+all'asserzione**: il nome è quello che il prossimo legge per capire se un
+cambiamento è una regressione o una scelta.
+
+    the desktop bar offers sign-in as its own link, not folded into the CTA   ← ieri
+    sign-in lives in the drawer, and the CTA is the door on desktop           ← oggi
+
+Il costo che il commit accetta ora vive nel nome di un test, non solo in un messaggio
+di commit che nessuno rilegge.
+
+Il terzo test — l'accesso dentro il menu a 390px — resta identico, ed è il pezzo che
+conta di più adesso: con la barra desktop a tre controlli **il drawer è l'unica porta
+esplicita al login**. Verificato che morda davvero: tolto il link dal drawer, quel
+test fallisce.
+
 ## Quello che la home ora contraddice, in `/pricing`
 
 Non è stato toccato — vale una passata sua — ma va detto:
