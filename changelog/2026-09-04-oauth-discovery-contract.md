@@ -99,6 +99,13 @@ e sopra `issuerFor()` — sono stati rimossi: dicevano la stessa cosa in due pun
 `021-app` (un repo che non esiste più) e nessuno dei due poteva fallire quando la coppia si
 fosse sfilata.
 
+Nello stesso giro, le due asserzioni RFC 8414 di `oauth.test.ts` hanno smesso di leggere
+`PUBLIC_APP_URL` dall'ambiente: passano per `appOrigin()`, quindi con il dev server di un altro
+worktree esportato in `PUBLIC_APP_URL` fallivano
+(`expected 'http://localhost:5223' to be 'https://www.anomalia.so'`) su codice che nessuno aveva
+toccato. Ora l'env pubblico è fissato nel file, come già fanno `app-url.test.ts` e
+`team-ignition.test.ts`.
+
 ## Changelog pubblico: assente di proposito
 
 Questa PR non cambia niente che un cliente possa vedere. Il fix visibile — la discovery che si

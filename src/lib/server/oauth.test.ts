@@ -1,6 +1,10 @@
 import crypto from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { env } from '$env/dynamic/private';
+
+vi.mock('$env/dynamic/public', () => ({
+  env: { PUBLIC_APP_URL: 'https://www.anomalia.so' }
+}));
 
 // Firmare è fail-closed di proposito: senza `APP_SECRET` nessun token esce. Il segreto se lo dà
 // il test, o la suite è verde solo su chi ha un `.env` completo e rossa in CI.
