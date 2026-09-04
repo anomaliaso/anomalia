@@ -108,6 +108,10 @@ function shareStatus(row: { expires_at: string | null; revoked_at: string | null
   return 'live';
 }
 
+function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
 function monthBounds(month: string): { start: string; end: string } {
   const [year, index] = month.split('-').map(Number);
   return {
@@ -213,17 +217,11 @@ async function buildMonthlyReport(
     .sort((a, b) => engagementScore(b) - engagementScore(a))
     .slice(0, TOP_POSTS);
 
-  const monthLabel = new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC'
-  });
-
   return {
     brand_name: brand.name,
     timezone: brand.timezone,
     month,
-    month_label: monthLabel,
+    month_label: monthLabel(month),
     published: rows.length,
     totals,
     platforms: [...byPlatform.values()].sort((a, b) => b.published - a.published),
@@ -238,6 +236,22 @@ async function buildMonthlyReport(
  * cosa esce, il report mensile sa cosa è uscito e quanto ha coperto. Una terza allowlist qui
  * sarebbe una terza cosa da tenere allineata a `posts`.
  */
+function composeDashboard(calendar: SharedViewSnapshot, report: SharedViewSnapshot): SharedViewSnapshot {
+  const posts = calendar.posts as { status: string }[];
+  const planned = posts.filter((post) => post.status !== 'published');
+
+  return {
+    brand_name: calendar.brand_name,
+    timezone: calendar.timezone,
+    month: calendar.month,
+    month_label: calendar.month_label,
+    published: report.published,
+    planned: planned.length,
+    reach: (report.totals as Record<string, number>).views,
+    upcoming: planned.slice(0, UPCOMING_SHOWN)
+  };
+}
+
 async function buildDashboard(
   supabase: SupabaseClient,
   brand: SharedViewBrand,
@@ -248,19 +262,7 @@ async function buildDashboard(
     buildMonthlyReport(supabase, brand, month)
   ]);
 
-  const posts = calendar.posts as { status: string }[];
-  const planned = posts.filter((post) => post.status !== 'published');
-
-  return {
-    brand_name: brand.name,
-    timezone: calendar.timezone,
-    month,
-    month_label: calendar.month_label,
-    published: report.published,
-    planned: planned.length,
-    reach: (report.totals as Record<string, number>).views,
-    upcoming: planned.slice(0, UPCOMING_SHOWN)
-  };
+  return composeDashboard(calendar, report);
 }
 
 /** L'unica tabella dei tipi di vista: aggiungerne uno è una riga qui più il suo builder. */
