@@ -781,3 +781,33 @@ la prova che il difetto non è tuo, salva le modifiche in una patch
 (`git diff > /tmp/x.patch`, mai `git stash`), ripristina i sorgenti, riesegui: se fallisce anche
 senza le tue modifiche, è ambiente. Il timeout del `beforeAll` scritto nel file vince sul flag
 `--hookTimeout` della CLI, quindi per una diagnosi va alzato nel file e rimesso subito dopo.
+
+## Un IPv6 può portarsi dentro un IPv4, e il divieto va all'indirizzo dentro
+
+**Segnale.** Un classificatore di indirizzi privati che tratta l'IPv6 per come *comincia* —
+`::1`, `^f[cd]`, `^fe[89ab]` — e l'IPv4 con le sue regole, senza che i due si parlino. Provalo
+con `::ffff:127.0.0.1`: se risponde "pubblico", il buco c'è.
+
+**Cosa succede.** `::ffff:127.0.0.1` (mapped), `2002:7f00:1::` (6to4) e `64:ff9b::7f00:1` (NAT64)
+sono tutti modi di scrivere `127.0.0.1` dentro un IPv6, e l'indirizzo che viene chiamato davvero è
+quello dentro. `dns.lookup(host, { all: true })` restituisce i record **AAAA verbatim**, quindi la
+forma arriva alla guardia esattamente così: basta un AAAA su un nome pubblico. La forma con le
+parentesi è rifiutata solo perché `URL.hostname` le tiene e la risoluzione fallisce — un rifiuto
+per **effetto collaterale**, che sparisce il giorno che qualcuno normalizza l'hostname.
+
+**Mossa.** Estrai l'IPv4 incapsulato e rimandalo alle regole IPv4, invece di allungare la lista
+dei prefissi vietati: una lista si allunga a ogni forma nuova, e la forma nuova la scopri dopo che
+ti è passata davanti. Espandi il `::` e leggi gli hextet per posizione — `::ffff:7f00:1` e
+`0:0:0:0:0:ffff:7f00:1` sono lo stesso indirizzo e una regex sul prefisso ne vede uno solo.
+Un IPv4 pubblico incapsulato deve restare pubblico: la regola è quella dell'IPv4, non un divieto
+sul prefisso.
+
+**E il test giusto non è quello del classificatore.** Quello prova la funzione; la proprietà che
+conta è che `assertPublicUrl` rifiuti un host il cui **AAAA** è una di quelle forme — con
+`lookup` sostituito perché restituisca `family: 6`. È il test che resta vero anche se domani il
+rifiuto smettesse di arrivare dal ramo che lo produce oggi.
+
+**Corollario generale.** Quando un rifiuto arriva "per fortuna" da un ramo diverso da quello che
+dovrebbe produrlo (qui: «could not resolve» invece di «non è pubblico»), non è protezione: è una
+coincidenza con la data di scadenza. Fissala in un test che nomina la proprietà, non il
+meccanismo.

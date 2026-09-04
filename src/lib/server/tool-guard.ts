@@ -158,11 +158,63 @@ export function isPrivateAddress(ip: string): boolean {
     if (a >= 224) return true; // multicast / reserved
     return false;
   }
-  const v6 = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  const v6 = ip.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
   if (v6 === '::1' || v6 === '::') return true;
   if (/^f[cd]/.test(v6)) return true; // unique-local
   if (/^fe[89ab]/.test(v6)) return true; // link-local
-  return false;
+
+  // An IPv6 address can carry an IPv4 one inside it, and the address finally dialled is that
+  // IPv4 one — so it has to face the IPv4 rules above. Reading only the prefix calls
+  // ::ffff:127.0.0.1 public and then opens a connection to loopback. `lookup` returns AAAA
+  // records verbatim, so this is a form a hostname can genuinely deliver.
+  const inner = embeddedIpv4(v6);
+  return inner ? isPrivateAddress(inner) : false;
+}
+
+/** The 8 hextets of an IPv6 address, `::` expanded. Null when it is not one. */
+function hextetsOf(v6: string): string[] | null {
+  const halves = v6.split('::');
+  if (halves.length > 2) return null;
+
+  const left = halves[0] ? halves[0].split(':') : [];
+  if (halves.length === 1) return left.length === 8 ? left : null;
+
+  const right = halves[1] ? halves[1].split(':') : [];
+  const gap = 8 - left.length - right.length;
+  if (gap < 0) return null;
+
+  return [...left, ...Array(gap).fill('0'), ...right];
+}
+
+function quadOf(high: string, low: string): string {
+  const h = parseInt(high, 16);
+  const l = parseInt(low, 16);
+  if (!Number.isFinite(h) || !Number.isFinite(l)) return '';
+  return `${(h >> 8) & 255}.${h & 255}.${(l >> 8) & 255}.${l & 255}`;
+}
+
+/**
+ * The IPv4 address embedded in an IPv6 one, in every shape a resolver can hand back: mapped and
+ * compatible (`::ffff:127.0.0.1`, `::ffff:7f00:1`, `::127.0.0.1`), 6to4 (`2002:7f00:1::`) and
+ * NAT64 (`64:ff9b::7f00:1`).
+ */
+function embeddedIpv4(v6: string): string | null {
+  const dotted = v6.match(/(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/);
+  if (dotted) return dotted[1];
+
+  const parts = hextetsOf(v6);
+  if (!parts) return null;
+
+  const value = (hextet: string) => parseInt(hextet, 16);
+  const leadingZeros = parts.slice(0, 5).every((p) => value(p) === 0);
+
+  if (leadingZeros && (value(parts[5]) === 0xffff || value(parts[5]) === 0)) {
+    return quadOf(parts[6], parts[7]) || null;
+  }
+  if (value(parts[0]) === 0x64 && value(parts[1]) === 0xff9b) return quadOf(parts[6], parts[7]) || null;
+  if (value(parts[0]) === 0x2002) return quadOf(parts[1], parts[2]) || null;
+
+  return null;
 }
 
 /**
