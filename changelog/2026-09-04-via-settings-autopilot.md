@@ -34,3 +34,24 @@ toglierla adesso non lascia nessuno senza il controllo, né una persona né un a
 `setAutopilot` in `$lib/server/settings-actions.ts`: era usata solo da quella pagina.
 Con lei se ne va l'ultimo import di `setJobEnabled` in quel file — le scritture sul roster
 passano ormai tutte da `/agents` e dall'endpoint.
+
+## La regressione che la cancellazione introduceva, chiusa qui
+
+La pagina, riaccendendo, faceva una cosa in più: `autopilot_failure_count: 0`. Il commento
+diceva *«Riaccendere azzera anche la serie di fallimenti: il watchdog riparte da zero»*.
+`toggleJob` su `/agents` non lo fa, e senza quel reset la cancellazione lasciava dietro un
+guasto lento.
+
+Il meccanismo, per intero: lo scheduler conta i giri falliti di fila e alla terza
+(`MAX_CONSECUTIVE_FAILURES`) scrive un opt-out `actor: 'watchdog'` sul roster. **Il brand non
+resta bloccato in silenzio** — su `/agents` il producer appare spento e si riaccende da lì, che
+è proprio come il watchdog è stato progettato. Ma il contatore resta a 3, e la soglia è `>=`:
+riacceso, il **primo** fallimento successivo lo rispegne. Un tentativo invece di tre. E
+l'avviso «autopilot disattivato» (`warnings.ts`, `brand-doctor.ts`) resta acceso finché un giro
+non riesce, quindi il prodotto dice una cosa e il roster ne dice un'altra.
+
+Il reset è finito in **`setJobEnabled`**, non in `toggleJob`. A riaccendere sono due superfici —
+la pagina `/agents` e `set_automation` via MCP — ed entrambe passano di lì: una guardia per
+ciascuna è la guardia che il terzo chiamante dimentica. Un fallimento del reset viene loggato e
+non fa tornare indietro l'interruttore: quello è già scritto, e al peggio il contatore lo azzera
+il primo giro riuscito, che è quello che già fa.

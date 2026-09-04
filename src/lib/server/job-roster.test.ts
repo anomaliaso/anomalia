@@ -24,6 +24,7 @@ import {
   jobEnabledForBrand,
   jobPausedForBrand,
   rosterForPrompt,
+  setJobEnabled,
   scheduledWorkAllowed,
   translatableReason,
   ROSTER_JOBS,
@@ -326,5 +327,64 @@ describe('jobRunCounts — quante volte un lavoro ha davvero girato', () => {
   it('la tabella assente non porta giù la lettura: zero conteggi, non un errore', async () => {
     const { admin } = ticksAdmin(null, true);
     await expect(jobRunCounts(admin, 'b1', '2026-08-05T00:00:00.000Z')).resolves.toEqual(new Map());
+  });
+});
+
+/**
+ * IL WATCHDOG SI SPEGNE DA SOLO, MA NON SI RIARMA DA SOLO.
+ *
+ * Tre giri falliti di fila e lo scheduler scrive un opt-out `actor: 'watchdog'` sul roster: il
+ * producer appare spento su /agents e si riaccende da lì. Ma `autopilot_failure_count` resta a
+ * 3, e la soglia è `>=`: riacceso, il PRIMO fallimento successivo lo rispegne — un solo
+ * tentativo invece di tre — e l'avviso «autopilot disattivato» resta acceso finché un giro non
+ * riesce. La pagina Impostazioni › Autopilot azzerava il contatore riaccendendo; cancellata
+ * quella, il reset vive qui, dove passano ENTRAMBE le superfici che riaccendono: /agents e
+ * `set_automation`.
+ */
+describe('riaccendere un lavoro', () => {
+  function recordingAdmin() {
+    const writes: { table: string; payload: Record<string, unknown> }[] = [];
+    const admin = {
+      from: (table: string) => ({
+        delete: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+        upsert: () => Promise.resolve({ error: null }),
+        update: (payload: Record<string, unknown>) => {
+          writes.push({ table, payload });
+          return { eq: () => Promise.resolve({ error: null }) };
+        }
+      })
+    } as unknown as SupabaseClient;
+    return { admin, writes };
+  }
+
+  it("azzera la serie di fallimenti dell'autopilot, o il watchdog rispegne al primo giro storto", async () => {
+    const { admin, writes } = recordingAdmin();
+
+    expect(await setJobEnabled(admin, { brandId: 'b1', jobKey: 'autopilot', enabled: true })).toEqual({ ok: true });
+    expect(writes).toEqual([{ table: 'brands', payload: { autopilot_failure_count: 0 } }]);
+  });
+
+  it('non azzera niente spegnendo: il contatore serve proprio a chi ha spento', async () => {
+    const { admin, writes } = recordingAdmin();
+
+    await setJobEnabled(admin, { brandId: 'b1', jobKey: 'autopilot', enabled: false });
+    expect(writes).toEqual([]);
+  });
+
+  it("non tocca il contatore per un lavoro che non e' l'autopilot", async () => {
+    const { admin, writes } = recordingAdmin();
+
+    await setJobEnabled(admin, { brandId: 'b1', jobKey: 'seo', enabled: true });
+    expect(writes).toEqual([]);
+  });
+
+  it('non scrive niente se il lavoro non esiste', async () => {
+    const { admin, writes } = recordingAdmin();
+
+    expect(await setJobEnabled(admin, { brandId: 'b1', jobKey: 'inventato', enabled: true })).toEqual({
+      ok: false,
+      error: 'unknown_job'
+    });
+    expect(writes).toEqual([]);
   });
 });

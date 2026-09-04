@@ -463,6 +463,24 @@ export async function setJobEnabled(
     console.warn('[job-roster] toggle threw:', e instanceof Error ? e.message.slice(0, 160) : e);
     return { ok: false, error: 'db' };
   }
+  // Riaccendere l'autopilot azzera la sua serie di fallimenti. Il watchdog spegne a tre giri
+  // storti di fila (`MAX_CONSECUTIVE_FAILURES`, scheduler.ts) e la soglia è `>=`: senza questo,
+  // riaccenderlo con il contatore a 3 dà UN tentativo invece di tre, e l'avviso «autopilot
+  // disattivato» resta acceso finché un giro non riesce. Sta qui e non nel chiamante perché a
+  // riaccendere sono due superfici — la pagina /agents e `set_automation` — e una guardia per
+  // ciascuna è una guardia che il prossimo chiamante dimentica.
+  if (input.enabled && input.jobKey === 'autopilot') {
+    const { error } = await admin
+      .from('brands')
+      .update({ autopilot_failure_count: 0 })
+      .eq('id', input.brandId);
+    // L'interruttore è già scritto: un reset fallito non deve far tornare indietro il bottone.
+    // Al peggio il contatore lo azzera il primo giro riuscito, che è quello che fa già.
+    if (error) {
+      console.warn('[job-roster] failure-count reset failed:', error.message.slice(0, 160));
+    }
+  }
+
   forgetBrandJobOptOuts(input.brandId);
   return { ok: true };
 }
