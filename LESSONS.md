@@ -30,6 +30,21 @@ decisiva e` chiedere una foto AI (percorso vecchio) e vedere lo stesso errore. M
 LOGICA con i test (il caricamento si mocka) e nel browser verifica quello che il difetto riguardava
 — quale tool viene scelto, quali righe nascono — senza pretendere che il file arrivi in Storage.
 
+### 77 test leggono un sorgente con `readFileSync`: cancellarlo non rompe nessun import
+Un censimento del codice morto fatto sul grafo degli import non li vede: questi test non importano
+niente di cio` che controllano, leggono il **testo** del file e ci asseriscono sopra. Cancelli il
+sorgente, nessun import si spezza, il grafo tace — e la CI diventa rossa. Peggio: il nome del test
+non dice cosa copre. Oggi `topbar-cta.test.ts` asseriva sul pannello del desktop agentico, e nessuna
+suite scelta «per area» lo avrebbe mai caricato; `dev` e` diventata rossa tre volte, in mano a due
+agenti diversi. Stessa forma per le liste che classificano le rotte per **stringa**
+(`workbench-paths.ts`, `settings/platforms.ts`): un grep sui simboli non le trova mai — e` la
+rottura di `agent-lab`. Segnale: un test rosso su un file che non hai toccato, che non importa nulla
+di cio` che hai cancellato. Mossa, prima di ogni PR di cancellazione:
+`npx vitest run $(git grep -ln "readFileSync" -- 'src/**/*.test.ts') > /tmp/src-read.log 2>&1`
+(poi `tail -5` sul file: `| tail` diretto bufferizza e il watchdog a 600s ti uccide), piu` un grep
+del **nome nudo** di ogni percorso cancellato — senza estensione e senza `$lib`, perche` e` cosi`
+che quelle liste lo nominano.
+
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 
