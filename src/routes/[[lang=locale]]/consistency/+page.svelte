@@ -166,7 +166,7 @@
 
   <section class="co-seo-related">
     <div class="co-wrap">
-      <p>Related: <a href={lp('/scheduling')}>Social media scheduling tools</a> · <a href={lp('/posting-schedule')}>Best times to post on social media</a> · <a href={lp('/content-calendar')}>Content calendar planning</a></p>
+      <p>Related: <a href={lp('/autopilot')}>Social media on autopilot</a> · <a href={lp('/posting-schedule')}>Best times to post on social media</a> · <a href={lp('/no-time')}>No time for social media</a></p>
     </div>
   </section>
 

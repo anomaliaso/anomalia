@@ -2554,10 +2554,6 @@
         "title": "Social Media Feels Overwhelming? You're Not Alone — Anomalia",
         "description": "Managing social media is exhausting. Anomalia takes it off your plate: AI creates, schedules and posts content across every platform."
       },
-      "contentIdeas": {
-        "title": "Never Run Out of Social Media Content Ideas Again — Anomalia",
-        "description": "Staring at a blank content calendar? Anomalia generates fresh, on-brand social media content ideas and posts for you every week."
-      },
       "cantAfford": {
         "title": "Can't Afford a Social Media Manager? Try AI Instead — Anomalia",
         "description": "A social media manager costs €2,000+/month. Anomalia does the same job with AI for a fraction of the price. Start free."
@@ -2569,10 +2565,6 @@
       "notWorking": {
         "title": "Social Media Marketing Not Working? Here's Why — Anomalia",
         "description": "Posting randomly with no strategy? Anomalia creates a data-driven editorial plan and posts consistently across every platform."
-      },
-      "aiVsHuman": {
-        "title": "AI vs Human Social Media Manager: Which Is Better? — Anomalia",
-        "description": "Can AI replace a social media manager? Anomalia creates, schedules and publishes content 24/7 at a fraction of the cost."
       },
       "autopilot": {
         "title": "Put Your Social Media on Autopilot — Without Looking Robotic — Anomalia",
@@ -2598,33 +2590,9 @@
         "title": "Best Times to Post on Social Media — Anomalia Handles It — Anomalia",
         "description": "Stop guessing when to post. Anomalia schedules your content at the optimal times for each platform automatically."
       },
-      "noResults": {
-        "title": "Posting on Social Media But Getting No Results? — Anomalia",
-        "description": "You post regularly but nothing changes. Anomalia creates a strategy-driven content plan that actually grows your business."
-      },
-      "scheduling": {
-        "title": "Social Media Scheduling Tool — Plan a Week in 2 Minutes — Anomalia",
-        "description": "Schedule a full week of social media content in minutes. Anomalia plans, creates and publishes posts automatically."
-      },
       "analytics": {
         "title": "Social Media Analytics — Know What Works, Fix What Doesn't — Anomalia",
         "description": "Track your social media performance across every platform. Anomalia shows what content works and creates more of it."
-      },
-      "contentCalendar": {
-        "title": "Content Calendar for Social Media — Filled Automatically — Anomalia",
-        "description": "Never stare at a blank content calendar again. Anomalia fills your editorial calendar with on-brand posts every week."
-      },
-      "automation": {
-        "title": "Social Media Automation — From Zero to Published — Anomalia",
-        "description": "Automate your entire social media workflow. Anomalia creates, schedules and publishes content across every platform."
-      },
-      "strategy": {
-        "title": "Social Media Strategy — Built by AI, Approved by You — Anomalia",
-        "description": "Stop posting without a plan. Anomalia creates a data-driven social media strategy tailored to your brand and market."
-      },
-      "captionWriter": {
-        "title": "AI Caption Writer — On-Brand Captions in Seconds — Anomalia",
-        "description": "Write social media captions that sound like you. Anomalia's AI learns your voice and generates captions for every platform."
       }
     },
     "grow": {

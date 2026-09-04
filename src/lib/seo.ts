@@ -30,11 +30,9 @@ export const MARKETING_PATHS = [
   '/agosto',
   '/no-time',
   '/overwhelmed',
-  '/content-ideas',
   '/cant-afford',
   '/multiple-accounts',
   '/not-working',
-  '/ai-vs-human',
   '/autopilot',
   '/grow',
   '/ads',
@@ -65,13 +63,7 @@ export const MARKETING_PATHS = [
   '/engagement',
   '/roi',
   '/posting-schedule',
-  '/no-results',
-  '/scheduling',
   '/analytics',
-  '/content-calendar',
-  '/automation',
-  '/strategy',
-  '/caption-writer',
   '/tools',
   '/tools/agent-team',
   '/tools/geo-audit',
@@ -177,6 +169,17 @@ export function localizedPath(path: string, lang: Locale): string {
  * almost as little as the 404 it replaced.
  */
 export const RETIRED_PAGES: Record<string, string> = {
+  // Programmatic SEO pages that sell a product Anomalia no longer is, and that 90 days of two
+  // analytics systems agree nobody read: zero pageviews each. They were in the sitemap, though,
+  // so each one leaves behind a 301 to the live page that makes the same promise today.
+  '/ai-vs-human': '/cant-afford',
+  '/automation': '/autoposts',
+  '/caption-writer': '/autoposts',
+  '/content-calendar': '/posting-schedule',
+  '/content-ideas': '/autoposts',
+  '/no-results': '/not-working',
+  '/scheduling': '/posting-schedule',
+  '/strategy': '/usecases',
   // Free tools nobody ever opened and Google was never told about: zero pageviews in 90 days
   // (PostHog and Vercel agree) and absent from MARKETING_PATHS since the day they were written.
   // The index still lists the nine that are actually used.
