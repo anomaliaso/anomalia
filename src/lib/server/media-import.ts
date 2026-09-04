@@ -14,12 +14,7 @@
  * operator can ask for it from the library when they want it.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  assertPublicUrl,
-  safeFetchBytes,
-  SafeFetchError,
-  type SafeFetchReason
-} from '$lib/server/tool-guard';
+import { safeFetchBytes, SafeFetchError, type SafeFetchReason } from '$lib/server/tool-guard';
 import {
   insertBrandMedia,
   probeImageDimensions,
@@ -79,16 +74,6 @@ export type MediaImportResult =
   | { ok: true; media: ImportedMedia }
   | { ok: false; error: MediaImportFailure };
 
-/**
- * Il gate di ogni hop. `assertPublicUrl` da solo accetterebbe http, e un 302 da https a http
- * consegna il file a chiunque stia sul percorso — quindi lo schema si ricontrolla qui, dove il
- * controllo vale anche per le destinazioni che non abbiamo scelto noi.
- */
-async function assertImportableHop(url: URL): Promise<void> {
-  if (url.protocol !== 'https:') throw new SafeFetchError('not_public', 'Only https URLs can be imported');
-  await assertPublicUrl(url);
-}
-
 function failureFor(e: unknown): MediaImportFailure {
   return e instanceof SafeFetchError ? FAILURE_BY_FETCH_REASON[e.reason] : 'fetch_failed';
 }
@@ -106,7 +91,9 @@ export async function importBrandMediaFromUrl(
       maxBytes: TRANSFER_CEILING,
       timeoutMs: TIMEOUT_MS,
       maxRedirects: MAX_REDIRECTS,
-      gate: assertImportableHop
+      // Un 302 da https a http consegna il file a chiunque stia sul percorso, quindi lo schema
+      // vale anche per le destinazioni che non abbiamo scelto noi.
+      scheme: 'https-only'
     });
   } catch (e) {
     return { ok: false, error: failureFor(e) };
