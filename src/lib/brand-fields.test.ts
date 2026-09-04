@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeHashtags, normalizeWebsite, sanitizeBrandColors } from './brand-fields';
+import {
+  isKnownTimezone,
+  normalizeHashtags,
+  normalizeWebsite,
+  sanitizeBrandColors
+} from './brand-fields';
 
 /**
  * Queste tre funzioni esistono per una ragione sola: il form dello Studio e i tool della chat
@@ -50,5 +55,27 @@ describe('normalizeHashtags', () => {
   it('si ferma a 30: un solo campo non può diventare un muro di tag', () => {
     const many = Array.from({ length: 50 }, (_, i) => `#t${i}`).join(' ');
     expect(normalizeHashtags(many)).toHaveLength(30);
+  });
+});
+
+describe('il fuso orario del brand', () => {
+  it('accetta una zona IANA vera', () => {
+    expect(isKnownTimezone('Europe/Rome')).toBe(true);
+    expect(isKnownTimezone('America/New_York')).toBe(true);
+  });
+
+  it('accetta anche gli alias storici, che restano fusi validi', () => {
+    // `Asia/Calcutta` non è nell'elenco moderno ma ICU lo risolve: rifiutarlo direbbe "non
+    // esiste" a un brand che ce l'ha salvato da anni.
+    expect(isKnownTimezone('Asia/Calcutta')).toBe(true);
+  });
+
+  it('rifiuta ciò che non è un fuso, invece di salvarlo e romperlo dopo', () => {
+    // La colonna decide l'ora locale di ogni slot futuro: una stringa qualunque non fallisce al
+    // salvataggio, fallisce quando il calendario prova a calcolare un orario.
+    expect(isKnownTimezone('Europe/Atlantide')).toBe(false);
+    expect(isKnownTimezone('CET+1')).toBe(false);
+    expect(isKnownTimezone('')).toBe(false);
+    expect(isKnownTimezone('   ')).toBe(false);
   });
 });

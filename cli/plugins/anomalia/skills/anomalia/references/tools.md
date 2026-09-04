@@ -228,6 +228,34 @@ their own words.
 pastes it on the profile by hand. `get_bio` also returns the short link worth putting there — the
 one with the most clicks in the last seven days.
 
+## Brand settings
+
+| MCP | CLI |
+|-----|-----|
+| `get_brand_settings` | (MCP only) |
+| `set_brand_settings` | (MCP only) |
+
+How the brand works: posting `timezone`, target `platforms`, `hashtags` per platform, and
+`voice_examples` (real past posts the AI imitates for tone). `set_brand_settings` changes only the
+fields you send; `hashtags` and `voice_examples` **replace** the whole list, so send the full list,
+not a delta — `{}` and `[]` clear one.
+
+Two consequences to say out loud before you change either of the first two:
+
+- **Timezone.** A post that already has a time does not move. It keeps firing at the same absolute
+  instant, so its local hour shifts by the offset difference — 18:00 in Rome reads as 12:00 once
+  the brand moves to New York. Only new scheduling uses the new zone.
+- **Platforms.** The target list decides what NEW posts are made for, never what publishes.
+  Removing a platform does not cancel posts already scheduled on it: they still go out while their
+  account is connected.
+
+`get_brand_settings` also returns `connected_platforms`, and the write answers with
+`without_account`. Targeting a platform with no connected account is allowed and silent otherwise:
+posts for it are produced and then sit unpublished until an account exists. Say so when it happens.
+
+An unknown IANA zone is refused (`unknown_timezone`), and so is a platform outside the list —
+`twitter` is not a name here, it is `x`. The post language lives on `update_brand_kit`, not here.
+
 ## Media models
 
 | MCP | CLI |

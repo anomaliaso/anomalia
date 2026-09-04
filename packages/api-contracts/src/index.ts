@@ -45,6 +45,7 @@ import {
   LIST_PRODUCTS
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
+import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
@@ -129,6 +130,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_AUDIT_FINDINGS,
   GET_BACKLINKS,
   GET_BIO,
+  GET_BRAND_SETTINGS,
   GET_CALENDAR,
   GET_CREATION_KIT,
   GET_GEO,
@@ -166,6 +168,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SAVE_WEEK_SEEDS,
   SEO_ACTION,
   SET_BIO,
+  SET_BRAND_SETTINGS,
   SET_MEDIA_MODEL,
   SYNC_HISTORY,
   UPDATE_ARTICLE,
@@ -233,6 +236,12 @@ export {
   LIST_ARTICLES,
   LIST_PRODUCTS
 };
+export {
+  GET_BRAND_SETTINGS,
+  SET_BRAND_SETTINGS,
+  TARGET_PLATFORMS
+} from './brand-settings';
+export type { TargetPlatform } from './brand-settings';
 export {
   DIAGNOSE_BRAND,
   DOCTOR_GATE_STATUSES,
