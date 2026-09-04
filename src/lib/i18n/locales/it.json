@@ -5107,6 +5107,7 @@
       "autoPublishTo": "Bozze per {platform}, pubblicate dopo la tua approvazione",
       "connectToChoose": "Collega un account qui sopra per scegliere quali pubblicare automaticamente.",
       "postingTimezone": "Fuso orario di pubblicazione",
+      "tzKeepsAbsolute": "Cambiare fuso NON sposta i post che hanno già un orario: partono nello stesso istante assoluto, quindi cambia la loro ora locale. Solo le programmazioni nuove usano il fuso nuovo.",
       "scheduleTimes": "Orari di programmazione",
       "scheduleTimesDesc": "Tutti gli orari dei post su Anomalia sono mostrati e programmati in questo fuso.",
       "save": "Salva",

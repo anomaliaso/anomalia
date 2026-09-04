@@ -4756,6 +4756,7 @@
       "autoPublishTo": "Borradores para {platform}, publicados tras tu aprobación",
       "connectToChoose": "Connect an account above to choose which post automatically.",
       "postingTimezone": "Zona horaria de publicación",
+      "tzKeepsAbsolute": "Cambiar la zona NO mueve las publicaciones que ya tienen hora: salen en el mismo instante absoluto, así que cambia su hora local. Solo la programación nueva usa la zona nueva.",
       "scheduleTimes": "Horarios de programación",
       "scheduleTimesDesc": "Todos los horarios de publicación en Anomalía se muestran y programan en esta zona.",
       "save": "Guardar",

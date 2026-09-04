@@ -5106,6 +5106,7 @@
       "autoPublishTo": "Drafts for {platform}, published after your approval",
       "connectToChoose": "Connect an account above to choose which post automatically.",
       "postingTimezone": "Posting timezone",
+      "tzKeepsAbsolute": "Changing the zone does NOT move posts that already have a time: they keep firing at the same absolute instant, so their local hour shifts. Only new scheduling uses the new zone.",
       "scheduleTimes": "Schedule times",
       "scheduleTimesDesc": "All post times across Anomalia are shown and scheduled in this zone.",
       "save": "Save",
