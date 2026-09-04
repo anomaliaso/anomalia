@@ -246,6 +246,70 @@ describe('il registry degli endpoint di brand', () => {
   it('leggere e scrivere un articolo passano dallo stesso indirizzo', () => {
     expect(byTool('update_article').pathUnderBrand).toBe(byTool('get_article').pathUnderBrand);
     expect(byTool('update_article').method).toBe('POST');
+  it('i due link di fatturazione portano a Stripe e non sono distruttivi', () => {
+    for (const tool of ['create_billing_portal_link', 'create_checkout_link']) {
+      const e = byTool(tool);
+      expect(e.method, tool).toBe('POST');
+      expect(e.destructive, tool).toBe(false);
+    }
+    expect(pathFor(byTool('create_billing_portal_link'), 'demo')).toBe(
+      '/api/v1/brands/demo/billing/portal'
+    );
+    expect(pathFor(byTool('create_checkout_link'), 'demo')).toBe('/api/v1/brands/demo/billing/checkout');
+  });
+
+  it('la descrizione dei link dice che si può anche disdire, e che apre l umano', () => {
+    for (const tool of ['create_billing_portal_link', 'create_checkout_link']) {
+      const { description } = byTool(tool);
+      expect(description.toLowerCase(), tool).toContain('cancel');
+      expect(description.toLowerCase(), tool).toContain('never');
+    }
+  });
+
+  it('un guasto di Stripe è nostro: 502, non un 4xx che accusa chi chiama', () => {
+    for (const tool of ['create_billing_portal_link', 'create_checkout_link']) {
+      expect(statusForFailure(byTool(tool), 'stripe_unavailable'), tool).toBe(502);
+      expect(statusForFailure(byTool(tool), 'no_org_billing'), tool).toBe(500);
+    }
+  });
+
+  it('chi ha il brand ma non la fatturazione dell org prende 403', () => {
+    for (const tool of ['create_billing_portal_link', 'create_checkout_link']) {
+      expect(statusForFailure(byTool(tool), 'not_org_owner'), tool).toBe(403);
+    }
+  });
+
+  it('un org senza cliente Stripe non è un errore di sintassi: 409', () => {
+    expect(statusForFailure(byTool('create_billing_portal_link'), 'no_customer')).toBe(409);
+    expect(statusForFailure(byTool('create_checkout_link'), 'no_customer')).toBe(409);
+    expect(statusForFailure(byTool('create_checkout_link'), 'no_subscription')).toBe(409);
+  });
+
+  it('il checkout accetta un piano opzionale e rifiuta il resto', () => {
+    const { input } = byTool('create_checkout_link');
+    expect(input.safeParse({}).success).toBe(true);
+    expect(input.safeParse({ plan: 'pro' }).success).toBe(true);
+    expect(input.safeParse({ plan: '' }).success).toBe(false);
+    expect(input.safeParse({ coupon: 'FREE' }).success).toBe(false);
+  });
+
+  it('il portale non prende parametri: non c è niente da scegliere per chi chiama', () => {
+    const { input } = byTool('create_billing_portal_link');
+    expect(input.safeParse({}).success).toBe(true);
+    expect(input.safeParse({ flow: 'cancel' }).success).toBe(false);
+  });
+
+  it('entrambi promettono una url e nient altro di sensibile', () => {
+    expect(byTool('create_billing_portal_link').output.safeParse({
+      ok: true,
+      url: 'https://billing.stripe.com/p/session/live_xyz'
+    }).success).toBe(true);
+    expect(byTool('create_checkout_link').output.safeParse({
+      ok: true,
+      url: 'https://billing.stripe.com/p/session/live_xyz',
+      plans: [{ key: 'pro', label: 'Pro' }]
+    }).success).toBe(true);
+    expect(byTool('create_billing_portal_link').output.safeParse({ ok: true }).success).toBe(false);
   });
 
   it('ads_remix è tornato: la rotta esiste, il client la sapeva chiamare, poi solo lui l ha persa', () => {

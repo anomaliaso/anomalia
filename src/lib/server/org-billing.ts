@@ -73,3 +73,22 @@ export async function orgBillingForBrand(
 		brandCount: brands.length
 	};
 }
+
+/**
+ * Billing authority, not brand access. A collaborator reaches a shared brand (0077) and must not
+ * reach the owner's payment pages through it. The predicate is written out instead of leaned on
+ * RLS because the API-key path runs as service role, where RLS proves nothing.
+ */
+export async function isOrgOwner(
+	supabase: SupabaseClient,
+	orgId: string,
+	userId: string
+): Promise<boolean> {
+	const { data } = await supabase
+		.from('organizations')
+		.select('id')
+		.eq('id', orgId)
+		.eq('owner_id', userId)
+		.maybeSingle();
+	return !!data;
+}
