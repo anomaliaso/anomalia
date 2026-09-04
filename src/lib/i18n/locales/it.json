@@ -3680,8 +3680,12 @@
       "backToTeam": "Torna alla squadra",
       "spaces": "Spazi",
       "tools": "Strumenti",
+      "home": "Home",
+      "materials": "Materiali",
+      "results": "Risultati",
       "library": "Libreria",
-      "site": "Blog",
+      "site": "Auto blog",
+      "seoGeo": "SEO/GEO",
       "talkTo": "Parla con {name}",
       "agentOffer": "Qui non c’è ancora nulla — se ne può occupare {name}. Apri la chat."
     },

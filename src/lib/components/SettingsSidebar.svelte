@@ -11,7 +11,6 @@
     ArrowLeft,
     ChevronDown,
     CircleUserRound,
-    Activity,
     CreditCard,
     Fingerprint,
     FolderOpen,
@@ -39,7 +38,6 @@
     Megaphone,
     Radar,
     Gift,
-    Send,
     LogIn,
   } from '@lucide/svelte';
   import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
@@ -72,7 +70,6 @@
   /** Global FEATURE_ADS kill switch, from app/[brand]/+layout.server.ts. */
   const adsOn = $derived(!!$page.data.flags?.ads);
   /** FEATURE_CONNECTORS kill switch (defaults on), from app/[brand]/+layout.server.ts. */
-  const connectorsOn = $derived($page.data.flags?.connectors !== false);
   const brandPlan = $derived(($page.data.brand?.plan as string | null | undefined) ?? null);
   const brandSlug = $derived(($page.data.brand?.slug as string | undefined) ?? '');
   const customDomainHref = $derived(
@@ -252,16 +249,6 @@
           label: $_('app.settings.connectedAccounts'),
           icon: Link2,
         },
-        ...(connectorsOn
-          ? [
-              {
-                id: 'connectors',
-                href: `${settingsBase}/connectors`,
-                label: $_('app.settings.connectors.nav'),
-                icon: Plug,
-              },
-            ]
-          : []),
         {
           id: 'autopilot',
           href: `${settingsBase}/autopilot`,
@@ -273,12 +260,6 @@
           href: `${settingsBase}/radar`,
           label: $_('app.settings.radar.nav'),
           icon: Radar,
-        },
-        {
-          id: 'publishing',
-          href: `${settingsBase}/publishing`,
-          label: $_('app.settings.publishing.title'),
-          icon: Send,
         },
         {
           id: 'timezone',
@@ -333,12 +314,6 @@
           href: `${settingsBase}/billing`,
           label: $_('app.settings.billing.title'),
           icon: CreditCard,
-        },
-        {
-          id: 'usage',
-          href: `${settingsBase}/usage`,
-          label: $_('app.settings.usage.title'),
-          icon: Activity,
         },
         {
           id: 'referrals',

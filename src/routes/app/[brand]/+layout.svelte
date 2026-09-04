@@ -6,16 +6,13 @@
   import SettingsSidebar from '$lib/components/SettingsSidebar.svelte';
   import PageRailDrawer from '$lib/components/PageRailDrawer.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
-  import Send from '@lucide/svelte/icons/send';
-  import Layers from '@lucide/svelte/icons/layers';
-  import Globe from '@lucide/svelte/icons/globe';
-  import Zap from '@lucide/svelte/icons/zap';
+  import House from '@lucide/svelte/icons/house';
+  import Images from '@lucide/svelte/icons/images';
+  import Target from '@lucide/svelte/icons/target';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
-  import LayoutGrid from '@lucide/svelte/icons/layout-grid';
-  import FolderOpen from '@lucide/svelte/icons/folder-open';
+  import BarChart3 from '@lucide/svelte/icons/chart-column';
   import Wrench from '@lucide/svelte/icons/wrench';
   import SettingsIcon from '@lucide/svelte/icons/settings';
-  import Sparkles from '@lucide/svelte/icons/sparkles';
   import { setCredits, refreshCredits } from '$lib/stores/credits';
   import WarningCenter from '$lib/components/WarningCenter.svelte';
   import WorkbenchPageShimmer from '$lib/components/WorkbenchPageShimmer.svelte';
@@ -24,12 +21,10 @@
   import { IsMobile, SHELL_MOBILE_BREAKPOINT } from '$lib/hooks/is-mobile.svelte';
   import { closePlanPanel } from '$lib/stores/plan-panel';
   import {
-    HUB_TABS,
     NAV_TEAM_SPACES,
     NAV_TEAM_TOOLS,
     workbenchPageHref,
-    type NavTeamItem,
-    type WorkbenchPageHub
+    type NavTeamItem
   } from '$lib/workbench-paths';
   import {
     SHELL_LAYOUT,
@@ -182,77 +177,6 @@
   });
 
   const adsOn = $derived(!!data.flags?.ads);
-  // FEATURE_NAV_TEAM: 5 sezioni al posto dei macro-hub. OFF = nav legacy.
-  const navTeam = $derived(!!data.flags?.navTeam);
-
-  // Dove porta il clic su una sezione della sidebar: la pagina che si apre davvero ogni giorno,
-  // non la panoramica del hub. Lo stato attivo si accende comunque da qualunque figlia.
-  const HUB_DEST: Partial<Record<WorkbenchPageHub, string>> = {
-    publish: '/calendar',
-    web: '/site',
-    automations: '/leads'
-  };
-
-  // I path restano in inglese: ci puntano i deep link di mail e cron.
-  const macros = $derived([
-    {
-      href: `${base}/brand`,
-      key: 'brand' as WorkbenchPageHub,
-      icon: Layers,
-      studio: true,
-      also: [
-        `${base}/brand`,
-        `${base}/knowledge`,
-        `${base}/voice`,
-        `${base}/rubrics`
-      ],
-    },
-    {
-      href: `${base}/publish`,
-      key: 'publish' as WorkbenchPageHub,
-      icon: Send,
-      badge: 'content' as const,
-      also: [
-        `${base}/publish`,
-        `${base}/calendar`,
-        `${base}/campaigns`,
-        `${base}/analytics`,
-        `${base}/competitors`,
-        // Strategia e piano editoriale vivono sotto il Calendario: il hub Social resta aperto.
-        `${base}/strategy`,
-        `${base}/gtm`,
-        `${base}/plan`,
-      ],
-    },
-    {
-      // Come Automations: la panoramica è libera, le sottopagine passano da /activate.
-      href: `${base}/web`,
-      key: 'web' as WorkbenchPageHub,
-      icon: Globe,
-      also: [`${base}/web`, `${base}/seo`, `${base}/seo-geo`, `${base}/geo`, `${base}/citations`, `${base}/keywords`, `${base}/backlinks`, `${base}/site`],
-    },
-    // Ads non è una voce di sidebar: le sue pagine restano raggiungibili dai link degli agenti
-    // e da ⌘K. Qui sta solo ciò che si apre tutti i giorni.
-    {
-      href: `${base}/automations`,
-      key: 'automations' as WorkbenchPageHub,
-      icon: Zap,
-      badge: 'leads' as const,
-      also: [`${base}/automations`, `${base}/radar`, `${base}/leads`, `${base}/agents`],
-    },
-    {
-      href: `${base}/designer`,
-      key: 'designer' as WorkbenchPageHub,
-      icon: Sparkles,
-      also: [
-        `${base}/designer`,
-        `${base}/media-generator`,
-        `${base}/ugc-creator`,
-        `${base}/motion-video`,
-        `${base}/media`,
-      ],
-    },
-  ]);
 
   function isSubActive(href: string) {
     return path === href || path.startsWith(`${href}/`);
@@ -273,11 +197,15 @@
   function navTeamItem(t: NavTeamItem, icon?: any) {
     const segment = t.path.replace(/^\//, '');
     return {
-      href: workbenchPageHref(data.brand.slug, segment, webHubEnabled, adsEnabled),
+      href: segment ? workbenchPageHref(data.brand.slug, segment, webHubEnabled, adsEnabled) : base,
       label: $_(t.labelKey),
       icon,
-      active: isSubActive(`${base}${t.path}`) || (t.also ?? []).some((p) => isSubActive(`${base}${p}`)),
-      key: t.path,
+      // La home non ha segmento, e `isSubActive(base)` sarebbe vero su OGNI pagina del brand:
+      // per lei conta solo l'uguaglianza esatta, il resto lo dicono gli `also`.
+      active:
+        (segment ? isSubActive(`${base}${t.path}`) : path === base) ||
+        (t.also ?? []).some((p) => isSubActive(`${base}${p}`)),
+      key: t.path || 'home',
       badge:
         t.badge === 'content'
           ? (extras?.pendingCount ?? 0)
@@ -286,7 +214,7 @@
             : undefined
     };
   }
-  const SPACE_ICONS = [LayoutGrid, CalendarDays, FolderOpen, Globe];
+  const SPACE_ICONS = [House, Images, Target, CalendarDays, BarChart3];
   function teamSidebarGroups(): NavGroup[] {
     const tools = NAV_TEAM_TOOLS.filter((t) => adsOn || !t.adsOnly);
     return [
@@ -316,124 +244,7 @@
     ];
   }
 
-  // L'ingresso alla nuova interfaccia. Non è tradotta perché `/v2` non lo è: è in costruzione, e
-  // l'etichetta lo dice invece di farla passare per finita. Il giorno che sostituisce questo
-  // guscio, il guscio se ne va e questa voce con lui.
-  const v2Preview = $derived<NavGroup>({
-    items: [
-      {
-        href: `/v2/${data.brand.slug}`,
-        label: 'New interface · preview',
-        icon: Sparkles,
-        key: 'v2-preview'
-      }
-    ]
-  });
-
-  const sidebarGroups = $derived.by(() => {
-    if (navTeam) return [...teamSidebarGroups(), v2Preview];
-    // Il tipo è quello del componente, non ricopiato a mano: la copia era andata alla deriva
-    // (icon opzionale vs obbligatoria) e falliva solo all'assegnazione qui sotto.
-    // `app.home.workbench.title` è la stessa chiave della pillola in topbar: cambiarla là
-    // cambia entrambe insieme.
-    const groups: NavGroup[] = [
-      {
-        items: [
-          {
-            href: `${base}/workbench`,
-            label: $_('app.home.workbench.title'),
-            icon: LayoutGrid,
-            active: isSubActive(`${base}/workbench`),
-            key: 'workbench'
-          }
-        ]
-      }
-    ];
-
-    for (const m of macros) {
-      // FEATURE_ADS spento: la scheda Ads non esiste (e la rotta risponde 404).
-      const tabs = (HUB_TABS[m.key] ?? []).filter((t) => adsOn || t.key !== 'ads');
-      const overviewPath = tabs.find((t) => t.key === 'overview')?.path;
-      const hubLandingActive = overviewPath ? isSubActive(`${base}${overviewPath}`) : false;
-
-      // La sezione è una VOCE, non un albero: il clic apre UNA pagina. Chi non è in HUB_DEST
-      // resta sulla sua landing; Ads non ha overview e vale la prima scheda.
-      const hubLandingPath = HUB_DEST[m.key] ?? overviewPath ?? tabs[0]?.path;
-      const hubHref = hubLandingPath
-        ? workbenchPageHref(data.brand.slug, hubLandingPath.replace(/^\//, ''), webHubEnabled, adsEnabled)
-        : undefined;
-
-      if (m.key === 'brand') {
-        const studioPct = extras?.studioPct ?? 0;
-        const identityHref = `${base}/settings/brand`;
-        const brandActive = isSubActive(identityHref);
-        groups.push({
-          label: $_('app.hub.' + m.key + '.label'),
-          groupIcon: m.icon,
-          tourKey: m.key,
-          active: brandActive,
-          href: identityHref,
-          pct: studioPct < 100 ? studioPct : undefined,
-          items: [
-            {
-              href: identityHref,
-              label: $_('app.hub.brand.label'),
-              icon: m.icon,
-              active: brandActive,
-              key: 'brand',
-              pct: studioPct < 100 ? studioPct : undefined,
-              linkOut: true
-            }
-          ]
-        });
-        continue;
-      }
-
-      groups.push({
-        label: $_('app.hub.' + m.key + '.label'),
-        groupIcon: m.icon,
-        tourKey: m.key,
-        active: hubLandingActive,
-        href: hubHref,
-        badge:
-          m.badge === 'content'
-            ? (extras?.pendingCount ?? 0)
-            : m.badge === 'leads'
-              ? (extras?.leadsPendingCount ?? 0)
-              : undefined,
-        pct: 'studio' in m && m.studio ? (extras?.studioPct ?? 0) : undefined,
-        items: tabs
-          .filter((t) => t.key !== 'overview')
-          .map((t) => {
-          const segment = t.path.replace(/^\//, '');
-          const href = workbenchPageHref(data.brand.slug, segment, webHubEnabled, adsEnabled);
-          return {
-            href,
-            label: $_(`app.hub.${m.key}.${t.key}`),
-            active:
-              isSubActive(`${base}${t.path}`) ||
-              (m.key === 'publish' &&
-                t.key === 'calendar' &&
-                (isSubActive(`${base}/gtm`) ||
-                  isSubActive(`${base}/plan`) ||
-                  isSubActive(`${base}/strategy`))),
-            key: `${m.key}.${t.key}`,
-            // I contatori vanno anche sulla figlia giusta, non solo sull'intestazione.
-            badge:
-              m.key === 'publish' && t.key === 'calendar'
-                ? (extras?.pendingCount ?? 0)
-                : m.key === 'automations' && t.key === 'leads'
-                  ? (extras?.leadsPendingCount ?? 0)
-                  : undefined,
-            pct: undefined,
-          };
-        }),
-      });
-    }
-
-    return [...groups, v2Preview];
-  });
-
+  const sidebarGroups = $derived(teamSidebarGroups());
 
   const SIDEBAR_W_MIN = SHELL_LAYOUT.SIDEBAR_W_MIN;
   const SIDEBAR_W_MAX = SHELL_LAYOUT.SIDEBAR_W_MAX;

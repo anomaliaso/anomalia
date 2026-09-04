@@ -3679,8 +3679,12 @@
       "backToTeam": "Back to the team",
       "spaces": "Spaces",
       "tools": "Tools",
+      "home": "Home",
+      "materials": "Materials",
+      "results": "Results",
       "library": "Library",
-      "site": "Blog",
+      "site": "Auto blog",
+      "seoGeo": "SEO/GEO",
       "talkTo": "Talk to {name}",
       "agentOffer": "Nothing here yet — {name} can take care of it. Open the chat."
     },

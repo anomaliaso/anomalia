@@ -194,13 +194,12 @@ export function workbenchPageHref(
   return `/app/${brandSlug}/${segment}`;
 }
 
-// Nav "La squadra" (flag FEATURE_NAV_TEAM): da 20+ voci di primo livello a 5 sezioni. Questa è la
-// struttura PURA (path + chiavi i18n), così workbench-paths.test.ts cammina l'albero e garantisce
-// che OGNI destinazione della nav legacy (HUB_TABS) resti raggiungibile: cambia la gerarchia, non
-// l'inventario. Flag OFF = HUB_TABS qui sopra, byte-identico.
+// La nav del brand: la STRUTTURA pura (path + chiavi i18n), così workbench-paths.test.ts cammina
+// l'albero e garantisce che OGNI destinazione dell'inventario (HUB_TABS qui sopra) resti
+// raggiungibile — cambia la gerarchia, non l'inventario.
 
 export type NavTeamItem = {
-  /** Path sotto /app/{slug} (con lo slash iniziale, come HUB_TABS). */
+  /** Path sotto /app/{slug} (con lo slash iniziale, come HUB_TABS). Vuoto = la home del brand. */
   path: string;
   labelKey: string;
   /** Altri path che tengono attiva la voce (rotte sorelle/legacy che atterrano qui). */
@@ -211,26 +210,24 @@ export type NavTeamItem = {
 };
 
 /**
- * SPAZI — le destinazioni di prima classe. Calendario assorbe le approvazioni (/approvals e
- * /content fanno già 308 su /calendar, la coda è il filtro ?status=). Libreria punta ai media; la
- * knowledge resta una pagina sotto Strumenti.
+ * SPAZI — le cinque destinazioni del mockup, in quell'ordine. Calendario assorbe le approvazioni
+ * (/approvals e /content fanno già 308 su /calendar, la coda è il filtro ?status=); la knowledge e
+ * il blog restano pagine sotto Strumenti.
  */
 export const NAV_TEAM_SPACES: NavTeamItem[] = [
-  // Panoramica (/workbench): l'unica vista che RIASSUME le altre. È lettura, non lavoro, quindi
-  // apre la lista invece di stare fra le destinazioni dove si produce. L'etichetta è
-  // `app.home.workbench.title`, la STESSA della pillola in topbar e del titolo della modal.
-  { path: '/workbench', labelKey: 'app.home.workbench.title' },
+  // La home del brand. `/workbench` non è più una voce sua: era la Panoramica, cioè la vista che
+  // RIASSUME le altre — ed è esattamente ciò che la home fa. Oggi `/app/<slug>` ci rimanda, quindi
+  // sta fra gli `also` o la voce si spegnerebbe appena atterrati.
+  { path: '', labelKey: 'app.nav2.home', also: ['/workbench'] },
+  { path: '/media', labelKey: 'app.nav2.materials', also: ['/designer'] },
+  { path: '/strategy', labelKey: 'app.hub.strategy.label', also: ['/gtm', '/plan'] },
   {
     path: '/calendar',
     labelKey: 'app.hub.publish.calendar',
     badge: 'content',
-    // Strategia e piano vivono nel chrome del calendario (stessa regola della nav legacy).
-    also: ['/content', '/approvals', '/strategy', '/gtm', '/plan', '/publish']
+    also: ['/content', '/approvals', '/publish']
   },
-  { path: '/media', labelKey: 'app.nav2.library', also: ['/designer'] },
-  // Il blog (/site) è la destinazione linkata anche oggi; /web è la landing del hub e
-  // oggi NON è linkata direttamente — resta solo nello stato attivo, come ora.
-  { path: '/site', labelKey: 'app.nav2.site', also: ['/web'] }
+  { path: '/analytics', labelKey: 'app.nav2.results' }
 ];
 
 /**
@@ -242,9 +239,12 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
 export const NAV_TEAM_TOOLS: NavTeamItem[] = [
   { path: '/radar', labelKey: 'app.hub.automations.radar' },
   { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
-  { path: '/analytics', labelKey: 'app.hub.publish.analytics' },
-  { path: '/seo', labelKey: 'app.hub.web.seo' },
-  { path: '/geo', labelKey: 'app.hub.web.geo' },
+  { path: '/site', labelKey: 'app.nav2.site' },
+  // SEO e GEO sono una voce sola: la ricerca e la citabilità dai modelli sono la stessa domanda
+  // ("ci trovano?") fatta a due motori. `/geo`, `/seo-geo` e `/citations` restano rotte vere —
+  // si aprono da qui dentro e da ⌘K, che elenca ogni pagina del brand — ma non hanno una riga
+  // propria in sidebar. `/web` è la landing del hub e non è mai stata linkata direttamente.
+  { path: '/seo', labelKey: 'app.nav2.seoGeo', also: ['/web', '/seo-geo', '/geo', '/citations'] },
   { path: '/keywords', labelKey: 'app.hub.web.keywords' },
   { path: '/backlinks', labelKey: 'app.hub.web.backlinks' },
   { path: '/competitors', labelKey: 'app.hub.publish.competitors' },
