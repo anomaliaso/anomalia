@@ -21,6 +21,9 @@ export const AGENT_AVATAR_FACES = [
 
 export type AgentAvatarFace = (typeof AGENT_AVATAR_FACES)[number];
 
+/** Un agente con un volto da disegnare: la pila di avatar e il carosello lo mostrano. */
+export type ThreadAgentAvatar = { id: string; name: string; face: string; color: string };
+
 export const DEFAULT_AGENT_AVATAR_FACE: AgentAvatarFace = 'wide';
 export const DEFAULT_AGENT_AVATAR_COLOR = '#111111';
 
