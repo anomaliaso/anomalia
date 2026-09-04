@@ -51,7 +51,9 @@ export const PUT: RequestHandler = async ({ request, params }) => {
   // An edit on an already-scheduled post must reach Zernio, or the copy that goes out is stale.
   await reschedIfNeeded(supabase, brand.id, params.id, (brand.timezone as string) ?? 'Europe/Rome');
 
-  return json({ ok: true });
+  // What was written, not what was asked: a field this route does not know is not in `updates`,
+  // so a caller reading the answer sees the edit that landed instead of its own request back.
+  return json({ ok: true, patch: updates });
 };
 
 export const DELETE: RequestHandler = async ({ request, params }) => {

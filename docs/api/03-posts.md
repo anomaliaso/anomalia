@@ -278,8 +278,11 @@ Aggiorna i campi editabili di un post senza re-render. Se il post è già progra
 **Response** `200`:
 
 ```json
-{ "ok": true }
+{ "ok": true, "patch": { "caption": "Nuovo caption", "platforms": ["instagram", "x"] } }
 ```
+
+`patch` è quello che la rotta ha scritto davvero, filtrato sui campi che sa applicare: un campo
+che non riconosce non ci finisce dentro. È una conferma, non l'eco della richiesta.
 
 **Errori specifici**
 
