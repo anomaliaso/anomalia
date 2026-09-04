@@ -8,7 +8,11 @@ import {
   type LanguageModel,
   type ModelMessage
 } from 'ai';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
@@ -657,22 +661,29 @@ ${CAPTION_FAILURE_MODES}
 ${ownerEditPairsBlock(opts.prefs)}${winners}${visuals}Seeds (${opts.strategy.seeds.length}):
 ${seedBrief(opts.strategy)}`;
 
+  const session = createHarnessSession({
+    brandId: opts.brandId,
+    userId: opts.userId,
+    agent: 'produce',
+    mode: opts.provider,
+    model: opts.modelId,
+    provider: opts.provider,
+    surface: 'batch'
+  });
+  session.captureRequest({ system: baseSystem, messages: opts.messages });
+
+  const steward = createSessionSteward(session, Object.keys(tools));
+  const watchedTools = wrapTools(session, tools, steward.pipeline());
+
   let result;
   try {
-    result = await harnessGenerateText({
-      brandId: opts.brandId,
-      userId: opts.userId,
-      agent: 'produce',
-      mode: opts.provider,
-      model: opts.modelId,
-      provider: opts.provider,
-      surface: 'batch'
-    }, {
+    result = await generateText({
       model: opts.model,
       maxOutputTokens: maxOutputTokensFor(opts.provider),
       system: baseSystem,
       messages: opts.messages,
-      tools,
+      allowSystemInMessages: true,
+      tools: watchedTools,
       stopWhen: [hasToolCall('finish'), stepCountIs(PRODUCE_AGENT_MAX_STEPS)],
       // Su kie/Grok la temperatura non arriva comunque: `forceReasoning` (dentro KIE_GROK_NO_STORE)
       // la toglie dalla richiesta, ed è un bene misurato — il campionamento di default di kie/Grok
@@ -682,11 +693,16 @@ ${seedBrief(opts.strategy)}`;
       providerOptions: opts.provider === 'kie' ? { openai: { ...KIE_GROK_NO_STORE } } : undefined,
       prepareStep: () => {
         const remaining = Math.max(0, Math.round((opts.deadlineMs - (Date.now() - t0)) / 1000));
-        return {
+        const step = {
           system: `${baseSystem}\n\n[budget] searches_used=${searches}/${SEARCH_BUDGET}; submitted=${!!submitted.current}; remaining_sec≈${remaining}`
         };
+        const patched = applyStewardPrepareStep(session, steward, step, baseSystem) ?? {};
+        session.capturePrepareStep(patched);
+        return patched;
       },
-      onStepFinish: ({ toolCalls, toolResults, text }) => {
+      onStepFinish: (event) => {
+        session.recordStep(event);
+        const { toolCalls, toolResults, text } = event;
         steps.push({
           step: steps.length + 1,
           toolCalls: toolCalls?.map((c) => ({ name: c.toolName, input: c.input })),
@@ -698,7 +714,14 @@ ${seedBrief(opts.strategy)}`;
         });
       }
     });
+    session.recordAssistantText(result.text);
+    session.recordUsage(result.totalUsage ?? result.usage);
+    session.finish('finished');
+  } catch (e) {
+    session.finish('failed', e);
+    throw e;
   } finally {
+    persistHarnessSession(session);
     logAiCall({
       label: 'produce-agent',
       provider: opts.provider,
@@ -833,6 +856,7 @@ Rendered images (if any) follow this text. Labels (POST i / POST i slide j) are 
 Approve only if these assets would help the brand grow organically AND pass hashtag/Reddit hygiene; otherwise request_changes with concrete feedback.`;
 
   let result;
+  let session: ReturnType<typeof createHarnessSession> | undefined;
   try {
     const imageContent: Array<
       { type: 'text'; text: string } | { type: 'image'; image: string }
@@ -844,7 +868,8 @@ Approve only if these assets would help the brand grow organically AND pass hash
         image: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`
       });
     }
-    result = await harnessGenerateText({
+    const messages = [{ role: 'user' as const, content: imageContent }];
+    session = createHarnessSession({
       brandId: opts.brandId,
       userId: opts.userId,
       agent: 'produce_reviewer',
@@ -852,17 +877,25 @@ Approve only if these assets would help the brand grow organically AND pass hash
       model: opts.modelId,
       provider: opts.provider,
       surface: 'batch'
-    }, {
+    });
+    session.captureRequest({ system: REVIEWER_SYSTEM, messages });
+
+    const steward = createSessionSteward(session, Object.keys(tools));
+    const watchedTools = wrapTools(session, tools, steward.pipeline());
+    const reviewerSession = session;
+
+    result = await generateText({
       model: opts.model,
       maxOutputTokens: maxOutputTokensFor(opts.provider),
       system: REVIEWER_SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: imageContent
-        }
-      ],
-      tools,
+      messages,
+      allowSystemInMessages: true,
+      tools: watchedTools,
+      prepareStep: () => {
+        const patched = applyStewardPrepareStep(reviewerSession, steward, {}, REVIEWER_SYSTEM) ?? {};
+        reviewerSession.capturePrepareStep(patched);
+        return patched;
+      },
       stopWhen: [
         hasToolCall('approve'),
         hasToolCall('request_changes'),
@@ -875,7 +908,9 @@ Approve only if these assets would help the brand grow organically AND pass hash
       // giudizio: il verdetto è ancorato alle immagini e alle regole, non alla temperatura.
       temperature: opts.provider === 'kie' ? undefined : 0.3,
       providerOptions: opts.provider === 'kie' ? { openai: { ...KIE_GROK_NO_STORE } } : undefined,
-      onStepFinish: ({ toolCalls, toolResults, text }) => {
+      onStepFinish: (event) => {
+        reviewerSession.recordStep(event);
+        const { toolCalls, toolResults, text } = event;
         steps.push({
           step: steps.length + 1,
           toolCalls: toolCalls?.map((c) => ({ name: c.toolName, input: c.input })),
@@ -884,7 +919,14 @@ Approve only if these assets would help the brand grow organically AND pass hash
         });
       }
     });
+    session.recordAssistantText(result.text);
+    session.recordUsage(result.totalUsage ?? result.usage);
+    session.finish('finished');
+  } catch (e) {
+    session?.finish('failed', e);
+    throw e;
   } finally {
+    if (session) persistHarnessSession(session);
     logAiCall({
       label: 'produce-reviewer',
       provider: opts.provider,
