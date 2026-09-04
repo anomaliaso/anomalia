@@ -53,13 +53,41 @@ che `usage.cost` coincide alla sesta cifra decimale con la tariffa dell'endpoint
 si paga sull'acquisto dei crediti. `provider` scrive `openrouter`, così la misura in produzione è
 leggibile il giorno dopo senza indovinare da quale trasporto è passata una riga.
 
+## `SERVED_BY`: una coppia senza trasporto non è una rotta
+
+Aggiungere `openrouter` rendeva analizzabile anche `AI_ROUTE_TEXT=gemini@openrouter` — ma
+`geminiTransport()` conosce solo `kie` e `google`, quindi quella rotta sarebbe atterrata **in
+silenzio su Google**. È il guasto peggiore della famiglia: la rotta si legge come rispettata, il
+traffico va altrove, e non resta traccia da nessuna parte.
+
+La prima versione di questa PR lo segnalava nel corpo della PR. Non regge, per due motivi:
+
+- **un avviso in una PR non sopravvive.** Fra due settimane qualcuno legge il registro, vede
+  `openrouter` fra gli endpoint validi, imposta la variabile e ottiene Google. È lo stesso
+  meccanismo del commento scaduto che AGENTS.md vieta: la conoscenza fuori dal codice invecchia e
+  mente.
+- **il registro ha già la regola giusta.** Quando manca la chiave, *«un endpoint senza chiave non è
+  una rotta: si ripiega, rumorosamente»*, e un test lo tiene. Un endpoint senza **trasporto** non è
+  più una rotta di uno senza chiave.
+
+Quindi quella conoscenza è diventata una tabella, `SERVED_BY`, accanto alle altre quattro: quali
+endpoint hanno davvero un trasporto scritto per ogni famiglia. `route()` ora ha due modi di
+rifiutare, entrambi rumorosi, e il messaggio dice **quale** dei due: `nessun trasporto gemini verso
+openrouter` oppure `la chiave manca`.
+
+Il buco **non era nuovo**: valeva identico per `gemini@xiaomi`, `gemini@deepseek`, `mimo@kie` e ogni
+altra coppia mai collegata. Chiuderne uno solo — quello appena visto — avrebbe garantito il ritorno
+degli altri, ed è esattamente la "condizione sparsa" che AGENTS.md vieta: le eccezioni si dichiarano
+**in un posto solo, accanto al modello che le governa**. Il test le percorre tutte e quattro.
+
+Quella conoscenza viveva sparsa in tre file (`gemini.ts`, `xiaomi.ts`, `gemini-audio.ts`), dove
+nessuno poteva vederla tutta insieme. Il giorno che si collega il trasporto del testo verso
+openrouter, cambia **una riga** di questa tabella e il test cambia colore.
+
 ## Quello che NON è in questa PR, e perché
 
-- **Il testo.** Il registro ora accetta `gemini@openrouter`, ma `geminiTransport()` conosce solo
-  `kie` e `google`: una rotta del testo verso openrouter finirebbe **in silenzio su Google**. Non è
-  un difetto introdotto qui (vale già per `gemini@xiaomi`), ma diventa raggiungibile in un modo che
-  sembra supportato. Il trasporto del testo è la PR successiva, e va fatta prima di scrivere quella
-  variabile in produzione.
+- **Il trasporto del testo verso openrouter.** È la PR successiva. Finché non esiste, il registro
+  rifiuta la rotta rumorosamente invece di fingerla — vedi sopra.
 - **Il video.** OpenRouter lo serve su una superficie separata (`/api/v1/videos`, 28 modelli), che è
   asincrona come kie e quindi non porta il regalo del sincrono. Storia sua.
 - **Il catalogo a tre modalità.** `chat_model_catalog` non ha una colonna di modalità; darne una è

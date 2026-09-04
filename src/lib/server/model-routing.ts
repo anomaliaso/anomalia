@@ -110,6 +110,26 @@ const HOME: Record<ModelFamily, Endpoint> = {
   deepseek: 'deepseek'
 };
 
+/**
+ * Chi ha un TRASPORTO scritto per quella famiglia. Non è una capacità del provider: è codice che
+ * esiste o non esiste da noi. `gemini@openrouter` si analizza benissimo, ma `geminiTransport()`
+ * conosce solo kie e google — quella rotta atterrerebbe su Google IN SILENZIO, cioè si leggerebbe
+ * come rispettata senza esserlo, che è il guasto peggiore di tutti perché non lascia traccia.
+ *
+ * Sta qui e non in tre file perché una regola scritta in tre posti diverge al primo cambiamento.
+ * Il giorno che si collega un trasporto nuovo, si aggiunge un endpoint a una riga di questa tabella
+ * e basta.
+ */
+const SERVED_BY: Record<ModelFamily, Endpoint[]> = {
+  gemini: ['google', 'kie'],
+  'gemini-tts': ['google', 'kie'],
+  'nano-banana': ['google', 'kie', 'openrouter'],
+  mimo: ['xiaomi'],
+  grok: ['kie'],
+  gpt: ['kie'],
+  deepseek: ['deepseek']
+};
+
 /** Quale riga di `ai_calls.provider` scrive ogni endpoint. */
 const LOG_PROVIDER: Record<Endpoint, LogProvider> = {
   google: 'gemini',
@@ -211,16 +231,26 @@ const SLOT_ENV: Record<Slot, string> = {
  * Dove va questo lavoro, adesso. Letto A OGNI CHIAMATA come `GEMINI_FLASH`: cambiare una variabile
  * su Vercel deve bastare a spostare il traffico, senza deploy, mentre il guasto è in corso.
  *
- * Un endpoint senza chiave non è una rotta, è un 401 con più passaggi: si ripiega sull'endpoint di
- * casa della famiglia, e se manca anche quello su Google. Il ripiego è RUMOROSO.
+ * Due modi di non essere una rotta, e nessuno dei due atterra in silenzio: un endpoint senza chiave
+ * è un 401 con più passaggi, una coppia senza trasporto è peggio — la rotta si legge come rispettata
+ * e serve un altro provider. Si ripiega sull'endpoint di casa della famiglia, e se manca anche
+ * quello su Google. Il ripiego è RUMOROSO, e dice QUALE dei due motivi.
  */
+function unroutable(chosen: Route): string | null {
+  if (!SERVED_BY[chosen.family].includes(chosen.endpoint)) {
+    return `nessun trasporto ${chosen.family} verso ${chosen.endpoint}`;
+  }
+  return endpointConfigured(chosen.endpoint) ? null : 'la chiave manca';
+}
+
 export function route(slot: Slot): Route {
   const chosen = parseRoute(env[SLOT_ENV[slot]]) ?? legacyRoute(slot) ?? SLOT_DEFAULT[slot];
-  if (endpointConfigured(chosen.endpoint)) return chosen;
+  const why = unroutable(chosen);
+  if (!why) return chosen;
   const home = HOME[chosen.family];
-  const fallback = endpointConfigured(home) ? home : 'google';
+  const fallback = unroutable(r(chosen.family, home)) ? 'google' : home;
   console.warn(
-    `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint} ma la chiave manca: ripiego su ${fallback}.`
+    `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint}: ${why}. Ripiego su ${fallback}.`
   );
   return r(chosen.family, fallback);
 }
