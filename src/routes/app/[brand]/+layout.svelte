@@ -317,8 +317,22 @@
     ];
   }
 
+  // L'ingresso alla nuova interfaccia. Non è tradotta perché `/v2` non lo è: è in costruzione, e
+  // l'etichetta lo dice invece di farla passare per finita. Il giorno che sostituisce questo
+  // guscio, il guscio se ne va e questa voce con lui.
+  const v2Preview = $derived<NavGroup>({
+    items: [
+      {
+        href: `/v2/${data.brand.slug}`,
+        label: 'New interface · preview',
+        icon: Sparkles,
+        key: 'v2-preview'
+      }
+    ]
+  });
+
   const sidebarGroups = $derived.by(() => {
-    if (navTeam) return teamSidebarGroups();
+    if (navTeam) return [...teamSidebarGroups(), v2Preview];
     // Il tipo è quello del componente, non ricopiato a mano: la copia era andata alla deriva
     // (icon opzionale vs obbligatoria) e falliva solo all'assegnazione qui sotto.
     // `app.home.workbench.title` è la stessa chiave della pillola in topbar e del titolo della
@@ -418,7 +432,7 @@
       });
     }
 
-    return groups;
+    return [...groups, v2Preview];
   });
 
 
