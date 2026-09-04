@@ -24,15 +24,34 @@ const redirect = vi.fn((status: number, location: string) => {
 
 vi.mock('@sveltejs/kit', async (orig) => ({ ...(await orig<object>()), redirect, error: vi.fn() }));
 
-async function loadLayout(pathname: string, brand: string) {
+// Il layout, sotto il rimando, interroga sessione, accesso e tenant. Finché il rimando stava in
+// cima nessuna di queste veniva raggiunta e il test passava con `locals: {}` — cioè non provava
+// l'ordine, che è precisamente la cosa che si è rotta.
+vi.mock('$lib/server/access', () => ({ canEnter: async () => true }));
+vi.mock('$lib/server/tenant', () => ({
+	resolveTenant: async (_c: unknown, _u: string, slug: string) => ({
+		brand: { id: 'b1', slug, brand_kit: null },
+		peers: []
+	})
+}));
+
+async function loadLayout(pathname: string, brand: string, session: unknown = { user: { id: 'u1' } }) {
 	const mod = await import('./+layout.server');
 	const cookies = { get: vi.fn(() => undefined), set: vi.fn() };
+	// Il layout lancia anche `loadDeferred`, che nessuno di questi test guarda ma la cui promessa
+	// rifiutata farebbe uscire vitest con errore. Una catena che risponde a qualunque metodo, e che
+	// è attendibile in fondo, la lascia finire in silenzio.
+	const chain: Record<string, unknown> = new Proxy(
+		{ then: (res: (v: unknown) => unknown) => Promise.resolve({ data: [], count: 0, error: null }).then(res) },
+		{ get: (t, k) => (k in t ? (t as Record<string | symbol, unknown>)[k] : () => chain) }
+	);
+	const supabase = { auth: { getSession: async () => ({ data: { session } }) }, from: () => chain };
 	try {
 		await (mod.load as (e: unknown) => Promise<unknown>)({
 			url: new URL(`https://app.test${pathname}`),
 			params: { brand },
 			cookies,
-			locals: {},
+			locals: { supabase, safeGetSession: async () => ({ session, user: session ? { id: 'u1' } : null }) },
 			depends: vi.fn()
 		});
 		return { redirected: null as null | { status: number; location: string }, cookies };
@@ -57,6 +76,12 @@ describe('la home del brand rimanda al workbench del brand', () => {
 	it('non scrive nessun cookie prima di rimandare: la risposta si chiude subito', async () => {
 		const { cookies } = await loadLayout('/app/demo', 'demo');
 		expect(cookies.set).not.toHaveBeenCalled();
+	});
+
+	it('chi non è autenticato va al login, non al workbench', async () => {
+		const { redirected } = await loadLayout('/app/demo', 'demo', null);
+		expect(redirected?.status).toBe(303);
+		expect(redirected?.location).toBe('/login');
 	});
 
 	it('una rotta figlia non viene rimandata', async () => {

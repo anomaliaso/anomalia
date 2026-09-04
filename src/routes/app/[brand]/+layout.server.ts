@@ -49,15 +49,6 @@ function gtmPhasesHaveContent(phases: unknown): boolean {
 }
 
 export const load: LayoutServerLoad = async ({ url, params, cookies, locals: { supabase, safeGetSession } }) => {
-  // La home del brand era la chat: tolta quella, il guscio non ha più niente da mostrare lì e il
-  // workbench È la home. Il rimando sta QUI e non in un +page.server.ts perché quello correva in
-  // parallelo a questo load: chiudeva la risposta prima che la riga sotto scrivesse il cookie
-  // dell'ultimo brand, e SvelteKit rifiutava con «cookies.set after the response has been
-  // generated». Qui il rimando parte prima di ogni attesa, quindi non c'è corsa da perdere.
-  if (decodeURIComponent(url.pathname).replace(/\/$/, '') === `/app/${params.brand}`) {
-    redirect(302, `/app/${encodeURIComponent(params.brand)}/workbench`);
-  }
-
   // Le pagine fanno `await parent()`: questa sezione bloccante È tutto il ritardo fra una pagina
   // e l'altra, oltre alle query della pagina stessa.
   const cookieSessionP = supabase.auth.getSession();
@@ -84,6 +75,16 @@ export const load: LayoutServerLoad = async ({ url, params, cookies, locals: { s
   const brandRows = shell.peers;
 
   if (!brand) throw error(404, 'Brand not found');
+
+  // La home del brand era la chat: tolta quella, il workbench È la home. Il rimando sta DOPO i
+  // controlli — sessione, accesso, brand esistente — perché sopra di essi rispondeva 302 al
+  // workbench a chi non era autenticato, invece del 303 verso /login che tutto il resto dell'app
+  // promette. E sta PRIMA della riga che scrive il cookie dell'ultimo brand, perché un
+  // +page.server.ts che rimandava correva in parallelo a questo load e chiudeva la risposta prima
+  // di quella scrittura: SvelteKit rifiuta un cookies.set dopo che la risposta è stata generata.
+  if (decodeURIComponent(url.pathname).replace(/\/$/, '') === `/app/${params.brand}`) {
+    redirect(302, `/app/${encodeURIComponent(params.brand)}/workbench`);
+  }
 
   if (cookies.get(LAST_BRAND_COOKIE) !== brand.slug) {
     cookies.set(LAST_BRAND_COOKIE, brand.slug, {
