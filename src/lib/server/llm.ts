@@ -266,6 +266,53 @@ export async function llmStructured<T>(opts: {
 	}
 }
 
+const WEB_PLUGIN = [{ id: 'web', engine: 'native' }];
+
+/**
+ * La chiamata con ricerca web, mandata A MANO invece che dall'AI SDK.
+ *
+ * `plugins` è un'estensione di OpenRouter, non un parametro OpenAI: passandola in
+ * `providerOptions.openai` l'SDK la SCARTAVA senza dire niente, e per giunta parla l'endpoint
+ * Responses (corpo `model, input, usage`). Risultato misurato in produzione: nessuna ricerca fatta,
+ * `annotations` assenti, zero citazioni — e `ok: true`. L'audit GEO, che esiste per rispondere
+ * «il brand è citato nelle risposte di Gemini?», stava misurando la MEMORIA del modello.
+ *
+ * Le citazioni si leggono da `annotations`, che è dove OpenRouter mette il grounding di Google:
+ * stesse fonti, altro nome. Il costo dal `usage.cost` del gateway, come ovunque.
+ */
+async function groundedCall(
+	modelId: string,
+	opts: { prompt: string; system?: string }
+): Promise<{ text: string; citations: Array<{ uri: string; title: string }> } & { cost?: number }> {
+	const messages = [
+		...(opts.system ? [{ role: 'system', content: opts.system }] : []),
+		{ role: 'user', content: opts.prompt }
+	];
+	const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
+		method: 'POST',
+		headers: { authorization: `Bearer ${llmApiKey() ?? ''}`, 'content-type': 'application/json' },
+		body: JSON.stringify({ model: modelId, messages, plugins: WEB_PLUGIN, usage: { include: true } }),
+		signal: AbortSignal.timeout(LLM_TIMEOUT_MS)
+	});
+	const body = (await res.json()) as {
+		choices?: Array<{ message?: { content?: string; annotations?: Array<{ url_citation?: { url?: string; title?: string } }> } }>;
+		usage?: { cost?: number };
+		error?: { message?: string };
+	};
+	if (!res.ok || body.error) throw new Error(body.error?.message ?? `HTTP ${res.status}`);
+
+	const message = body.choices?.[0]?.message;
+	const citations: Array<{ uri: string; title: string }> = [];
+	const seen = new Set<string>();
+	for (const a of message?.annotations ?? []) {
+		const uri = a?.url_citation?.url;
+		if (!uri || seen.has(uri)) continue;
+		seen.add(uri);
+		citations.push({ uri, title: a.url_citation?.title || uri });
+	}
+	return { text: message?.content ?? '', citations, cost: body.usage?.cost };
+}
+
 export async function llmText(opts: {
 	prompt: string;
 	system?: string;
@@ -277,27 +324,30 @@ export async function llmText(opts: {
 	label?: string;
 }): Promise<{ text: string; citations: Array<{ uri: string; title: string }> }> {
 	const modelId = opts.model ?? (opts.webSearch ? llmGeminiSearchModel() : llmDefaultModel());
-	const extra = opts.webSearch ? { plugins: [{ id: 'web', engine: 'native' }] } : undefined;
 	const t0 = Date.now();
 	const label = opts.label ?? (opts.webSearch ? 'llm.grounded' : 'llm.text');
+
+	if (opts.webSearch) {
+		try {
+			const { text, citations, cost } = await groundedCall(modelId, opts);
+			logAiCall({ label, provider: 'llm', model: modelId, prompt: opts.prompt, ms: Date.now() - t0, ok: true, flatCostUsd: cost });
+			return { text, citations };
+		} catch (e) {
+			logAiCall({
+				label, provider: 'llm', model: modelId, prompt: opts.prompt, ms: Date.now() - t0, ok: false,
+				error: e instanceof Error ? e.message : 'grounded call failed'
+			});
+			return { text: '', citations: [] };
+		}
+	}
 	try {
 		const result = await generateText({
 			model: llmLanguageModel(modelId),
 			system: opts.system,
 			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
-			providerOptions: { openai: { ...reasoningOptions(), ...(extra ?? {}) } }
+			providerOptions: { openai: reasoningOptions() }
 		});
-		const citations: Array<{ uri: string; title: string }> = [];
-		const seen = new Set<string>();
-		const sources = (result as { sources?: Array<{ url?: string; title?: string }> }).sources ?? [];
-		for (const s of sources) {
-			const uri = s?.url;
-			if (uri && !seen.has(uri)) {
-				seen.add(uri);
-				citations.push({ uri, title: s.title ?? uri });
-			}
-		}
 		logAiCall({
 			label,
 			provider: 'llm',
@@ -307,7 +357,7 @@ export async function llmText(opts: {
 			ok: true,
 			...extractSdkUsage(result.usage)
 		});
-		return { text: result.text ?? '', citations };
+		return { text: result.text ?? '', citations: [] };
 	} catch (e) {
 		logAiCall({
 			label,
