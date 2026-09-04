@@ -90,3 +90,38 @@ describe('le scritture dello studio esposte dal registry', () => {
     expect(names).toEqual([...new Set(names)]);
   });
 });
+
+/**
+ * Il tool e la rotta accettavano forme diverse: `#aabbccdd` passava lo schema del tool e prendeva
+ * un 400 dalla rotta. L'agente ha creduto di aver salvato un colore, la richiesta e' morta dopo,
+ * e niente glielo ha detto in tempo per correggere.
+ *
+ * L'invariante non e' "gli stessi caratteri": il tool accetta apposta un `#` mancante e lo aggiunge
+ * prima di partire. E' che TUTTO cio' che il tool accetta, una volta normalizzato, la rotta lo
+ * salvi. Niente puo' passare di qui per morire di la'.
+ */
+describe('set_colors non accetta niente che la rotta rifiuti', () => {
+  const ROUTE_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+  const normalize = (c: string) => (c.startsWith('#') ? c : `#${c}`);
+
+  test('quello che il tool lascia passare, la rotta lo salva', async () => {
+    const schema = find(await tools(), 'set_colors').inputSchema as {
+      properties: { colors: { items: { pattern?: string } } };
+    };
+    const pattern = schema.properties.colors.items.pattern;
+    expect(pattern).toBeDefined();
+    const toolHex = new RegExp(pattern as string);
+
+    // Il caso che ha rotto: otto cifre. Il tool le prendeva, la rotta no.
+    for (const rejected of ['#aabbccdd', 'aabbccdd', '#abcd', '#12345', '#gggggg']) {
+      expect(ROUTE_HEX.test(normalize(rejected)), `la rotta accetta ${rejected}?`).toBe(false);
+      expect(toolHex.test(rejected), `il tool accetta ${rejected}, la rotta lo rifiuta`).toBe(false);
+    }
+
+    // E quello che il brand scrive davvero continua a passare, `#` o no.
+    for (const accepted of ['#fff', '#7c5cff', '#FFFFFF', 'fff', '7c5cff']) {
+      expect(toolHex.test(accepted), `il tool rifiuta ${accepted}`).toBe(true);
+      expect(ROUTE_HEX.test(normalize(accepted)), `la rotta rifiuta ${accepted}`).toBe(true);
+    }
+  });
+});

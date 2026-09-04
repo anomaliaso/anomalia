@@ -32,7 +32,8 @@ const FIELD_KEYS: Record<string, string> = {
   articles_per_week: 'articlesPerWeek',
   default_locale: 'defaultLocale',
   locales: 'locales',
-  navbar_links: 'navbarLinks'
+  navbar_links: 'navbarLinks',
+  analytics: 'analytics'
 };
 
 type Cfg = Record<string, unknown>;
@@ -56,7 +57,8 @@ function view(cfg: Cfg, plan: string | null) {
     default_locale: typeof cfg.defaultLocale === 'string' ? parsed.locales.defaultLocale : null,
     locales: parsed.locales.extraLocales,
     navbar_links: parsed.navbarLinks,
-    icon_url: parsed.iconUrl
+    icon_url: parsed.iconUrl,
+    analytics: parsed.analytics
   };
 }
 

@@ -5,7 +5,7 @@
   import BlogSearch from './BlogSearch.svelte';
   import { openBlogCookieSettings } from './blog-consent.svelte';
 
-  let { brand, base = '', categories = [], children } = $props();
+  let { brand, base = '', categories = [], analytics = [], children } = $props();
 
   let theme = $state<'light' | 'dark'>('light');
   $effect(() => {
@@ -177,7 +177,7 @@
     </div>
   </footer>
 
-  <BlogCookieBanner {base} />
+  <BlogCookieBanner {base} {analytics} />
 </div>
 
 <style>

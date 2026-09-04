@@ -88,3 +88,33 @@ Il conto degli articoli toccati si fa **prima** della cancellazione — dopo, la
 permetteva non esiste più — e torna come `articles_affected`.
 
 `destructive: true`: è l'unico dei quattro.
+
+## `analytics` — un elenco chiuso, mai codice
+
+`set_blog_settings` accetta `analytics`: una lista di `{ provider, id }` con `provider` fra `ga4`,
+`meta_pixel`, `plausible`, `hotjar`. **Non esiste un campo per JavaScript arbitrario**, e non e' una
+dimenticanza:
+
+- il blog di un brand esce da due porte — il suo dominio (albero `src/routes/_site`) e
+  `/blog/<slug>`, che sta sulla **nostra origine**, la stessa di `/app` e della sessione di chi e'
+  loggato;
+- uno `<script>` li' dentro girerebbe con i permessi di anomalia.so. Vale anche per un container
+  GA4 o GTM, che chi lo amministra puo' riempire di JavaScript quando vuole.
+
+Da cui le due regole, tenute dal codice e non dalla convenzione:
+
+| dove | cosa succede |
+|---|---|
+| dominio verificato del brand (`_site`) | i tracker si caricano, dopo il consenso cookie |
+| `/blog/<slug>` (nostra origine) | salvati, **mai emessi** |
+
+`siteAnalytics` (`$lib/server/blog-site`) e' l'unica porta, ed e' chiamata solo da
+`src/routes/_site/+layout.server.ts`. `blog-analytics-boundary.test.ts` fallisce se qualcuno la
+chiama da un altro albero: dimenticarsene significa non caricare niente, mai il contrario.
+
+L'id e' verificato contro la forma che quel fornitore emette (`blogAnalyticsIdOk`), in tre punti —
+lo zod del contratto, la regola di campo accanto al modello (`BLOG_CONFIG_FIELDS`) e il renderer.
+Nessuno dei quattro alfabeti contiene una virgoletta, un `<` o uno spazio: e' l'unica ragione per
+cui interpolare l'id dentro lo snippet e' sicuro.
+
+`analytics: []` toglie tutto — e' cosi' che si stacca un tracker rotto da un sito live senza di noi.

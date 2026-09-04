@@ -122,7 +122,16 @@ layouts and locales, the plan's ceilings, and the categories, tags and authors; 
 changes it, and `add_blog_term` / `remove_blog_term` maintain the three lists. `articles_per_week`
 is clamped to the plan, so read back what was saved. Before removing a term, say what it leaves
 behind: a category leaves its articles unfiled, a tag comes off every article, an author leaves no
-byline.
+byline. `analytics` takes a closed list of providers (`ga4`, `meta_pixel`, `plausible`, `hotjar`)
+with their id — there is no field for arbitrary JavaScript, and those trackers load only on a
+verified custom domain, only after the visitor accepts cookies.
+
+**Change how the brand looks** → `get_appearance` reads the logo, favicon, palette, the two Google
+Fonts graphics are composed with and the visual brief; `set_appearance` changes them. A logo is
+given as a URL and is DOWNLOADED and re-hosted, so read back the address it answers with. Fonts go
+in pairs and are checked against Google Fonts before saving — a family it will not serve is refused
+rather than rendered as Inter. Setting `visual_style` locks it against the nightly rebuild.
+Colours stay with `set_colors`.
 
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion

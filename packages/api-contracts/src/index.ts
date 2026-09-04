@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { ADS_REMIX } from './ads';
+import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
 import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
@@ -151,6 +152,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GEO_ACTION,
   GET_ADS,
   GET_ANALYTICS,
+  GET_APPEARANCE,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_AUTOMATIONS,
@@ -201,6 +203,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SAVE_WEEK_SEEDS,
   SEARCH_KNOWLEDGE,
   SEO_ACTION,
+  SET_APPEARANCE,
   SET_AUTOMATION,
   SET_BIO,
   SET_BLOG_SETTINGS,
@@ -369,14 +372,18 @@ export type { AutomationJob } from './automations';
 export { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
 export {
   ADD_BLOG_TERM,
+  BLOG_ANALYTICS_ID_PATTERNS,
+  BLOG_ANALYTICS_PROVIDERS,
   BLOG_FONTS,
   BLOG_LAYOUTS,
   BLOG_TERM_KINDS,
+  blogAnalyticsIdOk,
   GET_BLOG_SETTINGS,
   REMOVE_BLOG_TERM,
   SET_BLOG_SETTINGS
 } from './blog-settings';
-export type { BlogTermKind } from './blog-settings';
+export type { BlogAnalyticsProvider, BlogTermKind } from './blog-settings';
+export { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
 export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
