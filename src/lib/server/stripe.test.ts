@@ -6,12 +6,7 @@ const subscriptionsUpdate = vi.fn();
 const subscriptionsCancel = vi.fn();
 
 vi.mock('$env/dynamic/private', () => ({
-	env: {
-		STRIPE_SECRET_KEY: 'sk_test_123',
-		STRIPE_PRICE_GO: 'price_go',
-		STRIPE_PRICE_STARTER: 'price_starter',
-		STRIPE_PRICE_PRO: 'price_pro'
-	}
+	env: { STRIPE_SECRET_KEY: 'sk_test_123' }
 }));
 
 vi.mock('stripe', () => ({
@@ -74,7 +69,7 @@ describe('createBillingPortalSession', () => {
 		});
 	});
 
-	it('requests the generic subscription_update flow', async () => {
+	it('sends an upgrade to the portal to pick the plan, naming no price', async () => {
 		billingPortalSessionsCreate.mockResolvedValue({ url: 'https://portal/upgrade' });
 		const { createBillingPortalSession } = await import('./stripe');
 
@@ -90,50 +85,7 @@ describe('createBillingPortalSession', () => {
 			return_url: 'https://app/return',
 			flow_data: { type: 'subscription_update', subscription_update: { subscription: 'sub_1' } }
 		});
-	});
-});
-
-describe('createUpgradePortalSession', () => {
-	it('looks up the subscription item and confirms the new price', async () => {
-		subscriptionsRetrieve.mockResolvedValue({
-			items: { data: [{ id: 'si_1', quantity: 1 }] }
-		});
-		billingPortalSessionsCreate.mockResolvedValue({ url: 'https://portal/confirm' });
-		const { createUpgradePortalSession } = await import('./stripe');
-
-		const url = await createUpgradePortalSession({
-			customerId: 'cus_1',
-			subscriptionId: 'sub_1',
-			plan: 'pro',
-			returnUrl: 'https://app/return'
-		});
-
-		expect(url).toBe('https://portal/confirm');
-		expect(subscriptionsRetrieve).toHaveBeenCalledWith('sub_1');
-		expect(billingPortalSessionsCreate).toHaveBeenCalledWith({
-			customer: 'cus_1',
-			return_url: 'https://app/return',
-			flow_data: {
-				type: 'subscription_update_confirm',
-				subscription_update_confirm: {
-					subscription: 'sub_1',
-					items: [{ id: 'si_1', price: 'price_pro', quantity: 1 }]
-				}
-			}
-		});
-	});
-
-	it('rejects a plan with no configured Stripe price', async () => {
-		const { createUpgradePortalSession } = await import('./stripe');
-
-		await expect(
-			createUpgradePortalSession({
-				customerId: 'cus_1',
-				subscriptionId: 'sub_1',
-				plan: 'nonexistent',
-				returnUrl: 'https://app/return'
-			})
-		).rejects.toThrow('No Stripe price configured for plan "nonexistent"');
+		expect(subscriptionsRetrieve).not.toHaveBeenCalled();
 	});
 });
 
@@ -141,7 +93,11 @@ describe('applyRetentionCoupon', () => {
 	it('applies the coupon to the subscription', async () => {
 		const { applyRetentionCoupon } = await import('./stripe');
 		await applyRetentionCoupon('sub_1', 'SAVE20');
-		expect(subscriptionsUpdate).toHaveBeenCalledWith('sub_1', { coupon: 'SAVE20' });
+		// `coupon` was removed from subscription updates in the API version this SDK pins
+		// (2026-08-26.dahlia); sending it back would be a 400 "unknown parameter".
+		expect(subscriptionsUpdate).toHaveBeenCalledWith('sub_1', {
+			discounts: [{ coupon: 'SAVE20' }]
+		});
 	});
 });
 
@@ -182,5 +138,41 @@ describe('ensureSubscriptionCanceled', () => {
 		subscriptionsRetrieve.mockResolvedValue({ status: 'active' });
 		const { ensureSubscriptionCanceled } = await import('./stripe');
 		await expect(ensureSubscriptionCanceled('sub_1')).rejects.toThrow('active_plan');
+	});
+
+	// The owner used "cancel plan", was told it was cancelled, and Stripe keeps the status
+	// `active` until the period runs out. Refusing here left them unable to delete their own
+	// brand for up to a month.
+	it('lets the delete through once cancellation is scheduled', async () => {
+		subscriptionsRetrieve.mockResolvedValue({ status: 'active', cancel_at_period_end: true });
+		const { ensureSubscriptionCanceled } = await import('./stripe');
+		await expect(ensureSubscriptionCanceled('sub_1')).resolves.toBeUndefined();
+	});
+
+	it.each(['incomplete_expired', 'unpaid'])(
+		'lets the delete through on the settled status %s',
+		async (status) => {
+			subscriptionsRetrieve.mockResolvedValue({ status });
+			const { ensureSubscriptionCanceled } = await import('./stripe');
+			await expect(ensureSubscriptionCanceled('sub_1')).resolves.toBeUndefined();
+		}
+	);
+
+	// A stale id bills nobody. Refusing on it made the brand undeletable forever.
+	it('lets the delete through when Stripe no longer knows the subscription', async () => {
+		subscriptionsRetrieve.mockRejectedValue(
+			Object.assign(new Error('No such subscription'), { code: 'resource_missing' })
+		);
+		const { ensureSubscriptionCanceled } = await import('./stripe');
+		await expect(ensureSubscriptionCanceled('sub_1')).resolves.toBeUndefined();
+	});
+
+	// Failing open on an outage would delete a brand whose subscription is still charging.
+	it('refuses when Stripe fails for any other reason', async () => {
+		subscriptionsRetrieve.mockRejectedValue(
+			Object.assign(new Error('connection error'), { code: 'api_connection_error' })
+		);
+		const { ensureSubscriptionCanceled } = await import('./stripe');
+		await expect(ensureSubscriptionCanceled('sub_1')).rejects.toThrow('connection error');
 	});
 });

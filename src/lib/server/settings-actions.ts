@@ -87,11 +87,11 @@ export async function upgrade({ request, params, url, locals: { supabase } }: Ev
 
   let upgradeUrl: string;
   try {
-    const { createUpgradePortalSession } = await stripeApi();
-    upgradeUrl = await createUpgradePortalSession({
+    const { createBillingPortalSession } = await stripeApi();
+    upgradeUrl = await createBillingPortalSession({
       customerId: brand.stripe_customer_id,
       subscriptionId: brand.stripe_subscription_id,
-      plan,
+      flow: 'upgrade',
       returnUrl: `${url.origin}/app/${brand.slug}/settings/billing`
     });
   } catch (e) {

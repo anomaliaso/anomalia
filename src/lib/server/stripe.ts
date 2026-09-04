@@ -11,18 +11,10 @@ function stripe(): Stripe {
   return client;
 }
 
-const PLAN_PRICE_ENV: Record<string, string | undefined> = {
-  go: env.STRIPE_PRICE_GO,
-  starter: env.STRIPE_PRICE_STARTER,
-  pro: env.STRIPE_PRICE_PRO
-};
-
-function priceIdForPlan(plan: string): string {
-  const id = PLAN_PRICE_ENV[plan];
-  if (!id) throw new Error(`No Stripe price configured for plan "${plan}"`);
-  return id;
-}
-
+/**
+ * Every plan change happens inside Stripe's hosted portal, on the prices configured there — the
+ * app never names a price id, so there is nothing here to drift from the Stripe dashboard.
+ */
 export async function createBillingPortalSession(opts: {
   customerId: string;
   returnUrl: string;
@@ -47,33 +39,8 @@ export async function createBillingPortalSession(opts: {
   return session.url;
 }
 
-export async function createUpgradePortalSession(opts: {
-  customerId: string;
-  subscriptionId: string;
-  plan: string;
-  returnUrl: string;
-}): Promise<string> {
-  const price = priceIdForPlan(opts.plan);
-  const subscription = await stripe().subscriptions.retrieve(opts.subscriptionId);
-  const item = subscription.items.data[0];
-  if (!item) throw new Error('Subscription has no items to upgrade');
-
-  const session = await stripe().billingPortal.sessions.create({
-    customer: opts.customerId,
-    return_url: opts.returnUrl,
-    flow_data: {
-      type: 'subscription_update_confirm',
-      subscription_update_confirm: {
-        subscription: opts.subscriptionId,
-        items: [{ id: item.id, price, quantity: item.quantity ?? 1 }]
-      }
-    }
-  });
-  return session.url;
-}
-
 export async function applyRetentionCoupon(subscriptionId: string, coupon: string): Promise<void> {
-  await stripe().subscriptions.update(subscriptionId, { coupon });
+  await stripe().subscriptions.update(subscriptionId, { discounts: [{ coupon }] });
 }
 
 export async function cancelSubscriptionAtPeriodEnd(
@@ -91,11 +58,37 @@ export async function cancelSubscriptionAtPeriodEnd(
 }
 
 /**
- * Blocks brand deletion while a paid subscription is still on (deleteBrand maps 'active_plan' to
- * an explicit "cancel your plan first" error) instead of silently canceling it as a side effect.
+ * States that will never bill again on their own: Stripe has either ended the subscription or
+ * given up collecting. `past_due` and `incomplete` stay out — those still recover on a retry, and
+ * the owner can end them from the portal in one click.
+ */
+const SETTLED_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new Set([
+  'canceled',
+  'incomplete_expired',
+  'unpaid'
+]);
+
+/**
+ * Blocks brand deletion while a subscription can still charge someone (deleteBrand maps
+ * 'active_plan' to an explicit "cancel your plan first" error) instead of silently canceling it
+ * as a side effect.
+ *
+ * Anything that cannot charge again lets the delete through, including the case the strict
+ * `status === 'canceled'` check used to trap: an owner who just used "cancel plan" carries
+ * `cancel_at_period_end` with the status still `active`, was told they had cancelled, and could
+ * not delete their own brand until the period ran out. A subscription id Stripe no longer knows
+ * is treated the same way — it bills nobody, and refusing on it made the brand undeletable
+ * forever. Every other Stripe failure (network, auth) still refuses: failing open there would
+ * delete a brand whose subscription is very much alive.
  */
 export async function ensureSubscriptionCanceled(subscriptionId: string): Promise<void> {
-  const sub = await stripe().subscriptions.retrieve(subscriptionId);
-  if (sub.status === 'canceled') return;
+  let sub: Stripe.Subscription;
+  try {
+    sub = await stripe().subscriptions.retrieve(subscriptionId);
+  } catch (e) {
+    if ((e as Stripe.errors.StripeError)?.code === 'resource_missing') return;
+    throw e;
+  }
+  if (SETTLED_STATUSES.has(sub.status) || sub.cancel_at_period_end) return;
   throw new Error('active_plan');
 }
