@@ -46,6 +46,7 @@ import {
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
+import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 import {
@@ -136,6 +137,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_GTM,
   GET_KEYWORDS,
   GET_MARKET_FIELD,
+  GET_MEDIA_MODELS,
   GET_PLAN,
   GET_POST,
   GET_RANKS,
@@ -164,6 +166,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SAVE_WEEK_SEEDS,
   SEO_ACTION,
   SET_BIO,
+  SET_MEDIA_MODEL,
   SYNC_HISTORY,
   UPDATE_ARTICLE,
   UPDATE_BRAND_KIT,
@@ -241,6 +244,13 @@ export {
   GOAL_STATUSES
 } from './brand-state';
 export { DIAGNOSE_RADAR, GET_MARKET_FIELD, IDEA_STATUSES, IDEAS_DEFAULT, IDEAS_MAX, LIST_IDEAS, MARKET_FIELD_DEFAULT, MARKET_FIELD_MAX } from './market';
+export {
+  GET_MEDIA_MODELS,
+  MEDIA_MODEL_JOBS,
+  MEDIA_MODEL_SLOT_IDS,
+  SET_MEDIA_MODEL
+} from './media-models';
+export type { MediaModelSlotId } from './media-models';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {

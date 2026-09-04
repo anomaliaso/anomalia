@@ -19,6 +19,7 @@ integrazioni esterne via API key — request, response, query params, body, erro
 | [09 — Connections](09-connections.md) | `/connections`, `/connections/catalog`, `/connections/:id/complete`, `/connections/:id` |
 | [10 — Shares](10-shares.md) | `/shares`, `/shares/revoke`, e la rotta pubblica `/share/:token` |
 | [11 — Billing](11-billing.md) | `/billing/portal`, `/billing/checkout` — link Stripe che l'agente consegna all'umano |
+| [12 — Impostazioni: modelli media](12-settings-models.md) | `/settings/models` — quale modello disegna e quale gira, per brand |
 
 ## Regole di manutenzione
 
