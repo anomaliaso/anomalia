@@ -2,7 +2,11 @@ import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { tool, stepCountIs, hasToolCall, type ModelMessage, type UIMessage } from 'ai';
-import { harnessStreamText } from '$lib/server/harness';
+import { streamText } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { transform } from 'sucrase';
@@ -754,60 +758,17 @@ Workflow:
 When the user message is ANY QC brief — MOTION CRAFT QC, REFERENCE FIDELITY FAILED, or SELLABILITY QC (verdict FIX/KILL) — you MUST apply every issue and the mandatory next test before you finish. Craft notes (transitions, easing, overlap, type, UI mockups) come first; reference-fidelity notes (missing or altered beats, broken order) come next; ads/organic sellability notes (hook, CTA, proof) come after. Do not argue with the score. Call replace_source or write_source — a text reply without a source change is a failure, and calling finish without one is the same failure with a nicer ending.
 `;
 
-	const result = harnessStreamText({
+	const session = createHarnessSession({
 		brandId,
 		userId,
 		agent: 'motion_video',
 		mode: selected.length ? 'edit' : 'create',
 		model: motion.modelId,
 		provider: motion.provider,
-		surface: 'chat'
-	}, {
-		model: motion.model,
-		maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-		system,
-		/**
-		 * Dopo uno studio riuscito, ogni step successivo riceve: (1) i frame della reference come
-		 * NORMALE messaggio utente in coda — il canale che nessun provider degrada, verificato dal
-		 * vivo il 2026-08-21 (due contenuti user consecutivi accettati, ~1200 token di immagine
-		 * ingeriti, descritti correttamente allo step finale); (2) il REFERENCE CONTRACT sul
-		 * system. prepareStep ricostruisce dalla base a ogni step, quindi l'iniezione resta UNA
-		 * per reference, mai accumulata. Prima dello studio non tocca niente.
-		 */
-		prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) =>
-			buildReferenceStepPatch([...studiedByRef.values()], system, stepMessages),
-		messages: messages.map((m, i) => {
-			const text = extractText(m);
-			if (m.role === 'user') {
-				const images =
-					i === 0
-						? [...(opts.logoImage ? [opts.logoImage] : []), ...(opts.referenceImages ?? [])].slice(
-								0,
-								8
-							)
-						: [];
-				// A reference clip or still pasted as a URL is only "watched" if it rides along as a part.
-				const media = mediaByMessage.get(i) ?? [];
-				if (images.length || media.length) {
-					return {
-						role: 'user' as const,
-						content: [
-							{ type: 'text' as const, text },
-							...images.map((image) => ({ type: 'image' as const, image })),
-							...media
-						]
-					};
-				}
-			}
-			return { role: m.role as 'user' | 'assistant', content: text };
-		}),
-		abortSignal: opts.abortSignal,
-		stopWhen: [
-			hasToolCall('finish'),
-			stepCountIs(MOTION_SLICE_MAX_STEPS),
-			() => (opts.deadlineReached ? opts.deadlineReached() : false)
-		],
-		tools: base.attach({
+		surface: 'batch'
+	});
+
+	const motionTools = base.attach({
 			...chatTools,
 			...libraryTools,
 			...contextTools,
@@ -1194,8 +1155,78 @@ When the user message is ANY QC brief — MOTION CRAFT QC, REFERENCE FIDELITY FA
 					};
 				}
 			})
+		})
+;
+
+	const steward = createSessionSteward(session, Object.keys(motionTools));
+	const watchedTools = wrapTools(session, motionTools, steward.pipeline());
+	session.captureRequest({ system });
+	// Lo scatto prima dello stream: un turno ucciso lascia comunque system e messaggi.
+	persistHarnessSession(session);
+
+	const result = streamText({
+		model: motion.model,
+		maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+		system,
+		allowSystemInMessages: true,
+		/**
+		 * Dopo uno studio riuscito, ogni step successivo riceve: (1) i frame della reference come
+		 * NORMALE messaggio utente in coda — il canale che nessun provider degrada, verificato dal
+		 * vivo il 2026-08-21 (due contenuti user consecutivi accettati, ~1200 token di immagine
+		 * ingeriti, descritti correttamente allo step finale); (2) il REFERENCE CONTRACT sul
+		 * system. prepareStep ricostruisce dalla base a ogni step, quindi l'iniezione resta UNA
+		 * per reference, mai accumulata. Prima dello studio non tocca niente.
+		 */
+		prepareStep: ({ messages: stepMessages }: { messages: ModelMessage[] }) => {
+			const step = buildReferenceStepPatch([...studiedByRef.values()], system, stepMessages);
+			const patched = applyStewardPrepareStep(session, steward, step, system) ?? {};
+			session.capturePrepareStep(patched);
+			return patched;
+		},
+		messages: messages.map((m, i) => {
+			const text = extractText(m);
+			if (m.role === 'user') {
+				const images =
+					i === 0
+						? [...(opts.logoImage ? [opts.logoImage] : []), ...(opts.referenceImages ?? [])].slice(
+								0,
+								8
+							)
+						: [];
+				// A reference clip or still pasted as a URL is only "watched" if it rides along as a part.
+				const media = mediaByMessage.get(i) ?? [];
+				if (images.length || media.length) {
+					return {
+						role: 'user' as const,
+						content: [
+							{ type: 'text' as const, text },
+							...images.map((image) => ({ type: 'image' as const, image })),
+							...media
+						]
+					};
+				}
+			}
+			return { role: m.role as 'user' | 'assistant', content: text };
 		}),
-		onFinish: ({ totalUsage, steps }) => {
+		abortSignal: opts.abortSignal,
+		stopWhen: [
+			hasToolCall('finish'),
+			stepCountIs(MOTION_SLICE_MAX_STEPS),
+			() => (opts.deadlineReached ? opts.deadlineReached() : false)
+		],
+		tools: watchedTools,
+		onStepFinish: (event) => {
+			session.recordStep(event);
+		},
+		onAbort: () => {
+			session.finish('aborted');
+			persistHarnessSession(session);
+		},
+		onFinish: ({ text, totalUsage, steps }) => {
+			session.recordAssistantText(text);
+			session.recordUsage(totalUsage);
+			session.finish('finished');
+			persistHarnessSession(session);
 			void recordReferenceUse().catch((error) => { swallow('record reference use', error); return undefined; });
 			// I file di questa run se ne vanno con lei: la VM è del brand e la spegne il suo timeout,
 			// ma lasciarci dentro il workspace di un turno finito è il modo in cui due giri dello
@@ -1220,6 +1251,8 @@ When the user message is ANY QC brief — MOTION CRAFT QC, REFERENCE FIDELITY FA
 			});
 		},
 		onError: ({ error }) => {
+			session.finish('failed', error);
+			persistHarnessSession(session);
 			void base.close();
 			opts.onSliceEnd?.({
 				finished: calledFinish,

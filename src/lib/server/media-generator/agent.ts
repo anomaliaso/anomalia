@@ -6,7 +6,11 @@
 import { swallow } from '$lib/server/swallow';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
 import { tool, stepCountIs, hasToolCall } from 'ai';
-import { harnessStreamText } from '$lib/server/harness';
+import { streamText } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { llmLanguageModel } from '$lib/server/llm';
@@ -873,24 +877,54 @@ If editing attached photos, call generate_image once per target × variants with
   // Images / clips the user linked in the prompt itself — text alone leaves the model blind to them.
   userContent.push(...(await resolveUserTurnMediaParts(opts.prompt)));
 
-  const result = harnessStreamText({
+  const messages = [{ role: 'user' as const, content: userContent }];
+  const session = createHarnessSession({
     brandId: opts.brandId,
     userId: opts.userId,
     agent: 'media_generator',
     mode: `${kind}:v${variants}`,
     model: IMAGE_AGENT_MODEL(),
     provider: 'llm',
-    surface: 'chat'
-  }, {
+    surface: 'batch'
+  });
+  session.captureRequest({ system, messages });
+
+  const steward = createSessionSteward(session, Object.keys(tools));
+  const watchedTools = wrapTools(session, tools, steward.pipeline());
+  // Lo scatto prima dello stream: un turno ucciso lascia comunque system e messaggi.
+  persistHarnessSession(session);
+
+  const result = streamText({
     model: llmLanguageModel(IMAGE_AGENT_MODEL()),
     maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
     system,
-    messages: [{ role: 'user', content: userContent }],
-    tools,
+    messages,
+    allowSystemInMessages: true,
+    tools: watchedTools,
     stopWhen: [hasToolCall('finish'), stepCountIs(MAX_STEPS)],
     temperature: 0.4,
     abortSignal: opts.abortSignal,
-    onFinish: ({ totalUsage }) => {
+    prepareStep: () => {
+      const patched = applyStewardPrepareStep(session, steward, {}, system) ?? {};
+      session.capturePrepareStep(patched);
+      return patched;
+    },
+    onStepFinish: (event) => {
+      session.recordStep(event);
+    },
+    onError: ({ error }) => {
+      session.finish('failed', error);
+      persistHarnessSession(session);
+    },
+    onAbort: () => {
+      session.finish('aborted');
+      persistHarnessSession(session);
+    },
+    onFinish: ({ text, totalUsage }) => {
+      session.recordAssistantText(text);
+      session.recordUsage(totalUsage);
+      session.finish('finished');
+      persistHarnessSession(session);
       // I file di questo turno se ne vanno con lui: la VM resta del brand, il workspace no.
       void base.close();
       logAiCall({
