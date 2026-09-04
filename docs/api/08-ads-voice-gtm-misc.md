@@ -586,7 +586,7 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/products" -H "Authorization
 
 ## `POST /api/v1/brands/:slug/products`
 
-Ri-sincronizza l'intero catalogo dal sito e-commerce del brand (Shopify / WooCommerce): elimina i prodotti esistenti e reinserisce quelli rilevati.
+Ri-sincronizza l'intero catalogo dal sito e-commerce del brand (Shopify / WooCommerce): elimina i prodotti esistenti e reinserisce quelli rilevati. Per aggiungere **una** offerta senza cancellare le altre c'è [`POST /studio/products`](04-studio.md).
 
 **Body**: nessuno
 
@@ -616,7 +616,7 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/products" \
 
 ## `PUT /api/v1/brands/:slug/products/:id`
 
-Aggiorna i campi di un singolo prodotto.
+Aggiorna i campi di un singolo prodotto. Solo i campi presenti nel body cambiano: le altre colonne restano identiche. Un campo non dichiarato viene **rifiutato**, non ignorato. Tool MCP: `update_product`.
 
 **Body**
 
@@ -624,7 +624,8 @@ Aggiorna i campi di un singolo prodotto.
 |---|---|---|---|
 | `title` | string | No | Nuovo titolo |
 | `description` | string | No | Nuova descrizione |
-| `pricing` | string | No | Nuovo prezzo |
+| `pricing` | string | No | Nuovo prezzo (testo libero) |
+| `url` | string | No | Dove sta l'offerta |
 | `featured` | boolean | No | Evidenziato sì/no |
 
 **Response** `200`:
@@ -637,7 +638,9 @@ Aggiorna i campi di un singolo prodotto.
 
 | Status | Body |
 |---|---|
-| `400` | `{"error":"No fields to update"}` |
+| `400` | `{"error":"invalid_input","details":[…]}` — campo sconosciuto o tipo sbagliato |
+| `400` | `{"error":"no_fields"}` — nessun campo da cambiare |
+| `404` | `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand: la risposta è la stessa |
 | `500` | `{"error":"<messaggio Supabase>"}` |
 
 **Esempio**:
@@ -652,7 +655,7 @@ curl -s -X PUT "https://anomalia.so/api/v1/brands/mio-brand/products/PRODUCT_ID"
 
 ## `DELETE /api/v1/brands/:slug/products/:id`
 
-Elimina un prodotto del brand.
+Elimina un prodotto del brand. Tool MCP: `delete_product`.
 
 **Response** `200`:
 
@@ -660,7 +663,12 @@ Elimina un prodotto del brand.
 { "ok": true }
 ```
 
-**Errori specifici**: `500` `{"error":"<messaggio Supabase>"}`
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `404` | `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand |
+| `500` | `{"error":"<messaggio Supabase>"}` |
 
 **Esempio**:
 

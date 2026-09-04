@@ -82,6 +82,13 @@ there for when you want Anomalia to write one and bill it.
 No model call, no credits. The rows become the week draft the plan page shows; `produce_week` is
 the separate paid step that turns them into posts.
 
+**Keep the brand truth current from your own source** → `get_studio` returns every row with its
+id. `create_product` / `update_product` / `delete_product` maintain the catalog one offer at a
+time; `update_person` and `update_competitor` fix a role or a wrong website. They change only the
+fields you send, leave every other column as it was, and cost nothing. `update_person` can never
+attest consent: a real person's face stays withheld from every generator until the operator
+states, in their own words, that they have it.
+
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).

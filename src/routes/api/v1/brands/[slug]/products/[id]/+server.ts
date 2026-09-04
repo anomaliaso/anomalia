@@ -1,6 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
+import { updateBrandRow, deleteBrandRow } from '$lib/server/brand-rows';
+import { UPDATE_PRODUCT } from '@anomalia/api-contracts';
 
 export const PUT: RequestHandler = async ({ request, params }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -11,24 +13,16 @@ export const PUT: RequestHandler = async ({ request, params }) => {
   const writeDenied = checkApiKeyWriteAccess(apiKey);
   if (writeDenied) return writeDenied;
 
-  const body = await request.json();
-  const { title, description, pricing, featured } = body;
-
-  const updates: Record<string, unknown> = {};
-  if (title !== undefined) updates.title = title;
-  if (description !== undefined) updates.description = description;
-  if (pricing !== undefined) updates.pricing = pricing;
-  if (featured !== undefined) updates.featured = featured;
-
-  if (Object.keys(updates).length === 0) {
-    return json({ error: 'No fields to update' }, { status: 400 });
+  const body = await request.json().catch(() => ({}));
+  const parsed = UPDATE_PRODUCT.input.safeParse({ ...body, id: params.id });
+  if (!parsed.success) {
+    return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }
 
-  const { error: updateError } = await supabase
-    .from('products').update(updates)
-    .eq('id', params.id).eq('brand_id', brand.id);
+  const { id, ...patch } = parsed.data;
+  const failure = await updateBrandRow(supabase, 'products', brand.id, id, patch);
+  if (failure) return json({ error: failure.error }, { status: failure.status });
 
-  if (updateError) return json({ error: updateError.message }, { status: 500 });
   return json({ ok: true });
 };
 
@@ -41,9 +35,8 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
   const writeDenied = checkApiKeyWriteAccess(apiKey);
   if (writeDenied) return writeDenied;
 
-  const { error: deleteError } = await supabase
-    .from('products').delete().eq('id', params.id).eq('brand_id', brand.id);
+  const failure = await deleteBrandRow(supabase, 'products', brand.id, params.id);
+  if (failure) return json({ error: failure.error }, { status: failure.status });
 
-  if (deleteError) return json({ error: deleteError.message }, { status: 500 });
   return json({ ok: true });
 };
