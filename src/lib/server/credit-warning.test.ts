@@ -19,7 +19,7 @@ vi.mock('./scheduler', () => ({
 
 import { maybeSendCreditWarning, type CreditsUsage } from './credits';
 
-/** brand_usage con il vincolo unico (brand_id, month) che fa perdere il secondo insert. */
+/** org_usage con il vincolo unico (org_id, month) che fa perdere il secondo insert. */
 function makeDb(rows: Row[]) {
 	const table: Row[] = rows.map((r) => ({ ...r }));
 	const build = (mode: 'select' | 'update', patch?: Row) => {
@@ -52,7 +52,7 @@ function makeDb(rows: Row[]) {
 				select: () => build('select'),
 				update: (patch: Row) => build('update', patch),
 				insert: async (row: Row) => {
-					if (table.some((r) => r.brand_id === row.brand_id && r.month === row.month)) {
+					if (table.some((r) => r.org_id === row.org_id && r.month === row.month)) {
 						return { data: null, error: { message: 'duplicate key value violates unique constraint' } };
 					}
 					table.push({ id: `u-${table.length + 1}`, ...row });
@@ -94,7 +94,7 @@ describe('maybeSendCreditWarning', () => {
 
 	it('non rimanda nello stesso periodo, ma riparte nel successivo', async () => {
 		const db = makeDb([
-			{ brand_id: 'brand-1', month: '2026-08-01', credits_warned_at: '2026-08-03T10:00:00.000Z' }
+			{ org_id: 'org-1', month: '2026-08-01', credits_warned_at: '2026-08-03T10:00:00.000Z' }
 		]);
 		await maybeSendCreditWarning(db.client as never, BRAND, usageAt(90));
 		expect(notifyBrandContacts).not.toHaveBeenCalled();
