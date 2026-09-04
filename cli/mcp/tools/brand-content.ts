@@ -1,26 +1,48 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { api, callEndpoint } from '../../lib/api.ts';
-import { BRAND_ENDPOINTS } from '../../lib/contracts/index.ts';
-import { resolvePostId, withAuth } from '../util.ts';
+import { BRAND_ENDPOINTS, BRAND_RESOURCES, type BrandResource } from '../../lib/contracts/index.ts';
+import { resolvePostId, resolveResourceId, withAuth } from '../util.ts';
 
 const slug = z.string().min(1).describe('Brand URL slug');
 
+const resourceId = (resource: BrandResource) =>
+  z.string().min(1).describe(`${BRAND_RESOURCES[resource]} id or unambiguous prefix`);
+
 function registerDeclaredEndpoints(server: McpServer) {
   for (const endpoint of BRAND_ENDPOINTS) {
+    const resource = endpoint.resource;
     server.registerTool(
       endpoint.tool,
       {
         title: endpoint.title,
         description: endpoint.description,
-        inputSchema: endpoint.input.extend({ slug }),
+        inputSchema:
+          resource === undefined
+            ? endpoint.input.extend({ slug })
+            : endpoint.input.extend({ slug, id: resourceId(resource) }),
         annotations: {
           readOnlyHint: endpoint.method === 'GET',
           destructiveHint: endpoint.destructive,
         },
       },
       async ({ slug: brandSlug, ...input }) =>
-        withAuth((token) => callEndpoint(endpoint, token, brandSlug as string, input)),
+        withAuth(async (token) => {
+          if (endpoint.resource === undefined) {
+            return callEndpoint(endpoint, token, brandSlug as string, input);
+          }
+
+          const { id, ...payload } = input as { id: string } & Record<string, unknown>;
+          const resolved = await resolveResourceId(endpoint.resource, token, brandSlug as string, id);
+          const body = await callEndpoint<Record<string, unknown>>(
+            endpoint,
+            token,
+            brandSlug as string,
+            payload,
+            resolved,
+          );
+          return { id: resolved, ...body };
+        }),
     );
   }
 }
@@ -145,25 +167,6 @@ export function registerBrandTools(server: McpServer) {
   );
 
   server.registerTool(
-    'get_post',
-    {
-      title: 'Get post',
-      description: 'Show a single post including carousel slides / media state. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1).describe('Post id or unambiguous prefix'),
-      }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug, id }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        const media = await api.getPostMedia(token, slug, postId);
-        return { id: postId, ...media };
-      }),
-  );
-
-  server.registerTool(
     'edit_post',
     {
       title: 'Edit post',
@@ -247,43 +250,6 @@ export function registerBrandTools(server: McpServer) {
         const postId = await resolvePostId(token, slug, id);
         await api.deletePost(token, slug, postId);
         return { ok: true, id: postId, deleted: true };
-      }),
-  );
-
-  server.registerTool(
-    'reschedule_post',
-    {
-      title: 'Reschedule post',
-      description: 'Reschedule a post. scheduled_for is an ISO datetime. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1),
-        scheduled_for: z.string().min(1).describe('ISO datetime, e.g. 2026-06-20T10:00'),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, id, scheduled_for }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        return { id: postId, ...(await api.reschedulePost(token, slug, postId, scheduled_for)) };
-      }),
-  );
-
-  server.registerTool(
-    'render_post',
-    {
-      title: 'Render post image',
-      description: 'Generate the missing image from the prompt. Bills a render. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, id }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        return { id: postId, ...(await api.renderPost(token, slug, postId)) };
       }),
   );
 

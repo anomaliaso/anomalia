@@ -1,5 +1,6 @@
 import { api } from '../lib/api.ts';
 import { loadSession, type StoredSession } from '../lib/auth.ts';
+import type { BrandResource } from '../lib/contracts/index.ts';
 import { resolveByPrefix } from '../lib/select.ts';
 import { getRequestAuth } from './context.ts';
 
@@ -99,4 +100,20 @@ export async function resolveArticleId(token: string, slug: string, idOrPrefix: 
     throw new Error(`No article found for id/prefix "${idOrPrefix}". List articles first.`);
   }
   return match.item.id;
+}
+
+type IdResolver = (token: string, slug: string, idOrPrefix: string) => Promise<string>;
+
+const RESOLVE_ID: Record<BrandResource, IdResolver> = {
+  post: resolvePostId,
+  article: resolveArticleId,
+};
+
+export function resolveResourceId(
+  resource: BrandResource,
+  token: string,
+  slug: string,
+  idOrPrefix: string,
+): Promise<string> {
+  return RESOLVE_ID[resource](token, slug, idOrPrefix);
 }
