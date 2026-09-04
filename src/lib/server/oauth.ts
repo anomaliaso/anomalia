@@ -160,25 +160,6 @@ export function anonClient() {
 
 // ── Discovery URLs ───────────────────────────────────────────────
 
-/**
- * Identificativo dell'authorization server = **l'origin che serve davvero questo documento**.
- *
- * Qui prima si toglieva il `www.` e si annunciava l'apex. Il riferimento a RFC 8414 era giusto
- * (l'`issuer` dev'essere identico all'identificatore da cui il client costruisce l'URL di
- * discovery) ma applicato al contrario: l'apex `https://anomalia.so` non serve niente, Vercel
- * lo 308-redirecta a www a livello di *dominio*, cioè prima del routing del deployment —
- * nessun `vercel.json` può escludere `/.well-known/*` da quel redirect. I client OAuth/MCP che
- * non seguono i redirect in discovery (Smithery, per dirne uno) si fermano esattamente lì:
- *   {"code":"oauth/auth_server_discovery_http_error", "status":308}
- *
- * Quindi l'issuer sta sull'unico host che risponde 200: issuer, endpoint e host che serve i
- * metadata diventano lo stesso origin e la discovery non dipende più da un redirect.
- *
- * L'altra metà della coppia vive in anomalia (`authServerUrl()` in `lib/config.ts`, che
- * riempie `authorization_servers` nel documento RFC 9728 di mcp.anomalia.so): i due valori
- * devono restare identici byte per byte, o i client severi rifiutano i metadata. Si spostano
- * insieme, sempre.
- */
 export function issuerFor(url: URL): string {
   return appOrigin(url);
 }
