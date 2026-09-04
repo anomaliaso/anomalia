@@ -1,9 +1,10 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
 
-  // Landing FAQ — answers the common "does it post for me / can I review / does it improve" questions.
+  // Landing FAQ — first the promise the hero makes and its limits, then the objection from the
+  // reader who could build it himself. Those two are the doubts; the rest is detail.
   // Copy lives in i18n under landing.faq.*.
-  const KEYS = ['review', 'social', 'seo', 'radar', 'leads', 'voice', 'platforms', 'trial'];
+  const KEYS = ['agency', 'diy', 'which', 'mcp', 'review', 'platforms', 'cost', 'selfhost'];
 </script>
 
 <section class="alt faq-sec" aria-labelledby="landing-faq-title">

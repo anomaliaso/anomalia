@@ -1,38 +1,46 @@
 <script lang="ts">
   import { _, locale } from 'svelte-i18n';
   import { page } from '$app/stores';
-  import { siClaude } from 'simple-icons';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import AskAiCta from '$lib/components/AskAiCta.svelte';
-  import ServiceMockup from '$lib/components/ServiceMockup.svelte';
-  import TeamRoster from '$lib/components/TeamRoster.svelte';
-  import HomeChatMockup from '$lib/components/HomeChatMockup.svelte';
   import WhyUs from '$lib/components/WhyUs.svelte';
   import HomePricing from '$lib/components/HomePricing.svelte';
   import LandingFaq from '$lib/components/LandingFaq.svelte';
-  import { localePath, type Locale } from '$lib/i18n/locale';
+  import { PLATFORM_KEYS, PLATFORM_META } from '$lib/components/platform-meta';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
-  import YoutubeFacade from '$lib/components/YoutubeFacade.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
-  import ConnectClaudeDialog from '$lib/components/ConnectClaudeDialog.svelte';
+  import { AGENT_INSTRUCTIONS } from '$lib/agent-instructions';
   import { marketingStartHref } from '$lib/start-href';
   import '$lib/styles/landing.css';
 
   let { data } = $props();
-  const lp = $derived((p: string) => localePath(p, (($locale as Locale) ?? 'en')));
   const waitlistActive = $derived(data.waitlistActive);
   const cta = $derived(waitlistActive ? $_('landing.cta.waitlist') : $_('landing.cta.getStarted'));
   const startHref = $derived(marketingStartHref({ loggedIn: Boolean(data.session), waitlistActive }));
 
   let copied = $state(false);
-  function copyInstall() {
-    navigator.clipboard.writeText('curl -sSL https://anomalia.so/install.sh | bash');
-    copied = true;
-    setTimeout(() => (copied = false), 2000);
+  let clipboardRefused = $state(false);
+
+  // Fuori da https la clipboard non c'è e il browser la nega: il fallimento non resta muto,
+  // il testo compare sotto il tasto e si può selezionare a mano.
+  async function copyInstructions() {
+    try {
+      await navigator.clipboard.writeText(AGENT_INSTRUCTIONS);
+      copied = true;
+      setTimeout(() => (copied = false), 2400);
+    } catch {
+      clipboardRefused = true;
+    }
   }
 
-  let claudeOpen = $state(false);
+  // The channel strip reads the same table the publisher does, so it cannot promise a platform
+  // the product can't post to.
+  const channels = PLATFORM_KEYS.map((k) => PLATFORM_META[k].label);
+
+  const JOBS = ['social', 'web', 'ads'];
+  const BUILD = ['i1', 'i2', 'i3', 'i4'];
+  const PLUG = ['i1', 'i2', 'i3', 'i4'];
 
   const siteUrl = $derived($page.url.origin);
   const jsonLd = $derived(
@@ -80,7 +88,6 @@
   <meta property="og:description" content={$_('meta.landing.description')} />
   <meta name="twitter:title" content={$_('meta.landing.title')} />
   <meta name="twitter:description" content={$_('meta.landing.description')} />
-  <link rel="preload" as="image" href="/yt-uksgDRVZm6w.webp" fetchpriority="high" />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
@@ -102,60 +109,73 @@
         <HeroUrlCta loggedIn={!!data.session} {waitlistActive} />
       </div>
       <p class="gr-note">{$_('landing.hero.note')}</p>
-      <button class="connect-claude" type="button" onclick={() => (claudeOpen = true)}>
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={siClaude.path} /></svg>
-        {$_('landing.hero.connectClaude')}
+      <button class="connect-claude" type="button" onclick={copyInstructions}>
+        {copied ? $_('landing.hero.agentCopied') : $_('landing.hero.agentCopy')}
       </button>
+      {#if clipboardRefused}
+        <pre class="agent-fallback" tabindex="0">{AGENT_INSTRUCTIONS}</pre>
+      {/if}
     </div>
   </section>
 
-  <TeamRoster />
-
-  <HomeChatMockup />
-
-  <!-- ============ VIDEO ============ -->
-  <section class="video-sec">
+  <!-- ============ THE THREE JOBS AN AGENCY DOES ============ -->
+  <section class="jobs-sec">
     <div class="wrap">
-      <div class="video-wrap">
-        <YoutubeFacade
-          videoId="uksgDRVZm6w"
-          title="YouTube video player"
-          poster="/yt-uksgDRVZm6w.webp"
-          priority
-        />
+      <div class="sec-head reveal">
+        <div class="kicker">{$_('landing.jobs.kicker')}</div>
+        <h2>{$_('landing.jobs.titleLead')} <span class="gr-accent">{$_('landing.jobs.titleAccent')}</span></h2>
+      </div>
+      <div class="jobs-cols">
+        {#each JOBS as job, i (job)}
+          <div class="job reveal" data-d={i + 1}>
+            <h3>{$_(`landing.jobs.${job}.title`)}</h3>
+            <p>{$_(`landing.jobs.${job}.body`)}</p>
+          </div>
+        {/each}
       </div>
     </div>
   </section>
 
-  <!-- ============ SERVICES 2×2 GRID ============ -->
-  <section class="services-sec">
+  <!-- ============ BUILD IT / PLUG IT IN ============ -->
+  <section class="split-sec">
     <div class="wrap">
-        <div class="sec-head reveal">
-          <div class="kicker">{$_('landing.services.kicker')}</div>
-          <h2>{$_('landing.services.titleLead')} <span class="gr-accent">{$_('landing.services.titleAccent')}</span></h2>
+      <div class="sec-head reveal">
+        <div class="kicker">{$_('landing.split.kicker')}</div>
+        <h2>{$_('landing.split.titleLead')} <span class="gr-accent">{$_('landing.split.titleAccent')}</span></h2>
+      </div>
+      <div class="split-cols">
+        <div class="split-col reveal" data-d="1">
+          <h3>{$_('landing.split.before.title')}</h3>
+          <ul>
+            {#each BUILD as k (k)}
+              <li>{$_(`landing.split.before.${k}`)}</li>
+            {/each}
+          </ul>
+          <p class="split-foot">{$_('landing.split.before.foot')}</p>
         </div>
-      <div class="services-grid">
-        <div class="svc-card reveal" data-d="1">
-          <h3>{$_('landing.services.social.title')}</h3>
-          <p>{$_('landing.services.social.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="content" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="2">
-          <h3>{$_('landing.services.seo.title')}</h3>
-          <p>{$_('landing.services.seo.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="seogeo" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="1">
-          <h3>{$_('landing.services.radar.title')}</h3>
-          <p>{$_('landing.services.radar.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="radar" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="2">
-          <h3>{$_('landing.services.leads.title')}</h3>
-          <p>{$_('landing.services.leads.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="leads" /></div>
+        <div class="split-col is-ours reveal" data-d="2">
+          <h3>{$_('landing.split.after.title')}</h3>
+          <ul>
+            {#each PLUG as k (k)}
+              <li>{$_(`landing.split.after.${k}`)}</li>
+            {/each}
+          </ul>
+          <p class="split-foot">{$_('landing.split.after.foot')}</p>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ CHANNELS ============ -->
+  <section class="channels-sec">
+    <div class="wrap">
+      <p class="channels-label">{$_('landing.channels.label')}</p>
+      <ul class="channels-list">
+        {#each channels as name (name)}
+          <li>{name}</li>
+        {/each}
+      </ul>
+      <p class="channels-note">{$_('landing.channels.note')}</p>
     </div>
   </section>
 
@@ -166,8 +186,6 @@
   <LandingFaq />
 
 </main>
-
-<ConnectClaudeDialog bind:open={claudeOpen} />
 
 <section class="featured-on" aria-label="Featured on">
   <div class="wrap">
@@ -405,15 +423,117 @@
      largo: 100% e poi ci pensa il max-width di .wrap. */
   .gr-hero-inner { width: 100%; }
 
-  /* ---------- VIDEO ----------
-     La homepage non ha UNA max-width: .wrap sta a --maxw (1440), .services-grid a 1200, il
-     mockup della chat e la comparativa a 940. Il video prende quella del mockup, che è la
-     sezione appena sopra e quindi l'unico confronto che l'occhio fa davvero. Il 16:9 resta
-     al player (aspect-ratio in YoutubeFacade), qui si tocca solo la larghezza.
-     Il cap va sul blocco interno e NON su .wrap: .wrap ha 16px di padding per lato, quindi
-     limitare lui darebbe 908px di video contro 940 di mockup — sbagliato di 32px proprio nel
-     confronto che si voleva sistemare. */
-  .video-wrap { max-width: 940px; margin-inline: auto; }
+  /* Il ripiego quando la clipboard non c'è: stesso testo, selezionabile a mano. */
+  .agent-fallback {
+    margin-top: 14px;
+    max-width: min(100%, 62ch);
+    max-height: 240px;
+    overflow: auto;
+    text-align: left;
+    white-space: pre-wrap;
+    font-size: 12px; line-height: 1.55;
+    color: var(--ink-soft);
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+
+  /* ---------- THE THREE JOBS ----------
+     Type only, no cards: this section has to read as one breath — the three things an agency
+     is paid for — and a border around each one would make them look like three products. */
+  .jobs-sec { padding-block: 100px 0; }
+  .jobs-cols {
+    display: flex; gap: 48px; align-items: flex-start;
+    max-width: 940px; margin-inline: auto;
+  }
+  .job { flex: 1 1 0; min-width: 0; }
+  .job h3 {
+    font-size: 1.15rem; font-weight: 600; letter-spacing: -0.03em;
+    margin: 0 0 10px;
+  }
+  .job p { margin: 0; font-size: 0.98rem; line-height: 1.55; color: var(--ink-soft); }
+
+  @media (max-width: 760px) {
+    .jobs-sec { padding-block: 64px 0; }
+    .jobs-cols { flex-direction: column; gap: 30px; }
+  }
+
+  /* ---------- BUILD IT / PLUG IT IN ----------
+     Flex and not grid: app.css owns a global `.grid` (1.7fr 1fr) that hijacks anything
+     carrying that class. 940px is the same cap as the three jobs above, so the page keeps one
+     vertical spine. */
+  .split-sec { padding-block: 100px 72px; }
+  .split-cols {
+    display: flex; gap: 24px; align-items: stretch;
+    max-width: 940px; margin-inline: auto;
+  }
+  .split-col {
+    flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--line); border-radius: 22px;
+    padding: 30px 28px;
+    background: var(--paper-2);
+  }
+  /* The right column is the product. It carries the weight so the eye lands there first. */
+  .split-col.is-ours { background: var(--paper); border-color: rgba(var(--accent-rgb), 0.32); }
+  .split-col h3 {
+    font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em;
+    margin: 0 0 20px;
+  }
+  .split-col.is-ours h3 { color: var(--accent); }
+  .split-col ul { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .split-col li {
+    font-size: 1rem; line-height: 1.45; color: var(--ink-soft);
+    padding-left: 20px; position: relative;
+  }
+  .split-col li::before {
+    content: ''; position: absolute; left: 0; top: 0.55em;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ink-faint);
+  }
+  .split-col.is-ours li { color: var(--ink); }
+  .split-col.is-ours li::before { background: var(--accent); }
+  /* The footer line is the whole argument: weeks against minutes. It gets the serif and the
+     size the numbers get on /grow. */
+  .split-foot {
+    margin: 26px 0 0; padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-family: var(--serif);
+    font-size: 1.4rem; font-weight: var(--heading-weight);
+    letter-spacing: var(--heading-tracking);
+    color: var(--ink-faint);
+  }
+  .split-col.is-ours .split-foot { color: var(--accent); border-top-color: rgba(var(--accent-rgb), 0.24); }
+
+  @media (max-width: 760px) {
+    .split-sec { padding-block: 64px; }
+    .split-cols { flex-direction: column; }
+  }
+
+  /* ---------- CHANNELS ----------
+     Names, not logos: the list is generated from PLATFORM_KEYS, so nine words cost nothing
+     to ship and cannot drift away from what the publisher actually supports. */
+  .channels-sec { padding-bottom: 40px; }
+  .channels-sec .wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    max-width: 720px; text-align: center;
+  }
+  .channels-label {
+    margin: 0;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .channels-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 8px 20px;
+  }
+  .channels-list li {
+    font-size: 1rem; font-weight: 500; letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .channels-note { margin: 0; font-size: 13px; color: var(--ink-faint); }
 
   /* ---------- FEATURED ON ---------- */
   .featured-on {

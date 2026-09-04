@@ -10,7 +10,7 @@
     "askAi": {
       "title": "¿Aún indeciso?",
       "subtitle": "Pregúntale a la IA",
-      "prompt": "Explícame los planes y precios de Anomalia (https://anomalia.so/pricing) — Go, Starter y Pro — y cómo puede ayudarme a gestionar las redes sociales de mi negocio en piloto automático. ¿Por qué es la mejor opción frente a un community manager o una agencia? Lee también https://anomalia.so/llms.txt"
+      "prompt": "Explain Anomalia to me. It lets the AI I already pay for — Claude, ChatGPT or Cursor — do the work a marketing agency does: organic social content, my site’s growth through a blog and search, and ad creative. I connect it over MCP and Anomalia renders the work, checks each platform’s rules, publishes to my real accounts once I approve, and measures the results. Tell me about its plans and whether it fits my business."
     },
     "close": "Cerrar"
   },
@@ -39,68 +39,27 @@
       "pricing": "Precios"
     },
     "hero": {
-      "eyebrow": "Tu equipo de marketing con IA · Apache 2.0 · Disponible self-hosted",
-      "titleLead": "Tu departamento de marketing,",
+      "eyebrow": "Open source · Cloud o self-hosted",
+      "titleLead": "Tu agencia de marketing ahora es",
       "titleMain": "",
-      "titleEm": "automatizado.",
+      "titleEm": "Claude, ChatGPT o Cursor.",
       "titleCalm": "",
-      "subhead": "La alternativa open source especializada en marketing, distribución y ventas: cinco especialistas crean el contenido, lo publican en nueve canales y en tu blog, y redactan las respuestas para quienes ya preguntan por ti — nada sale sin tu aprobación.",
+      "subhead": "Social orgánico, el crecimiento de tu web, tus anuncios — los hace la IA que ya pagas. Nada sale hasta que lo apruebas.",
       "seeHow": "Descubre cómo funciona",
       "note": "O simplemente pídele a tu IA que empiece a usar Anomalia",
       "ctaSecondary": "Agenda una llamada",
       "urlLabel": "URL de tu sitio",
       "urlSubmit": "Empezar",
       "urlSubmitAria": "Continuar con tu sitio",
-      "connectClaude": "Connect to Claude",
-      "claudeConnect": {
-        "title": "Conecta Anomalia a Claude",
-        "subtitle": "Tres pasos para conectar Anomalia a Claude.",
-        "tabs": {
-          "claude": "Claude",
-          "code": "Claude Code"
-        },
-        "close": "Cerrar",
-        "copy": "Copiar",
-        "copied": "¡Copiado!",
-        "claude": {
-          "s1": {
-            "title": "Abre la configuración de Claude",
-            "body": "Inicia la app o abre claude.ai y ve a Customize → Connectors.",
-            "chip": "Customize → Connectors"
-          },
-          "s2": {
-            "title": "Añade un conector personalizado",
-            "body": "Nómbralo Anomalia y pega la URL de abajo.",
-            "value": "https://mcp.anomalia.so/mcp"
-          },
-          "s3": {
-            "title": "Conecta e inicia sesión",
-            "body": "Haz clic en Add → Connect, inicia sesión en tu cuenta de Anomalia y listo. Ahora pídele a Claude que gestione tus redes sociales."
-          }
-        },
-        "code": {
-          "s1": {
-            "title": "Ejecuta el comando",
-            "body": "Pégalo en tu terminal. Claude Code registra Anomalia como servidor MCP.",
-            "value": "claude mcp add --transport http anomalia https://mcp.anomalia.so/mcp"
-          },
-          "s2": {
-            "title": "Autentícate",
-            "body": "Se abre una pestaña del navegador: inicia sesión en tu cuenta de Anomalia para autorizar."
-          },
-          "s3": {
-            "title": "Estás conectado",
-            "body": "Reinicia Claude Code y pídele que gestione tus redes sociales con Anomalia."
-          }
-        }
-      },
       "phrases": [
         "en todas partes donde buscan lo que vendes.",
         "donde se decide a quién comprar.",
         "en todas partes donde te buscan tus clientes.",
         "donde de verdad cuenta estar.",
         "donde te encuentran antes que a tus competidores."
-      ]
+      ],
+      "agentCopy": "Copia las instrucciones para tu agente",
+      "agentCopied": "Copiado — pégalo en tu IA"
     },
     "geoAudit": {
       "eyebrow": "Auditoría GEO gratuita",
@@ -311,38 +270,38 @@
     },
     "faq": {
       "kicker": "FAQ",
-      "title": "Preguntas que podrías tener.",
+      "title": "Las preguntas que te estás haciendo.",
       "review": {
-        "q": "¿Puedo revisar las publicaciones antes de que se publiquen?",
-        "a": "Siempre. Nada se publica sin tu aprobación. Puedes editar leyendas, cambiar visuales, reprogramar o eliminar — cada publicación pasa por ti primero."
-      },
-      "social": {
-        "q": "¿Cómo funciona el piloto automático de redes sociales?",
-        "a": "Anomalia aprende tu tono de voz, tus productos y tu público desde tu web y tu base de conocimiento. Después un equipo de especialistas construye el plan editorial de la semana y hace las publicaciones — texto, visual y horario — para los nueve canales que conectes. Tú apruebas, y las programa y publica."
-      },
-      "seo": {
-        "q": "¿Los artículos del blog realmente posicionarán en Google?",
-        "a": "Sí. Cada artículo está escrito para una intención de búsqueda real, enlazado a tus páginas reales y optimizado tanto para Google como para asistentes de IA como ChatGPT y Perplexity. No producimos relleno SEO genérico — cada pieza está basada en el conocimiento de tu marca."
-      },
-      "radar": {
-        "q": "¿Qué tan rápido reacciona el radar a las noticias?",
-        "a": "Tres veces al día. El radar lee Google News, Reddit, Threads, LinkedIn y X sobre tu tema, evalúa cada noticia frente a tu estrategia y convierte las relevantes en publicaciones listas con la fuente adjunta. Tú apruebas y salen."
-      },
-      "leads": {
-        "q": "¿Cómo funciona realmente la búsqueda de leads?",
-        "a": "El radar vigila hilos de Reddit, publicaciones de Threads, publicaciones de LinkedIn y conversaciones en X donde alguien busca productos como el tuyo. Para cada una redacta una respuesta con tu voz — tú la revisas y la envías. Nada se publica automáticamente."
-      },
-      "voice": {
-        "q": "¿Sonará como mi marca, no como un robot?",
-        "a": "Sí. Durante la configuración defines el tono, la voz y la personalidad. La IA hace referencia a tus productos reales, el texto de tu sitio web y las directrices de tu marca para cada pieza de contenido. También puedes subir ejemplos de publicaciones que te gusten."
+        "q": "¿Puedo revisarlo todo antes de que salga?",
+        "a": "Sí, y no hay forma de saltárselo. Tu IA puede escribir y programar, pero el post queda pendiente hasta que lo apruebas. Cambias el texto, sustituyes la imagen, lo mueves o lo borras."
       },
       "platforms": {
-        "q": "¿Qué plataformas son compatibles?",
-        "a": "Nueve para publicaciones sociales: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky y Reddit. Los artículos largos se publican en tu blog alojado con nosotros, o los exportas a WordPress, Webflow o Shopify. El radar escucha Google News, Reddit, Threads, LinkedIn y X."
+        "q": "¿Qué plataformas?",
+        "a": "Nueve para social: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky y Reddit. Los carruseles salen enteros en Instagram, Facebook y LinkedIn; en las demás sale la portada. Los artículos van a un blog en tu propio dominio."
       },
-      "trial": {
-        "q": "¿Hay una prueba gratuita?",
-        "a": "Puedes empezar gratis y explorar todo el panel. No se requiere tarjeta de crédito. Actualiza cuando estés listo para activar el piloto automático."
+      "mcp": {
+        "q": "¿Cómo lo conecto?",
+        "a": "Anomalia es un servidor MCP. Pulsa «Copia las instrucciones para tu agente» en la parte superior de esta página y pega el resultado en Claude, ChatGPT o Cursor: lleva la URL, el comando y las primeras llamadas."
+      },
+      "which": {
+        "q": "¿Qué IA puedo usar?",
+        "a": "Cualquiera que hable MCP sobre HTTP — Claude, Claude Code, Cursor, los conectores personalizados de ChatGPT. Todos usan la misma URL. Funciona con tu suscripción: el razonamiento y la escritura los factura tu proveedor, no nosotros."
+      },
+      "cost": {
+        "q": "¿Por qué estoy pagando?",
+        "a": "Tu suscripción de IA cubre el razonamiento y la escritura. El plan de Anomalia cubre lo que viene después: los renders, el calendario, la publicación y las analíticas."
+      },
+      "selfhost": {
+        "q": "¿Puedo alojarlo yo?",
+        "a": "Sí. Anomalia es open source — Docker Compose en tu propio servidor, tus claves, las mismas herramientas y el mismo servidor MCP, marcas ilimitadas."
+      },
+      "agency": {
+        "q": "¿Esto puede sustituir de verdad a mi agencia?",
+        "a": "Para hacer las cosas y sacarlas, sí: los posts, el blog, la programación, la publicación y los informes salen todos de tu propia IA. Dos límites, dichos claros. Trabaja con el contexto de marca que le des — tu web, tus productos, tu voz — así que articula tu posicionamiento, no se lo inventa. Y lanzar campañas de pago en Meta y Google se activa con nuestro equipo, no es self-serve."
+      },
+      "diy": {
+        "q": "¿Por qué no me lo construyo yo?",
+        "a": "Podrías conseguirlo perfectamente. El trabajo no es la IA — tu modelo ya escribe. Es OAuth para nueve plataformas, límites por plataforma que cambian sin avisar, el renderizado de imagen y vídeo, una cola de publicación con reintentos cuando una plataforma rechaza un post, y recoger las métricas después. Son semanas antes de que salga el primer post, y mantenimiento después. Aquí ya existe, y tu IA lo llama como herramientas."
       }
     },
     "grow": {
@@ -480,27 +439,6 @@
         "ctaSecondary": "Agenda una llamada"
       }
     },
-    "services": {
-      "kicker": "Adónde va el trabajo",
-      "social": {
-        "title": "Publicaciones sociales",
-        "body": "Nueve canales — Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky y Reddit. Publicaciones fieles a tu marca, planificadas, creadas y programadas semana tras semana. Nada se publica sin tu aprobación."
-      },
-      "seo": {
-        "title": "Blog, SEO y GEO",
-        "body": "Posiciona en Google y consigue que ChatGPT, Perplexity y Gemini te citen. Artículos largos y contenido optimizado para IA que generan tráfico real."
-      },
-      "radar": {
-        "title": "Marketing instantáneo",
-        "body": "Convierte noticias de última hora en publicaciones en minutos. El radar escanea fuentes, redacta contenido y lo publica antes de que el momento pase."
-      },
-      "leads": {
-        "title": "Nuevos leads a diario",
-        "body": "Encuentra personas que ya te buscan. El radar detecta conversaciones relevantes en Reddit, foros y redes — y redacta comentarios y DMs para ti."
-      },
-      "titleLead": "Un equipo,",
-      "titleAccent": "todos los canales que importan."
-    },
     "howitworks": {
       "kicker": "Cómo funciona",
       "title": "From zero to growth in five steps.",
@@ -602,13 +540,13 @@
       "kicker": "Precios",
       "titleLead": "Listo para usar o",
       "titleAccent": "en tu servidor.",
-      "lede": "Un producto, dos formas de tenerlo. Mismos agentes, mismas aprobaciones — elige dónde vive.",
+      "lede": "One product, two ways to own it. Same tools, same approvals — pick where it lives.",
       "apps": "Apps móviles y de escritorio — próximamente.",
       "cloud": {
         "name": "Cloud",
         "badge": "Listo ahora",
-        "meta": "Lo gestionamos todo. Regístrate, conecta una marca, aprueba.",
-        "f0": "Los agentes planifican, escriben y publican por ti, semana tras semana",
+        "meta": "We run everything. Sign up, connect a brand, connect your AI.",
+        "f0": "Your AI plans and writes; Anomalia renders and publishes",
         "f1": "Nada se publica sin tu aprobación",
         "f2": "Plan gratuito con créditos de IA cada mes",
         "f3": "Sin servidores ni configuración — funciona al instante",
@@ -620,7 +558,7 @@
         "meta": "Tu máquina, tus claves, tus datos. Clona y listo.",
         "f0": "Funciona con Docker Compose en tu propio servidor",
         "f1": "Tus claves de modelo y API — nada sale de tu infraestructura",
-        "f2": "Los mismos agentes que la nube, marcas ilimitadas",
+        "f2": "Same tools as the cloud, unlimited brands",
         "f3": "CLI y servidor MCP incluidos para tus agentes",
         "cta": "Ver en GitHub"
       }
@@ -646,23 +584,6 @@
         {
           "num": "4",
           "label": "Personas en el equipo"
-        }
-      ],
-      "reviews": [
-        {
-          "text": "Recuperé 15 horas a la semana. Las publicaciones son mejores que las que hacía yo.",
-          "name": "Marco R.",
-          "role": "Founder, Flash Camp"
-        },
-        {
-          "text": "Por primera vez tenemos un blog que trae tráfico real. Sin escribir una línea.",
-          "name": "Sara L.",
-          "role": "CMO, Mellon Studio"
-        },
-        {
-          "text": "El radar nos descubrió una tendencia que convertimos en 3 publicaciones que despegaron. Increíble.",
-          "name": "Alex T.",
-          "role": "Growth, Dal Nulla"
         }
       ]
     },
@@ -1904,145 +1825,6 @@
       },
       "cta": "Reservar una call"
     },
-    "team": {
-      "kicker": "El equipo",
-      "title": "Especialistas que",
-      "titleAccent": "terminan el trabajo.",
-      "sub": "Cinco oficios y quien los coordina. Cada uno tiene su área, sus herramientas y su hilo, y lleva el trabajo hasta el final: escrito, producido, revisado con reglas reales, listo para tu sí. Luego vuelve, con su ritmo — cada semana el plan y los posts, cada día el campo — y arranca la siguiente ronda desde lo que corregiste y lo que funcionó.",
-      "routines": "{count, plural, one {# rutina, con horario fijo} other {# rutinas, con horario fijo}}",
-      "onDemand": "Bajo petición — solo pídeselo en el chat",
-      "dm": "También se escriben entre ellos. Cuando el Content Creator necesita saber qué formato funcionó el mes pasado, se lo pregunta directamente al Analyst — en un hilo que puedes leer, sin que tengas que hacer de mensajero.",
-      "content": {
-        "role": "Publicaciones, textos, gráficos y el plan de la semana — escritos con la voz de tu marca.",
-        "name": "Content Creator"
-      },
-      "analyst": {
-        "role": "Los números y el rumbo: resultados, estrategia, vigilancia del mercado y leads.",
-        "name": "Analyst"
-      },
-      "web": {
-        "role": "Tu blog, tu posición en Google y que ChatGPT y Perplexity te citen.",
-        "name": "Web Specialist"
-      },
-      "ugc": {
-        "role": "Reels hablados: el guion, la cara, las tomas y la revisión.",
-        "name": "UGC Specialist"
-      },
-      "motion": {
-        "role": "Anuncios en movimiento y vídeos cinéticos, hechos desde código editable, no desde plantillas.",
-        "name": "Motion Specialist"
-      },
-      "auto": {
-        "role": "Quien coordina. Recibe lo que pidas y se lo pasa a quien deba hacerlo.",
-        "name": "Anomalia"
-      }
-    },
-    "chat": {
-      "kicker": "Cómo trabajas con ellos",
-      "title": "Tú les escribes.",
-      "titleAccent": "Ellos vuelven con el trabajo hecho.",
-      "sub": "Ningún flujo que montar, ningún calendario que rellenar. Una conversación, desde la petición hasta los borradores que esperan tu sí.",
-      "alt": "Una conversación con el Content Creator: la petición para la semana, el trabajo hecho en segundo plano y siete borradores esperando aprobación.",
-      "m1": "Prepárame la semana que viene. El mismo tono del mes pasado, pero más vídeo.",
-      "m2": "Me encargo. Primero leo tus últimas 20 publicaciones y el plan de esta semana.",
-      "actions": "14 acciones hechas",
-      "dm": "3 mensajes con Analyst",
-      "background": "Sigo en segundo plano — te escribo cuando esté listo",
-      "m3": "Siete publicaciones listas para la semana que viene: cuatro de Instagram, dos de TikTok, una de LinkedIn. El vídeo pasa de dos a cuatro. El reel del jueves retoma el gancho que mejor funcionó en julio — los números me los dio el Analyst.",
-      "draftTitle": "Instagram · Reel",
-      "draftSub": "Jueves, 18:30 · texto y portada listos",
-      "draftMore": "+6",
-      "approve": "Aprobar todo",
-      "review": "o ábrelos uno a uno",
-      "pick": "Elige un agente y mira con qué trabajo vuelve",
-      "openSettings": "Abrir Configuración",
-      "connectDrive": "Conectar Google Drive",
-      "cases": {
-        "content": {
-          "name": "La semana de publicaciones",
-          "preview": "Siete publicaciones listas para la semana que viene — cuatro Instagram, dos TikTok…"
-        },
-        "room": {
-          "name": "Tres en una sala",
-          "preview": "El lanzamiento del jueves, resuelto en tres réplicas.",
-          "b1": "El jueves lanzamos. Dadme el anuncio, y decidme si el formato aguanta.",
-          "b2": "En los últimos 60 días el carrusel lleva tres semanas cayendo, el vertical aguanta: 3,1× la media en guardados. Si el lanzamiento es una sola publicación, que sea vídeo.",
-          "b3": "Vídeo entonces. Quince segundos, seis tiempos, los colores de la web — nada de plantillas. El precio lo dejo fuera del primer tiempo: ahí va la promesa.",
-          "b4": "¿Y el texto?",
-          "b5": "Tres líneas, la misma voz que las publicaciones de julio, con la fecha del lanzamiento en la primera. El borrador está en el calendario para el jueves a las 18:30 — publicar sigue siendo cosa tuya."
-        },
-        "connect": {
-          "name": "El canal que falta",
-          "preview": "Siete borradores listos y ningún sitio donde publicarlos.",
-          "b1": "Programa el reel del jueves a las 18:30. Y dime cómo fue julio.",
-          "b2": "Los borradores están escritos, pero la cuenta de Instagram de la marca no está conectada: desde aquí no puedo poner el reel en cola ni leer los números de julio. Es una sola vez.",
-          "b3": "Configuración › Cuentas conectadas — autorizas tú, la contraseña no pasa por mí.",
-          "b4": "Instagram conectado · @flashcamp",
-          "b5": "Sigo donde lo había dejado. El reel está en cola para el jueves a las 18:30 con el texto que aprobaste, y he descargado los últimos 30 días: nueve publicaciones, y en vídeo los guardados son el doble. A partir de ahora programo los borradores sin volver a pedírtelo."
-        },
-        "drive": {
-          "name": "Los documentos que no tengo",
-          "preview": "Primero tus fichas de producto, luego el artículo.",
-          "b1": "Escríbeme el artículo sobre la colección nueva.",
-          "b2": "De la colección nueva tu web dice tres líneas. Con eso escribo un texto que da vueltas, o me invento los detalles — y no me los invento. Si las fichas de producto y las guías están en Drive, leo esas.",
-          "b3": "Solo leo las carpetas que me indiques. No escribo, no muevo y no borro nada.",
-          "b4": "Google Drive conectado · 41 documentos leídos",
-          "b5": "Leídos: las fichas de tejidos, la tarifa y el tono de voz de 2025. Ahora el artículo dice 480 g/m² en vez de «tejido pesado», y los precios son los de verdad. Programado para el martes, sigue siendo un borrador hasta que lo apruebes."
-        },
-        "motion": {
-          "name": "El anuncio que se mueve",
-          "preview": "Quince segundos, seis tiempos, voz y música.",
-          "b1": "Hazme un vídeo de 15 segundos para el lanzamiento. Los mismos colores de la web, y nada de plantillas.",
-          "b2": "Lo construyo desde el código — seis tiempos, una voz en off y una base musical debajo. Primero los fotogramas, luego el render.",
-          "b3": "23 acciones hechas",
-          "b4": "Renderizando en la máquina — te escribo cuando el archivo esté listo",
-          "b5": "Quince segundos. Una sola grabación de voz, cortada en los límites de cada frase para que ningún tiempo hable encima del siguiente, y la música a 0.2 por debajo de las palabras. Pasó la revisión de acabado, así que lo he renderizado. El código sigue siendo editable: dime un tiempo y cambio solo ese.",
-          "cardTitle": "lanzamiento-15s.mp4",
-          "cardSub": "1080×1920 · voz + música"
-        },
-        "web": {
-          "name": "La auditoría que se convierte en trabajo",
-          "preview": "Nota C+. Cuatro iniciativas, y el artículo del martes ya está escrito.",
-          "b1": "¿Por qué no aparecemos en Google por lo que de verdad vendemos?",
-          "b2": "He hecho la revisión del sitio. Nota C+: once páginas sin meta descripción, tres artículos compitiendo por la misma consulta y ningún enlace interno a la página de precios. El control de IA dice que ChatGPT te cita por el nombre de la marca y por nada más.",
-          "b3": "9 acciones hechas",
-          "b4": "Lo he convertido en cuatro iniciativas, en el orden que rinde: primero la página de comparación que aún no existe, luego los enlaces internos. El primer artículo ya está escrito y programado para el martes — sigue siendo un borrador hasta que lo apruebes."
-        },
-        "analyst": {
-          "name": "El lunes, sin que se lo pidas",
-          "preview": "Resumen semanal — nueve publicados, dos te esperan.",
-          "routine": "Resumen semanal · lunes, 8:00",
-          "b1": "La semana pasada: nueve publicaciones subidas, dos todavía esperándote. El reel del jueves hizo tres veces la media — una cara hablando, gancho dentro del primer segundo. El formato carrusel lleva tres semanas cayendo, así que he pedido que dos huecos de la próxima semana pasen a vídeo.",
-          "b2": "12 acciones hechas",
-          "b3": "1 mensaje con Content Creator",
-          "b4": "¿Cuáles tengo que mirar yo?",
-          "b5": "Los dos que esperan aprobación, y el post de LinkedIn — afirma algo sobre los plazos de entrega que no puedo comprobar con nada de lo que me has dado."
-        },
-        "ugc": {
-          "name": "El reel hablado",
-          "preview": "Clip lista, revisada con el estándar orgánico.",
-          "b1": "Un reel donde alguien explica por qué importa el tejido. Veinte segundos, con nuestra propia cara.",
-          "b2": "El guion cabe en el presupuesto de palabras para veinte segundos — por encima, la persona corre y se nota. Mismo casting que las demás clips, así la cara no cambia a mitad de la serie.",
-          "b3": "17 acciones hechas",
-          "b4": "Clip lista. Revisada con el estándar orgánico: gancho 8, los dos primeros segundos sin sonido 7, retención 8 — veredicto ship. Una de las cinco salió plana: corregí su guion y volví a renderizar solo esa, no todo el lote.",
-          "cardTitle": "Reel · 20s",
-          "cardSub": "revisada: ship · texto listo"
-        }
-      },
-      "remote": {
-        "brand": "FLASH CAMP",
-        "live": "EN VIVO",
-        "today": "HOY",
-        "tue": "MAR",
-        "wed": "MIÉ",
-        "launchStory": "Historia del lanzamiento",
-        "behindScenes": "Entre bastidores",
-        "customerNote": "Nota de cliente",
-        "calendarChecked": "Calendario revisado · {count} borradores listos para revisar",
-        "nextPost": "Siguiente publicación programada para el martes a las 09:00"
-      },
-      "foot": "Los trabajos largos siguen aunque cierres la pestaña, y el agente te escribe cuando termina. Publicar es el único paso que nunca da solo."
-    },
     "problems": {
       "kicker": "La verdad incómoda",
       "title": "Sabes que deberías estar en todas partes. No puedes.",
@@ -2168,6 +1950,48 @@
         "title": "Tus anuncios también pueden hacerse solos.",
         "sub": "Conectas la marca, fijas el presupuesto, apruebas. Del resto se encarga Anomalia.",
         "ctaSecondary": "Agenda una llamada"
+      }
+    },
+    "split": {
+      "kicker": "O constrúyelo tú",
+      "titleLead": "Podrías construirlo.",
+      "titleAccent": "Ya sabes lo que cuesta.",
+      "before": {
+        "title": "Constrúyelo tú",
+        "i1": "OAuth para nueve plataformas",
+        "i2": "El límite que impone cada una, y que cambia sin avisar",
+        "i3": "El renderizado de imagen y vídeo, una cola de publicación, los reintentos para cuando rechazan un post",
+        "i4": "Las métricas recogidas y devueltas al modelo",
+        "foot": "Semanas. Y mantenimiento, para siempre."
+      },
+      "after": {
+        "title": "Conéctalo",
+        "i1": "Una URL MCP en la IA que ya pagas",
+        "i2": "Escribe desde tu contexto real — tu web, tus productos, tu voz",
+        "i3": "Anomalia comprueba, renderiza, reserva el hueco y publica",
+        "i4": "Los números vuelven directos a la misma IA",
+        "foot": "Un comando. Hoy."
+      }
+    },
+    "channels": {
+      "label": "Publica en",
+      "note": "Nada se publica hasta que lo apruebas."
+    },
+    "jobs": {
+      "kicker": "Por lo que pagabas",
+      "titleLead": "Una agencia hace tres trabajos.",
+      "titleAccent": "Tu IA puede hacer los tres.",
+      "social": {
+        "title": "Social orgánico",
+        "body": "Publicaciones, carruseles y vídeo para nueve canales — con tu voz, comprobados contra las reglas de cada plataforma y repartidos por tu semana."
+      },
+      "web": {
+        "title": "El crecimiento de tu web",
+        "body": "Artículos publicados en tu propio dominio, estrategia de keywords con volumen de búsqueda real, y si los motores de IA te citan."
+      },
+      "ads": {
+        "title": "Anuncios",
+        "body": "Tu IA lee lo que están publicando tus competidores en la biblioteca de anuncios de Meta y redacta las creatividades. Lanzar las campañas se activa con nuestro equipo — esa parte aún no es self-serve."
       }
     }
   },
@@ -2508,8 +2332,8 @@
   },
   "meta": {
     "landing": {
-      "title": "Anomalia — un equipo de marketing que publica por ti",
-      "description": "Cinco especialistas de IA planifican, escriben, diseñan y publican tu contenido en nueve canales sociales, tu blog y Google. Tú apruebas; ellos hacen el resto."
+      "title": "Anomalia — Claude, ChatGPT and Cursor replace your agency",
+      "description": "Organic social, site growth and ads, run by the AI you already pay for. Anomalia renders the work, keeps platform rules, publishes to your accounts and measures it."
     },
     "pricing": {
       "title": "Pricing — Anomalia",
