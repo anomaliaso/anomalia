@@ -1,5 +1,4 @@
 <script lang="ts">
-  import '$lib/styles/tailwind.css';
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { METRIC_LABELS, compact, reachOf } from './tally';
   import type { TopPost } from './tally';

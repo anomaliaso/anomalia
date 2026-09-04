@@ -1,5 +1,4 @@
 <script lang="ts">
-  import '$lib/styles/tailwind.css';
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { listOf, pairsOf, platformsOf, stateOf, textOf, weeksOf } from './plan-shape';
   import type { PageProps } from './$types';
