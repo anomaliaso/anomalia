@@ -349,7 +349,7 @@ export function registerBrandTools(server: McpServer) {
         const postId = await resolvePostId(token, slug, id);
         return {
           id: postId,
-          ...(await api.postMedia(token, slug, postId, { action: 'reorder', order })),
+          ...(await api.postMedia(token, slug, postId, { action: 'restructure', order })),
         };
       }),
   );
