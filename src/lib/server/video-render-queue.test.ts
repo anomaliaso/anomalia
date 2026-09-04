@@ -18,6 +18,17 @@ vi.mock('$lib/server/ai-log', () => ({
 	withBrandContext: <T>(_brandId: string, fn: () => T) => fn()
 }));
 
+const saveRenderedVideoToLibrary = vi.fn();
+const addUsage = vi.fn();
+
+vi.mock('$lib/server/brand-media', () => ({
+	saveRenderedVideoToLibrary: (...args: unknown[]) => saveRenderedVideoToLibrary(...args)
+}));
+vi.mock('$lib/server/usage', () => ({
+	addUsage: (...args: unknown[]) => addUsage(...args),
+	monthKey: () => '2026-09'
+}));
+
 /** In-memory tables where a conditional UPDATE really re-checks the row it matched. */
 function makeDb(seed: Record<string, Row[]>) {
 	const tables: Record<string, Row[]> = {};
@@ -102,6 +113,10 @@ async function reconcile(client: unknown) {
 
 beforeEach(() => {
 	finishVideoRender.mockReset();
+	saveRenderedVideoToLibrary.mockReset();
+	saveRenderedVideoToLibrary.mockResolvedValue({ mediaId: 'media-1' });
+	addUsage.mockReset();
+	addUsage.mockResolvedValue(undefined);
 });
 
 describe('reconcileVideoRenders', () => {
@@ -312,6 +327,65 @@ describe('reconcileVideoRenders', () => {
 
 		expect(tables.video_renders[0].status).toBe('rendering');
 		expect(tables.video_renders[0].error).toBe('storage unreachable');
+	});
+
+	// Un clip generato VERSO LA LIBRERIA non ha un post a cui attaccarsi: senza questo ramo
+	// finirebbe `done` con la sua url e nessun id che create_post sappia accettare — pagato e
+	// irraggiungibile. `source_ref` porta l'id del lavoro, ed è così che check_media_job lo ritrova.
+	it('deposita in libreria un clip che non appartiene a nessun post', async () => {
+		finishVideoRender.mockResolvedValue({
+			status: 'done',
+			url: 'https://cdn/clip.mp4',
+			durationSeconds: 12,
+			resolution: '720p'
+		});
+		const { tables, client } = makeDb({ video_renders: [renderRow({ post_id: null })] });
+
+		expect(await reconcile(client)).toMatchObject({ done: 1 });
+
+		expect(saveRenderedVideoToLibrary).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				brandId: 'brand-1',
+				userId: 'user-1',
+				url: 'https://cdn/clip.mp4',
+				sourceRef: 'render-1'
+			})
+		);
+		expect(tables.video_renders[0].status).toBe('done');
+	});
+
+	// L'allocazione mensile si contava solo dentro il ramo del post, e questo apriva un arbitraggio:
+	// genero in libreria, attacco dopo, e il video non conta mai. Un video è un video.
+	it('conta il video sull allocazione mensile anche senza un post', async () => {
+		finishVideoRender.mockResolvedValue({
+			status: 'done',
+			url: 'https://cdn/clip.mp4',
+			durationSeconds: 12,
+			resolution: '720p'
+		});
+		const { client } = makeDb({ video_renders: [renderRow({ post_id: null })] });
+
+		await reconcile(client);
+
+		expect(addUsage).toHaveBeenCalledWith(expect.anything(), 'brand-1', '2026-09', { videos: 1 });
+	});
+
+	it('non deposita in libreria un clip che un post ha gia preso', async () => {
+		finishVideoRender.mockResolvedValue({
+			status: 'done',
+			url: 'https://cdn/clip.mp4',
+			durationSeconds: 12,
+			resolution: '720p'
+		});
+		const { client } = makeDb({
+			video_renders: [renderRow()],
+			posts: [{ id: 'post-1' }]
+		});
+
+		await reconcile(client);
+
+		expect(saveRenderedVideoToLibrary).not.toHaveBeenCalled();
 	});
 });
 
