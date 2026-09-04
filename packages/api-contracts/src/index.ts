@@ -55,7 +55,7 @@ import {
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
-import { SEARCH_KNOWLEDGE } from './knowledge';
+import { GET_KNOWLEDGE_STATUS, SEARCH_KNOWLEDGE } from './knowledge';
 import {
   ADD_RADAR_SOURCE,
   GET_RADAR,
@@ -157,6 +157,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_GSC,
   GET_GTM,
   GET_KEYWORDS,
+  GET_KNOWLEDGE_STATUS,
   GET_MARKET_FIELD,
   GET_MEDIA_MODELS,
   GET_PLAN,
@@ -300,7 +301,10 @@ export {
 } from './radar';
 export type { RadarPlatform, RadarSourceKindName } from './radar';
 export {
+  GET_KNOWLEDGE_STATUS,
   KNOWLEDGE_COLLECTIONS,
+  KNOWLEDGE_DOC_STATUSES,
+  KNOWLEDGE_FAILURES_MAX,
   KNOWLEDGE_EXCERPT_CHARS,
   KNOWLEDGE_HITS_DEFAULT,
   KNOWLEDGE_HITS_MAX,

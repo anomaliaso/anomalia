@@ -379,7 +379,7 @@ export async function getStudio(supabase: SupabaseClient, brandId: string) {
       .eq('brand_id', brandId).maybeSingle(),
     supabase.from('products').select('id, title, pricing, images, featured')
       .eq('brand_id', brandId),
-    supabase.from('brand_documents').select('id, kind, title, content_text, file_url, file_name, mime_type, created_at')
+    supabase.from('brand_documents').select('id, kind, title, content_text, file_url, file_name, mime_type, created_at, status, chunk_count')
       .eq('brand_id', brandId),
     supabase.from('social_post_history').select('id, platform, content, thumbnail_url, platform_post_url, metrics, published_at')
       .eq('brand_id', brandId).limit(60),
@@ -409,7 +409,12 @@ export async function getStudio(supabase: SupabaseClient, brandId: string) {
   return {
     kit,
     products: productsRes.data ?? [],
-    documents: docsRes.data ?? [],
+    // `chunk_count` esce come `chunkCount`: elencare un documento senza dire se è stato digerito
+    // è ciò che fa credere a un agente di avere una conoscenza che la ricerca non vede.
+    documents: (docsRes.data ?? []).map(({ chunk_count, ...doc }) => ({
+      ...doc,
+      chunkCount: (chunk_count as number) ?? 0
+    })),
     history: historyRes.data ?? [],
     people: (peopleRes.data ?? []).map(p => ({
       id: p.id,
