@@ -451,6 +451,8 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/keywords" \
 
 ## `GET /api/v1/brands/:slug/backlinks`
 
+Tool MCP: `get_backlinks`.
+
 Riepilogo della backlink network: piazzamenti in uscita/entrata, opportunità open e statistiche.
 
 **Query params**: nessuno
@@ -815,6 +817,8 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/articles/mio-articolo" \
 
 ## `GET /api/v1/brands/:slug/gsc`
 
+Tool MCP: `get_gsc`.
+
 Riepilogo Google Search Console: stato connessione + metriche aggregate 28 giorni (top query e pagine, max 20 ciascuna).
 
 **Query params**: nessuno
@@ -879,6 +883,8 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/gsc" \
 ---
 
 ## `GET /api/v1/brands/:slug/ranks`
+
+Tool MCP: `get_ranks`.
 
 Rank board: keyword tracciate attive con posizione attuale, precedente e delta.
 

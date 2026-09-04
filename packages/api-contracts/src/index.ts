@@ -45,6 +45,7 @@ import {
   LIST_PRODUCTS
 } from './reads';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
+import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 import {
   CREATE_SHARE,
   LIST_SHARES,
@@ -121,14 +122,17 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_ANALYTICS,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
+  GET_BACKLINKS,
   GET_BIO,
   GET_CALENDAR,
   GET_CREATION_KIT,
   GET_GEO,
+  GET_GSC,
   GET_GTM,
   GET_KEYWORDS,
   GET_PLAN,
   GET_POST,
+  GET_RANKS,
   GET_SEO,
   GET_STUDIO,
   GET_VOICE,
@@ -220,6 +224,7 @@ export {
   LIST_PRODUCTS
 };
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
+export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {
   ADD_COMPETITOR,
   CREATE_PRODUCT,
