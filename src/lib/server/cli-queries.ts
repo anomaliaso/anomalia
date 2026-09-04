@@ -373,7 +373,20 @@ export async function getAnalytics(supabase: SupabaseClient, brandId: string, br
 
 // ── Studio ──────────────────────────────────────────────────────────────
 
-export async function getStudio(supabase: SupabaseClient, brandId: string) {
+/**
+ * `index` non spedisce `content_text`, `full` sì. Il difetto è `index` perché il campo non aveva
+ * un lettore — la CLI stampa icona/titolo/id, `readBrandStudioForAgent` usa `.length`, la pagina
+ * Knowledge ha la sua query — e il suo unico effetto era rovesciare il corpus nella finestra di un
+ * agente esterno, che a quel punto smette di usare `search_knowledge`. `textBytes` dice che il
+ * testo c'è e quanto pesa, e resta in entrambi i modi.
+ */
+export type StudioDocuments = 'index' | 'full';
+
+export async function getStudio(
+  supabase: SupabaseClient,
+  brandId: string,
+  opts?: { documents?: StudioDocuments }
+) {
   const [kitRes, productsRes, docsRes, historyRes, competitorsRes, brandRes, peopleRes] = await Promise.all([
     supabase.from('brand_kit').select('category, about, brand_style, target_audience, brand_colors, theme_color, favicon_url, fonts, logos, ai_character, ai_context, ai_context_updated_at, visual_style, visual_style_locked, content_pillars, site_type, images')
       .eq('brand_id', brandId).maybeSingle(),
@@ -411,9 +424,11 @@ export async function getStudio(supabase: SupabaseClient, brandId: string) {
     products: productsRes.data ?? [],
     // `chunk_count` esce come `chunkCount`: elencare un documento senza dire se è stato digerito
     // è ciò che fa credere a un agente di avere una conoscenza che la ricerca non vede.
-    documents: (docsRes.data ?? []).map(({ chunk_count, ...doc }) => ({
+    documents: (docsRes.data ?? []).map(({ chunk_count, content_text, ...doc }) => ({
       ...doc,
-      chunkCount: (chunk_count as number) ?? 0
+      chunkCount: (chunk_count as number) ?? 0,
+      textBytes: ((content_text as string | null) ?? '').length,
+      ...(opts?.documents === 'full' ? { content_text: (content_text as string | null) ?? null } : {})
     })),
     history: historyRes.data ?? [],
     people: (peopleRes.data ?? []).map(p => ({

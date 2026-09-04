@@ -176,7 +176,7 @@ export type AnalyticsData = {
 export type StudioData = {
   kit: Record<string, unknown> | null;
   products: { id: string; title: string; pricing: string | null; images: unknown; featured: boolean | null }[];
-  documents: { id: string; kind: string; title: string; content_text: string | null }[];
+  documents: { id: string; kind: string; title: string; status: string; chunkCount: number; textBytes: number }[];
   history: { id: string; platform: string; content: string | null; metrics: Record<string, number> }[];
   people: { id: string; name: string; role: string | null; kind: string; description: string | null; consent: boolean; imageCount: number }[];
   competitors: { id: string; name: string; website: string | null; kind: string; rationale: string | null; source: string }[];

@@ -238,6 +238,12 @@ deck. No credits, no writes.
 | `get_bio` / `set_bio` | (MCP only) |
 | `sync_history` | `anomalia studio <slug> sync-history` |
 
+`get_studio` lists documents **without their text**. Each carries `status`, `chunkCount` and
+`textBytes`: the text exists, its size is stated, and it does not travel. To answer a question,
+call `search_knowledge` — it returns the passages that answer it with the document each came
+from. `documents: "full"` restores `content_text` on every document; it is there for callers
+that read it before and is almost never what you want.
+
 `create_product` adds ONE offer. The e-commerce resync behind `sync_products` replaces the whole
 catalog and would erase a hand-made row.
 

@@ -181,7 +181,10 @@ async function showStudio(token: string, slug: string) {
   section(`Knowledge (${data.documents.length})`);
   for (const doc of data.documents) {
     const icon = doc.kind === 'image' ? '🖼' : doc.kind === 'document' ? '📄' : '📝';
-    console.log(`  ${icon} ${doc.title}  ${c.dim(doc.id.slice(0, 8))}`);
+    // Cercabile = processato E spezzato. Un `ready` con zero chunk esiste e la ricerca non lo vede.
+    const searchable = doc.status === 'ready' && doc.chunkCount > 0;
+    const state = searchable ? '' : c.dim(`  (${doc.status}, not searchable)`);
+    console.log(`  ${icon} ${doc.title}  ${c.dim(doc.id.slice(0, 8))}${state}`);
   }
   console.log();
 

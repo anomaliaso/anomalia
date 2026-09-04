@@ -284,6 +284,8 @@ export {
   LIST_ARTICLES,
   LIST_PRODUCTS
 };
+export { STUDIO_DOCUMENT_MODES } from './reads';
+export type { StudioDocumentMode } from './reads';
 export {
   GET_BRAND_SETTINGS,
   SET_BRAND_SETTINGS,

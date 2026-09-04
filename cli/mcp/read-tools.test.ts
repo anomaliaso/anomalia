@@ -22,13 +22,21 @@ const MIGRATED_READS = [
   {
     name: 'get_studio',
     title: 'Studio',
-    // Cambiata di proposito: l'elenco dei documenti ora dice se sono stati digeriti, e manda a
-    // `search_knowledge` chi ha una domanda invece di far leggere il corpus intero.
+    // Cambiata di proposito, due volte: l'elenco dei documenti dice se sono stati digeriti, e il
+    // testo non viaggia più per difetto — `documents: "full"` lo restituisce a chi lo leggeva.
     description:
       'Full studio dump: kit, people, documents, competitors, products, history summary. ' +
-      'Each document carries `status` and `chunkCount`: a document that is not `ready` with at least one chunk exists here but is invisible to `search_knowledge`. ' +
-      'This returns the FULL text of every document — to answer a question, ask `search_knowledge` instead of reading the corpus.',
-    properties: { slug: SLUG_PROPERTY },
+      'Each document carries `status` and `chunkCount` (a document that is not `ready` with at least one chunk exists here but is invisible to `search_knowledge`) and `textBytes`, which says how much text it holds. ' +
+      'The text itself is NOT included: to answer a question, ask `search_knowledge` — it returns the passages that answer it with the document each came from, instead of the whole corpus. ' +
+      '`documents: "full"` restores the complete text of every document; it exists for callers that were reading it before and is almost never what you want.',
+    properties: {
+      slug: SLUG_PROPERTY,
+      documents: {
+        type: 'string',
+        enum: ['index', 'full'],
+        description: '`index` (default) lists documents without their text; `full` includes content_text',
+      },
+    },
     required: ['slug'],
   },
   {
