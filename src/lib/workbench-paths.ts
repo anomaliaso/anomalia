@@ -294,8 +294,7 @@ export const BRAND_PAGE_ROUTES = [
   'site/edit/[id]', // editor articolo a tutta larghezza (isArticleEdit) + dinamica
   'media-generator', // canvas full-bleed col composer pinnato (isMediaWorkbench)
   'motion-video', //   idem
-  'ugc-creator', //   idem
-  'agent-lab' // banco di prova SOLO dev (404 in prod): mai nel rail, non ha senso nella modal
+  'ugc-creator' //   idem
 ] as const;
 
 /** Rotte del brand ospitate nella modal. */
