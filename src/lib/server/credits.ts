@@ -534,7 +534,7 @@ async function claimCreditWarning(
 
 /**
  * Send a one-time email warning when credit usage exceeds 80% of the quota.
- * Uses brand_usage.credits_warned_at for anti-spam: one email per billing period.
+ * Uses org_usage.credits_warned_at for anti-spam: one email per billing period, per org.
  * Fire-and-forget: never throws, never blocks the caller.
  */
 export async function maybeSendCreditWarning(
