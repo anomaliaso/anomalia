@@ -12,6 +12,7 @@ import {
   KLING_3_VIDEO_MODEL,
   KLING_TURBO_I2V_MODEL
 } from '$lib/video-models';
+import { MEDIA_MODEL_SLOT_IDS } from '@anomalia/api-contracts';
 
 describe('media model slots', () => {
   it('offers at least one model in every slot', () => {
@@ -45,5 +46,12 @@ describe('media model slots', () => {
   it('does not answer for a slot that does not exist', () => {
     expect(mediaModelSlot('videoVibesModel')).toBeUndefined();
     expect(mediaModelSlot('')).toBeUndefined();
+  });
+
+  it('is the same list the API contract offers, or a slot exists that no agent can reach', () => {
+    // Il contratto non puo' importare `$lib`, quindi i sei nomi vivono anche li'. Questo test e'
+    // cio' che impedisce ai due elenchi di divergere in silenzio: un mestiere aggiunto qui e non
+    // di la' resterebbe modificabile dal browser e invisibile a `set_media_model`.
+    expect([...MEDIA_MODEL_SLOT_IDS]).toEqual(MEDIA_MODEL_SLOTS.map((s) => s.id));
   });
 });
