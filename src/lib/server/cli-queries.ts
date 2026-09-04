@@ -462,11 +462,14 @@ export async function getVoice(supabase: SupabaseClient, brandId: string) {
 
 // ── Calendar ────────────────────────────────────────────────────────────
 
+function isoDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export async function getCalendar(supabase: SupabaseClient, brandId: string, brandTimezone: string, year: number, month: number, brandLanguage: string | null = null) {
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
-  const startStr = firstDay.toISOString().slice(0, 10);
-  const endStr = lastDay.toISOString().slice(0, 10);
+  const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const startStr = isoDate(year, month, 1);
+  const endStr = isoDate(year, month, lastDayOfMonth);
 
   const [schedRes, slotRes, draftRes] = await Promise.all([
     supabase.from('posts')

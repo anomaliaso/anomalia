@@ -71,6 +71,24 @@ const calendar = (rows: Record<string, unknown>[], year: number, month: number) 
   return getCalendar(client as unknown as SupabaseLike, 'brand-1', 'Europe/Rome', year, month);
 };
 
+const LAST_DAY_OF_OCTOBER = {
+  id: 'last-day',
+  brand_id: 'brand-1',
+  status: 'scheduled',
+  scheduled_for: '2030-10-31T21:00:00.000Z',
+  slot: '2030-10-31'
+};
+
+async function underServerTimezone<T>(timezone: string, run: () => Promise<T>): Promise<T> {
+  const original = process.env.TZ;
+  process.env.TZ = timezone;
+  try {
+    return await run();
+  } finally {
+    process.env.TZ = original;
+  }
+}
+
 describe('getCalendar con un post proposto dall esterno', () => {
   it('mette un pending datato nel suo mese', async () => {
     const out = await calendar([DATED_IN_OCTOBER], 2030, 10);
@@ -96,5 +114,42 @@ describe('getCalendar con un post proposto dall esterno', () => {
     const out = await calendar([DATED_IN_OCTOBER], 2030, 10);
 
     expect(out.posts.find((p) => p.id === 'proposed')?.isDraft).toBeUndefined();
+  });
+});
+
+describe('la finestra del mese non dipende dal fuso del server', () => {
+  it('arriva fino all ultimo giorno anche a est di UTC', async () => {
+    const posts = await underServerTimezone('Europe/Rome', async () => {
+      const out = await calendar([LAST_DAY_OF_OCTOBER], 2030, 10);
+      return out.posts.map((p) => p.id);
+    });
+
+    expect(posts).toContain('last-day');
+  });
+
+  it('non tira dentro l ultimo giorno del mese prima', async () => {
+    const previousMonthTail = {
+      id: 'september-tail',
+      brand_id: 'brand-1',
+      status: 'scheduled',
+      scheduled_for: '2030-09-30T21:00:00.000Z',
+      slot: '2030-09-30'
+    };
+
+    const posts = await underServerTimezone('Europe/Rome', async () => {
+      const out = await calendar([previousMonthTail], 2030, 10);
+      return out.posts.map((p) => p.id);
+    });
+
+    expect(posts).not.toContain('september-tail');
+  });
+
+  it('la stessa finestra a ovest di UTC', async () => {
+    const posts = await underServerTimezone('America/Los_Angeles', async () => {
+      const out = await calendar([LAST_DAY_OF_OCTOBER], 2030, 10);
+      return out.posts.map((p) => p.id);
+    });
+
+    expect(posts).toContain('last-day');
   });
 });
