@@ -6,22 +6,47 @@ import { CREATE_POST, GET_CALENDAR, LIST_MEDIA, LIST_POSTS } from './posts';
 
 export type EndpointFailure = { readonly error: string; readonly status: number };
 
-export type BrandEndpoint = {
+export const BRAND_RESOURCES = {
+  post: 'Post',
+  article: 'Article'
+} as const;
+
+export type BrandResource = keyof typeof BRAND_RESOURCES;
+
+export const RESOURCE_SEGMENT = ':id';
+
+type EndpointShape = {
   readonly tool: string;
   readonly title: string;
   readonly description: string;
   readonly method: 'GET' | 'POST';
-  readonly pathUnderBrand: string;
   readonly input: z.ZodObject<z.ZodRawShape>;
   readonly output: z.ZodType;
   readonly failures: readonly EndpointFailure[];
   readonly destructive: boolean;
 };
 
+export type ResourcelessEndpoint = EndpointShape & {
+  readonly pathUnderBrand: string;
+  readonly resource?: undefined;
+};
+
+export type ResourceEndpoint = EndpointShape & {
+  readonly pathUnderBrand: `${string}/${typeof RESOURCE_SEGMENT}${string}`;
+  readonly resource: BrandResource;
+};
+
+export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
+
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [CREATE_POST, LIST_POSTS, GET_CALENDAR, LIST_MEDIA, CHECK_CONTENT, SAVE_PLAN, SAVE_WEEK_SEEDS, LIST_WEB_AUDITS, GET_AUDIT_FINDINGS, LIST_AUDIT_CITATIONS, LIST_WEB_FIXES];
 
-export function pathFor(endpoint: BrandEndpoint, slug: string): string {
-  return `/api/v1/brands/${encodeURIComponent(slug)}${endpoint.pathUnderBrand}`;
+export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;
+export function pathFor(endpoint: ResourceEndpoint, slug: string, id: string): string;
+export function pathFor(endpoint: BrandEndpoint, slug: string, id?: string): string {
+  const base = `/api/v1/brands/${encodeURIComponent(slug)}`;
+  if (endpoint.resource === undefined) return `${base}${endpoint.pathUnderBrand}`;
+  if (!id) throw new Error(`${endpoint.tool} needs a ${endpoint.resource} id`);
+  return `${base}${endpoint.pathUnderBrand.replace(RESOURCE_SEGMENT, encodeURIComponent(id))}`;
 }
 
 export function statusForFailure(endpoint: BrandEndpoint, error: string): number {

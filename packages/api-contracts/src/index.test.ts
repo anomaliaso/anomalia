@@ -1,12 +1,36 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { BRAND_ENDPOINTS, pathFor, statusForFailure, type BrandEndpoint } from './index';
+import {
+  BRAND_ENDPOINTS,
+  BRAND_RESOURCES,
+  RESOURCE_SEGMENT,
+  pathFor,
+  statusForFailure,
+  type BrandEndpoint
+} from './index';
 
 const byTool = (tool: string): BrandEndpoint => {
   const found = BRAND_ENDPOINTS.find((e) => e.tool === tool);
   if (!found) throw new Error(`missing endpoint ${tool}`);
   return found;
 };
+
+const ON_A_POST = {
+  tool: 'fixture_post_read',
+  title: 'Fixture',
+  description: 'Fixture',
+  method: 'GET',
+  pathUnderBrand: '/posts/:id/media',
+  resource: 'post',
+  input: z.object({}).strict(),
+  output: z.object({ status: z.string() }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+const modelled = (e: BrandEndpoint): boolean =>
+  e.pathUnderBrand.includes(RESOURCE_SEGMENT) === (e.resource !== undefined) &&
+  !e.pathUnderBrand.replace(RESOURCE_SEGMENT, '').includes(':');
 
 describe('il registry degli endpoint di brand', () => {
   it('descrive almeno una lettura e una scrittura, o non prova niente', () => {
@@ -26,13 +50,31 @@ describe('il registry degli endpoint di brand', () => {
     expect(pathFor(byTool('create_post'), 'demo')).toBe('/api/v1/brands/demo/posts');
   });
 
-  // Il limite dichiarato della versione 1: un endpoint con :id ha anche bisogno della
-  // risoluzione del prefisso (resolvePostId), che il registry non sa fare. Finché non la sa,
-  // quegli endpoint restano scritti a mano invece di entrare qui a metà.
-  it('non accetta ancora un endpoint con un segmento :id', () => {
+  it('un endpoint di risorsa mette l id risolto al posto del segmento', () => {
+    expect(pathFor(ON_A_POST, 'demo', '2b38abc5-7f31-4e0a-9a41-0f2d0c1b8e55')).toBe(
+      '/api/v1/brands/demo/posts/2b38abc5-7f31-4e0a-9a41-0f2d0c1b8e55/media'
+    );
+  });
+
+  it('senza id un endpoint di risorsa non costruisce un path a metà', () => {
+    // @ts-expect-error un endpoint che dichiara una risorsa non è chiamabile senza il suo id
+    expect(() => pathFor(ON_A_POST, 'demo')).toThrow(/post/);
+  });
+
+  it('un segmento dinamico esiste se e solo se la risorsa che lo risolve è dichiarata', () => {
     for (const e of BRAND_ENDPOINTS) {
-      expect(e.pathUnderBrand.includes(':'), e.tool).toBe(false);
+      expect(modelled(e), e.tool).toBe(true);
     }
+    expect(modelled({ ...ON_A_POST, resource: undefined })).toBe(false);
+    expect(modelled({ ...ON_A_POST, pathUnderBrand: '/posts/:id/media/:index' })).toBe(false);
+  });
+
+  it('ogni risorsa nominata da un endpoint ha una riga nella tabella delle risorse', () => {
+    for (const e of BRAND_ENDPOINTS) {
+      if (e.resource === undefined) continue;
+      expect(BRAND_RESOURCES[e.resource], e.tool).toBeDefined();
+    }
+    expect(BRAND_RESOURCES[ON_A_POST.resource]).toBe('Post');
   });
 
   it('una lettura non è mai distruttiva', () => {

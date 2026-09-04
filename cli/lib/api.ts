@@ -4,7 +4,12 @@
  */
 
 import { appUrl } from './config.ts';
-import { pathFor, type BrandEndpoint } from './contracts/index.ts';
+import {
+  pathFor,
+  type BrandEndpoint,
+  type ResourceEndpoint,
+  type ResourcelessEndpoint,
+} from './contracts/index.ts';
 
 async function request<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   // Resolved per call, not at import time: loadEnv() sets PUBLIC_APP_URL after the module
@@ -38,12 +43,27 @@ function post<T>(path: string, token: string, body?: unknown): Promise<T> {
 }
 
 export function callEndpoint<T>(
+  endpoint: ResourcelessEndpoint,
+  token: string,
+  slug: string,
+  input?: Record<string, unknown>,
+): Promise<T>;
+export function callEndpoint<T>(
+  endpoint: ResourceEndpoint,
+  token: string,
+  slug: string,
+  input: Record<string, unknown>,
+  id: string,
+): Promise<T>;
+export function callEndpoint<T>(
   endpoint: BrandEndpoint,
   token: string,
   slug: string,
   input: Record<string, unknown> = {},
+  id?: string,
 ): Promise<T> {
-  const path = pathFor(endpoint, slug);
+  const path =
+    endpoint.resource === undefined ? pathFor(endpoint, slug) : pathFor(endpoint, slug, id ?? '');
   if (endpoint.method === 'POST') return post<T>(path, token, input);
 
   const query = new URLSearchParams();
