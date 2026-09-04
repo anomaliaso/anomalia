@@ -4,13 +4,10 @@
   import { siClaude } from 'simple-icons';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import AskAiCta from '$lib/components/AskAiCta.svelte';
-  import ServiceMockup from '$lib/components/ServiceMockup.svelte';
-  import TeamRoster from '$lib/components/TeamRoster.svelte';
-  import HomeChatMockup from '$lib/components/HomeChatMockup.svelte';
   import WhyUs from '$lib/components/WhyUs.svelte';
   import HomePricing from '$lib/components/HomePricing.svelte';
   import LandingFaq from '$lib/components/LandingFaq.svelte';
-  import { localePath, type Locale } from '$lib/i18n/locale';
+  import { PLATFORM_KEYS, PLATFORM_META } from '$lib/components/platform-meta';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
   import YoutubeFacade from '$lib/components/YoutubeFacade.svelte';
@@ -20,19 +17,18 @@
   import '$lib/styles/landing.css';
 
   let { data } = $props();
-  const lp = $derived((p: string) => localePath(p, (($locale as Locale) ?? 'en')));
   const waitlistActive = $derived(data.waitlistActive);
   const cta = $derived(waitlistActive ? $_('landing.cta.waitlist') : $_('landing.cta.getStarted'));
   const startHref = $derived(marketingStartHref({ loggedIn: Boolean(data.session), waitlistActive }));
 
-  let copied = $state(false);
-  function copyInstall() {
-    navigator.clipboard.writeText('curl -sSL https://anomalia.so/install.sh | bash');
-    copied = true;
-    setTimeout(() => (copied = false), 2000);
-  }
-
   let claudeOpen = $state(false);
+
+  // The channel strip reads the same table the publisher does, so it cannot promise a platform
+  // the product can't post to.
+  const channels = PLATFORM_KEYS.map((k) => PLATFORM_META[k].label);
+
+  const SPLIT_YOURS = ['i1', 'i2', 'i3'];
+  const SPLIT_OURS = ['i1', 'i2', 'i3', 'i4', 'i5'];
 
   const siteUrl = $derived($page.url.origin);
   const jsonLd = $derived(
@@ -109,9 +105,49 @@
     </div>
   </section>
 
-  <TeamRoster />
+  <!-- ============ THE SPLIT: what your AI does, what Anomalia does ============ -->
+  <section class="split-sec">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="kicker">{$_('landing.split.kicker')}</div>
+        <h2>{$_('landing.split.titleLead')} <span class="gr-accent">{$_('landing.split.titleAccent')}</span></h2>
+      </div>
+      <div class="split-cols">
+        <div class="split-col reveal" data-d="1">
+          <h3>{$_('landing.split.yours.title')}</h3>
+          <p class="split-note">{$_('landing.split.yours.note')}</p>
+          <ul>
+            {#each SPLIT_YOURS as k (k)}
+              <li>{$_(`landing.split.yours.${k}`)}</li>
+            {/each}
+          </ul>
+        </div>
+        <div class="split-col is-ours reveal" data-d="2">
+          <h3>{$_('landing.split.ours.title')}</h3>
+          <p class="split-note">{$_('landing.split.ours.note')}</p>
+          <ul>
+            {#each SPLIT_OURS as k (k)}
+              <li>{$_(`landing.split.ours.${k}`)}</li>
+            {/each}
+          </ul>
+        </div>
+      </div>
+      <p class="split-punch reveal">{$_('landing.split.punch')}</p>
+    </div>
+  </section>
 
-  <HomeChatMockup />
+  <!-- ============ CHANNELS ============ -->
+  <section class="channels-sec">
+    <div class="wrap">
+      <p class="channels-label">{$_('landing.channels.label')}</p>
+      <ul class="channels-list">
+        {#each channels as name (name)}
+          <li>{name}</li>
+        {/each}
+      </ul>
+      <p class="channels-note">{$_('landing.channels.note')}</p>
+    </div>
+  </section>
 
   <!-- ============ VIDEO ============ -->
   <section class="video-sec">
@@ -123,38 +159,6 @@
           poster="/yt-uksgDRVZm6w.webp"
           priority
         />
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ SERVICES 2×2 GRID ============ -->
-  <section class="services-sec">
-    <div class="wrap">
-        <div class="sec-head reveal">
-          <div class="kicker">{$_('landing.services.kicker')}</div>
-          <h2>{$_('landing.services.titleLead')} <span class="gr-accent">{$_('landing.services.titleAccent')}</span></h2>
-        </div>
-      <div class="services-grid">
-        <div class="svc-card reveal" data-d="1">
-          <h3>{$_('landing.services.social.title')}</h3>
-          <p>{$_('landing.services.social.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="content" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="2">
-          <h3>{$_('landing.services.seo.title')}</h3>
-          <p>{$_('landing.services.seo.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="seogeo" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="1">
-          <h3>{$_('landing.services.radar.title')}</h3>
-          <p>{$_('landing.services.radar.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="radar" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="2">
-          <h3>{$_('landing.services.leads.title')}</h3>
-          <p>{$_('landing.services.leads.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="leads" /></div>
-        </div>
       </div>
     </div>
   </section>
@@ -414,6 +418,77 @@
      limitare lui darebbe 908px di video contro 940 di mockup — sbagliato di 32px proprio nel
      confronto che si voleva sistemare. */
   .video-wrap { max-width: 940px; margin-inline: auto; }
+
+  /* ---------- THE SPLIT ----------
+     Two columns saying who does what. Flex and not grid: app.css owns a global `.grid`
+     (1.7fr 1fr) that hijacks anything carrying that class, and the same 940px cap as the
+     video and the old chat mockup keeps the page's vertical spine straight. */
+  .split-sec { padding-block: 100px; }
+  .split-cols {
+    display: flex; gap: 24px; align-items: stretch;
+    max-width: 940px; margin-inline: auto;
+  }
+  .split-col {
+    flex: 1 1 0; min-width: 0;
+    border: 1px solid var(--line); border-radius: 22px;
+    padding: 30px 28px;
+    background: var(--paper-2);
+  }
+  /* The right column is the product. It carries the weight so the eye lands there first. */
+  .split-col.is-ours { background: var(--paper); border-color: rgba(var(--accent-rgb), 0.32); }
+  .split-col h3 {
+    font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em;
+    margin: 0 0 4px;
+  }
+  .split-col.is-ours h3 { color: var(--accent); }
+  .split-note { margin: 0 0 20px; font-size: 13px; color: var(--ink-faint); }
+  .split-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .split-col li {
+    font-size: 1rem; line-height: 1.45; color: var(--ink-soft);
+    padding-left: 20px; position: relative;
+  }
+  .split-col li::before {
+    content: ''; position: absolute; left: 0; top: 0.55em;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ink-faint);
+  }
+  .split-col.is-ours li { color: var(--ink); }
+  .split-col.is-ours li::before { background: var(--accent); }
+  .split-punch {
+    max-width: 44ch; margin: 48px auto 0; text-align: center;
+    font-size: 1.15rem; line-height: 1.5; color: var(--ink-soft);
+    text-wrap: balance;
+  }
+
+  @media (max-width: 760px) {
+    .split-sec { padding-block: 64px; }
+    .split-cols { flex-direction: column; }
+    .split-punch { margin-top: 32px; font-size: 1.05rem; }
+  }
+
+  /* ---------- CHANNELS ----------
+     Names, not logos: the list is generated from PLATFORM_KEYS, so nine words cost nothing
+     to ship and cannot drift away from what the publisher actually supports. */
+  .channels-sec { padding-bottom: 40px; }
+  .channels-sec .wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    max-width: 720px; text-align: center;
+  }
+  .channels-label {
+    margin: 0;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .channels-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 8px 20px;
+  }
+  .channels-list li {
+    font-size: 1rem; font-weight: 500; letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .channels-note { margin: 0; font-size: 13px; color: var(--ink-faint); }
 
   /* ---------- FEATURED ON ---------- */
   .featured-on {

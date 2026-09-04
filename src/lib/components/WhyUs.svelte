@@ -6,18 +6,11 @@
     { num: $_('landing.whyus.metric.1.num'), label: $_('landing.whyus.metric.1.label') },
     { num: $_('landing.whyus.metric.2.num'), label: $_('landing.whyus.metric.2.label') },
   ]);
-
-  const reviews = $derived([
-    { text: $_('landing.whyus.reviews.0.text'), name: $_('landing.whyus.reviews.0.name'), role: $_('landing.whyus.reviews.0.role'), initials: 'MR' },
-    { text: $_('landing.whyus.reviews.1.text'), name: $_('landing.whyus.reviews.1.name'), role: $_('landing.whyus.reviews.1.role'), initials: 'SL' },
-    { text: $_('landing.whyus.reviews.2.text'), name: $_('landing.whyus.reviews.2.name'), role: $_('landing.whyus.reviews.2.role'), initials: 'AT' },
-  ]);
 </script>
 
 <section class="whyus-sec">
   <div class="wrap">
     <div class="whyus-layout">
-      <!-- Left: story -->
       <div class="whyus-story reveal">
         <div class="kicker">{$_('landing.whyus.kicker')}</div>
         <!-- Sparkline: 0,0,0,0,0,0,0,0,25,50,80,110 -->
@@ -47,22 +40,6 @@
           {/each}
         </div>
       </div>
-      <!-- Right: reviews -->
-      <div class="whyus-reviews">
-        {#each reviews as r, i}
-          <div class="whyus-review reveal" data-d={i + 1}>
-            <div class="whyus-stars">{'★★★★★'}</div>
-            <p class="whyus-quote">"{r.text}"</p>
-            <div class="whyus-author">
-              <span class="whyus-avatar">{r.initials}</span>
-              <div>
-                <div class="whyus-name">{r.name}</div>
-                <div class="whyus-role">{r.role}</div>
-              </div>
-            </div>
-          </div>
-        {/each}
-      </div>
     </div>
   </div>
 </section>
@@ -70,12 +47,8 @@
 <style>
   .whyus-sec { padding-block: 120px; }
 
-  .whyus-layout {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
-    max-width: 1000px; margin-inline: auto; align-items: start;
-  }
+  .whyus-layout { max-width: 620px; margin-inline: auto; }
 
-  /* Left: story */
   .whyus-story .kicker { margin-bottom: 8px; }
   .whyus-signature { display: flex; align-items: center; gap: 12px; margin: 0 0 32px; }
   .whyus-photo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid var(--paper-2); flex-shrink: 0; }
@@ -88,23 +61,7 @@
   .whyus-m-num { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; color: var(--accent); }
   .whyus-m-label { font-size: 0.82rem; color: var(--ink-faint); margin-top: 2px; max-width: 14ch; line-height: 1.3; }
 
-  /* Right: reviews */
-  .whyus-reviews { display: flex; flex-direction: column; gap: 20px; }
-  .whyus-review {
-    padding: 28px; border-radius: 16px; background: var(--paper-2); border: 1px solid var(--line);
-  }
-  .whyus-stars { color: #f59e0b; font-size: 14px; letter-spacing: 2px; margin-bottom: 12px; }
-  .whyus-quote { font-size: 1rem; line-height: 1.55; color: var(--ink); margin: 0 0 16px; font-style: italic; }
-  .whyus-author { display: flex; align-items: center; gap: 10px; }
-  .whyus-avatar {
-    width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff;
-    font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .whyus-name { font-size: 0.9rem; font-weight: 700; color: var(--ink); }
-  .whyus-role { font-size: 0.8rem; color: var(--ink-faint); }
-
   @media (max-width: 768px) {
-    .whyus-layout { grid-template-columns: 1fr; gap: 40px; }
     .whyus-metrics { gap: 16px; }
     .whyus-sec { padding-block: 64px; }
   }
