@@ -49,7 +49,6 @@ function collectDefinitions(): Set<string> {
 // uno (sostituendolo con un token vero di UI_TOKENS), togli la riga: il test fallisce
 // apposta se una voce non è più stray, così la lista non mente mai.
 const LEGACY_STRAYS = [
-  '--bg src/routes/[[lang=locale]]/tools/conversation-gap/+page.svelte',
   '--bg src/routes/[[lang=locale]]/tools/keyword-research/+page.svelte',
   '--bg src/routes/app/[brand]/ads/library/+page.svelte',
   '--bg src/routes/app/[brand]/success/+page.svelte',
@@ -82,12 +81,6 @@ const LEGACY_STRAYS = [
   '--wash src/lib/components/ToolKeywordTable.svelte',
   '--wash src/lib/components/ToolPage.svelte',
   '--wash src/routes/[[lang=locale]]/tools/agent-team/+page.svelte',
-  '--wash src/routes/[[lang=locale]]/tools/ai-visibility/+page.svelte',
-  '--wash src/routes/[[lang=locale]]/tools/backlink-checker/+page.svelte',
-  '--wash src/routes/[[lang=locale]]/tools/heading-audit/+page.svelte',
-  '--wash src/routes/[[lang=locale]]/tools/redirect-checker/+page.svelte',
-  '--wash src/routes/[[lang=locale]]/tools/robots-tester/+page.svelte',
-  '--wash src/routes/[[lang=locale]]/tools/schema-validator/+page.svelte',
   '--wash src/routes/app/[brand]/geo/+page.svelte'
 ];
 

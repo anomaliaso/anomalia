@@ -13,10 +13,10 @@
   // slug → i18n namespace. Tools built before ToolPage keep their own key layout, but every one
   // of them has meta.title / meta.description, which is all this listing needs.
   const GROUPS: Array<{ key: string; tools: string[] }> = [
-    { key: 'seo', tools: ['keyword-research', 'keyword-difficulty', 'long-tail', 'competitor-gap', 'rank-checker', 'traffic-estimator', 'backlink-checker'] },
-    { key: 'ai', tools: ['agent-team', 'ai-visibility', 'geo-audit', 'llms-txt-generator', 'llms-txt-validator'] },
-    { key: 'technical', tools: ['page-speed', 'meta-tags', 'schema-validator', 'robots-tester', 'redirect-checker', 'heading-audit', 'broken-links', 'sitemap-analyzer'] },
-    { key: 'social', tools: ['conversation-gap', 'caption-length', 'best-time-to-post', 'social-media-roi'] }
+    { key: 'seo', tools: ['keyword-research'] },
+    { key: 'ai', tools: ['agent-team', 'geo-audit', 'llms-txt-generator', 'llms-txt-validator'] },
+    { key: 'technical', tools: ['sitemap-analyzer'] },
+    { key: 'social', tools: ['caption-length', 'best-time-to-post', 'social-media-roi'] }
   ];
 
   // Tool titles carry the " | Anomalia" suffix for SEO; strip it for the card.
