@@ -311,6 +311,40 @@ both writes normalise it the same way, so `r/coffee` and `coffee` are the same s
 Adding a source spends no credits by itself, but Radar reads it on every run from then on.
 Removing one is permanent and stops Radar reading it; what it already found stays.
 
+## Blog settings
+
+| MCP | CLI |
+|-----|-----|
+| `get_blog_settings` | (MCP only) |
+| `set_blog_settings` | (MCP only) |
+| `add_blog_term` | (MCP only) |
+| `remove_blog_term` | (MCP only) |
+
+How the blog looks (name, colour, font, layout, nav links, whether it is live) and how it writes
+(style brief, articles per week, languages, humanising pass), plus the categories, tags and
+authors an article can be filed under.
+
+**Read `get_blog_settings` first.** It carries `choices` (the fonts, layouts and locales that are
+accepted) and `limits` (the plan's ceiling on articles per week, how many extra languages it
+allows, whether a custom domain is available).
+
+`set_blog_settings` changes only the fields you send. `articles_per_week` is **clamped** to the
+plan ceiling rather than refused, so read `config` back from the answer instead of assuming your
+number was taken. A locale the blog does not serve is refused (`unknown_locale`) rather than
+dropped. `locales` and `navbar_links` replace their whole list.
+
+`add_blog_term` takes `term`: `category`, `tag` or `author`. The slug is derived from the name and
+must be unique for the brand — a clash answers `slug_taken` (409), not a second row. `description`
+belongs to a category, `bio` and `role` to an author; sending one to the wrong list is refused
+(`field_not_for_term`), not ignored.
+
+`remove_blog_term` deletes no article, but each kind leaves a different mark — say which before
+you do it: a **category** leaves its articles filed under nothing, a **tag** comes off every
+article that carried it, an **author** leaves their articles with no byline. The answer counts
+`articles_affected`.
+
+The blog icon and an author's avatar are images and cannot be set through these tools.
+
 ## Media models
 
 | MCP | CLI |
