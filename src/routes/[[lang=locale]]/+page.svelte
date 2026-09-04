@@ -10,7 +10,6 @@
   import { PLATFORM_KEYS, PLATFORM_META } from '$lib/components/platform-meta';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
-  import YoutubeFacade from '$lib/components/YoutubeFacade.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
   import ConnectClaudeDialog from '$lib/components/ConnectClaudeDialog.svelte';
   import { marketingStartHref } from '$lib/start-href';
@@ -27,8 +26,9 @@
   // the product can't post to.
   const channels = PLATFORM_KEYS.map((k) => PLATFORM_META[k].label);
 
-  const SPLIT_YOURS = ['i1', 'i2', 'i3'];
-  const SPLIT_OURS = ['i1', 'i2', 'i3', 'i4', 'i5'];
+  const JOBS = ['social', 'web', 'ads'];
+  const BEFORE = ['i1', 'i2', 'i3', 'i4'];
+  const AFTER = ['i1', 'i2', 'i3', 'i4', 'i5'];
 
   const siteUrl = $derived($page.url.origin);
   const jsonLd = $derived(
@@ -76,7 +76,6 @@
   <meta property="og:description" content={$_('meta.landing.description')} />
   <meta name="twitter:title" content={$_('meta.landing.title')} />
   <meta name="twitter:description" content={$_('meta.landing.description')} />
-  <link rel="preload" as="image" href="/yt-uksgDRVZm6w.webp" fetchpriority="high" />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
@@ -105,7 +104,25 @@
     </div>
   </section>
 
-  <!-- ============ THE SPLIT: what your AI does, what Anomalia does ============ -->
+  <!-- ============ THE THREE JOBS AN AGENCY DOES ============ -->
+  <section class="jobs-sec">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="kicker">{$_('landing.jobs.kicker')}</div>
+        <h2>{$_('landing.jobs.titleLead')} <span class="gr-accent">{$_('landing.jobs.titleAccent')}</span></h2>
+      </div>
+      <div class="jobs-cols">
+        {#each JOBS as job, i (job)}
+          <div class="job reveal" data-d={i + 1}>
+            <h3>{$_(`landing.jobs.${job}.title`)}</h3>
+            <p>{$_(`landing.jobs.${job}.body`)}</p>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BEFORE / AFTER ============ -->
   <section class="split-sec">
     <div class="wrap">
       <div class="sec-head reveal">
@@ -114,20 +131,20 @@
       </div>
       <div class="split-cols">
         <div class="split-col reveal" data-d="1">
-          <h3>{$_('landing.split.yours.title')}</h3>
-          <p class="split-note">{$_('landing.split.yours.note')}</p>
+          <h3>{$_('landing.split.before.title')}</h3>
+          <p class="split-note">{$_('landing.split.before.note')}</p>
           <ul>
-            {#each SPLIT_YOURS as k (k)}
-              <li>{$_(`landing.split.yours.${k}`)}</li>
+            {#each BEFORE as k (k)}
+              <li>{$_(`landing.split.before.${k}`)}</li>
             {/each}
           </ul>
         </div>
         <div class="split-col is-ours reveal" data-d="2">
-          <h3>{$_('landing.split.ours.title')}</h3>
-          <p class="split-note">{$_('landing.split.ours.note')}</p>
+          <h3>{$_('landing.split.after.title')}</h3>
+          <p class="split-note">{$_('landing.split.after.note')}</p>
           <ul>
-            {#each SPLIT_OURS as k (k)}
-              <li>{$_(`landing.split.ours.${k}`)}</li>
+            {#each AFTER as k (k)}
+              <li>{$_(`landing.split.after.${k}`)}</li>
             {/each}
           </ul>
         </div>
@@ -146,20 +163,6 @@
         {/each}
       </ul>
       <p class="channels-note">{$_('landing.channels.note')}</p>
-    </div>
-  </section>
-
-  <!-- ============ VIDEO ============ -->
-  <section class="video-sec">
-    <div class="wrap">
-      <div class="video-wrap">
-        <YoutubeFacade
-          videoId="uksgDRVZm6w"
-          title="YouTube video player"
-          poster="/yt-uksgDRVZm6w.webp"
-          priority
-        />
-      </div>
     </div>
   </section>
 
@@ -409,21 +412,31 @@
      largo: 100% e poi ci pensa il max-width di .wrap. */
   .gr-hero-inner { width: 100%; }
 
-  /* ---------- VIDEO ----------
-     La homepage non ha UNA max-width: .wrap sta a --maxw (1440), .services-grid a 1200, il
-     mockup della chat e la comparativa a 940. Il video prende quella del mockup, che è la
-     sezione appena sopra e quindi l'unico confronto che l'occhio fa davvero. Il 16:9 resta
-     al player (aspect-ratio in YoutubeFacade), qui si tocca solo la larghezza.
-     Il cap va sul blocco interno e NON su .wrap: .wrap ha 16px di padding per lato, quindi
-     limitare lui darebbe 908px di video contro 940 di mockup — sbagliato di 32px proprio nel
-     confronto che si voleva sistemare. */
-  .video-wrap { max-width: 940px; margin-inline: auto; }
+  /* ---------- THE THREE JOBS ----------
+     Type only, no cards: this section has to read as one breath — the three things an agency
+     is paid for — and a border around each one would make them look like three products. */
+  .jobs-sec { padding-block: 100px 0; }
+  .jobs-cols {
+    display: flex; gap: 48px; align-items: flex-start;
+    max-width: 940px; margin-inline: auto;
+  }
+  .job { flex: 1 1 0; min-width: 0; }
+  .job h3 {
+    font-size: 1.15rem; font-weight: 600; letter-spacing: -0.03em;
+    margin: 0 0 10px;
+  }
+  .job p { margin: 0; font-size: 0.98rem; line-height: 1.55; color: var(--ink-soft); }
 
-  /* ---------- THE SPLIT ----------
-     Two columns saying who does what. Flex and not grid: app.css owns a global `.grid`
-     (1.7fr 1fr) that hijacks anything carrying that class, and the same 940px cap as the
-     video and the old chat mockup keeps the page's vertical spine straight. */
-  .split-sec { padding-block: 100px; }
+  @media (max-width: 760px) {
+    .jobs-sec { padding-block: 64px 0; }
+    .jobs-cols { flex-direction: column; gap: 30px; }
+  }
+
+  /* ---------- BEFORE / AFTER ----------
+     What you pay an agency for, against what replaces it. Flex and not grid: app.css owns a
+     global `.grid` (1.7fr 1fr) that hijacks anything carrying that class. 940px is the same
+     cap as the three jobs above, so the page keeps one vertical spine. */
+  .split-sec { padding-block: 100px 72px; }
   .split-cols {
     display: flex; gap: 24px; align-items: stretch;
     max-width: 940px; margin-inline: auto;

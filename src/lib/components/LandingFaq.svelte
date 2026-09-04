@@ -1,9 +1,9 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
 
-  // Landing FAQ — the questions someone asks once they know they bring their own AI.
-  // Copy lives in i18n under landing.faq.*.
-  const KEYS = ['mcp', 'which', 'why', 'review', 'platforms', 'checks', 'cost', 'selfhost'];
+  // Landing FAQ — the agency question first, because that is the promise the hero makes and
+  // the one that needs its limits said out loud. Copy lives in i18n under landing.faq.*.
+  const KEYS = ['agency', 'which', 'mcp', 'why', 'review', 'platforms', 'cost', 'selfhost'];
 </script>
 
 <section class="alt faq-sec" aria-labelledby="landing-faq-title">
