@@ -370,3 +370,106 @@ export const CHECK_MEDIA_JOB = {
   failures: [],
   destructive: false
 } satisfies BrandEndpoint;
+// Ogni azione sui media ha la sua rotta: il corpo dice con che cosa farla, mai quale fare.
+const RENDER_FAILURES = [
+  { error: 'credits_exhausted', status: 402 },
+  { error: 'write access required', status: 403 }
+];
+
+const MediaResult = z.looseObject({
+  success: z.boolean().optional(),
+  error: z.string().optional(),
+  rendered: z.boolean().optional(),
+  media_url: z.string().nullable().optional(),
+  notes: z.string().optional()
+});
+
+export const REGENERATE_POST_MEDIA = {
+  tool: 'regenerate_post_media',
+  title: 'Regenerate post media',
+  description:
+    'Refine a single image with an instruction (bills one render). id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/regenerate',
+  resource: 'post',
+  input: z
+    .object({ instruction: z.string().min(1).describe('How to refine the image') })
+    .strict(),
+  output: MediaResult,
+  failures: [...RENDER_FAILURES, { error: 'Missing instruction or prompt', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REGENERATE_SLIDE = {
+  tool: 'regenerate_slide',
+  title: 'Regenerate carousel slide',
+  description:
+    'Re-render one carousel slide (index 0 = cover). Bills a render. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/slide',
+  resource: 'post',
+  input: z
+    .object({
+      index: z.number().int().min(0).describe('Slide index (0 = cover)'),
+      instruction: z.string().min(1)
+    })
+    .strict(),
+  output: z.looseObject({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    slide_index: z.number().optional(),
+    rendered: z.boolean().optional()
+  }),
+  failures: [...RENDER_FAILURES, { error: 'Missing index', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REORDER_SLIDES = {
+  tool: 'reorder_slides',
+  title: 'Reorder carousel slides',
+  description:
+    'Reorder or drop slides without rendering. order is e.g. [0,2,1]. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/order',
+  resource: 'post',
+  input: z.object({ order: z.array(z.number().int().min(0)).min(1) }).strict(),
+  output: z.looseObject({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    slide_count: z.number().optional()
+  }),
+  failures: [{ error: 'Missing order', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const MAKE_VIDEO = {
+  tool: 'make_video',
+  title: 'Animate post to video',
+  description:
+    'Animate the cover into a video clip (also retries a video that fell back to a photo). id ' +
+    'accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/video',
+  resource: 'post',
+  input: z
+    .object({
+      duration: z.number().optional().describe('Duration in seconds, e.g. 6'),
+      script: z.string().optional(),
+      instruction: z.string().optional()
+    })
+    .strict(),
+  output: z.looseObject({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    video_render_status: z.string().optional(),
+    video_note: z.string().optional(),
+    duration_seconds: z.number().optional(),
+    videos_left: z.number().optional(),
+    remake: z.boolean().optional()
+  }),
+  failures: [
+    ...RENDER_FAILURES,
+    { error: 'Invalid aspectRatio. Use 9:16, 1:1, 16:9, 4:3, 3:4 or 21:9.', status: 400 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
