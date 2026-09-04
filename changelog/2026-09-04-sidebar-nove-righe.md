@@ -4,6 +4,26 @@ Home, Materiali, Strategia, Calendario, SEO/GEO, Auto blog, News Radar, Agenti, 
 Un gruppo solo, senza intestazione: nove voci di pari rango non hanno bisogno di essere
 raggruppate, e il gruppo «Strumenti» che ne raccoglieva quattordici non c'è più.
 
+## In cima il prodotto, in fondo il cliente
+
+La riga in cima alla barra era etichettata «Panoramica» e portava a `/app/<slug>` — cioè
+esattamente dove porta la riga **Home** della nav. Due porte per la stessa stanza, una sopra
+l'altra. Al suo posto c'è il marchio di Anomalia (`BrandMark`, che esisteva già col suo test),
+e porta a `/app`: l'elenco dei brand, che è l'unica destinazione sensata rimasta — la home del
+brand ce l'ha già la nav, e un logo che non porta da nessuna parte è meglio non renderlo un
+link.
+
+**Il nome del brand del cliente non si perde**, ed era la cosa da verificare prima di toccare:
+sta in fondo, nella riga che apre il cambio brand, insieme al suo logo. Il commento accanto lo
+dichiarava già — *«il footer risponde a "su quale brand sto lavorando"»*. Le due identità sono
+due, e adesso stanno una per estremo invece di accavallarsi.
+
+`BrandMark` è `aria-hidden` perché è decorativo, e col rail collassato a icone il testo accanto
+è nascosto: il nome accessibile del link lo dà un `aria-label`, o sarebbe un link senza nome —
+il difetto che un logo «minimale» si porta dietro più spesso. C'è un test che tiene ferme
+entrambe le promesse (nome accessibile, e nome del brand ancora in fondo), e l'ho visto fallire
+rompendole una per volta.
+
 ## «Impostazioni» smette di essere una riga
 
 L'ingranaggio in fondo alla barra c'era già, e aveva già il suo nome accessibile —
