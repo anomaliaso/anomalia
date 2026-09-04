@@ -1,7 +1,10 @@
 import { swallow } from '$lib/server/swallow';
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
-import { tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText, tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
@@ -385,35 +388,51 @@ ${mode === 'more' ? `Propose ${opts.count ?? 4} NEW initiatives only.` : 'Propos
   let loopError: string | undefined;
 
   try {
-    await withAgentFallback('seoAgent', (chosen, markDirty) => {
+    await withAgentFallback('seoAgent', async (chosen, markDirty) => {
       loopModel = chosen;
-      return harnessGenerateText({
+
+      const session = createHarnessSession({
         brandId: String(opts.brand.id),
         agent: 'seo',
         mode,
         model: loopModel.modelId,
         provider: loopModel.provider,
         surface: 'batch'
-      }, {
+      });
+      const prompt =
+        mode === 'more'
+          ? `Research with DataForSEO, then finish with ${opts.count ?? 4} NEW initiatives distinct from the existing plan.`
+          : `Review this brand's SEO with DataForSEO tools, then finish with an updated evaluation and prioritized initiatives.`;
+      session.captureRequest({ system: baseSystem, prompt });
+
+      const steward = createSessionSteward(session, Object.keys(tools));
+      const watchedTools = wrapTools(session, tools, {
+        before: [...(steward.pipeline().before ?? []), () => { markDirty(); }]
+      });
+
+      try {
+        const result = await generateText({
         model: loopModel.model,
         maxOutputTokens: maxOutputTokensFor(loopModel.provider),
         system: baseSystem,
-        prompt:
-          mode === 'more'
-            ? `Research with DataForSEO, then finish with ${opts.count ?? 4} NEW initiatives distinct from the existing plan.`
-            : `Review this brand's SEO with DataForSEO tools, then finish with an updated evaluation and prioritized initiatives.`,
-        tools,
+        prompt,
+        allowSystemInMessages: true,
+        tools: watchedTools,
         stopWhen: [hasToolCall('finish'), stepCountIs(MAX_SEO_AGENT_STEPS), stallStop, () => deadlineReached(t0, deadlineMs)],
         temperature: 0.35,
         prepareStep: () => {
           const remainingSec = Math.max(0, Math.round((deadlineMs - (Date.now() - t0)) / 1000));
           const stepSystem = appendBudgetToSystem(baseSystem, budget, remainingSec);
-          if (budget.usdRemaining <= 0 && state.finished) {
-            return { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem };
-          }
-          return { system: stepSystem };
+          const step =
+            budget.usdRemaining <= 0 && state.finished
+              ? { toolChoice: { type: 'tool' as const, toolName: 'finish' }, system: stepSystem }
+              : { system: stepSystem };
+          const patched = applyStewardPrepareStep(session, steward, step, baseSystem) ?? {};
+          session.capturePrepareStep(patched);
+          return patched;
         },
         onStepFinish: ({ usage, toolCalls, toolResults, text }) => {
+          session.recordStep({ usage, toolCalls, text });
           addStrategyStepCost(budget, usage, loopModel);
           // Approximate DFS spend so the USD cap bites before runaway history calls.
           const dfsCalls = (toolCalls ?? []).filter((tc) => String(tc.toolName).startsWith('dfs_')).length;
@@ -433,7 +452,17 @@ ${mode === 'more' ? `Propose ${opts.count ?? 4} NEW initiatives only.` : 'Propos
           }
           void toolResults;
         }
-      }, { before: [() => { markDirty(); }] });
+        });
+        session.recordAssistantText(result.text);
+        session.recordUsage(result.totalUsage ?? result.usage);
+        session.finish('finished');
+        return result;
+      } catch (e) {
+        session.finish('failed', e);
+        throw e;
+      } finally {
+        persistHarnessSession(session);
+      }
     });
   } catch (e) {
     loopOk = false;

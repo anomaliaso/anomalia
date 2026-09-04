@@ -20,6 +20,7 @@ describe('niente agenti annidati sul GTM di produzione', () => {
 const LOOP_DRIVER: Record<string, 'harness' | 'sdk'> = {
 	'image-agent.ts': 'harness',
 	'produce-agent.ts': 'harness',
+	'seo-agent.ts': 'sdk',
 	'strategy-agent.ts': 'sdk',
 	'week-planner-agent.ts': 'sdk'
 };

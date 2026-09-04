@@ -284,3 +284,18 @@ describe('il budget scritto nel system di ogni step', () => {
     expect(String(rec.prepared[0].system)).toContain('time_left≈');
   });
 });
+
+// `harness/index` riesporta `harness/run`, che importa `chat/model` e `chat/controller`: chi
+// prende la traccia dall'indice si porta dentro la chat e `$lib/agent` senza usarli. I moduli
+// foglia non li toccano, e questo test è l'unica cosa che impedisce di «riordinare» l'import.
+describe('da dove arriva la traccia', () => {
+  it('il seo agent guida l SDK e non passa dall indice del framework', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(process.cwd(), 'src/lib/server/seo-agent.ts'), 'utf8');
+    expect(src).toMatch(/await generateText\(/);
+    expect(src).not.toContain('harnessGenerateText(');
+    expect(src).not.toMatch(/from '\$lib\/server\/harness'/);
+    expect(src).toMatch(/from '\$lib\/server\/harness\/session'/);
+  });
+});
