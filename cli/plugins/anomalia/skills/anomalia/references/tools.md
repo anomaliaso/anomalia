@@ -276,3 +276,30 @@ Refusals name the field: `article_not_found` (an article of another brand includ
 `translation_locked` (a translation's locale is its identity) and `article_published` — what is
 live is never edited in place. To correct a published article: `unpublish_article`,
 `update_article`, `publish_article`.
+## Billing links
+
+| MCP | CLI |
+|-----|-----|
+| `create_billing_portal_link` | (MCP only) |
+| `create_checkout_link` | (MCP only) |
+
+Both mint a **one-time Stripe URL and hand it back**. You never pay, never change a plan, never
+apply a discount and never cancel: you return the URL and stop, and the person completes the
+action on Stripe's own hosted page. The portal is also where a subscription is **cancelled** —
+say so when you hand the link over.
+
+Treat the URL as a credential: whoever holds it reaches that customer's billing without logging
+in. Give it to the account owner once, in the reply, and keep no copy of it anywhere.
+
+`create_billing_portal_link` takes only `slug`: invoices, payment method, plan change, cancel.
+`create_checkout_link` takes an optional `plan` and answers with the `plans` the hosted page will
+offer, so you can name them in one line.
+
+Only the **organization owner** can mint either one — reaching a brand is not authority over the
+organization's money, and a collaborator gets `not_org_owner` (403). Neither call spends credits
+or touches a model: an account out of credits is exactly who needs the link.
+
+Refusals worth reading: `no_customer` / `no_subscription` (409) mean the organization never
+subscribed — the body carries `app_billing_url`, which is where the person starts;
+`stripe_unavailable` (502) and `no_org_billing` (500) are ours, so retrying with different input
+changes nothing.

@@ -69,6 +69,11 @@ Gli endpoint che spendono AI richiedono **piano a pagamento + crediti** e scope 
 | `POST /brands/:slug/rubrics/propose` | Batch rubriche AI |
 | `POST /brands/:slug/web` (generate/optimize) | Articoli blog AI |
 
+**Non gated, di proposito**: `POST /brands/:slug/billing/portal` e
+`POST /brands/:slug/billing/checkout` ([10-billing](10-billing.md)) non chiamano `gateAiAction` e
+non guardano i crediti. Sarebbe circolare — chi ha finito i crediti è chi deve arrivare al
+checkout. Restano scope `write`: il link porta anche a un bottone di disdetta.
+
 ## Convenzioni di risposta
 
 - Successo: `200` (o `201` per creazione key), quasi sempre con `{"ok": true, …}`.

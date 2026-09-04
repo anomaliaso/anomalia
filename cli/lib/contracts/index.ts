@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { ADS_REMIX } from './ads';
+import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
 import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
 import { CHECK_CONTENT } from './content';
 import { GET_CREATION_KIT } from './creation-kit';
@@ -90,6 +91,8 @@ export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   ADS_REMIX,
+  BILLING_PORTAL_LINK,
+  CHECKOUT_LINK,
   CHECK_CONTENT,
   CREATE_POST,
   CREATE_PRODUCT,
@@ -196,6 +199,8 @@ export {
   REVOKE_SHARE,
   SHARED_VIEW_TYPES,
 };
+export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
+export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
 export type {
   AuditCitationRow,

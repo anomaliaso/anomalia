@@ -15,6 +15,7 @@ import { readUploadImage } from '$lib/server/raster-image';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { setJobEnabled } from '$lib/server/job-roster';
 import { orgBillingForBrand } from '$lib/server/org-billing';
+import { billingLink } from '$lib/server/billing-links';
 
 const stripeApi = () => import('$lib/server/stripe');
 
@@ -44,23 +45,18 @@ export async function billingPortal({ request, params, url, locals: { supabase }
   const flowRaw = String(data.get('flow') ?? 'invoices');
   const flow = flowRaw === 'payment_method' || flowRaw === 'upgrade' ? flowRaw : undefined;
 
-  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
-  if (!billing) return fail(404, { billingError: 'Brand not found' });
-  if (!billing.customerId) throw redirect(303, `/app/${params.brand}/activate`);
-
-  let portalUrl: string;
-  try {
-    const { createBillingPortalSession } = await stripeApi();
-    portalUrl = await createBillingPortalSession({
-      customerId: billing.customerId,
-      returnUrl: `${url.origin}/app/${params.brand}/settings/billing`,
-      flow,
-      subscriptionId: billing.subscriptionId
-    });
-  } catch (e) {
-    return fail(500, { billingError: e instanceof Error ? e.message : 'Could not open billing' });
+  const link = await billingLink(supabase, {
+    slug: params.brand!,
+    returnUrl: `${url.origin}/app/${params.brand}/settings/billing`,
+    flow
+  });
+  if (link.refusal === 'no_org_billing') return fail(404, { billingError: 'Brand not found' });
+  if (link.refusal === 'no_customer' || link.refusal === 'no_subscription') {
+    throw redirect(303, `/app/${params.brand}/activate`);
   }
-  throw redirect(303, portalUrl);
+  if (link.refusal) return fail(500, { billingError: link.message || 'Could not open billing' });
+
+  throw redirect(303, link.url);
 }
 
 export async function upgrade({ request, params, url, locals: { supabase } }: Ev) {
@@ -74,23 +70,18 @@ export async function upgrade({ request, params, url, locals: { supabase } }: Ev
   if (!plansAbove(billing.plan).some((p) => p.key === plan)) {
     return fail(400, { billingError: 'Unknown plan' });
   }
-  if (!billing.customerId || !billing.subscriptionId) {
+
+  const link = await billingLink(supabase, {
+    slug: params.brand!,
+    returnUrl: `${url.origin}/app/${params.brand}/settings/billing`,
+    flow: 'upgrade'
+  });
+  if (link.refusal === 'no_customer' || link.refusal === 'no_subscription') {
     throw redirect(303, `/app/${params.brand}/activate?plan=${encodeURIComponent(plan)}`);
   }
+  if (link.refusal) return fail(500, { billingError: link.message || 'Could not start the upgrade' });
 
-  let upgradeUrl: string;
-  try {
-    const { createBillingPortalSession } = await stripeApi();
-    upgradeUrl = await createBillingPortalSession({
-      customerId: billing.customerId,
-      subscriptionId: billing.subscriptionId,
-      flow: 'upgrade',
-      returnUrl: `${url.origin}/app/${params.brand}/settings/billing`
-    });
-  } catch (e) {
-    return fail(500, { billingError: e instanceof Error ? e.message : 'Could not start the upgrade' });
-  }
-  throw redirect(303, upgradeUrl);
+  throw redirect(303, link.url);
 }
 
 export async function applyRetention({ params, locals: { supabase } }: Ev) {

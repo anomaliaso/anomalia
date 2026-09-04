@@ -834,3 +834,22 @@ lavorando, il repo non può ripararlo — può solo smettere di regredire. Il te
 serve comunque, perché il giorno in cui il dominio torna a essere servito da qui il difetto
 non rientra; ma la riparazione è ripuntare il progetto, e va detta come tale invece di essere
 spacciata per un fix di codice.
+## Una colonna che la migration non ha mai creato si traveste da «brand non trovato»
+
+**Segnale.** Una lettura che «non può fallire» torna `null` per tutti — non per un tenant, non a
+intermittenza: per tutti — e la superficie sopra risponde con un errore di chi chiama (404, «Brand
+not found»). La suite è verde, perché il client Supabase è mockato e un mock non ha uno schema.
+
+**Cosa succede.** `orgBillingForBrand` seleziona `plan, stripe_customer_id, stripe_subscription_id`
+da `organizations`. In produzione quelle colonne non ci sono: la migration `20260903190000_org_billing_schema.sql`
+non è mai stata applicata, perché i deploy di questo repo non applicano migration. PostgREST
+risponde 400, `supabase-js` **risolve** con `{ data: null, error }`, la funzione ignora `error` e
+restituisce `null`, e il chiamante legge quel `null` come «questo brand non ha un'org». Il bottone
+del portale su `/app/billing` risponde 404 a chiunque, e sembra un problema di permessi.
+
+**La mossa.** Prima di diagnosticare il codice, `node scripts/schema-drift-check.mjs`: è in sola
+lettura, punta alla produzione senza paura, ed esce 1 con l'elenco delle colonne che il codice
+nomina e il database non ha. Va eseguito **dopo ogni migration scritta e prima di ogni PR che
+tocca il database** — non solo quando qualcosa è già rotto. Un `select` di colonne che potrebbero
+non esistere non è mai «non può fallire»: o si legge `error`, o il difetto arriva travestito da
+colpa di chi chiama.
