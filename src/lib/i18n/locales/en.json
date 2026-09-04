@@ -4521,6 +4521,12 @@
           "gsc": "Connect Google Search Console"
         }
       },
+      "todo": {
+        "title": "To do",
+        "count": "{n, plural, one {# thing needs you} other {# things need you}}",
+        "empty": "Nothing needs you right now. New drafts, radar signals and leads land here as they arrive.",
+        "noSocial": "No account connected yet"
+      },
       "overview": {
         "title": "Overview",
         "subtitle": "What needs your attention, what's coming up, how the web is performing, and how content is doing.",

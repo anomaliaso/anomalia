@@ -4182,6 +4182,12 @@
           "gsc": "Conecta Google Search Console"
         }
       },
+      "todo": {
+        "title": "Por hacer",
+        "count": "{n, plural, one {# cosa necesita tu atención} other {# cosas necesitan tu atención}}",
+        "empty": "No hay nada esperando. Los borradores nuevos, las señales del radar y los leads aparecen aquí en cuanto llegan.",
+        "noSocial": "Aún no hay ninguna cuenta conectada"
+      },
       "overview": {
         "title": "Resumen",
         "subtitle": "Qué necesita tu atención, qué está programado, cómo va la web y cómo rinden los contenidos.",
