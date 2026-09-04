@@ -43,8 +43,9 @@ const CreatePostInputSchema = z.object({
     .max(8)
     .optional()
     .describe(
-      'Ids from this brand media library (see list_media). An id that is not this brand is ' +
-        'rejected: the post is never quietly created without it'
+      'Full ids from this brand media library (see list_media) — unlike a post id, a media id ' +
+        'is never resolved from a prefix. An id that is not this brand is rejected: the post is ' +
+        'never quietly created without it. At most 8: a ninth is refused, not dropped'
     ),
   title: z.string().optional().describe('Required for Reddit'),
   subreddit: z.string().optional(),
@@ -71,7 +72,11 @@ export const CREATE_POST = {
     'Store copy you already wrote as one pending post for review. Anomalia calls no model and ' +
     'spends no credits. It does not publish and does not schedule: `scheduled_for` is the ' +
     'proposed calendar time, and approve_post remains the action that authorizes distribution. ' +
-    'Text-capable platforms only — instagram and tiktok need an image, youtube needs a video.',
+    'Text-capable platforms only — instagram and tiktok need an image, youtube needs a video. ' +
+    'Two different media failures: `media_not_found` (400) means the id is not this brand — ' +
+    'check it with list_media, and pass the full id, never a prefix; `media_unavailable` (502) ' +
+    'means the id is yours and Anomalia could not attach it, so retrying other ids is wasted ' +
+    'work — retry later or leave the media out.',
   method: 'POST',
   pathUnderBrand: '/posts',
   input: CreatePostInputSchema,
@@ -85,7 +90,8 @@ export const CREATE_POST = {
     { error: 'reddit_title', status: 400 },
     { error: 'too_soon', status: 400 },
     { error: 'invalid_scheduled_for', status: 400 },
-    { error: 'media_not_found', status: 400 }
+    { error: 'media_not_found', status: 400 },
+    { error: 'media_unavailable', status: 502 }
   ],
   destructive: false
 } satisfies BrandEndpoint;

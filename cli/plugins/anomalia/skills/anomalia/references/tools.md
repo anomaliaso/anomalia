@@ -38,8 +38,14 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `make_video` | `anomalia post <slug> <id> video …` |
 
 `list_media` lists what is already in the brand library; an id from there goes into `create_post`
-as `media_ids` and costs no render. A media id that is not this brand's stops the creation —
-the post is never made without it.
+as `media_ids` and costs no render. Pass the **full** id: unlike a post id, a media id is never
+resolved from a prefix. A media id that is not this brand's stops the creation — the post is
+never made without it.
+
+The two media failures of `create_post` mean opposite things. `media_not_found` (400) is yours:
+the id is not this brand's, so check it against `list_media`. `media_unavailable` (502) is ours:
+the media is this brand's and we could not attach it. Trying other ids, a shorter id or another
+platform changes nothing — retry later, or create the post without the media.
 
 `create_post` stores copy **you** wrote: Anomalia calls no model and spends no credits. It does
 not publish and does not schedule — `scheduled_for` is the proposed calendar time and stays a

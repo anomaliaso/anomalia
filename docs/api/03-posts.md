@@ -68,7 +68,7 @@ Senza media valgono solo le piattaforme che reggono il testo da solo: `facebook`
 | `caption` | string | Sì | La copy, salvata così com'è |
 | `platform_captions` | object | No | Override per piattaforma, `{"x": "…"}` |
 | `scheduled_for` | string | No | Istante proposto, ISO. Senza offset è letto sul fuso del brand; con `Z` o `±hh:mm` è preso come scritto. Almeno 2 minuti nel futuro |
-| `media_ids` | string[] | No | Fino a 8 id dalla libreria del brand (`GET /media`). Un id che non è di questo brand fa fallire la creazione: il post non nasce mai senza |
+| `media_ids` | string[] | No | Fino a 8 id **interi** dalla libreria del brand (`GET /media`): a differenza di un id di post, un id media non si risolve da un prefisso. Un id che non è di questo brand fa fallire la creazione: il post non nasce mai senza. Il nono id è rifiutato (`invalid_input`), non scartato |
 | `title` | string | No | Obbligatorio per Reddit (max 300 char) |
 | `subreddit` | string | No | Senza `r/` |
 | `link_url` | string | No | |
@@ -103,8 +103,9 @@ post resta una bozza senza data, fuori dal calendario ma elencata da `GET /posts
 | `400` | `{"error":"reddit_title"}` |
 | `400` | `{"error":"invalid_scheduled_for","details":"…"}` — data illeggibile |
 | `400` | `{"error":"too_soon"}` — data passata o troppo vicina |
-| `400` | `{"error":"media_not_found"}` — un id media non è di questo brand, o non si è potuto copiare |
+| `400` | `{"error":"media_not_found"}` — un id media non è di questo brand (o non esiste: le due cose non si distinguono). Colpa di chi chiama: l'id va corretto |
 | `403` | `{"error":"API key is read-only"}` |
+| `502` | `{"error":"media_unavailable"}` — il media è di questo brand ma non siamo riusciti ad allegarlo. Guasto nostro: riprovare con altri id non serve |
 
 **Esempio**:
 

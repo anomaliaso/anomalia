@@ -237,6 +237,35 @@ describe('POST /api/v1/brands/:slug/posts', () => {
     expect(rows).toEqual([]);
   });
 
+  it('un id malformato torna lo stesso 400 di un id altrui, senza rivelare la differenza', async () => {
+    findBrandMediaByIds.mockResolvedValue([]);
+
+    const { res, body, rows } = await call({
+      platforms: ['instagram'],
+      caption: 'copy',
+      media_ids: ['%%%']
+    });
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('media_not_found');
+    expect(rows).toEqual([]);
+  });
+
+  it('un media suo che non riusciamo a materializzare torna 502, non un 400 che accusa chi chiama', async () => {
+    findBrandMediaByIds.mockResolvedValue([{ id: 'asset-1', kind: 'image' }]);
+    publishLibraryMediaAsPostMedia.mockResolvedValue({ error: 'Upload of library media failed' });
+
+    const { res, body, rows } = await call({
+      platforms: ['instagram'],
+      caption: 'copy',
+      media_ids: ['asset-1']
+    });
+
+    expect(res.status).toBe(502);
+    expect(body.error).toBe('media_unavailable');
+    expect(rows).toEqual([]);
+  });
+
   it('un media della libreria sblocca instagram, che da sola la copy non regge', async () => {
     findBrandMediaByIds.mockResolvedValue([{ id: 'asset-1', kind: 'image' }]);
     publishLibraryMediaAsPostMedia.mockResolvedValue({
