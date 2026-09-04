@@ -285,6 +285,25 @@ describe('POST /api/v1/brands/:slug/posts', () => {
     expect(rows[0].content_type).toBe('uploaded_image');
   });
 
+  it('un media appena importato da URL è usabile subito: nessun catalogo lo trattiene', async () => {
+    findBrandMediaByIds.mockResolvedValue([
+      { id: 'imported-1', kind: 'image', source: 'agent', catalog_status: 'pending' }
+    ]);
+    publishLibraryMediaAsPostMedia.mockResolvedValue({
+      publicUrl: 'https://cdn.test/imported-1.png',
+      media: { id: 'imported-1' }
+    });
+
+    const { res, rows } = await call({
+      platforms: ['instagram'],
+      caption: 'copy con un immagine importata',
+      media_ids: ['imported-1']
+    });
+
+    expect(res.status).toBe(200);
+    expect(rows[0].media_url).toBe('https://cdn.test/imported-1.png');
+  });
+
   it('rifiuta una piattaforma sconosciuta al dominio', async () => {
     const { res, body, rows } = await call({ platforms: ['mastodon'], caption: 'copy' });
 

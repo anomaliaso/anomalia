@@ -58,6 +58,10 @@ calendar time, and `approve_post` is what authorizes distribution. Hand the oper
 **Reuse an asset instead of paying for a render** → `list_media` → pass its id to `create_post`
 as `media_ids`. That is also how you post to Instagram or TikTok, which never accept text alone.
 
+**Use a visual you made elsewhere** → `import_media_url` with its public https URL → pass the id
+it returns to `create_post` as `media_ids`. The file is copied into the brand library, so the post
+still has its image the day the original link dies.
+
 **Check your copy before you create it** → `check_content` with the same spec you would send to
 `create_post`. It returns blocking errors, warnings and a 0–100 score per platform, each naming
 the field to repair. It costs nothing and calls no model, so run it on every draft and fix what

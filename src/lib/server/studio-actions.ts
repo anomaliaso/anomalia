@@ -8,6 +8,7 @@ import { localeLanguageName } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
 import { syncBrandPostHistoryFromSocials, type ScrapeSyncResult } from '$lib/server/scrapecreators';
 import { signKnowledgePaths, archiveImageToBucket } from '$lib/server/media-archive';
+import { safeFetchBytes, SafeFetchError, type SafeFetchReason } from '$lib/server/tool-guard';
 import { extractText, isSupportedDoc } from '$lib/server/documents';
 import { personConsentColumns, CONSENT_NOT_ATTESTED } from '$lib/server/people-consent';
 import {
@@ -73,8 +74,22 @@ async function withBrand<T>(supabase: any, slug: string | undefined, fn: (brand:
  * L'unica differenza col form è inevitabile: lì l'ingresso è un File e passa da `readUploadImage`
  * (che converte anche gli HEIC), qui è un URL, quindi c'è un fetch con guardia SSRF. Il tetto di
  * byte, il path e la riga sono gli stessi.
+ *
+ * L'URL lo sceglie un MODELLO (`set_brand_logo`), quindi è testo che un contenuto ostile può
+ * dettare: la guardia deve risolvere l'indirizzo, non leggere l'hostname, e deve ricontrollarlo
+ * su ogni redirect. `safeFetchBytes` fa entrambe le cose ed è l'unica copia di quel controllo.
  */
 const LOGO_MAX_BYTES = 4_000_000;
+const LOGO_TIMEOUT_MS = 15_000;
+
+// http resta ammesso: il logo di onboarding arriva dal sito del brand, e un sito ancora in chiaro
+// è comune abbastanza che rifiutarlo romperebbe l'onboarding per chiudere un buco che si chiude
+// comunque risolvendo l'indirizzo.
+const LOGO_ERROR_BY_REASON: Record<SafeFetchReason, string> = {
+  not_public: 'That image URL is not fetchable (blocked or not http/https).',
+  too_large: 'Too large — the logo must be under 4MB.',
+  fetch_failed: 'Could not download the image.'
+};
 
 export async function storeBrandLogoFromUrl(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,22 +98,20 @@ export async function storeBrandLogoFromUrl(
 ): Promise<{ url: string } | { error: string }> {
   const src = String(opts.imageUrl ?? '').trim();
   if (!src) return { error: 'No image URL' };
-  const { isUrlSafe } = await import('$lib/server/brand-analysis');
-  if (!isUrlSafe(src)) return { error: 'That image URL is not fetchable (blocked or not http/https).' };
 
-  let bytes: Buffer;
-  let mime: string;
+  let fetched;
   try {
-    const res = await fetch(src, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return { error: `Could not download the image (HTTP ${res.status}).` };
-    mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-    if (!mime.startsWith('image/')) return { error: 'That URL is not an image.' };
-    bytes = Buffer.from(await res.arrayBuffer());
-  } catch {
+    fetched = await safeFetchBytes(src, { maxBytes: LOGO_MAX_BYTES, timeoutMs: LOGO_TIMEOUT_MS });
+  } catch (e) {
+    if (e instanceof SafeFetchError) return { error: LOGO_ERROR_BY_REASON[e.reason] };
     return { error: 'Could not download the image.' };
   }
-  if (!bytes.length) return { error: 'The image is empty.' };
-  if (bytes.length > LOGO_MAX_BYTES) return { error: 'Too large — the logo must be under 4MB.' };
+
+  if (!fetched.ok) return { error: `Could not download the image (HTTP ${fetched.status}).` };
+  if (!fetched.mime.startsWith('image/')) return { error: 'That URL is not an image.' };
+  if (!fetched.bytes.length) return { error: 'The image is empty.' };
+
+  const { mime, bytes } = fetched;
 
   // Stessa mappa del form: tutto ciò che non è png/gif/webp finisce come jpg.
   const ext = mime === 'image/png' ? 'png' : mime === 'image/gif' ? 'gif' : mime === 'image/webp' ? 'webp' : 'jpg';
