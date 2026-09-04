@@ -183,14 +183,33 @@ export class SafeFetchError extends Error {
 }
 
 /**
- * Reject anything that isn't a public http(s) host. Throws with a user-safe message.
+ * How much latitude the scheme gets, per caller.
+ *
+ * It is an argument and not an `if` at the call site because the redirect chain has to obey it
+ * too: a caller that demands https and only checks the URL it was handed still ships the file in
+ * clear the moment a hop answers `302 Location: http://…`. Declared here, it applies to every hop.
+ */
+export type UrlScheme = 'https-only' | 'http-or-https';
+
+const SCHEMES_ALLOWED: Record<UrlScheme, readonly string[]> = {
+  'https-only': ['https:'],
+  'http-or-https': ['http:', 'https:']
+};
+
+const SCHEME_REFUSAL: Record<UrlScheme, string> = {
+  'https-only': 'Only https URLs are supported',
+  'http-or-https': 'Only http(s) URLs are supported'
+};
+
+/**
+ * Reject anything that isn't a public host on an allowed scheme. Throws with a user-safe message.
  *
  * Exported because /start/preview is the same shape of caller as the tools above — an
  * anonymous stranger's URL — and must not fall back to the hostname-pattern check.
  */
-export async function assertPublicUrl(url: URL): Promise<void> {
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new SafeFetchError('not_public', 'Only http(s) URLs are supported');
+export async function assertPublicUrl(url: URL, scheme: UrlScheme = 'http-or-https'): Promise<void> {
+  if (!SCHEMES_ALLOWED[scheme].includes(url.protocol)) {
+    throw new SafeFetchError('not_public', SCHEME_REFUSAL[scheme]);
   }
   const host = url.hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
@@ -205,14 +224,26 @@ export async function assertPublicUrl(url: URL): Promise<void> {
   }
 }
 
+/**
+ * The name the platform CDNs already know the archivers by. It predates the guard and is kept
+ * verbatim: a CDN that starts refusing an unfamiliar agent answers 403, and a 403 here is
+ * indistinguishable from the expired link this whole archive exists to beat.
+ */
+export const ARCHIVE_USER_AGENT = 'Mozilla/5.0 (compatible; AnomaliaArchive/1.0)';
+
 export type SafeFetchResult = { url: string; status: number; ok: boolean; headers: Headers; body: string };
 
 type HopOptions = {
   timeoutMs?: number;
   maxRedirects?: number;
   method?: 'GET' | 'HEAD';
-  /** Runs before every hop. Defaults to assertPublicUrl; a caller with a stricter rule passes its own. */
-  gate?: (url: URL) => Promise<void>;
+  /** Checked on every hop, not just the first. Defaults to accepting http and https. */
+  scheme?: UrlScheme;
+  /**
+   * Platform CDNs answer differently depending on who is asking, and an archiver that suddenly
+   * changed its name would start collecting 403s that look exactly like expired links.
+   */
+  userAgent?: string;
 };
 
 /**
@@ -229,19 +260,20 @@ async function fetchFollowingGatedRedirects(
 ): Promise<{ url: URL; res: Response }> {
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const maxRedirects = opts.maxRedirects ?? 4;
-  const gate = opts.gate ?? assertPublicUrl;
+  const scheme = opts.scheme ?? 'http-or-https';
+  const userAgent = opts.userAgent ?? `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})`;
 
   let current = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
   const deadline = Date.now() + timeoutMs;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    await gate(current);
+    await assertPublicUrl(current, scheme);
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new SafeFetchError('fetch_failed', 'Request timed out');
 
     const res = await fetch(current, {
       method: opts.method ?? 'GET',
-      headers: { 'User-Agent': `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})`, Accept: '*/*' },
+      headers: { 'User-Agent': userAgent, Accept: '*/*' },
       redirect: 'manual',
       signal: AbortSignal.timeout(remaining)
     });
@@ -288,7 +320,7 @@ export type SafeFetchBytesResult = { url: string; status: number; ok: boolean; m
  */
 export async function safeFetchBytes(
   input: string,
-  opts: { maxBytes: number; timeoutMs?: number; maxRedirects?: number; gate?: (url: URL) => Promise<void> }
+  opts: { maxBytes: number; timeoutMs?: number; maxRedirects?: number; scheme?: UrlScheme; userAgent?: string }
 ): Promise<SafeFetchBytesResult> {
   const { url, res } = await fetchFollowingGatedRedirects(input, opts);
 
