@@ -122,6 +122,7 @@ export type ArticleEditFailure =
   | 'article_not_found'
   | 'no_changes'
   | 'invalid_language'
+  | 'translation_locked'
   | 'invalid_scheduled_for'
   | 'category_not_found'
   | 'author_not_found'
