@@ -2,15 +2,12 @@ import type { RequestHandler } from './$types';
 import {
   siteUrl,
   MARKETING_PATHS,
-  PLAYBOOK_SLUGS,
   STATIC_SITEMAP_PATHS,
   SITEMAP_LOCALES,
   localizedPath
 } from '$lib/seo';
 import { INSIGHT_SLUGS } from '$lib/data/insights';
-import { STYLE_PRESETS } from '$lib/design/presets';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { listWallSlugs } from '$lib/server/wall';
 import { hideMarketing } from '$lib/server/marketing-shell';
 import { env } from '$env/dynamic/private';
 import type { Locale } from '$lib/i18n/locale';
@@ -70,10 +67,6 @@ export const GET: RequestHandler = async ({ url }) => {
   </url>`
       );
 
-  const playbookEntries = appOnly
-    ? []
-    : PLAYBOOK_SLUGS.flatMap((slug) => localizedUrlEntries(site, `/playbooks/${slug}`, '0.6'));
-
   const insightEntries = appOnly
     ? []
     : INSIGHT_SLUGS.flatMap((slug) => localizedUrlEntries(site, `/insights/${slug}`, '0.75', 'monthly'));
@@ -84,22 +77,16 @@ export const GET: RequestHandler = async ({ url }) => {
   // returns 500 — the crawler keeps its last good copy of the sitemap instead of seeing half
   // the dynamic URLs vanish (missing lastmod signals) for exactly one fetch.
   let blogs: { blog_slug: string }[] | null = null;
-  let talentRows: { slug: string }[] | null = null;
   let agentRows: { slug: string }[] | null = null;
-  let wallSlugs: Awaited<ReturnType<typeof listWallSlugs>> = [];
   if (!appOnly) {
     try {
       const admin = createAdminClient();
-      const [blogRes, talentRes, agentRes, wall] = await Promise.all([
+      const [blogRes, agentRes] = await Promise.all([
         admin.from('brands').select('blog_slug').not('blog_slug', 'is', null),
-        admin.from('talents').select('slug').eq('status', 'active'),
-        admin.from('agent_templates').select('slug').eq('status', 'published'),
-        listWallSlugs(admin)
+        admin.from('agent_templates').select('slug').eq('status', 'published')
       ]);
       blogs = blogRes.data;
-      talentRows = talentRes.data;
       agentRows = agentRes.data;
-      wallSlugs = wall;
     } catch (e) {
       if (env.SUPABASE_SERVICE_ROLE_KEY) throw e;
     }
@@ -112,41 +99,17 @@ export const GET: RequestHandler = async ({ url }) => {
   </url>`
   );
 
-  const talentEntries = (talentRows ?? []).flatMap((t) =>
-    localizedUrlEntries(site, `/talents/${t.slug}`, '0.6')
-  );
-
   // Agent Library: /agents is already in MARKETING_PATHS; these are the per-agent pages.
   const agentEntries = (agentRows ?? []).flatMap((a) =>
     localizedUrlEntries(site, `/agents/${a.slug}`, '0.7')
   );
 
-  // Style presets live in code, not in a table — no query, just the library itself.
-  // The /styles index is already in MARKETING_PATHS; these are the per-preset pages.
-  const styleEntries = appOnly
-    ? []
-    : STYLE_PRESETS.flatMap((p) => localizedUrlEntries(site, `/styles/${p.slug}`, '0.6', 'monthly'));
-
-  // One entry per post on the design wall. `lastmod` is the day it was published to the wall — the
-  // page's content does not change after that, and claiming it did would train the crawler to
-  // ignore the field.
-  const wallEntries = wallSlugs.flatMap((w) => {
-    const entries = localizedUrlEntries(site, `/design/${w.slug}`, '0.5', 'monthly');
-    if (!w.updatedAt) return entries;
-    const day = w.updatedAt.slice(0, 10);
-    return entries.map((e) => e.replace('</url>', `  <lastmod>${day}</lastmod>\n  </url>`));
-  });
-
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 ${marketingEntries.join('\n')}
 ${staticEntries.join('\n')}
-${playbookEntries.join('\n')}
 ${insightEntries.join('\n')}
-${talentEntries.join('\n')}
 ${agentEntries.join('\n')}
-${styleEntries.join('\n')}
-${wallEntries.join('\n')}
 ${blogEntries.join('\n')}
 </urlset>
 `;

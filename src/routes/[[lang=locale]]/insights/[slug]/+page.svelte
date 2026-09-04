@@ -60,7 +60,6 @@
     '/pricing': { en: 'Pricing', it: 'Prezzi' },
     '/usecases': { en: 'Use cases', it: 'Casi d’uso' },
     '/autoposts': { en: 'Autoposts', it: 'Autoposts' },
-    '/playbooks': { en: 'Industry playbooks', it: 'Playbook per settore' },
     '/ai-seo-agent': { en: 'AI SEO Agent', it: 'AI SEO Agent' },
     '/autoblog': { en: 'Autoblog', it: 'Autoblog' },
     '/cant-afford': { en: 'When you can’t afford an agency', it: 'Quando non puoi permetterti un’agenzia' },

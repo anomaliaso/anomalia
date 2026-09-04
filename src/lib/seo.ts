@@ -42,14 +42,7 @@ export const MARKETING_PATHS = [
   '/autoposts',
   '/leads-finder',
   '/news-radar',
-  '/playbooks',
-  '/talents',
   '/agents',
-  '/styles',
-  // The two public walls (0199). Indexed like any other marketing page; the per-post detail
-  // pages are added to the sitemap from the database, since they are rows and not routes.
-  '/trending',
-  '/design',
   '/insights',
   '/cursor-mcp-motion-ads',
   '/compare',
@@ -109,42 +102,6 @@ export const MARKETING_PATHS = [
   '/docs/team-invites'
 ] as const;
 
-/** Dynamic playbook pages — one per profession. */
-export const PLAYBOOK_SLUGS = [
-  'restaurant',
-  'cafe',
-  'bakery',
-  'pizzeria',
-  'ecommerce',
-  'fashion-brand',
-  'jewelry-store',
-  'pet-shop',
-  'dental-clinic',
-  'chiropractor',
-  'nutritionist',
-  'mental-health',
-  'hair-salon',
-  'nail-studio',
-  'spa',
-  'barbershop',
-  'gym',
-  'yoga-studio',
-  'personal-trainer',
-  'crossfit-box',
-  'law-firm',
-  'real-estate',
-  'accountant',
-  'cleaning-service',
-  'photographer',
-  'agency',
-  'freelancer',
-  'coach',
-  'hotel',
-  'auto-shop',
-  'plumber',
-  'electrician'
-] as const;
-
 /** Static files that should appear in the sitemap but aren't marketing HTML pages. */
 export const STATIC_SITEMAP_PATHS = [
   '/llms.txt',
@@ -180,6 +137,15 @@ export const RETIRED_PAGES: Record<string, string> = {
   '/no-results': '/not-working',
   '/scheduling': '/posting-schedule',
   '/strategy': '/usecases',
+  // The public walls and libraries (0199). The material they showed — post designs, the style
+  // library, the talent roster, the industry playbooks — is NOT going anywhere: it stays in the
+  // database and in the modules that read it, because its future is inside the product, handed
+  // to the customer's own agent over MCP, not on a page the world browses. Only the pages go.
+  '/design': '/autoposts',
+  '/trending': '/news-radar',
+  '/styles': '/autoposts',
+  '/talents': '/usecases',
+  '/playbooks': '/usecases',
   // Free tools nobody ever opened and Google was never told about: zero pageviews in 90 days
   // (PostHog and Vercel agree) and absent from MARKETING_PATHS since the day they were written.
   // The index still lists the nine that are actually used.
@@ -201,6 +167,13 @@ export const RETIRED_PAGES: Record<string, string> = {
 };
 
 /**
+ * Retired roots whose children were database rows rather than routes: every `/design/<slug>`,
+ * `/playbooks/<slug>`, `/styles/<slug>` and `/talents/<slug>` that Google indexed needs the same
+ * 301 as its root, and there were hundreds of them.
+ */
+const RETIRED_PREFIXES = ['/design/', '/playbooks/', '/styles/', '/talents/'];
+
+/**
  * The 301 destination for a retired page, in the locale the visitor arrived in, or `null` when the
  * path is still live. The locale prefix is stripped before the lookup, so `/it/tools/meta-tags` and
  * `/tools/meta-tags` read the same row and land on the Italian and the English destination.
@@ -208,7 +181,9 @@ export const RETIRED_PAGES: Record<string, string> = {
 export function retiredPageTarget(pathname: string, lang: Locale): string | null {
   const seg = pathname.split('/')[1];
   const bare = SUPPORTED.includes(seg as Locale) ? pathname.slice(seg.length + 1) || '/' : pathname;
-  const dest = RETIRED_PAGES[bare.replace(/(.)\/$/, '$1')];
+  const path = bare.replace(/(.)\/$/, '$1');
+  const prefix = RETIRED_PREFIXES.find((r) => path.startsWith(r));
+  const dest = RETIRED_PAGES[prefix ? prefix.slice(0, -1) : path];
 
   return dest ? localizedPath(dest, lang) : null;
 }

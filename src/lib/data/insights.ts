@@ -213,7 +213,7 @@ export const INSIGHTS: InsightArticle[] = [
       en: 'Schedulers wait for you to create. Agencies need briefs. An autopilot runs the whole loop — with you still in control.',
       it: 'Gli scheduler aspettano che tu crei. Le agenzie chiedono brief. Un autopilot gira l’intero ciclo — con te ancora al comando.'
     },
-    relatedPaths: ['/autoposts', '/playbooks', '/pricing'],
+    relatedPaths: ['/autoposts', '/usecases', '/pricing'],
     sections: {
       en: [
         {
