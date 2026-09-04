@@ -9,9 +9,6 @@ import {
   type WebFixRow
 } from '@anomalia/api-contracts';
 
-// Reads over what the audits already measured. Nothing here writes, and nothing reshapes an
-// observation: `tech`, `search`, `backlinks` and `ai_overview` leave exactly as they were stored.
-
 const AUDITS_TABLE = 'brand_geo_audits';
 const FIXES_TABLE = 'brand_geo_artifacts';
 const SEO_SOURCE_PREFIX = 'seo:';
