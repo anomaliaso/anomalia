@@ -1,9 +1,10 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
 
-  // Landing FAQ — the agency question first, because that is the promise the hero makes and
-  // the one that needs its limits said out loud. Copy lives in i18n under landing.faq.*.
-  const KEYS = ['agency', 'which', 'mcp', 'why', 'review', 'platforms', 'cost', 'selfhost'];
+  // Landing FAQ — first the promise the hero makes and its limits, then the objection from the
+  // reader who could build it himself. Those two are the doubts; the rest is detail.
+  // Copy lives in i18n under landing.faq.*.
+  const KEYS = ['agency', 'diy', 'which', 'mcp', 'review', 'platforms', 'cost', 'selfhost'];
 </script>
 
 <section class="alt faq-sec" aria-labelledby="landing-faq-title">
