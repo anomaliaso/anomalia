@@ -78,8 +78,6 @@ const LEGACY_STRAYS = [
   '--surface src/routes/login/+page.svelte',
   '--surface src/routes/oauth/authorize/+page.svelte',
   '--warn src/lib/components/GrowthReadiness.svelte',
-  '--wash src/lib/components/ToolKeywordTable.svelte',
-  '--wash src/lib/components/ToolPage.svelte',
   '--wash src/routes/[[lang=locale]]/tools/agent-team/+page.svelte',
   '--wash src/routes/app/[brand]/geo/+page.svelte'
 ];
