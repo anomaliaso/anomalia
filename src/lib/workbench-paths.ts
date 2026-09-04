@@ -210,9 +210,12 @@ export type NavTeamItem = {
 };
 
 /**
- * SPAZI — le cinque destinazioni del mockup, in quell'ordine. Calendario assorbe le approvazioni
- * (/approvals e /content fanno già 308 su /calendar, la coda è il filtro ?status=); la knowledge e
- * il blog restano pagine sotto Strumenti.
+ * LE RIGHE DELLA SIDEBAR, in quest'ordine. Le cinque del mockup più le quattro che non potevano
+ * perdere la porta: SEO/GEO e Auto blog (le due volute al posto di «Web»), News Radar, e
+ * `/agents`, che dei nove lavori ricorrenti è l'unica superficie rimasta nel browser.
+ *
+ * Calendario assorbe le approvazioni: /approvals e /content fanno già 308 su /calendar, e la coda
+ * è il filtro ?status=.
  */
 export const NAV_TEAM_SPACES: NavTeamItem[] = [
   // La home del brand. `/workbench` non è più una voce sua: era la Panoramica, cioè la vista che
@@ -227,9 +230,18 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
     badge: 'content',
     also: ['/content', '/approvals', '/publish']
   },
-  // News Radar sale fra gli Spazi: e' l'unica delle pagine-strumento che si guarda tutti i
-  // giorni, ed e' la sola voce che la sidebar tiene fuori dalle cinque del mockup.
+  // SEO e GEO sono una voce sola: la ricerca e la citabilità dai modelli sono la stessa domanda
+  // ("ci trovano?") fatta a due motori. `/geo`, `/seo-geo` e `/citations` restano rotte vere —
+  // si aprono da qui dentro e da ⌘K — ma non hanno una riga propria. `/web` è la landing del
+  // hub e non è mai stata linkata direttamente.
+  { path: '/seo', labelKey: 'app.nav2.seoGeo', also: ['/web', '/seo-geo', '/geo', '/citations'] },
+  { path: '/site', labelKey: 'app.nav2.site' },
+  // Le due che girano da sole, di fila: quello che il prodotto guarda per te, e chi lo guarda.
+  // `/agents` è l'UNICA superficie browser dei nove lavori ricorrenti da quando
+  // Impostazioni › Autopilot non c'è più: senza questa riga, chi non ha un agente collegato
+  // resta senza un modo di spegnere le proprie automazioni.
   { path: '/radar', labelKey: 'app.nav2.newsRadar' },
+  { path: '/agents', labelKey: 'app.hub.automations.custom', also: ['/automations'] },
   { path: '/analytics', labelKey: 'app.nav2.results' }
 ];
 
@@ -237,7 +249,7 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
  * FUORI DALLA SIDEBAR — le destinazioni che esistono, hanno un'etichetta e si aprono da ⌘K (che
  * dopo la rimozione della modal elenca ogni pagina del brand su disco) e dai link degli agenti,
  * ma NON hanno una riga propria nella barra laterale. Il gruppo «Strumenti» che le raccoglieva è
- * stato tolto: la sidebar sono le sei voci del mockup più l'ingranaggio.
+ * stato tolto: la sidebar sono nove righe e l'ingranaggio, e basta.
  *
  * L'elenco resta perché è ancora l'inventario: `goTargetLabelKey` ci prende le etichette delle
  * scorciatoie `g <lettera>`, e il test lo confronta con HUB_TABS — una pagina nuova che non
@@ -246,12 +258,6 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
  */
 export const NAV_OFF_SIDEBAR: NavTeamItem[] = [
   { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
-  { path: '/site', labelKey: 'app.nav2.site' },
-  // SEO e GEO sono una voce sola: la ricerca e la citabilità dai modelli sono la stessa domanda
-  // ("ci trovano?") fatta a due motori. `/geo`, `/seo-geo` e `/citations` restano rotte vere —
-  // si aprono da qui dentro e da ⌘K, che elenca ogni pagina del brand — ma non hanno una riga
-  // propria in sidebar. `/web` è la landing del hub e non è mai stata linkata direttamente.
-  { path: '/seo', labelKey: 'app.nav2.seoGeo', also: ['/web', '/seo-geo', '/geo', '/citations'] },
   { path: '/keywords', labelKey: 'app.hub.web.keywords' },
   { path: '/backlinks', labelKey: 'app.hub.web.backlinks' },
   { path: '/competitors', labelKey: 'app.hub.publish.competitors' },
@@ -260,7 +266,6 @@ export const NAV_OFF_SIDEBAR: NavTeamItem[] = [
   // Lo Studio del brand: nella legacy è l'unica voce del hub Brand (Settings › Identity).
   { path: '/settings/brand', labelKey: 'app.hub.brand.identity' },
   { path: '/knowledge', labelKey: 'app.hub.brand.knowledge' },
-  { path: '/agents', labelKey: 'app.hub.automations.custom' },
   { path: '/ads/social', labelKey: 'app.hub.ads.social', adsOnly: true },
   { path: '/ads/google', labelKey: 'app.hub.ads.google', adsOnly: true },
   { path: '/ads/library', labelKey: 'app.hub.ads.library', adsOnly: true }

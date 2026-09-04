@@ -12,6 +12,9 @@
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
   import BarChart3 from '@lucide/svelte/icons/chart-column';
   import Radio from '@lucide/svelte/icons/radio';
+  import Search from '@lucide/svelte/icons/search';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
+  import Bot from '@lucide/svelte/icons/bot';
   import { setCredits, refreshCredits } from '$lib/stores/credits';
   import WarningCenter from '$lib/components/WarningCenter.svelte';
   import WorkbenchPageShimmer from '$lib/components/WorkbenchPageShimmer.svelte';
@@ -208,7 +211,7 @@
             : undefined
     };
   }
-  const SPACE_ICONS = [House, Images, Target, CalendarDays, Radio, BarChart3];
+  const SPACE_ICONS = [House, Images, Target, CalendarDays, Search, Newspaper, Radio, Bot, BarChart3];
   // Una sola sezione, senza intestazione: sei voci non hanno bisogno di essere raggruppate, e
   // «Impostazioni» non e' una riga — e' l'ingranaggio in fondo alla barra, che ha gia' il suo
   // nome accessibile (`aria-label` + `title` in DashboardSidebar).

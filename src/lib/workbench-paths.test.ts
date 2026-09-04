@@ -114,15 +114,28 @@ describe('la nav del brand', () => {
    * voce e quindi non sta qui). È l'unica cosa che un test può tenere ferma di una barra —
    * l'inventario lo sorveglia il caso qui sopra, l'aspetto nessuno.
    */
-  it('gli Spazi sono le sei voci della sidebar, in ordine', () => {
+  it('la sidebar è queste nove righe, in questo ordine', () => {
     expect(NAV_TEAM_SPACES.map((t) => [t.path, t.labelKey])).toEqual([
       ['', 'app.nav2.home'],
       ['/media', 'app.nav2.materials'],
       ['/strategy', 'app.hub.strategy.label'],
       ['/calendar', 'app.hub.publish.calendar'],
+      ['/seo', 'app.nav2.seoGeo'],
+      ['/site', 'app.nav2.site'],
       ['/radar', 'app.nav2.newsRadar'],
+      ['/agents', 'app.hub.automations.custom'],
       ['/analytics', 'app.nav2.results']
     ]);
+  });
+
+  /**
+   * `/agents` è l'unica superficie browser dei nove lavori ricorrenti da quando
+   * Impostazioni › Autopilot è stata cancellata. Toglierle la riga lascerebbe chi non ha un
+   * agente collegato senza un modo di spegnere le proprie automazioni — lo stesso difetto del
+   * contatore di fallimenti, di nuovo. Questo test è il motivo scritto accanto alla riga.
+   */
+  it('tiene in barra la sola porta rimasta ai lavori ricorrenti', () => {
+    expect(NAV_TEAM_SPACES.map((t) => t.path)).toContain('/agents');
   });
 
   /**
@@ -137,8 +150,6 @@ describe('la nav del brand', () => {
   it('sa esattamente quali destinazioni hanno perso la riga in sidebar', () => {
     expect(NAV_OFF_SIDEBAR.map((t) => t.path)).toEqual([
       '/leads',
-      '/site',
-      '/seo',
       '/keywords',
       '/backlinks',
       '/competitors',
@@ -146,7 +157,6 @@ describe('la nav del brand', () => {
       '/manual-posting',
       '/settings/brand',
       '/knowledge',
-      '/agents',
       '/ads/social',
       '/ads/google',
       '/ads/library'
