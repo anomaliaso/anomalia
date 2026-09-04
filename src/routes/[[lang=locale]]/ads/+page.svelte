@@ -16,7 +16,7 @@
   const startHref = $derived(marketingStartHref({ loggedIn, waitlistActive }));
   const tk = 'landing.thisAd';
 
-  // The creatives on this page ARE the campaign's creatives (static/ads, from scripts/gen-ads.mjs).
+  // The creatives on this page ARE the campaign's creatives (static/ads).
   // Only IT and EN sets exist; every other locale sees the English ones.
   const set = $derived((($locale as Locale) ?? 'en') === 'it' ? 'it' : 'en');
   const CREATIVES = ['a-claim', 'b-log', 'c-inception'];
