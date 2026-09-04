@@ -39,8 +39,7 @@ import { createHarnessSession } from '$lib/server/harness/session';
 import { persistHarnessSession } from '$lib/server/harness/persist';
 import { wrapTools } from '$lib/server/harness/pipeline';
 import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
-import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
-import { llmLanguageModel } from '$lib/server/llm';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { createAgentBase } from '$lib/server/agent-base';
 import { createBrandContextTools } from '$lib/server/brand-context-tools';
 import { createMediaLibraryTools } from '$lib/server/media-library-tools';
@@ -214,7 +213,7 @@ export async function runUgcOrchestrator(deps: UgcAgentDeps): Promise<UgcAgentOu
 		threadId: deps.threadId,
 		model: (() => {
 			const b = geminiFast();
-			const id = IMAGE_AGENT_MODEL();
+			const id = llmDefaultModel();
 			return id === b.modelId ? b : { ...b, model: llmLanguageModel(id), modelId: id };
 		})(),
 		defaultAgent: 'ugc',
@@ -425,7 +424,7 @@ export async function runUgcOrchestrator(deps: UgcAgentDeps): Promise<UgcAgentOu
 		userId,
 		agent: 'ugc_producer',
 		mode: String(plans.length),
-		model: IMAGE_AGENT_MODEL(),
+		model: llmDefaultModel(),
 		provider: 'llm',
 		surface: 'batch'
 	});
@@ -436,7 +435,7 @@ export async function runUgcOrchestrator(deps: UgcAgentDeps): Promise<UgcAgentOu
 
 	try {
 		const res = await generateText({
-			model: llmLanguageModel(IMAGE_AGENT_MODEL()),
+			model: llmLanguageModel(llmDefaultModel()),
 			maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
 			system,
 			prompt,

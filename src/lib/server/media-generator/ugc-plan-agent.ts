@@ -13,8 +13,7 @@ import { wrapTools } from '$lib/server/harness/pipeline';
 import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { llmLanguageModel } from '$lib/server/llm';
-import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
+import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { readMediaForAgent } from '$lib/server/strategy-agent-reads';
 import {
   brandContextPromptSection,
@@ -323,7 +322,7 @@ export async function planUgcClipsWithTools(opts: UgcPlanAgentOpts): Promise<Ugc
     userId: opts.userId,
     agent: 'ugc_plan',
     mode: String(count),
-    model: IMAGE_AGENT_MODEL(),
+    model: llmDefaultModel(),
     provider: 'llm',
     surface: 'batch'
   });
@@ -334,7 +333,7 @@ export async function planUgcClipsWithTools(opts: UgcPlanAgentOpts): Promise<Ugc
 
   try {
     const result = await generateText({
-      model: llmLanguageModel(IMAGE_AGENT_MODEL()),
+      model: llmLanguageModel(llmDefaultModel()),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system,
       prompt,
@@ -375,7 +374,7 @@ export async function planUgcClipsWithTools(opts: UgcPlanAgentOpts): Promise<Ugc
   logAiCall({
     label: 'ugc-plan-agent',
     provider: 'llm',
-    model: IMAGE_AGENT_MODEL(),
+    model: llmDefaultModel(),
     ms: Date.now() - t0,
     ok,
     brandId: opts.brandId,

@@ -18,7 +18,6 @@ describe('niente agenti annidati sul GTM di produzione', () => {
 // la traccia dai moduli foglia. Gli orchestratori escono dal framework uno per PR, e una tabella
 // con una riga per file fa sì che due PR in parallelo tocchino righe diverse invece della stessa.
 const LOOP_DRIVER: Record<string, 'harness' | 'sdk'> = {
-	'image-agent.ts': 'sdk',
 	'produce-agent.ts': 'sdk',
 	'seo-agent.ts': 'sdk',
 	'strategy-agent.ts': 'sdk',

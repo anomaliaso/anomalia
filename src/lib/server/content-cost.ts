@@ -10,7 +10,6 @@
  * I NUMERI SONO MISURATI, NON STIMATI. Mediane di `ai_calls` in produzione al 2026-08-31:
  *
  *   renderPostImage   n=994   $0.069     una immagine renderizzata
- *   critiqueImage     n=831   $0.008     il critico che la rilegge (gira su ogni render)
  *   video.render               una clip — NON un numero solo: v. videoCredits(), cambia di 17× col modello
  *   planStrategy      n=369   $0.033  ┐
  *   executePlan       n=410   $0.038  ├ il testo di un batch, indipendente da quanti post contiene
@@ -31,8 +30,15 @@ import { videoModel } from '$lib/server/model-routing';
 const CREDITS_PER_USD = 100;
 const credits = (usd: number): number => Math.round(usd * CREDITS_PER_USD);
 
-/** Un'immagine pubblicabile: il render più il critico che la rilegge e la fa ritentare. */
-export const IMAGE_CREDITS = credits(0.069 + 0.008);
+/**
+ * Un'immagine pubblicabile: UN render, e basta.
+ *
+ * Prima era `0.069 + 0.008`, il render più il critico che la rileggeva. Il critico non c'è più —
+ * e con lui i due candidati paralleli e i ritentativi, che questo numero non ha mai contato: la
+ * misura diceva ~4 render pagati per ogni immagine consegnata, 1.058 render per ~250 artefatti in
+ * 30 giorni. Adesso il prezzo dichiarato e quello addebitato sono la stessa cosa.
+ */
+export const IMAGE_CREDITS = credits(0.069);
 
 /**
  * Una clip, al prezzo del modello che la renderizzerà davvero. La copertina si conta a parte: è un

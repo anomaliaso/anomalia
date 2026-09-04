@@ -23,7 +23,7 @@ vi.mock('$lib/server/research', async (importOriginal) => ({
   structured: vi.fn(async () => ({ pass: true, score: 9, issues: [], fixHint: '', brandStyleMatch: true }))
 }));
 
-const { buildImageRequest, renderWithQC, renderCarouselSlide } = await import('./images');
+const { buildImageRequest, renderBrandImage, renderCarouselSlide } = await import('./images');
 
 const RENDERED = {
   candidates: [{ content: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'image/png' } }] } }]
@@ -49,10 +49,10 @@ beforeEach(() => {
 });
 
 describe('il pavimento di esecuzione del design arriva al percorso immagine', () => {
-  it('renderWithQC lo inietta quando il digest esiste', async () => {
+  it('renderBrandImage lo inietta quando il digest esiste', async () => {
     digest.section = DESIGN_FLOOR;
 
-    await renderWithQC(null as never, PROMPT, RENDER_OPTS, {}, false);
+    await renderBrandImage(null as never, PROMPT, RENDER_OPTS);
 
     expect(promptsSentToModel()[0]).toContain('AMBIENT DESIGN FLOOR');
   });
@@ -76,7 +76,7 @@ describe('il pavimento di esecuzione del design arriva al percorso immagine', ()
   });
 
   it('senza digest il prompt resta identico a prima', async () => {
-    await renderWithQC(null as never, PROMPT, RENDER_OPTS, {}, false);
+    await renderBrandImage(null as never, PROMPT, RENDER_OPTS);
 
     expect(promptsSentToModel()[0]).toBe(buildImageRequest(PROMPT, RENDER_OPTS).contents[0].parts[0].text);
   });
@@ -84,7 +84,7 @@ describe('il pavimento di esecuzione del design arriva al percorso immagine', ()
   it('il pavimento non tocca il soggetto: entra come blocco a sé, prima dello stile del brand', async () => {
     digest.section = DESIGN_FLOOR;
 
-    await renderWithQC(null as never, PROMPT, RENDER_OPTS, {}, false);
+    await renderBrandImage(null as never, PROMPT, RENDER_OPTS);
 
     const text = promptsSentToModel()[0];
     expect(text).toContain('AMBIENT DESIGN FLOOR');

@@ -4,7 +4,7 @@
 // get a strong cover, which the paid path animates.
 
 import { swallow } from '$lib/server/swallow';
-import { PRODUCT_REF_IMAGES, aspectRatioFor, brandOfferings, brandVisualDirective, extractVisualPlaybook, fetchLogoPart, loadMoodRefs, loadProductRefs, markProduceApproved, personImageMap, personReference, referenceModeFor, renderCarouselSlide, renderWithQC, resolveOffering, uploadPostImage } from './images';
+import { PRODUCT_REF_IMAGES, aspectRatioFor, brandOfferings, brandVisualDirective, extractVisualPlaybook, fetchLogoPart, loadMoodRefs, loadProductRefs, markProduceApproved, personImageMap, personReference, referenceModeFor, renderBrandImage, renderCarouselSlide, resolveOffering, uploadPostImage } from './images';
 import { type CaptionKnowledgeCtx, executePlan } from './caption-quality';
 import { client, planStrategy, warnOnSceneCollapse } from './plan-pipeline';
 import { normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, type PastWinner, type PostSeed, type PreviewPost, type Progress, VISUAL_REQUIRED, type WeeklyStrategy, carouselMaxPerBatch, clampCarousels, clampMediaCapabilities, clampVideos, platformKey } from './seed-model';
@@ -562,24 +562,8 @@ export async function renderPreviewImages(
               })
             : post.image_prompt;
 
-          const { dataUrl, qc } = await renderWithQC(
-            ai,
-            framePrompt,
-            renderOpts,
-            {
-              productName: post.product,
-              productKind: featured?.kind,
-              personName: post.person,
-              personAttributes:
-                post.person && !personRefs?.length
-                  ? personAttrsMap.get(post.person.toLowerCase().trim())
-                  : undefined,
-              referenceImages,
-              personImages: personRefs,
-              visualStyle: effectiveStyle
-            },
-            highStakes
-          );
+          const dataUrl = await renderBrandImage(ai, framePrompt, renderOpts);
+          const qc = undefined;
           // Expose the verdict so callers can surface it (CLI --verbose).
           if (qc) (post as AnyRec).__qc = qc;
 
