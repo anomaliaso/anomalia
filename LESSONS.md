@@ -811,3 +811,26 @@ rifiuto smettesse di arrivare dal ramo che lo produce oggi.
 dovrebbe produrlo (qui: «could not resolve» invece di «non è pubblico»), non è protezione: è una
 coincidenza con la data di scadenza. Fissala in un test che nomina la proprietà, non il
 meccanismo.
+## Il file che leggi non è sempre il file che è in produzione
+
+`https://mcp.anomalia.so/.well-known/oauth-protected-resource` annunciava
+`authorization_servers: ["https://anomalia.so"]` mentre `authServerUrl()` in `cli/lib/config.ts`
+— letto in questo repo, su `dev` e su `main` — restituisce `https://www.anomalia.so`. Nessuna
+delle due letture era sbagliata: il progetto Vercel che serve quel dominio (`anomalia-cli`) è
+agganciato al repo **pre-monorepo** `andreabuttarelli/anomalia-cli`, il cui `authServerUrl()`
+ritorna ancora l'apex, e la cui ultima deploy di produzione è di tre settimane prima
+dell'import nel monorepo. Il codice giusto non è mai arrivato in produzione perché nessuno
+deploya quel dominio da qui.
+
+Segnale: la produzione contraddice il codice che hai appena letto, e il `git log` del file
+mostra un solo commit — quello di import — senza traccia della modifica che stai cercando.
+Mossa: prima di diagnosticare, chiedi a Vercel **da quale repo e da quale commit** è servito
+quel dominio (`list_projects` → `link.repo`, `list_deployments` → `meta.githubCommitRepo`).
+Una funzione letta in locale non è una prova su cosa gira: il repo di origine è parte della
+domanda.
+
+**La regola dietro**: quando un dominio del prodotto non è servito dal repo in cui stai
+lavorando, il repo non può ripararlo — può solo smettere di regredire. Il test di contratto
+serve comunque, perché il giorno in cui il dominio torna a essere servito da qui il difetto
+non rientra; ma la riparazione è ripuntare il progetto, e va detta come tale invece di essere
+spacciata per un fix di codice.
