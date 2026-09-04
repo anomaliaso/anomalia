@@ -86,6 +86,13 @@ time; `update_person` and `update_competitor` fix a role or a wrong website. The
 fields you send, leave every other column as it was, and cost nothing. `update_person` can never
 attest consent: a real person's face stays withheld from every generator until the operator
 states, in their own words, that they have it.
+**Choose which model draws and which films** → `get_media_models` lists the six jobs (image
+generation, image refinement, video from text, animating a still, video refinement, motion
+transfer) with the models each one accepts; `set_media_model` pins one. A model that cannot do
+that job is refused with the list that would have been taken, so read before you write. `null`
+gives the job back to the platform default. No credits, no model call; it applies to the next
+render.
+
 **Hand over a payment link** → `create_checkout_link` (pick a plan and pay) or
 `create_billing_portal_link` (invoices, card, plan change, **cancel**). You mint the URL and give
 it to the account owner; they complete it on Stripe. Never pay, never switch a plan, never cancel

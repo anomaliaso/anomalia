@@ -228,6 +228,33 @@ their own words.
 pastes it on the profile by hand. `get_bio` also returns the short link worth putting there — the
 one with the most clicks in the last seven days.
 
+## Media models
+
+| MCP | CLI |
+|-----|-----|
+| `get_media_models` | (MCP only) |
+| `set_media_model` | (MCP only) |
+
+Six jobs a brand can hand to different models: `imageModel` (draw an image), `imageRefineModel`
+(redraw one that exists), `videoModel` (clip from words alone), `videoImageModel` (animate a
+still), `videoRefineModel` (rewrite a clip, keeping its movement), `videoMotionModel` (take
+movement from a guide video). They are not rungs of one ladder — a model that animates a photo
+may have no video input at all, so each job offers only the models that do it.
+
+`get_media_models` returns, per job, the current choice and the ids that job accepts.
+`set_media_model` takes `slot` and `model`; a model that job cannot do comes back as
+`model_not_for_slot` (400) with the list that would have been accepted, and nothing is saved.
+`model: null` drops the choice and the platform default renders again. `model` is always
+required — there is no way to leave it unsaid.
+
+Neither call spends credits or runs a model. The choice applies to the next render, not to
+anything already produced. It is stored on the brand, so it is the same for everyone working on
+that brand.
+
+The motion video written in code (Remotion/TSX) has no model choice of its own: it is a program
+rendered in a VM, not a generative model, and no per-brand preference exists for the model that
+writes it.
+
 ## SEO / GEO / blog / ads / AI
 
 | MCP | CLI |
