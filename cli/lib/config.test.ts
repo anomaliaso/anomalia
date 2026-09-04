@@ -23,9 +23,6 @@ describe('appUrl', () => {
 });
 
 describe('authServerUrl', () => {
-  // Deve combaciare con issuerFor() in 021-app: RFC 8414 confronta l'issuer byte per byte con
-  // l'identificatore da cui il client ha costruito l'URL di discovery. L'apex 308-redirecta,
-  // quindi l'unico identificatore che regge è quello che risponde 200 — www.
   test('never advertises the apex: it 308-redirects and discovery dies there', () => {
     delete process.env.PUBLIC_APP_URL;
     expect(authServerUrl()).toBe('https://www.anomalia.so');
