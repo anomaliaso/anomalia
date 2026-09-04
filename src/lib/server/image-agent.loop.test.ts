@@ -97,6 +97,8 @@ vi.mock('$lib/server/ai-log', async () => {
   return { ...actual, logAiCall };
 });
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MAX_AGENT_INSPECTS, MAX_AGENT_RENDERS, MAX_AGENT_STEPS, runImageAgent } from './image-agent';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -350,5 +352,19 @@ describe('il guardiano di sessione, che il framework applicava in silenzio', () 
     expect(rec.calls[1].output).toMatchObject({ error: 'render_image returned no image' });
     expect(rec.calls[2].output).toMatchObject({ blocked_by: 'steward', ran: false, do_not_retry: true });
     expect(renderPostImage).toHaveBeenCalledTimes(2);
+  });
+});
+// `harness/index` riesporta `harness/run`, che importa `chat/model` e `chat/controller`: chi
+// prende la traccia dall'indice si porta dentro la chat e `$lib/agent` senza usarli. I moduli
+// foglia non li toccano, e questo test è l'unica cosa che impedisce di «riordinare» l'import.
+describe('da dove arriva la traccia', () => {
+  const src = readFileSync(join(process.cwd(), 'src/lib/server/image-agent.ts'), 'utf8');
+
+  it('l image agent guida l SDK e non passa dall indice del framework', () => {
+    expect(src).toMatch(/await generateText\(/);
+    expect(src).not.toContain('harnessGenerateText(');
+    expect(src).not.toMatch(/from '\$lib\/server\/harness'/);
+    expect(src).toMatch(/from '\$lib\/server\/harness\/session'/);
+    expect(src).toMatch(/from '\$lib\/server\/harness\/persist'/);
   });
 });
