@@ -25,9 +25,6 @@ export const ICONS: Record<string, { path: string; hex: string }> = {
 
 export const SETTINGS_SECTIONS = [
   'brand',
-  'platforms',
-  'hashtags',
-  'voice-examples',
   'products',
   'people',
   'library',
@@ -38,7 +35,6 @@ export const SETTINGS_SECTIONS = [
   'ads-accounts',
   'radar',
   'video',
-  'timezone',
   'blog-appearance',
   'blog-authors',
   'blog-categories',
@@ -58,9 +54,6 @@ export const SETTINGS_SECTIONS = [
 /** Former Studio / Identity sections now under Settings → Brand. */
 export const SETTINGS_BRAND_SECTIONS = [
   'brand',
-  'platforms',
-  'hashtags',
-  'voice-examples',
   'products',
   'people'
 ] as const;
@@ -99,9 +92,6 @@ export const SETTINGS_GROUPS: readonly {
     labelKey: 'app.nav.sectionBrand',
     items: [
       { section: 'brand', labelKey: 'app.studio.tabs.brand' },
-      { section: 'platforms', labelKey: 'app.studio.tabs.platforms' },
-      { section: 'hashtags', labelKey: 'app.studio.tabs.hashtags' },
-      { section: 'voice-examples', labelKey: 'app.studio.tabs.voiceExamples' },
       { section: 'products', labelKey: 'app.hub.overview.brand.products' },
       { section: 'people', labelKey: 'app.studio.tabs.people' },
       { section: 'library', labelKey: 'app.hub.web.library' },
@@ -131,8 +121,7 @@ export const SETTINGS_GROUPS: readonly {
     items: [
       { section: 'connected-accounts', labelKey: 'app.settings.connectedAccounts' },
       { section: 'radar', labelKey: 'app.settings.radar.nav' },
-      { section: 'video', labelKey: 'app.settings.video.title' },
-      { section: 'timezone', labelKey: 'app.settings.postingTimezone' }
+      { section: 'video', labelKey: 'app.settings.video.title' }
     ]
   },
   {

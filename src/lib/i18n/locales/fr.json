@@ -4755,6 +4755,7 @@
       "autoPublishTo": "Brouillons pour {platform}, publiés après votre approbation",
       "connectToChoose": "Connectez un compte ci-dessus pour choisir lequel publie automatiquement.",
       "postingTimezone": "Fuseau horaire de publication",
+      "tzKeepsAbsolute": "Changer de fuseau NE déplace PAS les posts qui ont déjà une heure : ils partent au même instant absolu, donc leur heure locale change. Seules les nouvelles programmations utilisent le nouveau fuseau.",
       "scheduleTimes": "Horaires de publication",
       "scheduleTimesDesc": "Tous les horaires de publication dans Anomalia sont affichés et programmés dans ce fuseau.",
       "save": "Enregistrer",

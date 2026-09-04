@@ -80,7 +80,7 @@ export function computeBrandWarnings(i: BrandWarningInput): AppWarning[] {
   }
 
   if (targets.length === 0) {
-    out.push({ id: 'no-platforms', severity: 'warning', title: 'warnings.noPlatforms.title', message: 'warnings.noPlatforms.msg', href: `${i.base}/settings/platforms` });
+    out.push({ id: 'no-platforms', severity: 'warning', title: 'warnings.noPlatforms.title', message: 'warnings.noPlatforms.msg', href: `${i.base}/settings/brand#platforms` });
   } else {
     const notConnected = targets.filter((p) => !hasAccount.has(p));
     if (notConnected.length) {
@@ -172,7 +172,7 @@ export function computeBrandWarnings(i: BrandWarningInput): AppWarning[] {
   if (!i.hasVisualStyle) out.push({ id: 'studio-no-visual-style', severity: 'suggestion', title: 'warnings.studioVisual.title', message: 'warnings.studioVisual.msg', href: `${i.base}/settings/brand` });
   if (i.peopleCount === 0) out.push({ id: 'studio-no-people', severity: 'suggestion', title: 'warnings.studioPeople.title', message: 'warnings.studioPeople.msg', href: `${i.base}/settings/people` });
   if (i.competitorCount === 0) out.push({ id: 'studio-no-competitors', severity: 'suggestion', title: 'warnings.studioCompetitors.title', message: 'warnings.studioCompetitors.msg', href: `${i.base}/competitors` });
-  if (!i.hasHashtags) out.push({ id: 'studio-no-hashtags', severity: 'suggestion', title: 'warnings.studioHashtags.title', message: 'warnings.studioHashtags.msg', href: `${i.base}/settings/hashtags` });
+  if (!i.hasHashtags) out.push({ id: 'studio-no-hashtags', severity: 'suggestion', title: 'warnings.studioHashtags.title', message: 'warnings.studioHashtags.msg', href: `${i.base}/settings/brand#hashtags` });
 
   // Blog not opted in → Anomalia's plan & radar generate social only. Nudge the user to enable it so
   // the pipeline also produces blog articles (from the plan and from the news).

@@ -24,8 +24,21 @@
     data: any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     form: any;
-    section: import('./sections').StudioSection;
+    /**
+     * Quali sezioni rendere. Una pagina ne mostrava sempre UNA, e per anni è bastato; da quando
+     * le impostazioni del brand sono una pagina sola (fuso, piattaforme, hashtag, esempi di voce
+     * — la forma di `get_brand_settings`) ne servono quattro insieme. Sono blocchi `{#if}`
+     * indipendenti, quindi escono nell'ordine in cui stanno scritti qui sotto, non in quello
+     * dell'array: un ordine di lettura non lo decide chi chiama.
+     *
+     * Montare quattro volte il componente sarebbe stata la strada senza toccarlo, ma ognuna si
+     * porta dietro un client Supabase del browser e una sottoscrizione a `data.deferred`.
+     */
+    section: import('./sections').StudioSection | import('./sections').StudioSection[];
   } = $props();
+
+  const wanted = $derived(Array.isArray(section) ? section : [section]);
+  const shows = (s: import('./sections').StudioSection) => wanted.includes(s);
 
   // Studio content (brand kit, products, docs, history, people, competitors, and their signed
   // thumbnail URLs) streams in behind `data.deferred` (see +page.server.ts) — this used to block
@@ -403,7 +416,7 @@
 {#if !extras}
   <div class="studio-loading" aria-busy="true"></div>
 {:else}
-  {#if section === 'brand'}
+  {#if shows('brand')}
 <section id="brand" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.brand')}</h2>
         {#if kit}
@@ -678,7 +691,9 @@
           <div class="empty">{$_('app.studio.noKit')}</div>
         {/if}
       </section>
-  {:else if section === 'platforms'}
+  {/if}
+
+  {#if shows('platforms')}
 <section id="platforms" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.platforms')}</h2>
         <div class="kit span2">
@@ -711,7 +726,9 @@
           </form>
         </div>
       </section>
-  {:else if section === 'hashtags'}
+  {/if}
+
+  {#if shows('hashtags')}
 <section id="hashtags" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.hashtags')}</h2>
         <div class="kit span2">
@@ -738,7 +755,9 @@
           </form>
         </div>
       </section>
-  {:else if section === 'voice-examples'}
+  {/if}
+
+  {#if shows('voice-examples')}
 <section id="voice-examples" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.voiceExamples', { default: 'Post di esempio' })}</h2>
         <div class="kit span2">
@@ -751,7 +770,9 @@
           </form>
         </div>
       </section>
-  {:else if section === 'products'}
+  {/if}
+
+  {#if shows('products')}
 <section id="products" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.products', { values: { count: products.length } })}</h2>
         {#if products.length}
@@ -798,7 +819,9 @@
           <div class="empty">{$_('app.studio.noProducts')}</div>
         {/if}
       </section>
-  {:else if section === 'competitors'}
+  {/if}
+
+  {#if shows('competitors')}
 <section id="competitors" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.competitors', { values: { count: competitors.length } })}</h2>
         <div class="knowledge">
@@ -889,7 +912,9 @@
           {/if}
         </div>
       </section>
-  {:else if section === 'people'}
+  {/if}
+
+  {#if shows('people')}
 <section id="people" class="studio-section">
         <h2 class="section-title">{$_('app.studio.tabs.people')}</h2>
         <div class="knowledge">
