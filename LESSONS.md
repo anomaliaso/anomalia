@@ -66,6 +66,22 @@ Un eval o un test lanciato da un worktree misura un ibrido: `$lib` punta alla co
 ### Il worktree DENTRO la repo dir: la pagina è viva ma non risponde (403 su `entry.js`)
 Un worktree creato dentro la cartella della repo (`anomalia/anomalia-wt/<slug>`) risolve `@sveltejs/kit` dal `node_modules` del checkout padre: vite lo serve via `/@fs/...` **fuori dalla root del worktree** e risponde 403 — il bundle client non parte, la hydratazione non arriva, e ogni click "riuscito" dell'automazione browser non cambia nulla (SSR morto senza errori in console). Segnale: `performance.getEntriesByType('resource')` mostra `entry.js` con `responseStatus: 403`, i click vanno a un DOM senza handler. Mossa: il worktree sta **fuori** dalla repo (`../anomalia-wt/<slug>`, come da docs/e2e-testing.md §1) con `npm ci` proprio.
 
+### Rompere apposta per vedere il rosso: il ripristino si porta via il lavoro non committato
+
+Qui si rompe di proposito in continuazione — è il modo in cui si controlla che un test sorvegli
+davvero la proprietà che dice di sorvegliare, invece di essere verde da sempre. La trappola è nel
+gesto che segue: `git checkout -- <file>` ripristina **tutto** il file, quindi anche la modifica
+vera che non era ancora committata e che stava lì dentro. È successo su `DashboardSidebar.svelte`:
+rotto l'`aria-label` per guardare fallire la guardia, ripristinato, e con lui è sparito il nuovo
+header del prodotto — scritto, verificato, non committato.
+
+Segnale: il test che avevi appena visto passare torna rosso «da solo» dopo il ripristino, e
+falliscono anche casi che non c'entrano con la rottura.
+
+Mossa, una riga: **si rompe DOPO aver committato**, oppure su una copia
+(`cp file /tmp/file.bak`, rompi, `cp` indietro). Il costo è zero e vale per chiunque usi questo
+metodo — che è chiunque, qui.
+
 ### Verifica il `workdir` prima di ogni Edit
 Con più worktree aperti (feature + verifica), un edit fatto nel checkout sbagliato tocca dev. È successo: `live.ts` modificato nel checkout principale per un secondo, poi `git checkout --` e riapplicato nel posto giusto. Il tool Edit non ti proteggere — proteggiti tu: guarda il percorso del file che stai per toccare, sempre.
 
