@@ -74,13 +74,3 @@ export function normalizeAgentId(raw: unknown, fallback = DEFAULT_AGENT_ID): str
   const mapped = LEGACY_AGENT_MAP[raw] ?? raw;
   return AGENT_META.some((a) => a.id === mapped) ? mapped : fallback;
 }
-
-/** Like normalizeAgentId, but maps locked `web` → auto on unpaid brands. */
-export function normalizeAgentIdForBrand(
-  raw: unknown,
-  webHubEnabled: boolean,
-  fallback = DEFAULT_AGENT_ID
-): string {
-  const id = normalizeAgentId(raw, fallback);
-  return id === 'web' && !webHubEnabled ? fallback : id;
-}
