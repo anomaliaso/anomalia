@@ -12,16 +12,58 @@ describe('niente agenti annidati sul GTM di produzione', () => {
 	});
 });
 
+// CHI GUIDA IL GIRO, un orchestratore per riga.
+//
+// `harness` = passa ancora da `harnessGenerateText`; `sdk` = guida `generateText` da sé e prende
+// la traccia dai moduli foglia. Gli orchestratori escono dal framework uno per PR, e una tabella
+// con una riga per file fa sì che due PR in parallelo tocchino righe diverse invece della stessa.
+const LOOP_DRIVER: Record<string, 'harness' | 'sdk'> = {
+	'image-agent.ts': 'harness',
+	'produce-agent.ts': 'harness',
+	'strategy-agent.ts': 'sdk',
+	'week-planner-agent.ts': 'harness'
+};
+
+const loopFiles = Object.keys(LOOP_DRIVER);
+
 describe('batch loops: cap USD restano su generateText', () => {
-	it.each(['image-agent.ts', 'strategy-agent.ts', 'week-planner-agent.ts', 'produce-agent.ts'])(
-		'%s usa harnessGenerateText e PER_RUN o deadline, non new HarnessAgent',
+	it.each(loopFiles)('%s ha un tetto e non è un HarnessAgent', (file) => {
+		const src = readFileSync(join(root, `lib/server/${file}`), 'utf8');
+		expect(src).not.toMatch(/new HarnessAgent\b/);
+		expect(src.includes('PER_RUN_USD_CAP') || src.includes('deadlineMs') || src.includes('deadlineReached')).toBe(
+			true
+		);
+	});
+
+	it.each(loopFiles.filter((f) => LOOP_DRIVER[f] === 'harness'))(
+		'%s passa ancora da harnessGenerateText',
 		(file) => {
 			const src = readFileSync(join(root, `lib/server/${file}`), 'utf8');
 			expect(src).toContain('harnessGenerateText');
-			expect(src).not.toMatch(/new HarnessAgent\b/);
-			expect(src.includes('PER_RUN_USD_CAP') || src.includes('deadlineMs') || src.includes('deadlineReached')).toBe(
-				true
-			);
+		}
+	);
+
+	// `harness/index` riesporta `harness/run`, che importa `chat/model` e `chat/controller`: chi
+	// prende la traccia dall'indice si porta dentro la chat e `$lib/agent` senza usarli. I moduli
+	// foglia non li toccano, e questo test è l'unica cosa che impedisce di «riordinare» l'import.
+	it.each(loopFiles.filter((f) => LOOP_DRIVER[f] === 'sdk'))(
+		'%s guida l\'SDK e prende la traccia dai moduli foglia',
+		(file) => {
+			const src = readFileSync(join(root, `lib/server/${file}`), 'utf8');
+			expect(src).toMatch(/await generateText\(/);
+			expect(src).not.toContain('harnessGenerateText(');
+			expect(src).not.toMatch(/from '\$lib\/server\/harness'/);
+			expect(src).toMatch(/from '\$lib\/server\/harness\/session'/);
+			expect(src).toMatch(/from '\$lib\/server\/harness\/persist'/);
+		}
+	);
+
+	it.each(['session.ts', 'persist.ts', 'pipeline.ts', 'steward.ts'])(
+		'harness/%s non importa la chat né $lib/agent',
+		(file) => {
+			const src = readFileSync(join(root, `lib/server/harness/${file}`), 'utf8');
+			expect(src).not.toMatch(/from '\$lib\/server\/chat\//);
+			expect(src).not.toMatch(/from '\$lib\/agent\//);
 		}
 	);
 });
