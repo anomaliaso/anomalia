@@ -9,7 +9,7 @@ integrazioni esterne via API key — request, response, query params, body, erro
 | Pagina | Endpoint |
 |---|---|
 | [01 — Overview](01-overview.md) | Auth (JWT/API key), errori comuni, gate crediti, convenzioni |
-| [02 — Brand core](02-brands-core.md) | `GET /brands`, `GET /brands/:slug`, `/analytics`, `/calendar`, `/bio`, `/publishing`, `/tick` |
+| [02 — Brand core](02-brands-core.md) | `GET /brands`, `GET /brands/:slug`, `/analytics`, `/calendar`, `/bio`, `/publishing`, `/tick`, `/doctor`, `/goals` |
 | [03 — Posts](03-posts.md) | `/posts` (list/edit/delete), `/approve`, `/publish`, `/reschedule`, `/render`, `/media`, `/revoke`, `/approve-all` |
 | [04 — Studio](04-studio.md) | `/studio`, `/kit`, `/colors`, `/memory`, `/people`, `/documents`, `/competitors`, `/history/sync`, `/people/:id` |
 | [05 — Editorial plan](05-editorial-plan.md) | `/editorial-plan` + `propose` `approve` `discard` `revise` `update` `save-brief` `replan-week` |

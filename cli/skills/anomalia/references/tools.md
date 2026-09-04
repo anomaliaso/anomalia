@@ -19,6 +19,8 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `get_status` | `anomalia status <slug>` |
 | `get_analytics` | `anomalia analytics <slug>` |
 | `get_calendar` | `anomalia calendar <slug> [--month YYYY-MM]` |
+| `diagnose_brand` | (MCP only) |
+| `get_goals` | (MCP only) |
 | `get_gtm` | `anomalia gtm <slug>` |
 | `get_voice` / `update_voice` | `anomalia voice <slug>` |
 | `list_products` | (studio / products views) |
@@ -38,6 +40,18 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `regenerate_slide` | `anomalia post <slug> <id> slide --index N --instruction "…"` |
 | `reorder_slides` | `anomalia post <slug> <id> reorder --order "0,2,1"` |
 | `make_video` | `anomalia post <slug> <id> video …` |
+
+`diagnose_brand` answers "why is nothing happening". For each recurring cycle — publishing,
+autopilot, analytics review — it names the FIRST gate the brand fails (`blockedBy`), what the
+data says (`detail`), what unblocks it (`fix`, present only on a failing gate), and the last
+recorded outcome. Read `notCovered` before concluding anything: it lists the cycles this
+diagnosis does not look at, so "no blocks" never means "the whole product is working". No model,
+no credits, no writes.
+
+`get_goals` is goal mode measured rather than described: `summary` says how many goals were met
+on the first pass, how many went back to the person, how many automatic laps were spent, and
+`stopped_by` says why the chains stopped. Each goal carries its criteria and its diary. `limit`
+is 20 by default and 100 at most; `thread` narrows to one conversation.
 
 `get_creation_kit` is what you read BEFORE writing. Required: `slug`, `goal` (one line saying
 what the post has to do), `platforms` (comma-separated) and `format` (`single_image`, `carousel`,

@@ -93,7 +93,7 @@ checkout. Restano scope `write`: il link porta anche a un bottone di disdetta.
 
 | Pagina | Area |
 |---|---|
-| [02 — Brand core](02-brands-core.md) | `brands`, detail, analytics, calendar, bio, publishing, tick |
+| [02 — Brand core](02-brands-core.md) | `brands`, detail, analytics, calendar, bio, publishing, tick, doctor, goals |
 | [03 — Posts](03-posts.md) | Lista, edit, approve, publish, reschedule, render, media, revoke |
 | [04 — Studio](04-studio.md) | Kit, colors, memory, people, documents, competitors, history sync |
 | [05 — Editorial plan](05-editorial-plan.md) | Propose, approve, discard, revise, update, save-brief, replan-week |
