@@ -48,7 +48,16 @@ function gtmPhasesHaveContent(phases: unknown): boolean {
   return false;
 }
 
-export const load: LayoutServerLoad = async ({ params, cookies, locals: { supabase, safeGetSession } }) => {
+export const load: LayoutServerLoad = async ({ url, params, cookies, locals: { supabase, safeGetSession } }) => {
+  // La home del brand era la chat: tolta quella, il guscio non ha più niente da mostrare lì e il
+  // workbench È la home. Il rimando sta QUI e non in un +page.server.ts perché quello correva in
+  // parallelo a questo load: chiudeva la risposta prima che la riga sotto scrivesse il cookie
+  // dell'ultimo brand, e SvelteKit rifiutava con «cookies.set after the response has been
+  // generated». Qui il rimando parte prima di ogni attesa, quindi non c'è corsa da perdere.
+  if (decodeURIComponent(url.pathname).replace(/\/$/, '') === `/app/${params.brand}`) {
+    redirect(302, `/app/${encodeURIComponent(params.brand)}/workbench`);
+  }
+
   // Le pagine fanno `await parent()`: questa sezione bloccante È tutto il ritardo fra una pagina
   // e l'altra, oltre alle query della pagina stessa.
   const cookieSessionP = supabase.auth.getSession();
