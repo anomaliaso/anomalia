@@ -162,7 +162,7 @@
 
   <section class="en-seo-related">
     <div class="en-wrap">
-      <p>Related: <a href={lp('/analytics')}>Social media analytics tracking</a> · <a href={lp('/strategy')}>Build a social media strategy</a> · <a href={lp('/caption-writer')}>AI caption writer for engagement</a></p>
+      <p>Related: <a href={lp('/analytics')}>Social media analytics tracking</a> · <a href={lp('/roi')}>Measure social media ROI</a> · <a href={lp('/autoposts')}>Captions written for you</a></p>
     </div>
   </section>
 

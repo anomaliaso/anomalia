@@ -157,7 +157,7 @@
 
   <section class="bo-seo-related">
     <div class="bo-wrap">
-      <p>Related: <a href={lp('/consistency')}>How to post consistently</a> · <a href={lp('/no-results')}>Why social media isn't working</a> · <a href={lp('/scheduling')}>Social media scheduling tools</a></p>
+      <p>Related: <a href={lp('/consistency')}>How to post consistently</a> · <a href={lp('/not-working')}>Why social media isn't working</a> · <a href={lp('/posting-schedule')}>Best times to post on social media</a></p>
     </div>
   </section>
 
