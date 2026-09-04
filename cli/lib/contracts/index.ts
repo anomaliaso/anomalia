@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { ADS_REMIX } from './ads';
+import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
 import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
 import { CHECK_CONTENT } from './content';
@@ -127,6 +128,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_ADS,
   GET_ANALYTICS,
   GET_ARTICLE,
+  GET_AUTOMATIONS,
   GET_AUDIT_FINDINGS,
   GET_BACKLINKS,
   GET_BIO,
@@ -167,6 +169,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
   SEO_ACTION,
+  SET_AUTOMATION,
   SET_BIO,
   SET_BRAND_SETTINGS,
   SET_MEDIA_MODEL,
@@ -282,6 +285,14 @@ export {
   REVOKE_SHARE,
   SHARED_VIEW_TYPES,
 };
+export {
+  AUTOMATION_CADENCES,
+  AUTOMATION_JOBS,
+  AUTOMATION_STATES,
+  GET_AUTOMATIONS,
+  SET_AUTOMATION
+} from './automations';
+export type { AutomationJob } from './automations';
 export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
 export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
