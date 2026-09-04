@@ -88,4 +88,8 @@ AGENT-CHAT-*.md
 /mcp.json
 /.mcp.json
 .mimocode/
+.codex/
 vite.config.ts.timestamp-*.mjs
+
+# Prove locali: immagini e file generati per verificare a mano, mai da committare.
+.probe/
