@@ -126,8 +126,34 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 |-----|-----|
 | `get_seo` / `seo_action` | `anomalia seo <slug> [run\|plan\|…]` |
 | `get_geo` / `geo_action` | `anomalia geo <slug> [run\|fix]` |
+| `list_web_audits` | (MCP only) |
+| `get_audit_findings` | (MCP only) |
+| `list_audit_citations` | (MCP only) |
+| `list_web_fixes` | (MCP only) |
 | `get_keywords` / `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
 | `list_articles` / `generate_article` / `optimize_article` | `anomalia web <slug> …` |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
 | `chat` | `anomalia ai <slug> --message "…" --pipe` |
+
+`get_seo` and `get_geo` answer on the **latest** audit. The four web tools let you trace a claim
+back to what was actually measured, without paying for a new audit. All four are reads: they call
+no model, spend no credits and write nothing.
+
+`list_web_audits` is the index of every audit, newest first — `id`, `at`, `tech_score`,
+`share_of_voice`, `citability_score`, `binding_constraint`, and how many citations and findings
+the audit holds. Optional `limit` (12 by default, 24 at most) and `offset`.
+
+`get_audit_findings` opens one audit. `technical`, `search`, `backlinks` and `ai_overview` come
+back exactly as recorded. Without `audit_id` you get the newest audit, never an older one that
+happens to hold more data; an audit outside the brand answers `audit: null`.
+
+`list_audit_citations` returns the probes behind the share of voice for one audit, paginated with
+`limit` (50 by default, 200 at most) and `offset`; each carries `observed_at`, `answer_engine`,
+`question`, `brand_mentioned`, `rank`, `competitors`, `source_domains` and `error`. Same rule on
+`audit_id`, and an audit outside the brand answers zero citations.
+
+`list_web_fixes` returns generated fixes **with the body verbatim** — what `get_seo` and `get_geo`
+only name. `surface` is `seo` for growth assets tied to a plan initiative, `geo` for citability
+fixes. Filter with `fix_id` or `status` (`draft` / `accepted` / `dismissed`); bodies are long, so
+`limit` defaults to 3 and stops at 10.

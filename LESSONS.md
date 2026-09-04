@@ -36,6 +36,16 @@ Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot
 ### Il worktree nuovo ha bisogno anche del `.env`
 Dopo il `npm ci` la suite parte ma cade su 40+ test con `SUPABASE_SERVICE_ROLE_KEY not configured`: Vitest carica l'env dal `.env` del worktree, che non c'è. Segnale: errori di env mancante in un worktree fresco, deterministici, su file che passano nel checkout principale. Mossa: `cp ../anomalia/.env .` alla creazione del worktree, accanto al `npm ci`.
 
+### **Una regola di `.gitignore` senza `/` iniziale mangia una cartella di codice, in silenzio**
+Rotta nuova in `src/routes/api/v1/brands/[slug]/evidence/artifacts/`, 27 test verdi, `git add -A`,
+commit — e nel commit la cartella non c'era. La riga era `artifacts/`: senza `/` iniziale git la
+applica a **ogni** livello, non solo alla radice, e `git add -A` non protesta per un file ignorato.
+In produzione sarebbe stato un 404 su un endpoint che in locale passava tutti i test. Segnale: il
+conto in `git show --stat` non torna con i file che hai scritto, e `git status` non mostra niente.
+Mossa: dopo il commit, `git show --stat HEAD` e conta; se manca qualcosa,
+`git check-ignore -v <path>` dice quale riga l'ha presa. La riga si ancora (`/artifacts/`), non si
+aggira con `git add -f`: il `-f` vale per te oggi, l'ancora vale per tutti domani.
+
 ### **Il `.env` copiato può puntare al progetto hosted: il 404 sembrerà un bug di permessi**
 worktree con `.env` copiato ma `PUBLIC_SUPABASE_URL` sul progetto remoto: il login va, il brand locale esiste, ma `/app/<brand>` rende 404 "Brand not found" e la diagnosi scarta su RLS. In più una chiave segnaposto (`LLM_API_KEY` con dentro una frase italiana) passa i check di configurazione e muore 401 alla prima chiamata. Mossa: prima di sospettare RLS, `grep PUBLIC_SUPABASE_URL .env` (deve essere `http://localhost:8000`) e guarda gli `ai_calls`: le righe ok=false con 401 valgono più di ogni grep sul codice.
 
