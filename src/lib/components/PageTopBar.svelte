@@ -222,11 +222,9 @@
         {/if}
         {#if brandSlug && showStatus}
           <!-- Lo Stato (coda di oggi, lead, avvisi, andamento) non è più sotto la chat:
-               si apre da qui. È un <a> vero, non un bottone: su desktop PageModal
-               intercetta il click e lo apre in overlay senza cambiare URL, su mobile
-               naviga alla pagina piena. Un link morto non esiste in nessuno dei due casi.
-               Ha l'etichetta accanto all'icona: un'icona sola non dice cosa apre. La parola è UNA — qui, nel titolo della modal e nel rail — perché
-               tutti e tre la prendono da `app.home.workbench.title`. -->
+               si apre da qui, ed è un <a> vero verso la sua pagina. Ha l'etichetta accanto
+               all'icona: un'icona sola non dice cosa apre. La parola è la stessa della voce
+               di sidebar perché entrambe la prendono da `app.home.workbench.title`. -->
           <a
             class="topbar-status"
             href={`/app/${brandSlug}/workbench`}

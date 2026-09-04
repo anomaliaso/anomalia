@@ -2,7 +2,6 @@
   import { enhance } from '$app/forms';
   import { Plus, ExternalLink, Sparkles, Upload, Calendar, Trash2, Pencil, Eye } from '@lucide/svelte';
   import { page } from '$app/stores';
-  import { pageQuery } from '$lib/page-query';
   import { _ } from 'svelte-i18n';
   import { SvelteSet } from 'svelte/reactivity';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -12,8 +11,7 @@
   import { RASTER_IMAGE_ACCEPT } from '$lib/raster-image';
 
   let { data, form } = $props();
-  // I parametri della pagina, non quelli dell'URL: nella modal l'URL non cambia.
-  const q = pageQuery();
+  const q = (key: string) => $page.url.searchParams.get(key);
 
   const busy = new SvelteSet<string>();
   const isBusy = (key: string) => busy.has(key);

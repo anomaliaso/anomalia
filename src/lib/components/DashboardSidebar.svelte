@@ -5,7 +5,6 @@
   import { cn } from '$lib/utils.js';
   // Il menu utente è PORTALATO da bits-ui e si smonta alla selezione: per le voci che portano
   // ai settings si chiama l'API del modal invece di affidarsi al click dell'<a>.
-  import { onModalLinkClick } from '$lib/components/PageModal.svelte';
   import { locale, _ } from 'svelte-i18n';
   import { page } from '$app/stores';
   import { goto, invalidateAll, beforeNavigate } from '$app/navigation';
@@ -248,9 +247,8 @@
     if (sidebar.isMobile && sidebar.openMobile && !forceOpenMobile) sidebar.setOpenMobile(false);
   });
 
-  // Le sezioni sono voci dirette, non richiudibili: ogni pagina del brand si apre in una modal
-  // sopra la pagina viva (PageModal), quindi un clic sbagliato costa un Esc. Niente nemmeno il
-  // pannello dei figli sull'hover: era il terzo modo di arrivare alle stesse sottopagine.
+  // Le sezioni sono voci dirette, non richiudibili, e senza pannello dei figli sull'hover: era
+  // il terzo modo di arrivare alle stesse sottopagine.
 
   // La campanella: STESSA lista e stesso conteggio del pannello (li pubblica WarningCenter).
   // Il badge conta le NON VISTE: un totale che non cala mai non segnala niente. `seenWarningIds`
@@ -552,7 +550,7 @@
         <!-- Identita': UNA riga cliccabile verso il profilo, non un blocco decorativo. -->
         <div class="um-section">
           <DropdownMenu.Item class="um-item p-0">
-            <a href={profileHref} class="um-link" onclick={(e) => onModalLinkClick(e, 'profile')}>
+            <a href={profileHref} class="um-link">
               <span class="um-avatar">
                 {#if userAvatarUrl}
                   <img src={userAvatarUrl} alt="" class="size-full object-cover" loading="lazy" />
@@ -590,7 +588,7 @@
 
           <!-- Azioni: voci normali, senza etichetta — le icone e i nomi si spiegano da soli. -->
           <DropdownMenu.Item class="um-item p-0">
-            <a href={settingsHref} class="um-link" onclick={onModalLinkClick}>
+            <a href={settingsHref} class="um-link">
               <Settings class="size-4" strokeWidth={1.7} />
               <span>{settingsLabel}</span>
             </a>
@@ -700,7 +698,6 @@
       )}
       aria-label={settingsLabel}
       title={settingsLabel}
-      onclick={onModalLinkClick}
     >
       <Settings class={mobile ? 'size-4' : 'size-3.5'} strokeWidth={1.7} />
     </a>

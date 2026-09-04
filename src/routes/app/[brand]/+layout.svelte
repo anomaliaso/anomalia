@@ -4,7 +4,6 @@
   import * as Sidebar from '$lib/components/ui/sidebar/index.js';
   import DashboardSidebar, { type NavGroup } from '$lib/components/DashboardSidebar.svelte';
   import SettingsSidebar from '$lib/components/SettingsSidebar.svelte';
-  import PageModal from '$lib/components/PageModal.svelte';
   import PageRailDrawer from '$lib/components/PageRailDrawer.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import Send from '@lucide/svelte/icons/send';
@@ -232,8 +231,8 @@
       icon: Globe,
       also: [`${base}/web`, `${base}/seo`, `${base}/seo-geo`, `${base}/geo`, `${base}/citations`, `${base}/keywords`, `${base}/backlinks`, `${base}/site`],
     },
-    // Ads non è una voce di sidebar: le sue pagine restano raggiungibili dalla modal, dai link
-    // degli agenti e da ⌘K. Qui sta solo ciò che si apre tutti i giorni.
+    // Ads non è una voce di sidebar: le sue pagine restano raggiungibili dai link degli agenti
+    // e da ⌘K. Qui sta solo ciò che si apre tutti i giorni.
     {
       href: `${base}/automations`,
       key: 'automations' as WorkbenchPageHub,
@@ -335,8 +334,8 @@
     if (navTeam) return [...teamSidebarGroups(), v2Preview];
     // Il tipo è quello del componente, non ricopiato a mano: la copia era andata alla deriva
     // (icon opzionale vs obbligatoria) e falliva solo all'assegnazione qui sotto.
-    // `app.home.workbench.title` è la stessa chiave della pillola in topbar e del titolo della
-    // modal: cambiarla là cambia tutte e tre insieme.
+    // `app.home.workbench.title` è la stessa chiave della pillola in topbar: cambiarla là
+    // cambia entrambe insieme.
     const groups: NavGroup[] = [
       {
         items: [
@@ -478,8 +477,7 @@
   locked
   style="--sidebar-width: 18.5rem; --sidebar-width-icon: 3.25rem;"
 >
-  <!-- Su mobile le impostazioni le naviga `PageRailDrawer` (lo stesso rail della modal), non
-       questa sidebar: era l'unico posto del prodotto con un drawer suo. -->
+  <!-- Su mobile le impostazioni le naviga `PageRailDrawer`, non questa sidebar. -->
   {#if !isMobile.current}
     <SettingsSidebar
       brandName={data.brand.name}
@@ -558,8 +556,7 @@
     <Sidebar.Inset class="bg-[var(--paper-2)] border-0">
       <div class="main">
         <!-- `isBrandRoot` è la STESSA condizione che monta il composer, non una stringa
-             ricalcolata dentro la topbar. Con la modal aperta resta visibile ed è giusto: la
-             modal non cambia l'URL, quindi la pagina vera sotto è ancora la home. -->
+             ricalcolata dentro la topbar. -->
         <PageTopBar
           visible={showPageTopBar}
           warnings={extras?.warnings ?? []}
@@ -596,16 +593,7 @@
 
 <WarningCenter warnings={extras?.warnings ?? []} brandSlug={data.brand?.slug ?? ''} />
 
-<!-- Modal delle pagine del brand (solo desktop): puro stato del client, l'URL non cambia mai.
-     Ospita le +page.svelte VERE con preloadData. Atterrare davvero su una pagina (deep link,
-     refresh, mobile) resta pagina piena. -->
-<PageModal
-  {base}
-  desktop={!isMobile.current && !isFullWidth}
-  navGroups={sidebarGroups}
-/>
-
-<PageRailDrawer {base} enabled={isMobile.current && !isFullWidth} navGroups={sidebarGroups} />
+<PageRailDrawer {base} enabled={isMobile.current && !isFullWidth} />
 
 <!-- Montata una volta per tutto il brand, fuori dai rami settings/full-width: le scorciatoie
      devono valere ovunque. -->

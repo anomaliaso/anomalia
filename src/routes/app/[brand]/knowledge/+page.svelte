@@ -1,7 +1,6 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import { page } from '$app/stores';
-  import { pageQuery } from '$lib/page-query';
   import { enhance, applyAction } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { SubmitFunction } from '@sveltejs/kit';
@@ -45,9 +44,7 @@
     times_used?: number;
   } | null>(null);
 
-  // I parametri della pagina, non quelli dell'URL: nella modal l'URL del browser non
-  // cambia, e `?doc=` arriverebbe solo al load server. Vedi $lib/page-query.ts.
-  const q = pageQuery();
+  const q = (key: string) => $page.url.searchParams.get(key);
   $effect(() => {
     const doc = q('doc');
     if (doc && doc !== selectedId) {

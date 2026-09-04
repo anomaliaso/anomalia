@@ -9,7 +9,7 @@
   import PageHead from '$lib/components/PageHead.svelte';
   import { studioCompleteness } from '$lib/studio-completeness';
   import { _ } from 'svelte-i18n';
-  // Stili condivisi con SettingsModal (che ospita le stesse pagine senza questo layout).
+  // Stili condivisi con /app/billing, che monta le stesse primitive fuori da questo layout.
   import '$lib/styles/settings-shell.css';
 
   let { data, children } = $props();

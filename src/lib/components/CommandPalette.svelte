@@ -4,22 +4,17 @@
    *
    * Ora copre le pagine e le impostazioni, senza inventare cataloghi: OGNI gruppo legge la
    * fonte che il prodotto già usa —
-   *   pagine       → `navGroups` (la nav vera) ∪ BRAND_MODAL_ROUTES (workbench-paths.ts)
-   *   impostazioni → SETTINGS_MODAL_GROUPS (components/settings/platforms.ts)
+   *   pagine       → `navGroups` (la nav vera) ∪ le rotte sotto /app/[brand] che stanno su disco
+   *   impostazioni → SETTINGS_GROUPS (components/settings/platforms.ts)
    * Una lista scritta a mano qui invecchierebbe al primo rename di una rotta.
-   *
-   * Aprire una pagina significa `openPageModal(href)`: overlay, URL fermo, come ogni altro link
-   * del prodotto. Se la modal non può occuparsene (mobile, rotta full-page) si naviga davvero —
-   * mai un risultato morto.
    */
   import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { _ } from 'svelte-i18n';
   import Search from '@lucide/svelte/icons/search';
   import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
-  import { openPageModal } from '$lib/components/PageModal.svelte';
-  import { BRAND_MODAL_ROUTES, workbenchTabLabel } from '$lib/workbench-paths';
-  import { SETTINGS_MODAL_GROUPS } from '$lib/components/settings/platforms';
+  import { workbenchTabLabel } from '$lib/workbench-paths';
+  import { SETTINGS_GROUPS } from '$lib/components/settings/platforms';
   import {
     GO_TARGETS,
     SECTION_LETTERS,
@@ -41,7 +36,7 @@
     /** `/app/<slug>` del brand corrente. */
     base: string;
     brandSlug: string;
-    /** La nav vera della sidebar (la stessa che riceve PageModal), non una copia. */
+    /** La nav vera della sidebar, non una copia. */
     navGroups?: {
       label?: string;
       /** La SEZIONE stessa: dove porta il clic sulla riga di gruppo (landing del hub). */
@@ -51,6 +46,27 @@
       items?: { href: string; label: string }[];
     }[];
   } = $props();
+
+  /**
+   * Le rotte del brand che stanno su disco, lette a build time da Vite. Sostituisce l'elenco
+   * scritto a mano che c'era prima: un registro di 46 stringhe da tenere allineato al
+   * filesystem si stacca in silenzio, e qui non ha niente da decidere.
+   * Fuori: le dinamiche (nessun href statico), le impostazioni (hanno il loro gruppo) e le tre
+   * superfici di pagamento, che non sono una destinazione da cercare.
+   */
+  const NOT_A_DESTINATION = ['activate', 'success', 'proposal'];
+  const BRAND_PREFIX = '/src/routes/app/[brand]/';
+  const BRAND_ROUTES = Object.keys(import.meta.glob('/src/routes/app/**/+page.svelte'))
+    .filter((file) => file.startsWith(BRAND_PREFIX))
+    .map((file) => file.slice(BRAND_PREFIX.length, -'/+page.svelte'.length))
+    .filter(
+      (route) =>
+        route &&
+        !route.includes('[') &&
+        !route.startsWith('settings/') &&
+        !NOT_A_DESTINATION.includes(route)
+    )
+    .sort();
 
   type Group = 'action' | 'page' | 'settings';
   type Item = {
@@ -71,15 +87,12 @@
   const open = $derived($paletteOpen);
 
   // ── Apertura di una destinazione ────────────────────────────────────────────────────────────
-  /** Una pagina del brand: overlay se la modal può ospitarla, altrimenti navigazione vera. */
   function openPage(href: string) {
     close();
-    if (!openPageModal(href)) void goto(href);
+    void goto(href);
   }
-  /** Una sezione di impostazioni: `openPageModal` accetta la sezione abbreviata. */
   function openSettings(section: string) {
-    close();
-    if (!openPageModal(section)) void goto(`${base}/settings/${section}`);
+    openPage(`${base}/settings/${section}`);
   }
   // ── Le sorgenti, tutte derivate da ciò che esiste già ────────────────────────────────────────
   const actionItems = $derived.by<Item[]>(() => [
@@ -139,10 +152,9 @@
         });
       }
     }
-    // Solo le rotte che la nav conosce e quelle che si aprono in overlay. Le pagine a schermo
-    // pieno NON si cercano: se una sezione esce dalla nav le sue pagine escono anche da qui —
-    // è voluto, la palette non è un archivio di tutto ciò che esiste su disco.
-    for (const route of BRAND_MODAL_ROUTES) {
+    // Poi tutte le altre rotte del brand che stanno su disco. Nessun elenco da tenere allineato:
+    // una pagina nuova si cerca il giorno che esiste, una cancellata sparisce da sola.
+    for (const route of BRAND_ROUTES) {
       const href = `${base}/${route}`;
       if (seen.has(href)) continue;
       const label = workbenchTabLabel(href, base, $_);
@@ -161,7 +173,7 @@
   });
 
   const settingsItems = $derived.by<Item[]>(() =>
-    SETTINGS_MODAL_GROUPS.flatMap((g) =>
+    SETTINGS_GROUPS.flatMap((g) =>
       g.items.map((i) => ({
         id: `s:${i.section}`,
         group: 'settings' as const,
@@ -278,11 +290,14 @@
       openPalette('help');
       return;
     }
+    if (id === 'settings') {
+      openPage(`${base}/settings`);
+      return;
+    }
   }
 
   function onKeydown(e: KeyboardEvent) {
-    // Esc: lo gestisce l'overlay più in alto. Se la palette è aperta è lei, e PageModal si tiene
-    // fuori guardando `paletteOpen` — senza quella guardia Esc chiuderebbe entrambe insieme.
+    // Esc: lo gestisce l'overlay più in alto. Se la palette è aperta è lei.
     if (e.key === 'Escape') {
       clearPending();
       if (open) {
@@ -305,15 +320,12 @@
       return;
     }
     if (m.type !== 'run') return;
-    // ⌘, resta di PageModal (stesso comportamento di sempre: apre o chiude le impostazioni):
-    // il registro dice CHE COS'È quel tasto, non chi lo esegue.
-    if (m.id === 'settings') return;
     e.preventDefault();
     runShortcut(m.id);
   }
 
-  // La palette è stato del client come la modal: una navigazione vera (una CTA che porta altrove)
-  // la deve trovare chiusa, non appesa sopra la pagina nuova.
+  // La palette è stato del client: una navigazione vera (una CTA che porta altrove) la deve
+  // trovare chiusa, non appesa sopra la pagina nuova.
   onMount(() => () => {
     clearPending();
     paletteOpen.set(false);

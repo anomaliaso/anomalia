@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
-  import { pageQuery } from '$lib/page-query';
   import { _, locale } from 'svelte-i18n';
   import PageHead from '$lib/components/PageHead.svelte';
   import TopbarCta from '$lib/components/TopbarCta.svelte';
@@ -47,8 +46,7 @@
   import type { Locale } from '$lib/i18n/locale';
 
   let { data, form } = $props();
-  // I parametri della pagina, non quelli dell'URL: nella modal l'URL non cambia.
-  const q = pageQuery();
+  const q = (key: string) => $page.url.searchParams.get(key);
 
   type Schedule = (typeof data.schedules)[number];
   // Due entità, non una: l'agente è CHI lavora per il brand, la routine è COSA fa ogni tot.

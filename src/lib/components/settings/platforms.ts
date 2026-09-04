@@ -80,100 +80,20 @@ export const SETTINGS_BLOG_SECTIONS = [
 /** Ads settings under Settings → Ads. */
 export const SETTINGS_ADS_SECTIONS = ['ads-accounts', 'ads'] as const;
 
-// ─── Modal Impostazioni ────────────────────────────────────────────────────────────────
-// Il meccanismo (shallow routing che ospita la +page.svelte VERA) è agnostico al peso
-// della pagina: il default è quindi "tutto in modal". Restano fuori solo le rotte con
-// un motivo TECNICO dimostrabile, elencate in SETTINGS_FULL_PAGE_SECTIONS.
-// Il perimetro è e resta /app/<slug>/settings/** — nessun'altra area del prodotto.
-
 /**
- * Rotte settings che NON possono vivere nel modal, col motivo tecnico:
- * - facebook / linkedin: pagine intermedie OAuth. Il +layout di settings le esclude
- *   già dalla propria shell (`isOauthFlow`) e navigano fuori dal sito.
- * - usage/sessions/[id]: rotta dinamica di drill-down, non una sezione di nav —
- *   non ha un href statico da mettere nel rail, si raggiunge da dentro `usage`.
- * (Anche settings/connect/* è OAuth, ma non ha +page.svelte: non è mai un target.)
- */
-export const SETTINGS_FULL_PAGE_SECTIONS = [
-  'facebook',
-  'linkedin',
-  'usage/sessions/[id]'
-] as const;
-
-/** Tutte le sezioni ospitabili nel modal. */
-export const SETTINGS_MODAL_SECTIONS = [
-  'brand',
-  'platforms',
-  'hashtags',
-  'voice-examples',
-  'products',
-  'people',
-  'library',
-  'demo-account',
-  'blog-appearance',
-  'blog-authors',
-  'blog-categories',
-  'blog-domain',
-  'blog-integrations',
-  'search-console',
-  'ads/accounts',
-  'ads',
-  'connected-accounts',
-  'connectors',
-  'autopilot',
-  'radar',
-  'video',
-  'publishing',
-  'timezone',
-  'language',
-  'api-keys',
-  'team',
-  'profile',
-  'appearance',
-  'billing',
-  'usage',
-  'referrals',
-  'danger'
-] as const;
-
-export type SettingsModalSection = (typeof SETTINGS_MODAL_SECTIONS)[number];
-
-/** La sezione su cui si apre il modal (stessa scelta del redirect di /settings). */
-export const SETTINGS_MODAL_DEFAULT: SettingsModalSection = 'connected-accounts';
-
-/**
- * Sezioni che vogliono la taglia larga del modal: griglie, anteprime, tabelle e
- * grafici che a 880px si strizzano. Non è un'esclusione, è una misura.
- */
-export const SETTINGS_MODAL_WIDE = [
-  'brand',
-  'platforms',
-  'products',
-  'people',
-  'voice-examples',
-  'library',
-  'blog-appearance',
-  'ads/accounts',
-  'ads',
-  'video',
-  'usage',
-  'radar'
-] as const;
-
-/**
- * Il rail del modal: STESSO ordine e stessi raggruppamenti della SettingsSidebar vera
- * (src/lib/components/SettingsSidebar.svelte) — chi apre il modal ritrova la mappa che
- * già conosce. Le chiavi i18n sono quelle già esistenti: nessun doppione.
+ * La mappa delle impostazioni: STESSO ordine e stessi raggruppamenti della SettingsSidebar
+ * vera (src/lib/components/SettingsSidebar.svelte). La leggono il rail del drawer mobile e
+ * la palette ⌘K: una lista sola, o le tre divergono al primo cambio.
  * `flag` nasconde la voce quando la feature è spenta, esattamente come nella sidebar.
  */
 export type SettingsNavEntry = {
-  /** Sezione modal, oppure rotta full-page (allora la voce mostra ↗ e naviga davvero). */
+  /** Sezione sotto /app/<slug>/settings/. */
   section: string;
   labelKey: string;
   flag?: 'ads' | 'connectors';
 };
 
-export const SETTINGS_MODAL_GROUPS: readonly {
+export const SETTINGS_GROUPS: readonly {
   labelKey: string;
   items: readonly SettingsNavEntry[];
 }[] = [

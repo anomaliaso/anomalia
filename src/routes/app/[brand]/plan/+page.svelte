@@ -2,7 +2,6 @@
   import { enhance } from '$app/forms';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
-  import { pageQuery } from '$lib/page-query';
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { siInstagram, siTiktok, siFacebook, siX, siThreads, siYoutube, siBluesky, siReddit } from 'simple-icons';
@@ -11,8 +10,7 @@
   import UpgradeLink from '$lib/components/UpgradeLink.svelte';
 
   let { data, form } = $props();
-  // I parametri della pagina, non quelli dell'URL: nella modal l'URL non cambia.
-  const q = pageQuery();
+  const q = (key: string) => $page.url.searchParams.get(key);
 
   // Ponte dal badge "angolo" di una card contenuto (/plan?row=…): scorre e illumina quella riga.
   let highlightRow = $state<string | null>(null);

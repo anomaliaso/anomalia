@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  brandModalTarget,
   HUB_TABS,
   NAV_TEAM_SPACES,
   NAV_TEAM_TOOLS,
@@ -100,18 +99,5 @@ describe('nav team (FEATURE_NAV_TEAM)', () => {
     const tools = NAV_TEAM_TOOLS.map((t) => t.path);
     expect(spaces.filter((p) => tools.includes(p))).toEqual([]);
     expect(WORKBENCH_HUBS.length).toBe(7);
-  });
-
-  /**
-   * La home è solo la chat: il workbench è una rotta sua, e la modal la ospita. Se
-   * `workbench` uscisse da BRAND_MODAL_ROUTES, la CTA in topbar e il chip dei post da
-   * approvare tornerebbero a navigare via dalla chat invece di aprire l'overlay — un
-   * regresso silenzioso, che solo questo test vede.
-   */
-  it('il workbench si apre nella modal, la home no', () => {
-    expect(brandModalTarget('/app/acme/workbench', '/app/acme')).toBe('workbench');
-    expect(brandModalTarget('/app/acme/leads', '/app/acme')).toBe('leads');
-    // La home resta la superficie sotto la modal, non un contenuto da ospitare.
-    expect(brandModalTarget('/app/acme', '/app/acme')).toBeNull();
   });
 });
