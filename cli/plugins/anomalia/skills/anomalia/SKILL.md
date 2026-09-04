@@ -86,6 +86,13 @@ time; `update_person` and `update_competitor` fix a role or a wrong website. The
 fields you send, leave every other column as it was, and cost nothing. `update_person` can never
 attest consent: a real person's face stays withheld from every generator until the operator
 states, in their own words, that they have it.
+**Change how the brand works** → `get_brand_settings` then `set_brand_settings`: posting
+timezone, target platforms, hashtags per platform, voice examples. Only the fields you send
+change, and lists replace rather than merge. Two things to tell the person: changing the timezone
+does not move posts that already have a time (their local hour shifts instead), and removing a
+platform does not cancel posts already scheduled on it. If a target platform has no connected
+account the write says so in `without_account` — its posts will be produced and then wait.
+
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion
 transfer) with the models each one accepts; `set_media_model` pins one. A model that cannot do
