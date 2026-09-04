@@ -1,11 +1,9 @@
 /**
  * IL TEAM — quali agenti ricorrenti ha senso mettere al lavoro per QUESTO brand.
  *
- * La macchina esiste già tutta: `custom_agent_schedules` tiene nome, prompt, agente del registry,
- * giorni e orari; il cron `/api/v1/custom-agents/tick` gira ogni 5 minuti, apre un thread e fa
- * lavorare l'agente come se glielo avesse chiesto l'utente. Fino a 25 per brand. Quello che mancava
- * è che **nessuno li crea**: bisogna trovare la pagina, immaginarsi il team e scrivere i prompt a
- * mano — cioè esattamente il lavoro che l'utente è venuto qui per non fare.
+ * `custom_agent_schedules` tiene nome, prompt, agente del registry, giorni e orari, fino a 25 per
+ * brand. NON GIRANO PIÙ DA SOLE: il cron che le faceva partire ogni 5 minuti è stato tolto, e
+ * quel lavoro ricorrente lo pianifica adesso l'agente esterno via MCP.
  *
  * PERCHÉ QUESTO MODULO È CODICE E NON UN PEZZO DI PROMPT. La tentazione è scrivere nel system
  * prompt "proponi un team di agenti" e lasciar fare al modello. Ma "quali agenti hanno senso" non è

@@ -152,10 +152,6 @@
       "schedule": "*/2 * * * *"
     },
     {
-      "path": "/api/v1/custom-agents/tick",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/v1/health/costs/tick",
       "schedule": "0 4 * * *"
     },
