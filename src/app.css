@@ -25,6 +25,29 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* Self-hosted Lora — display face dei titoli, in prova. Stessa forma di Inter e stessi due
+   subset: i file arrivano da Google Fonts ma sono serviti da noi, perché il CSS di Google
+   costa un dominio in più nel percorso critico e manda l'IP di ogni visitatore a Google.
+   Variabile sull'asse wght 400–700: un file copre tutti i pesi che i titoli chiedono, quindi
+   l'intervallo dichiarato qui è quello vero e il browser non sintetizza mai niente.
+   SIL Open Font License 1.1 — il testo sta accanto ai file, in static/fonts/Lora-OFL.txt. */
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/lora-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/lora-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --ink:        #1d1d1f;
   --ink-soft:   #6e6e73;
@@ -67,7 +90,8 @@
   /* Token reale per il codice in chat & co. — prima ogni file usava var(--mono, fallback)
      con un token mai definito (voce LEGACY_STRAYS in ui-tokens.test.ts, ora ripulita). */
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  --serif: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  /* Esperimento: togliere "Lora", da qui riporta ogni titolo su Inter. */
+  --serif: "Lora", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* --serif: "Halant", Georgia, "Times New Roman", "Times", serif; */
   --heading-weight: 300;   /* single knob for all h1/h2 serif weight */
