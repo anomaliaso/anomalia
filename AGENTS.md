@@ -32,6 +32,8 @@ anomalia web <slug>                                # Blog articles (drafts too)
 # Brand doctor: GET /api/v1/brands/:slug/doctor (per cycle, the first gate the brand fails and how to unlock it)
 # Agent Library: GET /api/v1/agent-templates (public catalogue behind /agents + Automations › Custom Agents)
 # Chat goals: GET /api/v1/brands/:slug/goals (history + summary of goal mode — met_first_pass, laps, stopped_by)
+# SEO/GEO evidence: GET /api/v1/brands/:slug/evidence/{runs,run,artifacts} (audit history, citation
+#   probes with engine/query/verdict, generated fixes with their body — reads only, spend nothing)
 anomalia studio <slug> add-note --text "..."       # Add knowledge
 anomalia ai <slug> --message "..."                 # AI chat (full access)
 ```

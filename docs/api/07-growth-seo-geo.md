@@ -187,6 +187,172 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/geo" \
 
 ---
 
+## Prove SEO/GEO (`/evidence/*`)
+
+`GET /seo` e `GET /geo` rispondono su **l'ultimo** audit. Le tre letture qui sotto servono a
+risalire da un'affermazione alla prova che la sostiene: la storia delle run, una run com'è stata
+registrata, e il corpo dei fix generati.
+
+Sono **solo letture** — nessuna chiama un modello, nessuna spende crediti, nessuna scrive. Le
+osservazioni di audit, gli istanti e i valori misurati non si modificano da qui.
+
+---
+
+## `GET /api/v1/brands/:slug/evidence/runs`
+
+Indice delle run di audit SEO/GEO, dalla più recente. Una riga per run: serve a scegliere quale
+aprire, non a leggerla.
+
+**Query params**
+
+| Campo | Tipo | Default | Descrizione |
+|---|---|---|---|
+| `limit` | int 1–24 | 12 | Quante run |
+| `offset` | int ≥ 0 | 0 | Quante saltare |
+
+**Response** `200`:
+
+```json
+{
+  "runs": [
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "at": "2026-08-10T08:00:00Z",
+      "tech_score": 61,
+      "share_of_voice": 42,
+      "citability_score": 44,
+      "binding_constraint": "Densità di evidenza",
+      "citation_count": 96,
+      "issue_count": 7
+    }
+  ]
+}
+```
+
+Un brand senza audit risponde `{"runs":[]}`.
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` (limite oltre il tetto, parametro non dichiarato) |
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/evidence/runs?limit=6" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/evidence/run`
+
+Una run com'è stata registrata — `tech`, `search`, `backlinks`, `ai_overview` escono **identici a
+come sono stati salvati** — più le sue sonde di citazione, paginate.
+
+Senza `run_id` torna la run **più recente**, mai una più vecchia che ha più dati. Una run che non
+appartiene al brand (o che non esiste) risponde `run: null`, non un 404.
+
+**Query params**
+
+| Campo | Tipo | Default | Descrizione |
+|---|---|---|---|
+| `run_id` | string | — | Un id da `/evidence/runs`; assente = la run più recente |
+| `limit` | int 1–200 | 50 | Quante citazioni |
+| `offset` | int ≥ 0 | 0 | Quante saltarne |
+
+**Response** `200` (blocchi `tech`, `search`, `backlinks`, `ai_overview` dinamici):
+
+```json
+{
+  "run": {
+    "id": "33333333-3333-3333-3333-333333333333",
+    "at": "2026-08-10T08:00:00Z",
+    "tech_score": 61,
+    "share_of_voice": 42,
+    "tech": { "issues": ["<osservazioni dell audit>"], "citability": { "score": 44 } },
+    "search": { "organicKeywords": 380 },
+    "backlinks": { "referringDomains": 87 },
+    "ai_overview": { "checked": 10, "cited": 1, "rows": [] }
+  },
+  "citations": {
+    "total": 96,
+    "offset": 0,
+    "limit": 50,
+    "items": [
+      {
+        "observed_at": "2026-08-10T08:00:00Z",
+        "engine": "gemini",
+        "query": "miglior crm per agenzie",
+        "brand_mentioned": true,
+        "rank": 2,
+        "competitors": ["<altro brand>"],
+        "source_domains": ["esempio.it"],
+        "error": null
+      }
+    ]
+  }
+}
+```
+
+`source_domains` contiene **hostname**, non URL completi: l'URI intero non viene conservato al
+momento della raccolta. `error` valorizzato significa sonda fallita, non "non citati".
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/evidence/run?run_id=33333333-3333-3333-3333-333333333333" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/evidence/artifacts`
+
+I fix e gli asset generati dagli audit, **con il corpo per intero**. `GET /seo` e `GET /geo` ne
+danno solo l'intestazione.
+
+`surface` vale `seo` per gli asset di crescita legati a un'iniziativa del piano (`source_finding`
+`seo:<initiativeId>`), `geo` per i fix di citabilità.
+
+**Query params**
+
+| Campo | Tipo | Default | Descrizione |
+|---|---|---|---|
+| `artifact_id` | string | — | Solo questo artefatto |
+| `status` | string | — | `draft` \| `accepted` \| `dismissed` |
+| `limit` | int 1–10 | 3 | Quanti artefatti (i corpi sono lunghi) |
+| `offset` | int ≥ 0 | 0 | Quanti saltarne |
+
+**Response** `200`:
+
+```json
+{
+  "artifacts": [
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "surface": "geo",
+      "kind": "llms_txt",
+      "title": "llms.txt",
+      "format": "txt",
+      "status": "draft",
+      "target_path": "/llms.txt",
+      "source_finding": "no-llms-txt",
+      "created_at": "2026-08-11T08:00:00Z",
+      "body": "<contenuto del fix, verbatim>"
+    }
+  ]
+}
+```
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/evidence/artifacts?status=draft" -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
 ## `GET /api/v1/brands/:slug/keywords`
 
 Keyword strategy del brand (ricerca AI/DataForSEO) con citazioni di grounding.

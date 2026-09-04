@@ -126,8 +126,31 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 |-----|-----|
 | `get_seo` / `seo_action` | `anomalia seo <slug> [run\|plan\|…]` |
 | `get_geo` / `geo_action` | `anomalia geo <slug> [run\|fix]` |
+| `list_evidence_runs` | (MCP only) |
+| `get_evidence_run` | (MCP only) |
+| `list_evidence_artifacts` | (MCP only) |
 | `get_keywords` / `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
 | `list_articles` / `generate_article` / `optimize_article` | `anomalia web <slug> …` |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
 | `chat` | `anomalia ai <slug> --message "…" --pipe` |
+
+`get_seo` and `get_geo` answer on the **latest** audit. The three evidence tools let you trace a
+claim back to what was actually measured, without paying for a new audit. All three are reads:
+they call no model, spend no credits and write nothing.
+
+`list_evidence_runs` is the index of every audit run, newest first — `id`, `at`, `tech_score`,
+`share_of_voice`, `citability_score`, `binding_constraint`, and how many citations and issues the
+run holds. Optional `limit` (12 by default, 24 at most) and `offset`.
+
+`get_evidence_run` opens one run. `tech`, `search`, `backlinks` and `ai_overview` come back
+exactly as recorded. Its `citations` are the probes behind the share of voice, paginated with
+`limit` (50 by default, 200 at most) and `offset`; each carries `observed_at`, `engine`, `query`,
+`brand_mentioned`, `rank`, `competitors`, `source_domains` and `error`. Without `run_id` you get
+the newest run, never an older one that happens to hold more data; a run outside the brand
+answers `run: null`.
+
+`list_evidence_artifacts` returns generated fixes **with the body verbatim** — what `get_seo` and
+`get_geo` only name. `surface` is `seo` for growth assets tied to a plan initiative, `geo` for
+citability fixes. Filter with `artifact_id` or `status` (`draft` / `accepted` / `dismissed`);
+bodies are long, so `limit` defaults to 3 and stops at 10.

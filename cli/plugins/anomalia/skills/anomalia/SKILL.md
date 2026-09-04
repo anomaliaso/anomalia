@@ -78,6 +78,11 @@ the separate paid step that turns them into posts.
 
 **Blog draft** → `generate_article` → optional `optimize_article` → `publish_article` when asked.
 
+**Back a SEO/GEO claim with its evidence** → `list_evidence_runs` to see every audit run →
+`get_evidence_run` for the one you mean (its citations carry the engine, the question asked, the
+verdict and the domains cited) → `list_evidence_artifacts` for the fix body, verbatim. All three
+are free reads: never run a new audit just to see what a past one already measured.
+
 ## References (load on demand)
 
 - [references/mcp.md](references/mcp.md) — connect MCP (stdio / HTTP), Cursor config, auth
