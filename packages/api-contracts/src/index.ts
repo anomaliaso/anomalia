@@ -13,6 +13,7 @@ import {
   UPDATE_ARTICLE
 } from './articles';
 import { CHECK_CONTENT } from './content';
+import { QUERY_DATABASE } from './query';
 import { GET_CREATION_KIT } from './creation-kit';
 import {
   GET_AUDIT_FINDINGS,
@@ -231,8 +232,9 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   PLAN_WEEK,
   PROPOSE_PLAN,
   PUBLISH_ARTICLE,
-  REFINE_IMAGE,
+  QUERY_DATABASE,
   RECORD_MEMORY_USED,
+  REFINE_IMAGE,
   REFRESH_KEYWORDS,
   REGENERATE_POST_MEDIA,
   REGENERATE_SLIDE,
@@ -319,6 +321,8 @@ export {
   RESCHEDULE_POST,
   UPDATE_ARTICLE,
 };
+export { QUERY_DATABASE, QUERY_OPS, QUERY_TABLE_NAMES, QUERY_DEFAULT_ROWS, QUERY_MAX_ROWS } from './query';
+export { QUERY_TABLES } from './query-tables';
 export {
   DELETE_ARTICLE,
   GENERATE_ARTICLE,

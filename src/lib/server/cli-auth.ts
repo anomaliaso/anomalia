@@ -4,6 +4,7 @@ import { env as publicEnv } from '$env/dynamic/public';
 import { env } from '$env/dynamic/private';
 import { json } from '@sveltejs/kit';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { markRlsScoped } from '$lib/server/rls-client';
 import { userCanEnter } from '$lib/server/access';
 import { BOOKING_URL } from '$lib/links';
 
@@ -86,7 +87,10 @@ async function resolveCaller(request: Request): Promise<Caller> {
     return { error: json({ error: 'Invalid or expired token' }, { status: 401 }) };
   }
 
-  return { supabase, user };
+  // Chiave anon + il JWT dell'utente: Postgres valuta le sue policy, esattamente come nel browser.
+  // Il marchio si DICHIARA perché il client, guardato da fuori, è indistinguibile dalla service
+  // role — e la sessione qui non c'è: i cookie sono a vuoto per costruzione, non per errore.
+  return { supabase: markRlsScoped(supabase), user };
 }
 
 async function authenticateApiKey(token: string) {

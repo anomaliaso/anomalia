@@ -2,6 +2,7 @@ import {sequence} from '@sveltejs/kit/hooks';
 import { json, redirect, text } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { markRlsScoped } from '$lib/server/rls-client';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { Handle } from '@sveltejs/kit';
 import { pickLocale } from '$lib/i18n/locale';
@@ -80,7 +81,9 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
   await catalogModelIds().catch(() => []);
 
   // Per-request Supabase client bound to the request cookies (SSR auth).
-  event.locals.supabase = createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
+  // Marchiato come RLS-scoped: chiave anon, quindi Postgres valuta le policy dell'utente. È la
+  // dichiarazione su cui `query` decide di leggere — vedi $lib/server/rls-client.
+  event.locals.supabase = markRlsScoped(createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => validSessionCookies(event.cookies.getAll()),
       setAll: (cookiesToSet: CookieToSet[]) => {
@@ -98,7 +101,7 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
         });
       }
     }
-  });
+  }));
 
   // getSession() is local (cookie → JWT). getUser() hits GoTrue — cache it across SPA
   // navigations on this isolate so every in-brand click is not a 300–800ms auth RTT.

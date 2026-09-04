@@ -10,6 +10,7 @@ import {
   QUERY_MAX_ROWS,
   QUERY_TABLE_LIST
 } from './query-tool';
+import { markRlsScoped } from '$lib/server/rls-client';
 
 vi.mock('$lib/server/ai-log', () => ({ logAiCall: vi.fn() }));
 import { logAiCall } from '$lib/server/ai-log';
@@ -19,6 +20,7 @@ import { logAiCall } from '$lib/server/ai-log';
  * dimostrare che certe chiamate non partono mai) e restituisce quel che gli si dice.
  */
 function fakeClient(opts: {
+  authority?: 'user' | 'service';
   session?: { access_token: string } | null;
   rows?: Array<Record<string, unknown>>;
   count?: number;
@@ -42,14 +44,14 @@ function fakeClient(opts: {
       Promise.resolve({ data: opts.error ? null : (opts.rows ?? []), error: opts.error ?? null, count: opts.count ?? null });
     return b;
   };
-  return {
-    calls,
-    client: {
-      auth: { getSession: async () => ({ data: { session: opts.session === undefined ? { access_token: 'jwt' } : opts.session } }) },
-      from: (table: string) => ({ select: (cols: string) => builder(table, cols) })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any
-  };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: opts.session === undefined ? { access_token: 'jwt' } : opts.session } }) },
+    from: (table: string) => ({ select: (cols: string) => builder(table, cols) })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any;
+  // Il default è il client dell'utente, che è il caso di ogni test tranne quelli sul cancello:
+  // `authority: 'service'` lo lascia senza marchio, che è ciò che rende la service role respinta.
+  return { calls, client: opts.authority === 'service' ? client : markRlsScoped(client) };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -108,8 +110,8 @@ describe('sola lettura: le scritture non sono rifiutate, sono inesprimibili', ()
 });
 
 describe('il cancello: senza sessione utente non si legge', () => {
-  it('un client service-role (nessuna sessione) viene respinto, e non tocca il database', async () => {
-    const { client, calls } = fakeClient({ session: null, rows: [{ id: 'segreto-di-un-altro-brand' }] });
+  it('un client service-role viene respinto, e non tocca il database', async () => {
+    const { client, calls } = fakeClient({ authority: 'service', rows: [{ id: 'segreto-di-un-altro-brand' }] });
     const out = await run(client, { table: 'posts' });
     expect(out.error).toBe('no_user_session');
     expect(out).not.toHaveProperty('rows');
@@ -119,6 +121,88 @@ describe('il cancello: senza sessione utente non si legge', () => {
   it('il rifiuto spiega che la service role scavalcherebbe la RLS', () => {
     expect(NO_SESSION_ERROR.message).toMatch(/RLS/);
     expect(NO_SESSION_ERROR.message).toMatch(/service-role/);
+  });
+
+  it('il rifiuto nomina anche la chiave API, che è più stretta dei brand dell utente', () => {
+    expect(NO_SESSION_ERROR.message).toMatch(/brand_ids/);
+  });
+});
+
+/**
+ * IL PERCORSO API (CLI e MCP) PORTA IL CLIENT GIUSTO E VENIVA RIFIUTATO LO STESSO.
+ *
+ * `cli-auth.ts` costruisce il client del percorso JWT con la chiave anon e l'header dell'utente,
+ * ma con i cookie a vuoto: `auth.getSession()` risponde `null` — misurato — pur essendo un client
+ * a cui Postgres applica le policy dell'utente. Il cancello guardava la sessione, e chiudeva la
+ * porta proprio al client corretto mentre la service role restava fuori per la ragione giusta.
+ */
+describe('il cancello guarda i permessi, non la sessione', () => {
+  it('un client RLS-scoped SENZA sessione legge: è il percorso JWT di CLI e MCP', async () => {
+    const { client, calls } = fakeClient({ session: null, rows: [{ id: 'p1' }] });
+
+    const out = await run(client, { table: 'posts' });
+
+    expect(out.error).toBeUndefined();
+    expect(out.rows).toEqual([{ id: 'p1' }]);
+    expect(calls).toHaveLength(1);
+  });
+
+  /**
+   * La seconda metà, che è quella che conta: dal percorso API non deve comparire NIENTE che dal
+   * browser non si vedeva. Quali righe tornano lo decide Postgres, quindi qui si verifica l'unica
+   * cosa che potrebbe farle divergere — che la richiesta parta identica: stessa tabella, stesse
+   * colonne, stessi filtri, stesso tetto. Marchiare un client non allarga la lettura.
+   */
+  it('stessa domanda dai due percorsi, stessa richiesta al database — non una riga in più', async () => {
+    const browser = fakeClient({ session: { access_token: 'jwt' }, rows: [{ id: 'p1' }] });
+    const api = fakeClient({ session: null, rows: [{ id: 'p1' }] });
+
+    const fromBrowser = await run(browser.client, { table: 'posts', columns: ['id'], limit: 5 });
+    const fromApi = await run(api.client, { table: 'posts', columns: ['id'], limit: 5 });
+
+    expect(fromApi.rows).toEqual(fromBrowser.rows);
+    expect(api.calls).toEqual(browser.calls);
+  });
+
+  it('la service role resta respinta anche con una sessione: decide il marchio, non il token', async () => {
+    const { client, calls } = fakeClient({ authority: 'service', session: { access_token: 'jwt' }, rows: [{ id: 'ogni-brand' }] });
+
+    const out = await run(client, { table: 'posts' });
+
+    expect(out.error).toBe('no_user_session');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('il marchio non si mette sul client service-role, in nessun punto del sorgente', () => {
+    const admin = readFileSync(new URL('../supabase-admin.ts', import.meta.url), 'utf8');
+    expect(admin).not.toContain('markRlsScoped');
+  });
+});
+
+/**
+ * IL GUARDIANO DELLA LISTA. Fallisce da solo il giorno in cui una migrazione aggiunge una tabella,
+ * che è precisamente il giorno in cui serve: su MCP la lista è un `enum`, e un nome mancante non
+ * confonde l'agente — gli impedisce di chiedere una tabella che esiste.
+ */
+describe('le tabelle si generano dalle migrazioni, non si battono a mano', () => {
+  it('query-tables.ts è allineato alle migrazioni', async () => {
+    const { tablesFromMigrations } = await import('../../../../scripts/query-tables-from-migrations.mjs');
+
+    expect(QUERY_TABLE_LIST).toEqual(tablesFromMigrations());
+  });
+
+  it('niente backup e niente tabelle che nessuna migrazione crea', () => {
+    // I primi tre esistono in produzione ma non da un'installazione da zero; il quarto è un backup
+    // fatto a mano. Nessuno dei quattro va nominato all'agente, e la regola li esclude tutti senza
+    // un elenco di eccezioni: una tabella esiste se una migrazione la crea.
+    for (const ghost of ['asset_projects', 'asset_project_files', 'mcp_logs', 'thread_events_backup_20260901']) {
+      expect(QUERY_TABLE_LIST).not.toContain(ghost);
+    }
+  });
+
+  it('nessuna tabella fuori da public: uno schema diverso non entra', () => {
+    expect(QUERY_TABLE_LIST).not.toContain('stripe');
+    expect(QUERY_TABLE_LIST.every((t) => !t.includes('.'))).toBe(true);
   });
 });
 
@@ -256,12 +340,12 @@ describe('il registro', () => {
   });
 
   it("registra anche i rifiuti — è l'errore che ha reso invisibile sandbox_exec", async () => {
-    for (const [input, session] of [
-      [{ table: 'posts' }, null],
-      [{ table: 'posts; insert into x' }, undefined]
+    for (const [input, authority] of [
+      [{ table: 'posts' }, 'service'],
+      [{ table: 'posts; insert into x' }, 'user']
     ] as const) {
       vi.mocked(logAiCall).mockClear();
-      const { client } = fakeClient({ session });
+      const { client } = fakeClient({ authority });
       await run(client, input as Record<string, unknown>);
       const entry = vi.mocked(logAiCall).mock.calls[0][0];
       expect(entry.ok).toBe(false);
@@ -331,11 +415,11 @@ function scriptedClient(
   };
   return {
     calls,
-    client: {
+    client: markRlsScoped({
       auth: { getSession: async () => ({ data: { session: { access_token: 'jwt' } } }) },
       from: (table: string) => ({ select: (cols: string) => builder(table, cols) })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any
+    } as any)
   };
 }
 
