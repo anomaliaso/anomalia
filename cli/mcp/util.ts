@@ -105,6 +105,7 @@ const RESOLVE_ID: Record<BrandResource, IdResolver> = {
   product: byPrefix('product', async (token, slug) => (await api.listProducts(token, slug)).products),
   person: byPrefix('person', async (token, slug) => (await api.getStudio(token, slug)).people),
   competitor: byPrefix('competitor', async (token, slug) => (await api.getStudio(token, slug)).competitors),
+  document: byPrefix('document', async (token, slug) => (await api.getStudio(token, slug)).documents),
 };
 
 export function resolveResourceId(

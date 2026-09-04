@@ -221,3 +221,57 @@ export const DISCARD_PLAN = {
   failures: [],
   destructive: true
 } satisfies BrandEndpoint;
+
+// La settimana si chiama `week` da quando esiste il tool. La rotta la scrive `week_index` nella
+// sua documentazione pubblica e continua ad accettarlo: qui vive il nome che l'agente usa.
+const week = z.number().int().min(0);
+
+const NO_ACTIVE_PLAN = { error: 'No active editorial plan', status: 404 };
+const WEEK_REQUIRED = { error: 'week_index is required', status: 400 };
+
+export const SAVE_BRIEF = {
+  tool: 'save_brief',
+  title: 'Save week brief',
+  description: 'Save the brief for an editorial week (0-based index). Optional featured products.',
+  method: 'POST',
+  pathUnderBrand: '/editorial-plan/save-brief',
+  input: z
+    .object({
+      week,
+      brief: z.string(),
+      products: z.array(z.string()).optional().describe('Exact product names to feature')
+    })
+    .strict(),
+  output: Ok,
+  failures: [WEEK_REQUIRED, NO_ACTIVE_PLAN, { error: 'Invalid week_index', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REPLAN_WEEK = {
+  tool: 'replan_week',
+  title: 'Replan week',
+  description: 'Regenerate an editorial week from a brief.',
+  method: 'POST',
+  pathUnderBrand: '/editorial-plan/replan-week',
+  input: z.object({ week, brief: z.string().min(1) }).strict(),
+  output: z.object({ ok: z.literal(true), week: z.number() }),
+  failures: [
+    WEEK_REQUIRED,
+    { error: 'brief is required', status: 400 },
+    { error: 'no active editorial plan', status: 404 },
+    { error: 'invalid week_index', status: 400 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const PLAN_WEEK = {
+  tool: 'plan_week',
+  title: 'Generate weekly seeds',
+  description: 'Generate content seeds for a week (0-based index).',
+  method: 'POST',
+  pathUnderBrand: '/weekly-plan/plan',
+  input: z.object({ week }).strict(),
+  output: z.object({ ok: z.literal(true), draft: z.unknown() }),
+  failures: [WEEK_REQUIRED, NO_ACTIVE_PLAN],
+  destructive: false
+} satisfies BrandEndpoint;

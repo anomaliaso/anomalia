@@ -103,7 +103,7 @@ Imposta i colori del brand (max 8 hex), salvati in `brand_kit.brand_colors`.
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `colors` | string[] | sì | Array di 1–8 colori hex (`#rgb` o `#rrggbb`) |
+| `colors` | string[] | sì | Array di 1–8 colori hex (`#rgb` o `#rrggbb`); il `#` iniziale può mancare |
 
 **Response** `200`:
 
@@ -446,7 +446,7 @@ Aggiunge un documento/conoscenza (`brand_documents`) e ricostruisce il contesto 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
 | `title` | string | no | Titolo (default `"Note"`) |
-| `content_text` | string | condizionale | Obbligatorio a meno che `kind` sia `document` |
+| `content_text` | string | condizionale | Obbligatorio a meno che `kind` sia `document`. Accettato anche come `text` |
 | `kind` | string | no | Default `note`; `document` permette testo vuoto |
 
 **Response** `200`:

@@ -2309,6 +2309,7 @@
       "product": "Prodotto",
       "problems": "Problemi che risolviamo",
       "company": "Azienda",
+      "developers": "Sviluppatori",
       "freeTools": "Tool gratis",
       "resources": "Risorse",
       "useCases": "Casi d'uso",
@@ -2377,10 +2378,6 @@
         "title": "I social ti stressano? Non sei solo — Anomalia",
         "description": "Gestire i social media è estenuante. Anomalia se ne occupa: l'AI crea, programma e pubblica contenuti su tutte le piattaforme."
       },
-      "contentIdeas": {
-        "title": "Non avere più blocchi creativi sui social — Anomalia",
-        "description": "Calendario dei contenuti vuoto ogni settimana? Anomalia genera idee fresche e pubblica post on-brand per te ogni settimana."
-      },
       "cantAfford": {
         "title": "Non puoi assumere un social media manager? Prova l'AI — Anomalia",
         "description": "Un social media manager costa €2.000+/mese. Anomalia fa lo stesso lavoro con l'AI a una frazione del prezzo. Prova gratis."
@@ -2392,10 +2389,6 @@
       "notWorking": {
         "title": "Il tuo marketing social non funziona? Ecco perché — Anomalia",
         "description": "Pubblichi a caso senza strategia? Anomalia crea un piano editoriale basato sui dati e pubblica con costanza su ogni piattaforma."
-      },
-      "aiVsHuman": {
-        "title": "AI vs Social Media Manager umano: chi vince? — Anomalia",
-        "description": "L'AI può sostituire un social media manager? Anomalia crea, programma e pubblica contenuti 24/7 a una frazione del costo."
       },
       "autopilot": {
         "title": "Metti i social in autopilot (senza sembrare un robot) — Anomalia",
@@ -2421,33 +2414,9 @@
         "title": "Migliori orari per pubblicare sui social — Anomalia ci pensa — Anomalia",
         "description": "Smetti di indovinare quando pubblicare. Anomalia programma i tuoi contenuti negli orari ottimali per ogni piattaforma."
       },
-      "noResults": {
-        "title": "Pubblichi sui social ma non ottieni risultati? — Anomalia",
-        "description": "Pubblichi regolarmente ma nulla cambia. Anomalia crea un piano editoriale basato sulla strategia che fa crescere davvero il tuo business."
-      },
-      "scheduling": {
-        "title": "Strumento di scheduling social — pianifica una settimana in 2 minuti — Anomalia",
-        "description": "Programma una settimana intera di contenuti social in minuti. Anomalia pianifica, crea e pubblica i post automaticamente."
-      },
       "analytics": {
         "title": "Analytics social media — sapere cosa funziona — Anomalia",
         "description": "Traccia le performance dei tuoi social su ogni piattaforma. Anomalia mostra quali contenuti funzionano e ne crea di simili."
-      },
-      "contentCalendar": {
-        "title": "Calendario editoriale per social media — riempito automaticamente — Anomalia",
-        "description": "Non fissare mai più un calendario editoriale vuoto. Anomalia riempie il tuo calendario con post on-brand ogni settimana."
-      },
-      "automation": {
-        "title": "Automazione social media — da zero a pubblicato — Anomalia",
-        "description": "Automatizza l'intero workflow dei tuoi social. Anomalia crea, programma e pubblica contenuti su ogni piattaforma."
-      },
-      "strategy": {
-        "title": "Strategia social media — costruita dall'AI, approvata da te — Anomalia",
-        "description": "Smetti di pubblicare senza un piano. Anomalia crea una strategia social basata sui dati, su misura per il tuo brand e mercato."
-      },
-      "captionWriter": {
-        "title": "AI caption writer — caption on-brand in secondi — Anomalia",
-        "description": "Scrivi caption che suonano come te. L'AI di Anomalia impara il tuo tono e genera caption per ogni piattaforma."
       }
     },
     "grow": {
@@ -3507,6 +3476,7 @@
       "home": "Home",
       "materials": "Materiali",
       "results": "Risultati",
+      "newsRadar": "News Radar",
       "library": "Libreria",
       "site": "Auto blog",
       "seoGeo": "SEO/GEO",
@@ -4345,6 +4315,12 @@
           "gsc": "Collega Google Search Console"
         }
       },
+      "todo": {
+        "title": "Da fare",
+        "count": "{n, plural, one {# cosa richiede la tua attenzione} other {# cose richiedono la tua attenzione}}",
+        "empty": "Non c’è niente in attesa. Bozze nuove, segnali del radar e lead compaiono qui appena arrivano.",
+        "noSocial": "Nessun account ancora collegato"
+      },
       "overview": {
         "title": "Panoramica",
         "subtitle": "Cosa richiede la tua attenzione, cosa è in programma, come sta andando il web e come performano i contenuti.",
@@ -4923,6 +4899,7 @@
       "autoPublishTo": "Bozze per {platform}, pubblicate dopo la tua approvazione",
       "connectToChoose": "Collega un account qui sopra per scegliere quali pubblicare automaticamente.",
       "postingTimezone": "Fuso orario di pubblicazione",
+      "tzKeepsAbsolute": "Cambiare fuso NON sposta i post che hanno già un orario: partono nello stesso istante assoluto, quindi cambia la loro ora locale. Solo le programmazioni nuove usano il fuso nuovo.",
       "scheduleTimes": "Orari di programmazione",
       "scheduleTimesDesc": "Tutti gli orari dei post su Anomalia sono mostrati e programmati in questo fuso.",
       "save": "Salva",

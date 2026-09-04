@@ -23,6 +23,8 @@ integrazioni esterne via API key — request, response, query params, body, erro
 | [13 — Impostazioni: come lavora il brand](13-settings-brand.md) | `/settings/brand` — fuso, piattaforme, hashtag, esempi di voce |
 | [14 — Impostazioni: lavori ricorrenti](14-settings-automations.md) | `/settings/automations` — i nove lavori del roster e il loro interruttore |
 | [15 — Impostazioni: fonti del Radar](15-settings-radar.md) | `/settings/radar` — piattaforme e fonti che il Radar guarda |
+| [16 — Impostazioni: il blog](16-settings-blog.md) | `/settings/blog` — aspetto, cadenza, lingue, categorie, tag, autori, analytics |
+| [17 — Studio: il look del brand](17-studio-appearance.md) | `/studio/appearance` — logo, favicon, font delle grafiche, brief visivo |
 
 ## Regole di manutenzione
 

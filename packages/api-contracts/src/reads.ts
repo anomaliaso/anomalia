@@ -5,6 +5,10 @@ const NoInput = z.object({}).strict();
 
 const JsonObject = z.record(z.string(), z.unknown());
 
+export const STUDIO_DOCUMENT_MODES = ['index', 'full'] as const;
+
+export type StudioDocumentMode = (typeof STUDIO_DOCUMENT_MODES)[number];
+
 export const GET_PLAN = {
   tool: 'get_plan',
   title: 'Editorial plan',
@@ -58,18 +62,102 @@ export const GET_WEEKLY_PLAN = {
   destructive: false
 } satisfies BrandEndpoint;
 
+/**
+ * I nomi delle colonne che `getStudio` seleziona davvero. `looseObject` perché il dump porta
+ * ancora quello che la tabella aggiunge domani: dichiarare i campi veri toglie l'indovinello
+ * senza rompere chi legge un campo non ancora nominato qui.
+ */
+const StudioKit = z.looseObject({
+  category: z.string().nullable(),
+  about: z.string().nullable(),
+  brand_style: z.string().nullable(),
+  target_audience: z.string().nullable(),
+  brand_colors: z.unknown(),
+  theme_color: z.string().nullable(),
+  favicon_url: z.string().nullable(),
+  fonts: z.unknown(),
+  logos: z.unknown(),
+  ai_character: z.string().nullable(),
+  ai_context: z.string().nullable(),
+  ai_context_updated_at: z.string().nullable(),
+  visual_style: z.unknown(),
+  visual_style_locked: z.boolean().nullable(),
+  content_pillars: z.unknown(),
+  site_type: z.string().nullable(),
+  images: z.unknown()
+});
+
+const StudioProduct = z.looseObject({
+  id: z.string(),
+  title: z.string().nullable(),
+  pricing: z.unknown(),
+  images: z.unknown(),
+  featured: z.boolean().nullable()
+});
+
+/**
+ * `status` e `chunkCount` sono la differenza fra CARICATO e DIGERITO: un documento `ready` con
+ * zero chunk esiste nell'elenco e `search_knowledge` non lo vede. `get_knowledge_status` dà lo
+ * stesso conto per l'intero brand, con il motivo di ogni guasto.
+ */
+const StudioDocument = z.looseObject({
+  id: z.string(),
+  kind: z.string(),
+  title: z.string().nullable(),
+  file_url: z.string().nullable(),
+  file_name: z.string().nullable(),
+  mime_type: z.string().nullable(),
+  created_at: z.string(),
+  status: z.string(),
+  chunkCount: z.number(),
+  textBytes: z.number(),
+  /** Presente solo con `documents: "full"`. */
+  content_text: z.string().nullable().optional()
+});
+
+const StudioHistoryPost = z.looseObject({
+  id: z.string(),
+  platform: z.string().nullable(),
+  content: z.string().nullable(),
+  thumbnail_url: z.string().nullable(),
+  platform_post_url: z.string().nullable(),
+  metrics: z.unknown(),
+  published_at: z.string().nullable()
+});
+
+const StudioCompetitor = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  website: z.string().nullable(),
+  kind: z.string().nullable(),
+  rationale: z.string().nullable(),
+  source: z.string().nullable(),
+  created_at: z.string()
+});
+
 export const GET_STUDIO = {
   tool: 'get_studio',
   title: 'Studio',
-  description: 'Full studio dump: kit, people, documents, competitors, products, history summary.',
+  description:
+    'Full studio dump: kit, people, documents, competitors, products, history summary. ' +
+    'Each document carries `status` and `chunkCount` (a document that is not `ready` with at least one chunk exists here but is invisible to `search_knowledge`) and `textBytes`, which says how much text it holds. ' +
+    'The text itself is NOT included: to answer a question, ask `search_knowledge` — it returns the passages that answer it with the document each came from, instead of the whole corpus. ' +
+    '`documents: "full"` restores the complete text of every document; it exists for callers that were reading it before and is almost never what you want.',
   method: 'GET',
   pathUnderBrand: '/studio',
-  input: NoInput,
+  input: z
+    .object({
+      documents: z
+        .enum(STUDIO_DOCUMENT_MODES)
+        .optional()
+        .describe('`index` (default) lists documents without their text; `full` includes content_text')
+    })
+    .strict(),
   output: z.object({
-    kit: JsonObject.nullable(),
-    products: z.array(JsonObject),
-    documents: z.array(JsonObject),
-    history: z.array(JsonObject),
+    kit: StudioKit.nullable(),
+    products: z.array(StudioProduct),
+    documents: z.array(StudioDocument),
+    history: z.array(StudioHistoryPost),
     people: z.array(
       z.object({
         id: z.string(),
@@ -81,7 +169,7 @@ export const GET_STUDIO = {
         imageCount: z.number()
       })
     ),
-    competitors: z.array(JsonObject),
+    competitors: z.array(StudioCompetitor),
     targetPlatforms: z.array(z.string()),
     platformInstructions: z.record(z.string(), z.string()),
     language: z.string(),
@@ -278,6 +366,38 @@ export const LIST_PRODUCTS = {
         featured: z.boolean()
       })
     )
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+// La dashboard è il brand stesso: `GET /api/v1/brands/:slug`, nessun segmento sotto. Con
+// `pathUnderBrand` vuoto `pathFor` produce già quell'URL — non serve un secondo registro per gli
+// endpoint fuori dal brand, ne resta fuori uno solo (`list_brands`, che di brand non ne ha uno).
+export const GET_DASHBOARD = {
+  tool: 'get_dashboard',
+  title: 'Brand dashboard',
+  description:
+    'Full brand overview: pending count, plan, products, accounts, kit, recent autopilot runs.',
+  method: 'GET',
+  pathUnderBrand: '',
+  input: z.object({}).strict(),
+  output: z.looseObject({
+    brand: z.looseObject({ id: z.string(), name: z.string(), slug: z.string() }),
+    pendingCount: z.number(),
+    runs: z.array(z.looseObject({ status: z.string(), posts_created: z.number() })),
+    plan: z
+      .looseObject({ id: z.string(), status: z.string(), cadence: z.string() })
+      .nullable(),
+    productCount: z.number(),
+    accountCount: z.number(),
+    scheduledCount: z.number(),
+    publishedCount: z.number(),
+    hasGtm: z.boolean(),
+    hasContentPlans: z.boolean(),
+    hasHistory: z.boolean(),
+    kit: z.looseObject({ about: z.string().nullable() }).nullable(),
+    logoUrl: z.string().nullable()
   }),
   failures: [],
   destructive: false

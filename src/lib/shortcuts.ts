@@ -10,14 +10,14 @@
 // Le uniche con modificatore sono le due che un utente si aspetta: ⌘K e ⌘,.
 
 import { writable } from 'svelte/store';
-import { NAV_TEAM_SPACES, NAV_TEAM_TOOLS } from '$lib/workbench-paths';
+import { NAV_OFF_SIDEBAR, NAV_TEAM_SPACES } from '$lib/workbench-paths';
 
 /** Quanto resta armato il prefisso `g` prima di annullarsi da solo. */
 export const SEQUENCE_TIMEOUT_MS = 1200;
 
 /**
  * Le destinazioni di `g` + lettera. I `path` NON sono scritti a mano: vengono dalla nav
- * (NAV_TEAM_SPACES / NAV_TEAM_TOOLS), da cui `goTargetLabelKey` prende anche l'etichetta — il test
+ * (NAV_TEAM_SPACES / NAV_OFF_SIDEBAR), da cui `goTargetLabelKey` prende anche l'etichetta — il test
  * fallisce se una sparisce dalla nav. La lettera è l'iniziale inglese, tranne dove collideva:
  * `d` per Leads (l è già Library).
  */
@@ -34,7 +34,7 @@ export const GO_TARGETS: readonly { key: string; path: string }[] = [
 
 /** L'etichetta di una destinazione `g`, presa dalla nav vera. null = non è più nella nav. */
 export function goTargetLabelKey(path: string): string | null {
-  const hit = [...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS].find((i) => i.path === path);
+  const hit = [...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR].find((i) => i.path === path);
   return hit?.labelKey ?? null;
 }
 

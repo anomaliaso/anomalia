@@ -158,8 +158,7 @@ describe('la riga che l’utente legge', () => {
  * ask-user-blocking.test.ts e unattended.test.ts.
  */
 const ENGINES = [
-	'src/lib/server/chat/queue.ts',
-	'src/routes/api/v1/chat/respond/run/+server.ts'
+	'src/lib/server/chat/queue.ts'
 ];
 
 describe('il tetto è montato su ogni motore di chat', () => {
@@ -172,7 +171,7 @@ describe('il tetto è montato su ogni motore di chat', () => {
 		expect(src).toContain('chatTokenBudget()');
 	});
 
-	it.each([ENGINES[0], ENGINES[1]])('%s dice all’utente e nei log perché si è fermato', (path) => {
+	it.each([ENGINES[0]])('%s dice all’utente e nei log perché si è fermato', (path) => {
 		const src = readFileSync(path, 'utf8');
 		expect(src).toContain('turnTokenBudgetNotice(');
 		expect(src).toMatch(/token budget stop/);

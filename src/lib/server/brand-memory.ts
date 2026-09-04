@@ -8,7 +8,16 @@ type AnyRec = Record<string, any>;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type MemoryCategory = 'voice' | 'constraint' | 'fact' | 'preference' | 'insight' | 'skill';
+/** L'elenco chiuso, uguale al CHECK di `brand_memory.category` (0178). Un test lo tiene allineato al contratto. */
+export const MEMORY_CATEGORY_VALUES = [
+  'voice',
+  'constraint',
+  'fact',
+  'preference',
+  'insight',
+  'skill'
+] as const;
+export type MemoryCategory = (typeof MEMORY_CATEGORY_VALUES)[number];
 export type MemorySource = 'chat' | 'research' | 'onboarding' | 'user' | 'analysis';
 export type MemoryLayer = 'session' | 'project' | 'global';
 
@@ -858,6 +867,15 @@ async function runDreamInner(
     .eq('brand_id', brandId)
     .order('updated_at', { ascending: true });
 
+  // UN'ASSENZA TOTALE DI DATI NON È UN DATO. Il decadimento sull'inutilizzo presume che qualcuno
+  // stia segnalando l'uso — dentro lo fa il turno che inietta, fuori lo fa un modello con una
+  // scrittura esplicita. Se in questo brand nessuna riga è MAI stata segnalata, l'ipotesi giusta
+  // non è «non le usa nessuno» ma «nessuno sta segnalando», e far scendere la confidence sotto il
+  // pavimento di iniezione toglierebbe dai prompt righe che stavano funzionando: un guasto
+  // silenzioso e distruttivo, visibile solo quando il danno è già nei dati.
+  // Una scadenza esplicita resta valida comunque — l'ha decisa chi ha scritto la riga.
+  const usageIsReported = (entries ?? []).some((entry) => !!(entry as MemoryEntry).last_used_at);
+
   if (entries?.length) {
     for (const entry of entries as MemoryEntry[]) {
       if (writes >= DREAM_MAX_WRITES_PER_BRAND) {
@@ -872,7 +890,7 @@ async function runDreamInner(
           : new Date(entry.created_at);
       const daysSince = (now.getTime() - lastTouch.getTime()) / 86400000;
 
-      if (!entry.pinned && daysSince > 30 && entry.confidence > 0.3) {
+      if (!entry.pinned && usageIsReported && daysSince > 30 && entry.confidence > 0.3) {
         const decay = Math.max(0.3, entry.confidence - 0.1);
         if (!dryRun) {
           await supabase

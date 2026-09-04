@@ -57,7 +57,10 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (!adsFeatureEnabled()) return json({ error: 'Not found' }, { status: 404 });
   if (!adsAvailable(brand.plan)) return json({ error: 'ads_not_on_plan' }, { status: 403 });
 
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  // Il registry dichiara i campi propri di ogni azione dentro `extra`; il CLI li manda in cima.
+  // Sono lo stesso corpo, appiattito qui una volta sola.
+  const sent = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const body = { ...sent, ...((sent.extra as Record<string, unknown>) ?? {}) };
   const action = String(body.action ?? '');
 
   // activated_at/status feed the credits window: approving spends credits (12% management fee).

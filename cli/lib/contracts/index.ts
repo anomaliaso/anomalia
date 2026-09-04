@@ -1,8 +1,17 @@
 import type { z } from 'zod';
-import { ADS_REMIX } from './ads';
+import { ADS_ACTION, ADS_REMIX } from './ads';
+import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
-import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
+import {
+  DELETE_ARTICLE,
+  GENERATE_ARTICLE,
+  GET_ARTICLE,
+  OPTIMIZE_ARTICLE,
+  PUBLISH_ARTICLE,
+  UNPUBLISH_ARTICLE,
+  UPDATE_ARTICLE
+} from './articles';
 import { CHECK_CONTENT } from './content';
 import { GET_CREATION_KIT } from './creation-kit';
 import {
@@ -16,24 +25,35 @@ import {
   DISCARD_PLAN,
   PLAN_CADENCES,
   PLAN_CYCLE_WEEKS,
+  PLAN_WEEK,
   PROPOSE_PLAN,
+  REPLAN_WEEK,
   REVISE_PLAN,
+  SAVE_BRIEF,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
 } from './plans';
 import {
+  CHECK_MEDIA_JOB,
   CREATE_POST,
+  EDIT_POST,
+  GENERATE_MEDIA,
   GET_CALENDAR,
   GET_POST,
   IMPORT_MEDIA_URL,
   LIST_MEDIA,
   LIST_POSTS,
+  MAKE_VIDEO,
+  REGENERATE_POST_MEDIA,
+  REGENERATE_SLIDE,
   RENDER_POST,
+  REORDER_SLIDES,
   RESCHEDULE_POST,
 } from './posts';
 import {
   GET_ADS,
   GET_ANALYTICS,
+  GET_DASHBOARD,
   GET_GEO,
   GET_GTM,
   GET_KEYWORDS,
@@ -46,9 +66,17 @@ import {
   LIST_PRODUCTS
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
+import {
+  ADD_BLOG_TERM,
+  GET_BLOG_SETTINGS,
+  REMOVE_BLOG_TERM,
+  SET_BLOG_SETTINGS
+} from './blog-settings';
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
+import { GET_MEMORY, RECORD_MEMORY_USED, SAVE_MEMORY } from './memory';
+import { GET_KNOWLEDGE_STATUS, SEARCH_KNOWLEDGE } from './knowledge';
 import {
   ADD_RADAR_SOURCE,
   GET_RADAR,
@@ -58,6 +86,7 @@ import {
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 import { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
 import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
+import { GET_WRITING_SKILLS } from './writing-skills';
 import {
   CREATE_SHARE,
   LIST_SHARES,
@@ -66,11 +95,17 @@ import {
 } from './shares';
 import {
   ADD_COMPETITOR,
+  ADD_NOTE,
+  ADD_PERSON,
   CREATE_PRODUCT,
+  DELETE_COMPETITOR,
+  DELETE_DOCUMENT,
+  DELETE_PERSON,
   DELETE_PRODUCT,
   GET_BIO,
   RESEARCH_COMPETITORS,
   SET_BIO,
+  SET_COLORS,
   SYNC_HISTORY,
   UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
@@ -86,7 +121,8 @@ export const BRAND_RESOURCES = {
   article: 'Article',
   product: 'Product',
   person: 'Person',
-  competitor: 'Competitor'
+  competitor: 'Competitor',
+  document: 'Document'
 } as const;
 
 export type BrandResource = keyof typeof BRAND_RESOURCES;
@@ -118,38 +154,55 @@ export type ResourceEndpoint = EndpointShape & {
 export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
+  ADD_BLOG_TERM,
   ADD_COMPETITOR,
+  ADD_NOTE,
+  ADD_PERSON,
   ADD_RADAR_SOURCE,
+  ADS_ACTION,
   ADS_REMIX,
   APPROVE_PLAN,
   BILLING_PORTAL_LINK,
   CHECKOUT_LINK,
   CHECK_CONTENT,
+  CHECK_MEDIA_JOB,
   CREATE_POST,
   CREATE_PRODUCT,
   CREATE_SHARE,
+  DELETE_ARTICLE,
+  DELETE_COMPETITOR,
+  DELETE_DOCUMENT,
+  DELETE_PERSON,
   DELETE_PRODUCT,
   DIAGNOSE_BRAND,
   DIAGNOSE_RADAR,
   DISCARD_PLAN,
+  EDIT_POST,
+  GENERATE_ARTICLE,
+  GENERATE_MEDIA,
   GEO_ACTION,
   GET_ADS,
   GET_ANALYTICS,
+  GET_APPEARANCE,
   GET_ARTICLE,
-  GET_AUTOMATIONS,
   GET_AUDIT_FINDINGS,
+  GET_AUTOMATIONS,
   GET_BACKLINKS,
   GET_BIO,
+  GET_BLOG_SETTINGS,
   GET_BRAND_SETTINGS,
   GET_CALENDAR,
   GET_CREATION_KIT,
+  GET_DASHBOARD,
   GET_GEO,
   GET_GOALS,
   GET_GSC,
   GET_GTM,
   GET_KEYWORDS,
+  GET_KNOWLEDGE_STATUS,
   GET_MARKET_FIELD,
   GET_MEDIA_MODELS,
+  GET_MEMORY,
   GET_PLAN,
   GET_POST,
   GET_RADAR,
@@ -158,6 +211,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_STUDIO,
   GET_VOICE,
   GET_WEEKLY_PLAN,
+  GET_WRITING_SKILLS,
   IMPORT_MEDIA_URL,
   LIST_ARTICLES,
   LIST_AUDIT_CITATIONS,
@@ -169,24 +223,41 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_SOCIAL_ACCOUNTS,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
+  MAKE_VIDEO,
+  OPTIMIZE_ARTICLE,
+  PLAN_WEEK,
   PROPOSE_PLAN,
+  PUBLISH_ARTICLE,
+  RECORD_MEMORY_USED,
   REFRESH_KEYWORDS,
+  REGENERATE_POST_MEDIA,
+  REGENERATE_SLIDE,
+  REMOVE_BLOG_TERM,
   REMOVE_RADAR_SOURCE,
   RENDER_POST,
+  REORDER_SLIDES,
+  REPLAN_WEEK,
   RESCHEDULE_POST,
   RESEARCH_COMPETITORS,
   REVISE_PLAN,
   REVOKE_SHARE,
+  SAVE_BRIEF,
+  SAVE_MEMORY,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
+  SEARCH_KNOWLEDGE,
   SEO_ACTION,
+  SET_APPEARANCE,
   SET_AUTOMATION,
   SET_BIO,
-  SET_RADAR_PLATFORM,
+  SET_BLOG_SETTINGS,
   SET_BRAND_SETTINGS,
+  SET_COLORS,
   SET_MEDIA_MODEL,
+  SET_RADAR_PLATFORM,
   SOCIAL_CONNECT_LINK,
   SYNC_HISTORY,
+  UNPUBLISH_ARTICLE,
   UPDATE_ARTICLE,
   UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
@@ -204,14 +275,25 @@ export function pathFor(endpoint: BrandEndpoint, slug: string, id?: string): str
   return `${base}${endpoint.pathUnderBrand.replace(RESOURCE_SEGMENT, encodeURIComponent(id))}`;
 }
 
+// Un id accorciato è una comodità di lettura: la lista dice quale riga, il prefisso basta a
+// indicarla. Su una cancellazione non basta — il prefisso ambiguo colpisce la riga sbagliata e
+// non si torna indietro — quindi la DELETE prende l'id che il contratto dichiara, per intero.
+export function acceptsIdPrefix(endpoint: BrandEndpoint): endpoint is ResourceEndpoint {
+  return endpoint.resource !== undefined && endpoint.method !== 'DELETE';
+}
+
 export function statusForFailure(endpoint: BrandEndpoint, error: string): number {
   return endpoint.failures.find((f) => f.error === error)?.status ?? 500;
 }
 
 export {
+  ADS_ACTION,
   ADS_REMIX,
   CHECK_CONTENT,
+  CHECK_MEDIA_JOB,
   CREATE_POST,
+  EDIT_POST,
+  GENERATE_MEDIA,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_CALENDAR,
@@ -223,10 +305,21 @@ export {
   LIST_POSTS,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
+  MAKE_VIDEO,
+  REGENERATE_POST_MEDIA,
+  REGENERATE_SLIDE,
   RENDER_POST,
+  REORDER_SLIDES,
   RESCHEDULE_POST,
   UPDATE_ARTICLE,
 };
+export {
+  DELETE_ARTICLE,
+  GENERATE_ARTICLE,
+  OPTIMIZE_ARTICLE,
+  PUBLISH_ARTICLE,
+  UNPUBLISH_ARTICLE
+} from './articles';
 export type { Article, GetArticleInput, UpdateArticleInput, UpdateArticleResult } from './articles';
 export {
   AUDIT_CITATIONS_DEFAULT,
@@ -241,6 +334,7 @@ export {
 export {
   GET_ADS,
   GET_ANALYTICS,
+  GET_DASHBOARD,
   GET_GEO,
   GET_GTM,
   GET_KEYWORDS,
@@ -252,6 +346,8 @@ export {
   LIST_ARTICLES,
   LIST_PRODUCTS
 };
+export { STUDIO_DOCUMENT_MODES } from './reads';
+export type { StudioDocumentMode } from './reads';
 export {
   GET_BRAND_SETTINGS,
   SET_BRAND_SETTINGS,
@@ -287,15 +383,50 @@ export {
   SET_RADAR_PLATFORM
 } from './radar';
 export type { RadarPlatform, RadarSourceKindName } from './radar';
+export {
+  GET_KNOWLEDGE_STATUS,
+  KNOWLEDGE_COLLECTIONS,
+  KNOWLEDGE_DOC_STATUSES,
+  KNOWLEDGE_FAILURES_MAX,
+  KNOWLEDGE_EXCERPT_CHARS,
+  KNOWLEDGE_HITS_DEFAULT,
+  KNOWLEDGE_HITS_MAX,
+  SEARCH_KNOWLEDGE
+} from './knowledge';
+export type { KnowledgeCollection } from './knowledge';
+export {
+  AGENT_MEMORY_CATEGORIES,
+  GET_MEMORY,
+  MEMORY_CATEGORIES,
+  MEMORY_ENTRIES_DEFAULT,
+  MEMORY_ENTRIES_MAX,
+  MEMORY_USED_MAX,
+  RECORD_MEMORY_USED,
+  SAVE_MEMORY
+} from './memory';
+export type { AgentMemoryCategory } from './memory';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {
+  GET_WRITING_SKILLS,
+  WRITING_DECK_AGENTS,
+  WRITING_SKILL_SOURCES
+} from './writing-skills';
+export type { WritingDeckAgent } from './writing-skills';
+export {
   ADD_COMPETITOR,
+  ADD_NOTE,
+  ADD_PERSON,
+  CONSENT_NOT_ATTESTED,
   CREATE_PRODUCT,
+  DELETE_COMPETITOR,
+  DELETE_DOCUMENT,
+  DELETE_PERSON,
   DELETE_PRODUCT,
   GET_BIO,
   RESEARCH_COMPETITORS,
   SET_BIO,
+  SET_COLORS,
   SYNC_HISTORY,
   UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
@@ -318,6 +449,20 @@ export {
 } from './automations';
 export type { AutomationJob } from './automations';
 export { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
+export {
+  ADD_BLOG_TERM,
+  BLOG_ANALYTICS_ID_PATTERNS,
+  BLOG_ANALYTICS_PROVIDERS,
+  BLOG_FONTS,
+  BLOG_LAYOUTS,
+  BLOG_TERM_KINDS,
+  blogAnalyticsIdOk,
+  GET_BLOG_SETTINGS,
+  REMOVE_BLOG_TERM,
+  SET_BLOG_SETTINGS
+} from './blog-settings';
+export type { BlogAnalyticsProvider, BlogTermKind } from './blog-settings';
+export { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
 export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
@@ -330,13 +475,17 @@ export type {
 export { KIT_FORMATS } from './creation-kit';
 export type { GetCreationKitInput, GetCreationKitResult } from './creation-kit';
 export type { CreatePostInput, CreatePostResult } from './posts';
+export { MAX_MEDIA_ALTERNATIVES } from './posts';
 export {
   APPROVE_PLAN,
   DISCARD_PLAN,
   PLAN_CADENCES,
   PLAN_CYCLE_WEEKS,
+  PLAN_WEEK,
   PROPOSE_PLAN,
+  REPLAN_WEEK,
   REVISE_PLAN,
+  SAVE_BRIEF,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS
 };

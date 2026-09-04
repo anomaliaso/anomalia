@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_CYCLE_WEEKS, SAVE_PLAN, SAVE_WEEK_SEEDS } from './plans';
+import { pathFor } from './index';
+import { PLAN_CYCLE_WEEKS, PLAN_WEEK, REPLAN_WEEK, SAVE_BRIEF, SAVE_PLAN, SAVE_WEEK_SEEDS } from './plans';
 
 const validPlan = () => ({
   strategy: 'Portare fuori il lavoro vero di chi monta le tastiere.',
@@ -107,5 +108,25 @@ describe('il contratto dei seed scritti fuori da Anomalia', () => {
     });
 
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe('le tre azioni sulla settimana', () => {
+  it('chiamano la settimana col nome che il tool ha sempre esposto', () => {
+    for (const endpoint of [SAVE_BRIEF, REPLAN_WEEK, PLAN_WEEK]) {
+      expect(Object.keys(endpoint.input.shape), endpoint.tool).toContain('week');
+      expect(endpoint.input.safeParse({ week: -1, brief: 'x' }).success, endpoint.tool).toBe(false);
+    }
+  });
+
+  it('indirizzano le rotte che esistono già', () => {
+    expect(pathFor(SAVE_BRIEF, 'demo')).toBe('/api/v1/brands/demo/editorial-plan/save-brief');
+    expect(pathFor(REPLAN_WEEK, 'demo')).toBe('/api/v1/brands/demo/editorial-plan/replan-week');
+    expect(pathFor(PLAN_WEEK, 'demo')).toBe('/api/v1/brands/demo/weekly-plan/plan');
+  });
+
+  it('un brief vuoto vale per salvarlo, non per rigenerare la settimana', () => {
+    expect(SAVE_BRIEF.input.safeParse({ week: 0, brief: '' }).success).toBe(true);
+    expect(REPLAN_WEEK.input.safeParse({ week: 0, brief: '' }).success).toBe(false);
   });
 });

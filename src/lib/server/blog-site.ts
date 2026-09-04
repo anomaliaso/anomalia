@@ -141,6 +141,24 @@ async function brandProfile(brandId: string): Promise<BlogBrand | null> {
   };
 }
 
+/**
+ * I tracker di terze parti del brand — e il motivo per cui NON stanno dentro `brandProfile`.
+ *
+ * Il blog esce da due porte: il dominio del brand (albero `_site`) e `/blog/<slug>`, che sta sulla
+ * NOSTRA origine, la stessa di `/app` e della sessione di chi e' loggato. Uno script di terze parti
+ * caricato li' — un container GA4 o GTM, che chi lo amministra puo' riempire di JavaScript quando
+ * vuole — girerebbe con i permessi di anomalia.so.
+ *
+ * Quindi non arrivano col profilo: si chiedono, e li chiede solo l'albero servito sul dominio del
+ * brand. Dimenticarsene significa non caricarli; il contrario non e' possibile.
+ */
+export async function siteAnalytics(brandId: string): Promise<{ provider: string; id: string }[]> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('brands').select('blog_config').eq('id', brandId).maybeSingle();
+  const { blogAnalytics } = await import('$lib/server/blog-settings');
+  return blogAnalytics((data?.blog_config ?? {}) as Record<string, unknown>);
+}
+
 // Resolve which brand a hostname serves (custom domain). Any brand_sites row means it was connected.
 export async function resolveSiteBrand(host: string): Promise<BlogBrand | null> {
   const admin = createAdminClient();

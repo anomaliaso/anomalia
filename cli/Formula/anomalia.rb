@@ -7,37 +7,38 @@
 #   brew tap anomaliaso/tap https://github.com/anomaliaso/homebrew-tap
 #   brew install anomalia
 #
-# SHA256 placeholders below are filled by .github/workflows/release.yml on each v* tag.
+# SHA256 placeholders below are filled by .github/workflows/cli-release.yml on each cli-v* tag.
 
 class Anomalia < Formula
   desc "Command-line client for Anomalia — social media AI autopilot"
   homepage "https://anomalia.so"
   version "0.1.0"
-  license "AGPL-3.0-or-later"
+  license "Apache-2.0"
 
   livecheck do
     url "https://github.com/anomaliaso/anomalia/releases/latest"
+    regex(%r{/tag/cli-v?(\d+(?:\.\d+)+)"}i)
     strategy :github_latest
   end
 
   on_macos do
     on_arm do
-      url "https://github.com/anomaliaso/anomalia/releases/download/v#{version}/anomalia-macos-arm64.tar.gz"
+      url "https://github.com/anomaliaso/anomalia/releases/download/cli-v#{version}/anomalia-macos-arm64.tar.gz"
       sha256 "REPLACE_SHA256_MACOS_ARM64"
     end
     on_intel do
-      url "https://github.com/anomaliaso/anomalia/releases/download/v#{version}/anomalia-macos-x64.tar.gz"
+      url "https://github.com/anomaliaso/anomalia/releases/download/cli-v#{version}/anomalia-macos-x64.tar.gz"
       sha256 "REPLACE_SHA256_MACOS_X64"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/anomaliaso/anomalia/releases/download/v#{version}/anomalia-linux-arm64.tar.gz"
+      url "https://github.com/anomaliaso/anomalia/releases/download/cli-v#{version}/anomalia-linux-arm64.tar.gz"
       sha256 "REPLACE_SHA256_LINUX_ARM64"
     end
     on_intel do
-      url "https://github.com/anomaliaso/anomalia/releases/download/v#{version}/anomalia-linux-x64.tar.gz"
+      url "https://github.com/anomaliaso/anomalia/releases/download/cli-v#{version}/anomalia-linux-x64.tar.gz"
       sha256 "REPLACE_SHA256_LINUX_X64"
     end
   end

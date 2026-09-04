@@ -1,5 +1,9 @@
-# Builds the standalone CLI binaries + npm package from cli/, attaches GitHub
-# Release assets, updates the Homebrew formula and publishes to npm.
+# Builds the standalone CLI binaries + npm package from cli/, publishes to npm,
+# attaches GitHub Release assets and updates the Homebrew tap.
+#
+# Every credential the release needs is checked BEFORE the first irreversible step,
+# so a missing token fails the run while nothing has been published yet. A release
+# that half-lands — binaries on GitHub, nothing on npm — is the failure to avoid.
 name: CLI Release
 
 on:
@@ -13,8 +17,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/cli-v') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +27,22 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify release credentials
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set. Add it in Settings → Secrets → Actions."
+            exit 1
+          fi
+          npm whoami || { echo "::error::NPM_TOKEN does not authenticate against registry.npmjs.org."; exit 1; }
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::TAP_TOKEN is not set. It is needed to push the formula to anomaliaso/homebrew-tap."
+            exit 1
+          fi
 
       - name: Install, check, test
         working-directory: cli
@@ -40,6 +58,7 @@ jobs:
           TAG="${GITHUB_REF_NAME#cli-v}"
           node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$TAG"
           sed -i.bak "s/\.version('[^']*')/.version('${TAG}')/" cli.ts && rm cli.ts.bak
+          sed -i.bak "s/version: '[^']*'/version: '${TAG}'/" mcp/server.ts && rm mcp/server.ts.bak
 
       - name: Build binaries + npm package
         working-directory: cli
@@ -58,6 +77,13 @@ jobs:
           chmod +x scripts/update-homebrew-formula.sh
           scripts/update-homebrew-formula.sh "${GITHUB_REF_NAME#cli-v}"
 
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        working-directory: cli/dist-npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish binaries to GitHub Release
         if: startsWith(github.ref, 'refs/tags/cli-v')
         uses: softprops/action-gh-release@v2
@@ -67,25 +93,8 @@ jobs:
             cli/dist/SHA256SUMS.txt
           generate_release_notes: true
 
-      - name: Commit Homebrew formula bump to main
-        if: startsWith(github.ref, 'refs/tags/cli-v')
-        run: |
-          cp cli/Formula/anomalia.rb /tmp/anomalia.rb
-          git fetch origin main
-          git checkout -B cli-formula-bump origin/main
-          cp /tmp/anomalia.rb cli/Formula/anomalia.rb
-          if git diff --quiet cli/Formula/anomalia.rb; then
-            echo "Formula unchanged"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add cli/Formula/anomalia.rb
-          git commit -m "chore: bump Homebrew formula to ${GITHUB_REF_NAME}"
-          git push origin cli-formula-bump:main
-
       - name: Push formula to Homebrew tap
-        if: startsWith(github.ref, 'refs/tags/cli-v') && env.TAP_TOKEN != ''
+        if: startsWith(github.ref, 'refs/tags/cli-v')
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
@@ -103,15 +112,8 @@ jobs:
           git commit -m "anomalia ${GITHUB_REF_NAME#cli-v}"
           git push
 
-      - name: Publish to npm
-        if: startsWith(github.ref, 'refs/tags/cli-v')
-        working-directory: cli/dist-npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Upload build artifacts (manual runs)
-        if: github.ref != 'refs/tags/cli-v'
+        if: ${{ !startsWith(github.ref, 'refs/tags/cli-v') }}
         uses: actions/upload-artifact@v4
         with:
           name: anomalia-dist

@@ -14,3 +14,7 @@ api/_oauth.bundle.js
 api/_bundle.cjs
 api/_bundle.cjs.map
 api/*.cjs
+mcp/api/_bundle.js
+mcp/api/mcp.js
+mcp/api/oauth-protected-resource.js
+mcp/api/*.cjs

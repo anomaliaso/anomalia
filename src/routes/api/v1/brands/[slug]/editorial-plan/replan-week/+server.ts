@@ -13,7 +13,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
 
-  const { week_index, brief } = await request.json();
+  const body = await request.json();
+  const { brief } = body;
+  const week_index = body.week_index ?? body.week;
   if (week_index === undefined) return json({ error: 'week_index is required' }, { status: 400 });
   if (!brief) return json({ error: 'brief is required' }, { status: 400 });
 

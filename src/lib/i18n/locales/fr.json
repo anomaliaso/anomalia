@@ -2309,6 +2309,7 @@
       "product": "Produit",
       "problems": "Problèmes que nous résolvons",
       "company": "Entreprise",
+      "developers": "Développeurs",
       "freeTools": "Outils gratuits",
       "resources": "Ressources",
       "useCases": "Cas d'utilisation",
@@ -2377,10 +2378,6 @@
         "title": "Les réseaux sociaux vous submergent ? Vous n'êtes pas seul — Anomalia",
         "description": "Gérer les réseaux sociaux est épuisant. Anomalia vous en décharge : l'IA crée, programme et publie du contenu fidèle à votre marque chaque semaine."
       },
-      "contentIdeas": {
-        "title": "Never Run Out of Social Media Content Ideas Again — Anomalia",
-        "description": "Vous fixez un calendrier de contenu vide ? Anomalia génère des idées de contenu fraîches et fidèles à la marque chaque semaine — plus jamais la page blanche."
-      },
       "cantAfford": {
         "title": "Vous ne pouvez pas vous offrir un community manager ? Essayez l'IA — Anomalia",
         "description": "Un community manager coûte 2 000+ €/mois. Anomalia fait le même travail avec l'IA pour une fraction du prix."
@@ -2392,10 +2389,6 @@
       "notWorking": {
         "title": "Votre marketing sur les réseaux sociaux ne fonctionne pas ? Voici pourquoi — Anomalia",
         "description": "Vous publiez au hasard sans stratégie ? Anomalia crée un plan éditorial basé sur les données et publie de manière constante pour stimuler la croissance."
-      },
-      "aiVsHuman": {
-        "title": "AI vs Human Social Media Manager: Which Is Better? — Anomalia",
-        "description": "L'IA peut-elle remplacer un community manager ? Anomalia crée, programme et publie du contenu 24h/24, 7j/7 pour une fraction du prix."
       },
       "autopilot": {
         "title": "Mettez vos réseaux sociaux en pilote automatique — sans avoir l'air d'un robot — Anomalia",
@@ -2421,33 +2414,9 @@
         "title": "Best Times to Post on Social Media — Anomalia Handles It — Anomalia",
         "description": "Arrêtez de deviner quand publier. Anomalia programme votre contenu aux moments optimaux pour chaque plateforme automatiquement."
       },
-      "noResults": {
-        "title": "Vous publiez sur les réseaux sociaux mais sans résultats ? — Anomalia",
-        "description": "Vous publiez régulièrement mais rien ne change. Anomalia crée un plan de contenu basé sur la stratégie qui fait vraiment grandir votre entreprise."
-      },
-      "scheduling": {
-        "title": "Social Media Scheduling Tool — Plan a Week in 2 Minutes — Anomalia",
-        "description": "Programmez une semaine complète de contenu réseaux sociaux en quelques minutes. Anomalia planifie, crée et publie les posts automatiquement."
-      },
       "analytics": {
         "title": "Analytics réseaux sociaux — Sachez ce qui fonctionne, corrigez ce qui ne marche pas — Anomalia",
         "description": "Suivez vos performances sur les réseaux sociaux sur chaque plateforme. Anomalia montre quel contenu fonctionne et en crée davantage."
-      },
-      "contentCalendar": {
-        "title": "Calendrier de contenu pour les réseaux sociaux — Rempli automatiquement — Anomalia",
-        "description": "Ne fixez plus jamais un calendrier de contenu vide. Anomalia remplit votre calendrier éditorial avec des posts fidèles à la marque chaque semaine."
-      },
-      "automation": {
-        "title": "Automatisation des réseaux sociaux — De zéro à publié — Anomalia",
-        "description": "Automatisez votre flux de travail réseaux sociaux. Anomalia crée, programme et publie du contenu sur chaque plateforme."
-      },
-      "strategy": {
-        "title": "Stratégie réseaux sociaux — Construite par l'IA, approuvée par vous — Anomalia",
-        "description": "Arrêtez de publier sans plan. Anomalia crée une stratégie de réseaux sociaux basée sur les données, adaptée à votre marque et votre marché."
-      },
-      "captionWriter": {
-        "title": "AI Caption Writer — On-Brand Captions in Seconds — Anomalia",
-        "description": "Rédigez des légendes de réseaux sociaux qui sonnent comme vous. L'IA d'Anomalia apprend votre voix et génère des légendes pour chaque plateforme."
       }
     },
     "grow": {
@@ -3593,6 +3562,7 @@
       "home": "Accueil",
       "materials": "Matériaux",
       "results": "Résultats",
+      "newsRadar": "News Radar",
       "library": "Bibliothèque",
       "site": "Blog auto",
       "seoGeo": "SEO/GEO",
@@ -4004,6 +3974,12 @@
           "seo": "Analyse SEO/GEO de votre site",
           "gsc": "Connecter Google Search Console"
         }
+      },
+      "todo": {
+        "title": "À faire",
+        "count": "{n, plural, one {# chose demande votre attention} other {# choses demandent votre attention}}",
+        "empty": "Rien n’attend. Les nouveaux brouillons, les signaux du radar et les leads apparaissent ici dès leur arrivée.",
+        "noSocial": "Aucun compte connecté pour l’instant"
       },
       "overview": {
         "title": "Aperçu",
@@ -4572,6 +4548,7 @@
       "autoPublishTo": "Brouillons pour {platform}, publiés après votre approbation",
       "connectToChoose": "Connectez un compte ci-dessus pour choisir lequel publie automatiquement.",
       "postingTimezone": "Fuseau horaire de publication",
+      "tzKeepsAbsolute": "Changer de fuseau NE déplace PAS les posts qui ont déjà une heure : ils partent au même instant absolu, donc leur heure locale change. Seules les nouvelles programmations utilisent le nouveau fuseau.",
       "scheduleTimes": "Horaires de publication",
       "scheduleTimesDesc": "Tous les horaires de publication dans Anomalia sont affichés et programmés dans ce fuseau.",
       "save": "Enregistrer",

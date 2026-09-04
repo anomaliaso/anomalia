@@ -1,6 +1,9 @@
 # Anomalia MCP tools ↔ CLI
 
-All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous prefixes.
+All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous prefixes, except
+on a delete: `delete_product`, `delete_person`, `delete_document`, `delete_competitor` and
+`delete_article` take the full UUID, because an ambiguous prefix would remove the wrong row and
+nothing brings it back.
 
 ## Auth
 
@@ -30,6 +33,8 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `list_media` | (MCP only) |
 | `check_content` | (MCP only) |
 | `import_media_url` | (MCP only) |
+| `generate_media` | (MCP only) |
+| `check_media_job` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
 | `edit_post` | `anomalia post <slug> <id> edit …` |
@@ -105,6 +110,27 @@ that resolves to one, and a redirect that walks into one or drops back to http �
 before a byte is stored, so a rejected import leaves nothing behind. The result carries the id,
 the resolved `source_url` kept as the asset's origin, and a `signed_url` you can open to check
 that the right file arrived.
+
+`generate_media` makes a NEW image or video and puts it straight into the brand library — no
+post, nothing in the calendar. Required: `slug`, `prompt`; optional `kind` (`image` default, or
+`video`), `count`, `aspect_ratio`, `title`. **This spends credits**, unlike `import_media_url`:
+every image is a paid render and every video a paid clip. `count` draws up to 4 alternatives in
+one call and bills each one, so generate a few, look at them with `list_media`, and pass only the
+id you keep to `create_post` as `media_ids` — the calendar stays clean either way.
+
+An image comes back finished: `status` is `ready` and `media` carries the rows, each with a
+`signed_url` you can open. A video cannot: it takes minutes, longer than any single call may
+last, so it comes back with `status` `rendering` and a `job_id`, and `check_media_job` says where
+it got to. Do not call `generate_media` again for the same clip while one is still rendering —
+that bills a second one. Refusals: `credits_exhausted` (402) means the brand's pool is empty and
+nothing was drawn; `video_budget_exhausted` (400) means the monthly video allowance is used up,
+counting the clips still rendering; `render_failed` (502) is the model returning nothing, and
+nothing is stored; `store_failed` (502) means it was drawn but could not be filed.
+
+`check_media_job` reads those jobs back, newest first. Required: `slug`; optional `job_id` for
+one of them. Each row carries `status` (`rendering`, `done`, `failed` or `expired`), `error` when
+it failed, and `media_id` once the clip is in the library — that id is what `create_post` takes
+as `media_ids`. It calls no model and spends no credits, so poll it rather than guessing.
 
 `create_post` stores copy **you** wrote: Anomalia calls no model and spends no credits. It does
 not publish and does not schedule — `scheduled_for` is the proposed calendar time and stays a
@@ -197,6 +223,58 @@ seed: `platforms`, `pillar`, `format`, `media`, `slide_count`, `day`, `time`, `s
 A brand keeps one draft in review, so saving replaces the one that is there (`replaced` says so).
 `produce_week` is the separate, paid step that turns the rows into posts.
 
+## Memory
+
+| MCP | CLI |
+|-----|-----|
+| `get_memory` | (MCP only) |
+| `save_memory` | (MCP only) |
+| `record_memory_used` | (MCP only) |
+
+`get_memory` is what the brand already knows, so you stop asking the operator things it has
+already answered: its voice, the constraints it works under, the facts it confirmed, the
+preferences it stated, what previous work learned. `category` narrows to one kind; `limit` is 50
+by default, 200 at most. Chat-session notes and other agents' working notes never come out — only
+what belongs to the brand.
+
+**Reading is not using.** The read changes nothing and counts nothing. When an entry actually
+shaped what you produced, say so with `record_memory_used` and the ids you used — a handful, not
+everything you read. That counter is what keeps a working entry alive: entries nobody reports
+decay out of the prompts they were helping.
+
+`save_memory` records what you learned, so the next conversation starts from it. Writable:
+`fact`, `preference`, `insight`, `skill`. **`voice` and `constraint` are not** — they govern
+everything downstream, and only the operator sets them from the app.
+
+A `key` that already holds a DIFFERENT value answers **409 with both values and writes nothing**:
+you take the disagreement to the operator, you do not win it by arriving last. Sending the same
+value again reinforces it instead. Entries arrive with the confidence of something a model
+inferred, not something a person stated, and are never scoped to a chat.
+
+## Writing
+
+| MCP | CLI |
+|-----|-----|
+| `get_writing_skills` | (MCP only) |
+
+**Call this before writing any copy.** It returns the craft text itself, not a pointer to it:
+`humanizer` and `stop-slop` always — why the output must not read as a chatbot — plus `social`
+(captions, carousels, hooks, platform limits) or `seo-audit` depending on `agent`. Omit `agent`
+for the writing deck alone; `content` and `ugc` add `social`, `web` adds `seo-audit`.
+
+It also returns the **built-in production skills** for that agent — the ones that name the gates
+which refuse a render (`motion-voiceover-fit`, `graphic-feed-legibility`, and the rest). Write a
+motion script without them and `make_video` gets refused with no explanation.
+
+And it returns this brand's OWN procedures — what its team wrote down or the system distilled
+from repeated lessons. `source` tells product from brand, and **a brand procedure overrules a
+product skill when the two disagree**: the product skill is how everyone writes, the brand
+procedure is how this one does.
+
+Bodies arrive inline. Each skill lists its `references` by path without sending them; fetch one
+with `reference: "social/references/platform-limits.md"`, which returns that file alone and no
+deck. No credits, no writes.
+
 ## Studio
 
 | MCP | CLI |
@@ -212,13 +290,19 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 | `get_bio` / `set_bio` | (MCP only) |
 | `sync_history` | `anomalia studio <slug> sync-history` |
 
+`get_studio` lists documents **without their text**. Each carries `status`, `chunkCount` and
+`textBytes`: the text exists, its size is stated, and it does not travel. To answer a question,
+call `search_knowledge` — it returns the passages that answer it with the document each came
+from. `documents: "full"` restores `content_text` on every document; it is there for callers
+that read it before and is almost never what you want.
+
 `create_product` adds ONE offer. The e-commerce resync behind `sync_products` replaces the whole
 catalog and would erase a hand-made row.
 
-`update_product`, `update_person` and `update_competitor` take the row `id` verbatim from
-`get_studio` or `list_products` — no short prefixes here. They change only the fields you send:
-every other column keeps the value it had. An id from another brand answers `not_found`, exactly
-like one that does not exist anywhere.
+`update_product`, `update_person` and `update_competitor` change only the fields you send: every
+other column keeps the value it had. An id from another brand answers `not_found`, exactly like
+one that does not exist anywhere. The four deletes want the UUID in full, verbatim from
+`get_studio` or `list_products`.
 
 `update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
 real person's face stays withheld from every generator until the operator states the consent in
@@ -227,6 +311,39 @@ their own words.
 `set_bio` records the link in bio; no publishing API writes a profile bio, so a person still
 pastes it on the profile by hand. `get_bio` also returns the short link worth putting there — the
 one with the most clicks in the last seven days.
+
+## Knowledge
+
+| MCP | CLI |
+|-----|-----|
+| `search_knowledge` | (MCP only) |
+| `get_knowledge_status` | (MCP only) |
+
+`search_knowledge` asks the brand's OWN documents a question and returns the passages that answer
+it — not a list of files. Every hit carries where it came from (`documentId`, `title`,
+`headingPath`, `chunkId`), so a claim can be attributed instead of asserted. Retrieval is hybrid
+over what is already indexed: keywords first, one embedding of the question only when keywords
+come up short. No credits, no writes.
+
+Passages are cut at 1500 characters and `truncated` says when there is more; `limit` is 6 by
+default and 20 at most, so ask a narrow question several times rather than a wide one once.
+`collection` narrows to a shelf: `brand`, `product`, `commercial`, `legal`, `operations`,
+`research`.
+
+Empty `hits` is not the same as "the brand does not know this": read `get_knowledge_status`
+before concluding anything.
+
+`get_knowledge_status` says whether the knowledge is USABLE, not just uploaded. `documents`
+counts the pipeline stage by stage — `pending` → `processing` → `ready` | `failed` — and
+`indexed` is the only number retrieval can see: a `ready` document with zero chunks is not
+searchable. `chunks.embedded` below `chunks.total` means retrieval is running on keywords alone,
+so a paraphrase misses. `failures` names each broken document and WHY it broke, `collections`
+says which shelves are worth narrowing to, and `sources` says which connected apps feed the
+corpus and when each last synced.
+
+So: `search_knowledge` empty + `searchable: true` → the brand does not know it, go add a
+document. Empty + `pending`/`failed` above zero → it may already know it and nobody has read the
+file yet. Two opposite situations, two opposite actions.
 
 ## Brand settings
 
@@ -310,6 +427,71 @@ both writes normalise it the same way, so `r/coffee` and `coffee` are the same s
 
 Adding a source spends no credits by itself, but Radar reads it on every run from then on.
 Removing one is permanent and stops Radar reading it; what it already found stays.
+
+## Blog settings
+
+| MCP | CLI |
+|-----|-----|
+| `get_blog_settings` | (MCP only) |
+| `set_blog_settings` | (MCP only) |
+| `add_blog_term` | (MCP only) |
+| `remove_blog_term` | (MCP only) |
+
+How the blog looks (name, colour, font, layout, nav links, whether it is live) and how it writes
+(style brief, articles per week, languages, humanising pass), plus the categories, tags and
+authors an article can be filed under.
+
+**Read `get_blog_settings` first.** It carries `choices` (the fonts, layouts and locales that are
+accepted) and `limits` (the plan's ceiling on articles per week, how many extra languages it
+allows, whether a custom domain is available).
+
+`set_blog_settings` changes only the fields you send. `articles_per_week` is **clamped** to the
+plan ceiling rather than refused, so read `config` back from the answer instead of assuming your
+number was taken. A locale the blog does not serve is refused (`unknown_locale`) rather than
+dropped. `locales` and `navbar_links` replace their whole list.
+
+`add_blog_term` takes `term`: `category`, `tag` or `author`. The slug is derived from the name and
+must be unique for the brand — a clash answers `slug_taken` (409), not a second row. `description`
+belongs to a category, `bio` and `role` to an author; sending one to the wrong list is refused
+(`field_not_for_term`), not ignored.
+
+`remove_blog_term` deletes no article, but each kind leaves a different mark — say which before
+you do it: a **category** leaves its articles filed under nothing, a **tag** comes off every
+article that carried it, an **author** leaves their articles with no byline. The answer counts
+`articles_affected`.
+
+`analytics` is a **closed** list of providers with their measurement id — `ga4` (`G-XXXXXXX`),
+`meta_pixel` (numeric), `plausible` (a domain), `hotjar` (numeric). There is no field for arbitrary
+JavaScript and there will not be one: a script tag here runs on every visitor's page, and on the
+default `/blog/<slug>` address that page is served from Anomalia's own origin, alongside the
+session of anyone signed into `/app`. Those trackers therefore load **only on a verified custom
+domain** and **only after the visitor accepts cookies**; on `/blog/<slug>` they are stored and
+never emitted. Sending `analytics: []` takes them all off a live site without us.
+
+The blog icon and an author's avatar are images and cannot be set through these tools.
+
+## Brand appearance
+
+| MCP | CLI |
+|-----|-----|
+| `get_appearance` | (MCP only) |
+| `set_appearance` | (MCP only) |
+
+The look every render follows: logo, favicon, colour palette, the two Google Fonts graphics are
+composed with, and the visual brief.
+
+**Read `get_appearance` first** — a font it does not carry is a font Google Fonts will not serve,
+and the graphics would silently come out in Inter.
+
+`logo_url` and `favicon_url` are **downloaded and re-hosted**, not linked: the answer carries the
+address we stored, which is the one every graphic will use. A private, redirecting or oversized
+address is refused (`image_rejected`) rather than half-saved, and `remove_logo` clears the logo —
+the two cannot be combined (`logo_conflict`). `display_font` and `body_font` go together
+(`font_pair_incomplete`) and are checked against Google Fonts before saving (`font_not_available`,
+which names the missing family). Setting `visual_style` **locks** it: the nightly rebuild stops
+rewriting the brand's visual brief until someone regenerates it from the browser.
+
+Colours stay with `set_colors` (three or six hex digits, up to 8 — the list replaces the palette).
 
 ## Media models
 

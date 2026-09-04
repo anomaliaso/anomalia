@@ -160,7 +160,7 @@
 
   <section class="ps-seo-related">
     <div class="ps-wrap">
-      <p>Related: <a href={lp('/scheduling')}>Social media scheduling tools</a> · <a href={lp('/consistency')}>Post consistently on social media</a> · <a href={lp('/automation')}>Social media automation</a></p>
+      <p>Related: <a href={lp('/autopilot')}>Social media on autopilot</a> · <a href={lp('/consistency')}>Post consistently on social media</a> · <a href={lp('/autoposts')}>Posts published for you</a></p>
     </div>
   </section>
 

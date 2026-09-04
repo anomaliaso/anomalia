@@ -117,12 +117,6 @@
   .nav-pricing { font-size:16px; font-weight:600; color:var(--ink-soft); margin-right:18px; transition: color .2s var(--ease); letter-spacing: 0.01em; }
   .nav-pricing:hover { color:var(--ink); }
   .nav-pricing.is-current { color:var(--ink); }
-  .nav-login {
-    font-size: 14px; font-weight: 500; color: var(--ink-soft);
-    letter-spacing: 0.04em; text-decoration: none; padding: 6px 4px;
-    transition: color .15s var(--ease);
-  }
-  .nav-login:hover { color: var(--ink); }
   .nav-cta {
     font-size: 14px; font-weight: 600;
     padding: 6px 15px; border-radius: 980px;
@@ -1224,9 +1218,7 @@
     .logo-text { display: none; } /* hide "Anomalia" wordmark on mobile, icon only */
     .nav-right { grid-column: 2; justify-self: end; gap: 8px; }
     .nav-right .nav-link { display: none; }
-    .nav-right .theme-toggle { display: none; } /* theme toggle lives in the drawer */
     .nav-right .nav-github { display: none; } /* GitHub lives in the drawer */
-    .nav-right .lang { display: none; } /* lang moves into the dialog */
 
     /* Dialog: fullscreen slide-down menu. Everything inside lines up on the same 16px
        gutter as the bar above it, so the first letter of each row sits under the logo. */

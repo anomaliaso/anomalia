@@ -2309,6 +2309,7 @@
       "product": "Producto",
       "problems": "Problemas que resolvemos",
       "company": "Empresa",
+      "developers": "Desarrolladores",
       "freeTools": "Herramientas gratis",
       "resources": "Recursos",
       "useCases": "Casos de uso",
@@ -2377,10 +2378,6 @@
         "title": "Social Media Feels Overwhelming? You're Not Alone — Anomalia",
         "description": "Gestionar las redes sociales es agotador. Anomalía te lo quita de encima: la IA crea, programa y publica contenido en todas las plataformas."
       },
-      "contentIdeas": {
-        "title": "Never Run Out of Social Media Content Ideas Again — Anomalia",
-        "description": "¿Mirando un calendario de contenido en blanco? Anomalía genera publicaciones e ideas de contenido de redes sociales nuevas y de marca para usted cada semana."
-      },
       "cantAfford": {
         "title": "Can't Afford a Social Media Manager? Try AI Instead — Anomalia",
         "description": "Un gestor de redes sociales cuesta más de 2.000 € al mes. Anomalía hace el mismo trabajo con IA por una fracción del precio. Empieza gratis."
@@ -2392,10 +2389,6 @@
       "notWorking": {
         "title": "Social Media Marketing Not Working? Here's Why — Anomalia",
         "description": "¿Publicar aleatoriamente sin estrategia? Anomalia crea un plan editorial basado en datos y publica de manera consistente en todas las plataformas."
-      },
-      "aiVsHuman": {
-        "title": "AI vs Human Social Media Manager: Which Is Better? — Anomalia",
-        "description": "¿Puede la IA reemplazar a un administrador de redes sociales? Anomalía crea, programa y publica contenido las 24 horas del día, los 7 días de la semana, por una fracción del costo."
       },
       "autopilot": {
         "title": "Pon tus redes sociales en piloto automático, sin que parezcan robóticas, Anomalía",
@@ -2421,33 +2414,9 @@
         "title": "Best Times to Post on Social Media — Anomalia Handles It — Anomalia",
         "description": "Deja de adivinar cuándo publicar. Anomalía programa tu contenido en los momentos óptimos para cada plataforma de forma automática."
       },
-      "noResults": {
-        "title": "Posting on Social Media But Getting No Results? — Anomalia",
-        "description": "Publicas regularmente pero nada cambia. Anomalia crea un plan de contenido basado en una estrategia que realmente hace crecer su negocio."
-      },
-      "scheduling": {
-        "title": "Social Media Scheduling Tool — Plan a Week in 2 Minutes — Anomalia",
-        "description": "Programe una semana completa de contenido de redes sociales en minutos. Anomalía planifica, crea y publica publicaciones automáticamente."
-      },
       "analytics": {
         "title": "Social Media Analytics — Know What Works, Fix What Doesn't — Anomalia",
         "description": "Realice un seguimiento del rendimiento de sus redes sociales en todas las plataformas. Anomalía muestra qué contenido funciona y crea más."
-      },
-      "contentCalendar": {
-        "title": "Calendario de contenido para redes sociales — Se completa automáticamente — Anomalía",
-        "description": "Nunca más vuelvas a mirar un calendario de contenido en blanco. Anomalía llena tu calendario editorial con publicaciones sobre la marca cada semana."
-      },
-      "automation": {
-        "title": "Social Media Automation — From Zero to Published — Anomalia",
-        "description": "Automatice todo su flujo de trabajo de redes sociales. Anomalía crea, programa y publica contenido en todas las plataformas."
-      },
-      "strategy": {
-        "title": "Estrategia de redes sociales: creada por IA, aprobada por usted: Anomalía",
-        "description": "Deja de publicar sin un plan. Anomalia crea una estrategia de redes sociales basada en datos y adaptada a su marca y mercado."
-      },
-      "captionWriter": {
-        "title": "AI Caption Writer — On-Brand Captions in Seconds — Anomalia",
-        "description": "Escribe subtítulos para las redes sociales que se parezcan a ti. La IA de Anomalia aprende tu voz y genera subtítulos para cada plataforma."
       }
     },
     "grow": {
@@ -3593,6 +3562,7 @@
       "home": "Inicio",
       "materials": "Materiales",
       "results": "Resultados",
+      "newsRadar": "News Radar",
       "library": "Biblioteca",
       "site": "Auto blog",
       "seoGeo": "SEO/GEO",
@@ -4004,6 +3974,12 @@
           "seo": "Análisis SEO/GEO de tu sitio",
           "gsc": "Conecta Google Search Console"
         }
+      },
+      "todo": {
+        "title": "Por hacer",
+        "count": "{n, plural, one {# cosa necesita tu atención} other {# cosas necesitan tu atención}}",
+        "empty": "No hay nada esperando. Los borradores nuevos, las señales del radar y los leads aparecen aquí en cuanto llegan.",
+        "noSocial": "Aún no hay ninguna cuenta conectada"
       },
       "overview": {
         "title": "Resumen",
@@ -4572,6 +4548,7 @@
       "autoPublishTo": "Borradores para {platform}, publicados tras tu aprobación",
       "connectToChoose": "Connect an account above to choose which post automatically.",
       "postingTimezone": "Zona horaria de publicación",
+      "tzKeepsAbsolute": "Cambiar la zona NO mueve las publicaciones que ya tienen hora: salen en el mismo instante absoluto, así que cambia su hora local. Solo la programación nueva usa la zona nueva.",
       "scheduleTimes": "Horarios de programación",
       "scheduleTimesDesc": "Todos los horarios de publicación en Anomalía se muestran y programan en esta zona.",
       "save": "Guardar",

@@ -278,8 +278,11 @@ Aggiorna i campi editabili di un post senza re-render. Se il post è già progra
 **Response** `200`:
 
 ```json
-{ "ok": true }
+{ "ok": true, "patch": { "caption": "Nuovo caption", "platforms": ["instagram", "x"] } }
 ```
+
+`patch` è quello che la rotta ha scritto davvero, filtrato sui campi che sa applicare: un campo
+che non riconosce non ci finisce dentro. È una conferma, non l'eco della richiesta.
 
 **Errori specifici**
 
@@ -522,9 +525,85 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/posts/POST_ID/media" \
 
 ---
 
-## `POST /api/v1/brands/:slug/posts/:id/media`
+## `POST /api/v1/brands/:slug/posts/:id/media/regenerate`
 
-Azioni sul visual del post: `regenerate` (rifinisce/rimpiazza l'immagine), `slide` (re-render di una slide), `restructure` (riordina/rimuove slide, senza render né crediti), `video` (animazione in clip). Le azioni con render passano dal gate crediti e fatturano un render.
+Rifinisce o rimpiazza l'immagine di copertina. Passa dal gate crediti e fattura un render.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `instruction` | string | instruction o prompt | Istruzione di modifica |
+| `prompt` | string | instruction o prompt | Nuovo prompt completo |
+
+**Response** `200`: `{ "success": true, "rendered": true, "media_url": "https://…/media/….png", "notes": "…" }`
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media/slide`
+
+Re-render di una singola slide del carosello. Passa dal gate crediti e fattura un render.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `index` | number | Sì | Indice slide (0 = cover) |
+| `instruction` | string | No | Istruzione di modifica |
+| `prompt` | string | No | Nuovo prompt completo |
+
+**Response** `200`: `{ "success": true, "slide_index": 1, "rendered": true }`
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media/order`
+
+Riordina o rimuove le slide. Non rende niente: nessun render, nessun credito, nessun gate.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `order` | number[] | Sì | Nuovo ordine degli indici slide, es. `[0,2,1]` |
+
+**Response** `200`: `{ "success": true, "slide_count": 2 }`
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media/video`
+
+Anima la copertina in una clip. Passa dal gate crediti e fattura un render.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `duration` | number | No | Durata in secondi |
+| `script` | string | No | Script parlato |
+| `instruction` | string | No | Indicazioni sull'animazione |
+| `aspectRatio` | string | No | `9:16` \| `1:1` \| `16:9` \| `4:3` \| `3:4` \| `21:9` |
+
+**Response** `200`: `{ "success": true, "video_render_status": "rendering", "duration_seconds": 6, "videos_left": 4, "remake": false }`
+
+**Esempi**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts/POST_ID/media/regenerate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{"instruction":"Rendi i colori più caldi"}'
+
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts/POST_ID/media/order" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{"order":[0,2,1]}'
+```
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media` (compatibilità)
+
+Questa rotta faceva quattro cose a seconda di `action`. Ora ognuna ha la sua, sopra: **usa quelle**. Questa resta e continua a funzionare — non fa altro che inoltrare all'azione corrispondente.
 
 **Body**
 

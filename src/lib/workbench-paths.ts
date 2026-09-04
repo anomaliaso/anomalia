@@ -227,17 +227,24 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
     badge: 'content',
     also: ['/content', '/approvals', '/publish']
   },
+  // News Radar sale fra gli Spazi: e' l'unica delle pagine-strumento che si guarda tutti i
+  // giorni, ed e' la sola voce che la sidebar tiene fuori dalle cinque del mockup.
+  { path: '/radar', labelKey: 'app.nav2.newsRadar' },
   { path: '/analytics', labelKey: 'app.nav2.results' }
 ];
 
 /**
- * STRUMENTI — il gruppo richiudibile con tutte le pagine-strumento della nav legacy. L'ordine è per
- * frequenza d'uso. Niente resta orfano: il test confronta questo elenco (più gli SPAZI) con ogni
- * href di HUB_TABS.
- * I banchi del Designer non sono qui: la sezione è fuori dalla nav e non deve tornare col flag.
+ * FUORI DALLA SIDEBAR — le destinazioni che esistono, hanno un'etichetta e si aprono da ⌘K (che
+ * dopo la rimozione della modal elenca ogni pagina del brand su disco) e dai link degli agenti,
+ * ma NON hanno una riga propria nella barra laterale. Il gruppo «Strumenti» che le raccoglieva è
+ * stato tolto: la sidebar sono le sei voci del mockup più l'ingranaggio.
+ *
+ * L'elenco resta perché è ancora l'inventario: `goTargetLabelKey` ci prende le etichette delle
+ * scorciatoie `g <lettera>`, e il test lo confronta con HUB_TABS — una pagina nuova che non
+ * finisce né qui né fra gli Spazi fa fallire la suite, invece di sparire in silenzio.
+ * I banchi del Designer non sono qui: la sezione è fuori dalla nav da prima.
  */
-export const NAV_TEAM_TOOLS: NavTeamItem[] = [
-  { path: '/radar', labelKey: 'app.hub.automations.radar' },
+export const NAV_OFF_SIDEBAR: NavTeamItem[] = [
   { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
   { path: '/site', labelKey: 'app.nav2.site' },
   // SEO e GEO sono una voce sola: la ricerca e la citabilità dai modelli sono la stessa domanda

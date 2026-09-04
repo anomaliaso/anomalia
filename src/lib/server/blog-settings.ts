@@ -15,6 +15,7 @@ import { storeSecrets, loadSecrets } from '$lib/server/integration-secrets';
 import { blogArticlesPerWeek, blogArticlesPerWeekMax } from '$lib/server/plans';
 import { isBlogLocale, resolveBlogLocales, type BlogLocaleConfig } from '$lib/server/blog-locales';
 import { readUploadImage } from '$lib/server/raster-image';
+import { BLOG_ANALYTICS_PROVIDERS, blogAnalyticsIdOk } from '@anomalia/api-contracts';
 
 type Ev = RequestEvent;
 
@@ -62,6 +63,7 @@ export type BlogConfigView = {
   humanizerEnabled: boolean;
   backlinkNetwork: boolean;
   locales: BlogLocaleConfig;
+  analytics: { provider: string; id: string }[];
 };
 
 export function parseBlogConfig(
@@ -87,8 +89,21 @@ export function parseBlogConfig(
     showBlogLink: cfg.showBlogLink !== false,
     humanizerEnabled: cfg.humanizerEnabled !== false,
     backlinkNetwork: cfg.backlinkNetwork !== false,
-    locales: resolveBlogLocales(cfg, plan)
+    locales: resolveBlogLocales(cfg, plan),
+    analytics: blogAnalytics(cfg)
   };
+}
+
+/**
+ * I tracker che il brand ha scelto, gia' ridotti a quelli che sanno essere resi. La lettura non si
+ * fida di cio' che sta nel jsonb: una riga scritta prima che il fornitore esistesse, o da una mano
+ * che non e' passata dal contratto, non deve diventare uno script.
+ */
+export function blogAnalytics(cfg: Record<string, unknown>): { provider: string; id: string }[] {
+  const raw = Array.isArray(cfg.analytics) ? cfg.analytics : [];
+  return raw
+    .map((e) => ({ provider: String((e as { provider?: unknown })?.provider ?? ''), id: String((e as { id?: unknown })?.id ?? '') }))
+    .filter((e) => blogAnalyticsIdOk(e.provider, e.id));
 }
 
 /** Shared load payload for blog settings pages (appearance / domain / integrations). */
@@ -282,61 +297,185 @@ export async function toggleBlog({ request, params, locals: { supabase } }: Ev) 
 }
 
 /** Parse blog appearance form fields into a blog_config patch. */
+/**
+ * UNA regola per campo di `blog_config`, e un chiamante solo che le applica.
+ *
+ * Il form del browser salva TUTTO insieme (una casella non spuntata non arriva, quindi assente
+ * vuol dire `false`); i tool dell'API cambiano solo i campi nominati. Sono due chiamanti, non due
+ * regole: se la pulizia di `accent` vivesse in due posti, il form rifiuterebbe un colore che il
+ * tool accetta, e nessuno lo scoprirebbe finché il sito non esce sbagliato.
+ *
+ * Ogni voce riceve il valore grezzo e il piano, e restituisce ciò che va scritto nel jsonb.
+ */
+const str = (v: unknown, max: number): string => String(v ?? '').trim().slice(0, max);
+
+const BLOG_CONFIG_FIELDS: Record<string, (v: unknown, plan?: string | null) => unknown> = {
+  enabled: (v) => v === true,
+  title: (v) => str(v, 80) || null,
+  description: (v) => str(v, 300) || null,
+  accent: (v) => (/^#[0-9a-f]{6}$/i.test(str(v, 7)) ? str(v, 7) : '#111111'),
+  font: (v) => (FONT_KEYS.includes(str(v, 20)) ? str(v, 20) : 'sans'),
+  layout: (v) => (str(v, 20) === 'sidebar' ? 'sidebar' : 'navbar'),
+  showBlogLink: (v) => v === true,
+  humanizerEnabled: (v) => v === true,
+  backlinkNetwork: (v) => v === true,
+  styleInstructions: (v) => str(v, 1500) || null,
+  // Ridotta al tetto del piano invece che rifiutata: alzare il piano poi la libera, e un salvataggio
+  // che fallisce per un numero troppo alto è peggio di uno che salva il massimo consentito.
+  articlesPerWeek: (v, plan) =>
+    v === null || v === undefined || v === ''
+      ? null
+      : Math.max(0, Math.min(blogArticlesPerWeekMax(plan), Math.round(Number(v) || 0))),
+  defaultLocale: (v) => {
+    const l = str(v, 10).toLowerCase();
+    return isBlogLocale(l) ? l : null;
+  },
+  locales: (v) => {
+    const raw = Array.isArray(v) ? v : [];
+    return raw
+      .map((x) => String(x).trim().toLowerCase())
+      .filter((x, i, arr) => isBlogLocale(x) && arr.indexOf(x) === i);
+  },
+  navbarLinks: (v) => {
+    const raw = Array.isArray(v) ? v : [];
+    return raw
+      .map((l) => ({ label: str((l as { label?: unknown })?.label, 60), url: str((l as { url?: unknown })?.url, 300) }))
+      .filter((l) => l.label && l.url)
+      .slice(0, 6);
+  },
+  // Ultima linea prima che un id finisca dentro lo snippet di un fornitore. Il contratto lo rifiuta
+  // gia', ma la regola sta qui, accanto al modello: un chiamante futuro che scrivesse `blog_config`
+  // senza passare dal contratto non porta comunque uno script dentro una pagina pubblica.
+  analytics: (v) => {
+    const raw = Array.isArray(v) ? v : [];
+    const seen = new Set<string>();
+    const kept: { provider: string; id: string }[] = [];
+    for (const e of raw) {
+      const provider = str((e as { provider?: unknown })?.provider, 20);
+      const id = str((e as { id?: unknown })?.id, 80);
+      if (!blogAnalyticsIdOk(provider, id) || seen.has(provider)) continue;
+      seen.add(provider);
+      kept.push({ provider, id });
+      if (kept.length === BLOG_ANALYTICS_PROVIDERS.length) break;
+    }
+    return kept;
+  }
+};
+
+export const BLOG_CONFIG_KEYS = Object.keys(BLOG_CONFIG_FIELDS);
+
+/**
+ * La patch pulita per i soli campi presenti in `input`.
+ *
+ * `locales` non può contenere la lingua di default — sono le lingue IN PIÙ — e la regola è
+ * incrociata, quindi si applica dopo il passaggio per campo, su ciò che vale DOPO la patch.
+ */
+export function blogConfigPatch(
+  input: Record<string, unknown>,
+  plan?: string | null,
+  current: Record<string, unknown> = {}
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const [key, clean] of Object.entries(BLOG_CONFIG_FIELDS)) {
+    if (key in input) patch[key] = clean(input[key], plan);
+  }
+
+  if (Array.isArray(patch.locales)) {
+    const fallback = 'defaultLocale' in patch ? patch.defaultLocale : current.defaultLocale;
+    patch.locales = (patch.locales as string[]).filter((l) => l !== fallback);
+  }
+
+  return patch;
+}
+
+/**
+ * Lo slug di una voce del blog, derivato dal nome. Era ricopiato dentro tre azioni del form:
+ * tre copie della stessa riga, che al primo cambio (una lettera accentata trattata diversamente)
+ * avrebbero prodotto tre slug diversi per lo stesso nome.
+ */
+export function blogTermSlug(name: string, max: number): string {
+  return String(name ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, max);
+}
+
+/**
+ * Le tre liste sotto cui un articolo si archivia, e in COSA differiscono.
+ *
+ * La differenza che conta è l'ultima colonna: cancellare non cancella mai un articolo, ma lascia
+ * un segno diverso per ognuna — una categoria e un autore staccano un riferimento (`on delete set
+ * null`), un tag sparisce dalla tabella di mezzo (`on delete cascade`). Tre righe qui invece di
+ * tre `if` sparsi: la prossima lista è una riga, e le conseguenze si leggono insieme.
+ */
+export const BLOG_TERMS = {
+  category: {
+    table: 'blog_categories',
+    nameMax: 80,
+    slugMax: 70,
+    extras: ['description'] as const,
+    extraMax: { description: 300 } as Record<string, number>,
+    refTable: 'brand_articles',
+    refColumn: 'category_id'
+  },
+  tag: {
+    table: 'blog_tags',
+    nameMax: 50,
+    slugMax: 50,
+    extras: [] as const,
+    extraMax: {} as Record<string, number>,
+    refTable: 'brand_article_tags',
+    refColumn: 'tag_id'
+  },
+  author: {
+    table: 'blog_authors',
+    nameMax: 100,
+    slugMax: 70,
+    extras: ['bio', 'role'] as const,
+    extraMax: { bio: 500, role: 30 } as Record<string, number>,
+    refTable: 'brand_articles',
+    refColumn: 'author_id'
+  }
+} as const;
+
+export type BlogTerm = keyof typeof BLOG_TERMS;
+
 export function customizationPatchFromFormData(
   fd: FormData,
   plan?: string | null
 ): Record<string, unknown> {
-  const title = String(fd.get('title') ?? '')
-    .trim()
-    .slice(0, 80);
-  const description = String(fd.get('description') ?? '')
-    .trim()
-    .slice(0, 300);
-  const accent = String(fd.get('accent') ?? '').trim();
-  const font = String(fd.get('font') ?? 'sans').trim();
-  const styleInstructions = String(fd.get('styleInstructions') ?? '')
-    .trim()
-    .slice(0, 1500);
-  const apwRaw = String(fd.get('articlesPerWeek') ?? '').trim();
-  const weekMax = blogArticlesPerWeekMax(plan);
-  const articlesPerWeek =
-    apwRaw === '' ? null : Math.max(0, Math.min(weekMax, Math.round(Number(apwRaw) || 0)));
-  const layout = String(fd.get('layout') ?? 'navbar').trim() === 'sidebar' ? 'sidebar' : 'navbar';
-  // Unchecked checkboxes are omitted from FormData — treat missing as false.
-  const showBlogLink = fd.get('showBlogLink') === 'true';
-  const humanizerEnabled = fd.get('humanizerEnabled') === 'true';
-  const backlinkNetwork = fd.get('backlinkNetwork') === 'true';
-  // Blog locales. defaultLocale is what the bare blog URL redirects to; `locales` are the extra
-  // languages articles get translated into. The plan clamp lives in resolveBlogLocales (applied on
-  // READ too), so a downgrade stops serving the extras without destroying the user's choice.
-  const defaultLocaleRaw = String(fd.get('defaultLocale') ?? '').trim().toLowerCase();
-  const defaultLocale = isBlogLocale(defaultLocaleRaw) ? defaultLocaleRaw : null;
-  const locales = fd
-    .getAll('locales')
-    .map((v) => String(v).trim().toLowerCase())
-    .filter((v, i, arr) => isBlogLocale(v) && v !== defaultLocale && arr.indexOf(v) === i);
-
   const navbarLinks: Array<{ label: string; url: string }> = [];
   for (let i = 0; i < 6; i++) {
-    const label = String(fd.get(`nav_label_${i}`) ?? '').trim();
-    const url = String(fd.get(`nav_url_${i}`) ?? '').trim();
-    if (label && url) navbarLinks.push({ label, url });
+    navbarLinks.push({
+      label: String(fd.get(`nav_label_${i}`) ?? ''),
+      url: String(fd.get(`nav_url_${i}`) ?? '')
+    });
   }
-  return {
-    title: title || null,
-    description: description || null,
-    accent: /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#111111',
-    font: FONT_KEYS.includes(font) ? font : 'sans',
-    styleInstructions: styleInstructions || null,
-    articlesPerWeek,
-    defaultLocale,
-    locales,
-    layout,
-    showBlogLink,
-    navbarLinks,
-    humanizerEnabled,
-    backlinkNetwork
-  };
+  const apwRaw = String(fd.get('articlesPerWeek') ?? '').trim();
+  const defaultLocale = String(fd.get('defaultLocale') ?? '');
+
+  // Il form salva tutto insieme: ogni campo è presente, e una casella non spuntata è `false`.
+  return blogConfigPatch(
+    {
+      title: fd.get('title'),
+      description: fd.get('description'),
+      accent: fd.get('accent'),
+      font: fd.get('font') ?? 'sans',
+      styleInstructions: fd.get('styleInstructions'),
+      articlesPerWeek: apwRaw === '' ? null : apwRaw,
+      layout: fd.get('layout') ?? 'navbar',
+      showBlogLink: fd.get('showBlogLink') === 'true',
+      humanizerEnabled: fd.get('humanizerEnabled') === 'true',
+      backlinkNetwork: fd.get('backlinkNetwork') === 'true',
+      defaultLocale,
+      locales: fd.getAll('locales'),
+      navbarLinks
+    },
+    plan
+  );
 }
 
 export async function saveCustomization({ request, params, locals: { supabase } }: Ev) {
@@ -389,13 +528,7 @@ export async function createCategory({ request, params, locals: { supabase } }: 
     .trim()
     .slice(0, 80);
   if (!name) return fail(400, { error: 'name_required' });
-  const slug = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 70);
+  const slug = blogTermSlug(name, 70);
   const description =
     String(fd.get('description') ?? '')
       .trim()
@@ -428,13 +561,7 @@ export async function createTag({ request, params, locals: { supabase } }: Ev) {
     .trim()
     .slice(0, 50);
   if (!name) return fail(400, { error: 'name_required' });
-  const slug = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 50);
+  const slug = blogTermSlug(name, 50);
   const { error } = await createAdminClient()
     .from('blog_tags')
     .insert({ brand_id: brand.id, name, slug });
@@ -468,13 +595,7 @@ export async function createAuthor({
     .trim()
     .slice(0, 100);
   if (!name) return fail(400, { error: 'name_required' });
-  const slug = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 70);
+  const slug = blogTermSlug(name, 70);
   const bio =
     String(fd.get('bio') ?? '')
       .trim()

@@ -80,7 +80,7 @@ for (const target of selectedTargets) {
 
   if (proc.exitCode !== 0) {
     console.error(`  ✗ Failed to build ${outName}`);
-    continue;
+    process.exit(1);
   }
 
   console.log(`  ✓ ${outName} (${(Bun.file(outPath).size / 1024 / 1024).toFixed(1)} MB)`);
@@ -114,7 +114,7 @@ for (const target of selectedTargets) {
   });
   if (tar.exitCode !== 0) {
     console.error(`  ✗ Failed to archive ${outName}`);
-    continue;
+    process.exit(1);
   }
   console.log(`  ✓ ${outName}.tar.gz`);
 }

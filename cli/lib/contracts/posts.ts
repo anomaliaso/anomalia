@@ -171,7 +171,7 @@ export const RENDER_POST = {
     z.object({ ok: z.literal(true), url: z.string().nullable(), error: z.string().nullable() }),
     z.object({ error: z.string(), url: z.string() })
   ]),
-  failures: [],
+  failures: [{ error: 'credits_exhausted', status: 402 }],
   destructive: false
 } satisfies BrandEndpoint;
 
@@ -278,6 +278,237 @@ export const IMPORT_MEDIA_URL = {
     { error: 'too_large', status: 413 },
     { error: 'empty', status: 400 },
     { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+/**
+ * Un tetto solo per le alternative, non due che divergono: lo schema rifiuta oltre questo numero,
+ * quindi il server non ha una seconda soglia da tenere allineata. È lo stesso ceiling che la
+ * pagina Media generator applica alle sue varianti — ogni alternativa è un render pagato.
+ */
+export const MAX_MEDIA_ALTERNATIVES = 4;
+
+const GeneratedMediaSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  mime: z.string().nullable(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  signed_url: z.string().nullable()
+});
+
+export const GENERATE_MEDIA = {
+  tool: 'generate_media',
+  title: 'Generate media into the library',
+  description:
+    'Generate a new image or video into the brand media library, then pass the id it returns as ' +
+    'media_ids on create_post. THIS SPENDS CREDITS: every image is a paid render and every video ' +
+    'is a paid clip, so ask for what you need and no more. It creates nothing in the calendar — ' +
+    'generate alternatives, look at them with list_media, and attach only the one you keep. ' +
+    'Images come back ready, up to ' + MAX_MEDIA_ALTERNATIVES + ' per call. A video takes minutes: ' +
+    'it comes back as a job_id with status rendering, and check_media_job says when it landed — ' +
+    'do not call this again for the same clip while one is still rendering.',
+  method: 'POST',
+  pathUnderBrand: '/media/generate',
+  input: z
+    .object({
+      prompt: z.string().min(1).describe('What the image or video should show'),
+      kind: z.enum(['image', 'video']).optional().describe('Defaults to image'),
+      count: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_MEDIA_ALTERNATIVES)
+        .optional()
+        .describe(
+          'How many alternatives to draw, images only, 1-' + MAX_MEDIA_ALTERNATIVES +
+            '. Each one bills a render. Defaults to 1.'
+        ),
+      aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
+      title: z.string().optional().describe('The name the asset carries in the library')
+    })
+    .strict(),
+  output: z.object({
+    ok: z.literal(true),
+    status: z.enum(['ready', 'rendering']),
+    media: z.array(GeneratedMediaSchema),
+    job_id: z.string().nullable()
+  }),
+  failures: [
+    { error: 'credits_exhausted', status: 402 },
+    { error: 'video_budget_exhausted', status: 400 },
+    { error: 'render_failed', status: 502 },
+    { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const CHECK_MEDIA_JOB = {
+  tool: 'check_media_job',
+  title: 'Check a media generation job',
+  description:
+    'Where the videos generate_media started have got to, newest first. status is rendering while ' +
+    'the clip is being made, done once it is in the library — and then media_id is the id ' +
+    'create_post accepts as media_ids. failed says why. Calls no model and spends no credits.',
+  method: 'GET',
+  pathUnderBrand: '/media/generate',
+  input: z
+    .object({ job_id: z.string().optional().describe('One job; omit for the brand\'s recent ones') })
+    .strict(),
+  output: z.object({
+    jobs: z.array(
+      z.object({
+        id: z.string(),
+        status: z.string(),
+        media_id: z.string().nullable(),
+        error: z.string().nullable(),
+        submitted_at: z.string().nullable()
+      })
+    )
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+// Ogni azione sui media ha la sua rotta: il corpo dice con che cosa farla, mai quale fare.
+const RENDER_FAILURES = [
+  { error: 'credits_exhausted', status: 402 },
+  { error: 'write access required', status: 403 }
+];
+
+const MediaResult = z.looseObject({
+  success: z.boolean().optional(),
+  error: z.string().optional(),
+  rendered: z.boolean().optional(),
+  media_url: z.string().nullable().optional(),
+  notes: z.string().optional()
+});
+
+export const REGENERATE_POST_MEDIA = {
+  tool: 'regenerate_post_media',
+  title: 'Regenerate post media',
+  description:
+    'Refine a single image with an instruction (bills one render). id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/regenerate',
+  resource: 'post',
+  input: z
+    .object({ instruction: z.string().min(1).describe('How to refine the image') })
+    .strict(),
+  output: MediaResult,
+  failures: [...RENDER_FAILURES, { error: 'Missing instruction or prompt', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REGENERATE_SLIDE = {
+  tool: 'regenerate_slide',
+  title: 'Regenerate carousel slide',
+  description:
+    'Re-render one carousel slide (index 0 = cover). Bills a render. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/slide',
+  resource: 'post',
+  input: z
+    .object({
+      index: z.number().int().min(0).describe('Slide index (0 = cover)'),
+      instruction: z.string().min(1)
+    })
+    .strict(),
+  output: z.looseObject({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    slide_index: z.number().optional(),
+    rendered: z.boolean().optional()
+  }),
+  failures: [...RENDER_FAILURES, { error: 'Missing index', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REORDER_SLIDES = {
+  tool: 'reorder_slides',
+  title: 'Reorder carousel slides',
+  description:
+    'Reorder or drop slides without rendering. order is e.g. [0,2,1]. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/order',
+  resource: 'post',
+  input: z.object({ order: z.array(z.number().int().min(0)).min(1) }).strict(),
+  output: z.looseObject({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    slide_count: z.number().optional()
+  }),
+  failures: [{ error: 'Missing order', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const MAKE_VIDEO = {
+  tool: 'make_video',
+  title: 'Animate post to video',
+  description:
+    'Animate the cover into a video clip (also retries a video that fell back to a photo). id ' +
+    'accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/media/video',
+  resource: 'post',
+  input: z
+    .object({
+      duration: z.number().optional().describe('Duration in seconds, e.g. 6'),
+      script: z.string().optional(),
+      instruction: z.string().optional()
+    })
+    .strict(),
+  output: z.looseObject({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    video_render_status: z.string().optional(),
+    video_note: z.string().optional(),
+    duration_seconds: z.number().optional(),
+    videos_left: z.number().optional(),
+    remake: z.boolean().optional()
+  }),
+  failures: [
+    ...RENDER_FAILURES,
+    { error: 'Invalid aspectRatio. Use 9:16, 1:1, 16:9, 4:3, 3:4 or 21:9.', status: 400 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const EDIT_POST = {
+  tool: 'edit_post',
+  title: 'Edit post',
+  description:
+    'Edit post fields without rendering (no credits). Editing a scheduled post re-syncs to ' +
+    'Zernio. id accepts a short prefix.',
+  method: 'PUT',
+  pathUnderBrand: '/posts/:id',
+  resource: 'post',
+  input: z
+    .object({
+      caption: z.string().optional(),
+      title: z.string().optional(),
+      link_url: z.string().nullable().optional(),
+      subreddit: z.string().optional(),
+      first_comment: z.string().optional(),
+      image_prompt: z.string().optional(),
+      format: z.string().optional(),
+      slot: z.string().optional(),
+      product_name: z.string().optional(),
+      platforms: z.array(z.string()).optional(),
+      media_url: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Set null to clear image (text-only)'),
+      platform_captions: z.record(z.string(), z.string()).nullable().optional()
+    })
+    .strict(),
+  // `patch` è quello che la rotta ha scritto davvero, filtrato sui campi che sa applicare: una
+  // conferma, non l'eco della richiesta. Un campo che non esiste non ci finisce dentro.
+  output: z.object({ ok: z.literal(true), patch: z.record(z.string(), z.unknown()) }),
+  failures: [
+    { error: 'No fields to update', status: 400 },
+    { error: 'Post not found', status: 404 }
   ],
   destructive: false
 } satisfies BrandEndpoint;

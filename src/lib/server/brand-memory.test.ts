@@ -354,6 +354,51 @@ describe('runDream', () => {
     expect(rows.map((x) => x.key)).toEqual(['k1']);
   });
 
+  /**
+   * UN'ASSENZA TOTALE DI DATI NON È UN DATO. Il decadimento sull'inutilizzo presume che qualcuno
+   * stia segnalando l'uso. Con la superficie esterna, chi legge la memoria è un modello che sta
+   * fuori e segnala con una scrittura esplicita: se non lo fa, l'ipotesi giusta non è «non le usa
+   * nessuno» ma «nessuno sta segnalando», e far scendere la confidence sotto il pavimento di
+   * iniezione toglierebbe dai prompt righe che stavano funzionando. Un'adozione mancata non deve
+   * poter cancellare il patrimonio del cliente.
+   */
+  it('non decade niente in un brand dove nessuna riga è mai stata segnalata', async () => {
+    const rows = [
+      staleRow(1, { times_used: 0, last_used_at: null }),
+      staleRow(2, { times_used: 0, last_used_at: null })
+    ];
+    const { supabase, writes } = dreamSupabase({ brand_memory: rows });
+
+    const r = await runDream(supabase as never, 'brand-1');
+
+    expect(r.decayed).toBe(0);
+    expect(writes.updates).toBe(0);
+    expect(rows.map((x) => x.confidence)).toEqual([0.8, 0.8]);
+  });
+
+  it('appena una riga è segnalata, il segnale è vivo e le altre tornano a decadere', async () => {
+    const rows = [
+      staleRow(1, { times_used: 0, last_used_at: null }),
+      staleRow(2, { times_used: 3, last_used_at: OLD })
+    ];
+    const { supabase } = dreamSupabase({ brand_memory: rows });
+
+    const r = await runDream(supabase as never, 'brand-1');
+
+    expect(r.decayed).toBe(2);
+    for (const row of rows) expect(row.confidence as number).toBeCloseTo(0.7);
+  });
+
+  it('una scadenza esplicita vale anche senza nessuna segnalazione: l’ha decisa chi ha scritto', async () => {
+    const rows = [staleRow(1, { times_used: 0, last_used_at: null, expires_at: OLD })];
+    const { supabase } = dreamSupabase({ brand_memory: rows });
+
+    const r = await runDream(supabase as never, 'brand-1');
+
+    expect(r.archivedKeys).toEqual(['k1']);
+    expect(rows).toHaveLength(0);
+  });
+
   it('promuove il fatto che la chat ha confermato quattro volte (oggi non succede mai)', async () => {
     // Il caso reale: quattro turni della STESSA chat riportano lo stesso fatto. Con il prompt che
     // diceva "salta ciò che è già in memoria" il modello non lo riestraeva, times_reinforced

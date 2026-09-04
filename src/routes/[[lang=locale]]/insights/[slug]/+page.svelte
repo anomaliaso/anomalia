@@ -60,10 +60,8 @@
     '/pricing': { en: 'Pricing', it: 'Prezzi' },
     '/usecases': { en: 'Use cases', it: 'Casi d’uso' },
     '/autoposts': { en: 'Autoposts', it: 'Autoposts' },
-    '/playbooks': { en: 'Industry playbooks', it: 'Playbook per settore' },
     '/ai-seo-agent': { en: 'AI SEO Agent', it: 'AI SEO Agent' },
     '/autoblog': { en: 'Autoblog', it: 'Autoblog' },
-    '/ai-vs-human': { en: 'AI vs human', it: 'AI vs umano' },
     '/cant-afford': { en: 'When you can’t afford an agency', it: 'Quando non puoi permetterti un’agenzia' },
     '/docs/geo-audit': { en: 'GEO Audit docs', it: 'Docs GEO Audit' }
   };

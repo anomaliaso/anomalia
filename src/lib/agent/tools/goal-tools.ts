@@ -184,7 +184,7 @@ export function createGoalTools(opts: {
   threadId?: string;
   /**
    * I tool già andati a buon fine in QUESTO turno, per chi non gira dentro il ciclo dell'AI SDK e
-   * quindi non riceve `opts.messages` — il ponte del kit (`agent/plugins/goal.ts`). Senza,
+   * quindi non riceve `opts.messages`. Senza,
    * la lista si legge dai messaggi come sempre.
    */
   succeededThisTurn?: () => string[];

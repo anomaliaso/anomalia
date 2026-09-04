@@ -5,7 +5,7 @@ description: >-
   brands, posts, plans, studio, SEO/GEO, blog, and AI chat. Use when the user
   mentions Anomalia, anomalia.so, approving social posts, editorial plans,
   SEO/GEO audits, or managing brand content from an agent.
-license: AGPL-3.0-or-later
+license: Apache-2.0
 compatibility: >-
   Requires network access to anomalia.so (or PUBLIC_APP_URL). Prefer Anomalia MCP
   when connected; otherwise the anomalia CLI (Bun or installed binary) after OAuth login.
@@ -44,11 +44,25 @@ Setup details: [references/mcp.md](references/mcp.md).
 1. Start with `list_brands` (or `anomalia brands`) to learn **slugs**.
 2. Pass `slug` on every brand-scoped call.
 3. Post/article ids accept **short unambiguous prefixes** from list output — never guess if ambiguous.
-5. Confirm before reject / delete / discard unless the user clearly asked.
+4. **Before writing ANY copy** — caption, carousel, script, article, bio — call
+   `get_writing_skills`. It returns the craft text Anomalia writes with, plus this brand's own
+   procedures. Skipping it is how output starts reading as generated.
+5. **Read `get_memory` before asking the operator** something the brand may already know — and
+   call `record_memory_used` with the ids that actually shaped your output. An entry nobody
+   reports decays out of the prompts it was helping.
+6. Confirm before reject / delete / discard unless the user clearly asked.
 
 ## Quick workflows
 
-**Before you write anything** → `get_creation_kit` with the goal, the platforms and the format.
+**Before you write anything** → two reads, and they answer different questions.
+
+`get_writing_skills` is **how to write**: `humanizer` and `stop-slop` always, `social` or
+`seo-audit` depending on `agent`, plus the brand's own procedures (`source: "brand"`, and those
+overrule a product skill when they disagree). Bodies come inline; references are listed by path
+and fetched one at a time with `reference: "<skill>/<path>"`. A few thousand tokens, no credits —
+and the difference between copy a person would publish and copy that reads as generated.
+
+`get_creation_kit` is **what to say** — with the goal, the platforms and the format.
 It returns the smallest brief for that one job: platform limits, brand facts and approved voice,
 the matching rubric, ONE template with its hook family, the operator's own rewrites, what has
 worked on this brand, and which calendar minutes are taken. It is a selection, not the library —
@@ -105,6 +119,22 @@ kinds this plan allows and how many sources are left; `add_radar_source` / `remo
 change them, naming a source by its `(kind, value)` pair. Threads, X and LinkedIn are Pro-only and
 answer `plan_required` below it, so read before you write. A source already there comes back
 `added: false` rather than failing.
+
+**Set up the blog** → `get_blog_settings` shows how it looks, how it writes, the accepted fonts,
+layouts and locales, the plan's ceilings, and the categories, tags and authors; `set_blog_settings`
+changes it, and `add_blog_term` / `remove_blog_term` maintain the three lists. `articles_per_week`
+is clamped to the plan, so read back what was saved. Before removing a term, say what it leaves
+behind: a category leaves its articles unfiled, a tag comes off every article, an author leaves no
+byline. `analytics` takes a closed list of providers (`ga4`, `meta_pixel`, `plausible`, `hotjar`)
+with their id — there is no field for arbitrary JavaScript, and those trackers load only on a
+verified custom domain, only after the visitor accepts cookies.
+
+**Change how the brand looks** → `get_appearance` reads the logo, favicon, palette, the two Google
+Fonts graphics are composed with and the visual brief; `set_appearance` changes them. A logo is
+given as a URL and is DOWNLOADED and re-hosted, so read back the address it answers with. Fonts go
+in pairs and are checked against Google Fonts before saving — a family it will not serve is refused
+rather than rendered as Inter. Setting `visual_style` locks it against the nightly rebuild.
+Colours stay with `set_colors`.
 
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion

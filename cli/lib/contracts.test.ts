@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import { pathFor, type ResourceEndpoint } from './contracts/index.ts';
 
-const ROOT = join(import.meta.dir, '..');
+const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const CANONICAL = join(ROOT, '..', 'packages', 'api-contracts', 'src');
 const MIRROR = join(ROOT, 'lib', 'contracts');
 
