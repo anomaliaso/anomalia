@@ -144,7 +144,7 @@ It never looks at pixels — judging an image or a video is a separate, explicit
 | `revoke_share` | (MCP only) |
 
 `create_share` freezes one view as a snapshot and returns a link a client opens with no account.
-Required: `slug`, `view` (`calendar`, `dashboard` or `monthly_report`). Optional: `month` (`YYYY-MM`, default
+Required: `slug`, `view` (`calendar`, `dashboard`, `monthly_report`, `strategy` or `workspace`). Optional: `month` (`YYYY-MM`, default
 the current month on the brand clock) and `expires_in_days` (1–365; without it the link lasts
 until revoked).
 

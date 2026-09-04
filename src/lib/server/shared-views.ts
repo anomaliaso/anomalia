@@ -34,6 +34,26 @@ export const DASHBOARD_SNAPSHOT_FIELDS = ['brand_name', 'timezone', 'month', 'mo
 export const REPORT_POST_FIELDS = ['platform', 'caption', 'thumbnail_url', 'url', 'published_at', ...METRIC_FIELDS] as const;
 export const REPORT_SNAPSHOT_FIELDS = ['brand_name', 'timezone', 'month', 'month_label', 'published', 'totals', 'platforms', 'top_posts'] as const;
 
+export const STRATEGY_GOAL_FIELDS = ['kpi', 'target'] as const;
+export const STRATEGY_PHASE_FIELDS = ['name', 'objective', 'goals'] as const;
+export const STRATEGY_WEEK_FIELDS = ['week_start', 'theme', 'focus', 'status'] as const;
+export const STRATEGY_PLATFORM_FIELDS = ['platform', 'share', 'role'] as const;
+export const STRATEGY_SNAPSHOT_FIELDS = [
+  'brand_name',
+  'timezone',
+  'month',
+  'month_label',
+  'statement',
+  'cadence',
+  'platforms',
+  'weeks',
+  'objective',
+  'horizon',
+  'phase'
+] as const;
+
+export const WORKSPACE_SNAPSHOT_FIELDS = ['brand_name', 'timezone', 'month', 'month_label', 'dashboard', 'calendar', 'report', 'strategy'] as const;
+
 export class SharedViewsNotMigrated extends Error {
   constructor() {
     super(`shared_views is missing — apply supabase/migrations/${MIGRATION_FILE} before using public client links`);
@@ -106,6 +126,10 @@ function shareStatus(row: { expires_at: string | null; revoked_at: string | null
   if (row.revoked_at) return 'revoked';
   if (row.expires_at && Date.parse(row.expires_at) <= now.getTime()) return 'expired';
   return 'live';
+}
+
+function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 function monthBounds(month: string): { start: string; end: string } {
@@ -213,17 +237,11 @@ async function buildMonthlyReport(
     .sort((a, b) => engagementScore(b) - engagementScore(a))
     .slice(0, TOP_POSTS);
 
-  const monthLabel = new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC'
-  });
-
   return {
     brand_name: brand.name,
     timezone: brand.timezone,
     month,
-    month_label: monthLabel,
+    month_label: monthLabel(month),
     published: rows.length,
     totals,
     platforms: [...byPlatform.values()].sort((a, b) => b.published - a.published),
@@ -238,6 +256,22 @@ async function buildMonthlyReport(
  * cosa esce, il report mensile sa cosa è uscito e quanto ha coperto. Una terza allowlist qui
  * sarebbe una terza cosa da tenere allineata a `posts`.
  */
+function composeDashboard(calendar: SharedViewSnapshot, report: SharedViewSnapshot): SharedViewSnapshot {
+  const posts = calendar.posts as { status: string }[];
+  const planned = posts.filter((post) => post.status !== 'published');
+
+  return {
+    brand_name: calendar.brand_name,
+    timezone: calendar.timezone,
+    month: calendar.month,
+    month_label: calendar.month_label,
+    published: report.published,
+    planned: planned.length,
+    reach: (report.totals as Record<string, number>).views,
+    upcoming: planned.slice(0, UPCOMING_SHOWN)
+  };
+}
+
 async function buildDashboard(
   supabase: SupabaseClient,
   brand: SharedViewBrand,
@@ -248,18 +282,136 @@ async function buildDashboard(
     buildMonthlyReport(supabase, brand, month)
   ]);
 
-  const posts = calendar.posts as { status: string }[];
-  const planned = posts.filter((post) => post.status !== 'published');
+  return composeDashboard(calendar, report);
+}
+
+type PlanPhase = {
+  name?: string;
+  objective?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  goals?: { kpi?: string; target?: string }[];
+};
+
+/**
+ * La fase che governa il mese CHIESTO, non quella di oggi.
+ *
+ *   fasi:  |── giugno..agosto ──|── settembre..novembre ──|
+ *   mese chiesto: 2026-09  ────────────────▲  questa
+ *
+ * Presa dall'orologio, uno snapshot congelato a settembre mostrerebbe la fase di dicembre a chi
+ * apre il link a dicembre — tranne che lo snapshot è congelato, quindi mostrerebbe una fase decisa
+ * dal momento della creazione e non dal mese di cui parla il link. Dal mese, invece, è la stessa
+ * risposta per chiunque, sempre, e si prova senza toccare il clock.
+ */
+function phaseForMonth(phases: PlanPhase[], month: string): PlanPhase | null {
+  const reference = Date.parse(`${month}-01T00:00:00Z`);
+
+  return (
+    phases.find((phase) => {
+      if (!phase.start_date) return false;
+      if (Date.parse(`${phase.start_date}T00:00:00Z`) > reference) return false;
+      return !phase.end_date || Date.parse(`${phase.end_date}T23:59:59Z`) >= reference;
+    }) ?? null
+  );
+}
+
+/**
+ * Il lavoro concordato: cosa facciamo, con che ritmo, su quali piattaforme e verso quale obiettivo.
+ *
+ * Solo i piani ATTIVI. Una proposta è una conversazione ancora aperta fra noi e chi decide, non
+ * qualcosa da consegnare a un cliente — e `revision_feedback` è letteralmente il testo di quella
+ * conversazione. Restano fuori anche `rationale`, `brief` e `products` di ogni settimana: sono
+ * gli appunti di chi pianifica, non il piano.
+ */
+async function buildStrategy(
+  supabase: SupabaseClient,
+  brand: SharedViewBrand,
+  month: string
+): Promise<SharedViewSnapshot> {
+  const [editorial, gtm] = await Promise.all([
+    supabase
+      .from('editorial_plans')
+      .select('strategy, cadence, platform_mix, weeks')
+      .eq('brand_id', brand.id)
+      .eq('status', 'active')
+      .maybeSingle(),
+    supabase
+      .from('gtm_plans')
+      .select('objective, horizon, phases')
+      .eq('brand_id', brand.id)
+      .eq('status', 'active')
+      .maybeSingle()
+  ]);
+
+  if (editorial.error) raise(editorial.error);
+  if (gtm.error) raise(gtm.error);
+
+  const plan = (editorial.data ?? {}) as Record<string, unknown>;
+  const gtmPlan = (gtm.data ?? {}) as Record<string, unknown>;
+
+  const weeks = (Array.isArray(plan.weeks) ? plan.weeks : []) as Record<string, unknown>[];
+  const mix = (Array.isArray(plan.platform_mix) ? plan.platform_mix : []) as Record<string, unknown>[];
+  const phase = phaseForMonth((Array.isArray(gtmPlan.phases) ? gtmPlan.phases : []) as PlanPhase[], month);
+
+  return {
+    brand_name: brand.name,
+    timezone: brand.timezone,
+    month,
+    month_label: monthLabel(month),
+    statement: (plan.strategy as string | null) ?? null,
+    cadence: (plan.cadence as string | null) ?? null,
+    platforms: mix.map((entry) => ({
+      platform: (entry.platform as string | null) ?? null,
+      share: (entry.share as string | null) ?? null,
+      role: (entry.role as string | null) ?? null
+    })),
+    weeks: weeks.map((week) => ({
+      week_start: (week.week_start as string | null) ?? null,
+      theme: (week.theme as string | null) ?? null,
+      focus: (week.focus as string | null) ?? null,
+      status: (week.status as string | null) ?? null
+    })),
+    objective: (gtmPlan.objective as string | null) ?? null,
+    horizon: (gtmPlan.horizon as string | null) ?? null,
+    phase: phase
+      ? {
+          name: phase.name ?? null,
+          objective: phase.objective ?? null,
+          goals: (phase.goals ?? []).map((goal) => ({ kpi: goal.kpi ?? null, target: goal.target ?? null }))
+        }
+      : null
+  };
+}
+
+/**
+ * Un link solo per tutto quello che il cliente può vedere, invece di quattro da tenere insieme.
+ *
+ * Non è una vista in più: è la somma esatta delle altre. Ogni sezione È lo snapshot che quella
+ * vista consegnerebbe da sola, quindi il workspace non può mostrare un campo che uno dei link
+ * singoli non mostrerebbe già — e un test lo verifica chiave per chiave. Le query si fanno una
+ * volta e la dashboard si compone da calendario e report, che sono già qui.
+ */
+async function buildWorkspace(
+  supabase: SupabaseClient,
+  brand: SharedViewBrand,
+  month: string
+): Promise<SharedViewSnapshot> {
+  const [calendar, report, strategy] = await Promise.all([
+    buildCalendar(supabase, brand, month),
+    buildMonthlyReport(supabase, brand, month),
+    buildStrategy(supabase, brand, month)
+  ]);
 
   return {
     brand_name: brand.name,
     timezone: calendar.timezone,
     month,
     month_label: calendar.month_label,
-    published: report.published,
-    planned: planned.length,
-    reach: (report.totals as Record<string, number>).views,
-    upcoming: planned.slice(0, UPCOMING_SHOWN)
+    dashboard: composeDashboard(calendar, report),
+    calendar,
+    report,
+    strategy
   };
 }
 
@@ -270,7 +422,9 @@ const SNAPSHOT_BUILDERS: Record<
 > = {
   calendar: buildCalendar,
   dashboard: buildDashboard,
-  monthly_report: buildMonthlyReport
+  monthly_report: buildMonthlyReport,
+  strategy: buildStrategy,
+  workspace: buildWorkspace
 };
 
 export async function buildSnapshot(
