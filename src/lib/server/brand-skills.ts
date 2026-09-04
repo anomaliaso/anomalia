@@ -80,9 +80,23 @@ const SKILLS_BY_AGENT: Record<TeamAgentId, string[]> = {
 	motion: [...WRITING_SKILLS, 'social', 'remotion-best-practices']
 };
 
+function skillNamesForAgent(agentId?: string | null): string[] {
+	return SKILLS_BY_AGENT[agentId as TeamAgentId] ?? WRITING_SKILLS;
+}
+
+/**
+ * Solo le skill di prodotto del mazzo, senza toccare il disco. Le usa chi serve il TESTO a un
+ * modello che sta fuori da qui: non ha l'harness, e le skill del repo (`.agents/skills`) sono
+ * scritte per gli agenti di codice, non per chi scrive per un brand.
+ */
+export function brandSkillsForAgent(agentId?: string | null): HarnessRepoSkill[] {
+	const names = skillNamesForAgent(agentId);
+	return brandSkills.filter((skill) => names.includes(skill.name));
+}
+
 export async function skillsForAgent(agentId?: string | null): Promise<HarnessRepoSkill[]> {
-	const names = SKILLS_BY_AGENT[agentId as TeamAgentId] ?? WRITING_SKILLS;
-	const brand = brandSkills.filter((skill) => names.includes(skill.name));
+	const names = skillNamesForAgent(agentId);
+	const brand = brandSkillsForAgent(agentId);
 	const repo = await loadHarnessSkills(names.filter((name) => !brandSkills.some((skill) => skill.name === name)));
 	return [...brand, ...repo];
 }
