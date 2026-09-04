@@ -7,17 +7,6 @@ const slug = z.string().min(1).describe('Brand URL slug');
 
 export function registerPlanTools(server: McpServer) {
   server.registerTool(
-    'get_plan',
-    {
-      title: 'Editorial plan',
-      description: 'View active editorial plan and any pending proposal.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getEditorialPlan(token, slug)),
-  );
-
-  server.registerTool(
     'propose_plan',
     {
       title: 'Propose editorial plan',
@@ -94,17 +83,6 @@ export function registerPlanTools(server: McpServer) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async ({ slug, week, brief }) => withAuth((token) => api.replanWeek(token, slug, week, brief)),
-  );
-
-  server.registerTool(
-    'get_weekly_plan',
-    {
-      title: 'Weekly plan',
-      description: 'View weekly plan seeds and related posts.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getWeeklyPlan(token, slug)),
   );
 
   server.registerTool(

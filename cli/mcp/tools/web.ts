@@ -7,17 +7,6 @@ const slug = z.string().min(1).describe('Brand URL slug');
 
 export function registerWebTools(server: McpServer) {
   server.registerTool(
-    'get_seo',
-    {
-      title: 'SEO overview',
-      description: 'Tech score, search performance, SEO grade and initiatives.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getSeo(token, slug)),
-  );
-
-  server.registerTool(
     'seo_action',
     {
       title: 'SEO action',
@@ -36,17 +25,6 @@ export function registerWebTools(server: McpServer) {
   );
 
   server.registerTool(
-    'get_geo',
-    {
-      title: 'GEO overview',
-      description: 'AI visibility: share of voice, citations, ready fixes.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getGeo(token, slug)),
-  );
-
-  server.registerTool(
     'geo_action',
     {
       title: 'GEO action',
@@ -61,17 +39,6 @@ export function registerWebTools(server: McpServer) {
   );
 
   server.registerTool(
-    'get_keywords',
-    {
-      title: 'Keywords',
-      description: 'Keyword strategy: volume, difficulty, opportunity, action.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getKeywords(token, slug)),
-  );
-
-  server.registerTool(
     'refresh_keywords',
     {
       title: 'Refresh keywords',
@@ -80,20 +47,6 @@ export function registerWebTools(server: McpServer) {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async ({ slug }) => withAuth((token) => api.refreshKeywords(token, slug)),
-  );
-
-  server.registerTool(
-    'list_articles',
-    {
-      title: 'List blog articles',
-      description: 'List web/blog articles. status: draft, scheduled, published, or all.',
-      inputSchema: z.object({
-        slug,
-        status: z.enum(['draft', 'scheduled', 'published', 'all']).optional(),
-      }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug, status }) => withAuth((token) => api.getWeb(token, slug, status)),
   );
 
   server.registerTool(
@@ -193,17 +146,6 @@ export function registerWebTools(server: McpServer) {
           ...(await api.webAction(token, slug, { action: 'delete', id: articleId })),
         };
       }),
-  );
-
-  server.registerTool(
-    'get_ads',
-    {
-      title: 'Ads overview',
-      description: 'Ad campaigns summary, candidates, and connected ad accounts.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getAds(token, slug)),
   );
 
   server.registerTool(

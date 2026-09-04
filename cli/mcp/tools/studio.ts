@@ -7,17 +7,6 @@ const slug = z.string().min(1).describe('Brand URL slug');
 
 export function registerStudioTools(server: McpServer) {
   server.registerTool(
-    'get_studio',
-    {
-      title: 'Studio',
-      description: 'Full studio dump: kit, people, documents, competitors, products, history summary.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getStudio(token, slug)),
-  );
-
-  server.registerTool(
     'update_brand_kit',
     {
       title: 'Update brand kit',
