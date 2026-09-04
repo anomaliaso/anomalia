@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { houseVoiceFor, loadCaptionKnowledge } from './caption-quality';
 import { brandLines, client } from './plan-pipeline';
-import { type AspectRatio, type QcVerdict, aspectRatioFor, brandVisualDirective, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderCarouselSlide, renderWithQC, uploadPostImage } from './images';
+import { type AspectRatio, type QcVerdict, aspectRatioFor, brandVisualDirective, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderBrandImage, renderCarouselSlide, uploadPostImage } from './images';
 import { imageModelFor, imageRefineModelFor } from '$lib/image-models';
 import { type AnyRec, type BrandProfile, CAROUSEL_MIN_SLIDES, CAROUSEL_PLATFORMS, type ContentPrefs, type ImagePart, type PreviewPost, carouselMaxSlides, guidanceFor, platformKey } from './seed-model';
 import { aiActCopyGuardrail } from '$lib/ai-act';
@@ -265,7 +265,8 @@ Return JSON.`;
     // on the first prompt (never ship half a series).
     if (slidePrompts.length >= 2) {
       const coverPrompt = slidePrompts[0];
-      const { dataUrl, qc } = await renderWithQC(ai, coverPrompt, renderOpts, critiqueOpts, highStakes);
+      const dataUrl = await renderBrandImage(ai, coverPrompt, renderOpts);
+  const qc = undefined;
       if (dataUrl) {
         const cover = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
         if (cover) {
@@ -291,7 +292,8 @@ Return JSON.`;
     }
     // Under-delivered slides → single image on whatever prompt we have.
     const only = slidePrompts[0] || `Photorealistic, scroll-stopping social photo: ${opts.brief}`;
-    const { dataUrl, qc } = await renderWithQC(ai, only, renderOpts, critiqueOpts, highStakes);
+    const dataUrl = await renderBrandImage(ai, only, renderOpts);
+  const qc = undefined;
     const imageUrl = dataUrl ? await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio) : undefined;
     await stampCompositeLibrary(!!imageUrl);
     return withKnowledge({ caption, imagePrompt: only, imageUrl, qc });
@@ -330,15 +332,8 @@ Return JSON.`;
     ? (await import('$lib/server/ugc')).buildUgcFramePrompt({ hook: opts.hook })
     : imagePrompt;
 
-  const { dataUrl, qc } = await renderWithQC(
-    ai,
-    coverPromptFinal,
-    renderOpts,
-    critiqueOpts,
-    // Same policy as the batch renderer: user-uploaded subject references make fidelity the
-    // whole point → best-of-N candidates; a pure text brief renders once.
-    highStakes
-  );
+  const dataUrl = await renderBrandImage(ai, coverPromptFinal, renderOpts);
+  const qc = undefined;
   let imageUrl: string | undefined;
   if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
   await stampCompositeLibrary(!!imageUrl);
@@ -348,7 +343,7 @@ Return JSON.`;
 // ── On-demand carousel (chat tool) ──────────────────────────────────────────
 // One-shot carousel from a brief: LLM writes the caption + N coherent slide prompts, then we
 // render slide 1 (cover) at full quality and slides 2..N anchored to it — the exact rendering path
-// the batch generator uses (renderWithQC + renderCarouselSlide), just for a single post. Returns
+// the batch generator uses (renderPostImage + renderCarouselSlide), just for a single post. Returns
 // the ordered slide URLs; a series that ends with < 2 usable slides returns imageUrls:[] so the
 // caller can fall back to a single image.
 const CAROUSEL_SINGLE_SCHEMA = {
@@ -428,7 +423,8 @@ Return JSON.`;
   };
 
   // Slide 1 (cover) at full quality, then slides 2..N in parallel anchored to it.
-  const { dataUrl, qc } = await renderWithQC(ai, slidePrompts[0], renderOpts, { visualStyle: renderOpts.visualStyle }, false);
+  const dataUrl = await renderBrandImage(ai, slidePrompts[0], renderOpts);
+  const qc = undefined;
   if (!dataUrl) return { caption, imagePrompts: slidePrompts, imageUrls: [], qc };
   const cover = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
   if (!cover) return { caption, imagePrompts: slidePrompts, imageUrls: [], qc };
@@ -568,13 +564,8 @@ export async function generateStandaloneImage(opts: {
     aspectRatio
   };
 
-  const { dataUrl, qc } = await renderWithQC(
-    ai,
-    editBrief,
-    renderOpts,
-    { referenceImages: renderOpts.referenceImages, visualStyle: renderOpts.visualStyle },
-    !!baseImage || !!extraParts.length
-  );
+  const dataUrl = await renderBrandImage(ai, editBrief, renderOpts);
+  const qc = undefined;
 
   let imageUrl: string | undefined;
   if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, aspectRatio);
