@@ -58,8 +58,6 @@ describe('PUT /api/v1/brands/:slug/people/:id', () => {
     ]);
   });
 
-  // Il consenso lo attesta una persona, non un agente: fino ad allora resolvePeopleVisualRefs
-  // nega quel volto a ogni generatore. Una modifica non è la scorciatoia per concederlo.
   it('non lascia che una modifica attesti il consenso o cambi il tipo di persona', async () => {
     for (const forbidden of [
       { consent: true },

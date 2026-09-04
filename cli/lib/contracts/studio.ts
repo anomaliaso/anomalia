@@ -96,9 +96,6 @@ export const DELETE_PRODUCT = {
   destructive: true
 } satisfies BrandEndpoint;
 
-// Solo i campi descrittivi. `kind`, `images` e le colonne del consenso restano fuori: una modifica
-// non è il posto dove una persona reale diventa un'AI, né dove un volto ottiene il permesso di
-// essere usato — quello lo attesta l'utente, e passa da POST /studio/people.
 const UpdatePersonInputSchema = z
   .object({
     id,

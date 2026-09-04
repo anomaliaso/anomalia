@@ -1,10 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// L'unico posto che decide cosa vuol dire "questa riga non è tua". Una update o una delete
-// filtrata per brand tocca zero righe sia quando l'id non esiste sia quando appartiene a un altro
-// brand: la risposta deve essere la stessa nei due casi, o il 404 diventa un oracolo che dice a
-// chi chiede se quell'id esiste da qualche altra parte.
-
 export const ROW_NOT_FOUND = 'not_found';
 export const EMPTY_PATCH = 'no_fields';
 

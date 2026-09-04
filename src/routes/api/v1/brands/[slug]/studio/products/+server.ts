@@ -3,9 +3,6 @@ import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 import { CREATE_PRODUCT, statusForFailure } from '@anomalia/api-contracts';
 
-// POST /studio/products aggiunge UNA riga al catalogo. La POST su /products è un'altra cosa: quella
-// risincronizza il catalogo intero da Shopify o WooCommerce e prima cancella tutto — un prodotto
-// scritto a mano non sopravviverebbe.
 export const POST: RequestHandler = async ({ request, params }) => {
   const { supabase, error, apiKey } = await authenticate(request);
   if (error) return error;
