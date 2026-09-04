@@ -368,19 +368,6 @@ export const CHAT_FACE_BY_PHASE: Record<ChatFacePhase, AgentAvatarFace> = {
 };
 
 /**
- * A riposo la faccia è quella DELL'AGENTE, non una neutra uguale per tutti: con `idle` fisso a
- * 'wide', Motion e Analyst si presentavano con la faccia di Anomalia finché non partiva un turno.
- * Le altre fasi restano condivise: cambia il tono del turno, non chi lo sta facendo.
- */
-export function chatFaceForPhase(
-  phase: ChatFacePhase,
-  resting?: AgentAvatarFace | string | null
-): AgentAvatarFace {
-  if (phase === 'idle' && resting) return normalizeAvatarFace(resting, CHAT_FACE_BY_PHASE.idle);
-  return CHAT_FACE_BY_PHASE[phase] ?? CHAT_FACE_BY_PHASE.idle;
-}
-
-/**
  * Loop suonato accanto a "thinking"/"generating" mentre un turno gira. Movimenti piccoli — due
  * battiti di ciglia, uno sguardo di lato — così legge come qualcuno che aspetta con te, non che
  * parla. La faccia è lo spinner.

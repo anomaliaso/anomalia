@@ -343,16 +343,6 @@ export async function listArticlesByCategory(brandId: string, categorySlug: stri
 
 // --- Tags ---
 
-export async function listTags(brandId: string): Promise<BlogTag[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('blog_tags')
-    .select('id, name, slug')
-    .eq('brand_id', brandId)
-    .order('name', { ascending: true });
-  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, slug: r.slug }));
-}
-
 export async function listArticlesByTag(brandId: string, tagSlug: string, scope?: LocaleScope): Promise<{ tag: BlogTag | null; articles: BlogArticle[] }> {
   const admin = createAdminClient();
   const { data: tag } = await admin
@@ -385,18 +375,6 @@ export async function listArticlesByTag(brandId: string, tagSlug: string, scope?
 }
 
 // --- Authors ---
-
-export async function listAuthors(brandId: string): Promise<BlogAuthor[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('blog_authors')
-    .select('id, name, slug, bio, avatar_url, role')
-    .eq('brand_id', brandId)
-    .order('name', { ascending: true });
-  return (data ?? []).map((r: any) => ({
-    id: r.id, name: r.name, slug: r.slug, bio: r.bio ?? null, avatarUrl: r.avatar_url ?? null, role: r.role ?? 'writer'
-  }));
-}
 
 export async function getAuthor(brandId: string, authorSlug: string): Promise<BlogAuthor | null> {
   const admin = createAdminClient();

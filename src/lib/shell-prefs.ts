@@ -1,11 +1,8 @@
-/** Persistent shell layout prefs (sidebar + chat/workbench split). Browser localStorage. */
+/** Persistent shell layout prefs (sidebar). Browser localStorage. */
 
 export const SHELL_PREF_KEYS = {
   sidebarOpen: 'anomalia.sidebarOpen',
-  sidebarPanePx: 'anomalia.sidebarPanePx',
-  chatPanePx: 'anomalia.chatPanePx',
-  workbenchCollapsed: 'anomalia.workbenchCollapsed',
-  chatCollapsed: 'anomalia.chatCollapsed'
+  sidebarPanePx: 'anomalia.sidebarPanePx'
 } as const;
 
 /** Cookie kept in sync so SSR / first paint can match the sidebar open state. */
@@ -16,8 +13,6 @@ export const SIDEBAR_OPEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 export const LAST_BRAND_COOKIE = 'anomalia_last_brand';
 export const LAST_BRAND_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
-const CHAT_W_DEFAULT = 340;
-const CHAT_W_MIN = 280;
 const SIDEBAR_W_DEFAULT = 280;
 const SIDEBAR_W_MIN = 220;
 const SIDEBAR_W_MAX = 420;
@@ -84,37 +79,7 @@ export function writeSidebarPanePx(px: number) {
   writeRaw(SHELL_PREF_KEYS.sidebarPanePx, String(Math.round(px)));
 }
 
-export function readChatPanePx(): number {
-  const n = Number(readRaw(SHELL_PREF_KEYS.chatPanePx));
-  if (!Number.isFinite(n) || n < CHAT_W_MIN) return CHAT_W_DEFAULT;
-  return Math.round(n);
-}
-
-export function writeChatPanePx(px: number) {
-  writeRaw(SHELL_PREF_KEYS.chatPanePx, String(Math.round(px)));
-}
-
-export function readWorkbenchCollapsed(): boolean {
-  const v = readRaw(SHELL_PREF_KEYS.workbenchCollapsed);
-  return v === '1' || v === 'true';
-}
-
-export function writeWorkbenchCollapsed(collapsed: boolean) {
-  writeRaw(SHELL_PREF_KEYS.workbenchCollapsed, collapsed ? 'true' : 'false');
-}
-
-export function readChatCollapsed(): boolean {
-  const v = readRaw(SHELL_PREF_KEYS.chatCollapsed);
-  return v === '1' || v === 'true';
-}
-
-export function writeChatCollapsed(collapsed: boolean) {
-  writeRaw(SHELL_PREF_KEYS.chatCollapsed, collapsed ? 'true' : 'false');
-}
-
 export const SHELL_LAYOUT = {
-  CHAT_W_DEFAULT,
-  CHAT_W_MIN,
   SIDEBAR_W_DEFAULT,
   SIDEBAR_W_MIN,
   SIDEBAR_W_MAX
