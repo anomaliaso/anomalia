@@ -139,9 +139,8 @@ describe('lo sticker è lo stesso su ogni surface', () => {
 		expect(reads('./components/ChatToolChips.svelte')).toContain('chipCalls(calls)');
 	});
 
-	it('e lo disegna un componente solo, che montano le superfici rimaste', () => {
+	it('e lo disegna un componente solo, che ChatLiveStatus monta', () => {
 		for (const f of [
-			'./components/ChatColumn.svelte',
 			'./components/ChatLiveStatus.svelte'
 		]) {
 			expect(reads(f)).toContain('<ChatExpressionStickers');

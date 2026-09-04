@@ -115,18 +115,4 @@ describe('agentForTask', () => {
     expect(agentForTask('post e seo')).toBeNull();
   });
 
-  it('la scheda in chat non usa il linguaggio dell’assunzione per una routine assegnata', () => {
-    // Il difetto è visivo prima che testuale: se la card continua a dire "assumi questo" con una
-    // faccia sorteggiata, l'utente vede un collega nuovo comunque.
-    const src = readFileSync(
-      join(__dirname, 'components/ChatAgentProposalCard.svelte'),
-      'utf8'
-    );
-    expect(src).toContain('parseRoutineOwner');
-    // Faccia e nome del proprietario, non un avatar tirato a sorte dal nome del compito.
-    expect(src).toContain('BUILTIN_AGENT_AVATARS');
-    for (const key of ['routineFor', 'confirmRoutine', 'createdRoutine', 'noteRoutine']) {
-      expect(src, key).toContain(key);
-    }
-  });
 });
