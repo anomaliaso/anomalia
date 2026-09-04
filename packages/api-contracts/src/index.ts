@@ -3,7 +3,15 @@ import { ADS_ACTION, ADS_REMIX } from './ads';
 import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
-import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
+import {
+  DELETE_ARTICLE,
+  GENERATE_ARTICLE,
+  GET_ARTICLE,
+  OPTIMIZE_ARTICLE,
+  PUBLISH_ARTICLE,
+  UNPUBLISH_ARTICLE,
+  UPDATE_ARTICLE
+} from './articles';
 import { CHECK_CONTENT } from './content';
 import { GET_CREATION_KIT } from './creation-kit';
 import {
@@ -155,6 +163,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CREATE_POST,
   CREATE_PRODUCT,
   CREATE_SHARE,
+  DELETE_ARTICLE,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,
   DELETE_PERSON,
@@ -162,6 +171,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   DIAGNOSE_BRAND,
   DIAGNOSE_RADAR,
   DISCARD_PLAN,
+  GENERATE_ARTICLE,
   GENERATE_MEDIA,
   GEO_ACTION,
   GET_ADS,
@@ -205,8 +215,10 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_SOCIAL_ACCOUNTS,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
+  OPTIMIZE_ARTICLE,
   PLAN_WEEK,
   PROPOSE_PLAN,
+  PUBLISH_ARTICLE,
   RECORD_MEMORY_USED,
   REFRESH_KEYWORDS,
   REMOVE_BLOG_TERM,
@@ -233,6 +245,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SET_RADAR_PLATFORM,
   SOCIAL_CONNECT_LINK,
   SYNC_HISTORY,
+  UNPUBLISH_ARTICLE,
   UPDATE_ARTICLE,
   UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
@@ -283,6 +296,13 @@ export {
   RESCHEDULE_POST,
   UPDATE_ARTICLE,
 };
+export {
+  DELETE_ARTICLE,
+  GENERATE_ARTICLE,
+  OPTIMIZE_ARTICLE,
+  PUBLISH_ARTICLE,
+  UNPUBLISH_ARTICLE
+} from './articles';
 export type { Article, GetArticleInput, UpdateArticleInput, UpdateArticleResult } from './articles';
 export {
   AUDIT_CITATIONS_DEFAULT,

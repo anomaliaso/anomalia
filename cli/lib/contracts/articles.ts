@@ -138,3 +138,76 @@ export const UPDATE_ARTICLE = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+// Ogni azione sugli articoli ha la sua rotta: il corpo dice con che cosa farla, mai quale fare.
+const Ok = z.object({ ok: z.literal(true) });
+const NoInput = z.object({}).strict();
+
+export const GENERATE_ARTICLE = {
+  tool: 'generate_article',
+  title: 'Generate article',
+  description: 'Generate a blog article draft from a topic.',
+  method: 'POST',
+  pathUnderBrand: '/web/generate',
+  input: z.object({ topic: z.string().min(1) }).strict(),
+  output: z.object({ ok: z.literal(true), articleId: z.string() }),
+  failures: [
+    { error: 'Missing topic', status: 400 },
+    { error: 'Could not generate the article', status: 502 },
+    { error: 'credits_exhausted', status: 402 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const OPTIMIZE_ARTICLE = {
+  tool: 'optimize_article',
+  title: 'Optimize article',
+  description:
+    'Rewrite an article for SEO (meta title/description included). id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/web/article/:id/optimize',
+  resource: 'article',
+  input: NoInput,
+  output: Ok,
+  failures: [{ error: 'credits_exhausted', status: 402 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const PUBLISH_ARTICLE = {
+  tool: 'publish_article',
+  title: 'Publish article',
+  description: 'Publish a blog article. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/web/article/:id/publish',
+  resource: 'article',
+  input: NoInput,
+  output: z.object({ ok: z.literal(true), status: z.literal('published') }),
+  failures: [],
+  destructive: true
+} satisfies BrandEndpoint;
+
+export const UNPUBLISH_ARTICLE = {
+  tool: 'unpublish_article',
+  title: 'Unpublish article',
+  description: 'Unpublish a blog article. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/web/article/:id/unpublish',
+  resource: 'article',
+  input: NoInput,
+  output: z.object({ ok: z.literal(true), status: z.literal('draft') }),
+  failures: [],
+  destructive: true
+} satisfies BrandEndpoint;
+
+export const DELETE_ARTICLE = {
+  tool: 'delete_article',
+  title: 'Delete article',
+  description: 'Delete a blog article by UUID.',
+  method: 'DELETE',
+  pathUnderBrand: '/web/article/:id',
+  resource: 'article',
+  input: z.object({ id: z.uuid() }).strict(),
+  output: Ok,
+  failures: [],
+  destructive: true
+} satisfies BrandEndpoint;

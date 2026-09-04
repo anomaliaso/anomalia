@@ -579,46 +579,73 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/web?status=draft" \
 
 ---
 
-## `POST /api/v1/brands/:slug/web`
+## `POST /api/v1/brands/:slug/web/generate`
 
-Azioni sugli articoli: generazione, ottimizzazione SEO, pubblicazione, depubblicazione, eliminazione. `generate`/`optimize` **consumano crediti**; le azioni di stato richiedono solo write access.
+Scrive una bozza d'articolo a partire da un argomento. **Consuma crediti.**
 
 **Body**
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `action` | string | Sì | `generate` \| `optimize` \| `publish` \| `unpublish` \| `delete` |
-| `topic` | string | Sì per `generate` | Argomento dell'articolo |
-| `id` | string | Sì per `optimize`/`publish`/`unpublish`/`delete` | UUID articolo |
+| `topic` | string | Sì | Argomento dell'articolo |
 
-**Response** `200` — per azione:
-
-```json
-{ "ok": true, "articleId": "99999999-9999-9999-9999-999999999999" }  // generate
-{ "ok": true }                                                        // optimize, delete
-{ "ok": true, "status": "published" }                                 // publish
-{ "ok": true, "status": "draft" }                                     // unpublish
-```
-
-Note: `publish` attiva anche l'indicizzazione istantanea (IndexNow + Exa), fire-and-forget.
-
-**Errori specifici**
+**Response** `200`: `{ "ok": true, "articleId": "99999999-9999-9999-9999-999999999999" }`
 
 | Status | Body |
 |---|---|
-| `400` | `{"error":"Missing id"}` |
 | `400` | `{"error":"Missing topic"}` |
-| `400` | `{"error":"Unknown action: <action>"}` |
-| `500` | `{"error":"<messaggio errore DB>"}` |
 | `502` | `{"error":"Could not generate the article"}` |
+
+---
+
+## `POST /api/v1/brands/:slug/web/article/:id/optimize`
+
+Riscrive l'articolo per la SEO, meta title e description compresi. **Consuma crediti.**
+
+**Response** `200`: `{ "ok": true }`
+
+---
+
+## `POST /api/v1/brands/:slug/web/article/:id/publish`
+
+Manda l'articolo in pubblicazione. Non costa crediti: basta il write access. Attiva anche
+l'indicizzazione istantanea (IndexNow + Exa), fire-and-forget.
+
+**Response** `200`: `{ "ok": true, "status": "published" }`
+
+---
+
+## `POST /api/v1/brands/:slug/web/article/:id/unpublish`
+
+Riporta l'articolo a bozza. Non costa crediti: basta il write access.
+
+**Response** `200`: `{ "ok": true, "status": "draft" }`
+
+---
+
+## `DELETE /api/v1/brands/:slug/web/article/:id`
+
+Elimina l'articolo. Non costa crediti: basta il write access. `:id` è l'UUID pieno — su una
+cancellazione un id accorciato e ambiguo colpirebbe la riga sbagliata, e non si torna indietro.
+
+**Response** `200`: `{ "ok": true }`
 
 **Esempio**:
 
 ```bash
-curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/web" \
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/web/generate" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"action":"generate","topic":"come scegliere il CRM giusto"}'
+  -d '{"topic":"come scegliere il CRM giusto"}'
 ```
+
+---
+
+## `POST /api/v1/brands/:slug/web` (compatibilità)
+
+Questa rotta faceva cinque cose a seconda di `action`. Ora ognuna ha la sua, sopra: **usa quelle**.
+Questa resta e continua a funzionare — non fa altro che inoltrare all'azione corrispondente,
+portando l'`id` dal corpo al percorso. `{"error":"Missing id"}` e `{"error":"Unknown action: …"}`
+restano i suoi 400.
 
 ---
 

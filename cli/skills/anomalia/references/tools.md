@@ -1,8 +1,9 @@
 # Anomalia MCP tools ↔ CLI
 
 All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous prefixes, except
-on a delete: `delete_product`, `delete_person`, `delete_document` and `delete_competitor` take
-the full UUID, because an ambiguous prefix would remove the wrong row and nothing brings it back.
+on a delete: `delete_product`, `delete_person`, `delete_document`, `delete_competitor` and
+`delete_article` take the full UUID, because an ambiguous prefix would remove the wrong row and
+nothing brings it back.
 
 ## Auth
 
