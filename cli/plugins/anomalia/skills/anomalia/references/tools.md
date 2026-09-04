@@ -225,6 +225,9 @@ one with the most clicks in the last seven days.
 | `list_audit_citations` | (MCP only) |
 | `list_web_fixes` | (MCP only) |
 | `get_keywords` / `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
+| `get_gsc` | (MCP only) |
+| `get_ranks` | (MCP only) |
+| `get_backlinks` | (MCP only) |
 | `list_articles` / `generate_article` / `optimize_article` | `anomalia web <slug> …` |
 | `get_article` / `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
@@ -233,6 +236,17 @@ one with the most clicks in the last seven days.
 `get_seo` and `get_geo` answer on the **latest** audit. The four web tools let you trace a claim
 back to what was actually measured, without paying for a new audit. All four are reads: they call
 no model, spend no credits and write nothing.
+
+`get_gsc`, `get_ranks` and `get_backlinks` are the measured side of the same brand. `get_gsc`
+reads Google Search Console over the last 28 days — clicks, impressions, top queries and top
+pages — and says whether the property is connected at all: `connected: false` means there is
+nothing to read yet, not that the brand ranks nowhere. `get_ranks` returns the tracked keywords
+with `position`, `prevPosition` and `delta` (positive = moved up), the ranking URL, and
+`hasAiOverview` for the ones where Google answered on its own. `get_backlinks` returns links
+given and received plus the open give/receive opportunities, and `unlocked` tells you whether
+the network is usable — it needs Starter or above **and** the brand's opt-in, so `planAllowed`
+and `enabled` say which of the two is missing. All three are reads: no model, no credits, no
+writes.
 
 `list_web_audits` is the index of every audit, newest first — `id`, `at`, `tech_score`,
 `share_of_voice`, `citability_score`, `binding_constraint`, and how many citations and findings

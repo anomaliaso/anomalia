@@ -159,6 +159,19 @@ describe('le letture migrate sul registry', () => {
     }
   });
 
+  test('ogni endpoint del registry esiste in tools/list come lo dichiara', async () => {
+    const all = await tools();
+
+    for (const endpoint of BRAND_ENDPOINTS) {
+      const tool = find(all, endpoint.tool);
+
+      expect(tool.title, endpoint.tool).toBe(endpoint.title);
+      expect(tool.description, endpoint.tool).toBe(endpoint.description);
+      expect(tool.annotations?.readOnlyHint, endpoint.tool).toBe(endpoint.method === 'GET');
+      expect(tool.annotations?.destructiveHint, endpoint.tool).toBe(endpoint.destructive);
+    }
+  });
+
   test('nessuna di esse è dichiarata due volte', async () => {
     const names = (await tools()).map((t) => t.name);
 
