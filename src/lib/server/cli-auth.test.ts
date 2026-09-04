@@ -136,3 +136,54 @@ describe('authenticate — prodotto chiuso', () => {
     expect(res.user?.id).toBe('user-1');
   });
 });
+
+/**
+ * Lo scope di scrittura di una chiave è imposto UNA volta, in `resolveCaller`, sul metodo: ogni
+ * rotta che muta è un non-GET, quindi il metodo è l'intero controllo. È la ragione per cui una
+ * rotta nuova non deve ricordarsi di nulla — ma è anche il motivo per cui, se quella riga sparisse,
+ * sparirebbe per tutte insieme. Questo test è la prova che c'è.
+ */
+describe('una chiave di sola lettura', () => {
+  const RAW_KEY = 'anomalia_live_sololetturatest';
+
+  async function callWithKey(method: string) {
+    const rows: Record<string, unknown>[] = [];
+    vi.resetModules();
+    vi.doMock('$env/dynamic/private', () => ({ env: { SUPABASE_SERVICE_ROLE_KEY: 'service-role' } }));
+    vi.doMock('@supabase/supabase-js', () => ({
+      createClient: () => createTestSupabase({ api_keys: rows }).client
+    }));
+
+    const { authenticate, hashApiKey } = await import('./cli-auth');
+    rows.push({
+      id: 'key-1',
+      user_id: 'user-1',
+      name: 'read only',
+      key_hash: await hashApiKey(RAW_KEY),
+      permissions: { brand_ids: '*', scopes: ['read'] }
+    });
+
+    return authenticate(
+      new Request('https://x/api/v1/brands/demo/settings/models', {
+        method,
+        headers: { authorization: `Bearer ${RAW_KEY}` }
+      })
+    );
+  }
+
+  it('legge senza ostacoli', async () => {
+    const res = await callWithKey('GET');
+
+    expect(res.error).toBeUndefined();
+    expect(res.apiKey?.id).toBe('key-1');
+  });
+
+  it('non scrive: ogni metodo che muta è 403 prima ancora di entrare in una rotta', async () => {
+    for (const method of ['POST', 'PUT', 'DELETE']) {
+      const res = await callWithKey(method);
+
+      expect(res.error?.status, method).toBe(403);
+      expect(await res.error!.json(), method).toEqual({ error: 'API key is read-only' });
+    }
+  });
+});
