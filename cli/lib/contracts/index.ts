@@ -46,6 +46,12 @@ import {
   LIST_PRODUCTS
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
+import {
+  ADD_BLOG_TERM,
+  GET_BLOG_SETTINGS,
+  REMOVE_BLOG_TERM,
+  SET_BLOG_SETTINGS
+} from './blog-settings';
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
@@ -118,6 +124,7 @@ export type ResourceEndpoint = EndpointShape & {
 export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
+  ADD_BLOG_TERM,
   ADD_COMPETITOR,
   ADD_RADAR_SOURCE,
   ADS_REMIX,
@@ -136,10 +143,11 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_ADS,
   GET_ANALYTICS,
   GET_ARTICLE,
-  GET_AUTOMATIONS,
   GET_AUDIT_FINDINGS,
+  GET_AUTOMATIONS,
   GET_BACKLINKS,
   GET_BIO,
+  GET_BLOG_SETTINGS,
   GET_BRAND_SETTINGS,
   GET_CALENDAR,
   GET_CREATION_KIT,
@@ -171,6 +179,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_WEB_FIXES,
   PROPOSE_PLAN,
   REFRESH_KEYWORDS,
+  REMOVE_BLOG_TERM,
   REMOVE_RADAR_SOURCE,
   RENDER_POST,
   RESCHEDULE_POST,
@@ -182,9 +191,10 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SEO_ACTION,
   SET_AUTOMATION,
   SET_BIO,
-  SET_RADAR_PLATFORM,
+  SET_BLOG_SETTINGS,
   SET_BRAND_SETTINGS,
   SET_MEDIA_MODEL,
+  SET_RADAR_PLATFORM,
   SOCIAL_CONNECT_LINK,
   SYNC_HISTORY,
   UPDATE_ARTICLE,
@@ -318,6 +328,16 @@ export {
 } from './automations';
 export type { AutomationJob } from './automations';
 export { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
+export {
+  ADD_BLOG_TERM,
+  BLOG_FONTS,
+  BLOG_LAYOUTS,
+  BLOG_TERM_KINDS,
+  GET_BLOG_SETTINGS,
+  REMOVE_BLOG_TERM,
+  SET_BLOG_SETTINGS
+} from './blog-settings';
+export type { BlogTermKind } from './blog-settings';
 export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
 export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
