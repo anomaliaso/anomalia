@@ -129,7 +129,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   UPDATE_COMPETITOR,
   UPDATE_PERSON,
   UPDATE_PRODUCT,
-  export const BRAND_ENDPOINTS: readonly BrandEndpoint[,
 ];
 
 export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;

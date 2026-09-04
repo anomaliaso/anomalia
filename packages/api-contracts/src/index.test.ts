@@ -246,6 +246,8 @@ describe('il registry degli endpoint di brand', () => {
   it('leggere e scrivere un articolo passano dallo stesso indirizzo', () => {
     expect(byTool('update_article').pathUnderBrand).toBe(byTool('get_article').pathUnderBrand);
     expect(byTool('update_article').method).toBe('POST');
+  });
+
   it('i due link di fatturazione portano a Stripe e non sono distruttivi', () => {
     for (const tool of ['create_billing_portal_link', 'create_checkout_link']) {
       const e = byTool(tool);
