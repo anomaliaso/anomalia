@@ -853,3 +853,40 @@ nomina e il database non ha. Va eseguito **dopo ogni migration scritta e prima d
 tocca il database** — non solo quando qualcosa è già rotto. Un `select` di colonne che potrebbero
 non esistere non è mai «non può fallire»: o si legge `error`, o il difetto arriva travestito da
 colpa di chi chiama.
+
+## Una rotta SvelteKit esiste perché esiste un file di pagina
+
+**Segnale.** Una pagina risponde `Not found` per tutti, e lo stack punta a `resolve()` dentro
+`@sveltejs/kit`, non a codice tuo:
+
+```
+Error: Not found: /app/anomalia
+    at resolve (node_modules/@sveltejs/kit/src/runtime/server/respond.js:711:13)
+```
+
+Nel `git log` recente c'è una PR che parlava d'altro — un cookie, un redirect, un ordine di
+esecuzione — e che, fra le altre cose, ha **cancellato** un `+page.server.ts`.
+
+**Cosa succede.** SvelteKit costruisce il manifest dai file. Senza né `+page.server.ts` né
+`+page.svelte` la rotta non esiste, e il 404 nasce prima che parta un solo `load` — layout
+compreso. Un rimando spostato «in cima al layout» non viene mai raggiunto: il guscio non entra
+nemmeno in scena. È capitato a `/app/[brand]`: la home del brand è rimasta irraggiungibile per
+tutti mentre i quattro test del rimando restavano verdi, perché provavano il `load` del layout e
+il 404 avviene prima di lui.
+
+**La mossa.** Svuotare una pagina del suo contenuto e lasciarci solo un `redirect` è legittimo;
+**cancellare il file no**, perché toglie la rotta. Quando una pagina diventa un rimando, il file
+resta e la ragione per cui resta si scrive dentro — è l'unica cosa che il prossimo lettore vede
+prima di ricancellarlo. E la proprietà si fissa in un test che legge la cartella dal disco
+(`readdirSync`, come gli altri 71 di questo repo), non nel `load`: quel test è l'unico che può
+fallire per la ragione giusta. Munirlo del negativo, o passa a vuoto — qui una cartella di solo
+endpoint (`credits/`, con un `+server.ts` e basta) che **non** deve risultare una pagina.
+
+**Il corollario, se due rimandi sembrano uno di troppo.** Le due strade del server non si
+comportano allo stesso modo, e la differenza decide chi vince: per una richiesta di pagina
+(`server/page/index.js`) i `load` partono in parallelo ma i risultati si consumano **in ordine di
+nodo**, quindi vince il layout; per la `__data.json` di una navigazione dal client
+(`server/data/index.js`) è un `Promise.all` che rilancia il `Redirect` appena arriva, quindi vince
+**il primo che rigetta**. Un rimando piazzato nella pagina chiude la risposta mentre il layout è
+ancora dentro le sue query, e il `cookies.set` del layout trova la risposta già generata. Prima di
+dichiarare ridondante una guardia, leggi quale delle due strade la esercita.
