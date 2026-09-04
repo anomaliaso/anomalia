@@ -1,0 +1,47 @@
+diff --git a/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js b/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js
+index 4f2e1d5..8f81d10 100644
+--- a/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js
++++ b/node_modules/@earendil-works/pi-ai/dist/providers/openai-completions.js
+@@ -305,9 +305,12 @@ export const streamOpenAICompletions = (model, context, options) => {
+             if (output.stopReason === "error") {
+                 throw new Error(output.errorMessage || "Provider returned an error stop reason");
+             }
+-            if (!hasFinishReason) {
++            if (!hasFinishReason && output.content.length === 0 && compat.supportsFinishReason !== false) {
+                 throw new Error("Stream ended without finish_reason");
+             }
++            if (!hasFinishReason) {
++                output.stopReason = output.content.some((block) => block.type === "toolCall") ? "toolUse" : "stop";
++            }
+             stream.push({ type: "done", reason: output.stopReason, message: output });
+             stream.end();
+         }
+@@ -888,6 +891,7 @@ function detectCompat(model) {
+         supportsDeveloperRole: !isNonStandard,
+         supportsReasoningEffort: !isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway,
+         supportsUsageInStreaming: true,
++        supportsFinishReason: !(provider === "openrouter" || baseUrl.includes("openrouter.ai")),
+         maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
+         requiresToolResultName: false,
+         requiresAssistantAfterToolResult: false,
+@@ -924,6 +928,7 @@ function getCompat(model) {
+         supportsDeveloperRole: model.compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
+         supportsReasoningEffort: model.compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
+         supportsUsageInStreaming: model.compat.supportsUsageInStreaming ?? detected.supportsUsageInStreaming,
++        supportsFinishReason: model.compat.supportsFinishReason ?? detected.supportsFinishReason,
+         maxTokensField: model.compat.maxTokensField ?? detected.maxTokensField,
+         requiresToolResultName: model.compat.requiresToolResultName ?? detected.requiresToolResultName,
+         requiresAssistantAfterToolResult: model.compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
+diff --git a/node_modules/@earendil-works/pi-ai/dist/types.d.ts b/node_modules/@earendil-works/pi-ai/dist/types.d.ts
+index 4527475..7cd1c1f 100644
+--- a/node_modules/@earendil-works/pi-ai/dist/types.d.ts
++++ b/node_modules/@earendil-works/pi-ai/dist/types.d.ts
+@@ -313,6 +313,8 @@ export interface OpenAICompletionsCompat {
+     supportsReasoningEffort?: boolean;
+     /** Whether the provider supports `stream_options: { include_usage: true }` for token usage in streaming responses. Default: true. */
+     supportsUsageInStreaming?: boolean;
++    /** Whether streamed responses include `finish_reason`. Default: true. */
++    supportsFinishReason?: boolean;
+     /** Which field to use for max tokens. Default: auto-detected from URL. */
+     maxTokensField?: "max_completion_tokens" | "max_tokens";
+     /** Whether tool results require the `name` field. Default: auto-detected from URL. */
