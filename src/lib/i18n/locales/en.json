@@ -6108,7 +6108,16 @@
       "workspace": "Workspace",
       "lightMode": "Light mode",
       "darkMode": "Dark mode",
-      "language": "Language"
+      "language": "Language",
+      "billing": {
+        "poolTitle": "Shared credit pool",
+        "poolDesc": "One subscription covers every brand in your account.",
+        "periodLabel": "Period {start} – {end}",
+        "breakdownTitle": "Usage by brand",
+        "brandCol": "Brand",
+        "creditsCol": "Credits used",
+        "noBrands": "Create a brand to start."
+      }
     },
     "radar": {
       "title": "Radar",

@@ -5769,7 +5769,16 @@
       "workspace": "Espacio de trabajo",
       "lightMode": "Modo claro",
       "darkMode": "Modo oscuro",
-      "language": "Idioma"
+      "language": "Idioma",
+      "billing": {
+        "poolTitle": "Bolsa de créditos compartida",
+        "poolDesc": "Una sola suscripción cubre todas las marcas de tu cuenta.",
+        "periodLabel": "Periodo {start} – {end}",
+        "breakdownTitle": "Consumo por marca",
+        "brandCol": "Marca",
+        "creditsCol": "Créditos usados",
+        "noBrands": "Crea una marca para empezar."
+      }
     },
     "radar": {
       "title": "Radar",
