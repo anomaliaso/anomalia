@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pathFor, statusForFailure } from './index';
 import {
+  ADD_NOTE,
   CREATE_PRODUCT,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,
@@ -8,6 +9,7 @@ import {
   DELETE_PRODUCT,
   GET_BIO,
   SET_BIO,
+  SET_COLORS,
   UPDATE_COMPETITOR,
   UPDATE_PERSON,
   UPDATE_PRODUCT
@@ -111,5 +113,24 @@ describe('i contratti dello studio', () => {
     expect(GET_BIO.input.safeParse({}).success).toBe(true);
     expect(SET_BIO.input.safeParse({ bio_url: '' }).success).toBe(true);
     expect(SET_BIO.input.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('le scritture dello studio arrivate dai tool scritti a mano', () => {
+  it('una nota si aggiunge col testo, come il tool l’ha sempre chiesto', () => {
+    expect(ADD_NOTE.input.safeParse({ text: 'Il banco è di faggio.' }).success).toBe(true);
+    expect(ADD_NOTE.input.safeParse({ text: '' }).success).toBe(false);
+    expect(ADD_NOTE.input.safeParse({ content_text: 'x' }).success).toBe(false);
+  });
+
+  it('i colori si passano con o senza cancelletto', () => {
+    expect(SET_COLORS.input.safeParse({ colors: ['#7c5cff'] }).success).toBe(true);
+    expect(SET_COLORS.input.safeParse({ colors: ['7c5cff'] }).success).toBe(true);
+    expect(SET_COLORS.input.safeParse({ colors: [] }).success).toBe(false);
+  });
+
+  it('indirizzano le rotte che esistono già', () => {
+    expect(pathFor(ADD_NOTE, 'demo')).toBe('/api/v1/brands/demo/studio/documents');
+    expect(pathFor(SET_COLORS, 'demo')).toBe('/api/v1/brands/demo/studio/colors');
   });
 });

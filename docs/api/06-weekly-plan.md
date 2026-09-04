@@ -83,7 +83,7 @@ Genera la strategia settimanale (tema + seed per post) per la settimana `week_in
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `week_index` | number (0-based) | Sì | Indice della settimana del piano editoriale attivo |
+| `week_index` | number (0-based) | Sì | Indice della settimana del piano editoriale attivo. Accettato anche come `week` |
 
 **Response** `200`:
 

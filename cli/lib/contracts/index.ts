@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { ADS_REMIX } from './ads';
+import { ADS_ACTION, ADS_REMIX } from './ads';
 import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
@@ -17,8 +17,11 @@ import {
   DISCARD_PLAN,
   PLAN_CADENCES,
   PLAN_CYCLE_WEEKS,
+  PLAN_WEEK,
   PROPOSE_PLAN,
+  REPLAN_WEEK,
   REVISE_PLAN,
+  SAVE_BRIEF,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
 } from './plans';
@@ -75,6 +78,7 @@ import {
 } from './shares';
 import {
   ADD_COMPETITOR,
+  ADD_NOTE,
   CREATE_PRODUCT,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,
@@ -83,6 +87,7 @@ import {
   GET_BIO,
   RESEARCH_COMPETITORS,
   SET_BIO,
+  SET_COLORS,
   SYNC_HISTORY,
   UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
@@ -133,7 +138,9 @@ export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   ADD_BLOG_TERM,
   ADD_COMPETITOR,
+  ADD_NOTE,
   ADD_RADAR_SOURCE,
+  ADS_ACTION,
   ADS_REMIX,
   APPROVE_PLAN,
   BILLING_PORTAL_LINK,
@@ -190,15 +197,18 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_SOCIAL_ACCOUNTS,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
+  PLAN_WEEK,
   PROPOSE_PLAN,
   REFRESH_KEYWORDS,
   REMOVE_BLOG_TERM,
   REMOVE_RADAR_SOURCE,
   RENDER_POST,
+  REPLAN_WEEK,
   RESCHEDULE_POST,
   RESEARCH_COMPETITORS,
   REVISE_PLAN,
   REVOKE_SHARE,
+  SAVE_BRIEF,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
   SEARCH_KNOWLEDGE,
@@ -208,6 +218,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   SET_BIO,
   SET_BLOG_SETTINGS,
   SET_BRAND_SETTINGS,
+  SET_COLORS,
   SET_MEDIA_MODEL,
   SET_RADAR_PLATFORM,
   SOCIAL_CONNECT_LINK,
@@ -241,6 +252,7 @@ export function statusForFailure(endpoint: BrandEndpoint, error: string): number
 }
 
 export {
+  ADS_ACTION,
   ADS_REMIX,
   CHECK_CONTENT,
   CREATE_POST,
@@ -340,6 +352,7 @@ export {
 export type { WritingDeckAgent } from './writing-skills';
 export {
   ADD_COMPETITOR,
+  ADD_NOTE,
   CREATE_PRODUCT,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,
@@ -348,6 +361,7 @@ export {
   GET_BIO,
   RESEARCH_COMPETITORS,
   SET_BIO,
+  SET_COLORS,
   SYNC_HISTORY,
   UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
@@ -401,8 +415,11 @@ export {
   DISCARD_PLAN,
   PLAN_CADENCES,
   PLAN_CYCLE_WEEKS,
+  PLAN_WEEK,
   PROPOSE_PLAN,
+  REPLAN_WEEK,
   REVISE_PLAN,
+  SAVE_BRIEF,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS
 };

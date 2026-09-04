@@ -105,24 +105,4 @@ export function registerWebTools(server: McpServer) {
       }),
   );
 
-  server.registerTool(
-    'ads_action',
-    {
-      title: 'Ads action',
-      description:
-        'Run an ads action. Common actions: sync, propose, create, reject, pause, resume, toggle, duplicate, delete. Pass campaignId; for a single creative add adId (and next active|paused for toggle). duplicate creates a paused copy as a new proposal; approve it to launch. Pass extra fields as needed.',
-      inputSchema: z.object({
-        slug,
-        action: z.string().min(1),
-        campaignId: z.string().optional(),
-        extra: z.record(z.string(), z.unknown()).optional().describe('Additional action payload fields'),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async ({ slug, action, campaignId, extra }) =>
-      withAuth((token) =>
-        api.adsAction(token, slug, { action, campaignId, ...(extra ?? {}) }),
-      ),
-  );
-
 }

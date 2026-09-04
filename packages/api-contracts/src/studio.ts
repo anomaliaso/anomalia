@@ -344,3 +344,41 @@ export const SYNC_HISTORY = {
   destructive: false,
   openWorld: true
 } satisfies BrandEndpoint;
+
+export const ADD_NOTE = {
+  tool: 'add_note',
+  title: 'Add knowledge note',
+  description: 'Add a knowledge document / note to the studio.',
+  method: 'POST',
+  pathUnderBrand: '/studio/documents',
+  input: z.object({ text: z.string().min(1), title: z.string().optional() }).strict(),
+  output: z.object({
+    ok: z.literal(true),
+    document: z.looseObject({ id: z.string(), kind: z.string(), title: z.string() })
+  }),
+  failures: [{ error: 'content_text is required', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const SET_COLORS = {
+  tool: 'set_colors',
+  title: 'Set brand colors',
+  description:
+    'Set brand colors as hex values, e.g. ["#7c5cff","#ffffff"]. Three or six digits, up to 8 ' +
+    'colours; the list replaces the whole palette.',
+  method: 'PUT',
+  pathUnderBrand: '/studio/colors',
+  // Stessa forma che la rotta salva: un `#aabbccdd` che passa di qui e prende un 400 di là
+  // lascia l'agente convinto di aver salvato un colore. studio-writes.test.ts le confronta.
+  input: z
+    .object({
+      colors: z
+        .array(z.string().regex(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/))
+        .min(1)
+        .max(8)
+    })
+    .strict(),
+  output: z.object({ ok: z.literal(true), colors: z.array(z.string()) }),
+  failures: [{ error: 'colors must be an array of max 8 hex strings', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;

@@ -13,7 +13,8 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (writeDenied) return writeDenied;
 
   const body = await request.json();
-  const { title, content_text, kind } = body;
+  const { title, kind } = body;
+  const content_text = body.content_text ?? body.text;
 
   if (!content_text && kind !== 'document') {
     return json({ error: 'content_text is required' }, { status: 400 });

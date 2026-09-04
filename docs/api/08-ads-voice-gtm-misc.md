@@ -109,6 +109,7 @@ Esegue un'azione sulle campagne ads, selezionata dal campo `action` del body.
 |---|---|---|---|
 | `action` | string | Sì | `propose` \| `approve` \| `reject` \| `duplicate` \| `delete` \| `pause` \| `resume` \| `toggle` \| `sync` \| `create` |
 | `campaignId` | string | per `approve`/`reject`/`duplicate`/`delete`/`pause`/`resume`/`toggle` | ID campagna (`ad_campaigns.id`) |
+| `extra` | object | No | Gli altri campi dell'azione, se preferisci raggrupparli invece di metterli in cima al corpo |
 | `budgetAmount` | number | No | `approve`: budget giornaliero proposto; `create`: budget |
 | `goal` | string | No | `approve`: `engagement` \| `traffic` \| `awareness` \| `video_views`; `create`: default `traffic` |
 | `adId` | string | No | Solo `toggle`: se presente agisce sulla singola creativa |
