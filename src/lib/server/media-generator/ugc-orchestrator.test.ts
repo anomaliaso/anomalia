@@ -24,9 +24,12 @@ M.env.LLM_DEFAULT_MODEL = 'google/gemini-2.5-flash';
 type Driver = (tools: Record<string, any>) => Promise<void>;
 let drive: Driver = async () => {};
 
-vi.mock(import('$lib/server/harness'), async (importOriginal) => ({
+// Il finto modello sta su `generateText` dell'SDK, non sull'involucro: e` il confine che
+// sopravvive all'uscita dell'orchestratore dal framework, quindi lo stesso test vale su
+// entrambe le implementazioni.
+vi.mock(import('ai'), async (importOriginal) => ({
 	...(await importOriginal()),
-	harnessGenerateText: (async (_meta: unknown, opts: { tools: Record<string, unknown> }) => {
+	generateText: (async (opts: { tools: Record<string, unknown> }) => {
 		await drive(opts.tools as Record<string, never>);
 		return { steps: [1], text: 'done' };
 	}) as never
@@ -49,7 +52,7 @@ vi.mock(import('$lib/server/brand-context-tools'), async (importOriginal) => ({
 	createBrandContextTools: (() => ({})) as never
 }));
 
-vi.mock(import('$lib/agent/tools/media-library-tools'), async (importOriginal) => ({
+vi.mock(import('$lib/server/media-library-tools'), async (importOriginal) => ({
 	...(await importOriginal()),
 	createMediaLibraryTools: (() => ({})) as never
 }));

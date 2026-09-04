@@ -6,8 +6,11 @@
  * off-brand Life-Force drama from the prompt alone.
  */
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { tool, stepCountIs, hasToolCall } from 'ai';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText, tool, stepCountIs, hasToolCall } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { llmLanguageModel } from '$lib/server/llm';
@@ -315,28 +318,49 @@ export async function planUgcClipsWithTools(opts: UgcPlanAgentOpts): Promise<Ugc
 
   const t0 = Date.now();
   let ok = false;
+  const session = createHarnessSession({
+    brandId: opts.brandId,
+    userId: opts.userId,
+    agent: 'ugc_plan',
+    mode: String(count),
+    model: IMAGE_AGENT_MODEL(),
+    provider: 'llm',
+    surface: 'batch'
+  });
+  session.captureRequest({ system, prompt });
+
+  const steward = createSessionSteward(session, Object.keys(tools));
+  const watchedTools = wrapTools(session, tools, steward.pipeline());
+
   try {
-    await harnessGenerateText({
-      brandId: opts.brandId,
-      userId: opts.userId,
-      agent: 'ugc_plan',
-      mode: String(count),
-      model: IMAGE_AGENT_MODEL(),
-      provider: 'llm',
-      surface: 'batch'
-    }, {
+    const result = await generateText({
       model: llmLanguageModel(IMAGE_AGENT_MODEL()),
       maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       system,
       prompt,
-      tools,
+      allowSystemInMessages: true,
+      tools: watchedTools,
       stopWhen: [hasToolCall('submit_ugc_scripts'), stepCountIs(UGC_PLAN_MAX_STEPS)],
       temperature: 0.7,
-      abortSignal: opts.abortSignal
+      abortSignal: opts.abortSignal,
+      prepareStep: () => {
+        const patched = applyStewardPrepareStep(session, steward, {}, system) ?? {};
+        session.capturePrepareStep(patched);
+        return patched;
+      },
+      onStepFinish: (event) => {
+        session.recordStep(event);
+      }
     });
+    session.recordAssistantText(result.text);
+    session.recordUsage(result.totalUsage ?? result.usage);
+    session.finish('finished');
     ok = !!(state.clips && state.clips.length);
   } catch (e) {
+    session.finish('failed', e);
     console.error('[ugc-plan-agent] failed', e);
+  } finally {
+    persistHarnessSession(session);
   }
 
   let mediaUrls: string[] = [];

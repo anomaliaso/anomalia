@@ -350,3 +350,30 @@ describe('la traccia della corsa', () => {
     );
   });
 });
+
+// `harness/index` riesporta `harness/run`, che importa `chat/model` e `chat/controller`: chi
+// prende la traccia dall'indice si porta dentro la chat e `$lib/agent` senza usarli. I moduli
+// foglia non li toccano, e questo test è l'unica cosa che impedisce di «riordinare» l'import.
+describe('da dove arriva la traccia, per tutti e due gli UGC', () => {
+  it.each(['ugc-plan-agent.ts', 'ugc-agent.ts'])(
+    '%s guida l SDK e non passa dall indice del framework',
+    async (file) => {
+      const { readFileSync } = await import('node:fs');
+      const { join } = await import('node:path');
+      const src = readFileSync(join(process.cwd(), `src/lib/server/media-generator/${file}`), 'utf8');
+      expect(src).toMatch(/await generateText\(/);
+      expect(src).not.toContain('harnessGenerateText(');
+      expect(src).not.toMatch(/from '\$lib\/server\/harness'/);
+      expect(src).toMatch(/from '\$lib\/server\/harness\/session'/);
+    }
+  );
+
+  // brand-context-tools è uscito da `src/lib/agent`: quattro generatori che devono SOPRAVVIVERE
+  // dipendono da lui, e lasciarlo lì dentro voleva dire cancellarlo insieme al framework.
+  it.each(['ugc-plan-agent.ts', 'ugc-agent.ts'])('%s non importa più da $lib/agent', async (file) => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(process.cwd(), `src/lib/server/media-generator/${file}`), 'utf8');
+    expect(src).not.toMatch(/from '\$lib\/agent\//);
+  });
+});
