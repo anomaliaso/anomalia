@@ -50,7 +50,7 @@ regola ce l'ha già:
 | `brand` | `brand_kit`, `products`, `people` | prodotti ordinati per sovrapposizione col goal (max 5); solo persone che passano `likenessConsented` |
 | `voice` | `houseVoiceFor` (`caption-quality.ts`) | personalità approvata quando c'è |
 | `rubric` | `loadApprovedRubrics` (`rubrics.ts`) | solo quelle del formato richiesto |
-| `template` | `agent-docs/skills/social/references/post-templates.md` | un gruppo da formato+piattaforma, un blocco dal goal |
+| `template` | `agent-docs/skills/social/references/post-templates.md` | formato+piattaforma scelgono il gruppo e, quando il formato decide da solo, il blocco; il goal sceglie solo dove resta una scelta vera |
 | `template.playbook` | `platformPlaybook` (`seed-model.ts`) | solo le piattaforme richieste |
 | `calendar` | `posts` + `SLOT_OCCUPYING_STATUSES` | solo i minuti occupati da adesso in avanti |
 | `week` | `editorial_plans` attivo + `currentWeekIndex` | solo la settimana corrente |
@@ -127,3 +127,19 @@ soprattutto **riscrive una regola che ha già una casa**. `likenessConsented` in
 `design-visual-refs.ts` lo dice nel proprio docblock: «Re-stating the condition anywhere else is
 how the rule diverges». Adesso il kit chiama quella funzione. Il test che lo tiene fallisce con la
 condizione riscritta e passa con la regola vera.
+
+## Il difetto che solo l'esecuzione vera ha mostrato
+
+Con l'endpoint acceso sullo stack locale e il brand `demo`, un lavoro `format=video` su Instagram
+tornava con **The Carousel Hook**: il gruppo era giusto, ma dentro il gruppo sceglieva il goal, e
+per «show the tasting bench in a short clip» nessun blocco segnava punti, quindi vinceva il primo.
+Il formato è un vincolo duro e sta sopra il goal nella precedenza del piano — una struttura a slide
+consegnata a chi sta girando una clip è una risposta sbagliata.
+
+`TEMPLATE_ROUTES` ha adesso una colonna `pins`: quando il formato decide da solo il blocco è
+fissato (`carousel` → The Carousel Hook, `video` → The Reel Script), altrimenti resta `null` e il
+goal sceglie. Una tabella sola, come prima. Il test è stato scritto prima della correzione e l'ho
+visto fallire con `expected 'The Carousel Hook' to be 'The Reel Script'`.
+
+Nessun test con un doppio di supabase avrebbe trovato questo: il difetto non era nei dati, era
+nella scelta, e si vede solo guardando cosa esce per un lavoro vero.

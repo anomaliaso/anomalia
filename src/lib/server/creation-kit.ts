@@ -13,6 +13,7 @@
  * rubrics, the owner's rewrites, the brand's own history, the calendar. What this file owns is
  * KIT_SECTIONS: which sections exist, in what order they yield when the budget runs out.
  */
+import type { GetCreationKitResult } from '@anomalia/api-contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import POST_TEMPLATES from '$lib/agent-docs/skills/social/references/post-templates.md?raw';
 import type { ContentFormat } from '$lib/content-formats';
@@ -129,28 +130,35 @@ const TEMPLATES = parseTemplates(POST_TEMPLATES);
 const HOOK_GROUP = 'Hook Formulas';
 
 /**
- * Which template group a job draws from — the ONE place a format or a platform earns a different
+ * Which templates a job may draw from — the ONE place a format or a platform earns a different
  * answer. First matching row wins; `format: null` matches any format, `platform: null` any
- * platform. Inside the chosen group the goal picks the single block.
+ * platform. `pins` names the block the FORMAT decides on its own, because a requested format is a
+ * hard constraint and outranks the goal: a video job asking for a short clip must never come back
+ * with a carousel's slide plan. Where `pins` is null the format leaves a real choice, and the goal
+ * picks inside the group.
  */
 const TEMPLATE_ROUTES: ReadonlyArray<{
   format: ContentFormat | null;
   platform: string | null;
   group: string;
+  pins: string | null;
 }> = [
-  { format: 'carousel', platform: null, group: 'Instagram Templates' },
-  { format: 'video', platform: null, group: 'Instagram Templates' },
-  { format: null, platform: 'x', group: 'Twitter/X Thread Templates' },
-  { format: null, platform: 'twitter', group: 'Twitter/X Thread Templates' },
-  { format: null, platform: null, group: 'LinkedIn Post Templates' }
+  { format: 'carousel', platform: null, group: 'Instagram Templates', pins: 'The Carousel Hook' },
+  { format: 'video', platform: null, group: 'Instagram Templates', pins: 'The Reel Script' },
+  { format: null, platform: 'x', group: 'Twitter/X Thread Templates', pins: null },
+  { format: null, platform: 'twitter', group: 'Twitter/X Thread Templates', pins: null },
+  { format: null, platform: null, group: 'LinkedIn Post Templates', pins: null }
 ];
 
-function groupForJob(job: KitJob): string {
+const FALLBACK_ROUTE = TEMPLATE_ROUTES[TEMPLATE_ROUTES.length - 1];
+
+function routeForJob(job: KitJob) {
   const wanted = new Set(job.platforms.map((p) => p.toLowerCase()));
-  const route = TEMPLATE_ROUTES.find(
-    (r) => (r.format === null || r.format === job.format) && (r.platform === null || wanted.has(r.platform))
+  return (
+    TEMPLATE_ROUTES.find(
+      (r) => (r.format === null || r.format === job.format) && (r.platform === null || wanted.has(r.platform))
+    ) ?? FALLBACK_ROUTE
   );
-  return route?.group ?? 'LinkedIn Post Templates';
 }
 
 // ── Goal ranking ─────────────────────────────────────────────────────────
@@ -294,12 +302,11 @@ function buildRubric({ job, sources, words }: KitContext) {
 }
 
 function buildTemplate({ job, prefs, words }: KitContext) {
-  const group = groupForJob(job);
-  const picked = bestByGoal(
-    TEMPLATES.filter((t) => t.group === group),
-    words,
-    (t) => `${t.name} ${t.body}`
+  const route = routeForJob(job);
+  const candidates = TEMPLATES.filter(
+    (t) => t.group === route.group && (route.pins === null || t.name === route.pins)
   );
+  const picked = bestByGoal(candidates, words, (t) => `${t.name} ${t.body}`);
   if (!picked) return undefined;
 
   const hooks = bestByGoal(
@@ -415,13 +422,11 @@ function byteLength(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8');
 }
 
-export type CreationKit = { size_bytes: number; budget_bytes: number; trimmed: string[] } & Record<string, unknown>;
-
 export async function buildCreationKit(
   supabase: SupabaseClient,
   brand: KitBrand,
   job: KitJob
-): Promise<CreationKit> {
+): Promise<GetCreationKitResult> {
   const prefs = (brand.content_prefs ?? {}) as ContentPrefs;
   const sources = await loadSources(supabase, brand);
   const ctx: KitContext = { brand, job, prefs, sources, words: goalWords(job.goal) };
@@ -433,14 +438,19 @@ export async function buildCreationKit(
   }
 
   const trimmed: string[] = [];
-  const assemble = () => ({
-    job: { goal: job.goal, platforms: job.platforms, format: job.format },
-    versions: { kit: CREATION_KIT_VERSION },
-    size_bytes: CREATION_KIT_MAX_BYTES,
-    budget_bytes: CREATION_KIT_MAX_BYTES,
-    trimmed,
-    ...Object.fromEntries(sections)
-  });
+
+  // The section map is keyed by string, so the spread is the one place the shape has to be
+  // asserted. GetCreationKitResult comes straight from the endpoint contract, so a builder that
+  // stops matching what the endpoint declares stops compiling.
+  const assemble = () =>
+    ({
+      job: { goal: job.goal, platforms: job.platforms, format: job.format },
+      versions: { kit: CREATION_KIT_VERSION },
+      size_bytes: CREATION_KIT_MAX_BYTES,
+      budget_bytes: CREATION_KIT_MAX_BYTES,
+      trimmed,
+      ...Object.fromEntries(sections)
+    }) as GetCreationKitResult;
 
   const yieldOrder = KIT_SECTIONS.filter((s) => s.precedence > 1).sort((a, b) => b.precedence - a.precedence);
   while (byteLength(assemble()) > CREATION_KIT_MAX_BYTES && yieldOrder.length) {

@@ -75,6 +75,23 @@ describe('il creation kit seleziona invece di svuotare la libreria', () => {
     expect(JSON.stringify(kit)).not.toContain('The Story Post');
   });
 
+  it('il formato batte il goal: un video non riceve la struttura di un carosello', async () => {
+    const clip = 'show the tasting bench in a short clip';
+    const video = await buildCreationKit(
+      fakeSupabase(tables()) as never,
+      BRAND as never,
+      job({ goal: clip, platforms: ['instagram'], format: 'video' })
+    );
+    const carousel = await buildCreationKit(
+      fakeSupabase(tables()) as never,
+      BRAND as never,
+      job({ goal: clip, platforms: ['instagram'], format: 'carousel' })
+    );
+
+    expect(video.template?.name).toBe('The Reel Script');
+    expect(carousel.template?.name).toBe('The Carousel Hook');
+  });
+
   it('il goal sceglie fra i template dello stesso gruppo', async () => {
     const contrarian = await buildCreationKit(
       fakeSupabase(tables()) as never,

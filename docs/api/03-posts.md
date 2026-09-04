@@ -742,7 +742,7 @@ forma della risposta: due kit si confrontano solo se hanno la stessa versione.
 | `brand` | `brand_kit`, `products`, `people` | Prodotti ordinati per sovrapposizione lessicale col `goal`, massimo 5. Solo le persone che passano `likenessConsented` (reali con consenso attestato, più le persona AI, che non ritraggono nessuno) |
 | `voice` | `houseVoiceFor` | La personalità approvata quando c'è, altrimenti la house voice |
 | `rubric` | `rubrics` (approvate) | Solo quelle del `format` richiesto, poi la più vicina al `goal` |
-| `template` | `post-templates.md` | Un gruppo dal formato+piattaforma, un blocco dal `goal`, più una famiglia di hook |
+| `template` | `post-templates.md` | Il formato e la piattaforma scelgono il gruppo; quando il formato decide da solo (`carousel`, `video`) il blocco è fissato, altrimenti lo sceglie il `goal`. Più una famiglia di hook |
 | `calendar` | `posts` | Solo i minuti già occupati da qui in avanti, massimo 8 |
 | `week` | `editorial_plans` attivo | Solo la settimana corrente |
 | `operator_edits` | `content_prefs.captionEditPairs` | Le ultime 3 riscritture reali del proprietario |

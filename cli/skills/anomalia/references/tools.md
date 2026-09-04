@@ -53,8 +53,10 @@ nothing there, so do not go looking for it elsewhere:
 - **voice** — the brand's approved personality when set, otherwise the house voice. Write to it.
 - **rubric** — the approved recurring series matching your format, with its art direction. When
   present, this post is an episode of it.
-- **template** — ONE structure chosen for your format, platform and goal, its hook family, and the
-  playbook for exactly the platforms you asked about.
+- **template** — ONE structure for your format and platform, its hook family, and the playbook for
+  exactly the platforms you asked about. The format decides first: a `video` job always gets the
+  reel structure, never a carousel's slide plan. The goal only picks where the format leaves a
+  real choice.
 - **calendar** — the minutes already taken, with the campaign they belong to. Do not double-book.
 - **week** — the current editorial week's theme.
 - **operator_edits** — real before → after rewrites by the owner. Absorb the difference, never the
