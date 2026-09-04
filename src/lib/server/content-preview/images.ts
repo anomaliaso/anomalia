@@ -13,6 +13,7 @@ import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
+import { generateImageOnOpenrouter } from '$lib/server/openrouter-image';
 import { route } from '$lib/server/model-routing';
 import { signPaths } from '$lib/server/people';
 import { svgToPng } from '$lib/server/brand-analysis';
@@ -253,6 +254,17 @@ export async function renderPostImage(
   }
   const req = buildImageRequest(imagePrompt, opts);
   const imageModel = req.model;
+  // OpenRouter serve lo STESSO modello Google in una richiesta sincrona: 3,4s di media contro 25,0s
+  // su kie, e senza createTask/polling non esiste il task abbandonato-e-fatturato. Costa il 68% in
+  // più per render ($0,0336 contro ~$0,020), quindi è una scelta di latenza, non di risparmio.
+  // Nessun ritentativo qui: un fallimento sincrono torna già diagnosticato, e `generateImageOnOpenrouter`
+  // alza l'eccezione invece di restituire un successo vuoto.
+  if (route('image').endpoint === 'openrouter') {
+    return await generateImageOnOpenrouter(
+      { ...req, model: googleImageModel(req.model, NANO_BANANA_2_LITE) },
+      { context: `image:${imageModel}` }
+    );
+  }
   // Nano Banana gira su kie: stesso modello, −33%/−40% per immagine (misurato sui crediti
   // addebitati). È l'UNICO punto da cambiare perché ogni render del prodotto passa di qui.
   // `AI_ROUTE_IMAGE=nano-banana@google` riporta tutto su Google senza deploy.

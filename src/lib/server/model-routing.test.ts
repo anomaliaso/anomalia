@@ -97,6 +97,75 @@ describe('il registro delle rotte', () => {
     expect(missingCapabilities('google')).toEqual([]);
   });
 
+  it('openrouter è una rotta, e AI_ROUTE_IMAGE la seleziona', async () => {
+    setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', AI_ROUTE_IMAGE: 'nano-banana@openrouter' });
+    const { route } = await import('./model-routing');
+    expect(route('image')).toMatchObject({
+      family: 'nano-banana',
+      endpoint: 'openrouter',
+      provider: 'openrouter'
+    });
+  });
+
+  it('la chiave del gateway del testo vale anche per openrouter', async () => {
+    setEnv({ ...KEYS, LLM_API_KEY: 'o', AI_ROUTE_IMAGE: 'nano-banana@openrouter' });
+    const { route } = await import('./model-routing');
+    expect(route('image').endpoint).toBe('openrouter');
+  });
+
+  it('senza chiave openrouter non è una rotta: si ripiega, rumorosamente', async () => {
+    setEnv({ GEMINI_API_KEY: 'g', AI_ROUTE_IMAGE: 'nano-banana@openrouter' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { route } = await import('./model-routing');
+    expect(route('image')).toMatchObject({ endpoint: 'google', provider: 'gemini' });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('una coppia senza trasporto non è una rotta: si ripiega, e dice perché', async () => {
+    // `geminiTransport()` conosce solo kie e google: il testo verso openrouter atterrerebbe su
+    // Google IN SILENZIO, cioè la rotta si legge come rispettata e non lo è. Vale identico per le
+    // coppie che erano già cieche prima di openrouter — una regola sola, non un'eccezione.
+    for (const raw of ['gemini@openrouter', 'gemini@xiaomi', 'gemini@deepseek', 'mimo@kie']) {
+      vi.resetModules();
+      setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', DEEPSEEK_API_KEY: 'd', AI_ROUTE_TEXT: raw });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { route } = await import('./model-routing');
+      route('text');
+      expect(warn, raw).toHaveBeenCalledWith(expect.stringMatching(/nessun trasporto/));
+      warn.mockRestore();
+    }
+  });
+
+  it('le coppie che un trasporto serve davvero passano senza rumore', async () => {
+    const SLOT_VAR = { text: 'AI_ROUTE_TEXT', image: 'AI_ROUTE_IMAGE', tts: 'AI_ROUTE_TTS' } as const;
+    for (const [raw, slot, endpoint] of [
+      ['gemini@kie', 'text', 'kie'],
+      ['gemini@google', 'text', 'google'],
+      ['mimo@xiaomi', 'text', 'xiaomi'],
+      ['grok@kie', 'text', 'kie'],
+      ['nano-banana@openrouter', 'image', 'openrouter'],
+      ['nano-banana@google', 'image', 'google'],
+      ['gemini-tts@kie', 'tts', 'kie']
+    ] as const) {
+      vi.resetModules();
+      setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', [SLOT_VAR[slot]]: raw });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { route } = await import('./model-routing');
+      expect(route(slot).endpoint, raw).toBe(endpoint);
+      expect(warn, raw).not.toHaveBeenCalled();
+      warn.mockRestore();
+    }
+  });
+
+  it('i default non si spostano: aggiungere openrouter non muove niente', async () => {
+    setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o' });
+    const { route } = await import('./model-routing');
+    expect(route('text').endpoint).toBe('google');
+    expect(route('image').endpoint).toBe('kie');
+    expect(route('tts').endpoint).toBe('kie');
+  });
+
   it('i modelli video: nuova variabile, vecchia variabile, default', async () => {
     setEnv({ ...KEYS, AI_ROUTE_VIDEO_I2V: 'bytedance/seedance-2-5', KIE_VIDEO_MODEL_T2V: 'vecchio/t2v' });
     const { videoModel } = await import('./model-routing');
