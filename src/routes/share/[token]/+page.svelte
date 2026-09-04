@@ -3,6 +3,7 @@
 
   const snapshot = $derived(data.snapshot as Record<string, any>);
   const isCalendar = $derived(data.view === 'calendar');
+  const isDashboard = $derived(data.view === 'dashboard');
 
   const METRICS = ['views', 'likes', 'comments', 'shares'] as const;
 
@@ -21,6 +22,12 @@
   }
 
   const number = (n: unknown) => Number(n ?? 0).toLocaleString();
+
+  const TITLES: Record<string, string> = {
+    calendar: 'Content calendar',
+    dashboard: 'This month',
+    monthly_report: 'Monthly report'
+  };
 </script>
 
 <svelte:head>
@@ -31,11 +38,43 @@
 <main>
   <header>
     <p class="eyebrow">{snapshot.brand_name}</p>
-    <h1>{isCalendar ? 'Content calendar' : 'Monthly report'}</h1>
+    <h1>{TITLES[data.view] ?? 'Monthly report'}</h1>
     <p class="sub">{snapshot.month_label}</p>
   </header>
 
-  {#if isCalendar}
+  {#if isDashboard}
+    <section class="tiles">
+      <div class="tile"><span class="n">{number(snapshot.published)}</span><span class="l">published</span></div>
+      <div class="tile"><span class="n">{number(snapshot.planned)}</span><span class="l">planned</span></div>
+      <div class="tile"><span class="n">{number(snapshot.reach)}</span><span class="l">reach</span></div>
+    </section>
+
+    <h2>Next out</h2>
+    {#if snapshot.upcoming.length === 0}
+      <p class="empty">Nothing planned for the rest of this month.</p>
+    {:else}
+      <ol class="calendar">
+        {#each snapshot.upcoming as post, i (i)}
+          <li>
+            <div class="when">
+              <span class="date">{day(post)}</span>
+              <span class="hour">{time(post)}</span>
+            </div>
+            <div class="what">
+              <div class="meta">
+                <span class="platform">{post.platform ?? '—'}</span>
+                <span class="status status-{post.status}">{post.status}</span>
+              </div>
+              {#if post.caption}<p class="caption">{post.caption}</p>{/if}
+            </div>
+            {#if post.media_url}
+              <img class="thumb" src={post.media_url} alt="" loading="lazy" />
+            {/if}
+          </li>
+        {/each}
+      </ol>
+    {/if}
+  {:else if isCalendar}
     {#if snapshot.posts.length === 0}
       <p class="empty">Nothing planned for this month yet.</p>
     {:else}

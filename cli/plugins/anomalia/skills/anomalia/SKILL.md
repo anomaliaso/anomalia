@@ -96,8 +96,8 @@ costs no credits, which is the point: whoever ran out is who needs it.
 
 **Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
 
-**Send a client the calendar or the month's results** → `create_share` (`view`: `calendar` or
-`monthly_report`). It returns a link they open with no account, showing a frozen snapshot of that
+**Send a client the calendar, the month at a glance, or the month's results** → `create_share`
+(`view`: `calendar`, `dashboard` or `monthly_report`). It returns a link they open with no account, showing a frozen snapshot of that
 view and nothing else. The token is in the response **once** — hand over the `url` immediately.
 `list_shares` shows what is out there, `revoke_share` turns one off without touching anyone's
 access to the brand.

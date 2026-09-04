@@ -7,6 +7,7 @@ import { SHARED_VIEW_TYPES } from '@anomalia/api-contracts';
 import {
   CALENDAR_POST_FIELDS,
   CALENDAR_SNAPSHOT_FIELDS,
+  DASHBOARD_SNAPSHOT_FIELDS,
   REPORT_POST_FIELDS,
   REPORT_SNAPSHOT_FIELDS,
   SHARE_SNAPSHOT_VERSION,
@@ -244,6 +245,53 @@ describe('lo snapshot del report mensile', () => {
     expect(argsOf(history, 'eq')).toContainEqual(['brand_id', 'brand-1']);
     expect(argsOf(history, 'gte')[0][0]).toBe('published_at');
     expect(argsOf(history, 'lt')[0][0]).toBe('published_at');
+  });
+});
+
+describe('lo snapshot della dashboard', () => {
+  function dashboardSupabase(rows: Row[]) {
+    return fakeSupabase({ social_post_history: fakeTable({ data: rows, error: null }) });
+  }
+
+  it('porta solo i campi dichiarati, in cima e su ogni uscita', async () => {
+    const { snapshot } = await buildSnapshot(dashboardSupabase([A_HISTORY_ROW_WITH_EVERYTHING]), BRAND, 'dashboard', '2026-09');
+
+    expect(Object.keys(snapshot).sort()).toEqual([...DASHBOARD_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys((snapshot.upcoming as Row[])[0]).sort()).toEqual([...CALENDAR_POST_FIELDS].sort());
+  });
+
+  it('non fa uscire prompt, qc, note interne o identificatori privati', async () => {
+    const { snapshot } = await buildSnapshot(dashboardSupabase([A_HISTORY_ROW_WITH_EVERYTHING]), BRAND, 'dashboard', '2026-09');
+    const serialized = JSON.stringify(snapshot);
+
+    for (const secret of ['un prompt interno', 'borderline', 'token-di-approvazione', 'nota interna', 'post-1', 'brand-1', 'plan-1', 'zernio']) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
+  it('conta le tre cifre che il cliente legge: uscite fatte, uscite in programma, copertura', async () => {
+    calendarReturns([
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'approved', scheduled_for: '2026-09-10T07:00:00.000Z' },
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'pending_user', scheduled_for: '2026-09-11T07:00:00.000Z' },
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'published', scheduled_for: '2026-09-01T07:00:00.000Z' }
+    ]);
+
+    const { snapshot } = await buildSnapshot(dashboardSupabase([A_HISTORY_ROW_WITH_EVERYTHING]), BRAND, 'dashboard', '2026-09');
+
+    expect(snapshot.published).toBe(1);
+    expect(snapshot.planned).toBe(2);
+    expect(snapshot.reach).toBe(1000);
+  });
+
+  it('tiene fuori dalle prossime uscite quelle gia pubblicate', async () => {
+    calendarReturns([
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'published', scheduled_for: '2026-09-01T07:00:00.000Z' },
+      { ...A_POST_ROW_WITH_EVERYTHING, status: 'approved', scheduled_for: '2026-09-10T07:00:00.000Z' }
+    ]);
+
+    const { snapshot } = await buildSnapshot(dashboardSupabase([]), BRAND, 'dashboard', '2026-09');
+
+    expect((snapshot.upcoming as Row[]).map((p) => p.status)).toEqual(['planned']);
   });
 });
 

@@ -21,12 +21,15 @@ const TOKEN_BYTES = 32;
 const MISSING_TABLE_CODES = new Set(['PGRST205', '42P01']);
 const MIGRATION_FILE = '20260904120000_shared_views.sql';
 const TOP_POSTS = 5;
+const UPCOMING_SHOWN = 6;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const METRIC_FIELDS = ['views', 'likes', 'comments', 'shares'] as const;
 
 export const CALENDAR_POST_FIELDS = ['platform', 'caption', 'media_url', 'scheduled_for', 'slot', 'status'] as const;
 export const CALENDAR_SNAPSHOT_FIELDS = ['brand_name', 'timezone', 'month', 'month_label', 'posts'] as const;
+
+export const DASHBOARD_SNAPSHOT_FIELDS = ['brand_name', 'timezone', 'month', 'month_label', 'published', 'planned', 'reach', 'upcoming'] as const;
 
 export const REPORT_POST_FIELDS = ['platform', 'caption', 'thumbnail_url', 'url', 'published_at', ...METRIC_FIELDS] as const;
 export const REPORT_SNAPSHOT_FIELDS = ['brand_name', 'timezone', 'month', 'month_label', 'published', 'totals', 'platforms', 'top_posts'] as const;
@@ -228,12 +231,45 @@ async function buildMonthlyReport(
   };
 }
 
+/**
+ * La dashboard che il cliente apre: le tre cifre del mese e le prossime uscite, niente altro.
+ *
+ * Si compone dei due builder che esistono già invece di fare query proprie — il calendario sa
+ * cosa esce, il report mensile sa cosa è uscito e quanto ha coperto. Una terza allowlist qui
+ * sarebbe una terza cosa da tenere allineata a `posts`.
+ */
+async function buildDashboard(
+  supabase: SupabaseClient,
+  brand: SharedViewBrand,
+  month: string
+): Promise<SharedViewSnapshot> {
+  const [calendar, report] = await Promise.all([
+    buildCalendar(supabase, brand, month),
+    buildMonthlyReport(supabase, brand, month)
+  ]);
+
+  const posts = calendar.posts as { status: string }[];
+  const planned = posts.filter((post) => post.status !== 'published');
+
+  return {
+    brand_name: brand.name,
+    timezone: calendar.timezone,
+    month,
+    month_label: calendar.month_label,
+    published: report.published,
+    planned: planned.length,
+    reach: (report.totals as Record<string, number>).views,
+    upcoming: planned.slice(0, UPCOMING_SHOWN)
+  };
+}
+
 /** L'unica tabella dei tipi di vista: aggiungerne uno è una riga qui più il suo builder. */
 const SNAPSHOT_BUILDERS: Record<
   SharedViewType,
   (supabase: SupabaseClient, brand: SharedViewBrand, month: string) => Promise<SharedViewSnapshot>
 > = {
   calendar: buildCalendar,
+  dashboard: buildDashboard,
   monthly_report: buildMonthlyReport
 };
 

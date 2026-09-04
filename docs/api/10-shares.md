@@ -31,7 +31,7 @@ Crea il link. Richiede una API key con scope `write`.
 
 | Campo | Obbligatorio | Note |
 |---|---|---|
-| `view` | sì | `calendar` o `monthly_report` |
+| `view` | sì | `calendar`, `dashboard` o `monthly_report` |
 | `month` | no | `YYYY-MM`. Senza, il mese corrente sull'orologio del brand |
 | `expires_in_days` | no | 1–365. Senza, il link vale finché non viene revocato |
 
@@ -128,6 +128,12 @@ esatto delle chiavi: un campo aggiunto a monte fa fallire il test invece di usci
 Ogni post: `platform`, `caption`, `media_url`, `scheduled_for`, `slot`, `status`.
 `status` è `planned` o `published`: il workflow interno (`pending_user`, `approved`, `failed`)
 non esce. Le bozze senza data restano fuori.
+
+**`dashboard`** — `brand_name`, `timezone`, `month`, `month_label`, `published`, `planned`,
+`reach`, `upcoming[]`.
+Ogni uscita ha le stesse chiavi di un post del calendario. È il calendario e il report messi
+insieme: le tre cifre del mese e le prossime sei uscite non ancora pubblicate. Si compone dei due
+builder che esistono già, quindi non ha una terza allowlist da tenere allineata.
 
 **`monthly_report`** — `brand_name`, `timezone`, `month`, `month_label`, `published`, `totals`,
 `platforms[]`, `top_posts[]`.
