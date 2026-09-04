@@ -200,3 +200,104 @@ export const SET_BIO = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+export const UPDATE_BRAND_KIT = {
+  tool: 'update_brand_kit',
+  title: 'Update brand kit',
+  description: 'Update brand kit fields (about, category, audience, style, language).',
+  method: 'PUT',
+  pathUnderBrand: '/studio/kit',
+  input: z
+    .object({
+      about: z.string().optional(),
+      category: z.string().optional(),
+      target_audience: z.string().optional(),
+      brand_style: z.string().optional(),
+      language: z.string().optional()
+    })
+    .strict(),
+  output: Ok,
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const UPDATE_VOICE = {
+  tool: 'update_voice',
+  title: 'Update voice',
+  description:
+    'Patch brand voice fields (mood, tone, register, avoid list, platform instructions).',
+  method: 'POST',
+  pathUnderBrand: '/voice/update',
+  input: z
+    .object({
+      mood: z.string().optional(),
+      tone: z.string().optional(),
+      register: z.number().optional(),
+      emotion: z.string().optional(),
+      character: z.string().optional(),
+      syntax: z.string().optional(),
+      avoid: z.array(z.string()).optional(),
+      platform_instructions: z.record(z.string(), z.string()).optional()
+    })
+    .strict(),
+  output: Ok,
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const ADD_COMPETITOR = {
+  tool: 'add_competitor',
+  title: 'Add competitor',
+  description: 'Add a competitor to the studio.',
+  method: 'POST',
+  pathUnderBrand: '/studio/competitors',
+  input: z
+    .object({
+      name: z.string().min(1),
+      website: z.string().optional(),
+      rationale: z.string().optional()
+    })
+    .strict(),
+  output: z.object({
+    ok: z.literal(true),
+    competitor: z.looseObject({
+      id: z.string(),
+      name: z.string(),
+      website: z.string().nullable(),
+      kind: z.string(),
+      source: z.string()
+    })
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const RESEARCH_COMPETITORS = {
+  tool: 'research_competitors',
+  title: 'Research competitors',
+  description: 'Run AI competitor research and add findings to the studio.',
+  method: 'POST',
+  pathUnderBrand: '/studio/competitors/research',
+  input: z.object({}).strict(),
+  output: z.object({ ok: z.literal(true), found: z.number(), added: z.number() }),
+  failures: [],
+  destructive: false,
+  openWorld: true
+} satisfies BrandEndpoint;
+
+export const SYNC_HISTORY = {
+  tool: 'sync_history',
+  title: 'Sync social history',
+  description: 'Sync historical social posts into the studio.',
+  method: 'POST',
+  pathUnderBrand: '/studio/history/sync',
+  input: z.object({}).strict(),
+  output: z.looseObject({
+    synced: z.number(),
+    noAccounts: z.boolean().optional(),
+    errors: z.array(z.string()).optional()
+  }),
+  failures: [],
+  destructive: false,
+  openWorld: true
+} satisfies BrandEndpoint;

@@ -6,50 +6,7 @@ import { resolveArticleId, withAuth } from '../util.ts';
 const slug = z.string().min(1).describe('Brand URL slug');
 
 export function registerWebTools(server: McpServer) {
-  server.registerTool(
-    'seo_action',
-    {
-      title: 'SEO action',
-      description:
-        'Run SEO actions: run (tech audit), plan, more (append initiatives), asset, article. For asset/article pass initiativeId.',
-      inputSchema: z.object({
-        slug,
-        action: z.enum(['run', 'plan', 'more', 'asset', 'article']),
-        initiativeId: z.string().optional(),
-        guidance: z.string().optional().describe('Optional guidance when action=more'),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, action, initiativeId, guidance }) =>
-      withAuth((token) => api.seoAction(token, slug, { action, initiativeId, guidance })),
-  );
-
-  server.registerTool(
-    'geo_action',
-    {
-      title: 'GEO action',
-      description: 'Run GEO citation audit or generate fix artifacts.',
-      inputSchema: z.object({
-        slug,
-        action: z.enum(['audit', 'fix']),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, action }) => withAuth((token) => api.geoAction(token, slug, action)),
-  );
-
-  server.registerTool(
-    'refresh_keywords',
-    {
-      title: 'Refresh keywords',
-      description: 'Regenerate keyword research for the brand.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug }) => withAuth((token) => api.refreshKeywords(token, slug)),
-  );
-
-  server.registerTool(
+        server.registerTool(
     'generate_article',
     {
       title: 'Generate article',

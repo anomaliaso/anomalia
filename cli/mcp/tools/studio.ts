@@ -6,25 +6,7 @@ import { withAuth } from '../util.ts';
 const slug = z.string().min(1).describe('Brand URL slug');
 
 export function registerStudioTools(server: McpServer) {
-  server.registerTool(
-    'update_brand_kit',
-    {
-      title: 'Update brand kit',
-      description: 'Update brand kit fields (about, category, audience, style, language).',
-      inputSchema: z.object({
-        slug,
-        about: z.string().optional(),
-        category: z.string().optional(),
-        target_audience: z.string().optional(),
-        brand_style: z.string().optional(),
-        language: z.string().optional(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, ...data }) => withAuth((token) => api.updateBrandKit(token, slug, data)),
-  );
-
-  server.registerTool(
+    server.registerTool(
     'set_colors',
     {
       title: 'Set brand colors',
@@ -142,24 +124,7 @@ export function registerStudioTools(server: McpServer) {
     async ({ slug, id }) => withAuth((token) => api.deletePerson(token, slug, id)),
   );
 
-  server.registerTool(
-    'add_competitor',
-    {
-      title: 'Add competitor',
-      description: 'Add a competitor to the studio.',
-      inputSchema: z.object({
-        slug,
-        name: z.string().min(1),
-        website: z.string().optional(),
-        rationale: z.string().optional(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, name, website, rationale }) =>
-      withAuth((token) => api.addCompetitor(token, slug, { name, website, rationale })),
-  );
-
-  server.registerTool(
+    server.registerTool(
     'delete_competitor',
     {
       title: 'Delete competitor',
@@ -173,25 +138,4 @@ export function registerStudioTools(server: McpServer) {
     async ({ slug, id }) => withAuth((token) => api.deleteCompetitor(token, slug, id)),
   );
 
-  server.registerTool(
-    'research_competitors',
-    {
-      title: 'Research competitors',
-      description: 'Run AI competitor research and add findings to the studio.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.researchCompetitors(token, slug)),
-  );
-
-  server.registerTool(
-    'sync_history',
-    {
-      title: 'Sync social history',
-      description: 'Sync historical social posts into the studio.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.syncHistory(token, slug)),
-  );
-}
+    }

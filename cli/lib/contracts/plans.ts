@@ -170,3 +170,54 @@ export const SAVE_WEEK_SEEDS = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+const NoInput = z.object({}).strict();
+const Ok = z.object({ ok: z.literal(true) });
+
+export const PROPOSE_PLAN = {
+  tool: 'propose_plan',
+  title: 'Propose editorial plan',
+  description: 'Generate the first / a new editorial plan proposal.',
+  method: 'POST',
+  pathUnderBrand: '/editorial-plan/propose',
+  input: NoInput,
+  output: z.object({ ok: z.literal(true), plan: z.unknown() }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REVISE_PLAN = {
+  tool: 'revise_plan',
+  title: 'Revise editorial plan',
+  description: 'Request a revision of the proposed plan with feedback.',
+  method: 'POST',
+  pathUnderBrand: '/editorial-plan/revise',
+  input: z.object({ feedback: z.string().min(1) }).strict(),
+  output: z.object({ ok: z.literal(true), plan: z.unknown() }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const APPROVE_PLAN = {
+  tool: 'approve_plan',
+  title: 'Approve editorial plan',
+  description: 'Approve the proposed editorial plan.',
+  method: 'POST',
+  pathUnderBrand: '/editorial-plan/approve',
+  input: NoInput,
+  output: Ok,
+  failures: [],
+  destructive: true
+} satisfies BrandEndpoint;
+
+export const DISCARD_PLAN = {
+  tool: 'discard_plan',
+  title: 'Discard editorial plan',
+  description: 'Discard the proposed editorial plan.',
+  method: 'POST',
+  pathUnderBrand: '/editorial-plan/discard',
+  input: NoInput,
+  output: Ok,
+  failures: [],
+  destructive: true
+} satisfies BrandEndpoint;

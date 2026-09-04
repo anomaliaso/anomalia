@@ -11,8 +11,12 @@ import {
   LIST_WEB_FIXES,
 } from './evidence';
 import {
+  APPROVE_PLAN,
+  DISCARD_PLAN,
   PLAN_CADENCES,
   PLAN_CYCLE_WEEKS,
+  PROPOSE_PLAN,
+  REVISE_PLAN,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
 } from './plans';
@@ -28,14 +32,19 @@ import {
 } from './posts';
 import {
   GET_ADS,
+  GET_ANALYTICS,
   GET_GEO,
+  GET_GTM,
   GET_KEYWORDS,
   GET_PLAN,
   GET_SEO,
   GET_STUDIO,
+  GET_VOICE,
   GET_WEEKLY_PLAN,
-  LIST_ARTICLES
+  LIST_ARTICLES,
+  LIST_PRODUCTS
 } from './reads';
+import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 import {
   CREATE_SHARE,
   LIST_SHARES,
@@ -43,13 +52,18 @@ import {
   SHARED_VIEW_TYPES,
 } from './shares';
 import {
+  ADD_COMPETITOR,
   CREATE_PRODUCT,
   DELETE_PRODUCT,
   GET_BIO,
+  RESEARCH_COMPETITORS,
   SET_BIO,
+  SYNC_HISTORY,
+  UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
   UPDATE_PERSON,
-  UPDATE_PRODUCT
+  UPDATE_PRODUCT,
+  UPDATE_VOICE
 } from './studio';
 
 export type EndpointFailure = { readonly error: string; readonly status: number };
@@ -75,6 +89,7 @@ type EndpointShape = {
   readonly output: z.ZodType;
   readonly failures: readonly EndpointFailure[];
   readonly destructive: boolean;
+  readonly openWorld?: boolean;
 };
 
 export type ResourcelessEndpoint = EndpointShape & {
@@ -90,7 +105,9 @@ export type ResourceEndpoint = EndpointShape & {
 export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
+  ADD_COMPETITOR,
   ADS_REMIX,
+  APPROVE_PLAN,
   BILLING_PORTAL_LINK,
   CHECKOUT_LINK,
   CHECK_CONTENT,
@@ -98,37 +115,51 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CREATE_PRODUCT,
   CREATE_SHARE,
   DELETE_PRODUCT,
+  DISCARD_PLAN,
+  GEO_ACTION,
   GET_ADS,
+  GET_ANALYTICS,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_BIO,
   GET_CALENDAR,
   GET_CREATION_KIT,
   GET_GEO,
+  GET_GTM,
   GET_KEYWORDS,
   GET_PLAN,
   GET_POST,
   GET_SEO,
   GET_STUDIO,
+  GET_VOICE,
   GET_WEEKLY_PLAN,
   IMPORT_MEDIA_URL,
   LIST_ARTICLES,
   LIST_AUDIT_CITATIONS,
   LIST_MEDIA,
   LIST_POSTS,
+  LIST_PRODUCTS,
   LIST_SHARES,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
+  PROPOSE_PLAN,
+  REFRESH_KEYWORDS,
   RENDER_POST,
   RESCHEDULE_POST,
+  RESEARCH_COMPETITORS,
+  REVISE_PLAN,
   REVOKE_SHARE,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
+  SEO_ACTION,
   SET_BIO,
+  SYNC_HISTORY,
   UPDATE_ARTICLE,
+  UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
   UPDATE_PERSON,
   UPDATE_PRODUCT,
+  UPDATE_VOICE,
 ];
 
 export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;
@@ -176,22 +207,32 @@ export {
 } from './evidence';
 export {
   GET_ADS,
+  GET_ANALYTICS,
   GET_GEO,
+  GET_GTM,
   GET_KEYWORDS,
   GET_PLAN,
   GET_SEO,
   GET_STUDIO,
+  GET_VOICE,
   GET_WEEKLY_PLAN,
-  LIST_ARTICLES
+  LIST_ARTICLES,
+  LIST_PRODUCTS
 };
+export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export {
+  ADD_COMPETITOR,
   CREATE_PRODUCT,
   DELETE_PRODUCT,
   GET_BIO,
+  RESEARCH_COMPETITORS,
   SET_BIO,
+  SYNC_HISTORY,
+  UPDATE_BRAND_KIT,
   UPDATE_COMPETITOR,
   UPDATE_PERSON,
-  UPDATE_PRODUCT
+  UPDATE_PRODUCT,
+  UPDATE_VOICE
 } from './studio';
 export {
   CREATE_SHARE,
@@ -211,7 +252,16 @@ export type {
 export { KIT_FORMATS } from './creation-kit';
 export type { GetCreationKitInput, GetCreationKitResult } from './creation-kit';
 export type { CreatePostInput, CreatePostResult } from './posts';
-export { PLAN_CADENCES, PLAN_CYCLE_WEEKS, SAVE_PLAN, SAVE_WEEK_SEEDS };
+export {
+  APPROVE_PLAN,
+  DISCARD_PLAN,
+  PLAN_CADENCES,
+  PLAN_CYCLE_WEEKS,
+  PROPOSE_PLAN,
+  REVISE_PLAN,
+  SAVE_PLAN,
+  SAVE_WEEK_SEEDS
+};
 export type { SavePlanInput, SavePlanResult, SaveWeekSeedsInput, SaveWeekSeedsResult } from './plans';
 export type { CreateProductInput, CreateProductResult } from './studio';
 export type { CreateShareInput, CreateShareResult, SharedViewType } from './shares';
