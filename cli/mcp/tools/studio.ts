@@ -44,20 +44,6 @@ export function registerStudioTools(server: McpServer) {
   );
 
   server.registerTool(
-    'delete_document',
-    {
-      title: 'Delete studio document',
-      description: 'Delete a knowledge document by UUID.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().uuid(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async ({ slug, id }) => withAuth((token) => api.deleteDocument(token, slug, id)),
-  );
-
-  server.registerTool(
     'add_person',
     {
       title: 'Add person',
@@ -108,34 +94,6 @@ export function registerStudioTools(server: McpServer) {
           kind: 'ai',
         }),
       ),
-  );
-
-  server.registerTool(
-    'delete_person',
-    {
-      title: 'Delete person',
-      description: 'Delete a studio person by UUID.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().uuid(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async ({ slug, id }) => withAuth((token) => api.deletePerson(token, slug, id)),
-  );
-
-    server.registerTool(
-    'delete_competitor',
-    {
-      title: 'Delete competitor',
-      description: 'Delete a competitor by UUID.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().uuid(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async ({ slug, id }) => withAuth((token) => api.deleteCompetitor(token, slug, id)),
   );
 
     }

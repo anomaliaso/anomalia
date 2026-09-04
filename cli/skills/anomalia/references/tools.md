@@ -1,6 +1,8 @@
 # Anomalia MCP tools ↔ CLI
 
-All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous prefixes.
+All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous prefixes, except
+on a delete: `delete_product`, `delete_person`, `delete_document` and `delete_competitor` take
+the full UUID, because an ambiguous prefix would remove the wrong row and nothing brings it back.
 
 ## Auth
 
@@ -215,10 +217,10 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 `create_product` adds ONE offer. The e-commerce resync behind `sync_products` replaces the whole
 catalog and would erase a hand-made row.
 
-`update_product`, `update_person` and `update_competitor` take the row `id` verbatim from
-`get_studio` or `list_products` — no short prefixes here. They change only the fields you send:
-every other column keeps the value it had. An id from another brand answers `not_found`, exactly
-like one that does not exist anywhere.
+`update_product`, `update_person` and `update_competitor` change only the fields you send: every
+other column keeps the value it had. An id from another brand answers `not_found`, exactly like
+one that does not exist anywhere. The four deletes want the UUID in full, verbatim from
+`get_studio` or `list_products`.
 
 `update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
 real person's face stays withheld from every generator until the operator states the consent in
