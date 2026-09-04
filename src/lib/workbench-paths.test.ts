@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HUB_TABS,
   NAV_TEAM_SPACES,
-  NAV_TEAM_TOOLS,
+  NAV_OFF_SIDEBAR,
   WORKBENCH_HUBS
 } from './workbench-paths';
 
@@ -84,19 +84,19 @@ describe('la nav del brand', () => {
      * porti è una pagina che nessuno trova.
      */
     const SENZA_RIGA_PROPRIA = ['/geo'];
-    const newTree = new Set([...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS].map((t) => t.path));
+    const newTree = new Set([...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR].map((t) => t.path));
     for (const path of legacyLinked.filter((p) => !SENZA_RIGA_PROPRIA.includes(p))) {
       expect(newTree, `href legacy orfano: ${path}`).toContain(path);
     }
     // …e quella deve almeno accendere la voce che la contiene, o non si sa dove si è.
-    const alsoEverywhere = new Set([...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS].flatMap((t) => t.also ?? []));
+    const alsoEverywhere = new Set([...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR].flatMap((t) => t.also ?? []));
     for (const path of SENZA_RIGA_PROPRIA) {
       expect(alsoEverywhere, `${path} non accende nessuna voce`).toContain(path);
     }
   });
 
   it('il nuovo albero non inventa hub: ogni voce usa chiavi i18n esistenti o nav2', () => {
-    for (const t of [...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS]) {
+    for (const t of [...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR]) {
       expect(t.labelKey).toMatch(/^app\.(hub|nav2)\./);
       expect(t.path === '' || t.path.startsWith('/')).toBe(true);
     }
@@ -104,27 +104,57 @@ describe('la nav del brand', () => {
     expect(NAV_TEAM_SPACES[0].path).toBe('');
     // Sanità: le liste non si sovrappongono (una pagina, una casa).
     const spaces = NAV_TEAM_SPACES.map((t) => t.path);
-    const tools = NAV_TEAM_TOOLS.map((t) => t.path);
+    const tools = NAV_OFF_SIDEBAR.map((t) => t.path);
     expect(spaces.filter((p) => tools.includes(p))).toEqual([]);
     expect(WORKBENCH_HUBS.length).toBe(7);
   });
 
   /**
-   * Il mockup: cinque destinazioni, in quest'ordine. È l'unica cosa che un test può tenere
-   * ferma di una sidebar — l'inventario lo sorveglia il caso qui sopra, l'aspetto nessuno.
+   * La sidebar per intero: sei righe, in quest'ordine, più l'ingranaggio in fondo (che non è una
+   * voce e quindi non sta qui). È l'unica cosa che un test può tenere ferma di una barra —
+   * l'inventario lo sorveglia il caso qui sopra, l'aspetto nessuno.
    */
-  it('gli Spazi sono le cinque voci del mockup, in ordine', () => {
+  it('gli Spazi sono le sei voci della sidebar, in ordine', () => {
     expect(NAV_TEAM_SPACES.map((t) => [t.path, t.labelKey])).toEqual([
       ['', 'app.nav2.home'],
       ['/media', 'app.nav2.materials'],
       ['/strategy', 'app.hub.strategy.label'],
       ['/calendar', 'app.hub.publish.calendar'],
+      ['/radar', 'app.nav2.newsRadar'],
       ['/analytics', 'app.nav2.results']
     ]);
   });
 
+  /**
+   * IL GRUPPO «STRUMENTI» NON C'È PIÙ, e queste sono le destinazioni che ci vivevano dentro:
+   * esistono, hanno un'etichetta, si aprono da ⌘K e dai link degli agenti, ma **nessuna riga
+   * della sidebar ci porta**. È una perdita reale, non un dettaglio, e sta scritta qui perché
+   * chi la rimette in discussione veda l'elenco invece di doverlo ricostruire.
+   *
+   * Il test non giudica: inchioda. Aggiungerne una senza toccare questa lista fa fallire la
+   * suite, che è l'unico modo perché una pagina non perda la sua porta in silenzio.
+   */
+  it('sa esattamente quali destinazioni hanno perso la riga in sidebar', () => {
+    expect(NAV_OFF_SIDEBAR.map((t) => t.path)).toEqual([
+      '/leads',
+      '/site',
+      '/seo',
+      '/keywords',
+      '/backlinks',
+      '/competitors',
+      '/campaigns',
+      '/manual-posting',
+      '/settings/brand',
+      '/knowledge',
+      '/agents',
+      '/ads/social',
+      '/ads/google',
+      '/ads/library'
+    ]);
+  });
+
   it('la Panoramica non è più una voce: ci si arriva dalla home', () => {
-    const everywhere = [...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS];
+    const everywhere = [...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR];
     expect(everywhere.map((t) => t.path)).not.toContain('/workbench');
     expect(NAV_TEAM_SPACES[0].also).toContain('/workbench');
   });
