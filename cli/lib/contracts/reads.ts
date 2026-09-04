@@ -5,6 +5,10 @@ const NoInput = z.object({}).strict();
 
 const JsonObject = z.record(z.string(), z.unknown());
 
+export const STUDIO_DOCUMENT_MODES = ['index', 'full'] as const;
+
+export type StudioDocumentMode = (typeof STUDIO_DOCUMENT_MODES)[number];
+
 export const GET_PLAN = {
   tool: 'get_plan',
   title: 'Editorial plan',
@@ -100,13 +104,15 @@ const StudioDocument = z.looseObject({
   id: z.string(),
   kind: z.string(),
   title: z.string().nullable(),
-  content_text: z.string().nullable(),
   file_url: z.string().nullable(),
   file_name: z.string().nullable(),
   mime_type: z.string().nullable(),
   created_at: z.string(),
   status: z.string(),
-  chunkCount: z.number()
+  chunkCount: z.number(),
+  textBytes: z.number(),
+  /** Presente solo con `documents: "full"`. */
+  content_text: z.string().nullable().optional()
 });
 
 const StudioHistoryPost = z.looseObject({
@@ -134,11 +140,19 @@ export const GET_STUDIO = {
   title: 'Studio',
   description:
     'Full studio dump: kit, people, documents, competitors, products, history summary. ' +
-    'Each document carries `status` and `chunkCount`: a document that is not `ready` with at least one chunk exists here but is invisible to `search_knowledge`. ' +
-    'This returns the FULL text of every document — to answer a question, ask `search_knowledge` instead of reading the corpus.',
+    'Each document carries `status` and `chunkCount` (a document that is not `ready` with at least one chunk exists here but is invisible to `search_knowledge`) and `textBytes`, which says how much text it holds. ' +
+    'The text itself is NOT included: to answer a question, ask `search_knowledge` — it returns the passages that answer it with the document each came from, instead of the whole corpus. ' +
+    '`documents: "full"` restores the complete text of every document; it exists for callers that were reading it before and is almost never what you want.',
   method: 'GET',
   pathUnderBrand: '/studio',
-  input: NoInput,
+  input: z
+    .object({
+      documents: z
+        .enum(STUDIO_DOCUMENT_MODES)
+        .optional()
+        .describe('`index` (default) lists documents without their text; `full` includes content_text')
+    })
+    .strict(),
   output: z.object({
     kit: StudioKit.nullable(),
     products: z.array(StudioProduct),
