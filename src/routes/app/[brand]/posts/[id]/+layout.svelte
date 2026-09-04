@@ -16,7 +16,6 @@
   const nav = $derived([
     { href: `${base}/preview`, key: 'preview', label: $_('app.post.nav.preview') },
     { href: `${base}/edit`, key: 'edit', label: $_('app.post.nav.edit') },
-    { href: `${base}/chat`, key: 'chat', label: $_('app.post.nav.chat') },
     { href: `${base}/details`, key: 'details', label: $_('app.post.nav.details') },
     { href: `${base}/analytics`, key: 'analytics', label: $_('app.post.nav.analytics') },
     { href: `${base}/campaign`, key: 'campaign', label: $_('app.post.nav.campaign') },
