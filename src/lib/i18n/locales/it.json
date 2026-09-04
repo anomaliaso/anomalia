@@ -350,10 +350,6 @@
         "q": "Quale AI posso usare?",
         "a": "Qualsiasi client che parli MCP su HTTP. Claude e Claude Code hanno la procedura guidata in questa pagina; Cursor e i connettori custom di ChatGPT usano lo stesso URL. Gira sul tuo abbonamento: il ragionamento e la scrittura li fattura il tuo provider, non noi."
       },
-      "why": {
-        "q": "Se la mia AI scrive già, a cosa mi serve Anomalia?",
-        "a": "Scrivere è la metà facile. La tua AI non può verificare una caption contro il limite di 3.000 caratteri di LinkedIn, rifiutare un post di solo testo su Instagram, generare la copertina, tenere giovedì alle 18:30, entrare nel tuo Instagram o dirti com’è andato il post dopo. Anomalia fa queste cose, e i numeri li ridà alla tua AI."
-      },
       "cost": {
         "q": "Per cosa sto pagando?",
         "a": "Il tuo abbonamento AI copre il ragionamento e la scrittura. Il piano Anomalia copre quello che viene dopo: i render, il calendario, la pubblicazione e le analytics."
@@ -365,6 +361,10 @@
       "agency": {
         "q": "Può davvero sostituire la mia agenzia?",
         "a": "Per fare le cose e per mandarle fuori sì: i post, il blog, la programmazione, la pubblicazione e i report girano tutti dalla tua AI. Due limiti, detti chiari. Lavora dal contesto di marca che gli dai — il tuo sito, i tuoi prodotti, la tua voce — quindi articola il tuo posizionamento, non se lo inventa. E far partire campagne a pagamento su Meta e Google si attiva con il nostro team, non è self-serve."
+      },
+      "diy": {
+        "q": "Perché non me lo costruisco da solo?",
+        "a": "Potresti benissimo riuscirci. Il lavoro non è l’AI — il tuo modello scrive già. È OAuth per nove piattaforme, limiti per piattaforma che cambiano senza preavviso, il rendering di immagini e video, una coda di pubblicazione con i tentativi da rifare quando una piattaforma rifiuta un post, e la raccolta delle metriche. Sono settimane prima che esca il primo post, e manutenzione dopo. Qui esiste già, e la tua AI lo chiama come strumenti."
       }
     },
     "grow": {
@@ -2036,6 +2036,13 @@
         "title": "Ads",
         "body": "La tua AI legge cosa stanno girando i concorrenti nella libreria pubblica di Meta e scrive i creativi. Le campagne su Meta e Google si attivano con il nostro team — quella parte non è ancora self-serve."
       }
+    },
+    "diy": {
+      "kicker": "Oppure te lo costruisci",
+      "titleLead": "Potresti costruirtelo da solo.",
+      "titleAccent": "Sai quanto costa.",
+      "body": "Il tuo modello scrive già — quella parte ce l’hai. Quello che manca è l’idraulica: OAuth per nove piattaforme, il limite di caratteri che ognuna impone e cambia senza avvisare, il rendering di immagini e video, una coda di pubblicazione, i tentativi da rifare quando una piattaforma rifiuta un post, e le metriche che tornano indietro.",
+      "punch": "Settimane, prima che esca un solo post, e poi manutenzione per sempre. Non sostituiamo il ragionamento. Sostituiamo l’idraulica, ed è già costruita."
     }
   },
   "usecases": {

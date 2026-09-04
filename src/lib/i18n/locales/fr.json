@@ -328,10 +328,6 @@
         "q": "Which AI can I use?",
         "a": "Anything that speaks MCP over HTTP. Claude and Claude Code have a guided setup on this page; Cursor and ChatGPT’s custom connectors take the same URL. It runs on your subscription — your provider bills the thinking and the writing, not us."
       },
-      "why": {
-        "q": "If my AI already writes, what do I need Anomalia for?",
-        "a": "Writing is the easy half. Your AI cannot check a caption against LinkedIn’s 3,000-character limit, refuse a text-only post on Instagram, render the cover, hold Thursday at 6:30 PM, sign in to your Instagram, or tell you what the post did afterwards. Anomalia does those, and hands the numbers back to your AI."
-      },
       "cost": {
         "q": "What am I paying for?",
         "a": "Your AI subscription covers the thinking and the writing. Anomalia’s plan covers what comes after: the renders, the calendar, the publishing and the analytics."
@@ -343,6 +339,10 @@
       "agency": {
         "q": "Can this really replace my agency?",
         "a": "For the making and the shipping, yes: the posts, the blog, the scheduling, the publishing and the reporting all run from your own AI. Two honest limits. It works from the brand context you give it — your site, your products, your voice — so it articulates your positioning rather than inventing it. And running paid campaigns on Meta and Google is still set up with our team, not self-serve."
+      },
+      "diy": {
+        "q": "Why wouldn’t I just build this myself?",
+        "a": "You might well manage it. The work isn’t the AI — your model already writes. It’s OAuth for nine platforms, per-platform limits that change without notice, image and video rendering, a publish queue with retries when a platform refuses a post, and collecting the metrics afterwards. That is weeks before the first post goes out, and maintenance after it. Here it exists already, and your AI calls it as tools."
       }
     },
     "grow": {
@@ -2036,6 +2036,13 @@
         "title": "Ads",
         "body": "Your AI reads what competitors are running in Meta’s public ad library and drafts the creative. Launching campaigns on Meta and Google is set up with our team — that part is not self-serve yet."
       }
+    },
+    "diy": {
+      "kicker": "Or build it yourself",
+      "titleLead": "You could build this yourself.",
+      "titleAccent": "You know what it costs.",
+      "body": "Your model already writes — that part you have. What’s missing is the plumbing: OAuth for nine platforms, the character limit each one enforces and changes without warning, image and video rendering, a publish queue, the retries for when a platform refuses a post, and the metrics coming back afterwards.",
+      "punch": "Weeks of that before one post goes out, and maintenance forever after. We don’t replace the thinking. We replace the plumbing, and it is already built."
     }
   },
   "usecases": {

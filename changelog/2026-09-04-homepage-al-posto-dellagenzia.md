@@ -34,6 +34,32 @@ cambiato il testo in tre punti:
   creativi (`ads_remix`, che funziona ed è ungated), e *«le campagne si attivano con il nostro
   team — quella parte non è ancora self-serve»*. Niente TikTok ads: non esistono.
 
+## L'obiezione di chi sa costruire
+
+«La tua agenzia ora è Claude» produce un pensiero immediato nel lettore più competente:
+*«allora me lo faccio da solo»*. E ha metà ragione — il suo modello **sa** scrivere. Quello
+che non ha è l'idraulica, ed è una sezione a sé (il terzo respiro, dopo i tre domini) più la
+seconda FAQ: le due domande insieme coprono chi dubita del prodotto e chi dubita che serva.
+
+Il testo elenca l'idraulica in **una frase sola che non finisce mai** — OAuth per nove
+piattaforme, i limiti di caratteri che cambiano senza avvisare, il rendering, la coda di
+pubblicazione, i tentativi da rifare, le metriche che tornano. La lunghezza della frase *è*
+l'argomento: un elenco puntato avrebbe letto come un giro di funzionalità, che è esattamente
+la cosa da evitare.
+
+Due scelte deliberate:
+
+- **Nessun numero inventato.** Il confronto naturale sarebbe «X minuti dal collegare Claude al
+  primo post contro settimane di lavoro». Quel numero **non esiste**: ho cercato una misura di
+  time-to-first-post in `src/`, `cli/` e `docs/` e non c'è. Resta qualitativo. Una cifra falsa
+  in homepage la scopre il primo cliente.
+- **Nessun disprezzo per il lettore.** Il titolo è *«Potresti costruirtelo da solo. Sai quanto
+  costa.»* — non «non ne sei capace». Chi lo pensa probabilmente ci riuscirebbe, ed è la
+  ragione per cui l'argomento regge: sa già quanto costa perché l'ha già fatto.
+
+La FAQ `why` («se la mia AI scrive già, a cosa mi serve Anomalia?») è stata rimossa: era la
+versione smussata della stessa obiezione, e tenerle entrambe faceva ripetere la risposta.
+
 ## I limiti detti ad alta voce
 
 «Sostituire un'agenzia» è una promessa grossa, e regge solo se la pagina dice anche cosa non

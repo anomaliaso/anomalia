@@ -122,6 +122,18 @@
     </div>
   </section>
 
+  <!-- ============ OR BUILD IT YOURSELF ============ -->
+  <section class="diy-sec">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="kicker">{$_('landing.diy.kicker')}</div>
+        <h2>{$_('landing.diy.titleLead')} <span class="gr-accent">{$_('landing.diy.titleAccent')}</span></h2>
+      </div>
+      <p class="diy-body reveal">{$_('landing.diy.body')}</p>
+      <p class="diy-punch reveal">{$_('landing.diy.punch')}</p>
+    </div>
+  </section>
+
   <!-- ============ BEFORE / AFTER ============ -->
   <section class="split-sec">
     <div class="wrap">
@@ -430,6 +442,22 @@
   @media (max-width: 760px) {
     .jobs-sec { padding-block: 64px 0; }
     .jobs-cols { flex-direction: column; gap: 30px; }
+  }
+
+  /* ---------- OR BUILD IT YOURSELF ----------
+     Prose, deliberately: the objection is answered by the length of one sentence listing the
+     plumbing, and a bulleted list would read as a feature tour instead of an accumulation. */
+  .diy-sec { padding-block: 100px 0; }
+  .diy-body, .diy-punch {
+    max-width: 54ch; margin-inline: auto; text-align: center;
+    font-size: 1.15rem; line-height: 1.6;
+  }
+  .diy-body { color: var(--ink-soft); }
+  .diy-punch { margin-top: 26px; color: var(--ink); text-wrap: balance; }
+
+  @media (max-width: 760px) {
+    .diy-sec { padding-block: 64px 0; }
+    .diy-body, .diy-punch { font-size: 1.05rem; }
   }
 
   /* ---------- BEFORE / AFTER ----------
