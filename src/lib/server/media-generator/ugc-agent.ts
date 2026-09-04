@@ -38,7 +38,7 @@ import { harnessGenerateText } from '$lib/server/harness';
 import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
 import { llmLanguageModel } from '$lib/server/llm';
 import { createAgentBase } from '$lib/server/agent-base';
-import { createBrandContextTools } from '$lib/agent/tools/brand-context-tools';
+import { createBrandContextTools } from '$lib/server/brand-context-tools';
 import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
 import { geminiFast } from '$lib/server/chat/model';
 import type { UgcClipPlan } from '$lib/server/media-generator/ugc-batch';

@@ -18,7 +18,7 @@ import { createAgentTeamTools } from '$lib/agent/tools/agent-team-tools';
 import { createAgentDmTools } from '$lib/agent/tools/agent-dm-tools';
 import { createAgentSessionTools } from '$lib/agent/tools/agent-session-tools';
 import { createTeamActivityTools } from '$lib/agent/tools/team-activity-tools';
-import { createBrandContextTools } from '$lib/agent/tools/brand-context-tools';
+import { createBrandContextTools } from '$lib/server/brand-context-tools';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
 import { createArtifactTools } from '$lib/agent/tools/artifact-tools';
 import { createGoalTools } from '$lib/agent/tools/goal-tools';

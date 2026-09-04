@@ -16,7 +16,7 @@ import { readMediaForAgent } from '$lib/server/strategy-agent-reads';
 import {
   brandContextPromptSection,
   createBrandContextTools
-} from '$lib/agent/tools/brand-context-tools';
+} from '$lib/server/brand-context-tools';
 import { resolveBrandImageIds } from '$lib/server/brand-media';
 import { logAiCall } from '$lib/server/ai-log';
 import type { UgcBrandGrounding } from '$lib/server/media-generator/brand-grounding';

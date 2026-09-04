@@ -46,7 +46,7 @@ import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
 import {
 	brandContextPromptSection,
 	createBrandContextTools
-} from '$lib/agent/tools/brand-context-tools';
+} from '$lib/server/brand-context-tools';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import {
 	MOTION_EXPO_IN_OUT,

@@ -44,7 +44,7 @@ vi.mock(import('$lib/server/agent-base'), async (importOriginal) => ({
 	})) as never
 }));
 
-vi.mock(import('$lib/agent/tools/brand-context-tools'), async (importOriginal) => ({
+vi.mock(import('$lib/server/brand-context-tools'), async (importOriginal) => ({
 	...(await importOriginal()),
 	createBrandContextTools: (() => ({})) as never
 }));
