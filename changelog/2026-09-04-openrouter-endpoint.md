@@ -104,3 +104,57 @@ la dashboard dei costi sbaglia di 2× su 13.265 chiamate in 30 giorni.
 Non lo tocco qui: cambiare quella tariffa cambia i crediti addebitati agli utenti, ed è una
 decisione di prodotto. Ma va deciso, perché finché resta, ogni confronto di costo fra provider
 parte da un denominatore sbagliato — incluso quello che ha motivato questa PR.
+
+## Il default gira: le immagini vanno su OpenRouter
+
+La ragione **non è il costo**. È il p95.
+
+| | chiamate | fallite | media | p95 |
+|---|---|---|---|---|
+| Google | 993 | **0** (0,0%) | 9,2s | 20,2s |
+| kie | 199 | 7 (**3,5%**) | 68,1s | **142,9s** |
+| OpenRouter | misurato | — | **3,4s** | — |
+
+Un render su kie può far aspettare **due minuti e mezzo**, e uno su ventinove non arriva affatto.
+OpenRouter è tre volte più veloce di Google e venti volte più di kie, ed è sincrono.
+
+Il prezzo, rifatto sul mix vero invece che sul confronto sbagliato — il +68% girato in giro
+confrontava OpenRouter con **kie**, ma l'83% dei render gira su **Google**:
+
+| modello | Google (produzione) | kie (produzione) | OpenRouter (misurato) |
+|---|---|---|---|
+| Nano Banana 2 — 71% dei render | $0,06891 | $0,05797 | **$0,06721** |
+| Nano Banana 2 Lite | — | $0,02000 | $0,03361 |
+| Nano Banana Pro | $0,11939 | $0,09000 | $0,13525 |
+
+Sul modello che porta il 71% dei render OpenRouter costa il **2,5% meno di Google**. Sul totale
+sono **+$13,17 al mese** (+17%), non +68%.
+
+### Due ruoli che non vanno confusi
+
+`SLOT_DEFAULT.image` è openrouter, ma `HOME['nano-banana']` resta **kie**. Non è una svista: il
+default dice dove va il traffico quando tutto funziona, `HOME` dove va quando openrouter non è
+utilizzabile. Facendoli coincidere il ripiego finiva su **Google saltando kie**, cioè l'opposto di
+«kie resta il ripiego». Un test lo tiene.
+
+### Perché oggi l'83% dei render gira su Google, che il codice non spiega
+
+Il default di prima era `nano-banana@kie`, `KIE_API_KEY` è impostata, e **nessuna** variabile di
+rotta esiste in produzione: né `AI_ROUTE_*`, né le vecchie `IMAGE_PROVIDER` / `GTM_PROVIDER` /
+`GEMINI_TRANSPORT` / `TTS_PROVIDER` — verificato sulle 82 variabili di produzione, zero
+corrispondenze. Con quel codice ogni render avrebbe dovuto scrivere `provider: 'kie'`.
+
+Ne scrive 993 su 1.192 come `gemini`. Il codice su `dev` **non può** produrre quel comportamento, e
+la spiegazione non sta nel codice: **la produzione gira codice di due giorni fa**, 405 commit
+indietro. Quello che si legge qui descrive `dev`, non ciò che sta servendo i clienti.
+
+Quindi girare questo default non sposta un solo render finché un deploy non arriva davvero. Non è
+una cautela teorica: al momento di scrivere, i deploy recenti risultano tutti **Canceled** e
+l'ultima produzione pronta risale a due giorni fa. Prima di dire che le immagini sono su
+OpenRouter, va guardato `ai_calls.provider`, non questo file.
+
+### Se servisse forzare la rotta senza aspettare il default
+
+`AI_ROUTE_IMAGE=nano-banana@openrouter` batte sia `SLOT_DEFAULT` sia le vecchie variabili, ed è
+reversibile togliendola. Resta il modo più rapido di spostare o riportare indietro il traffico
+mentre un guasto è in corso, che è lo scopo per cui quelle variabili esistono.

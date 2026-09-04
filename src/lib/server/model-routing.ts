@@ -99,11 +99,19 @@ const MISSING: Record<Endpoint, Partial<Record<Capability, string>>> = {
   }
 };
 
-/** L'endpoint di casa di ogni famiglia: quello che serve quando nessuno scrive `@`. */
+/**
+ * L'endpoint di casa di ogni famiglia: quello che serve quando nessuno scrive `@`, ed è anche il
+ * bersaglio del RIPIEGO quando la rotta scelta non è servibile.
+ *
+ * Per `nano-banana` è kie e NON openrouter, che pure è il default dello slot: sono due ruoli
+ * diversi. Il default dice dove va il traffico quando tutto funziona; questa riga dice dove va
+ * quando openrouter non è utilizzabile — e lì la risposta è kie, non Google. Farle coincidere
+ * mandava il ripiego su Google saltando kie del tutto, che è l'opposto di «kie resta il ripiego».
+ */
 const HOME: Record<ModelFamily, Endpoint> = {
   gemini: 'google',
   'gemini-tts': 'google',
-  'nano-banana': 'google',
+  'nano-banana': 'kie',
   mimo: 'xiaomi',
   grok: 'kie',
   gpt: 'kie',
@@ -164,9 +172,11 @@ export type Slot = 'text' | 'image' | 'tts';
 const SLOT_DEFAULT: Record<Slot, Route> = {
   // Il lavoro di sfondo resta su Gemini servito da Google, come oggi.
   text: r('gemini', 'google'),
-  // Nano Banana Pro/2 girano su kie: stesso modello, −33% e −40% per immagine (misurato sui
-  // crediti addebitati). Senza chiave kie si torna su Google da soli.
-  image: r('nano-banana', 'kie'),
+  // Le immagini su OpenRouter, e la ragione NON è il costo: kie fallisce il 3,5% dei render e ha
+  // un p95 di 142,9s (media 68,1s) contro i 3,4s di OpenRouter, che è anche sincrono. Sul modello
+  // che porta il 71% dei render OpenRouter costa il 2,5% MENO di Google; sul totale sono +$13/mese.
+  // Chi legge dopo cercherà un risparmio: non c'è, c'è la disponibilità. kie resta il ripiego.
+  image: r('nano-banana', 'openrouter'),
   // La voce su kie COSTA DI PIÙ (~3× a parità di battuta): lo scopo è togliere una dipendenza
   // dalla API di Google, non risparmiare. Chi legge dopo darà per scontato il contrario.
   tts: r('gemini-tts', 'kie')
