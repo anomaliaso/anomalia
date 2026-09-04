@@ -119,7 +119,7 @@ async function loadProductImages(supabase: SupabaseClient, brandId: string, prod
 // both call these, so an edit behaves identically wherever it comes from.
 
 const POST_STATE_COLS =
-  'id, platform, platforms, caption, title, first_comment, link_url, subreddit, image_prompt, image_prompts, media_url, media_urls, content_type, format, product_name, status, video_thumbnail_url, youtube_thumbnail_url, updated_at';
+  'id, platform, platforms, caption, platform_captions, title, first_comment, link_url, subreddit, image_prompt, image_prompts, media_url, media_urls, content_type, format, product_name, status, scheduled_for, slot, video_thumbnail_url, youtube_thumbnail_url, updated_at';
 
 async function readRow(t: EditorTarget): Promise<AnyRec | null> {
   const { data } = await t.supabase
@@ -198,6 +198,9 @@ export async function readPostState(t: EditorTarget) {
     platform: row.platform,
     platforms: row.platforms,
     caption: row.caption,
+    platform_captions: row.platform_captions ?? null,
+    scheduled_for: row.scheduled_for ?? null,
+    slot: row.slot ?? null,
     title: row.title,
     first_comment: row.first_comment,
     link_url: row.link_url,
