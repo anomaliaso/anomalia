@@ -11,6 +11,7 @@
  * cambiano da prodotto a prodotto — un autopilota social vuole colori e font, un prodotto di lead
  * vuole sapere cosa NON fai e con che parole ne parlano i tuoi clienti. Due lettori, un raccoglitore.
  */
+import { lookup } from 'node:dns/promises';
 
 /** Il nome ridotto a token confrontabili: serve solo ad abbinare le foto del team ai nomi. */
 function slugify(value: string): string {
@@ -421,7 +422,7 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB — limite per immagini l
  * Graceful degradation: se vibrant non è disponibile o fallisce, restituisce [].
  */
 export async function extractColorsFromImage(imageUrl: string): Promise<string[]> {
-    if (!isUrlSafe(imageUrl)) return [];
+    if (!(await isUrlSafeToFetch(imageUrl))) return [];
 
     try {
         const response = await fetch(imageUrl, {
@@ -713,7 +714,11 @@ export function matchTeamPhotos(
 /** Lista di hostname bloccati per prevenire SSRF */
 const SSRF_BLOCKED_HOSTNAMES = ['localhost', '0.0.0.0', '[::1]'];
 
-/** Pattern IPv4 privati — matchano hostname come stringa */
+/**
+ * Gli indirizzi che non escono su internet. Una tabella sola, applicata sia al nome (quando è già
+ * un indirizzo scritto per esteso) sia a ciò che il resolver risponde: la riga nuova vale per
+ * entrambi i casi il giorno che si aggiunge, e nessuno dei due può restare indietro.
+ */
 const SSRF_PRIVATE_IP_PATTERNS = [
     /^127\./,
     /^10\./,
@@ -721,21 +726,44 @@ const SSRF_PRIVATE_IP_PATTERNS = [
     /^192\.168\./,
     /^169\.254\./,
     /^0\./,
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,  // CGNAT (100.64/10)
+    /^(22[4-9]|2[3-5]\d)\./,                     // multicast e riservati (224.0.0.0+)
 ];
 
 /** Pattern IPv6 privati — copre mapped IPv4 (::ffff:), unique local (fc/fd), link-local (fe80) */
 const SSRF_PRIVATE_IPV6_PATTERNS = [
     /^::ffff:/i,      // IPv6-mapped IPv4 (es. ::ffff:127.0.0.1)
+    /^::\d/,          // IPv4-compatible (es. ::127.0.0.1)
     /^::$/,           // Unspecified address
     /^::1$/,          // Loopback senza brackets
     /^f[cd]/i,        // Unique local addresses (fc00::/7)
     /^fe[89ab]/i,     // Link-local addresses (fe80::/10)
+    /^2002:/i,        // 6to4 — porta un IPv4 dentro, e il relay è tecnologia morta
+    /^64:ff9b:/i,     // NAT64 — idem
 ];
 
 /**
- * Verifica che un URL non punti a risorse interne (SSRF protection).
- * Controlla hostname e pattern IP (IPv4 + IPv6) — usato sia per URL iniziali che per redirect,
- * e per ogni URL che arriva da fuori (es. le immagini di riferimento scelte dal chatbot).
+ * Dice se un indirizzo — non un nome — è fuori dalla rete pubblica.
+ *
+ * Le parentesi quadre e la zone id (`fe80::1%eth0`) si tolgono prima: nessuna delle due fa parte
+ * dell'indirizzo, ed entrambe basterebbero a far mancare ogni pattern.
+ */
+function isPrivateAddress(address: string): boolean {
+    const bare = address.trim().toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
+    return (
+        SSRF_PRIVATE_IP_PATTERNS.some(p => p.test(bare)) ||
+        SSRF_PRIVATE_IPV6_PATTERNS.some(p => p.test(bare))
+    );
+}
+
+/**
+ * Il PRE-FILTRO: dice se un URL è scritto in modo accettabile e non nomina apertamente un
+ * indirizzo interno. Non risolve niente, quindi NON basta da solo prima di aprire un socket —
+ * un nome pubblico il cui record DNS risponde `127.0.0.1` lo supera senza storie, perché la
+ * stringa è innocua: è la risposta del resolver a non esserlo.
+ *
+ * Chi sta per scaricare qualcosa usa `isUrlSafeToFetch`. Questa resta per chi filtra un elenco
+ * di URL senza dialogarli (le immagini di riferimento proposte a un modello, per esempio).
  */
 export function isUrlSafe(url: string): boolean {
     try {
@@ -743,16 +771,29 @@ export function isUrlSafe(url: string): boolean {
         if (!['http:', 'https:'].includes(parsed.protocol)) return false;
         const hostname = parsed.hostname.toLowerCase();
         if (SSRF_BLOCKED_HOSTNAMES.includes(hostname)) return false;
-        if (SSRF_PRIVATE_IP_PATTERNS.some(p => p.test(hostname))) return false;
 
-        // IPv6: rimuovi brackets per testare i pattern (URL.hostname li include per IPv6)
-        const bareHost = hostname.replace(/^\[|\]$/g, '');
-        if (SSRF_PRIVATE_IPV6_PATTERNS.some(p => p.test(bareHost))) return false;
-
-        return true;
+        return !isPrivateAddress(hostname);
     } catch {
         return false;
     }
+}
+
+/**
+ * La guardia da usare PRIMA DI APRIRE UN SOCKET: il pre-filtro, e poi l'indirizzo vero.
+ *
+ * `lookup(host, { all: true })` chiede al resolver ogni indirizzo dietro quel nome, e basta che
+ * uno solo sia interno perché l'URL sia rifiutato — un nome con due record, uno pubblico e uno
+ * privato, sceglierebbe altrimenti quale dei due usare al momento della connessione. Un nome che
+ * non risolve non si dialoga: se il resolver non sa dov'è, non lo sappiamo nemmeno noi.
+ */
+export async function isUrlSafeToFetch(url: string): Promise<boolean> {
+    if (!isUrlSafe(url)) return false;
+
+    const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const addresses = await lookup(host, { all: true }).catch(() => []);
+    if (!addresses.length) return false;
+
+    return !addresses.some(a => isPrivateAddress(a.address));
 }
 
 // --- Fetch ---
@@ -763,8 +804,8 @@ export function isUrlSafe(url: string): boolean {
  * Gestione redirect manuale per validare SSRF su ogni hop.
  */
 export async function fetchPage(url: string): Promise<string> {
-    // Validazione SSRF sull'URL iniziale
-    if (!isUrlSafe(url)) return '';
+    // Validazione SSRF sull'URL iniziale: l'indirizzo, non il nome
+    if (!(await isUrlSafeToFetch(url))) return '';
 
     let currentUrl = url;
     let redirectCount = 0;
@@ -795,7 +836,7 @@ export async function fetchPage(url: string): Promise<string> {
                 const resolvedUrl = new URL(location, currentUrl).href;
 
                 // Validazione SSRF sul target del redirect
-                if (!isUrlSafe(resolvedUrl)) return '';
+                if (!(await isUrlSafeToFetch(resolvedUrl))) return '';
 
                 currentUrl = resolvedUrl;
                 redirectCount++;
@@ -890,7 +931,7 @@ const TLS_ERROR_CODES = new Set([
 ]);
 
 const defaultEntryProbe: EntryProbe = async (url) => {
-    if (!isUrlSafe(url)) return { tlsError: false, finalUrl: null };
+    if (!(await isUrlSafeToFetch(url))) return { tlsError: false, finalUrl: null };
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
@@ -930,7 +971,7 @@ export async function resolveEntryUrl(url: string, probe: EntryProbe = defaultEn
     if (!finalUrl) return url;
 
     try {
-        if (new URL(finalUrl).protocol === 'https:' && isUrlSafe(finalUrl)) return finalUrl;
+        if (new URL(finalUrl).protocol === 'https:' && (await isUrlSafeToFetch(finalUrl))) return finalUrl;
     } catch {
         return url;
     }
@@ -953,7 +994,7 @@ export async function loadPageHtml(
     onEscalate?: () => void,
     renderer: BrowserRenderer = noRenderer
 ): Promise<string> {
-    if (!isUrlSafe(url)) return '';
+    if (!(await isUrlSafeToFetch(url))) return '';
 
     // Una pagina di blocco non è il sito: meglio niente, così chi chiama lo dice all'utente
     // invece di far analizzare un errore 403 come se fosse il suo brand.
@@ -1036,7 +1077,7 @@ export async function fetchShopifyProducts(baseUrl: string): Promise<Array<{ nam
 
         // Validazione SSRF — l'origin deriva dall'URL utente che è già validato,
         // ma difesa in profondità per evitare bypass se chiamato da altri contesti
-        if (!isUrlSafe(`${origin}/products.json`)) return [];
+        if (!(await isUrlSafeToFetch(`${origin}/products.json`))) return [];
 
         const PER_PAGE = 250; // Max consentito da Shopify
         const MAX_PAGES = 10; // Limite sicurezza: max 2500 prodotti
@@ -1123,7 +1164,7 @@ export async function fetchWooCommerceProducts(baseUrl: string): Promise<Array<{
         const origin = new URL(baseUrl).origin;
 
         // Validazione SSRF — difesa in profondità
-        if (!isUrlSafe(`${origin}/wp-json/wc/store/v1/products`)) return [];
+        if (!(await isUrlSafeToFetch(`${origin}/wp-json/wc/store/v1/products`))) return [];
 
         const PER_PAGE = 100; // Max per WooCommerce Store API
         const MAX_PAGES = 10;
