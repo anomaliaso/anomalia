@@ -97,7 +97,7 @@ Post and article ids accept **short unambiguous prefixes** from list results (sa
 | Posts | `list_posts`, `get_post`, `edit_post`, `approve_posts`, `regenerate_slide`, `make_video` |
 | Plans | `get_plan`, `propose_plan`, `plan_week`, `produce_week` |
 | Studio | `get_studio`, `add_note`, `research_competitors` |
-| Web | `get_seo`, `get_geo`, `generate_article`, `chat` |
+| Web | `get_seo`, `get_geo`, `generate_article`, `ads_remix`, `chat` |
 
 Full map: [`skills/anomalia/references/tools.md`](../skills/anomalia/references/tools.md).
 

@@ -248,6 +248,36 @@ describe('il registry degli endpoint di brand', () => {
     expect(byTool('update_article').method).toBe('POST');
   });
 
+  it('ads_remix è tornato: la rotta esiste, il client la sapeva chiamare, poi solo lui l ha persa', () => {
+    const remix = byTool('ads_remix');
+    expect(remix.method).toBe('POST');
+    expect(pathFor(remix, 'demo')).toBe('/api/v1/brands/demo/ads/remix');
+    expect(remix.destructive).toBe(false);
+    expect(statusForFailure(remix, 'ads_not_on_plan')).toBe(403);
+    expect(statusForFailure(remix, 'credits_exhausted')).toBe(402);
+    expect(statusForFailure(remix, 'no_competitor_ads')).toBe(400);
+  });
+
+  it('ads_remix promette brief classificati, non una lista di stringhe', () => {
+    const { output } = byTool('ads_remix');
+    expect(
+      output.safeParse({
+        ok: true,
+        briefs: [
+          {
+            rank: 1,
+            strategy: 'Riprendi hook-problema-soluzione',
+            hook: 'Stufo di risultati che non arrivano?',
+            headline: 'Il metodo che funziona',
+            productName: 'Kit Completo',
+            visualPrompt: 'Flat lay del kit'
+          }
+        ]
+      }).success
+    ).toBe(true);
+    expect(output.safeParse({ ok: true, briefs: ['un brief'] }).success).toBe(false);
+  });
+
   it('una response con outputSchema è un oggetto: MCP non sa trasportare un array', () => {
     for (const e of BRAND_ENDPOINTS) {
       if (!(e.output instanceof z.ZodObject)) continue;

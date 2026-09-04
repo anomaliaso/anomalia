@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { ADS_REMIX } from './ads';
 import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
 import { CHECK_CONTENT } from './content';
 import { GET_CREATION_KIT } from './creation-kit';
@@ -88,6 +89,7 @@ export type ResourceEndpoint = EndpointShape & {
 export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
+  ADS_REMIX,
   CHECK_CONTENT,
   CREATE_POST,
   CREATE_PRODUCT,
@@ -140,6 +142,7 @@ export function statusForFailure(endpoint: BrandEndpoint, error: string): number
 }
 
 export {
+  ADS_REMIX,
   CHECK_CONTENT,
   CREATE_POST,
   GET_ARTICLE,

@@ -273,8 +273,9 @@ program
 
 program
   .command('ads <slug>')
-  .description('Ads via Zernio: list, propose boosts, approve spend, create standalone')
+  .description('Ads via Zernio: list, propose boosts, remix competitor ads, approve spend')
   .option('--propose', 'Crea proposte di boost dai post organici migliori')
+  .option('--remix', 'Remix competitor/trending ads → brief creativi in brand voice')
   .option('--approve <id>', 'Approva e lancia una campagna proposta (spende budget)')
   .option('--reject <id>', 'Rifiuta una proposta')
   .option('--duplicate <id>', 'Duplica una campagna live (copia in pausa, poi approva)')

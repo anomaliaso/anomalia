@@ -93,6 +93,7 @@ Note: `--id` accepts the short prefix printed in the tables.
 - `anomalia ads <slug>` — Ad campaigns, spend, metrics + boost candidates
 - `anomalia ads <slug> --sync` — Sync ad accounts + metrics
 - `anomalia ads <slug> --propose` — Propose boosts from top organic posts
+- `anomalia ads <slug> --remix` — Remix competitor/trending ads into ranked creative briefs
 - `anomalia ads <slug> --create --name "..." --headline "..." [--platform metaads|googleads] [--budget N]` — Create a standalone proposal
 - `anomalia ads <slug> --approve <id> [--budget N] [--goal ...]` — Approve + launch on Zernio
 - `anomalia ads <slug> --pause <id>` — Pause a campaign (all its creatives)
