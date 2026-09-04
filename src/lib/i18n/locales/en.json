@@ -10,7 +10,7 @@
     "askAi": {
       "title": "Still undecided?",
       "subtitle": "Ask AI",
-      "prompt": "Explain Anomalia's plans and pricing (https://anomalia.so/pricing) — Go, Starter, and Pro — and how it can help me run my business's social media on autopilot. Why is it the better choice vs a social media manager or an agency? Also read https://anomalia.so/llms.txt"
+      "prompt": "Explain Anomalia to me. I connect my own AI (Claude, Claude Code, Cursor) to it over MCP: my model plans and writes, and Anomalia checks the posts against each platform’s rules, renders the images, schedules, publishes to my real accounts and measures the results. Tell me about its plans and whether it fits my business."
     },
     "close": "Close"
   },
@@ -39,10 +39,10 @@
       "pricing": "Pricing"
     },
     "hero": {
-      "eyebrow": "Your AI marketing team · Apache 2.0 · Self-hosted available",
-      "titleLead": "Your marketing department,",
+      "eyebrow": "Open source · Bring your own AI · Cloud or self-hosted",
+      "titleLead": "Your AI writes it.",
       "titleMain": "",
-      "titleEm": "automated.",
+      "titleEm": "Anomalia publishes it.",
       "titleCalm": "",
       "phrases": [
         "everywhere they're searching for what you sell.",
@@ -51,7 +51,7 @@
         "wherever it counts most.",
         "where they find you before your competitors."
       ],
-      "subhead": "The open-source alternative specialized in marketing, distribution and sales: five specialists make the work, publish it across nine channels and your blog, and draft the replies to people already asking about you — nothing goes out until you approve it.",
+      "subhead": "Connect your own AI over MCP. It plans and writes; Anomalia checks the platform rules, renders the images, publishes to your real accounts and measures what happened.",
       "seeHow": "See how it works",
       "note": "Or just ask your AI to start using Anomalia",
       "ctaSecondary": "Book a call",
@@ -336,35 +336,35 @@
       "title": "Questions you might have.",
       "review": {
         "q": "Can I review posts before they go live?",
-        "a": "Always. Nothing gets published without your approval. You can edit captions, swap visuals, reschedule or delete — every single post goes through you first."
-      },
-      "social": {
-        "q": "How does the social media autopilot work?",
-        "a": "Anomalia learns your brand voice, products and audience from your website and knowledge base. Then a team of specialists builds a weekly editorial plan and makes the posts — caption, visual and timing — for any of the nine channels you connect. You approve, and it schedules and publishes them."
-      },
-      "seo": {
-        "q": "Will the blog articles actually rank on Google?",
-        "a": "Yes. Each article is written for real search intent, linked to your actual pages, and optimized for both Google and AI assistants like ChatGPT and Perplexity. We don't churn out generic SEO filler — every piece is grounded in your brand knowledge."
-      },
-      "radar": {
-        "q": "How fast does the radar react to news?",
-        "a": "Three times a day. The radar reads Google News, Reddit, Threads, LinkedIn and X for your beat, judges each item against your strategy, and turns the relevant ones into ready posts with the source attached. You approve and it goes live."
-      },
-      "leads": {
-        "q": "How does finding leads actually work?",
-        "a": "The radar watches Reddit threads, Threads posts, LinkedIn posts and X conversations for people asking about products like yours. It drafts a reply for each one in your voice — you review and send it yourself. Nothing is posted automatically."
-      },
-      "voice": {
-        "q": "Will it sound like my brand, not a robot?",
-        "a": "Yes. During onboarding you define tone, voice and personality. The AI references your real products, your actual website copy and your brand guidelines for every piece of content. You can also upload examples of posts you love."
+        "a": "Always. Your AI can write and schedule, but a post stays pending until you approve it. You can edit the caption, swap the image, move it or delete it."
       },
       "platforms": {
         "q": "Which platforms are supported?",
-        "a": "Nine for social posts: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky and Reddit. Long-form articles publish to your own hosted blog or export to WordPress, Webflow or Shopify. The radar watches Google News, Reddit, Threads, LinkedIn and X."
+        "a": "Nine: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky and Reddit. Carousels fan out on Instagram, Facebook and LinkedIn; the others get the cover."
       },
-      "trial": {
-        "q": "Is there a free trial?",
-        "a": "You can start for free and explore the full dashboard. No credit card required. Upgrade when you're ready to activate the autopilot."
+      "mcp": {
+        "q": "How do I connect my own AI?",
+        "a": "Anomalia is an MCP server. You add it as a connector in Claude, or with a single command in Claude Code, and your AI gets the Anomalia tools. Press “Connect to Claude” at the top of this page for the exact steps."
+      },
+      "which": {
+        "q": "Which AI can I use?",
+        "a": "Any client that speaks MCP over HTTP — Claude, Claude Code, Cursor. It runs on your own subscription: the thinking and the writing are billed by your provider, not by us."
+      },
+      "why": {
+        "q": "If my AI already writes, what do I need Anomalia for?",
+        "a": "Writing is the easy half. Your AI cannot check a caption against LinkedIn’s limit, render the cover, hold Thursday at 6:30 PM, sign in to your Instagram, or tell you what the post did afterwards. Anomalia does those, and hands the numbers back to your AI."
+      },
+      "checks": {
+        "q": "What does “checked against the real rules” mean?",
+        "a": "A deterministic pass before anything is scheduled: per-platform character limits, posts that need media, YouTube taking video only, Reddit needing its own title, double-booked slots. No model is asked, so it costs nothing and it always answers the same."
+      },
+      "cost": {
+        "q": "What does Anomalia charge for?",
+        "a": "Your AI subscription covers the thinking and the writing. Anomalia’s plan covers what comes after: the renders, the calendar, the publishing and the analytics."
+      },
+      "selfhost": {
+        "q": "Can I run it myself?",
+        "a": "Yes. Anomalia is open source. Run it with Docker Compose on your own server with your own keys — same tools, same MCP server, unlimited brands."
       }
     },
     "grow": {
@@ -502,27 +502,6 @@
         "ctaSecondary": "Book a call"
       }
     },
-    "services": {
-      "kicker": "Where the work goes",
-      "social": {
-        "title": "Social posts",
-        "body": "Nine channels — Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky and Reddit. On-brand posts planned, made and scheduled week after week. Nothing publishes until you approve it."
-      },
-      "seo": {
-        "title": "Blog, SEO & GEO",
-        "body": "Rank on Google and get cited by ChatGPT, Perplexity and Gemini. Long-form articles and AI-optimized content that drive real traffic."
-      },
-      "radar": {
-        "title": "Instant marketing",
-        "body": "Turn breaking news into posts in minutes. The radar scans sources, drafts content and gets it live before the moment fades."
-      },
-      "leads": {
-        "title": "New leads daily",
-        "body": "Find people already looking for you. The radar spots relevant conversations on Reddit, forums and social — then drafts comments and DMs for you."
-      },
-      "titleLead": "One team,",
-      "titleAccent": "every channel that matters."
-    },
     "howitworks": {
       "kicker": "How it works",
       "title": "From zero to growth in five steps.",
@@ -624,13 +603,13 @@
       "kicker": "Pricing",
       "titleLead": "Ready to run or",
       "titleAccent": "yours to host.",
-      "lede": "One product, two ways to own it. Same agents, same approvals — pick where it lives.",
+      "lede": "One product, two ways to own it. Same tools, same approvals — pick where it lives.",
       "apps": "Mobile and desktop apps — coming soon.",
       "cloud": {
         "name": "Cloud",
         "badge": "Ready to go",
-        "meta": "We run everything. Sign up, connect a brand, approve.",
-        "f0": "Agents plan, write and publish for you, week after week",
+        "meta": "We run everything. Sign up, connect a brand, connect your AI.",
+        "f0": "Your AI plans and writes; Anomalia renders and publishes",
         "f1": "Nothing goes live without your approval",
         "f2": "Free plan with monthly AI credits",
         "f3": "No servers, no setup — it just works",
@@ -642,7 +621,7 @@
         "meta": "Your machine, your keys, your data. Clone it and go.",
         "f0": "Runs with Docker Compose on your own server",
         "f1": "Your model and API keys — nothing leaves your stack",
-        "f2": "Same agents as the cloud, unlimited brands",
+        "f2": "Same tools as the cloud, unlimited brands",
         "f3": "CLI and MCP server included for your own agents",
         "cta": "View on GitHub"
       }
@@ -668,23 +647,6 @@
         {
           "num": "4",
           "label": "People in the team"
-        }
-      ],
-      "reviews": [
-        {
-          "text": "I got back 15 hours a week. The posts are better than the ones I used to make myself.",
-          "name": "Marco R.",
-          "role": "Founder, Flash Camp"
-        },
-        {
-          "text": "For the first time we have a blog that brings in real traffic. Without writing a line.",
-          "name": "Sara L.",
-          "role": "CMO, Mellon Studio"
-        },
-        {
-          "text": "The radar surfaced a trend we turned into 3 posts that took off. Wild.",
-          "name": "Alex T.",
-          "role": "Growth, Dal Nulla"
         }
       ]
     },
@@ -2031,144 +1993,31 @@
       },
       "cta": "Book a call"
     },
-    "team": {
-      "kicker": "The team",
-      "title": "Specialists that",
-      "titleAccent": "finish the job.",
-      "sub": "Five crafts and a lead. Each one owns its area, its tools and its own thread, and takes its work all the way: written, made, checked against real rules, ready for your yes. Then it comes back on schedule — the plan and the posts every week, the field every day — and starts the next round from what you corrected and from what worked.",
-      "routines": "{count, plural, one {# routine, on a schedule} other {# routines, on a schedule}}",
-      "onDemand": "On demand — just ask in the chat",
-      "dm": "They also write to each other. When the Content Creator needs to know which format worked last month, it asks the Analyst directly — in a thread you can read, without you being the messenger.",
-      "content": {
-        "role": "Posts, captions, graphics and the weekly plan — written in your brand’s voice.",
-        "name": "Content Creator"
+    "split": {
+      "kicker": "The split",
+      "titleLead": "A chat window can write a caption.",
+      "titleAccent": "It can’t publish it.",
+      "yours": {
+        "title": "Your AI",
+        "note": "Your model, your subscription, your context.",
+        "i1": "Plans the week and decides what to say",
+        "i2": "Writes the captions, in your brand’s voice",
+        "i3": "Reads the numbers Anomalia hands back and changes the plan"
       },
-      "analyst": {
-        "role": "The numbers and the direction: results, strategy, market watch and leads.",
-        "name": "Analyst"
+      "ours": {
+        "title": "Anomalia",
+        "note": "The tools your AI calls.",
+        "i1": "Checks every post against the platform’s real limits — 280 characters on X, no text-only post on Instagram, video only on YouTube",
+        "i2": "Renders the images and animates them into video",
+        "i3": "Holds the calendar and the scheduled slot",
+        "i4": "Publishes to your real accounts — after you approve",
+        "i5": "Reads back likes, saves and reach, and hands them to your AI"
       },
-      "web": {
-        "role": "Your blog, your rankings on Google, and getting cited by ChatGPT and Perplexity.",
-        "name": "Web Specialist"
-      },
-      "ugc": {
-        "role": "Talking reels: the script, the face, the footage and the review.",
-        "name": "UGC Specialist"
-      },
-      "motion": {
-        "role": "Kinetic ads and motion videos, built from editable source instead of templates.",
-        "name": "Motion Specialist"
-      },
-      "auto": {
-        "role": "The lead. Takes whatever you ask and hands it to whoever should be doing it.",
-        "name": "Anomalia"
-      }
+      "punch": "The hard part was never writing the caption."
     },
-    "chat": {
-      "kicker": "How you work with them",
-      "title": "You write to them.",
-      "titleAccent": "They come back with the work done.",
-      "sub": "No workflow to build, no calendar to fill. One conversation, from the request to the drafts waiting for your yes.",
-      "alt": "A conversation with the Content Creator: a request for next week, the work done in the background, and seven drafts waiting for approval.",
-      "m1": "Prepare next week for me. Same voice as last month, but more video.",
-      "m2": "On it. Let me read your last 20 posts and this week’s plan first.",
-      "actions": "14 actions done",
-      "dm": "3 messages with Analyst",
-      "background": "Working in the background — I’ll write to you when it’s ready",
-      "m3": "Seven posts ready for next week: four Instagram, two TikTok, one LinkedIn. Video goes from two to four. Thursday’s reel reuses the hook that worked best in July — the Analyst pulled the numbers.",
-      "draftTitle": "Instagram · Reel",
-      "draftSub": "Thursday, 6:30 PM · caption and cover ready",
-      "draftMore": "+6",
-      "approve": "Approve all",
-      "review": "or open them one by one",
-      "pick": "Pick an agent to see the kind of work it comes back with",
-      "openSettings": "Open Settings",
-      "connectDrive": "Connect Google Drive",
-      "cases": {
-        "content": {
-          "name": "The week of posts",
-          "preview": "Seven posts ready for next week — four Instagram, two TikTok…"
-        },
-        "room": {
-          "name": "Three in one room",
-          "preview": "Thursday’s launch, settled in three lines.",
-          "b1": "We launch on Thursday. Give me the ad, and tell me if the format holds.",
-          "b2": "Over the last 60 days the carousel has been sliding for three weeks, vertical video holds: 3.1× the average on saves. If there’s only one launch post, make it video.",
-          "b3": "Video then. Fifteen seconds, six beats, the colours of the site — not a template. I’m keeping the price out of the first beat: that one is for the promise.",
-          "b4": "And the caption?",
-          "b5": "Three lines, the same voice as July’s posts, with the launch date in the first one. The draft is in the calendar for Thursday at 6:30 PM — publishing stays yours."
-        },
-        "connect": {
-          "name": "The channel that isn’t there",
-          "preview": "Seven drafts ready, nowhere to publish them.",
-          "b1": "Schedule Thursday’s reel for 6:30 PM. And tell me how July went.",
-          "b2": "The drafts are written, but the brand’s Instagram account isn’t connected: from here I can neither queue the reel nor read July’s numbers. It’s a one-time thing.",
-          "b3": "Settings › Connected accounts — you authorise it, the password never passes through me.",
-          "b4": "Instagram connected · @flashcamp",
-          "b5": "Picked up where I left off. The reel is queued for Thursday at 6:30 PM with the caption you approved, and I pulled the last 30 days: nine posts, and saves on video are double. From now on I schedule the drafts without asking you again."
-        },
-        "drive": {
-          "name": "The documents I don’t have",
-          "preview": "Your product sheets first, then the article.",
-          "b1": "Write me the article about the new collection.",
-          "b2": "Your site says three lines about the new collection. With those I write a piece that circles the point, or I make the details up — and I don’t make things up. If the product sheets and the guidelines live on Drive, I’ll read those.",
-          "b3": "I only read the folders you point me at. I don’t write, move or delete anything.",
-          "b4": "Google Drive connected · 41 documents read",
-          "b5": "Read: the fabric sheets, the price list and the 2025 tone of voice. The article now says 480 g/m² instead of “heavy fabric”, and the prices are the real ones. Scheduled for Tuesday, and it stays a draft until you approve it."
-        },
-        "motion": {
-          "name": "The ad that moves",
-          "preview": "Fifteen seconds, six beats, voice-over and music.",
-          "b1": "Make me a 15-second video for the new launch. Same colours as the site, and not a template.",
-          "b2": "I'll build it from source — six beats, a voice-over, and a music bed under it. Stills first, render after.",
-          "b3": "23 actions done",
-          "b4": "Rendering on the machine — I'll write to you when the file is ready",
-          "b5": "Fifteen seconds. One voice-over recording, cut on the line boundaries so no beat talks over the next, and the music sits at 0.2 under the words. It passed the craft review, so I rendered it. The source stays editable: name a beat and I change only that one.",
-          "cardTitle": "launch-15s.mp4",
-          "cardSub": "1080×1920 · voice-over + music"
-        },
-        "web": {
-          "name": "The audit that becomes work",
-          "preview": "Grade C+. Four initiatives, and Tuesday's article is written.",
-          "b1": "Why don't we come up on Google for what we actually sell?",
-          "b2": "I ran the site review. Grade C+: eleven pages with no meta description, three articles competing for the same query, and nothing linking to the pricing page. The AI check says ChatGPT cites you for the brand name and for nothing else.",
-          "b3": "9 actions done",
-          "b4": "I turned it into four initiatives, in the order that pays: the comparison page that doesn't exist yet, then the internal links. I wrote the first article and scheduled it for Tuesday — it stays a draft until you approve it."
-        },
-        "analyst": {
-          "name": "Monday, without being asked",
-          "preview": "Weekly recap — nine published, two waiting for you.",
-          "routine": "Weekly recap · Monday, 8:00",
-          "b1": "Last week: nine posts published, two still waiting for you. Thursday's reel did three times the average — a face talking, hook inside the first second. The carousel format has been sliding for three weeks, so I asked for two of next week's slots to become video.",
-          "b2": "12 actions done",
-          "b3": "1 message with Content Creator",
-          "b4": "Which ones do I actually need to look at?",
-          "b5": "The two waiting for approval, and the LinkedIn post — it makes a claim about delivery times that I can't check against anything you've given me."
-        },
-        "ugc": {
-          "name": "The talking reel",
-          "preview": "Clip ready, reviewed against the organic standard.",
-          "b1": "A reel where someone explains why the fabric matters. Twenty seconds, our own face.",
-          "b2": "The script fits the word budget for twenty seconds — over it the person rushes and you can hear it. Same casting as the other clips, so the face doesn't change halfway through the set.",
-          "b3": "17 actions done",
-          "b4": "Clip ready. Reviewed against the organic standard: hook 8, first two seconds with the sound off 7, hold 8 — verdict ship. One of the five came back flat: I fixed its script and re-rendered that clip alone, not the whole batch.",
-          "cardTitle": "Reel · 20s",
-          "cardSub": "reviewed: ship · caption ready"
-        }
-      },
-      "remote": {
-        "brand": "FLASH CAMP",
-        "live": "LIVE",
-        "today": "TODAY",
-        "tue": "TUE",
-        "wed": "WED",
-        "launchStory": "Launch story",
-        "behindScenes": "Behind the scenes",
-        "customerNote": "Customer note",
-        "calendarChecked": "Calendar checked · {count} drafts ready for review",
-        "nextPost": "Next post queued for Tuesday at 09:00"
-      },
-      "foot": "Long jobs keep running after you close the tab, and the agent writes to you when it is done. Publishing is the one step it never takes on its own."
+    "channels": {
+      "label": "Publishes to",
+      "note": "Nothing goes live until you approve it."
     }
   },
   "usecases": {
@@ -2507,8 +2356,8 @@
   },
   "meta": {
     "landing": {
-      "title": "Anomalia — a marketing team that publishes for you",
-      "description": "Five AI specialists plan, write, design and publish your content across nine social channels, your blog and Google. You approve; they do the rest."
+      "title": "Anomalia — your AI writes it, Anomalia publishes it",
+      "description": "Connect your own AI over MCP. It writes; Anomalia checks the platform rules, renders the images, publishes to nine social accounts and measures what worked."
     },
     "pricing": {
       "title": "Pricing — Anomalia",
