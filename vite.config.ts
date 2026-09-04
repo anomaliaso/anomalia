@@ -84,7 +84,8 @@ export default defineConfig({
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',
       'packages/*.{test,spec}.{js,ts}',
-      'scripts/**/*.{test,spec}.{js,ts}'
+      'scripts/**/*.{test,spec}.{js,ts}',
+      'docker/**/*.{test,spec}.{js,mjs,ts}'
     ],
     hookTimeout: 30_000
   }
