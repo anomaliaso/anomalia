@@ -251,7 +251,9 @@ Two consequences to say out loud before you change either of the first two:
 
 `get_brand_settings` also returns `connected_platforms`, and the write answers with
 `without_account`. Targeting a platform with no connected account is allowed and silent otherwise:
-posts for it are produced and then sit unpublished until an account exists. Say so when it happens.
+posts for it are produced and then sit unpublished until an account exists. Say so when it happens,
+and reach for `list_social_accounts` — it reads the same accounts and is the only place that says
+*why* a platform is missing.
 
 An unknown IANA zone is refused (`unknown_timezone`), and so is a platform outside the list —
 `twitter` is not a name here, it is `x`. The post language lives on `update_brand_kit`, not here.
@@ -407,6 +409,44 @@ Refusals name the field: `article_not_found` (an article of another brand includ
 `translation_locked` (a translation's locale is its identity) and `article_published` — what is
 live is never edited in place. To correct a published article: `unpublish_article`,
 `update_article`, `publish_article`.
+## Social accounts
+
+| MCP | CLI |
+|-----|-----|
+| `list_social_accounts` | (MCP only) |
+| `create_social_connect_link` | (MCP only) |
+
+Where the brand actually publishes, and how a platform gets connected. This is **not**
+`connections` / `list_integrations_tools`: those are Composio (Drive, Notion, GitHub, Gmail).
+These two are the social accounts a post goes out on.
+
+`list_social_accounts` returns one row per account — `platform`, `username`, `status` — plus
+`connected_platforms` (at least one **active** account: the only ones a post leaves from),
+`broken_platforms` (an account exists but none is active — expired, revoked, disconnected),
+`can_connect`, `slots` (`used` / `limit` for the plan) and `manage_url`. `broken_platforms` is the
+one thing no other tool shows, and it is usually the answer to "why hasn't this published?": the
+post is scheduled, the platform is targeted, and the account stopped working weeks ago.
+
+`create_social_connect_link` takes a `platform` and answers with the **URL a person opens** to
+authorise it. You never run the OAuth, never see a token, never connect anything: you hand the URL
+over and stop. Unlike a billing link it is not a credential — it is a page of our own app behind
+their login — but it is only useful to someone who can already reach the brand. Minting a link for
+a platform that is already connected is fine and comes back with `already_connected: true`: that
+is how an expired account gets re-authorised or a second one added.
+
+`platform` must be one of `platform_choices` — the same vocabulary as `set_brand_settings`, and
+`twitter` is not in it, it is `x`. An unknown name is refused with `invalid_input` and the allowed
+list in `platform_choices`.
+
+Two refusals mean two different remedies: `plan_cannot_connect` (409) is a free, trial, paused or
+export-only brand that connects no accounts at all — the body carries `activate_url`, which is
+where the person starts; `account_limit` (409) is a plan whose slots are full, and the remedy is
+`manage_url`, where they remove one. Neither call spends credits or touches a model.
+
+**There is no tool to disconnect an account, on purpose.** Removing one stops scheduled
+publishing without anyone noticing until a post fails to go out, and that is not a step an agent
+takes on someone's behalf. `manage_url` is where a person does it.
+
 ## Billing links
 
 | MCP | CLI |

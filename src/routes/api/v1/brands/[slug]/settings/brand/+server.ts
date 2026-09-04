@@ -1,9 +1,9 @@
 import { json } from '@sveltejs/kit';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 import { SET_BRAND_SETTINGS, TARGET_PLATFORMS, statusForFailure } from '@anomalia/api-contracts';
 import { isKnownTimezone, normalizeHashtags } from '$lib/brand-fields';
+import { socialConnections } from '$lib/server/social-connections';
 
 type Prefs = Record<string, unknown>;
 
@@ -14,17 +14,9 @@ type Prefs = Record<string, unknown>;
 // La lettura porta anche le piattaforme che hanno un account collegato. Non è decorazione:
 // `target_platforms` non è validata contro gli account, quindi un agente può bersagliare una
 // piattaforma dove non c'è dove pubblicare, e i post per lei restano fermi in `approved` senza
-// che nessuno lo dica.
-
-async function connectedPlatforms(supabase: SupabaseClient, brandId: string): Promise<string[]> {
-  const { data } = await supabase
-    .from('social_accounts')
-    .select('platform')
-    .eq('brand_id', brandId)
-    .eq('status', 'active');
-
-  return [...new Set((data ?? []).map((row) => String(row.platform ?? '').toLowerCase()))].filter(Boolean);
-}
+// che nessuno lo dica. L'elenco viene dalla stessa lettura di `list_social_accounts`, che è dove
+// si vede anche PERCHÉ una piattaforma non è collegata: due tool che rispondono alla stessa
+// domanda devono leggerla nello stesso posto, o divergono al primo cambiamento.
 
 const storedHashtags = (prefs: Prefs): Record<string, string[]> =>
   (prefs.platformHashtags as Record<string, string[]>) ?? {};
@@ -45,7 +37,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
     timezone: brand.timezone,
     platforms: brand.target_platforms ?? [],
     platform_choices: [...TARGET_PLATFORMS],
-    connected_platforms: await connectedPlatforms(supabase, brand.id),
+    connected_platforms: (await socialConnections(supabase, brand)).connected,
     hashtags: storedHashtags(prefs),
     voice_examples: storedExamples(prefs)
   });
@@ -116,7 +108,7 @@ export const PUT: RequestHandler = async ({ request, params }) => {
   }
 
   const saved = platforms ?? brand.target_platforms ?? [];
-  const connected = await connectedPlatforms(supabase, brand.id);
+  const { connected } = await socialConnections(supabase, brand);
 
   return json({
     ok: true,
