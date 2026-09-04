@@ -48,5 +48,4 @@ anomalia login
 anomalia brands
 anomalia content <slug> --status pending_user
 anomalia approve <slug> --all
-anomalia ai <slug> --message "..." --pipe
 ```

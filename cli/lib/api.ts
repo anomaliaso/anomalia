@@ -496,24 +496,4 @@ export const api = {
       copiedCampaignId?: string;
     }>(`/api/v1/brands/${slug}/ads`, t, body),
 
-  // ── Chat ──────────────────────────────────────────────────────────────
-
-  chat: async (t: string, slug: string, message: string): Promise<string> => {
-    const res = await fetch(`${appUrl()}/app/${slug}/chat`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: message }] }),
-    });
-    if (!res.ok) throw new Error(`Chat error: ${res.status}`);
-    // Read streaming response
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let result = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      result += decoder.decode(value, { stream: true });
-    }
-    return result;
-  },
 };

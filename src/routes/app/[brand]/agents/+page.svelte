@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { enhance } from '$app/forms';
-  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { pageQuery } from '$lib/page-query';
   import { _, locale } from 'svelte-i18n';
@@ -13,7 +12,6 @@
   import Play from '@lucide/svelte/icons/play';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import MessageSquare from '@lucide/svelte/icons/message-square';
   import Clock from '@lucide/svelte/icons/clock';
   import Calendar from '@lucide/svelte/icons/calendar';
   import Check from '@lucide/svelte/icons/check';
@@ -398,24 +396,15 @@
       <p class="routine-state" class:err={!!s.last_error}>{scheduleState(s)}</p>
     </div>
     <div class="routine-tools">
-      {#if s.last_thread_id}
-        <a class="icon-btn" href={`${base}/chat/${s.last_thread_id}`} title={$_('app.custom.openChat')}>
-          <MessageSquare size={14} strokeWidth={2} />
-        </a>
-      {/if}
       <!-- "Esegui ora" è della ROUTINE: un agente con due incarichi non saprebbe quale far partire. -->
       <form
         method="POST"
         action="?/runNow"
         use:enhance={() => {
           rowBusy = s.id;
-          return async ({ result, update }) => {
+          return async ({ update }) => {
             await update();
             rowBusy = null;
-            if (result.type === 'success') {
-              const threadId = (result.data as { threadId?: string } | undefined)?.threadId;
-              if (threadId) await goto(`${base}/chat/${threadId}`);
-            }
           };
         }}
       >

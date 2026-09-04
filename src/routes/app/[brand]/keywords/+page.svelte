@@ -2,7 +2,6 @@
   import { enhance } from '$app/forms';
   import { _ } from 'svelte-i18n';
   import { page } from '$app/stores';
-  import AgentEmptyOffer from '$lib/components/AgentEmptyOffer.svelte';
   import PageHead from '$lib/components/PageHead.svelte';
   import TopbarCta from '$lib/components/TopbarCta.svelte';
   import { refreshCredits } from '$lib/stores/credits';
@@ -154,7 +153,6 @@
       <h3>{$_('app.keywords.emptyTitle')}</h3>
       {#if $page.data.flags?.navTeam}
         <!-- FEATURE_NAV_TEAM: la ricerca keyword è mestiere dell'agente SEO — si propone lui. -->
-        <p class="muted"><AgentEmptyOffer job="seo" /></p>
       {:else}
         <p class="muted">{$_('app.keywords.emptyDesc')}</p>
       {/if}

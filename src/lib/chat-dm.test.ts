@@ -79,11 +79,10 @@ describe('isDmReplyBackMessage', () => {
 describe('la chip sta su ogni surface, come lo sticker', () => {
   const reads = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8');
 
-  it('ChatLiveStatus / ChatColumn / ChatTurn montano ChatDmChip', () => {
+  it('ChatLiveStatus / ChatColumn montano ChatDmChip', () => {
     for (const f of [
       './components/ChatColumn.svelte',
-      './components/ChatLiveStatus.svelte',
-      '../routes/app/[brand]/chat/components/ChatTurn.svelte'
+      './components/ChatLiveStatus.svelte'
     ]) {
       expect(reads(f)).toContain('<ChatDmChip');
     }

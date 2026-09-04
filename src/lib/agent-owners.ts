@@ -1,7 +1,6 @@
 // La mappa "chi possiede cosa" fra gli agenti della squadra e le superfici del prodotto, in UN
 // posto solo e client-safe (job-roster.ts tira dentro supabase-admin e non può entrare in un
-// componente). JOB_HOME/AGENT_HOME vanno dall'agente alla pagina, SEGMENT_OWNER dalla pagina
-// all'agente: nessuna delle due va ricopiata altrove.
+// componente). JOB_HOME/AGENT_HOME vanno dall'agente alla pagina: non vanno ricopiate altrove.
 //
 // Le chiavi sono quelle di ROSTER_JOBS: agent-owners.test.ts fallisce se le due liste divergono,
 // così questa copia client non può invecchiare in silenzio.
@@ -148,60 +147,6 @@ export const AGENT_HOME: Record<string, string> = {
   auto: ''
 };
 
-/**
- * Primo segmento di rotta → job del roster. Solo le pagine con un proprietario CHIARO: meglio
- * nessun bottone che un "Parla con" che apre l'agente sbagliato.
- */
-const SEGMENT_OWNER: Record<string, OwnerJobKey> = {
-  radar: 'radar_recap',
-  leads: 'radar_recap',
-  analytics: 'analytics_review',
-  // Strategia e piano editoriale sono lo stesso mestiere a due granularità (vedi ROSTER_JOBS).
-  gtm: 'strategy_review',
-  strategy: 'strategy_review',
-  plan: 'strategy_review',
-  // La coda dei contenuti è il prodotto del producer settimanale.
-  calendar: 'autopilot',
-  content: 'autopilot',
-  approvals: 'autopilot',
-  publish: 'autopilot',
-  seo: 'seo',
-  'seo-geo': 'seo',
-  keywords: 'seo',
-  backlinks: 'seo',
-  geo: 'geo',
-  citations: 'geo',
-  competitors: 'market_refs'
-};
-
-/** Il job che possiede il path dato (path completo o primo segmento sotto /app/{slug}). */
-export function owningJobForPath(pathname: string, brandBase: string): OwnerJobKey | null {
-  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
-  let rest = pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
-  rest = rest.replace(/^\//, '').split('?')[0];
-  const seg = rest.split('/')[0] ?? '';
-  return SEGMENT_OWNER[seg] ?? null;
-}
-
-/** I thread minimi che servono per trovare quello persistente dell'agente che possiede un job. */
-type ThreadLike = { id: string; agent?: string | null; surface?: string | null };
-
-/**
- * L'href per "parlare con" chi possiede un job: il thread di squadra dell'agente owner
- * (surface='team'), altrimenti il vecchio thread per-job, altrimenti la home del brand.
- */
-export function jobThreadHref(
-  threads: readonly ThreadLike[],
-  brandSlug: string,
-  jobKey: OwnerJobKey
-): string {
-  const t =
-    threads.find((th) => th.surface === 'team' && th.agent === JOB_OWNERS[jobKey]) ??
-    threads.find((th) => th.agent === `job:${jobKey}`);
-  // ponytail: senza thread si apre il composer generico — creare il thread dal client
-  // vorrebbe un endpoint nuovo su team-ignition; se serve, si aggiunge lì, non qui.
-  return t ? `/app/${brandSlug}/chat/${t.id}` : `/app/${brandSlug}`;
-}
 
 /**
  * PRIMA DI ASSUMERE, GUARDA CHI C'È GIÀ. Dalle parole del compito si ricava chi lo copre, e i tool

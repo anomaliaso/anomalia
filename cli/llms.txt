@@ -109,9 +109,6 @@ Note: `--id` accepts the short prefix printed in the tables.
 - `anomalia calendar <slug> [--month YYYY-MM]` — View calendar
 
 ### AI Chat
-- `anomalia ai <slug> --message "..."` — Chat with AI (full read/write access)
-- `echo "..." | anomalia ai <slug>` — Pipe mode for AI agents
-- `anomalia ai <slug> --message "..." --pipe` — Raw output (no formatting)
 
 ### System
 - `anomalia update` — Update CLI to latest version

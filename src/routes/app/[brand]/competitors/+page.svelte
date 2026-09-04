@@ -2,7 +2,6 @@
 	import { enhance } from '$app/forms';
 	import { _ } from 'svelte-i18n';
 	import PageHead from '$lib/components/PageHead.svelte';
-	import AgentEmptyOffer from '$lib/components/AgentEmptyOffer.svelte';
 	import { page } from '$app/stores';
 	import TopbarCta from '$lib/components/TopbarCta.svelte';
 	import PlatformGlyph from '$lib/components/PlatformGlyph.svelte';
@@ -354,7 +353,6 @@
 			<h3>{$_('app.competitors.emptyTitle')}</h3>
 			{#if $page.data.flags?.navTeam}
 				<!-- FEATURE_NAV_TEAM: si offre l'agente che osserva i competitor, non un "crea il primo". -->
-				<p><AgentEmptyOffer job="market_refs" /></p>
 			{:else}
 				<p>{$_('app.competitors.emptyDesc')}</p>
 			{/if}

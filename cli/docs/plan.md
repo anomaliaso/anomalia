@@ -74,13 +74,8 @@ anomalia plan my-brand revise --feedback "Voglio più behind-the-scenes e meno p
 
 L'AI produce un nuovo piano proposto con le modifiche. Poi approvi o scarti.
 
-Puoi anche usare l'AI chat per feedback più naturali:
-
-```bash
-anomalia ai my-brand --message "Voglio più focus su Instagram e meno su TikTok"
-anomalia ai my-brand --message "Aumenta la frequenza a 5 post a settimana"
-anomalia ai my-brand --message "Aggiungi LinkedIn al platform mix"
-```
+Per un feedback in linguaggio naturale, chiedilo al tuo agente: via MCP arriva agli stessi
+comandi.
 
 ### 5. Salvare un brief per una settimana
 
@@ -104,22 +99,6 @@ anomalia plan my-brand replan --week 0 --brief "Dietro le quinte del brand"
 ```
 
 L'AI ricostruisce solo quella settimana, mantenendo le altre 3 invariate.
-
-### 7. Modificare inline via AI
-
-```bash
-# Cambia tema settimana
-anomalia ai my-brand --message "Cambia il tema della settimana 2 a 'dietro le quinte'"
-
-# Cambia voice
-anomalia ai my-brand --message "Cambia il tone a friendly e casuale"
-
-# Cambia cadenza
-anomalia ai my-brand --message "Aumenta la frequenza a 5 post a settimana"
-
-# Cambia platform mix
-anomalia ai my-brand --message "Dai più peso a Instagram (60%) e meno a TikTok (40%)"
-```
 
 ## Piano Settimanale (Seeds)
 
@@ -156,28 +135,9 @@ L'AI genera le righe (seeds) per la settimana, basandosi su:
 ```bash
 # Produci tutti i seeds
 anomalia weekly-plan my-brand produce --week 0
-
-# Produci singolo seed via AI
-anomalia ai my-brand --message "Produci solo il primo seed della settimana"
 ```
 
 Ogni seed diventa un post reale con caption, immagine e scheduling.
-
-### Modificare i seeds via AI
-
-```bash
-# Cambia platform di un seed
-anomalia ai my-brand --message "Cambia il primo seed da Instagram a TikTok"
-
-# Cambia format
-anomalia ai my-brand --message "Cambia il formato del secondo seed da post a carousel"
-
-# Aggiungi un seed
-anomalia ai my-brand --message "Aggiungi un reel per venerdì alle 18"
-
-# Rimuovi un seed
-anomalia ai my-brand --message "Rimuovi il seed del weekend"
-```
 
 ## Struttura del piano
 
@@ -214,11 +174,8 @@ Ogni settimana:
 
 ## Storico
 
-Ogni piano sostituito viene conservato. Puoi vedere lo storico con:
-
-```bash
-anomalia ai my-brand --message "Mostrami lo storico dei piani editoriali"
-```
+Ogni piano sostituito viene conservato: lo storico si chiede al proprio agente, che lo legge
+via MCP.
 
 ## Combinazione con altri comandi
 

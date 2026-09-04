@@ -37,7 +37,6 @@
     Zap,
     Clock,
     Megaphone,
-    MessageSquare,
     Radar,
     Gift,
     Send,
@@ -298,12 +297,6 @@
           href: `${settingsBase}/language`,
           label: $_('app.settings.language'),
           icon: Languages,
-        },
-        {
-          id: 'chat',
-          href: `${settingsBase}/chat`,
-          label: $_('app.settings.chat.title'),
-          icon: MessageSquare,
         },
         {
           id: 'api-keys',

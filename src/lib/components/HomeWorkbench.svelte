@@ -1,8 +1,6 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import type { HomeOverview } from '$lib/server/hub-overview';
-  import { openChatComposer } from '$lib/stores/chat';
-  import { closePageModal } from '$lib/components/PageModal.svelte';
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
   import GrowthReadiness from '$lib/components/GrowthReadiness.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
@@ -24,32 +22,14 @@
     extras = null,
     overview,
     launchedAt = null,
-    onboardingCompleted = true
   }: {
     brandSlug: string;
     extras?: Extras | null;
     overview: HomeOverview;
     launchedAt?: string | null;
-    onboardingCompleted?: boolean;
   } = $props();
 
-  const showContinueBanner = $derived(!onboardingCompleted);
   const base = $derived(`/app/${brandSlug}`);
-
-  /** Setup continues in chat — the assistant owns the remaining onboarding steps. */
-  function continueSetupInChat() {
-    openChatComposer({
-      brandSlug,
-      prefill: $_('app.home.continueOnboarding.chatPrefill')
-    });
-    // Il workbench vive nella modal: il composer sta sotto il backdrop, quindi prima si
-    // chiude, poi si scorre. Fuori dalla modal `closePageModal` è un no-op.
-    closePageModal();
-    if (typeof document === 'undefined') return;
-    document
-      .querySelector('.overview-composer')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 
   // Merge deferred extras into setup flags when they arrive.
   const setup = $derived({
@@ -320,21 +300,6 @@
       : 0
   );
 
-  function askAiAboutBlogs() {
-    openChatComposer({
-      brandSlug,
-      agent: 'web',
-      prefill: $_('app.home.overview.blogsAiPrompt', { values: { n: pendingBlogCount } })
-    });
-  }
-  function askAiAboutPosts() {
-    openChatComposer({
-      brandSlug,
-      agent: 'publish',
-      prefill: $_('app.home.overview.postsAiPrompt', { values: { n: pendingPostCount } })
-    });
-  }
-
   function formatWhen(iso: string) {
     try {
       return new Date(iso).toLocaleString(undefined, {
@@ -351,16 +316,6 @@
 </script>
 
 <div class="home-wb">
-  {#if showContinueBanner}
-    <button type="button" class="ob-banner" onclick={continueSetupInChat}>
-      <div class="ob-banner-copy">
-        <span class="ob-banner-kicker">{$_('app.home.continueOnboarding.kicker')}</span>
-        <strong class="ob-banner-title">{$_('app.home.continueOnboarding.title')}</strong>
-        <span class="ob-banner-msg">{$_('app.home.continueOnboarding.msg')}</span>
-      </div>
-      <span class="ob-banner-cta">{$_('app.home.continueOnboarding.cta')}</span>
-    </button>
-  {/if}
 
   {#if showSetup}
     <section class="setup-box">
@@ -486,18 +441,6 @@
                 {$_('app.home.overview.blogsToAccept', { values: { n: pendingBlogCount } })}
               {/if}
             </span>
-          </div>
-          <div class="ov-panel-actions">
-            {#if pendingPostCount > 0}
-              <button type="button" class="ov-ai" onclick={askAiAboutPosts}
-                >{$_('app.home.overview.postsAiCta')}</button
-              >
-            {/if}
-            {#if pendingBlogCount > 0}
-              <button type="button" class="ov-ai ov-ai-strong" onclick={askAiAboutBlogs}
-                >{$_('app.home.overview.blogsAiCta')}</button
-              >
-            {/if}
           </div>
         </div>
 
@@ -923,182 +866,6 @@
     min-width: 0;
     width: 100%;
     overflow-x: clip;
-  }
-
-  .ob-banner {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin: 0 0 20px;
-    padding: 16px 18px;
-    width: 100%;
-    text-align: left;
-    font: inherit;
-    cursor: pointer;
-    border-radius: 16px;
-    /* Border is drawn by the rotating conic gradient below, not by a static border, so the
-       element keeps the same box size whether the animation runs or not. */
-    border: 1px solid transparent;
-    background:
-      linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--accent) 12%, var(--paper)) 0%,
-        var(--paper) 55%
-      )
-      padding-box,
-      conic-gradient(
-        from var(--ob-angle),
-        color-mix(in srgb, var(--accent) 70%, transparent),
-        color-mix(in srgb, var(--accent) 10%, var(--line)) 25%,
-        color-mix(in srgb, var(--accent) 70%, transparent) 50%,
-        color-mix(in srgb, var(--accent) 10%, var(--line)) 75%,
-        color-mix(in srgb, var(--accent) 70%, transparent)
-      )
-      border-box;
-    color: var(--ink);
-    position: relative;
-    animation:
-      ob-spin 4s linear infinite,
-      ob-glow 2.6s ease-in-out infinite;
-  }
-  /* Glow as a pulsing box-shadow rather than a blurred pseudo-element behind the card: a
-     `z-index:-1` layer would sit behind the PAGE background too (the banner creates no stacking
-     context of its own), so on some themes it would simply be invisible. */
-  @keyframes ob-spin {
-    to {
-      --ob-angle: 360deg;
-    }
-  }
-  @keyframes ob-glow {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 18px 2px color-mix(in srgb, var(--accent) 35%, transparent);
-    }
-  }
-  /* An animated border on a permanently visible banner is exactly the motion that triggers
-     vestibular discomfort — freeze it, but keep the accent border so it still reads as urgent. */
-  @media (prefers-reduced-motion: reduce) {
-    .ob-banner {
-      animation: none;
-      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-      box-shadow: 0 0 14px 1px color-mix(in srgb, var(--accent) 22%, transparent);
-    }
-  }
-  .ob-banner-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
-  }
-  .ob-banner-kicker {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  .ob-banner-title {
-    font-size: 15px;
-    font-weight: 650;
-  }
-  .ob-banner-msg {
-    font-size: 13px;
-    color: var(--ink-soft);
-  }
-  /* Material-style state layers: the button keeps ONE background (the accent) and the interaction
-     is expressed by a translucent white overlay on top of it — 8% hovered, 12% pressed — plus an
-     elevation change. Tinting the accent itself would drift the brand colour; a layer does not.
-     The overlay lives in a pseudo-element so it can't affect the label's contrast. */
-  .ob-banner-cta {
-    flex-shrink: 0;
-    position: relative;
-    overflow: hidden;
-    padding: 10px 14px;
-    border-radius: 999px;
-    /* Same rotating-border trick as the banner, at pill scale: the accent fill is the padding-box
-       layer, the travelling highlight is the border-box layer. */
-    border: 1px solid transparent;
-    background:
-      linear-gradient(var(--accent), var(--accent)) padding-box,
-      conic-gradient(
-          from var(--cta-angle),
-          rgba(255, 255, 255, 0.45),
-          rgba(255, 255, 255, 0.06) 25%,
-          rgba(255, 255, 255, 0.45) 50%,
-          rgba(255, 255, 255, 0.06) 75%,
-          rgba(255, 255, 255, 0.45)
-        )
-        border-box;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    /* Glow rides on filter, NOT box-shadow — box-shadow is already carrying the Material
-       elevation states, and one property cannot animate on two schedules. */
-    filter: drop-shadow(0 0 0 transparent);
-    animation:
-      cta-spin 3s linear infinite,
-      cta-glow 2.6s ease-in-out infinite;
-    transition:
-      box-shadow 140ms cubic-bezier(0.2, 0, 0, 1),
-      transform 90ms cubic-bezier(0.2, 0, 0, 1);
-  }
-  @keyframes cta-spin {
-    to {
-      --cta-angle: 360deg;
-    }
-  }
-  @keyframes cta-glow {
-    0%,
-    100% {
-      filter: drop-shadow(0 0 1px color-mix(in srgb, var(--accent) 14%, transparent));
-    }
-    50% {
-      filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 32%, transparent));
-    }
-  }
-  .ob-banner-cta::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: #fff;
-    opacity: 0;
-    transition: opacity 140ms cubic-bezier(0.2, 0, 0, 1);
-    pointer-events: none;
-  }
-  /* Hover lives on the banner, not the span: the whole banner is the control, so the pointer is
-     rarely exactly over the pill — reacting only to the pill would feel broken. */
-  .ob-banner:hover .ob-banner-cta {
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.24);
-  }
-  .ob-banner:hover .ob-banner-cta::after {
-    opacity: 0.08;
-  }
-  .ob-banner:active .ob-banner-cta {
-    /* Pressed sits LOWER than resting — Material drops elevation on press, it does not raise it. */
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
-    transform: scale(0.97);
-  }
-  .ob-banner:active .ob-banner-cta::after {
-    opacity: 0.12;
-  }
-  .ob-banner:focus-visible .ob-banner-cta::after {
-    opacity: 0.1;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ob-banner-cta {
-      transition: none;
-      animation: none;
-      /* Keep a static glow so the button still stands out without moving. */
-      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 20%, transparent));
-    }
-    .ob-banner:active .ob-banner-cta {
-      transform: none;
-    }
   }
 
   .setup-box {

@@ -54,8 +54,6 @@ export type ShortcutDef = {
 export const BASE_SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'palette', keys: ['mod', 'K'], labelKey: 'app.shell.scPalette' },
   { id: 'settings', keys: ['mod', ','], labelKey: 'app.nav.settings' },
-  { id: 'newChat', keys: ['n'], labelKey: 'chat.newChat' },
-  { id: 'focusPrompt', keys: ['/'], labelKey: 'app.shell.scFocusPrompt' },
   { id: 'help', keys: ['?'], labelKey: 'app.shell.scHelp' },
   { id: 'close', keys: ['Esc'], labelKey: 'app.shell.scClose' }
 ];
@@ -125,8 +123,6 @@ export function matchShortcut(e: KeyboardEvent, pending = false): ShortcutMatch 
     return /^[a-z0-9]$/i.test(key) ? { type: 'run', id: `seq:${key.toLowerCase()}` } : NONE;
   }
   if (key.toLowerCase() === 'g') return { type: 'pending' };
-  if (key.toLowerCase() === 'n') return { type: 'run', id: 'newChat' };
-  if (key === '/') return { type: 'run', id: 'focusPrompt' };
   if (key === '?') return { type: 'run', id: 'help' };
   return NONE;
 }

@@ -28,7 +28,6 @@ Drive [Anomalia](https://anomalia.so) — social media AI autopilot — through 
 |-----------|--------|
 | Anomalia MCP is connected | Call MCP tools (`list_brands`, `list_posts`, …) |
 | MCP not available | Shell: `anomalia …` after `anomalia login` |
-| Vague / multi-step ask | MCP `chat` or `anomalia ai <slug> --message "…" --pipe` |
 
 Never invent REST endpoints or API keys.
 
@@ -45,7 +44,6 @@ Setup details: [references/mcp.md](references/mcp.md).
 1. Start with `list_brands` (or `anomalia brands`) to learn **slugs**.
 2. Pass `slug` on every brand-scoped call.
 3. Post/article ids accept **short unambiguous prefixes** from list output — never guess if ambiguous.
-4. Prefer specific tools (`approve_posts`, `edit_post`, …) over `chat` for precise edits.
 5. Confirm before reject / delete / discard unless the user clearly asked.
 
 ## Quick workflows

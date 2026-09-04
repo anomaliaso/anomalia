@@ -2,14 +2,10 @@
   /**
    * LA RICERCA GLOBALE (⌘K) — un campo solo per tutto il prodotto.
    *
-   * Prima l'unica ricerca era quella dei thread in sidebar: un filtro su una lista già a schermo.
-   * Questa la ingloba e ci aggiunge le pagine, le impostazioni, gli agenti e i messaggi, senza
-   * inventare cataloghi: OGNI gruppo legge la fonte che il prodotto già usa —
+   * Ora copre le pagine e le impostazioni, senza inventare cataloghi: OGNI gruppo legge la
+   * fonte che il prodotto già usa —
    *   pagine       → `navGroups` (la nav vera) ∪ BRAND_MODAL_ROUTES (workbench-paths.ts)
    *   impostazioni → SETTINGS_MODAL_GROUPS (components/settings/platforms.ts)
-   *   agenti       → TEAM_SPECIALIST_IDS + /chat/agents (gli stessi del picker del composer)
-   *   thread       → lo store $chatThreads, già in memoria: zero query
-   *   messaggi     → /chat/search, l'UNICA parte che va sul server (con debounce)
    * Una lista scritta a mano qui invecchierebbe al primo rename di una rotta.
    *
    * Aprire una pagina significa `openPageModal(href)`: overlay, URL fermo, come ogni altro link
@@ -22,21 +18,8 @@
   import Search from '@lucide/svelte/icons/search';
   import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
   import { openPageModal } from '$lib/components/PageModal.svelte';
-  import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import { BRAND_MODAL_ROUTES, workbenchTabLabel } from '$lib/workbench-paths';
   import { SETTINGS_MODAL_GROUPS } from '$lib/components/settings/platforms';
-  import { TEAM_SPECIALIST_IDS } from '$lib/agent-owners';
-  import {
-    BUILTIN_AGENT_AVATARS,
-    DEFAULT_CHAT_AGENT_AVATAR,
-    fallbackAvatarColor,
-    fallbackAvatarFace,
-    normalizeAvatarColor,
-    normalizeAvatarFace,
-    type AgentAvatarFace
-  } from '$lib/agent-avatars';
-  import { threadIdentity } from '$lib/thread-identity';
-  import { chatThreadId, chatThreads, openChatComposer } from '$lib/stores/chat';
   import {
     GO_TARGETS,
     SECTION_LETTERS,
@@ -69,14 +52,13 @@
     }[];
   } = $props();
 
-  type Group = 'action' | 'page' | 'settings' | 'agent' | 'thread' | 'message';
+  type Group = 'action' | 'page' | 'settings';
   type Item = {
     id: string;
     group: Group;
     label: string;
-    /** Riga secondaria: il gruppo di nav, l'anteprima del thread, il pezzo di messaggio. */
+    /** Riga secondaria: il gruppo di nav. */
     hint?: string;
-    avatar?: { face: AgentAvatarFace; color: string };
     run: () => void;
   };
 
@@ -99,67 +81,8 @@
     close();
     if (!openPageModal(section)) void goto(`${base}/settings/${section}`);
   }
-  function openThread(threadId: string) {
-    close();
-    chatThreadId.set(threadId);
-    void goto(`${base}/chat/${threadId}`, { noScroll: true, keepFocus: true });
-  }
-
-  // ── Agenti ──────────────────────────────────────────────────────────────────────────────────
-  type CustomAgent = { id: string; name: string; face: string; color: string };
-  let customAgents = $state<CustomAgent[]>([]);
-  // Gli stessi agenti del picker del composer, dallo stesso endpoint. Una volta sola per brand:
-  // la palette non è una pagina, non ha senso rifare la fetch a ogni apertura.
-  $effect(() => {
-    const slug = brandSlug;
-    if (!slug) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch(`/app/${slug}/chat/agents`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        customAgents = (data.agents ?? []) as CustomAgent[];
-      } catch {
-        /* restano i sei builtin */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  });
-
-  /**
-   * Parlare con un agente = il suo DIARIO se esiste (`surface='team'`, il thread persistente che
-   * team-ignition già scrive), altrimenti il composer vuoto con quell'agente selezionato. Stessa
-   * regola di `jobThreadHref`: mai creare un thread dal client.
-   */
-  function openAgent(agentId: string | null, customId: string | null) {
-    const t = $chatThreads.find((th) =>
-      customId
-        ? th.custom_agent_id === customId
-        : (th as { surface?: string | null }).surface === 'team' && th.agent === agentId
-    );
-    close();
-    if (t) {
-      chatThreadId.set(t.id);
-      void goto(`${base}/chat/${t.id}`, { noScroll: true, keepFocus: true });
-      return;
-    }
-    openChatComposer({ brandSlug, agent: agentId ?? undefined });
-  }
-
   // ── Le sorgenti, tutte derivate da ciò che esiste già ────────────────────────────────────────
   const actionItems = $derived.by<Item[]>(() => [
-    {
-      id: 'a:new-chat',
-      group: 'action',
-      label: $_('chat.newChat'),
-      run: () => {
-        close();
-        openChatComposer({ brandSlug });
-      }
-    },
     {
       id: 'a:workbench',
       group: 'action',
@@ -249,95 +172,6 @@
     )
   );
 
-  const agentItems = $derived.by<Item[]>(() => {
-    const builtin = TEAM_SPECIALIST_IDS.map((id) => {
-      const av = BUILTIN_AGENT_AVATARS[id] ?? DEFAULT_CHAT_AGENT_AVATAR;
-      const label = $_(`chat.agents.${id}.label`);
-      const desc = $_(`chat.agents.${id}.desc`);
-      return {
-        id: `g:${id}`,
-        group: 'agent' as const,
-        label: typeof label === 'string' ? label : id,
-        hint: typeof desc === 'string' ? desc : undefined,
-        avatar: av,
-        run: () => openAgent(id, null)
-      };
-    });
-    const custom = customAgents.map((a) => ({
-      id: `g:custom:${a.id}`,
-      group: 'agent' as const,
-      label: a.name,
-      hint: $_('chat.agents.custom'),
-      avatar: {
-        face: normalizeAvatarFace(a.face || fallbackAvatarFace(a.id)),
-        color: normalizeAvatarColor(a.color, fallbackAvatarColor(a.id))
-      },
-      run: () => openAgent(null, a.id)
-    }));
-    return [...builtin, ...custom];
-  });
-
-  const threadItems = $derived.by<Item[]>(() =>
-    $chatThreads.map((t) => {
-      const who = threadIdentity(t, (k) => $_(k));
-      return {
-        id: `t:${t.id}`,
-        group: 'thread' as const,
-        label: who.name,
-        hint: t.preview || t.title || undefined,
-        avatar: { face: who.face, color: who.color },
-        run: () => openThread(t.id)
-      };
-    })
-  );
-
-  // ── Messaggi: l'unico gruppo che va sul server ───────────────────────────────────────────────
-  type MessageHit = { id: string; thread_id: string; snippet: string };
-  let messageHits = $state<MessageHit[]>([]);
-  let messageQuery = $state('');
-  $effect(() => {
-    const q = query.trim();
-    const slug = brandSlug;
-    if (!open || q.length < 2 || !slug) {
-      messageHits = [];
-      return;
-    }
-    let cancelled = false;
-    // 220ms: sotto si batte una lettera e parte una query per ognuna; sopra si sente il ritardo.
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/app/${slug}/chat/search?q=${encodeURIComponent(q)}`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        messageHits = (data.messages ?? []) as MessageHit[];
-        messageQuery = q;
-      } catch {
-        // La ricerca messaggi degrada in silenzio: il resto della palette funziona lo stesso.
-        if (!cancelled) messageHits = [];
-      }
-    }, 220);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  });
-
-  const messageItems = $derived.by<Item[]>(() => {
-    if (messageQuery !== query.trim()) return [];
-    return messageHits.map((m) => {
-      const t = $chatThreads.find((th) => th.id === m.thread_id);
-      const who = t ? threadIdentity(t, (k) => $_(k)) : null;
-      return {
-        id: `m:${m.id}`,
-        group: 'message' as const,
-        label: m.snippet,
-        hint: who?.name,
-        avatar: who ? { face: who.face, color: who.color } : undefined,
-        run: () => openThread(m.thread_id)
-      };
-    });
-  });
-
   // ── Filtro ──────────────────────────────────────────────────────────────────────────────────
   /** 3 = inizia con, 2 = inizio di parola, 1 = contiene, 0 = no. Basta a ordinare bene. */
   function score(text: string | undefined, q: string): number {
@@ -362,24 +196,18 @@
   const GROUP_LABEL: Record<Group, string> = {
     action: 'app.shell.cmdGroupActions',
     page: 'app.shell.cmdGroupPages',
-    settings: 'app.shell.cmdGroupSettings',
-    agent: 'app.shell.cmdGroupAgents',
-    thread: 'app.shell.cmdGroupThreads',
-    message: 'app.shell.cmdGroupMessages'
+    settings: 'app.shell.cmdGroupSettings'
   };
 
   /** I risultati raggruppati, nell'ordine in cui si mostrano. */
   const groups = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const out: { group: Group; items: Item[] }[] = [
-      // A campo vuoto la palette non è una lista di tutto: sono le azioni e le chat recenti,
+      // A campo vuoto la palette non è una lista di tutto: sono le azioni,
       // cioè quello che si fa davvero aprendola per sbaglio.
       { group: 'action', items: filter(actionItems, q, q ? 4 : 5) },
       { group: 'page', items: q ? filter(pageItems, q, 6) : [] },
-      { group: 'settings', items: q ? filter(settingsItems, q, 5) : [] },
-      { group: 'agent', items: q ? filter(agentItems, q, 5) : [] },
-      { group: 'thread', items: filter(threadItems, q, q ? 6 : 5) },
-      { group: 'message', items: messageItems }
+      { group: 'settings', items: q ? filter(settingsItems, q, 5) : [] }
     ];
     return out.filter((g) => g.items.length > 0);
   });
@@ -406,7 +234,6 @@
     mode = next;
     query = '';
     cursor = 0;
-    messageHits = [];
     paletteOpen.set(true);
   }
 
@@ -450,20 +277,6 @@
     if (id === 'help') {
       openPalette('help');
       return;
-    }
-    if (id === 'newChat') {
-      close();
-      openChatComposer({ brandSlug });
-      return;
-    }
-    if (id === 'focusPrompt') {
-      // ponytail: il selettore della textarea del composer. È l'unica del prodotto con questa
-      // classe; se un giorno ce ne fossero due, si aggiunge un `data-` e si cambia qui.
-      const box = document.querySelector<HTMLTextAreaElement>('textarea.ch-input');
-      if (box) {
-        box.focus();
-        box.setSelectionRange(box.value.length, box.value.length);
-      }
     }
   }
 
@@ -651,11 +464,6 @@
                     onclick={() => item.run()}
                     onmousemove={() => (cursor = idx)}
                   >
-                    {#if item.avatar}
-                      <span class="cp-avatar" aria-hidden="true">
-                        <AgentAvatar face={item.avatar.face} color={item.avatar.color} size={20} />
-                      </span>
-                    {/if}
                     <span class="cp-text">
                       <span class="cp-label">{item.label}</span>
                       {#if item.hint}<span class="cp-hint">{item.hint}</span>{/if}

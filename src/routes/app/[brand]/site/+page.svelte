@@ -6,10 +6,8 @@
   import { _ } from 'svelte-i18n';
   import { SvelteSet } from 'svelte/reactivity';
   import * as Dialog from '$lib/components/ui/dialog';
-  import * as Tooltip from '$lib/components/ui/tooltip';
   import PageHead from '$lib/components/PageHead.svelte';
   import TopbarCta from '$lib/components/TopbarCta.svelte';
-  import { openChatComposer } from '$lib/stores/chat';
   import { jpegIfHeicFormFiles } from '$lib/raster-image-client';
   import { RASTER_IMAGE_ACCEPT } from '$lib/raster-image';
 
@@ -83,20 +81,6 @@
   );
 
   // Same queue as Overview: drafts + approved-but-unscheduled (exclude planned placeholders).
-  const pendingReview = $derived(
-    data.articles.filter(
-      (a) =>
-        a.status === 'draft' || (a.status === 'approved' && !a.scheduled_for)
-    ).length
-  );
-
-  function askAiAboutBlogs() {
-    openChatComposer({
-      brandSlug: $page.params.brand,
-      agent: 'web',
-      prefill: $_('app.home.overview.blogsAiPrompt', { values: { n: pendingReview } })
-    });
-  }
 
   const blogTitle = $derived(data.config.title || data.brandName || 'Blog');
   const blogDesc = $derived(
@@ -162,25 +146,6 @@
         <span class="topbar-cta-short">Nuovo</span>
         <span class="topbar-cta-full">Nuovo post</span>
       </a>
-      {#if pendingReview > 0}
-        <Tooltip.Provider delayDuration={200}>
-          <Tooltip.Root>
-            <Tooltip.Trigger
-              type="button"
-              class="btn ghost topbar-link ai-cta"
-              aria-label={$_('app.home.overview.blogsAiCta')}
-              onclick={askAiAboutBlogs}
-            >
-              <Sparkles class="topbar-cta-icon" strokeWidth={2.1} aria-hidden="true" />
-              <span class="topbar-cta-short">{$_('app.home.overview.blogsAiCtaShort')}</span>
-              <span class="topbar-cta-full">{$_('app.home.overview.blogsAiCta')}</span>
-            </Tooltip.Trigger>
-            <Tooltip.Content side="bottom" class="max-w-[260px] text-left">
-              {$_('app.home.overview.blogsAiHint')}
-            </Tooltip.Content>
-          </Tooltip.Root>
-        </Tooltip.Provider>
-      {/if}
       {#if data.draftCount > 0}
         <form
           class="topbar-cta-wrap"
@@ -280,17 +245,6 @@
         <p class="muted small">{data.articles.length} totali · clicca una cella per gestirla</p>
       </div>
       <div class="section-actions">
-        {#if pendingReview > 0}
-          <button
-            type="button"
-            class="btn ghost ai-cta"
-            title={$_('app.home.overview.blogsAiHint')}
-            onclick={askAiAboutBlogs}
-          >
-            <Sparkles size={14} strokeWidth={2} />
-            <span class="ai-cta-label">{$_('app.home.overview.blogsAiCta')}</span>
-          </button>
-        {/if}
         {#if unscheduled > 0}
           <form method="POST" action="?/scheduleAllDrafts" use:enhance={withBusy('schedule-all')}>
             <button
@@ -748,9 +702,6 @@
   .section-actions .btn {
     max-width: 100%;
   }
-  .ai-cta-label {
-    text-align: left;
-  }
 
   .posts-grid {
     display: grid;
@@ -950,18 +901,6 @@
   }
   .bulk-link:hover { text-decoration: underline; }
   .bulk-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .btn.ai-cta {
-    background: color-mix(in srgb, var(--accent, #7c5cff) 12%, var(--paper));
-    border-color: color-mix(in srgb, var(--accent, #7c5cff) 30%, var(--line));
-    color: var(--ink);
-    white-space: normal;
-    line-height: 1.25;
-    height: auto;
-    min-height: 36px;
-  }
-  .btn.ai-cta:hover {
-    border-color: color-mix(in srgb, var(--accent, #7c5cff) 50%, var(--line));
-  }
   .btn.full { width: 100%; justify-content: center; }
   .btn-link {
     background: none;
@@ -1120,8 +1059,5 @@
       justify-content: center;
       padding: 11px 14px;
     }
-    .ai-cta-label {
-      text-align: center;
     }
-  }
 </style>

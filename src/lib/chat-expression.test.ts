@@ -139,11 +139,10 @@ describe('lo sticker è lo stesso su ogni surface', () => {
 		expect(reads('./components/ChatToolChips.svelte')).toContain('chipCalls(calls)');
 	});
 
-	it('e lo disegna un componente solo, che montano tutte e tre le superfici', () => {
+	it('e lo disegna un componente solo, che montano le superfici rimaste', () => {
 		for (const f of [
 			'./components/ChatColumn.svelte',
-			'./components/ChatLiveStatus.svelte',
-			'../routes/app/[brand]/chat/components/ChatTurn.svelte'
+			'./components/ChatLiveStatus.svelte'
 		]) {
 			expect(reads(f)).toContain('<ChatExpressionStickers');
 			// E nessuna se lo rifiltra a mano: quella era la strada per scollarsi di nuovo.

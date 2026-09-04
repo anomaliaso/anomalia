@@ -18,7 +18,6 @@
     brandSlug={data.brand.slug}
     {overview}
     launchedAt={data.brand?.launched_at ?? null}
-    onboardingCompleted={!!data.brand?.onboarding_completed_at}
   />
 {:catch}
   <p class="wb-failed">{$_('app.home.workbench.failed')}</p>

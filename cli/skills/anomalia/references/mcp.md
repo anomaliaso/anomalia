@@ -99,7 +99,6 @@ There is **no** `ANOMALIA_TOKEN` / API-key path by design.
 1. `list_brands` — learn brand **slugs**.
 2. `get_dashboard` with `slug` — overview.
 3. `list_posts` with `slug` and status `pending_user` — approval queue.
-4. Use specific tools for edits; use `chat` only for open-ended multi-step work.
 
 Ids from list tools accept short unambiguous prefixes (same rule as the CLI).
 
