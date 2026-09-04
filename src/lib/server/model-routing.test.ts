@@ -183,6 +183,70 @@ describe('il registro delle rotte', () => {
     warn.mockRestore();
   });
 
+  it('il video è uno slot, e si indirizza per famiglia e endpoint come gli altri', async () => {
+    setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', AI_ROUTE_VIDEO: 'seedance@openrouter' });
+    const { route } = await import('./model-routing');
+    expect(route('video')).toMatchObject({
+      family: 'seedance',
+      endpoint: 'openrouter',
+      provider: 'openrouter'
+    });
+  });
+
+  it('una coppia video senza trasporto non è una rotta: si ripiega, e dice perché', async () => {
+    // Famiglie che esistono e endpoint che esistono, ma nessun trasporto fra i due: e` il caso che
+    // NON deve atterrare zitto su kie mentre la variabile dice openrouter.
+    //
+    // Le coppie vanno riscelte quando `SERVED_BY` cambia, e non e` pedanteria: `gemini@openrouter`
+    // stava qui finche` il testo non aveva un trasporto, e adesso ce l'ha. Una coppia che diventa
+    // servita rende il test rosso — rumoroso, quindi innocuo; una che diventa NON PARSABILE lo
+    // farebbe restare verde misurando il ripiego al default invece dell'invariante. Sono due modi
+    // opposti di sbagliare, e solo uno si vede.
+    for (const raw of ['grok@openrouter', 'gpt@openrouter', 'gemini-tts@openrouter']) {
+      vi.resetModules();
+      setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', AI_ROUTE_VIDEO: raw });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { route } = await import('./model-routing');
+      expect(route('video').endpoint, raw).not.toBe('openrouter');
+      expect(warn, raw).toHaveBeenCalledWith(expect.stringMatching(/nessun trasporto/));
+      warn.mockRestore();
+    }
+  });
+
+  it('senza chiave openrouter il video non ci va: si ripiega su kie, rumorosamente', async () => {
+    setEnv({ KIE_API_KEY: 'k', GEMINI_API_KEY: 'g', AI_ROUTE_VIDEO: 'seedance@openrouter' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { route } = await import('./model-routing');
+    expect(route('video')).toMatchObject({ endpoint: 'kie', provider: 'kie' });
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/la chiave manca/));
+    warn.mockRestore();
+  });
+
+  it('le coppie video che un trasporto serve davvero passano senza rumore', async () => {
+    for (const [raw, endpoint] of [
+      ['grok-imagine@kie', 'kie'],
+      ['seedance@kie', 'kie'],
+      ['kling@kie', 'kie'],
+      ['grok-imagine@openrouter', 'openrouter'],
+      ['seedance@openrouter', 'openrouter'],
+      ['kling@openrouter', 'openrouter']
+    ] as const) {
+      vi.resetModules();
+      setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', AI_ROUTE_VIDEO: raw });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { route } = await import('./model-routing');
+      expect(route('video').endpoint, raw).toBe(endpoint);
+      expect(warn, raw).not.toHaveBeenCalled();
+      warn.mockRestore();
+    }
+  });
+
+  it('il video resta su kie: questa rotta costruisce la strada, non ci manda il traffico', async () => {
+    setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o' });
+    const { route } = await import('./model-routing');
+    expect(route('video')).toMatchObject({ endpoint: 'kie', provider: 'kie' });
+  });
+
   it('i modelli video: nuova variabile, vecchia variabile, default', async () => {
     setEnv({ ...KEYS, AI_ROUTE_VIDEO_I2V: 'bytedance/seedance-2-5', KIE_VIDEO_MODEL_T2V: 'vecchio/t2v' });
     const { videoModel } = await import('./model-routing');
