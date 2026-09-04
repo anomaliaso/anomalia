@@ -182,6 +182,51 @@ describe('il registry degli endpoint di brand', () => {
     expect(output.safeParse({ ok: true, errors: [], warnings: [], scores: [] }).success).toBe(false);
   });
 
+  it('get_article è una lettura, quindi una API key di sola lettura la raggiunge', () => {
+    const get = byTool('get_article');
+    expect(get.method).toBe('GET');
+    expect(get.destructive).toBe(false);
+    expect(pathFor(get, 'demo')).toBe('/api/v1/brands/demo/web/article');
+    expect(get.input.safeParse({ id: 'art-1' }).success).toBe(true);
+    expect(get.input.safeParse({}).success).toBe(false);
+  });
+
+  it('update_article dichiara ogni campo che si può scrivere senza un modello', () => {
+    const { input } = byTool('update_article');
+    expect(
+      input.safeParse({
+        id: 'art-1',
+        title: 'Guida',
+        body_md: '# Guida',
+        meta_title: null,
+        meta_description: null,
+        category_id: 'cat-1',
+        author_id: null,
+        tag_ids: ['tag-1'],
+        language: 'it',
+        scheduled_for: null
+      }).success
+    ).toBe(true);
+    expect(input.safeParse({ id: 'art-1', title: '' }).success).toBe(false);
+    expect(input.safeParse({ id: 'art-1', title: 'a'.repeat(201) }).success).toBe(false);
+    expect(input.safeParse({ id: 'art-1', meta_title: 'a'.repeat(71) }).success).toBe(false);
+    expect(input.safeParse({ id: 'art-1', cover_image: 'https://cdn/x.png' }).success).toBe(false);
+  });
+
+  it('un articolo pubblicato non si aggiorna: il rifiuto è un 409, non un 500 muto', () => {
+    const update = byTool('update_article');
+    expect(statusForFailure(update, 'article_published')).toBe(409);
+    expect(statusForFailure(update, 'planned_needs_slot')).toBe(409);
+    expect(statusForFailure(update, 'translation_locked')).toBe(409);
+    expect(statusForFailure(update, 'category_not_found')).toBe(400);
+    expect(statusForFailure(update, 'article_not_found')).toBe(404);
+  });
+
+  it('leggere e scrivere un articolo passano dallo stesso indirizzo', () => {
+    expect(byTool('update_article').pathUnderBrand).toBe(byTool('get_article').pathUnderBrand);
+    expect(byTool('update_article').method).toBe('POST');
+  });
+
   it('una response con outputSchema è un oggetto: MCP non sa trasportare un array', () => {
     for (const e of BRAND_ENDPOINTS) {
       if (!(e.output instanceof z.ZodObject)) continue;
