@@ -1,7 +1,6 @@
 /**
  * Shared executors for long-running chat tools.
  * Tool wrappers await these inline (runLongTool → executeChatToolJob).
- * /api/v1/chat/run remains as a legacy resume path for pending jobs.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ensureShortNetworkCuts } from '$lib/platform-limits';

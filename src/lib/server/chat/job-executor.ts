@@ -1,6 +1,6 @@
 /**
  * Shared executor for long-running chat tools.
- * Used inline by tool wrappers (await until done) and by /api/v1/chat/run for any leftover jobs.
+ * Used inline by tool wrappers (await until done).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { JobCancellation } from '$lib/server/chat/job-cancel';
