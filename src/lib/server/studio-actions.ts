@@ -279,38 +279,25 @@ export const studioActions: Actions = {
     });
   },
 
-  // Which kie video model generates clips (Settings → Video). Duration options and the render
-  // clamp follow this model's caps. Empty = platform env default (Grok Imagine today).
   // Quale modello serve quale mestiere (Settings -> Images & video). Una sola azione per tutti e
   // sei gli slot: la regola che un modello deve saper fare il lavoro in cui viene salvato vale
   // ovunque, e scritta sei volte divergerebbe al primo cambio.
   updateMediaModel: async ({ request, params, locals: { supabase } }) => {
     return withBrand(supabase, params.brand, async (brand) => {
       const fd = await request.formData();
-      const { mediaModelSlot, slotAccepts } = await import('$lib/media-model-slots');
+      const { mediaModelSlot } = await import('$lib/media-model-slots');
       const slot = mediaModelSlot(fd.get('slot'));
       if (!slot) return fail(400, { error: 'Unknown model slot' });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prefs: Record<string, any> = { ...(brand.content_prefs ?? {}) };
-      const raw = String(fd.get('model') ?? '').trim();
-      if (!raw) delete prefs[slot.pref];
-      else if (!slotAccepts(slot, raw)) return fail(400, { error: 'Unknown model for this slot' });
-      else prefs[slot.pref] = raw;
-
-      // Re-clamp a stored length that the previous model allowed but this one does not (e.g. 30s
-      // on Seedance 2.5 -> Grok's 15s ceiling), so Settings never shows an unsavable value.
-      if (slot.pref === 'videoModel' && typeof prefs.videoDuration === 'number') {
-        const { isKnownVideoModel, clampVideoDuration, videoDurationOptions } = await import('$lib/server/video');
-        const model = isKnownVideoModel(prefs.videoModel) ? prefs.videoModel : null;
-        prefs.videoDuration = clampVideoDuration(prefs.videoDuration, model);
-        const allowed = videoDurationOptions(model);
-        if (!allowed.includes(prefs.videoDuration) && allowed.length) {
-          prefs.videoDuration = allowed.reduce((best, s) =>
-            Math.abs(s - prefs.videoDuration) < Math.abs(best - prefs.videoDuration) ? s : best
-          );
-        }
-      }
+      // La regola sta in `chooseMediaModel`, non qui: il browser e i tool dell'API la chiamano
+      // entrambi, e scritta due volte divergerebbe al primo modello nuovo.
+      const { chooseMediaModel } = await import('$lib/server/media-model-prefs');
+      const { prefs } = chooseMediaModel(
+        brand.content_prefs as Record<string, unknown> | null,
+        slot,
+        String(fd.get('model') ?? '').trim() || null
+      );
+      if (!prefs) return fail(400, { error: 'Unknown model for this slot' });
 
       const { error } = await supabase.from('brands').update({ content_prefs: prefs }).eq('id', brand.id);
       if (error) return fail(400, { error: error.message });
