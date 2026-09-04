@@ -1,23 +1,49 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { PAID_PLAN_IDS } from '$lib/plans';
 
-export const OWNER_CONSTRAINT = 'organizations_owner_id_key';
-
-function violatesOwnerConstraint(error: { message?: string; details?: string } | null): boolean {
-  if (!error) return false;
-  return `${error.message ?? ''} ${error.details ?? ''}`.includes(OWNER_CONSTRAINT);
+/**
+ * The owner's org that is actually paying, if any. Read through `brands` rather than through
+ * the org's own billing columns: those arrive with the org-level billing migration and do not
+ * exist yet, while the brand ones stay populated throughout that rollout. Both conditions are
+ * required — a cancelled subscription keeps its id but has its plan cleared.
+ */
+async function payingOrgId(supabase: SupabaseClient, ownerId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('brands')
+    .select('org_id, organizations!inner(owner_id)')
+    .eq('organizations.owner_id', ownerId)
+    .not('stripe_subscription_id', 'is', null)
+    .in('plan', [...PAID_PLAN_IDS])
+    .order('org_id', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data?.org_id as string | undefined) ?? null;
 }
 
-// Every user gets one organization (their workspace) lazily on first need.
+/**
+ * The owner's oldest organization: where brands land when nothing is paying yet. A user may own
+ * several (production does), so "their org" has to mean one specific row, always the same one —
+ * otherwise a new brand lands in whichever org the database happened to return. `id` breaks a tie
+ * on identical timestamps.
+ */
+async function oldestOrgId(supabase: SupabaseClient, ownerId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+// Every user gets an organization (their workspace) lazily on first need.
 // Brands hang off an org, so this must run before a brand can be created.
 // RLS-safe: the user owns the org they insert (owner_id = auth.uid()).
 export async function ensureOrgForUser(supabase: SupabaseClient, user: User): Promise<string | null> {
-  const { data: existing } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('owner_id', user.id)
-    .limit(1)
-    .maybeSingle();
-  if (existing) return existing.id;
+  const existing = (await payingOrgId(supabase, user.id)) ?? (await oldestOrgId(supabase, user.id));
+  if (existing) return existing;
 
   const handle = user.email?.split('@')[0] ?? 'My';
   const { data: org, error } = await supabase
@@ -25,19 +51,11 @@ export async function ensureOrgForUser(supabase: SupabaseClient, user: User): Pr
     .insert({ name: `${handle}'s workspace`, owner_id: user.id })
     .select('id')
     .single();
+  if (error || !org) return null;
 
-  if (!error) {
-    await supabase.from('org_members').insert({ org_id: org.id, user_id: user.id, role: 'owner' });
-    return org.id;
-  }
+  await supabase.from('org_members').insert({ org_id: org.id, user_id: user.id, role: 'owner' });
 
-  // Lost a race with another concurrent call for this same user: organizations.owner_id is
-  // unique, so the winner's row is this user's org too — fetch it instead of returning null.
-  if (!violatesOwnerConstraint(error)) return null;
-  const { data: winner } = await supabase
-    .from('organizations')
-    .select('id')
-    .eq('owner_id', user.id)
-    .single();
-  return winner?.id ?? null;
+  // A concurrent first call may have inserted its own row a moment earlier: both answers
+  // converge on the oldest, so two tabs cannot walk away with two different orgs.
+  return (await oldestOrgId(supabase, user.id)) ?? org.id;
 }
