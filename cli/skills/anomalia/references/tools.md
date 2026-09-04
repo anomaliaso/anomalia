@@ -199,6 +199,34 @@ seed: `platforms`, `pillar`, `format`, `media`, `slide_count`, `day`, `time`, `s
 A brand keeps one draft in review, so saving replaces the one that is there (`replaced` says so).
 `produce_week` is the separate, paid step that turns the rows into posts.
 
+## Memory
+
+| MCP | CLI |
+|-----|-----|
+| `get_memory` | (MCP only) |
+| `save_memory` | (MCP only) |
+| `record_memory_used` | (MCP only) |
+
+`get_memory` is what the brand already knows, so you stop asking the operator things it has
+already answered: its voice, the constraints it works under, the facts it confirmed, the
+preferences it stated, what previous work learned. `category` narrows to one kind; `limit` is 50
+by default, 200 at most. Chat-session notes and other agents' working notes never come out — only
+what belongs to the brand.
+
+**Reading is not using.** The read changes nothing and counts nothing. When an entry actually
+shaped what you produced, say so with `record_memory_used` and the ids you used — a handful, not
+everything you read. That counter is what keeps a working entry alive: entries nobody reports
+decay out of the prompts they were helping.
+
+`save_memory` records what you learned, so the next conversation starts from it. Writable:
+`fact`, `preference`, `insight`, `skill`. **`voice` and `constraint` are not** — they govern
+everything downstream, and only the operator sets them from the app.
+
+A `key` that already holds a DIFFERENT value answers **409 with both values and writes nothing**:
+you take the disagreement to the operator, you do not win it by arriving last. Sending the same
+value again reinforces it instead. Entries arrive with the confidence of something a model
+inferred, not something a person stated, and are never scoped to a chat.
+
 ## Writing
 
 | MCP | CLI |

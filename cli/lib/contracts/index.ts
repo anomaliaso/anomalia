@@ -59,6 +59,7 @@ import {
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
+import { GET_MEMORY, RECORD_MEMORY_USED, SAVE_MEMORY } from './memory';
 import { GET_KNOWLEDGE_STATUS, SEARCH_KNOWLEDGE } from './knowledge';
 import {
   ADD_RADAR_SOURCE,
@@ -179,6 +180,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_KNOWLEDGE_STATUS,
   GET_MARKET_FIELD,
   GET_MEDIA_MODELS,
+  GET_MEMORY,
   GET_PLAN,
   GET_POST,
   GET_RADAR,
@@ -201,6 +203,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_WEB_FIXES,
   PLAN_WEEK,
   PROPOSE_PLAN,
+  RECORD_MEMORY_USED,
   REFRESH_KEYWORDS,
   REMOVE_BLOG_TERM,
   REMOVE_RADAR_SOURCE,
@@ -211,6 +214,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   REVISE_PLAN,
   REVOKE_SHARE,
   SAVE_BRIEF,
+  SAVE_MEMORY,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
   SEARCH_KNOWLEDGE,
@@ -346,6 +350,17 @@ export {
   SEARCH_KNOWLEDGE
 } from './knowledge';
 export type { KnowledgeCollection } from './knowledge';
+export {
+  AGENT_MEMORY_CATEGORIES,
+  GET_MEMORY,
+  MEMORY_CATEGORIES,
+  MEMORY_ENTRIES_DEFAULT,
+  MEMORY_ENTRIES_MAX,
+  MEMORY_USED_MAX,
+  RECORD_MEMORY_USED,
+  SAVE_MEMORY
+} from './memory';
+export type { AgentMemoryCategory } from './memory';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {

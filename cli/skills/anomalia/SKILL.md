@@ -47,7 +47,10 @@ Setup details: [references/mcp.md](references/mcp.md).
 4. **Before writing ANY copy** — caption, carousel, script, article, bio — call
    `get_writing_skills`. It returns the craft text Anomalia writes with, plus this brand's own
    procedures. Skipping it is how output starts reading as generated.
-5. Confirm before reject / delete / discard unless the user clearly asked.
+5. **Read `get_memory` before asking the operator** something the brand may already know — and
+   call `record_memory_used` with the ids that actually shaped your output. An entry nobody
+   reports decays out of the prompts it was helping.
+6. Confirm before reject / delete / discard unless the user clearly asked.
 
 ## Quick workflows
 
