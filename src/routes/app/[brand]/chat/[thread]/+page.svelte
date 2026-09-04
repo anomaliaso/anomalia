@@ -5,15 +5,11 @@
   import { page } from '$app/stores';
   import { afterNavigate } from '$app/navigation';
   import { notifyChatReady } from '$lib/chat-notifications';
-  import { Monitor } from '@lucide/svelte';
   import { chatThreadId, markThreadRead, refreshThreads, setThreadAgent } from '$lib/stores/chat';
   import { createModelChoiceSave, type ModelChoice } from '$lib/chat-model-choice.svelte';
   import { hasWebHub } from '$lib/plans';
   import { openPlanDocument } from '$lib/stores/plan-panel';
-  import { pageTopActions } from '$lib/stores/page-meta';
   import { postPreviewHref } from '$lib/page-modal-navigation';
-  import TopbarCta from '$lib/components/TopbarCta.svelte';
-  import AgentComputerPanel from '$lib/components/AgentComputerPanel.svelte';
   import {
     chatSessions,
     backgroundToolThreads,
@@ -41,10 +37,8 @@
   import { readChatDraft, writeChatDraft } from '$lib/chat-draft';
   import ChatImageLightbox from '$lib/components/ChatImageLightbox.svelte';
   import { materialPress } from '$lib/actions/material-press.js';
-  import { streamParts, backgroundJobLabel, type ChatPostPreview } from '$lib/chat-parts';
+  import { streamParts, type ChatPostPreview } from '$lib/chat-parts';
   import { handleChatColorBadgeClick, chatZoomableImageSrc } from '$lib/chat-markdown';
-  import { IsMobile } from '$lib/hooks/is-mobile.svelte';
-  import { readAgentPanelPref, writeAgentPanelPref } from '$lib/chat-agent-panel-pref';
   import { snapshotWorkbench } from '$lib/workbench-context';
   import type { ChatMode } from '$lib/chat-modes';
   import { coerceChatTier, type ChatTier } from '$lib/chat-tiers';
@@ -60,11 +54,10 @@
   import TranscriptList from '../components/TranscriptList.svelte';
   import ComposerDock from '../components/ComposerDock.svelte';
   import EditMessageDialog from '../components/EditMessageDialog.svelte';
-  import AgentComputerDock from '../components/AgentComputerDock.svelte';
   import { consolidateMessages, mapMsg, planIdsIn, parseToolCalls, redoIdOf, type ChatArtifactUi, type ChatMessage, type PostPreview } from '../components/transcript';
   import { type KitRun } from '../components/kit-run';
   import { startLiveRunPoll } from '../components/live-run-poll.svelte';
-  import { createLifecycle, assistantReportOf, assistantWorkOf } from './lifecycle.svelte';
+  import { createLifecycle } from './lifecycle.svelte';
   import { dmAgents } from '$lib/chat-dm';
 
   let { data } = $props();
@@ -447,30 +440,6 @@
     });
   });
 
-  // Il computer dell'agente: colonna affiancata sopra ~1100px, Sheet sotto.
-  // La preferenza segue l'AGENTE (custom prima dello specialista): riaprendo una chat dalla
-  // sidebar, il pannello torna com'era stato lasciato — aperto o chiuso.
-  let agentPanelOpen = $state(false);
-  const panelNarrow = new IsMobile(1100);
-
-  // Atterraggio (e cambio thread): il pannello torna com'era per l'agente di QUESTA chat.
-  $effect(() => {
-    agentPanelOpen = readAgentPanelPref(data.brandSlug, data.thread.custom_agent_id ?? data.thread.agent);
-  });
-  // Ogni cambio dopo — toggle in topbar, X del pannello — resta la preferenza.
-  $effect(() => {
-    writeAgentPanelPref(data.brandSlug, data.thread.custom_agent_id ?? data.thread.agent, agentPanelOpen);
-  });
-
-  const panelLastReport = $derived(assistantReportOf(messages));
-  const panelWork = $derived(assistantWorkOf(messages));
-
-  // Cleanup esplicito: senza, la Panoramica erediterebbe il bottone del thread appena lasciato.
-  $effect(() => {
-    pageTopActions.set(agentPanelTopAction);
-    return () => pageTopActions.set(null);
-  });
-
   $effect(() => {
     const pending = session?.pendingUserText;
     if (!pending || !session?.loading) return;
@@ -502,7 +471,6 @@
 
   let backgroundToolsActive = $derived($backgroundToolThreads.has(data.thread.id));
   let backgroundJobs = $derived($backgroundToolJobs[data.thread.id] ?? []);
-  const panelBgLabels = $derived(backgroundJobs.map((j) => backgroundJobLabel(j, $_)));
 
   function stopRequest() {
     void cancelChatSession(data.thread.id, data.brandSlug);
@@ -969,36 +937,6 @@
 
 </script>
 
-{#snippet agentPanelTopAction()}
-  <TopbarCta
-    type="button"
-    variant="neutral"
-    Icon={Monitor}
-    title={$_('chat.computer.toggle')}
-    onclick={() => (agentPanelOpen = !agentPanelOpen)}
-  >
-    {$_('chat.computer.toggle')}
-  </TopbarCta>
-{/snippet}
-
-{#snippet agentPanelContent()}
-  {#if data.agentDesktopEnabled}
-    <AgentComputerPanel
-      brandSlug={data.brandSlug}
-      thread={data.thread}
-      job={data.agentPanel?.job ?? null}
-      custom={data.agentPanel?.custom ?? null}
-      renders={data.agentPanel?.renders ?? []}
-      live={{ loading, streamBuf, streamToolCalls, streamReasoning }}
-      backgroundLabels={panelBgLabels}
-      lastReport={panelLastReport}
-      lastPostId={panelWork.post}
-      lastPlanId={panelWork.plan}
-      onclose={() => (agentPanelOpen = false)}
-    />
-  {/if}
-{/snippet}
-
 <div class="chat-thread-shell">
 <div class="chat-page" use:materialPress style="--material-press-fill: var(--paper-2)">
   <div class="chat-scroll" bind:this={scrollEl} onclick={onChatScrollClick} onscroll={onChatScroll}>
@@ -1064,9 +1002,6 @@
   />
 </div>
 
-<AgentComputerDock bind:open={agentPanelOpen} narrow={panelNarrow.current}>
-  {@render agentPanelContent()}
-</AgentComputerDock>
 </div>
 
 {#if zoomImageSrc}

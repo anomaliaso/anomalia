@@ -19,7 +19,6 @@
 import { swallow } from '$lib/server/swallow';
 import { env } from '$env/dynamic/private';
 import { acquireHolder, releaseHolder } from './sandbox-leases';
-import { DESKTOP_PORT, DISPLAY, X_SOCKET } from '@anomalia/agent-adapters/graphical-bootstrap';
 
 /** `research` è l'UNICO profilo con internet aperto: `compute` e `agent` vedono solo i registry. */
 export type SandboxNetworkMode = 'compute' | 'research' | 'agent';
@@ -42,13 +41,6 @@ export const PACKAGE_DOMAINS = [
 
 /** CDN da cui Playwright scarica i binari del browser. Servono solo in provisioning. */
 export const BROWSER_DOMAINS = ['playwright.azureedge.net', 'cdn.playwright.dev', '*.playwright.dev'] as const;
-
-/**
- * I mirror apt da cui `graphical-bootstrap.ts` installa Xvfb/xdotool/ImageMagick. Verificati con
- * `apt-cache policy` sull'immagine reale: sono gli unici host che `apt-get update` contatta, non
- * una lista a occhio.
- */
-export const DESKTOP_DOMAINS = ['archive.ubuntu.com', 'security.ubuntu.com'] as const;
 
 /**
  * GitHub, per il profilo `compute`: il minimo perché il token di `sandbox_device_login` sia usabile
@@ -82,9 +74,7 @@ export function buildNetworkPolicy(mode: SandboxNetworkMode, extraDomains: strin
     return { allow: ['*'], subnets: { deny: [...DENIED_SUBNETS] } };
   }
   return {
-    // ponytail: DESKTOP_DOMAINS sempre presenti invece che dietro un flag "graphical" — un
-    // `provision()` in più da cablare per due host non vale la complessità.
-    allow: [...PACKAGE_DOMAINS, ...BROWSER_DOMAINS, ...GITHUB_DOMAINS, ...DESKTOP_DOMAINS, ...extra],
+    allow: [...PACKAGE_DOMAINS, ...BROWSER_DOMAINS, ...GITHUB_DOMAINS, ...extra],
     subnets: { deny: [...DENIED_SUBNETS] }
   };
 }
@@ -202,9 +192,8 @@ export const SANDBOX_GENERATION = env.SANDBOX_GENERATION || 'g5';
  * Erano tre nomi per brand (`research` per harness e browse, `r-motion` per Remotion, `agent` per
  * il computer): tre affitti, tre Chromium, tre snapshot, e un pannello che mostrava «il computer
  * dell'agente» mentre il `shell` dell'agente girava altrove. Averne una sola per brand ha chiuso
- * quella bugia e ne ha aperta un'altra, peggiore: **lo schermo `:1` è uno solo**, quindi due
- * agenti dello stesso brand che usano `observe`/`act` insieme si muovono il mouse a vicenda, e
- * chi ha preso il controllo del desktop se lo vede scrivere sotto le mani.
+ * quella bugia e ne ha aperta un'altra, peggiore: il disco è uno solo, quindi due agenti dello
+ * stesso brand che lavorano insieme si sovrascrivono i file a vicenda.
  *
  * Quindi la macchina è dell'AGENTE: schermo suo, profilo Chrome suo, disco suo. Si crea alla
  * prima volta che quell'agente ne ha bisogno — chi non tocca mai un computer non ne paga uno.
@@ -295,25 +284,17 @@ export function describeSandboxDeath(error: unknown): Error {
  * Lo script di navigazione: vive nella VM e si usa da riga di comando, così l'agente può comporlo
  * in una pipeline sua. Stampa JSON — titolo, testo ripulito, link, screenshot opzionale.
  *
- * A VISTA QUANDO C'È QUALCUNO CHE GUARDA. La VM è dell'agente e il suo schermo è uno solo: se
- * `${X_SOCKET}` esiste, il desktop è acceso e chi lo sta guardando deve vedere le pagine aprirsi.
- * Senza display si resta headless, che è anche il ripiego se il lancio a vista non regge — uno
- * schermo morto che lascia il socket dietro di sé non deve spegnere la navigazione.
+ * SEMPRE HEADLESS: nessuno guarda più questa VM da fuori, il desktop grafico non fa più parte del
+ * prodotto.
  */
 export const BROWSE_SCRIPT = `import { chromium } from 'playwright';
-import { existsSync } from 'node:fs';
 
 const [url, ...rest] = process.argv.slice(2);
 const opts = Object.fromEntries(rest.map((a) => { const i = a.indexOf('='); return i < 0 ? [a, 'true'] : [a.slice(0, i), a.slice(i + 1)]; }));
 if (!url) { console.error('usage: browse.mjs <url> [wait=selector] [screenshot=path] [maxChars=20000]'); process.exit(2); }
 
 const args = ['--no-sandbox', '--disable-dev-shm-usage', '--no-first-run'];
-const onScreen = existsSync('${X_SOCKET}');
-const browser = onScreen
-  ? await chromium
-      .launch({ headless: false, args, env: { ...process.env, DISPLAY: '${DISPLAY}' } })
-      .catch(() => chromium.launch({ headless: true, args }))
-  : await chromium.launch({ headless: true, args });
+const browser = await chromium.launch({ headless: true, args });
 try {
   const ctx = await browser.newContext({ userAgent: opts.ua || undefined, viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
@@ -384,7 +365,7 @@ export type SandboxHandle = {
    * Chiude il ciclo di vita del chiamante: via la directory della run e via l'holder.
    *
    * NON chiama `sandbox.stop()` direttamente: la VM è condivisa e un altro holder — un turno
-   * simultaneo, chi guarda il desktop — può essere ancora vivo. È `releaseHolder` a decidere:
+   * simultaneo, un render in corso — può essere ancora vivo. È `releaseHolder` a decidere:
    * cancellata la riga di questo chiamante, se era l'ultima la macchina si spegne; altrimenti
    * resta accesa per chi la usa. Gli holder scadono da soli (vedi `sandbox-leases.ts`), quindi un
    * processo serverless morto a metà turno non la tiene accesa per sempre.
@@ -522,28 +503,6 @@ export function sandboxConfigDrift(
 }
 
 /**
- * Scrive «accesa» sulla riga del computer, senza far cadere l'apertura se il database non
- * risponde. Import pigro: `sandbox.ts` è infrastruttura e non deve tirarsi dietro il client
- * amministrativo a ogni avvio di processo.
- */
-async function publishComputerState(
-  brandId: string,
-  refName: string,
-  agentId: string | undefined,
-  log: (line: string) => void
-): Promise<void> {
-  try {
-    const [{ publishComputerRunning }, { createAdminClient }] = await Promise.all([
-      import('$lib/server/agent-desktop'),
-      import('$lib/server/supabase-admin')
-    ]);
-    await publishComputerRunning(createAdminClient(), brandId, refName, agentId);
-  } catch (error) {
-    log(`sandbox: stato del computer non pubblicato — ${String(error)}`);
-  }
-}
-
-/**
  * Apre (o riprende) la sandbox del brand. `timeoutMs` viene dal tempo che RESTA al turno, non da
  * una costante: una VM che sopravvive al turno che l'ha creata è solo una fattura.
  */
@@ -597,11 +556,10 @@ export async function openBrandSandbox(opts: {
   // binari che scarica sono compilati per Debian. `SANDBOX_IMAGE` con Chromium già dentro azzera
   // tutto il provisioning.
   const browserImage = env.SANDBOX_BROWSER_IMAGE || 'vercel/sandbox/ubuntu';
-  // L'immagine col desktop già cotto (`sandbox-desktop/`): XFCE, VNC e noVNC dentro, quindi la VM
-  // è pronta in 7 secondi invece dei 280 che apt chiedeva. Vale per TUTTI, perché la macchina è
-  // una sola: chi rende un video e chi guarda il desktop stanno sullo stesso disco. Senza la
-  // variabile si resta sul percorso che installa a runtime, così un self-hosted senza registry
-  // continua a funzionare.
+  // `SANDBOX_DESKTOP_IMAGE` resta letta di proposito: il desktop non c'è più, ma è la variabile
+  // con cui un progetto può già puntare a un'immagine precotta, e cambiarla è un intervento sulla
+  // configurazione di produzione — non su questo file. La strada nuova è `SANDBOX_IMAGE`, che
+  // `docker/sandbox/Dockerfile` costruisce con Chromium dentro e che ha comunque la precedenza.
   const image = env.SANDBOX_IMAGE || env.SANDBOX_DESKTOP_IMAGE || (needsBrowser ? browserImage : undefined);
 
   // Nessuno la ferma a mano (vedi `release`): il timeout è l'unica cosa che la spegne.
@@ -610,10 +568,7 @@ export async function openBrandSandbox(opts: {
   const createOpts = {
     persistent: true,
     ...(image ? { image } : {}),
-    // La porta del desktop è dichiarata SEMPRE, non solo da chi lo apre: è un parametro di
-    // creazione, e la VM la crea chi arriva primo — che di solito è un turno di chat, non il
-    // pannello. Chiederla dopo non ha effetto: resterebbe chiusa per la vita della macchina.
-    ports: [...new Set([DESKTOP_PORT, ...(opts.ports ?? [])])],
+    ports: [...new Set(opts.ports ?? [])],
     timeout: lease,
     resources: { vcpus: Number(env.SANDBOX_VCPUS || 2) },
     // LA RETE DELLA MACCHINA UNICA, e non è quella che il chiamante chiede.
@@ -621,7 +576,7 @@ export async function openBrandSandbox(opts: {
     // La policy si fissa alla creazione: con una VM sola per brand, onorare `opts.mode` vorrebbe
     // dire che la rete del brand dipende da CHI l'ha aperta per primo — chiusa se è partito un
     // job, aperta se è partita la chat. Vince `research`, la macchina dell'harness: senza
-    // internet non funzionano né il desktop né il render Motion.
+    // internet il render Motion non funziona.
     //
     // Il prezzo, dichiarato: `shell` degli specialisti gira ora con internet aperto sullo stesso
     // disco dello snapshot del brand — la separazione che la lane `agent` teneva. Restano i guard
@@ -669,12 +624,6 @@ export async function openBrandSandbox(opts: {
       );
     }
   }
-
-  // LO STATO DEL COMPUTER SI PUBBLICA QUI, dove la macchina si apre — e non nella manciata di
-  // chiamanti che potrebbero scordarsene. Prima lo scriveva solo la rotta del desktop: un render
-  // Motion teneva la VM accesa dieci minuti e il pannello continuava a dire «non è mai stata
-  // accesa». Non è fatale: una riga di stato non deve impedire di lavorare.
-  void publishComputerState(opts.brandId, name, opts.agentId, log);
 
   const root = runRootFor(opts.runId);
 
