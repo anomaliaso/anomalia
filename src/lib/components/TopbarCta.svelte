@@ -17,7 +17,7 @@
     disabled?: boolean;
     type?: 'submit' | 'button';
     title?: string;
-    variant?: 'primary' | 'ghost' | 'neutral';
+    variant?: 'primary' | 'ghost';
     /** Lucide (or compatible) icon — shown when not busy; spinner replaces it while loading. */
     Icon?: Component<{ class?: string; strokeWidth?: number | string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
     class?: string;
@@ -32,7 +32,6 @@
   class="topbar-cta {className}"
   class:is-busy={busy}
   class:ghost={variant === 'ghost'}
-  class:neutral={variant === 'neutral'}
   {type}
   disabled={locked}
   aria-busy={busy}
@@ -90,17 +89,6 @@
     box-shadow: none;
   }
 
-  .topbar-cta.neutral {
-    gap: 6px;
-    padding: 7px 10px;
-    font-size: 12px;
-    font-weight: 550;
-    color: var(--ink-soft);
-    background: transparent;
-    border: 1px solid var(--line);
-    box-shadow: none;
-  }
-
   .topbar-cta:hover:not(:disabled):not(.is-busy) {
     transform: translateY(-1px);
     background: color-mix(in srgb, var(--accent) 88%, #000);
@@ -111,14 +99,6 @@
 
   .topbar-cta.ghost:hover:not(:disabled):not(.is-busy) {
     background: color-mix(in srgb, var(--accent) 14%, var(--paper));
-    box-shadow: none;
-  }
-
-  .topbar-cta.neutral:hover:not(:disabled):not(.is-busy) {
-    transform: none;
-    color: var(--ink);
-    background: var(--paper-2);
-    border-color: var(--line-2);
     box-shadow: none;
   }
 
@@ -135,19 +115,9 @@
     box-shadow: none;
   }
 
-  .topbar-cta.neutral:active:not(:disabled):not(.is-busy) {
-    transform: none;
-    background: var(--paper-3);
-    box-shadow: none;
-  }
-
   .topbar-cta:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--accent) 55%, #fff);
     outline-offset: 2px;
-  }
-
-  .topbar-cta.neutral:focus-visible {
-    outline-color: var(--ink);
   }
 
   .topbar-cta:disabled,
@@ -184,11 +154,6 @@
   .topbar-cta.ghost .topbar-cta-spin {
     border-color: color-mix(in srgb, var(--accent) 30%, transparent);
     border-top-color: var(--accent);
-  }
-
-  .topbar-cta.neutral .topbar-cta-spin {
-    border-color: color-mix(in srgb, var(--ink) 22%, transparent);
-    border-top-color: var(--ink);
   }
 
   @keyframes topbar-cta-spin {
