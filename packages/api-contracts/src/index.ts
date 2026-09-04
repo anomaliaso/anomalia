@@ -49,6 +49,7 @@ import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
+import { SEARCH_KNOWLEDGE } from './knowledge';
 import {
   ADD_RADAR_SOURCE,
   GET_RADAR,
@@ -179,6 +180,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   REVOKE_SHARE,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
+  SEARCH_KNOWLEDGE,
   SEO_ACTION,
   SET_AUTOMATION,
   SET_BIO,
@@ -287,6 +289,14 @@ export {
   SET_RADAR_PLATFORM
 } from './radar';
 export type { RadarPlatform, RadarSourceKindName } from './radar';
+export {
+  KNOWLEDGE_COLLECTIONS,
+  KNOWLEDGE_EXCERPT_CHARS,
+  KNOWLEDGE_HITS_DEFAULT,
+  KNOWLEDGE_HITS_MAX,
+  SEARCH_KNOWLEDGE
+} from './knowledge';
+export type { KnowledgeCollection } from './knowledge';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {
