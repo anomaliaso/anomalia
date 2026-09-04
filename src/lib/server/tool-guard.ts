@@ -33,10 +33,6 @@ type ToolCap = {
 const PARSE_ONLY: ToolCap = { perIp: 30, globalPerDay: 5000, costPerRun: 0 };
 // Gemini call with web-search grounding — the most expensive thing a free tool can do.
 const AI_BACKED: ToolCap = { perIp: 3, globalPerDay: 200, costPerRun: 0.04 };
-// One or two DataForSEO Labs live tasks (~$0.013 each).
-const DFS_LABS: ToolCap = { perIp: 5, globalPerDay: 400, costPerRun: 0.03 };
-// DataForSEO Backlinks — priced well above Labs, and the classic free-tool abuse magnet.
-const DFS_BACKLINKS: ToolCap = { perIp: 2, globalPerDay: 60, costPerRun: 0.06 };
 
 const TOOL_CAPS: Record<string, ToolCap> = {
   // The pre-login guest preview (/start/preview): site analysis + one caption pass + one image,
@@ -44,10 +40,7 @@ const TOOL_CAPS: Record<string, ToolCap> = {
   // make, and no credit gate stands behind it (renderPostImage gates on a brand context a guest
   // does not have), so this cap IS the spending limit: 200 x $0.08 = ~$16/day worst case.
   'guest-preview': { perIp: 3, globalPerDay: 200, costPerRun: 0.08 },
-  // Existing tools (previously unguarded).
   'keyword-research': AI_BACKED,
-  // Site fetch + grounded AI discovery + DataForSEO overview (+ optional Reddit samples).
-  'conversation-gap': AI_BACKED,
   'geo-audit': AI_BACKED,
   // The agent-team tool is a CONVERSATION, so it is metered per MESSAGE, not per scan: a chat has
   // no natural end, and a per-conversation cap would be a free model with extra steps. Its own
@@ -56,25 +49,7 @@ const TOOL_CAPS: Record<string, ToolCap> = {
   'agent-team': { perIp: 15, globalPerDay: 600, costPerRun: 0.02 },
   'llms-txt-generator': AI_BACKED,
   'llms-txt-validator': PARSE_ONLY,
-  'sitemap-analyzer': PARSE_ONLY,
-  // Parse-only additions.
-  'meta-tags': PARSE_ONLY,
-  'schema-validator': PARSE_ONLY,
-  'robots-tester': PARSE_ONLY,
-  'redirect-checker': PARSE_ONLY,
-  'heading-audit': PARSE_ONLY,
-  'broken-links': PARSE_ONLY,
-  // PSI is free but quota-limited (25k/day). PARSE_ONLY's 5000/day global keeps us far under it
-  // even if every other quota consumer in the account fires at once.
-  'page-speed': PARSE_ONLY,
-  // Data-backed additions.
-  'keyword-difficulty': DFS_LABS,
-  'traffic-estimator': DFS_LABS,
-  'long-tail': DFS_LABS,
-  'competitor-gap': DFS_LABS,
-  'rank-checker': DFS_LABS,
-  'ai-visibility': DFS_LABS,
-  'backlink-checker': DFS_BACKLINKS
+  'sitemap-analyzer': PARSE_ONLY
 };
 
 // Hashed so we never store a raw IP. Salted with the service-role key (always set in prod) so

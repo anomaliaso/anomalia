@@ -5,6 +5,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { Handle } from '@sveltejs/kit';
 import { pickLocale } from '$lib/i18n/locale';
+import { retiredPageTarget } from '$lib/seo';
 import { withBrandContext } from '$lib/server/ai-log';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { captureReferralCookie } from '$lib/server/referrals';
@@ -155,6 +156,15 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
   // brand blogs stay clean; their Powered-by badge already links to anomalia.so/?ref=….
   if (!isBlogRoute) {
     captureReferralCookie(event.cookies, event.url.searchParams.get('ref'));
+  }
+
+  // Pagine pubbliche ritirate: 301 verso quella che ha preso il loro posto. Si guarda il
+  // pathname e non route.id perché la rotta non esiste più — è esattamente il 404 che stiamo
+  // evitando. Prima di marketingShellTarget: su self-host il 404 non è un problema di SEO, ma
+  // mandare una vecchia URL in /app perderebbe comunque la destinazione giusta.
+  const retiredDest = retiredPageTarget(event.url.pathname, event.locals.locale);
+  if (retiredDest) {
+    throw redirect(301, retiredDest + event.url.search);
   }
 
   // Self-host: HIDE_MARKETING=1 manda il pitch (homepage, pricing, /start, …) in /app.
