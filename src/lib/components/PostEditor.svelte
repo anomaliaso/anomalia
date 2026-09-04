@@ -10,8 +10,6 @@
   import { captionViolations, captionFor, platformLabel, PLATFORM_CHAR_LIMITS, ALT_CAPTION_PLATFORMS, YOUTUBE_TITLE_LIMIT } from '$lib/platform-limits';
   import { downscaleImageFile } from '$lib/chat-attachments';
   import { RASTER_IMAGE_ACCEPT, isRasterImageSource } from '$lib/raster-image';
-  import ChatToolChips from '$lib/components/ChatToolChips.svelte';
-  import { renderMd, handleChatColorBadgeClick } from '$lib/chat-markdown';
   import { YOUTUBE_THUMB_FILE_ACCEPT, prepareYoutubeThumbnailFile } from '$lib/youtube-thumbnail-client';
 
   // Shared post editor dialog — used by both Approvals and Content. The host page must define the
@@ -58,7 +56,7 @@
     // Lightbox (calendar) vs full-page post dashboard.
     embedded = false,
     // Which columns to show when embedded. Modal always shows all available.
-    panels = 'all' as 'all' | 'edit' | 'chat',
+    panels = 'all' as 'all' | 'edit',
     onClose
   }: {
     post: Post;
@@ -69,25 +67,20 @@
     busyDays: Record<string, number>;
     // Platforms the brand can publish to (connected accounts) — the cross-post picker offers these.
     availablePlatforms?: string[];
-    // Global feature flags (from the [brand] layout). studio → AI editor chat.
+    // Global feature flags (from the [brand] layout). studio → graphic source editor.
     flags?: { studio?: boolean };
     embedded?: boolean;
-    panels?: 'all' | 'edit' | 'chat';
+    panels?: 'all' | 'edit';
     onClose?: () => void;
   } = $props();
 
   const studioOn = $derived(!!flags?.studio);
-  const showChat = $derived(studioOn && (panels === 'all' || panels === 'chat'));
   const showForm = $derived(panels === 'all' || panels === 'edit');
   const close = () => onClose?.();
 
-  // Mobile dual-pane: bottom bar switches between settings/chat (first) and preview (second).
+  // Mobile dual-pane: bottom bar switches between settings (first) and preview (second).
   // Default to the editable pane so properties are reachable without scrolling past the image.
   let mobilePane = $state<'primary' | 'preview'>('primary');
-  const mobilePrimaryKey = $derived(showForm ? 'edit' : 'chat');
-  const mobilePrimaryLabel = $derived(
-    mobilePrimaryKey === 'chat' ? $_('posteditor.mobilePane.chat') : $_('posteditor.mobilePane.edit')
-  );
 
   function setMobilePane(next: 'primary' | 'preview') {
     mobilePane = next;
@@ -367,117 +360,6 @@
   let mediaLoading = $state(false);
   const refCount = $derived(refImages.length + refPicks.length);
 
-  // ---- Studio editor chat: a dedicated conversation that edits THIS post via AI tools. ----
-  type ChatMsg = { role: 'user' | 'assistant'; text: string; tools?: string[] };
-  let chatMessages = $state<ChatMsg[]>([]);
-  let chatBusy = $state(false);
-  let chatError = $state('');
-  let chatScrollEl = $state<HTMLDivElement>();
-
-  function applyPostState(p: Record<string, unknown> | null | undefined) {
-    if (!p) return;
-    if (typeof p.caption === 'string') eCaption = p.caption;
-    eMedia = (p.media_url as string | null) ?? eMedia;
-    eMediaUrls = Array.isArray(p.media_urls) ? (p.media_urls as string[]) : eMediaUrls;
-    eImagePrompt = (p.image_prompt as string | null) ?? eImagePrompt;
-    eContentType = (p.content_type as string | null) ?? eContentType;
-    if (typeof p.title === 'string') eTitle = p.title;
-    if (typeof p.link_url === 'string') eLinkUrl = p.link_url;
-    if (typeof p.subreddit === 'string') eSubreddit = p.subreddit;
-    if (Array.isArray(p.platforms)) ePlatforms = (p.platforms as string[]).map((x) => x.toLowerCase());
-    if ('youtube_thumbnail_url' in p) eYoutubeThumb = (p.youtube_thumbnail_url as string | null) ?? null;
-  }
-
-  // UI messages are stored as steps; flatten to {role,text,tools} for display.
-  function flattenChat(raw: unknown[]): ChatMsg[] {
-    const out: ChatMsg[] = [];
-    for (const m of raw as Record<string, unknown>[]) {
-      const role = m.role === 'assistant' ? 'assistant' : 'user';
-      const content = m.content;
-      if (typeof content === 'string') { if (content.trim()) out.push({ role, text: content }); continue; }
-      let text = ''; const tools: string[] = [];
-      for (const part of (Array.isArray(content) ? content : []) as Record<string, unknown>[]) {
-        if (part.type === 'text' && typeof part.text === 'string') text += part.text;
-        else if (part.type === 'tool-call' && typeof part.toolName === 'string') tools.push(part.toolName);
-      }
-      if (text.trim() || tools.length) out.push({ role, text, tools: tools.length ? tools : undefined });
-    }
-    return out;
-  }
-
-  async function loadChat() {
-    try {
-      const res = await fetch(`/app/${brandSlug}/content/${post.id}/chat`);
-      if (!res.ok) return;
-      const j = await res.json();
-      chatMessages = flattenChat(j.messages ?? []);
-      applyPostState(j.post);
-      queueMicrotask(() => chatScrollEl?.scrollTo({ top: chatScrollEl.scrollHeight }));
-    } catch { /* offline / flag off */ }
-  }
-
-  async function reloadPostState() {
-    try {
-      const res = await fetch(`/app/${brandSlug}/content/${post.id}/chat`);
-      if (res.ok) applyPostState((await res.json()).post);
-    } catch { /* ignore */ }
-  }
-
-  async function sendChat(preset?: string) {
-    const t = (typeof preset === 'string' ? preset : feedback).trim();
-    if (!t || chatBusy) return;
-    chatBusy = true; chatError = '';
-    chatMessages = [...chatMessages, { role: 'user', text: t }];
-    const attachments = {
-      uploads: refImages,
-      brandImageIds: refPicks.filter((p) => p.kind === 'brand').map((p) => p.id),
-      postThumbIds: refPicks.filter((p) => p.kind === 'post').map((p) => p.id)
-    };
-    feedback = ''; refImages = []; refPicks = []; brandPicker = false;
-    queueMicrotask(() => chatScrollEl?.scrollTo({ top: chatScrollEl.scrollHeight }));
-    try {
-      const res = await fetch(`/app/${brandSlug}/content/${post.id}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: t }], attachments })
-      });
-      if (!res.ok) throw new Error(await res.text().catch(() => `HTTP ${res.status}`));
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let sseBuf = '', streamText = '';
-      const streamTools: string[] = [];
-      chatMessages = [...chatMessages, { role: 'assistant', text: '' }];
-      const idx = chatMessages.length - 1;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        sseBuf += decoder.decode(value, { stream: true });
-        const lines = sseBuf.split('\n'); sseBuf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6);
-          if (raw === '[DONE]') continue;
-          try {
-            const evt = JSON.parse(raw);
-            if (evt.type === 'text-delta' && evt.delta) streamText += evt.delta;
-            else if (evt.type === 'tool-input-start' && evt.toolName) streamTools.push(evt.toolName);
-            chatMessages[idx] = { role: 'assistant', text: streamText, tools: streamTools.length ? [...streamTools] : undefined };
-            chatScrollEl?.scrollTo({ top: chatScrollEl.scrollHeight });
-          } catch { /* skip malformed */ }
-        }
-      }
-      // Tools mutated the post row → pull the fresh state into the preview and graphic source.
-      await reloadPostState();
-      await loadGraphicSource();
-    } catch (e) {
-      chatError = e instanceof Error && e.message ? e.message : 'Errore';
-      console.error('[editor chat]', e);
-    } finally {
-      chatBusy = false;
-      queueMicrotask(() => chatScrollEl?.scrollTo({ top: chatScrollEl.scrollHeight }));
-    }
-  }
-
   async function openBrandPicker() {
     brandPicker = !brandPicker;
     if (!brandPicker || mediaRefs || mediaLoading) return;
@@ -659,14 +541,6 @@
   ]);
   let current = $state(0);
   let revisionsLoaded = $state(false);
-
-  // Studio: load the post's editor conversation once, on open.
-  let chatLoaded = false;
-  $effect(() => {
-    if (!studioOn || chatLoaded) return;
-    chatLoaded = true;
-    loadChat();
-  });
 
   // Load persisted revisions on mount when the post has been regenerated at least once.
   $effect(() => {
@@ -941,9 +815,7 @@
 >
   <div
     class="lb-card"
-    class:with-chat={showChat}
     class:embedded
-    class:chat-focus={embedded && panels === 'chat'}
     class:edit-focus={embedded && panels === 'edit'}
     class:mobile-primary={mobilePane === 'primary'}
     class:mobile-preview={mobilePane === 'preview'}
@@ -1318,101 +1190,6 @@
     </div>
     {/if}
 
-    {#if showChat}
-    <!-- Full-height AI editor chat, persisted per post. Same rendering as the global chatbot. -->
-    <aside class="lb-chat">
-      <div class="lb-chat-head">Editor AI</div>
-      <div class="lb-chat-log" bind:this={chatScrollEl} onclick={handleChatColorBadgeClick}>
-        {#if !chatMessages.length && !chatBusy}
-          <div class="lb-chat-hint">{$_(graphicKind ? 'posteditor.chatHintGraphic' : 'posteditor.chatHint')}</div>
-        {/if}
-        {#each chatMessages as m, i (i)}
-          {#if m.role === 'user'}
-            <div class="self-end flex flex-col items-end">
-              <div class="lb-chat-user">{@html renderMd(m.text)}</div>
-            </div>
-          {:else}
-            {#if m.tools?.length}
-              <ChatToolChips calls={m.tools.map((t) => ({ toolName: t }))} />
-            {/if}
-            {#if m.text}<div class="lb-chat-msg chat-msg">{@html renderMd(m.text)}</div>{/if}
-          {/if}
-        {/each}
-        {#if chatBusy && !chatMessages[chatMessages.length - 1]?.text}
-          <div class="flex gap-1 py-2">
-            <span class="lb-dot"></span><span class="lb-dot d1"></span><span class="lb-dot d2"></span>
-          </div>
-        {/if}
-      </div>
-      {#if chatError}<span class="regen-note err lb-chat-err">{chatError}</span>{/if}
-      <div class="lb-chat-composer">
-        <div class="regen-box" class:disabled={chatBusy}>
-          {#if refImages.length || refPicks.length}
-            <div class="ref-strip">
-              {#each refImages as src, i (i)}
-                <div class="ref-thumb" style={`background-image:url(${src})`}>
-                  <button type="button" class="ref-del" onclick={() => removeRef(i)} aria-label={$_('posteditor.removeRef')}>×</button>
-                </div>
-              {/each}
-              {#each refPicks as p, i (p.kind + p.id)}
-                <div class="ref-thumb" style={`background-image:url(${p.url})`}>
-                  <button type="button" class="ref-del" onclick={() => removePick(i)} aria-label={$_('posteditor.removeRef')}>×</button>
-                </div>
-              {/each}
-            </div>
-          {/if}
-          <textarea bind:this={feedbackEl} bind:value={feedback} rows="1"
-            placeholder="Scrivi all'editor AI…"
-            onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-            disabled={chatBusy}></textarea>
-          <div class="regen-bar">
-            <button type="button" class="ref-add" onclick={() => refInputEl?.click()}
-              disabled={chatBusy || refCount >= MAX_REF_IMAGES}
-              title={$_('posteditor.addRef')} aria-label={$_('posteditor.addRef')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15l-5-5L5 21"/><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>
-            </button>
-            <button type="button" class="ref-add" class:on={brandPicker} onclick={openBrandPicker}
-              disabled={chatBusy}
-              title={$_('posteditor.addRefFromBrand')} aria-label={$_('posteditor.addRefFromBrand')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            </button>
-            <input bind:this={refInputEl} type="file" accept={RASTER_IMAGE_ACCEPT} multiple hidden onchange={onPickRefs} />
-            <button class="regen-send" type="button" onclick={sendChat} disabled={chatBusy || !feedback.trim()} aria-label="Invia">
-              {#if chatBusy}<span class="spinner sm"></span>{:else}↑{/if}
-            </button>
-          </div>
-          {#if brandPicker}
-            <div class="ref-picker">
-              {#if mediaLoading}
-                <div class="ref-empty">{$_('posteditor.loadingRefs')}</div>
-              {:else if mediaRefs && (mediaRefs.brandImages.length || mediaRefs.postThumbs.length)}
-                {#if mediaRefs.brandImages.length}
-                  <div class="ref-grp-lbl">{$_('posteditor.brandImages')}</div>
-                  <div class="ref-grid">
-                    {#each mediaRefs.brandImages as bi (bi.id)}
-                      <button type="button" class="ref-cell" class:on={isPicked('brand', bi.id)} style={`background-image:url(${bi.url})`}
-                        onclick={() => togglePick('brand', bi.id, bi.url)} aria-label={$_('posteditor.pick')}></button>
-                    {/each}
-                  </div>
-                {/if}
-                {#if mediaRefs.postThumbs.length}
-                  <div class="ref-grp-lbl">{$_('posteditor.yourPosts')}</div>
-                  <div class="ref-grid">
-                    {#each mediaRefs.postThumbs as pt (pt.id)}
-                      <button type="button" class="ref-cell" class:on={isPicked('post', pt.id)} style={`background-image:url(${pt.url})`}
-                        onclick={() => togglePick('post', pt.id, pt.url)} aria-label={$_('posteditor.pick')}></button>
-                    {/each}
-                  </div>
-                {/if}
-              {:else}
-                <div class="ref-empty">{$_('posteditor.noBrandMedia')}</div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </div>
-    </aside>
-    {/if}
 
     <nav class="lb-mobile-bar" aria-label={$_('posteditor.mobilePane.label')}>
       <button
@@ -1422,17 +1199,11 @@
         aria-pressed={mobilePane === 'primary'}
         onclick={() => setMobilePane('primary')}
       >
-        {#if mobilePrimaryKey === 'chat'}
-          <svg class="lb-mobile-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
-          </svg>
-        {:else}
-          <svg class="lb-mobile-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-          </svg>
-        {/if}
-        <span>{mobilePrimaryLabel}</span>
+        <svg class="lb-mobile-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </svg>
+        <span>{$_('posteditor.mobilePane.edit')}</span>
       </button>
       <button
         type="button"
@@ -1519,8 +1290,6 @@
     flex: 1 1 auto;
   }
   .lb-card.embedded.edit-focus { grid-template-columns: 1.05fr 1fr; }
-  .lb-card.embedded.chat-focus { grid-template-columns: 1fr 1.05fr; }
-  .lb-card.embedded.chat-focus .lb-body { display: none; }
   .lb-close { position: absolute; top: 12px; right: 14px; z-index: 2; width: 32px; height: 32px; border-radius: 50%;
     border: none; cursor: pointer; background: rgba(0, 0, 0, 0.4); color: #fff; font-size: 20px; line-height: 1; }
   /* Show the post image at its TRUE aspect ratio (no cover-crop): contain renders portrait 4:5 /
@@ -1593,46 +1362,11 @@
   .when .chg { font-size: 12px; font-weight: 600; color: var(--accent); }
   /* Chat-style regeneration composer */
   .regen-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  /* ---- Studio editor: full-height chat rail (matches the global chatbot rendering) ---- */
-  .lb-card.with-chat { grid-template-columns: 1fr 0.86fr 0.92fr; }
-  /* The 97vw dialog width must not leak into the embedded card, or it blows past the
-     content pane (it wins over `.lb-card.embedded { width: 100% }` on source order). */
-  .lb-card.with-chat:not(.embedded) { width: min(1840px, 97vw); }
-  .lb-chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 94vh; max-height: 94vh;
-    border-left: 1px solid var(--line, #e3e3e6); background: var(--paper, #fff); }
-  .lb-card.embedded .lb-chat { height: 100%; max-height: none; }
-  .lb-chat-head { flex: 0 0 auto; padding: 16px 18px 10px; font-size: 12px; font-weight: 600;
-    letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-faint, #86868b); }
-  .lb-chat-review { flex: 0 0 auto; padding: 0 16px 10px; }
-  .lb-chat-shortcuts { padding: 0 0 10px; }
-  .lb-chat-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 18px 12px;
-    display: flex; flex-direction: column; gap: 10px; }
-  .lb-chat-hint { font-size: 13px; color: var(--ink-faint, #86868b); line-height: 1.55; padding: 8px 2px; }
-  .lb-chat-user { background: var(--ink, #1d1d1f); color: #fff; padding: 9px 13px; border-radius: 16px;
-    border-bottom-right-radius: 6px; font-size: 13.5px; line-height: 1.5; max-width: 82%; word-break: break-word; }
-  .lb-chat-msg { align-self: flex-start; max-width: 92%; }
-  .lb-chat-err { margin: 0 18px 8px; }
-  .lb-chat-composer { flex: 0 0 auto; padding: 10px 16px 16px; border-top: 1px solid var(--line, #e3e3e6); }
-  .lb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint, #86868b);
-    display: inline-block; animation: lbbounce 1s infinite; }
-  .lb-dot.d1 { animation-delay: 0.15s; } .lb-dot.d2 { animation-delay: 0.3s; }
-  @keyframes lbbounce { 0%,80%,100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-4px); opacity: 1; } }
-  /* markdown body (same as global chat) */
-  .chat-msg { font-size: 13.5px; line-height: 1.55; color: var(--ink, #1d1d1f); }
-  .chat-msg strong { font-weight: 650; }
-  .chat-msg a { color: var(--accent, #7c5cff); text-decoration: underline; }
-  .chat-msg ul, .chat-msg ol { margin: 6px 0; padding-left: 20px; }
-  .chat-msg li { margin: 2px 0; }
-  .chat-msg code { font-family: var(--mono, monospace); font-size: 0.88em; background: var(--paper-2, #f5f5f7); padding: 1px 5px; border-radius: 5px; }
-  .chat-msg pre { background: var(--paper-2, #f5f5f7); padding: 10px 12px; border-radius: 10px; overflow-x: auto; margin: 6px 0; }
-  .chat-msg pre code { background: none; padding: 0; }
   .lb-mobile-bar { display: none; }
   @media (max-width: 900px) {
     /* Dual-pane → single scrollable pane; floating bottom bar switches views. */
     .lb-card,
-    .lb-card.with-chat,
-    .lb-card.embedded.edit-focus,
-    .lb-card.embedded.chat-focus {
+    .lb-card.embedded.edit-focus {
       display: flex;
       flex-direction: column;
       grid-template-columns: none;
@@ -1663,8 +1397,7 @@
     }
 
     .lb-img,
-    .lb-body,
-    .lb-chat {
+    .lb-body {
       position: relative;
       flex: 0 0 auto;
       width: 100%;
@@ -1681,30 +1414,9 @@
     .lb-body {
       padding: 16px 14px 20px;
     }
-    .lb-chat {
-      height: auto;
-      max-height: none;
-      min-height: 60vh;
-      border-left: none;
-      border-top: none;
-    }
-    .lb-chat-log {
-      flex: 1 1 auto;
-      max-height: none;
-      overflow: visible;
-      min-height: 200px;
-    }
-    .lb-chat-composer {
-      position: sticky;
-      bottom: calc(76px + env(safe-area-inset-bottom, 0px));
-      z-index: 5;
-      background: var(--paper, #fff);
-    }
-
-    /* Settings / chat first; preview second — hide the inactive pane. */
+    /* Settings first; preview second — hide the inactive pane. */
     .lb-card.mobile-primary .lb-img { display: none; }
-    .lb-card.mobile-preview .lb-body,
-    .lb-card.mobile-preview .lb-chat { display: none; }
+    .lb-card.mobile-preview .lb-body { display: none; }
     .lb-card.mobile-preview .lb-img { display: flex; }
 
     /* Leave room for the floating bottom bar so content isn't covered. */

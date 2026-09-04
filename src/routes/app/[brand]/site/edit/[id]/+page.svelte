@@ -1,11 +1,9 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { enhance } from '$app/forms';
-  import { invalidateAll } from '$app/navigation';
   import { backHref } from '$lib/page-modal-navigation';
   import { pageModalOrigin } from '$lib/stores/page-modal';
   import BlogEditor from '$lib/components/blog/BlogEditor.svelte';
-  import ArticleChat from '$lib/components/blog/ArticleChat.svelte';
   import { jpegIfHeicFile, jpegIfHeicFormFiles } from '$lib/raster-image-client';
   import { RASTER_IMAGE_ACCEPT } from '$lib/raster-image';
 
@@ -13,28 +11,17 @@
   const siteHref = $derived(`/app/${$page.params.brand}/site`);
   const returnHref = $derived(backHref($pageModalOrigin, siteHref));
 
-  // Flatten stored version exchanges (instruction → reply) into a chat transcript.
-  const initialMessages = data.chat.messages.flatMap((m: { instruction: string; reply: string }) => [
-    { role: 'user' as const, text: m.instruction },
-    { role: 'assistant' as const, text: m.reply }
-  ]);
-
   let title = $state(data.article.title);
   let metaTitle = $state(data.article.metaTitle);
   let metaDescription = $state(data.article.metaDescription);
   let cover = $state<string | null>(data.article.cover);
   let editorRef = $state<BlogEditor | null>(null);
-  let chatRef = $state<ArticleChat | null>(null);
   let busy = $state(false);
   let dirty = $state(false);
   let bodyMd = $state(data.article.bodyMd);
   let categoryId = $state(data.article.categoryId);
   let authorId = $state(data.article.authorId);
   let selectedTagIds = $state(new Set(data.articleTagIds));
-
-  // Cover "Chiedi alle AI" prompt snippet
-  let coverAskOpen = $state(false);
-  let coverAskPrompt = $state('');
 
   const uploadUrl = $derived(`${$page.url.pathname.replace(/\/$/, '')}/upload`);
   const withBusy = () => {
@@ -67,34 +54,6 @@
     });
   }
 
-  function onAiTitleChange(t: string) { title = t; dirty = true; }
-  function onAiMetaChange(mt: string, md: string) { metaTitle = mt; metaDescription = md; dirty = true; }
-  function onCoverChange(url: string) {
-    cover = url;
-    coverAskOpen = false;
-    void invalidateAll();
-  }
-
-  function submitCoverAsk() {
-    const text = coverAskPrompt.trim();
-    if (!text || !cover) return;
-    coverAskPrompt = '';
-    coverAskOpen = false;
-    void chatRef?.sendImageEdit({ instruction: text, imageUrl: cover, target: 'cover' });
-  }
-
-  function onBodyAskAi(src: string, prompt: string) {
-    void chatRef?.sendImageEdit({ instruction: prompt, imageUrl: src, target: 'body' });
-  }
-
-  function onBodyAskAiText(selectedText: string, prompt: string) {
-    void chatRef?.sendTextEdit({ instruction: prompt, selectedText });
-  }
-
-  function onCoverAskKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitCoverAsk(); }
-    else if (e.key === 'Escape') coverAskOpen = false;
-  }
 </script>
 
 <div class="editor-page">
@@ -121,24 +80,6 @@
     <div class="cover-hero" class:empty={!cover}>
       {#if cover}
         <img src={cover} alt="copertina" />
-        <button
-          type="button"
-          class="ask-ai-btn"
-          onclick={() => (coverAskOpen = !coverAskOpen)}
-        >Chiedi alle AI</button>
-        {#if coverAskOpen}
-          <div class="ask-ai-panel">
-            <textarea
-              bind:value={coverAskPrompt}
-              onkeydown={onCoverAskKey}
-              rows="2"
-              placeholder="Come vuoi modificare la copertina?"
-            ></textarea>
-            <button type="button" class="ask-ai-send" onclick={submitCoverAsk} disabled={!coverAskPrompt.trim()}>
-              Invia alla chat
-            </button>
-          </div>
-        {/if}
       {:else}
         <span class="cover-ph" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -195,25 +136,10 @@
           initialMarkdown={bodyMd}
           onChange={() => (dirty = true)}
           onImageUpload={uploadImage}
-          onAskAiImage={onBodyAskAi}
-          onAskAiText={onBodyAskAiText}
         />
       </div>
 
       <div class="right-col">
-        <ArticleChat
-          bind:this={chatRef}
-          chatUrl={`${$page.url.pathname.replace(/\/$/, '')}/chat`}
-          {initialMessages}
-          canUndo={data.chat.canUndo}
-          canRedo={data.chat.canRedo}
-          getMarkdown={() => editorRef?.getMarkdown() ?? bodyMd}
-          setMarkdown={(md) => { editorRef?.setMarkdown(md); dirty = false; }}
-          onTitleChange={onAiTitleChange}
-          onMetaChange={onAiMetaChange}
-          onCoverChange={onCoverChange}
-        />
-
         <details class="seo">
           <summary>SEO</summary>
           <label>Meta title<input name="meta_title" bind:value={metaTitle} maxlength="70" placeholder="Titolo SEO (max 60)" /></label>
@@ -358,34 +284,6 @@
     gap: 8px; width: 100%; height: 100%; font-size: 13px;
   }
   .cover-ph svg { width: 36px; height: 36px; }
-  .ask-ai-btn {
-    position: absolute; right: 12px; bottom: 12px; z-index: 2;
-    font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.35); cursor: pointer;
-    background: rgba(18, 18, 18, 0.72); color: #fff; backdrop-filter: blur(6px);
-    font-family: inherit; line-height: 1.2;
-  }
-  .ask-ai-btn:hover { background: rgba(18, 18, 18, 0.88); }
-  .ask-ai-panel {
-    position: absolute; right: 12px; bottom: 48px; z-index: 3;
-    width: min(320px, calc(100% - 24px));
-    display: flex; flex-direction: column; gap: 8px;
-    padding: 10px; border-radius: 10px;
-    background: var(--paper); border: 1px solid var(--line);
-    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
-  }
-  .ask-ai-panel textarea {
-    width: 100%; resize: none; box-sizing: border-box;
-    font-size: 13px; line-height: 1.4; font-family: inherit;
-    padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--paper-2); color: var(--ink); outline: none;
-  }
-  .ask-ai-send {
-    align-self: flex-end; font-size: 12px; font-weight: 600; font-family: inherit;
-    padding: 7px 12px; border-radius: 8px; border: none; cursor: pointer;
-    background: var(--accent, #7c5cff); color: #fff;
-  }
-  .ask-ai-send:disabled { opacity: 0.5; cursor: default; }
   .cover-ctl {
     display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
     flex-wrap: wrap; min-width: 0;
@@ -417,7 +315,6 @@
     .workspace { flex-direction: column; }
     .editor-wrap { min-height: 420px; }
     .right-col { width: 100%; position: static; max-height: none; align-self: stretch; }
-    .right-col :global(.chat) { height: 320px; }
   }
   @container workbench (max-width: 640px) {
     .cover-hero { max-height: none; }

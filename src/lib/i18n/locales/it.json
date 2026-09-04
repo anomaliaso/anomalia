@@ -7110,7 +7110,6 @@
       "nav": {
         "preview": "Anteprima",
         "edit": "Modifica",
-        "chat": "Chat",
         "details": "Dettagli",
         "analytics": "Analytics",
         "campaign": "Campagna",
@@ -7125,10 +7124,6 @@
         "followers": "Azienda · 1.240 follower",
         "noMedia": "Nessun media",
         "noCaption": "Nessuna caption"
-      },
-      "chat": {
-        "studioOff": "La chat editor è disponibile quando Studio è attivo per questo workspace.",
-        "goEdit": "Modifica post →"
       },
       "details": {
         "title": "Dettagli post",
@@ -7171,13 +7166,13 @@
       },
       "campaign": {
         "title": "Alternative media",
-        "body": "Genera creatività alternative da questo post per una nuova campagna, poi raffinale in chat.",
-        "openChat": "Apri chat editor →",
-        "step1": "Apri la chat editor con il brief suggerito.",
+        "body": "Genera creatività alternative da questo post per una nuova campagna, poi raffinale nell’editor.",
+        "step1": "Copia il brief suggerito e passalo al tuo agente.",
         "step2": "Chiedi 2–3 immagini o slide alternative (stesso messaggio, visual diverso).",
         "step3": "Scegli la vincitrice, poi boostala o programmala come nuovo post.",
         "suggestedPrompt": "Brief suggerito",
-        "chatPrompt": "Genera 3 versioni media alternative di questo post {platform} per una nuova campagna. Mantieni il tone of voice. Caption attuale: \"{caption}\". Varia composizione e mood, non il prodotto."
+        "chatPrompt": "Genera 3 versioni media alternative di questo post {platform} per una nuova campagna. Mantieni il tone of voice. Caption attuale: \"{caption}\". Varia composizione e mood, non il prodotto.",
+        "goEdit": "Modifica post →"
       },
       "boost": {
         "title": "Boost ads",
@@ -7297,8 +7292,6 @@
       "exportPng": "Esporta PNG",
       "exportJpg": "Esporta JPG"
     },
-    "chatHint": "Chiedi di riscrivere la caption, cambiare l'immagine o una slide del carosello. Puoi allegare riferimenti dal PC, dalla libreria brand o dai tuoi post.",
-    "chatHintGraphic": "Questo still ha codice HTML/CSS modificabile. Chiedi di analizzarlo, cambiarlo, restilizzare la grafica o riscrivere la caption.",
     "regenerating": "Rigenerazione…",
     "featuredProduct": "Prodotto in evidenza",
     "caption": "Didascalia",
@@ -7398,7 +7391,6 @@
     "mobilePane": {
       "label": "Pannelli editor",
       "edit": "Modifica",
-      "chat": "Chat",
       "preview": "Anteprima"
     }
   },

@@ -7109,7 +7109,6 @@
       "nav": {
         "preview": "Preview",
         "edit": "Edit",
-        "chat": "Chat",
         "details": "Details",
         "analytics": "Analytics",
         "campaign": "Campaign",
@@ -7124,10 +7123,6 @@
         "followers": "Company · 1,240 followers",
         "noMedia": "No media",
         "noCaption": "No caption yet"
-      },
-      "chat": {
-        "studioOff": "Editor chat is available when Studio is enabled for this workspace.",
-        "goEdit": "Edit post →"
       },
       "details": {
         "title": "Post details",
@@ -7170,13 +7165,13 @@
       },
       "campaign": {
         "title": "Media alternatives",
-        "body": "Generate alternate creatives from this post for a new campaign, then refine them in the editor chat.",
-        "openChat": "Open editor chat →",
-        "step1": "Open the editor chat with the suggested brief.",
+        "body": "Generate alternate creatives from this post for a new campaign, then refine them in the editor.",
+        "step1": "Copy the suggested brief and hand it to your agent.",
         "step2": "Ask for 2–3 alternate images or carousel slides (same message, different visual).",
         "step3": "Pick a winner, then boost it or schedule it as a new post.",
         "suggestedPrompt": "Suggested brief",
-        "chatPrompt": "Generate 3 alternative media versions of this {platform} post for a new campaign. Keep the brand voice. Current caption: \"{caption}\". Vary composition and mood, not the product."
+        "chatPrompt": "Generate 3 alternative media versions of this {platform} post for a new campaign. Keep the brand voice. Current caption: \"{caption}\". Vary composition and mood, not the product.",
+        "goEdit": "Edit post →"
       },
       "boost": {
         "title": "Boost as ad",
@@ -7296,8 +7291,6 @@
       "exportPng": "Export PNG",
       "exportJpg": "Export JPG"
     },
-    "chatHint": "Ask to rewrite the caption, change the image, or a carousel slide. You can attach references from your computer, the brand library, or your posts.",
-    "chatHintGraphic": "This still has editable HTML/CSS source. Ask to analyze or change the code, restyle the graphic, or rewrite the caption.",
     "regenerating": "Regenerating…",
     "featuredProduct": "Featured product",
     "caption": "Caption",
@@ -7397,7 +7390,6 @@
     "mobilePane": {
       "label": "Editor panels",
       "edit": "Edit",
-      "chat": "Chat",
       "preview": "Preview"
     }
   },

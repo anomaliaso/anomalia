@@ -19,11 +19,8 @@ describe('la cancellazione dal post editor non passa dal 404 del post eliminato'
     expect(close).toBeLessThan(update);
   });
 
-  it.each([
-    '../../routes/app/[brand]/posts/[id]/edit/+page.svelte',
-    '../../routes/app/[brand]/posts/[id]/chat/+page.svelte'
-  ])('naviga al calendario senza invalidare il dettaglio eliminato: %s', (path) => {
-    const source = read(path);
+  it('naviga al calendario senza invalidare il dettaglio eliminato', () => {
+    const source = read('../../routes/app/[brand]/posts/[id]/edit/+page.svelte');
     const leave = source.slice(source.indexOf('async function onLeave'), source.indexOf('</script>'));
 
     expect(source).toContain('const calendarHref = $derived(`/app/${brand.slug}/calendar`)');

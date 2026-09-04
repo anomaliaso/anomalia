@@ -7008,7 +7008,6 @@
       "nav": {
         "preview": "Aperçu",
         "edit": "Modifier",
-        "chat": "Chat",
         "details": "Détails",
         "analytics": "Analytics",
         "campaign": "Campagne",
@@ -7023,10 +7022,6 @@
         "followers": "Entreprise · 1 240 abonnés",
         "noMedia": "Pas de média",
         "noCaption": "Pas de légende"
-      },
-      "chat": {
-        "studioOff": "Le chat éditeur est disponible lorsque Studio est activé pour cet espace.",
-        "goEdit": "Modifier le post →"
       },
       "details": {
         "title": "Détails du post",
@@ -7069,13 +7064,13 @@
       },
       "campaign": {
         "title": "Alternatives média",
-        "body": "Générez des créatives alternatives à partir de ce post pour une nouvelle campagne, puis affinez-les dans le chat.",
-        "openChat": "Ouvrir le chat éditeur →",
-        "step1": "Ouvrez le chat éditeur avec le brief suggéré.",
+        "body": "Générez des créatives alternatives à partir de ce post pour une nouvelle campagne, puis affinez-les dans l’éditeur.",
+        "step1": "Copiez le brief suggéré et confiez-le à votre agent.",
         "step2": "Demandez 2–3 images ou slides alternatives (même message, visuel différent).",
         "step3": "Choisissez la gagnante, puis boostez-la ou programmez-la comme nouveau post.",
         "suggestedPrompt": "Brief suggéré",
-        "chatPrompt": "Génère 3 versions média alternatives de ce post {platform} pour une nouvelle campagne. Garde la voix de marque. Légende actuelle : \"{caption}\". Varie composition et ambiance, pas le produit."
+        "chatPrompt": "Génère 3 versions média alternatives de ce post {platform} pour une nouvelle campagne. Garde la voix de marque. Légende actuelle : \"{caption}\". Varie composition et ambiance, pas le produit.",
+        "goEdit": "Modifier le post →"
       },
       "boost": {
         "title": "Booster en pub",
@@ -7297,8 +7292,6 @@
       "exportPng": "Exporter PNG",
       "exportJpg": "Exporter JPG"
     },
-    "chatHint": "Demandez de réécrire la légende, de changer l'image ou une slide du carrousel. Vous pouvez joindre des références depuis l'ordinateur, la bibliothèque marque ou vos posts.",
-    "chatHintGraphic": "Ce still a un code HTML/CSS modifiable. Demandez de l'analyser ou le modifier, restyler le visuel ou réécrire la légende.",
     "regenerating": "Régénération…",
     "featuredProduct": "Featured product",
     "caption": "Caption",
@@ -7398,7 +7391,6 @@
     "mobilePane": {
       "label": "Panneaux éditeur",
       "edit": "Modifier",
-      "chat": "Chat",
       "preview": "Aperçu"
     }
   },

@@ -286,7 +286,6 @@ export const BRAND_PAGE_ROUTES = [
   'posts/[id]/analytics', // i dettagli post hanno chrome dedicata fuori dalla shell
   'posts/[id]/boost', //   (isPostDash nel +layout) e sono rotte dinamiche
   'posts/[id]/campaign',
-  'posts/[id]/chat',
   'posts/[id]/details',
   'posts/[id]/edit',
   'posts/[id]/preview',

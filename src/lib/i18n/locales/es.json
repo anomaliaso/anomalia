@@ -7008,7 +7008,6 @@
       "nav": {
         "preview": "Vista previa",
         "edit": "Editar",
-        "chat": "Chat",
         "details": "Detalles",
         "analytics": "Analytics",
         "campaign": "Campaña",
@@ -7023,10 +7022,6 @@
         "followers": "Empresa · 1.240 seguidores",
         "noMedia": "Sin media",
         "noCaption": "Sin caption"
-      },
-      "chat": {
-        "studioOff": "El chat del editor está disponible cuando Studio está activo en este workspace.",
-        "goEdit": "Editar post →"
       },
       "details": {
         "title": "Detalles del post",
@@ -7069,13 +7064,13 @@
       },
       "campaign": {
         "title": "Alternativas de media",
-        "body": "Genera creatividades alternativas de este post para una nueva campaña y afínalas en el chat.",
-        "openChat": "Abrir chat del editor →",
-        "step1": "Abre el chat del editor con el brief sugerido.",
+        "body": "Genera creatividades alternativas de este post para una nueva campaña y afínalas en el editor.",
+        "step1": "Copia el brief sugerido y pásaselo a tu agente.",
         "step2": "Pide 2–3 imágenes o slides alternativas (mismo mensaje, visual distinto).",
         "step3": "Elige la ganadora y boóstala o prográmala como nuevo post.",
         "suggestedPrompt": "Brief sugerido",
-        "chatPrompt": "Genera 3 versiones de media alternativas de este post de {platform} para una nueva campaña. Mantén la voz de marca. Caption actual: \"{caption}\". Varía composición y mood, no el producto."
+        "chatPrompt": "Genera 3 versiones de media alternativas de este post de {platform} para una nueva campaña. Mantén la voz de marca. Caption actual: \"{caption}\". Varía composición y mood, no el producto.",
+        "goEdit": "Editar post →"
       },
       "boost": {
         "title": "Impulsar como anuncio",
@@ -7297,8 +7292,6 @@
       "exportPng": "Exportar PNG",
       "exportJpg": "Exportar JPG"
     },
-    "chatHint": "Pide reescribir el pie de foto, cambiar la imagen o una diapositiva del carrusel. Puedes adjuntar referencias del ordenador, la biblioteca de marca o tus publicaciones.",
-    "chatHintGraphic": "Este still tiene código HTML/CSS editable. Pide analizarlo o cambiarlo, restilizar la gráfica o reescribir el pie de foto.",
     "regenerating": "Regenerando…",
     "featuredProduct": "Producto destacado",
     "caption": "Leyenda",
@@ -7398,7 +7391,6 @@
     "mobilePane": {
       "label": "Paneles del editor",
       "edit": "Editar",
-      "chat": "Chat",
       "preview": "Vista previa"
     }
   },
