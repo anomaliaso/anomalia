@@ -17,6 +17,7 @@ integrazioni esterne via API key — request, response, query params, body, erro
 | [07 — Growth: SEO/GEO/web](07-growth-seo-geo.md) | `/seo`, `/geo`, `/web/audits`, `/web/fixes`, `/keywords`, `/backlinks`, `/web`, `/articles`, `/gsc`, `/ranks`, `/library/scan` |
 | [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | `/ads`, `/ads/remix`, `/voice`, `/gtm`, `/rubrics`, `/products`, `/api-keys` |
 | [09 — Connections](09-connections.md) | `/connections`, `/connections/catalog`, `/connections/:id/complete`, `/connections/:id` |
+| [10 — Shares](10-shares.md) | `/shares`, `/shares/revoke`, e la rotta pubblica `/share/:token` |
 
 ## Regole di manutenzione
 

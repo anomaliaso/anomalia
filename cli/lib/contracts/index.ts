@@ -35,6 +35,12 @@ import {
   LIST_ARTICLES
 } from './reads';
 import {
+  CREATE_SHARE,
+  LIST_SHARES,
+  REVOKE_SHARE,
+  SHARED_VIEW_TYPES,
+} from './shares';
+import {
   CREATE_PRODUCT,
   DELETE_PRODUCT,
   GET_BIO,
@@ -85,6 +91,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CHECK_CONTENT,
   CREATE_POST,
   CREATE_PRODUCT,
+  CREATE_SHARE,
   DELETE_PRODUCT,
   GET_ADS,
   GET_ARTICLE,
@@ -104,10 +111,12 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_AUDIT_CITATIONS,
   LIST_MEDIA,
   LIST_POSTS,
+  LIST_SHARES,
   LIST_WEB_AUDITS,
   LIST_WEB_FIXES,
   RENDER_POST,
   RESCHEDULE_POST,
+  REVOKE_SHARE,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
   SET_BIO,
@@ -178,6 +187,12 @@ export {
   UPDATE_PERSON,
   UPDATE_PRODUCT
 } from './studio';
+export {
+  CREATE_SHARE,
+  LIST_SHARES,
+  REVOKE_SHARE,
+  SHARED_VIEW_TYPES,
+};
 export type { CheckContentInput, CheckContentResult } from './content';
 export type {
   AuditCitationRow,
@@ -191,3 +206,4 @@ export type { CreatePostInput, CreatePostResult } from './posts';
 export { PLAN_CADENCES, PLAN_CYCLE_WEEKS, SAVE_PLAN, SAVE_WEEK_SEEDS };
 export type { SavePlanInput, SavePlanResult, SaveWeekSeedsInput, SaveWeekSeedsResult } from './plans';
 export type { CreateProductInput, CreateProductResult } from './studio';
+export type { CreateShareInput, CreateShareResult, SharedViewType } from './shares';
