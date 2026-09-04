@@ -87,3 +87,25 @@ la rotta, lo fa diventare rosso.
 solo estratta `brandSkillsForAgent` — le sole skill di prodotto, senza toccare il disco — in un
 commit separato senza cambi di comportamento, come vuole la regola: prima si riordina, poi si
 aggiunge.
+
+## Aggiunta dopo la revisione: le skill di default in codice
+
+`DEFAULT_SKILLS` (`src/lib/server/default-skills.ts`) sono sei procedure di produzione definite in
+codice — quattro motion, due grafica — ognuna con il nome del **gate che rifiuta il render** se non
+la si segue (`assertMotionVoiceGate`, `graphic-check`). Non sono conoscenza del brand: sono tecnica
+del prodotto, aggiornata col deploy.
+
+Arrivavano a un modello per due strade, **entrambe nel perimetro in smantellamento**: il trigger
+nell'indice del prompt via `buildMemoryContext`, e il corpo via `read_memory` in
+`src/lib/agent/tools/expression-memory-tools.ts`. Stessa regressione delle skill markdown, scoperta
+solo guardando i contatori.
+
+Un agente esterno che scrive uno script motion senza `motion-voiceover-fit` si vede rifiutare
+`make_video` e non sa perché. Ora escono dallo stesso tool, con `defaultSkillEntries(agent)` —
+la stessa funzione, lo stesso scoping per agente, gli stessi id `builtin:` che non devono mai
+finire in `recordMemoryUsage`.
+
+Nella stessa passata, `serveBrand` è stato sostituito da `serveSkillEntry`, che usa **`skillTrigger`**
+invece di tagliare la prima riga a mano: è la funzione che riempie l'indice del prompt interno, salta
+le righe vuote, toglie `#` e `**` e taglia a 100 caratteri. Due modi di estrarre lo stesso trigger
+divergono al primo `## Use when …`.
