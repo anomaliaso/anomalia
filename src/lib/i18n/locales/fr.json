@@ -10,7 +10,7 @@
     "askAi": {
       "title": "Encore indécis ?",
       "subtitle": "Demandez à l'IA",
-      "prompt": "Explique-moi Anomalia. J’y connecte ma propre IA (Claude, Claude Code, Cursor) via MCP : mon modèle planifie et rédige, et Anomalia vérifie les publications contre les règles de chaque plateforme, génère les images, programme, publie sur mes vrais comptes et mesure les résultats. Parle-moi de ses offres et dis-moi si ça convient à mon activité."
+      "prompt": "Explain Anomalia to me. It lets the AI I already pay for — Claude, ChatGPT or Cursor — do the work a marketing agency does: organic social content, my site’s growth through a blog and search, and ad creative. I connect it over MCP and Anomalia renders the work, checks each platform’s rules, publishes to my real accounts once I approve, and measures the results. Tell me about its plans and whether it fits my business."
     },
     "close": "Fermer"
   },
@@ -39,14 +39,14 @@
       "pricing": "Tarifs"
     },
     "hero": {
-      "eyebrow": "Open source · Votre propre IA · Cloud ou auto-hébergé",
-      "titleLead": "Votre IA l’écrit.",
+      "eyebrow": "Open source · Cloud or self-hosted",
+      "titleLead": "Your marketing agency is now",
       "titleMain": "",
-      "titleEm": "Anomalia le publie.",
+      "titleEm": "Claude, ChatGPT or Cursor.",
       "titleCalm": "",
-      "subhead": "Connectez votre propre IA via MCP. Elle planifie et rédige ; Anomalia vérifie les règles de chaque plateforme, génère les images, publie sur vos vrais comptes et mesure ce qui s’est passé.",
+      "subhead": "Organic social, your site’s growth, your ads — run by the AI you already pay for. Nothing goes out until you approve it.",
       "seeHow": "Découvrez comment ça marche",
-      "note": "Ou demandez simplement à votre IA de se mettre à Anomalia",
+      "note": "Or just ask your AI to start using Anomalia",
       "ctaSecondary": "Réserver un appel",
       "urlLabel": "URL de votre site",
       "urlSubmit": "Commencer",
@@ -311,38 +311,38 @@
     },
     "faq": {
       "kicker": "FAQ",
-      "title": "Les questions que vous vous posez.",
+      "title": "Questions you might have.",
       "review": {
-        "q": "Puis-je relire les publications avant leur mise en ligne ?",
-        "a": "Toujours. Votre IA peut rédiger et programmer, mais la publication reste en attente jusqu’à votre validation. Vous pouvez changer la légende, remplacer l’image, la déplacer ou la supprimer."
+        "q": "Can I review everything before it goes live?",
+        "a": "Yes, and there is no way around it. Your AI can write and schedule, but a post stays pending until you approve it. Edit the caption, swap the image, move it or delete it."
       },
       "platforms": {
-        "q": "Quelles plateformes sont prises en charge ?",
-        "a": "Neuf : Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky et Reddit. Les carrousels partent en entier sur Instagram, Facebook et LinkedIn ; ailleurs, c’est la couverture."
+        "q": "Which platforms?",
+        "a": "Nine for social: Instagram, TikTok, Facebook, LinkedIn, X, Threads, YouTube, Bluesky and Reddit. Carousels fan out on Instagram, Facebook and LinkedIn; the others get the cover. Articles publish to a blog on your own domain."
       },
       "mcp": {
-        "q": "Comment je connecte ma propre IA ?",
-        "a": "Anomalia est un serveur MCP. Vous l’ajoutez comme connecteur dans Claude, ou en une seule commande dans Claude Code, et votre IA récupère les outils Anomalia. Cliquez sur « Connect to Claude » en haut de cette page pour les étapes exactes."
+        "q": "How do I connect it?",
+        "a": "Anomalia is an MCP server. You add it as a connector in Claude, or with a single command in Claude Code, and your AI gets the Anomalia tools. Press “Connect to Claude” at the top of this page for the exact steps."
       },
       "which": {
-        "q": "Quelle IA puis-je utiliser ?",
-        "a": "N’importe quel client qui parle MCP en HTTP — Claude, Claude Code, Cursor. Elle tourne sur votre propre abonnement : le raisonnement et la rédaction sont facturés par votre fournisseur, pas par nous."
+        "q": "Which AI can I use?",
+        "a": "Anything that speaks MCP over HTTP. Claude and Claude Code have a guided setup on this page; Cursor and ChatGPT’s custom connectors take the same URL. It runs on your subscription — your provider bills the thinking and the writing, not us."
       },
       "why": {
-        "q": "Si mon IA écrit déjà, à quoi me sert Anomalia ?",
-        "a": "Écrire, c’est la moitié facile. Votre IA ne peut pas vérifier une légende contre la limite de LinkedIn, générer la couverture, réserver jeudi à 18h30, se connecter à votre Instagram, ni vous dire ce que la publication a fait ensuite. Anomalia s’en charge, et rend les chiffres à votre IA."
-      },
-      "checks": {
-        "q": "Que veut dire « vérifié contre les vraies règles » ?",
-        "a": "Un passage déterministe avant toute programmation : limites de caractères par plateforme, publications qui exigent un média, YouTube qui n’accepte que la vidéo, Reddit qui réclame son propre titre, créneaux déjà pris. Aucun modèle n’est interrogé : ça ne coûte rien et ça répond toujours pareil."
+        "q": "If my AI already writes, what do I need Anomalia for?",
+        "a": "Writing is the easy half. Your AI cannot check a caption against LinkedIn’s 3,000-character limit, refuse a text-only post on Instagram, render the cover, hold Thursday at 6:30 PM, sign in to your Instagram, or tell you what the post did afterwards. Anomalia does those, and hands the numbers back to your AI."
       },
       "cost": {
-        "q": "On paie pour quoi chez Anomalia ?",
-        "a": "Votre abonnement IA couvre le raisonnement et la rédaction. L’offre Anomalia couvre ce qui vient après : les rendus, le calendrier, la publication et les statistiques."
+        "q": "What am I paying for?",
+        "a": "Your AI subscription covers the thinking and the writing. Anomalia’s plan covers what comes after: the renders, the calendar, the publishing and the analytics."
       },
       "selfhost": {
-        "q": "Puis-je l’héberger moi-même ?",
-        "a": "Oui. Anomalia est open source. Vous le lancez avec Docker Compose sur votre serveur et avec vos clés — mêmes outils, même serveur MCP, marques illimitées."
+        "q": "Can I run it myself?",
+        "a": "Yes. Anomalia is open source — Docker Compose on your own server, your own keys, the same tools and the same MCP server, unlimited brands."
+      },
+      "agency": {
+        "q": "Can this really replace my agency?",
+        "a": "For the making and the shipping, yes: the posts, the blog, the scheduling, the publishing and the reporting all run from your own AI. Two honest limits. It works from the brand context you give it — your site, your products, your voice — so it articulates your positioning rather than inventing it. And running paid campaigns on Meta and Google is still set up with our team, not self-serve."
       }
     },
     "grow": {
@@ -581,13 +581,13 @@
       "kicker": "Tarifs",
       "titleLead": "Prêt à l'emploi ou",
       "titleAccent": "sur votre serveur.",
-      "lede": "Un produit, deux façons de l’avoir. Mêmes outils, mêmes validations — choisissez où il vit.",
+      "lede": "One product, two ways to own it. Same tools, same approvals — pick where it lives.",
       "apps": "Applications mobiles et bureau — bientôt disponibles.",
       "cloud": {
         "name": "Cloud",
         "badge": "Prêt à l'emploi",
-        "meta": "On gère tout. Vous vous inscrivez, vous connectez une marque, vous connectez votre IA.",
-        "f0": "Votre IA planifie et rédige ; Anomalia génère et publie",
+        "meta": "We run everything. Sign up, connect a brand, connect your AI.",
+        "f0": "Your AI plans and writes; Anomalia renders and publishes",
         "f1": "Rien n'est publié sans votre validation",
         "f2": "Formule gratuite avec des crédits IA chaque mois",
         "f3": "Aucun serveur, aucune configuration — ça marche tout de suite",
@@ -599,7 +599,7 @@
         "meta": "Votre machine, vos clés, vos données. Clonez et c'est parti.",
         "f0": "Tourne avec Docker Compose sur votre propre serveur",
         "f1": "Vos clés de modèle et d'API — rien ne quitte votre infrastructure",
-        "f2": "Mêmes outils que le cloud, marques illimitées",
+        "f2": "Same tools as the cloud, unlimited brands",
         "f3": "CLI et serveur MCP inclus pour vos agents",
         "cta": "Voir sur GitHub"
       }
@@ -1994,30 +1994,48 @@
       }
     },
     "split": {
-      "kicker": "Le partage des rôles",
-      "titleLead": "Un chat sait écrire une légende.",
-      "titleAccent": "Il ne sait pas la publier.",
-      "yours": {
-        "title": "Votre IA",
-        "note": "Votre modèle, votre abonnement, votre contexte.",
-        "i1": "Planifie la semaine et décide quoi dire",
-        "i2": "Rédige les légendes, dans la voix de votre marque",
-        "i3": "Lit les chiffres que lui rend Anomalia et change le plan"
+      "kicker": "Before / after",
+      "titleLead": "The retainer, the briefs, the waiting.",
+      "titleAccent": "Gone.",
+      "punch": "It works from what you give it. It won’t invent your positioning, and it won’t publish behind your back.",
+      "before": {
+        "title": "An agency",
+        "note": "Every month, whether you needed them or not.",
+        "i1": "A retainer that doesn’t move when your month is quiet",
+        "i2": "Briefs to write and calls to sit through",
+        "i3": "A tone that is nearly yours",
+        "i4": "You find out what worked a month later"
       },
-      "ours": {
-        "title": "Anomalia",
-        "note": "Les outils que votre IA appelle.",
-        "i1": "Vérifie chaque publication contre les vraies limites de la plateforme — 280 caractères sur X, pas de texte seul sur Instagram, vidéo uniquement sur YouTube",
-        "i2": "Génère les images et les anime en vidéo",
-        "i3": "Tient le calendrier et le créneau programmé",
-        "i4": "Publie sur vos vrais comptes — après votre validation",
-        "i5": "Remonte les likes, les enregistrements et la portée, et les transmet à votre IA"
-      },
-      "punch": "Le difficile n’a jamais été d’écrire la légende."
+      "after": {
+        "title": "Your AI + Anomalia",
+        "note": "The subscription you already pay for, plus a plan.",
+        "i1": "You ask, in the thread you already work in",
+        "i2": "It writes from your real context — your site, your products, your voice",
+        "i3": "Anomalia checks each platform’s rules, renders the work and holds the slot",
+        "i4": "Publishes to your real accounts, once you approve",
+        "i5": "The numbers come straight back to the same AI"
+      }
     },
     "channels": {
-      "label": "Publie sur",
-      "note": "Rien ne part en ligne sans votre validation."
+      "label": "Publishes to",
+      "note": "Nothing goes live until you approve it."
+    },
+    "jobs": {
+      "kicker": "What you were paying for",
+      "titleLead": "An agency does three jobs.",
+      "titleAccent": "Your AI can do all three.",
+      "social": {
+        "title": "Organic social",
+        "body": "Posts, carousels and video for nine channels, written in your voice, checked against each platform’s rules and scheduled across the week."
+      },
+      "web": {
+        "title": "Your site’s growth",
+        "body": "Blog articles written from your site’s own pages and published on your domain, keyword strategy with real search volume, and audits of whether AI engines cite you."
+      },
+      "ads": {
+        "title": "Ads",
+        "body": "Your AI reads what competitors are running in Meta’s public ad library and drafts the creative. Launching campaigns on Meta and Google is set up with our team — that part is not self-serve yet."
+      }
     }
   },
   "usecases": {
@@ -2356,8 +2374,8 @@
   },
   "meta": {
     "landing": {
-      "title": "Anomalia — votre IA l’écrit, Anomalia le publie",
-      "description": "Connectez votre propre IA via MCP. Elle écrit ; Anomalia vérifie les règles de chaque plateforme, génère les images, publie sur neuf comptes et mesure ce qui a marché."
+      "title": "Anomalia — Claude, ChatGPT and Cursor replace your agency",
+      "description": "Organic social, site growth and ads, run by the AI you already pay for. Anomalia renders the work, keeps platform rules, publishes to your accounts and measures it."
     },
     "pricing": {
       "title": "Tarifs — Anomalia",
