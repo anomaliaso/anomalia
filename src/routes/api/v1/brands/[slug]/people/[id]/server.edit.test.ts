@@ -49,9 +49,13 @@ describe('PUT /api/v1/brands/:slug/people/:id', () => {
     const res = await put({ role: 'Co-fondatrice' });
 
     expect(res.status).toBe(200);
-    expect(updateBrandRow).toHaveBeenCalledWith(supabase, 'people', 'brand-1', 'per1', {
-      role: 'Co-fondatrice'
-    });
+    expect(updateBrandRow.mock.lastCall).toStrictEqual([
+      supabase,
+      'people',
+      'brand-1',
+      'per1',
+      { role: 'Co-fondatrice' }
+    ]);
   });
 
   // Il consenso lo attesta una persona, non un agente: fino ad allora resolvePeopleVisualRefs

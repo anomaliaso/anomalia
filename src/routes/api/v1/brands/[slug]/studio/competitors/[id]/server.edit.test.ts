@@ -55,17 +55,25 @@ describe('PUT /api/v1/brands/:slug/studio/competitors/:id', () => {
     const res = await put({ website: 'cafferivale.it' });
 
     expect(res.status).toBe(200);
-    expect(updateBrandRow).toHaveBeenCalledWith(supabase, 'competitors', 'brand-1', 'c1', {
-      website: 'https://cafferivale.it'
-    });
+    expect(updateBrandRow.mock.lastCall).toStrictEqual([
+      supabase,
+      'competitors',
+      'brand-1',
+      'c1',
+      { website: 'https://cafferivale.it' }
+    ]);
   });
 
   it('non azzera il sito quando la modifica riguarda solo la motivazione', async () => {
     await put({ rationale: 'Stesso scaffale, stesso prezzo' });
 
-    expect(updateBrandRow).toHaveBeenCalledWith(supabase, 'competitors', 'brand-1', 'c1', {
-      rationale: 'Stesso scaffale, stesso prezzo'
-    });
+    expect(updateBrandRow.mock.lastCall).toStrictEqual([
+      supabase,
+      'competitors',
+      'brand-1',
+      'c1',
+      { rationale: 'Stesso scaffale, stesso prezzo' }
+    ]);
   });
 
   it('rifiuta un kind che il CHECK del database non accetta', async () => {

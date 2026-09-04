@@ -55,9 +55,13 @@ describe('PUT /api/v1/brands/:slug/products/:id', () => {
     const res = await put({ pricing: '19,90 €' });
 
     expect(res.status).toBe(200);
-    expect(updateBrandRow).toHaveBeenCalledWith(supabase, 'products', 'brand-1', 'p1', {
-      pricing: '19,90 €'
-    });
+    expect(updateBrandRow.mock.lastCall).toStrictEqual([
+      supabase,
+      'products',
+      'brand-1',
+      'p1',
+      { pricing: '19,90 €' }
+    ]);
   });
 
   it('rifiuta un id che non è di questo brand senza dire se esiste altrove', async () => {

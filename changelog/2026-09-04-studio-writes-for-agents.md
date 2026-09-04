@@ -62,6 +62,14 @@ proprio input, nessun altro segmento dinamico è ammesso, e un id mancante fa **
 di chiamare la collezione intera (che per `/products` è la risincronizzazione e-commerce: un
 `DELETE` mal costruito lì sarebbe stato un incidente).
 
+Un branch parallelo, `feat/registry-id-endpoints`, ha scritto lo stesso meccanismo in un altro
+modo: un campo `resource` con una tassonomia (`post`, `article`) e una tabella di resolver lato
+client. Non è pushato e non ha una PR. Quella forma serve ai post, che hanno davvero un prefisso
+da risolvere; qui non serve — l'id torna per intero — e i suoi metodi ammessi restano
+`GET | POST`, quindi non può esprimere nessuna delle scritture di questa PR. Le due parti si
+compongono: la tassonomia e il rifiuto a compile-time di un `pathFor` senza id vanno sopra a
+questo, quando i tool dei post entreranno nel registry.
+
 ## Il consenso
 
 `PUT /people/:id` accettava quattro campi in whitelist, quindi non poteva già toccare `consent`.
