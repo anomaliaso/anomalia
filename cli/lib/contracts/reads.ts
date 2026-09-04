@@ -195,3 +195,90 @@ export const LIST_ARTICLES = {
   failures: [],
   destructive: false
 } satisfies BrandEndpoint;
+
+export const GET_ANALYTICS = {
+  tool: 'get_analytics',
+  title: 'Analytics',
+  description: 'Brand analytics: totals, engagement, recent activity.',
+  method: 'GET',
+  pathUnderBrand: '/analytics',
+  input: NoInput,
+  output: z.looseObject({
+    total: z.number(),
+    scheduled: z.number(),
+    pending: z.number(),
+    failed: z.number(),
+    platforms: z.array(z.tuple([z.string(), z.number()])),
+    upcomingPosts: z.array(JsonObject),
+    recentActivity: z.array(JsonObject),
+    socialPerformance: z.array(JsonObject),
+    topPosts: z.array(JsonObject),
+    products: z.number(),
+    accounts: z.number()
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const GET_GTM = {
+  tool: 'get_gtm',
+  title: 'GTM roadmap',
+  description: 'View the go-to-market roadmap for a brand.',
+  method: 'GET',
+  pathUnderBrand: '/gtm',
+  input: NoInput,
+  output: z.object({
+    gtm: JsonObject.nullable(),
+    proposed: JsonObject.nullable(),
+    proposedFeedback: z.string().nullable(),
+    currentPhase: z.number().nullable(),
+    phaseStatuses: z.array(z.enum(['done', 'now', 'next'])),
+    horizons: z.array(z.string()),
+    studioPct: z.number()
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const GET_VOICE = {
+  tool: 'get_voice',
+  title: 'Voice rules',
+  description: 'View brand voice framework and platform rules.',
+  method: 'GET',
+  pathUnderBrand: '/voice',
+  input: NoInput,
+  output: z.object({
+    platforms: z.array(z.string()),
+    voiceMode: z.string(),
+    voiceFramework: JsonObject,
+    platformRules: z.record(z.string(), JsonObject),
+    avoid: z.array(z.string()),
+    platformInstructions: z.record(z.string(), z.string()),
+    studioPct: z.number()
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const LIST_PRODUCTS = {
+  tool: 'list_products',
+  title: 'List products',
+  description: 'List products in the brand catalog.',
+  method: 'GET',
+  pathUnderBrand: '/products',
+  input: NoInput,
+  output: z.object({
+    products: z.array(
+      z.looseObject({
+        id: z.string(),
+        title: z.string(),
+        kind: z.string(),
+        pricing: z.string().nullable(),
+        imageCount: z.number(),
+        featured: z.boolean()
+      })
+    )
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;

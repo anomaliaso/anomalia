@@ -24,6 +24,7 @@ function registerDeclaredEndpoints(server: McpServer) {
         annotations: {
           readOnlyHint: endpoint.method === 'GET',
           destructiveHint: endpoint.destructive,
+          ...(endpoint.openWorld ? { openWorldHint: true } : {}),
         },
       },
       async ({ slug: brandSlug, ...input }) =>
@@ -90,72 +91,7 @@ export function registerBrandTools(server: McpServer) {
       }),
   );
 
-  server.registerTool(
-    'get_analytics',
-    {
-      title: 'Analytics',
-      description: 'Brand analytics: totals, engagement, recent activity.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getAnalytics(token, slug)),
-  );
-
-  server.registerTool(
-    'get_gtm',
-    {
-      title: 'GTM roadmap',
-      description: 'View the go-to-market roadmap for a brand.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getGtm(token, slug)),
-  );
-
-  server.registerTool(
-    'get_voice',
-    {
-      title: 'Voice rules',
-      description: 'View brand voice framework and platform rules.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.getVoice(token, slug)),
-  );
-
-  server.registerTool(
-    'update_voice',
-    {
-      title: 'Update voice',
-      description: 'Patch brand voice fields (mood, tone, register, avoid list, platform instructions).',
-      inputSchema: z.object({
-        slug,
-        mood: z.string().optional(),
-        tone: z.string().optional(),
-        register: z.number().optional(),
-        emotion: z.string().optional(),
-        character: z.string().optional(),
-        syntax: z.string().optional(),
-        avoid: z.array(z.string()).optional(),
-        platform_instructions: z.record(z.string(), z.string()).optional(),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, ...data }) => withAuth((token) => api.updateVoice(token, slug, data)),
-  );
-
-  server.registerTool(
-    'list_products',
-    {
-      title: 'List products',
-      description: 'List products in the brand catalog.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.listProducts(token, slug)),
-  );
-
-  server.registerTool(
+            server.registerTool(
     'approve_posts',
     {
       title: 'Approve all pending posts',

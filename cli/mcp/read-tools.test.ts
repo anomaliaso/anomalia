@@ -64,6 +64,34 @@ const MIGRATED_READS = [
     },
     required: ['slug'],
   },
+  {
+    name: 'get_analytics',
+    title: 'Analytics',
+    description: 'Brand analytics: totals, engagement, recent activity.',
+    properties: { slug: SLUG_PROPERTY },
+    required: ['slug'],
+  },
+  {
+    name: 'get_gtm',
+    title: 'GTM roadmap',
+    description: 'View the go-to-market roadmap for a brand.',
+    properties: { slug: SLUG_PROPERTY },
+    required: ['slug'],
+  },
+  {
+    name: 'get_voice',
+    title: 'Voice rules',
+    description: 'View brand voice framework and platform rules.',
+    properties: { slug: SLUG_PROPERTY },
+    required: ['slug'],
+  },
+  {
+    name: 'list_products',
+    title: 'List products',
+    description: 'List products in the brand catalog.',
+    properties: { slug: SLUG_PROPERTY },
+    required: ['slug'],
+  },
 ] as const;
 
 type Tool = {

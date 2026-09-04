@@ -6,54 +6,7 @@ import { withAuth } from '../util.ts';
 const slug = z.string().min(1).describe('Brand URL slug');
 
 export function registerPlanTools(server: McpServer) {
-  server.registerTool(
-    'propose_plan',
-    {
-      title: 'Propose editorial plan',
-      description: 'Generate the first / a new editorial plan proposal.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug }) => withAuth((token) => api.proposePlan(token, slug)),
-  );
-
-  server.registerTool(
-    'revise_plan',
-    {
-      title: 'Revise editorial plan',
-      description: 'Request a revision of the proposed plan with feedback.',
-      inputSchema: z.object({
-        slug,
-        feedback: z.string().min(1),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, feedback }) => withAuth((token) => api.revisePlan(token, slug, feedback)),
-  );
-
-  server.registerTool(
-    'approve_plan',
-    {
-      title: 'Approve editorial plan',
-      description: 'Approve the proposed editorial plan.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.approvePlan(token, slug)),
-  );
-
-  server.registerTool(
-    'discard_plan',
-    {
-      title: 'Discard editorial plan',
-      description: 'Discard the proposed editorial plan.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async ({ slug }) => withAuth((token) => api.discardPlan(token, slug)),
-  );
-
-  server.registerTool(
+          server.registerTool(
     'save_brief',
     {
       title: 'Save week brief',
