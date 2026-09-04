@@ -144,6 +144,7 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 | `list_web_fixes` | (MCP only) |
 | `get_keywords` / `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
 | `list_articles` / `generate_article` / `optimize_article` | `anomalia web <slug> …` |
+| `get_article` / `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
 | `chat` | `anomalia ai <slug> --message "…" --pipe` |
@@ -169,3 +170,27 @@ happens to hold more data; an audit outside the brand answers `audit: null`.
 only name. `surface` is `seo` for growth assets tied to a plan initiative, `geo` for citability
 fixes. Filter with `fix_id` or `status` (`draft` / `accepted` / `dismissed`); bodies are long, so
 `limit` defaults to 3 and stops at 10.
+
+`get_article` returns one article **in full and in any state** — draft, planned, approved or
+published: `body_md`, `meta_title`, `meta_description`, `cover_image`, `category`, `tags`,
+`author`, `language`, `status`, `scheduled_for` (plus the brand-local reading) and
+`translation_of`. `list_articles` only summarises; read this one before editing and again after.
+
+`update_article` writes text and metadata you already have: `title`, `body_md` (the COMPLETE
+markdown, a replacement not a diff), `meta_title`, `meta_description`, `category_id`,
+`author_id`, `tag_ids` (the complete set — it replaces the current one), `language` (ISO 639-1),
+`scheduled_for`. Anomalia calls no model and spends no credits; nothing is rewritten or
+reformatted, and a field you do not send is left exactly as it was — changing the title never
+touches the body, the cover or the description. Raw HTML inside `body_md` is stored as you sent
+it and escaped by the public blog, so markdown is the only markup that renders.
+
+Two halves with different weight: the text fields are safe, `scheduled_for` is consequential —
+dating a draft moves it to `approved`, and `approved` is the status that auto-publishes. Pass
+`null` to clear the schedule back to a draft.
+
+Refusals name the field: `article_not_found` (an article of another brand included),
+`no_changes`, `category_not_found`, `author_not_found`, `tags_not_found`, `invalid_language`,
+`invalid_scheduled_for`, `planned_needs_slot` (a `planned` placeholder cannot lose its slot),
+`translation_locked` (a translation's locale is its identity) and `article_published` — what is
+live is never edited in place. To correct a published article: `unpublish_article`,
+`update_article`, `publish_article`.

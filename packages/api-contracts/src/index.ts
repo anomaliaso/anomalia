@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { GET_ARTICLE, UPDATE_ARTICLE } from './articles';
 import { CHECK_CONTENT } from './content';
 import {
   GET_AUDIT_FINDINGS,
@@ -60,6 +61,7 @@ export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CHECK_CONTENT,
   CREATE_POST,
+  GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_CALENDAR,
   GET_POST,
@@ -73,6 +75,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   RESCHEDULE_POST,
   SAVE_PLAN,
   SAVE_WEEK_SEEDS,
+  UPDATE_ARTICLE,
 ];
 
 export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;
@@ -91,6 +94,7 @@ export function statusForFailure(endpoint: BrandEndpoint, error: string): number
 export {
   CHECK_CONTENT,
   CREATE_POST,
+  GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_CALENDAR,
   GET_POST,
@@ -102,7 +106,9 @@ export {
   LIST_WEB_FIXES,
   RENDER_POST,
   RESCHEDULE_POST,
+  UPDATE_ARTICLE,
 };
+export type { Article, GetArticleInput, UpdateArticleInput, UpdateArticleResult } from './articles';
 export {
   AUDIT_CITATIONS_DEFAULT,
   AUDIT_CITATIONS_MAX,

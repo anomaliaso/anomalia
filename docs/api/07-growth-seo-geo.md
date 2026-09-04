@@ -620,6 +620,117 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/web" \
 
 ---
 
+## `GET /api/v1/brands/:slug/web/article`
+
+Un articolo **completo, in qualsiasi stato** (draft, planned, approved, published): corpo markdown,
+campi SEO, cover, categoria, tag, autore, lingua, schedule e stato. È la lettura che serve prima di
+modificare, e quella che serve dopo per vedere cos'è cambiato. Non chiama nessun modello e non
+consuma crediti; una API key di sola lettura la raggiunge.
+
+Tool MCP: `get_article`.
+
+**Query params**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `id` | string | Sì | UUID articolo |
+
+**Response** `200`
+
+```json
+{
+  "article": {
+    "id": "99999999-9999-9999-9999-999999999999",
+    "slug": "guida-al-campeggio",
+    "title": "Guida al campeggio",
+    "meta_title": "Guida al campeggio | Demo",
+    "meta_description": "Come si monta una tenda senza litigare.",
+    "body_md": "# Guida\n\n…",
+    "status": "draft",
+    "language": "Italian",
+    "cover_image": "https://…/cover.png",
+    "category": { "id": "…", "name": "Outdoor", "slug": "outdoor" },
+    "author": { "id": "…", "name": "Giulia", "slug": "giulia" },
+    "tags": [{ "id": "…", "name": "Tende", "slug": "tende" }],
+    "scheduled_for": null,
+    "scheduled_for_local": null,
+    "published_at": null,
+    "translation_of": null,
+    "source": "ai",
+    "version_seq": 3,
+    "created_at": "2026-08-01T10:00:00.000Z",
+    "updated_at": "2026-08-02T10:00:00.000Z"
+  }
+}
+```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` |
+| `404` | `{"error":"article_not_found"}` — inclusi gli articoli di un altro brand |
+
+---
+
+## `POST /api/v1/brands/:slug/web/article`
+
+Scrive testo e metadati che hai già scritto tu. **Nessun modello, nessun credito**: niente viene
+riscritto, rigenerato o riformattato. Un campo che non mandi resta esattamente com'era, quindi
+cambiare il titolo non tocca il corpo, la cover o la meta description.
+
+Tool MCP: `update_article`.
+
+**Body**
+
+| Campo | Tipo | Descrizione |
+|---|---|---|
+| `id` | string | UUID articolo (obbligatorio) |
+| `title` | string | 1–200 caratteri |
+| `body_md` | string | Il markdown COMPLETO, sostituisce il precedente. Salvato tale e quale: il blog pubblico **escapa** l'HTML grezzo, quindi l'unico markup che renderizza è il markdown |
+| `meta_title` | string \| null | max 70; `null` lo azzera |
+| `meta_description` | string \| null | max 200; `null` la azzera |
+| `category_id` | string \| null | Una categoria **di questo brand**; `null` la toglie |
+| `author_id` | string \| null | Un autore **di questo brand**; `null` toglie la firma |
+| `tag_ids` | string[] | Il set COMPLETO (max 20), sostituisce quello attuale; `[]` toglie tutti i tag |
+| `language` | string | Codice ISO 639-1, es. `"it"`. Salvato come nome inglese della lingua (`Italian`), la forma che il blog legge |
+| `scheduled_for` | string \| null | Istante ISO; senza offset è letto sull'orologio del brand. **Datare un draft lo porta ad `approved`, che è lo stato che auto-pubblica.** `null` riporta a draft |
+
+**Response** `200`
+
+```json
+{ "ok": true, "updated_fields": ["title"], "article": { "…": "come sopra" } }
+```
+
+`updated_fields` elenca i campi passati; se lo schedule ha cambiato lo stato, contiene anche
+`status`.
+
+**Errori specifici**
+
+| Status | Body | Quando |
+|---|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` | Campo non dichiarato, o fuori limite |
+| `400` | `{"error":"no_changes"}` | Solo `id`, niente da scrivere |
+| `400` | `{"error":"invalid_language"}` | Codice locale che il blog non pubblica |
+| `400` | `{"error":"invalid_scheduled_for","details":{…}}` | Data non interpretabile o già passata |
+| `400` | `{"error":"category_not_found"}` | Categoria assente o di un altro brand |
+| `400` | `{"error":"author_not_found"}` | Autore assente o di un altro brand |
+| `400` | `{"error":"tags_not_found"}` | Almeno un tag assente o di un altro brand — non ne scrive nessuno |
+| `404` | `{"error":"article_not_found"}` | Inclusi gli articoli di un altro brand |
+| `409` | `{"error":"article_published"}` | Quello che è live non si modifica in place: `unpublish`, modifica, ripubblica |
+| `409` | `{"error":"planned_needs_slot"}` | Un segnaposto `planned` senza data non verrebbe mai scritto |
+| `409` | `{"error":"translation_locked"}` | La lingua di una traduzione è la sua identità |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/web/article" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"id":"99999999-9999-9999-9999-999999999999","title":"Titolo mio","body_md":"# Titolo mio\n\nTesto scritto da me."}'
+```
+
+---
+
 ## `GET /api/v1/brands/:slug/articles`
 
 API headless read-only: elenca SOLO gli articoli **pubblicati** (riepilogo, senza corpo). Paginata.

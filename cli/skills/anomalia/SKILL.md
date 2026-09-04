@@ -88,6 +88,11 @@ the share of voice (engine, question asked, verdict, domains cited) → `list_we
 body, verbatim. All four are free reads: never run a new audit just to see what a past one already
 measured.
 
+**Write or fix an article yourself** → `get_article` to read it whole, `update_article` to write
+your own title, markdown body, SEO fields, category, tags, author or schedule. No model, no
+credits, and a field you do not send is untouched. A published article is refused: `unpublish_article`
+first, then edit, then `publish_article`.
+
 ## References (load on demand)
 
 - [references/mcp.md](references/mcp.md) — connect MCP (stdio / HTTP), Cursor config, auth

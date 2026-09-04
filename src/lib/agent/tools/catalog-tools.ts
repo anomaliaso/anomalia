@@ -7,6 +7,12 @@ import { resolveScheduleInput } from '$lib/server/clock';
 import type { ChatToolCtx } from './shared';
 import { startLongToolJob, type AnyRec } from './shared';
 import { noteRead, requireFreshRead } from '$lib/server/chat/read-guards';
+import { articleEditRefusal, articleScheduleChange, type ScheduleRefusal } from '$lib/server/article-editing';
+
+const SCHEDULE_REFUSAL_MESSAGE: Record<ScheduleRefusal, string> = {
+  article_published: 'Article is already published',
+  planned_needs_slot: 'Planned placeholders need a slot — reschedule it instead, or delete it from the Site page.'
+};
 
 export function catalogTools(ctx: ChatToolCtx) {
   const { supabase, brandId, tz, userId, origin } = ctx;
@@ -119,21 +125,17 @@ export function catalogTools(ctx: ChatToolCtx) {
         const { admin } = await blogAdmin();
         const { data: art } = await admin.from('brand_articles').select('id, title, status').eq('id', article_id).eq('brand_id', brandId).maybeSingle();
         if (!art) return { error: 'Article not found' };
-        if (art.status === 'published') return { error: 'Article is already published' };
-        let patch: AnyRec;
+        const denied = articleEditRefusal(art.status);
+        if (denied) return { error: SCHEDULE_REFUSAL_MESSAGE[denied] };
         let when: string | null = null;
-        if (!scheduled_for) {
-          // A month-plan placeholder without a date would never get written — refuse to clear it.
-          if (art.status === 'planned') return { error: 'Planned placeholders need a slot — reschedule it instead, or delete it from the Site page.' };
-          patch = { scheduled_for: null, status: 'draft' };
-        } else {
+        if (scheduled_for) {
           const parsed = resolveScheduleInput(scheduled_for, tz);
           if ('error' in parsed) return parsed;
           when = parsed.utc;
-          // Placeholders only move their slot — 'approved' (auto-publish) is reserved for real drafts.
-          patch = art.status === 'planned' ? { scheduled_for: when } : { scheduled_for: when, status: 'approved' };
         }
-        const { error } = await admin.from('brand_articles').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', article_id).eq('brand_id', brandId);
+        const change = articleScheduleChange(art.status, when);
+        if (!change.ok) return { error: SCHEDULE_REFUSAL_MESSAGE[change.reason] };
+        const { error } = await admin.from('brand_articles').update({ ...change.patch, updated_at: new Date().toISOString() }).eq('id', article_id).eq('brand_id', brandId);
         if (error) return { error: error.message };
         return {
           success: true,
