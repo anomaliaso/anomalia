@@ -12,7 +12,6 @@ import { providerGetJson, type ProviderAuth } from './provider-fetch';
 
 const FOLDER_FIELDS = 'nextPageToken,files(id,name,mimeType,webViewLink)';
 const FILE_FIELDS = 'nextPageToken,files(id,name,mimeType,modifiedTime,size,webViewLink,parents)';
-const FILE_META_FIELDS = 'id,name,mimeType,modifiedTime,size,webViewLink,parents';
 const MAX_EXPANDED_FOLDERS = 40;
 
 function driveFilesUrl(q: string, pageToken: string | null, pageSize = 100): string {
@@ -99,37 +98,6 @@ export async function listDriveFilesInFolders(
     if (!unique.has(file.id)) unique.set(file.id, file);
   }
   return [...unique.values()].slice(0, cap);
-}
-
-export async function fetchDriveFile(
-  auth: ProviderAuth,
-  fileId: string
-): Promise<(DriveFile & { parents: string[] }) | null> {
-  const id = parseDriveFolderId(fileId);
-  if (!id) return null;
-  const data = await providerGetJson(
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=${FILE_META_FIELDS}&supportsAllDrives=true`,
-    auth
-  );
-  if (!data || typeof data !== 'object') return null;
-  const rec = data as Record<string, unknown>;
-  const mimeType = String(rec.mimeType ?? '');
-  const parsedId = String(rec.id ?? id);
-  const parents = Array.isArray(rec.parents) ? rec.parents.map((p) => String(p ?? '').trim()).filter(Boolean) : [];
-  if (mimeType === 'application/vnd.google-apps.folder') {
-    return {
-      id: parsedId,
-      name: String(rec.name ?? 'Untitled folder'),
-      mimeType,
-      modifiedTime: rec.modifiedTime ? String(rec.modifiedTime) : null,
-      size: 0,
-      webViewLink: rec.webViewLink ? String(rec.webViewLink) : null,
-      parents
-    };
-  }
-  const list = parseDriveFileList({ files: [rec] }).files[0];
-  if (!list) return null;
-  return { ...list, parents };
 }
 
 export async function listDriveFilesByIds(auth: ProviderAuth, fileIds: string[]): Promise<DriveFile[]> {

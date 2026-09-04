@@ -58,8 +58,6 @@ export const SETTINGS_SECTIONS = [
   'danger'
 ] as const;
 
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
-
 /** Former Studio / Identity sections now under Settings → Brand. */
 export const SETTINGS_BRAND_SECTIONS = [
   'brand',
@@ -69,8 +67,6 @@ export const SETTINGS_BRAND_SECTIONS = [
   'products',
   'people'
 ] as const;
-
-export type SettingsBrandSection = (typeof SETTINGS_BRAND_SECTIONS)[number];
 
 /** Blog settings under Settings → Blog. */
 export const SETTINGS_BLOG_SECTIONS = [
@@ -82,13 +78,8 @@ export const SETTINGS_BLOG_SECTIONS = [
   'search-console'
 ] as const;
 
-export type SettingsBlogSection = (typeof SETTINGS_BLOG_SECTIONS)[number];
-
 /** Ads settings under Settings → Ads. */
 export const SETTINGS_ADS_SECTIONS = ['ads-accounts', 'ads'] as const;
-
-export type SettingsAdsSection = (typeof SETTINGS_ADS_SECTIONS)[number];
-
 
 // ─── Modal Impostazioni ────────────────────────────────────────────────────────────────
 // Il meccanismo (shallow routing che ospita la +page.svelte VERA) è agnostico al peso
@@ -109,8 +100,6 @@ export const SETTINGS_FULL_PAGE_SECTIONS = [
   'linkedin',
   'usage/sessions/[id]'
 ] as const;
-
-export type SettingsFullPageSection = (typeof SETTINGS_FULL_PAGE_SECTIONS)[number];
 
 /** Tutte le sezioni ospitabili nel modal. */
 export const SETTINGS_MODAL_SECTIONS = [

@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from '@google/genai';
 import { structured } from './research';
 import { withBrandContext } from './ai-log';
 import { defaultSkillsFor } from './default-skills';
@@ -95,11 +94,6 @@ export type MemoryGraphEdge = {
   targetId: string;
   weight: number;
   reason: 'category' | 'tokens';
-};
-
-export type MemoryGraph = {
-  nodes: MemoryEntry[];
-  edges: MemoryGraphEdge[];
 };
 
 export type MemoryWriteOpts = {
@@ -1117,91 +1111,6 @@ async function nodeExists(
 }
 
 // ── Migration helper: seed from existing ai_context ────────────────────────────
-
-/**
- * One-time migration: parse the existing brand_kit.ai_context blob and seed
- * the brand_memory table with initial entries. Called during the transition period.
- */
-export async function seedFromAiContext(
-  supabase: SupabaseClient,
-  brandId: string,
-  ai: GoogleGenAI
-): Promise<number> {
-  const { data: kit } = await supabase
-    .from('brand_kit')
-    .select('ai_context')
-    .eq('brand_id', brandId)
-    .maybeSingle();
-
-  const context = kit?.ai_context as string;
-  if (!context || context.length < 50) return 0;
-
-  // Check if already seeded
-  const { count } = await supabase
-    .from('brand_memory')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId);
-
-  if (count && count > 0) return 0;
-
-  const prompt = `You are a memory extraction system. Parse this brand context brief and extract structured memory entries.
-
-BRAND CONTEXT:
-${context.slice(0, 3000)}
-
-Extract facts as a JSON array. Each item:
-- key: short snake_case identifier
-- value: one-sentence fact
-- category: "voice" | "constraint" | "fact" | "preference" | "insight"
-- confidence: 0.8 (moderate — these are from a synthesized brief, not direct user input)
-
-Rules:
-- Extract 5-15 entries maximum
-- Focus on actionable facts (voice, constraints, audience, differentiators)
-- Skip generic filler
-- Return JSON array only`;
-
-  try {
-    const raw = await structured<unknown>(ai, prompt, {
-          type: 'array' as const,
-          items: {
-            type: 'object' as const,
-            properties: {
-              key: { type: 'string' as const },
-              value: { type: 'string' as const },
-              category: { type: 'string' as const, enum: ['voice', 'constraint', 'fact', 'preference', 'insight'] as const },
-              confidence: { type: 'number' as const }
-            },
-            required: ['key', 'value', 'category', 'confidence']
-          }
-    }, undefined, { label: 'memoryExtract' });
-
-    const extracted = (Array.isArray(raw) ? raw : []) as Array<{
-      key: string;
-      value: string;
-      category: MemoryCategory;
-      confidence: number;
-    }>;
-
-    let count = 0;
-    for (const item of extracted) {
-      if (!item.key || !item.value) continue;
-      await writeMemory(supabase, brandId, {
-        key: item.key,
-        value: item.value,
-        category: item.category,
-        confidence: item.confidence ?? 0.8,
-        source: 'onboarding',
-        layer: 'project'
-      });
-      count++;
-    }
-
-    return count;
-  } catch {
-    return 0;
-  }
-}
 
 // ── Research integration: persist strategy findings to memory ──────────────────
 

@@ -155,51 +155,6 @@ export function passwordResetEmailText(locale: Locale, resetUrl: string): string
 // the user's normal login (they created the account during onboarding).
 export type RecapCounts = { posts: number; competitors: number; weeks: number };
 
-export function onboardingRecapEmailSubject(locale: Locale, brandName: string, posts: number): string {
-  return tEmail(locale, 'recap.subject', { brand: brandName, count: posts });
-}
-
-export function onboardingRecapEmailHtml(
-  locale: Locale,
-  brandName: string,
-  counts: RecapCounts,
-  continueUrl: string,
-  preview: PreviewPost[],
-  origin?: string
-): string {
-  const items = preview.map(postRow).join('');
-  return shell(
-    origin,
-    `
-    <h2 style="font-size:22px;letter-spacing:-0.02em;margin:14px 0 6px;">${tEmail(locale, 'recap.heading', { brand: brandName })}</h2>
-    <p style="color:#6e6e73;line-height:1.5;margin:0 0 18px;">${tEmail(locale, 'recap.intro', { posts: counts.posts, competitors: counts.competitors, weeks: counts.weeks })}</p>
-    ${items}
-    ${cta(continueUrl, tEmail(locale, 'recap.cta'))}
-    <p style="color:#86868b;font-size:12px;margin-top:22px;">${tEmail(locale, 'recap.footer')}</p>`
-  );
-}
-
-export function onboardingRecapEmailText(
-  locale: Locale,
-  brandName: string,
-  counts: RecapCounts,
-  continueUrl: string,
-  preview: PreviewPost[]
-): string {
-  const lines = preview.map((p) => `- ${(p.platform ?? '').toUpperCase()}: ${(p.caption ?? '').slice(0, 140)}`).join('\n');
-  return [
-    tEmail(locale, 'recap.heading', { brand: brandName }),
-    '',
-    tEmail(locale, 'recap.intro', { posts: counts.posts, competitors: counts.competitors, weeks: counts.weeks }),
-    '',
-    lines,
-    '',
-    `${tEmail(locale, 'recap.cta')} ${continueUrl}`,
-    '',
-    tEmail(locale, 'recap.footer')
-  ].join('\n');
-}
-
 // Sent once when onboarding research finishes (strategy report + proposed editorial plan). Users can
 // leave the long market-study step; this email is how they learn it's ready to review.
 export function strategyPlanReadyEmailSubject(locale: Locale, brandName: string): string {

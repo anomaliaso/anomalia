@@ -3,7 +3,7 @@
 import { swallow } from '$lib/server/swallow';
 import { Marked } from 'marked';
 import { createAdminClient } from './supabase-admin';
-import { BLOG_LOCALE_LANGUAGE, resolveBlogLocales, type BlogLocale, type BlogLocaleConfig } from './blog-locales';
+import { BLOG_LOCALE_LANGUAGE, resolveBlogLocales, type BlogLocaleConfig } from './blog-locales';
 import { referralCodeForBrand } from './referrals';
 
 /**
@@ -15,11 +15,6 @@ import { referralCodeForBrand } from './referrals';
  * every pre-0129 article vanish the day locales shipped.
  */
 export type LocaleScope = { kind: 'default' } | { kind: 'translation'; language: string };
-
-export function scopeForLocale(locale: BlogLocale | null | undefined, defaultLocale: BlogLocale): LocaleScope {
-  if (!locale || locale === defaultLocale) return { kind: 'default' };
-  return { kind: 'translation', language: BLOG_LOCALE_LANGUAGE[locale] };
-}
 
 /**
  * PostgREST filter constraining a brand_articles query to one language version, as a single `.or()`

@@ -773,9 +773,6 @@ export async function auditSiteTech(url: string): Promise<GeoTechAudit | null> {
 
 export type GeoEngine = 'gemini' | 'deepseek' | 'exa' | 'gpt' | 'grok' | 'claude' | 'perplexity' | 'bing';
 
-/** Marketing surfaces we check in robots.txt — not all are measured answer engines. */
-export const ROBOTS_ONLY_SURFACES = ['perplexity', 'copilot'] as const;
-
 export type CitationResult = {
   engine: GeoEngine;     // which answer engine produced this verdict
   prompt: string;

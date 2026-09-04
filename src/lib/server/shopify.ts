@@ -113,14 +113,6 @@ export async function publishArticle(conn: ShopifyConn, input: ShopifyArticleInp
 
 // --- Persistence (server-only: blog_integrations holds secrets, RLS blocks anon/authed reads) ---
 
-export type ShopifyState = {
-  connected: boolean;
-  store: string;
-  blogId: string | null;
-  author: string | null;
-  publishImmediately: boolean;
-};
-
 // Read a brand's saved Shopify connection. Returns the full conn (with secrets) for server use, or
 // null when there's no complete, blog-selected connection.
 export async function loadConn(admin: SupabaseClient, brandId: string): Promise<(ShopifyConn & { publishImmediately: boolean }) | null> {

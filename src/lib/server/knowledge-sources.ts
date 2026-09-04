@@ -47,7 +47,7 @@ import {
   listGithubRepos,
   type GithubRepo
 } from '$lib/server/knowledge-connectors/github';
-import { expandDriveFolderIds, listDriveFilesByIds, listDriveFilesInFolders, listDriveFolders } from '$lib/server/knowledge-connectors/drive-scope';
+import { expandDriveFolderIds, listDriveFilesByIds, listDriveFilesInFolders } from '$lib/server/knowledge-connectors/drive-scope';
 import { collectNotionScopedPages, listNotionPickerItems } from '$lib/server/knowledge-connectors/notion-scope';
 import {
   GMAIL_LIST_QUERY,
@@ -381,26 +381,6 @@ export async function saveNotionPages(
   }
   await patchSourceSettings(supabase, brandId, 'notion', { pages: selected });
   return selected;
-}
-
-export async function listDriveFoldersForBrand(
-  supabase: SupabaseClient,
-  brandId: string
-): Promise<{ folders: DriveFolderOption[]; error: string | null }> {
-  const { data } = await supabase
-    .from('brand_knowledge_sources')
-    .select('connected_account_id')
-    .eq('brand_id', brandId)
-    .eq('provider', 'google-drive')
-    .neq('status', 'disconnected')
-    .maybeSingle();
-  if (!data?.connected_account_id) return { folders: [], error: null };
-  try {
-    const auth = providerAuth(data.connected_account_id as string, toolkitForProvider('google-drive'));
-    return { folders: await listDriveFolders(auth), error: null };
-  } catch (e) {
-    return { folders: [], error: e instanceof Error ? e.message : String(e) };
-  }
 }
 
 export async function listNotionPagesForBrand(

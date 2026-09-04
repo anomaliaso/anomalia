@@ -60,4 +60,3 @@ export const UI_TOKENS = [
   '--sidebar-w'
 ] as const;
 
-export type UiToken = (typeof UI_TOKENS)[number];

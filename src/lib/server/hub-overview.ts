@@ -9,8 +9,6 @@ import { loadGrowthReadiness, type GrowthReadiness } from '$lib/server/growth-re
 
 type BrandRow = { id: string; slug: string; plan: string | null; timezone: string; content_prefs?: unknown };
 
-export type HubOverviewStat = { label: string; value: string | number };
-
 export type PendingPostPreview = {
   id: string;
   platform: string | null;

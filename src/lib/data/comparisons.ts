@@ -1,4 +1,3 @@
-export type CompareLocale = 'en' | 'it';
 
 type L = { en: string; it: string };
 
@@ -573,8 +572,6 @@ export const COMPARISONS: Comparison[] = [
     }
   }
 ];
-
-export const COMPARE_SLUGS = COMPARISONS.map((c) => c.slug);
 
 export function getComparison(slug: string): Comparison | undefined {
   return COMPARISONS.find((c) => c.slug === slug);

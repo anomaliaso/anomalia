@@ -83,17 +83,6 @@ export async function loadGraphicFont(preferred?: string | null): Promise<{ font
   throw new Error('Could not load a font for the graphic renderer');
 }
 
-/** First usable family name out of brand_kit.fonts (`string[]` or `{name|family}[]`). */
-export function brandFontName(fonts: unknown): string | null {
-  if (!Array.isArray(fonts)) return null;
-  for (const f of fonts) {
-    if (typeof f === 'string' && f.trim()) return f.trim();
-    const name = (f as { name?: string; family?: string })?.name ?? (f as { family?: string })?.family;
-    if (typeof name === 'string' && name.trim()) return name.trim();
-  }
-  return null;
-}
-
 export type RenderedGraphic = {
   png: Buffer;
   /** Present when the caller asked for JPEG export. PNG is always produced (that's what we store). */
@@ -333,7 +322,6 @@ export async function renderGraphicSource(
     import('satori'),
     import(/* @vite-ignore */ '@resvg/resvg-js')
   ]);
-
 
   const { tree, width, height } = await sourceToSatoriTree(inlined, kind);
 

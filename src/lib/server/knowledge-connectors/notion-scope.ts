@@ -1,13 +1,6 @@
 /** Notion picker listing + scoped page collection (uses provider HTTP). */
 import { normalizeNotionId, type NotionPageOption } from '$lib/notion-pages';
-import {
-  parseNotionChildren,
-  parseNotionParentId,
-  parseNotionPickerResults,
-  parseNotionSearch,
-  selectedNotionIdSet,
-  type NotionPickerItem
-} from './notion';
+import { parseNotionChildren, parseNotionPickerResults, parseNotionSearch, selectedNotionIdSet, type NotionPickerItem } from './notion';
 import {
   NOTION_VERSION,
   providerGetJson,
@@ -155,12 +148,3 @@ async function listChildPages(auth: ProviderAuth, pageId: string): Promise<Scope
   return pages;
 }
 
-export async function fetchNotionParentId(auth: ProviderAuth, pageId: string): Promise<string | null> {
-  const page = await providerGetJson(
-    `https://api.notion.com/v1/pages/${encodeURIComponent(pageId)}`,
-    auth,
-    NOTION_VERSION
-  );
-  if (!page || typeof page !== 'object') return null;
-  return parseNotionParentId(page as Record<string, unknown>);
-}

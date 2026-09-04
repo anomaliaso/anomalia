@@ -215,5 +215,3 @@ export const repeatPhrase = (phrase: string, n: number, style: Style): El =>
     )
   );
 
-/** Story-sized padding helper (9:16 is taller — keep side pad similar, use more vertical air). */
-export const storyPad = () => s(8);

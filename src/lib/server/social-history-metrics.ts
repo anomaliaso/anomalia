@@ -12,8 +12,6 @@
 // the AI should filter source='zernio' at query time. The dedupe below stays a general utility
 // (e.g. for the analytics page, which intentionally shows the full merged picture).
 
-export type HistoryMetricKey = 'views' | 'likes' | 'comments' | 'shares';
-
 export type SocialHistoryRow = {
   id?: string;
   source?: string | null;

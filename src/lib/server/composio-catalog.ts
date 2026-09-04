@@ -54,11 +54,6 @@ const toolkitDirectory = createDirectoryCache<ConnectorCatalogItem>();
 /** Our own auth configs change when someone edits them in the dashboard — refresh often. */
 const ownAuthConfigs = createDirectoryCache<string>({ ttlMs: 5 * 60 * 1000 });
 
-export function invalidateToolkitDirectory(): void {
-  toolkitDirectory.invalidate();
-  ownAuthConfigs.invalidate();
-}
-
 /**
  * The catalog is whatever Composio answers — every toolkit, in full. There is no registry table
  * and no hardcoded fallback: if the call fails the page says so, because a short list of made-up

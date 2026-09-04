@@ -100,7 +100,6 @@ export function funnelBrief(spec: FunnelSpec): string {
 // is idempotent (previous stamped goals are stripped and rewritten), and the LLM cannot produce
 // them (the Gemini schema has no metric/value fields).
 export const FUNNEL_METRICS = ['reach', 'clicks', 'signups', 'final'] as const;
-export type FunnelMetric = (typeof FUNNEL_METRICS)[number];
 
 type PhaseLike = {
   duration_weeks: number;

@@ -17,9 +17,6 @@ export const MAX_CHUNKS_PER_BRAND = 4000;
 export const DOC_LIMIT_STARTER = 50;
 export const DOC_LIMIT_PRO = 300;
 
-// text-embedding-004 404s on v1beta (verified live 2026-07-31) — gemini-embedding-001 is the
-// available model; outputDimensionality pins it to the vector(768) column in 0114.
-const EMBED_DIMS = 768;
 const EMBED_BATCH = 32;
 const RRF_K = 60;
 
@@ -80,17 +77,6 @@ export type SearchHit = {
   content: string;
   score: number;
 };
-
-export type KnowledgeNodeKind =
-  | 'memory'
-  | 'document'
-  | 'chunk'
-  | 'chat_message'
-  | 'product'
-  | 'competitor'
-  | 'person'
-  | 'post'
-  | 'rubric';
 
 function ext(fileName: string): string {
   const m = /\.([a-z0-9]+)$/i.exec(fileName);

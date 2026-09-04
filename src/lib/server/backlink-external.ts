@@ -583,22 +583,6 @@ export async function proposeBacklinkOrder(
   return order;
 }
 
-/**
- * @deprecated Prefer createBacklinkDraft / createManualBacklinkOrder.
- * Kept for callers that still pass provider.
- */
-export async function createBacklinkOrder(
-  admin: SupabaseClient,
-  brand: AnyRec,
-  opts: { targetUrl: string; topic?: string; provider?: 'submitforbacklinks' | 'manual' }
-): Promise<BacklinkOrder> {
-  const provider = opts.provider ?? (externalBacklinksConfigured() ? 'submitforbacklinks' : 'manual');
-  if (provider === 'submitforbacklinks') {
-    return createBacklinkDraft(admin, brand, opts);
-  }
-  return createManualBacklinkOrder(admin, brand, opts);
-}
-
 /** Issue free-listing badge markup (POST …/badge action=issue). */
 export async function issueBacklinkBadge(
   admin: SupabaseClient,

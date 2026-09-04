@@ -143,23 +143,6 @@ export async function disconnectAccount(accountId: string): Promise<void> {
   return publisher.disconnectAccount(accountId);
 }
 
-export async function disconnectAllBrandAccounts(
-  supabase: SupabaseClient,
-  brandId: string
-): Promise<number> {
-  const { data: accounts } = await supabase
-    .from('social_accounts')
-    .select('id, zernio_account_id')
-    .eq('brand_id', brandId);
-  let n = 0;
-  for (const a of accounts ?? []) {
-    if (a.zernio_account_id) await disconnectAccount(a.zernio_account_id).catch(swallow('disconnect zernio account'));
-    await supabase.from('social_accounts').delete().eq('id', a.id).eq('brand_id', brandId);
-    n++;
-  }
-  return n;
-}
-
 export async function getPostStatus(postId: string): Promise<RemotePostStatus> {
   return publisher.postStatus(postId);
 }

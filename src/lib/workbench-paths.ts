@@ -66,18 +66,6 @@ export function workbenchTabLabel(
   return seg ? seg.charAt(0).toUpperCase() + seg.slice(1) : t('app.shell.tabHome');
 }
 
-export function isWorkbenchPath(pathname: string, brandBase: string): boolean {
-  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
-  if (!pathname.startsWith(base)) return false;
-  if (pathname.includes('/chat/')) return false;
-  if (pathname.includes('/success')) return false;
-  if (pathname.includes('/activate')) return false;
-  if (pathname.includes('/proposal')) return false;
-  if (pathname.includes('/image-generator')) return false;
-  if (pathname.includes('/settings')) return false;
-  return true;
-}
-
 export type WorkbenchPageHub =
   | 'strategy'
   | 'publish'

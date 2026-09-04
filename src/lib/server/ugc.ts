@@ -35,21 +35,6 @@ MOOD: a frame from a camera roll mid-conversation, not a composed ad still.
 DO NOT: no on-image text, no captions, no logo, no watermark, no graphic overlay, no product-shot lighting, no clean seamless backdrop.`;
 
 /**
- * Life-Force 8 (Whitman / Ca$hvertising) — the desire UNDER the pain beat.
- * Every UGC hook should name a concrete painful moment that sits on one of these.
- */
-export const LIFE_FORCE_DESIRES = [
-  'stay alive / feel well / live longer',
-  'enjoy food and drink',
-  'free from fear, pain and danger',
-  'find a partner',
-  'live comfortably',
-  'be better than the people around you',
-  'look after the people you love',
-  'be liked and respected'
-] as const;
-
-/**
  * Spoken structure for ≤15s UGC ads:
  * Hook (call-out / pain moment) → body (problem + demo + proof) → CTA (qualify + soft action).
  * Product never in the first ~8s / never leads the hook.
@@ -209,10 +194,6 @@ export const UGC_BEHAVIORAL_BEATS = [
   'react to a sound',
   'half-laugh at own sentence'
 ] as const;
-
-/** MASTER list as a single prompt clause (fallback when no concrete pick is baked in). */
-export const UGC_BEHAVIORAL_BEATS_PROMPT =
-  'BEHAVIORAL BEATS — pick 2–3, vary per video: glance away • lean back • shrug • adjust phone grip • react to a sound • half-laugh at own sentence. Do them on camera during the body; do not skip.';
 
 /** Scelta stabile dal seed: deterministica per i test, ma diversa fra clip con campi diversi. */
 export function pickUgcBehavioralBeats(seed: string, n?: number): string[] {

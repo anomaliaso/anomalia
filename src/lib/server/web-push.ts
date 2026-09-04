@@ -99,12 +99,3 @@ export async function sendPushToUser(
 	return { sent, pruned };
 }
 
-/** Fan-out push to many users (best-effort, never throws). */
-export async function sendPushToUsers(
-	supabase: SupabaseClient,
-	userIds: string[],
-	payload: PushPayload
-): Promise<void> {
-	const unique = [...new Set(userIds.filter(Boolean))];
-	await Promise.all(unique.map((id) => sendPushToUser(supabase, id, payload).catch(swallow('send web push'))));
-}
