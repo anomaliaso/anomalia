@@ -898,3 +898,26 @@ nodo**, quindi vince il layout; per la `__data.json` di una navigazione dal clie
 **il primo che rigetta**. Un rimando piazzato nella pagina chiude la risposta mentre il layout è
 ancora dentro le sue query, e il `cookies.set` del layout trova la risposta già generata. Prima di
 dichiarare ridondante una guardia, leggi quale delle due strade la esercita.
+
+## Una patch «scaduta» può esserlo solo sulla tua macchina
+
+**Segnale.** `patch-package` dice `Patch was made for version: X / Installed version: Y`, con Y più
+nuova. Sembra ovvio: la dipendenza è andata avanti, la patch è da buttare.
+
+**Cosa succede.** In questo repo ci sono due lockfile: `package-lock.json`, tracciato, che la CI usa
+con `npm ci`, e `bun.lock`, non tracciato, che vive sulla macchina di chi ha lanciato `bun install`.
+Divergono. Il primo pinnava `@ai-sdk/harness@1.0.87` — esattamente la versione della patch — mentre
+bun aveva risolto la 1.0.101. La patch era **viva per tutti tranne che lì**, e cancellarla ha fatto
+diventare rossa la CI e ha tolto due comportamenti veri: le scritture in blocco di `writeSkills`
+(6,9 secondi di attesa) e la conservazione delle parti immagine nell'adattatore pi, che senza patch
+**degrada in silenzio** invece di fallire.
+
+**Mossa.** Prima di dichiarare scaduta una patch, leggi la versione nel lockfile **tracciato**, non
+quella in `node_modules`. Se coincide con quella della patch, la patch è viva e il problema è
+l'install che hai davanti.
+
+**Corollario, e qui è il punto.** Tre errori nello stesso blocco sembravano tre conferme
+indipendenti: due dicevano «la patch non applica», il terzo «il pacchetto non c'è». Erano tre
+sintomi di **una causa sola** — l'albero di `node_modules` rotto — e nessuno dei tre parlava delle
+patch. Dopo un `npm install` pulito applicano tutte e tre. Più errori insieme invitano a
+concludere; guarda invece se hanno un antenato comune.
