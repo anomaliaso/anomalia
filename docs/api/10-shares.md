@@ -31,7 +31,7 @@ Crea il link. Richiede una API key con scope `write`.
 
 | Campo | Obbligatorio | Note |
 |---|---|---|
-| `view` | sì | `calendar`, `dashboard` o `monthly_report` |
+| `view` | sì | `calendar`, `dashboard`, `monthly_report`, `strategy` o `workspace` |
 | `month` | no | `YYYY-MM`. Senza, il mese corrente sull'orologio del brand |
 | `expires_in_days` | no | 1–365. Senza, il link vale finché non viene revocato |
 
@@ -140,9 +140,44 @@ builder che esistono già, quindi non ha una terza allowlist da tenere allineata
 Ogni top post: `platform`, `caption`, `thumbnail_url`, `url`, `published_at`, `views`, `likes`,
 `comments`, `shares`.
 
+**`strategy`** — `brand_name`, `timezone`, `month`, `month_label`, `statement`, `cadence`,
+`platforms[]`, `weeks[]`, `objective`, `horizon`, `phase`.
+Ogni piattaforma: `platform`, `share`, `role`. Ogni settimana: `week_start`, `theme`, `focus`,
+`status`. La fase è quella che governa il **mese chiesto** (non quella di oggi): `name`,
+`objective`, `goals[]` con `kpi` e `target`.
+Solo i piani **attivi**: una proposta è una conversazione ancora aperta con chi decide, non
+lavoro concordato — e `revision_feedback` è letteralmente il testo di quella conversazione.
+Restano fuori `rationale`, `brief` e `products` di ogni settimana (gli appunti di chi pianifica),
+`voice`, `changes_summary`, `reply` e ogni `actual`/`metric`/`value` dei goal.
+
+**`workspace`** — `brand_name`, `timezone`, `month`, `month_label`, più `dashboard`, `calendar`,
+`report` e `strategy`, ognuno **esattamente** lo snapshot della vista corrispondente. Un link
+solo invece di quattro. Non è una vista in più ma la loro somma: non può mostrare un campo che
+uno dei link singoli non mostrerebbe già, e un test lo verifica chiave per chiave.
+
 Non escono mai: id di post, brand o riga; prompt e `image_prompt`; `qc`, `needs_attention`,
 `attention_reason`; token di approvazione; connettori, note interne, costi, impostazioni, membri;
 lo slug del brand e la provenienza dei dati.
+
+## Perché non basta aprire le pagine di `/app/[brand]` sotto token
+
+Sotto `/app/[brand]` vivono 96 pagine, e fra queste `settings/api-keys`, `settings/danger`,
+`settings/demo-account` e `settings/blog-integrations`: chiavi API, `DELETE FROM brands` e
+segreti nel Vault. Un elenco di **esclusioni** si dimentica alla prima pagina aggiunta, e la
+pagina aggiunta sarebbe pubblica per difetto.
+
+Qui vale il contrario. La rotta pubblica non ha nessun percorso dentro l'albero dell'app: legge
+una tabella sola e una colonna sola. Una pagina aggiunta domani non attraversa **nessuna** delle
+quattro porte che rendono pubblica una cosa, e resta invisibile senza che nessuno se ne ricordi:
+
+1. `SHARED_VIEW_TYPES` in `packages/api-contracts/src/shares.ts` — l'enum che l'endpoint valida.
+2. Il builder in `SNAPSHOT_BUILDERS`, che nomina campo per campo cosa copia. È un
+   `Record<SharedViewType, …>`: un tipo senza builder non compila.
+3. Il vincolo `check (view_type in (…))` su `shared_views`. È l'unica delle quattro che
+   TypeScript non copre, ed è già divergita una volta (`dashboard` nel contratto, assente nel
+   check): ora un test confronta la migration con l'enum e la suite diventa rossa prima del
+   deploy.
+4. La pagina `/share/[token]`, che deve saperla disegnare.
 
 ## Fuori da questa versione
 

@@ -3,9 +3,18 @@ import { CREATE_SHARE, LIST_SHARES, REVOKE_SHARE, SHARED_VIEW_TYPES } from './sh
 
 describe('il contratto delle viste pubbliche', () => {
   it('dichiara solo le viste che esistono davvero', () => {
-    expect([...SHARED_VIEW_TYPES]).toEqual(['calendar', 'dashboard', 'monthly_report']);
+    expect([...SHARED_VIEW_TYPES]).toEqual(['calendar', 'dashboard', 'monthly_report', 'strategy', 'workspace']);
     expect(CREATE_SHARE.input.safeParse({ view: 'proposal' }).success).toBe(false);
   });
+
+  // Le pagine sotto /app/[brand] non sono viste condivisibili: indovinarne il nome non apre
+  // niente, perché diventare pubblici passa da questo enum e da altre tre porte deliberate.
+  it.each(['settings', 'api-keys', 'billing', 'team', 'knowledge', 'agents', 'usage', 'danger'])(
+    'rifiuta %s: una pagina dell app non è una vista pubblica',
+    (guessed) => {
+      expect(CREATE_SHARE.input.safeParse({ view: guessed }).success).toBe(false);
+    }
+  );
 
   it('accetta un mese YYYY-MM e rifiuta qualunque altra forma', () => {
     expect(CREATE_SHARE.input.safeParse({ view: 'calendar', month: '2026-09' }).success).toBe(true);

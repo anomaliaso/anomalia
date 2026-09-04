@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { BrandEndpoint } from './index';
 
-export const SHARED_VIEW_TYPES = ['calendar', 'dashboard', 'monthly_report'] as const;
+export const SHARED_VIEW_TYPES = ['calendar', 'dashboard', 'monthly_report', 'strategy', 'workspace'] as const;
 
 export type SharedViewType = (typeof SHARED_VIEW_TYPES)[number];
 
@@ -37,7 +37,7 @@ export const CREATE_SHARE = {
       view: z
         .enum(SHARED_VIEW_TYPES)
         .describe(
-          'calendar = the month plan; dashboard = the month at a glance (what went out, what is planned, reach); monthly_report = what that month published'
+          'calendar = the month plan; dashboard = the month at a glance (what went out, what is planned, reach); monthly_report = what that month published; strategy = the agreed plan behind it (statement, cadence, platforms, weeks, current phase); workspace = all of the above behind one link'
         ),
       month: MONTH.optional(),
       expires_in_days: z.coerce

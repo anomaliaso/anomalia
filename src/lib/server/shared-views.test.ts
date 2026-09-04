@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getCalendar = vi.fn();
@@ -11,6 +14,12 @@ import {
   REPORT_POST_FIELDS,
   REPORT_SNAPSHOT_FIELDS,
   SHARE_SNAPSHOT_VERSION,
+  STRATEGY_GOAL_FIELDS,
+  STRATEGY_PHASE_FIELDS,
+  STRATEGY_PLATFORM_FIELDS,
+  STRATEGY_SNAPSHOT_FIELDS,
+  WORKSPACE_SNAPSHOT_FIELDS,
+  STRATEGY_WEEK_FIELDS,
   SharedViewsNotMigrated,
   buildSnapshot,
   createSharedView,
@@ -407,5 +416,238 @@ describe('la lista e la revoca', () => {
     const shares = fakeTable({ data: null, error: null });
 
     await expect(revokeSharedView(fakeSupabase({ shared_views: shares }), 'brand-1', 'share-di-un-altro')).resolves.toBeNull();
+  });
+});
+
+describe('lo snapshot della strategia', () => {
+  const AN_EDITORIAL_PLAN_WITH_EVERYTHING = {
+    id: 'plan-1',
+    brand_id: 'brand-1',
+    status: 'active',
+    strategy: 'La strategia che il cliente legge',
+    cadence: '3/week',
+    platform_mix: [{ platform: 'linkedin', share: '60%', role: 'autorità' }],
+    weeks: [
+      {
+        index: 0,
+        week_start: '2026-09-07',
+        theme: 'Lancio',
+        focus: 'Presentare il prodotto',
+        status: 'planned',
+        rationale: 'ragionamento interno',
+        brief: 'il brief che ha scritto l operatore',
+        products: ['SKU interno'],
+        content_mix: [{ type: 'reel', count: 3 }]
+      }
+    ],
+    voice: { mood: 'interno', tone: 'interno', goal: 'interno', personality: 'interno' },
+    revision_feedback: 'il feedback della revisione',
+    changes_summary: ['cambio interno'],
+    source: 'agent',
+    parent_id: 'plan-0'
+  };
+
+  const A_GTM_PLAN_WITH_EVERYTHING = {
+    id: 'gtm-1',
+    brand_id: 'brand-1',
+    status: 'active',
+    horizon: '6m',
+    objective: 'Vendere di più',
+    phases: [
+      {
+        index: 0,
+        name: 'Fase passata',
+        objective: 'passato',
+        rationale: 'ragionamento interno gtm',
+        start_date: '2026-06-01',
+        end_date: '2026-08-31',
+        goals: [{ kpi: 'lead', target: '100', why: 'perché interno', actual: '42', metric: 'leads', value: 42 }],
+        platform_weights: [{ platform: 'linkedin', percent: 100 }],
+        pillars: ['pilastro']
+      },
+      {
+        index: 1,
+        name: 'Fase corrente',
+        objective: 'crescere',
+        rationale: 'ragionamento interno gtm',
+        start_date: '2026-09-01',
+        end_date: '2026-11-30',
+        goals: [{ kpi: 'lead', target: '200', why: 'perché interno', actual: '10', metric: 'leads', value: 10 }],
+        platform_weights: [{ platform: 'linkedin', percent: 100 }],
+        pillars: ['pilastro']
+      }
+    ],
+    revision_feedback: 'il feedback della revisione gtm',
+    reply: 'risposta interna',
+    changes_summary: ['cambio interno gtm'],
+    parent_id: 'gtm-0'
+  };
+
+  function strategySupabase(editorial: Row | null, gtm: Row | null) {
+    return fakeSupabase({
+      editorial_plans: fakeTable({ data: editorial, error: null }),
+      gtm_plans: fakeTable({ data: gtm, error: null })
+    });
+  }
+
+  it('porta solo i campi dichiarati, in cima e dentro ogni parte', async () => {
+    const { snapshot } = await buildSnapshot(
+      strategySupabase(AN_EDITORIAL_PLAN_WITH_EVERYTHING, A_GTM_PLAN_WITH_EVERYTHING),
+      BRAND,
+      'strategy',
+      '2026-09'
+    );
+
+    expect(Object.keys(snapshot).sort()).toEqual([...STRATEGY_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys((snapshot.weeks as Row[])[0]).sort()).toEqual([...STRATEGY_WEEK_FIELDS].sort());
+    expect(Object.keys((snapshot.platforms as Row[])[0]).sort()).toEqual([...STRATEGY_PLATFORM_FIELDS].sort());
+    expect(Object.keys(snapshot.phase as Row).sort()).toEqual([...STRATEGY_PHASE_FIELDS].sort());
+    expect(Object.keys(((snapshot.phase as Row).goals as Row[])[0]).sort()).toEqual([...STRATEGY_GOAL_FIELDS].sort());
+  });
+
+  it('non fa uscire brief, revisioni, ragionamenti interni né identificatori', async () => {
+    const { snapshot } = await buildSnapshot(
+      strategySupabase(AN_EDITORIAL_PLAN_WITH_EVERYTHING, A_GTM_PLAN_WITH_EVERYTHING),
+      BRAND,
+      'strategy',
+      '2026-09'
+    );
+    const serialized = JSON.stringify(snapshot);
+
+    for (const secret of [
+      'ragionamento interno',
+      'il brief che ha scritto l operatore',
+      'SKU interno',
+      'il feedback della revisione',
+      'cambio interno',
+      'risposta interna',
+      'perché interno',
+      'plan-1',
+      'plan-0',
+      'gtm-1',
+      'gtm-0',
+      'brand-1'
+    ]) {
+      expect(serialized, secret).not.toContain(secret);
+    }
+  });
+
+  it('legge solo il piano attivo: una proposta non è lavoro concordato', async () => {
+    const editorial = fakeTable({ data: AN_EDITORIAL_PLAN_WITH_EVERYTHING, error: null });
+    const gtm = fakeTable({ data: A_GTM_PLAN_WITH_EVERYTHING, error: null });
+
+    await buildSnapshot(fakeSupabase({ editorial_plans: editorial, gtm_plans: gtm }), BRAND, 'strategy', '2026-09');
+
+    expect(argsOf(editorial, 'eq')).toEqual([
+      ['brand_id', 'brand-1'],
+      ['status', 'active']
+    ]);
+    expect(argsOf(gtm, 'eq')).toEqual([
+      ['brand_id', 'brand-1'],
+      ['status', 'active']
+    ]);
+  });
+
+  it('mostra la fase che governa il mese chiesto, non la prima della lista', async () => {
+    const { snapshot } = await buildSnapshot(
+      strategySupabase(AN_EDITORIAL_PLAN_WITH_EVERYTHING, A_GTM_PLAN_WITH_EVERYTHING),
+      BRAND,
+      'strategy',
+      '2026-09'
+    );
+
+    expect((snapshot.phase as Row).name).toBe('Fase corrente');
+  });
+
+  it('senza piano attivo resta vuoto invece di rompersi', async () => {
+    const { snapshot } = await buildSnapshot(strategySupabase(null, null), BRAND, 'strategy', '2026-09');
+
+    expect(snapshot.statement).toBeNull();
+    expect(snapshot.weeks).toEqual([]);
+    expect(snapshot.platforms).toEqual([]);
+    expect(snapshot.phase).toBeNull();
+    expect(Object.keys(snapshot).sort()).toEqual([...STRATEGY_SNAPSHOT_FIELDS].sort());
+  });
+
+  it('dice che la migration manca invece di far passare un errore Postgres', async () => {
+    const supabase = fakeSupabase({ editorial_plans: fakeTable({ data: null, error: MISSING_TABLE }) });
+
+    await expect(buildSnapshot(supabase, BRAND, 'strategy', '2026-09')).rejects.toBeInstanceOf(SharedViewsNotMigrated);
+  });
+});
+
+describe('lo snapshot del workspace', () => {
+  function workspaceSupabase() {
+    return fakeSupabase({
+      social_post_history: fakeTable({ data: [A_HISTORY_ROW_WITH_EVERYTHING], error: null }),
+      editorial_plans: fakeTable({ data: null, error: null }),
+      gtm_plans: fakeTable({ data: null, error: null })
+    });
+  }
+
+  it('porta solo i campi dichiarati in cima', async () => {
+    const { snapshot } = await buildSnapshot(workspaceSupabase(), BRAND, 'workspace', '2026-09');
+
+    expect(Object.keys(snapshot).sort()).toEqual([...WORKSPACE_SNAPSHOT_FIELDS].sort());
+  });
+
+  it('ogni sezione è esattamente lo snapshot della sua vista: non può mostrare di più', async () => {
+    const { snapshot } = await buildSnapshot(workspaceSupabase(), BRAND, 'workspace', '2026-09');
+
+    expect(Object.keys(snapshot.calendar as Row).sort()).toEqual([...CALENDAR_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys(snapshot.report as Row).sort()).toEqual([...REPORT_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys(snapshot.dashboard as Row).sort()).toEqual([...DASHBOARD_SNAPSHOT_FIELDS].sort());
+    expect(Object.keys(snapshot.strategy as Row).sort()).toEqual([...STRATEGY_SNAPSHOT_FIELDS].sort());
+  });
+
+  it('non fa uscire prompt, qc, note interne o identificatori privati', async () => {
+    const { snapshot } = await buildSnapshot(workspaceSupabase(), BRAND, 'workspace', '2026-09');
+    const serialized = JSON.stringify(snapshot);
+
+    for (const secret of ['un prompt interno', 'borderline', 'token-di-approvazione', 'nota interna', 'post-1', 'brand-1', 'plan-1', 'zernio']) {
+      expect(serialized, secret).not.toContain(secret);
+    }
+  });
+
+  it('non ripete le query: il calendario e la storia si leggono una volta sola', async () => {
+    const history = fakeTable({ data: [A_HISTORY_ROW_WITH_EVERYTHING], error: null });
+    await buildSnapshot(
+      fakeSupabase({
+        social_post_history: history,
+        editorial_plans: fakeTable({ data: null, error: null }),
+        gtm_plans: fakeTable({ data: null, error: null })
+      }),
+      BRAND,
+      'workspace',
+      '2026-09'
+    );
+
+    expect(getCalendar).toHaveBeenCalledTimes(1);
+    expect(argsOf(history, 'select').length).toBe(1);
+  });
+});
+
+// Le porte che una pagina aggiunta domani deve attraversare per diventare pubblica. Sono
+// deliberate e separate: il contratto, il builder, il vincolo SQL, la superficie pubblica.
+// Questi test tengono le ultime due allineate alla prima — l'unica che TypeScript non copre.
+describe('l elenco di ciò che è pubblico non si allarga da solo', () => {
+  const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+
+  it('il vincolo SQL su view_type dice esattamente quello che dice il contratto', () => {
+    const dir = join(repoRoot, 'supabase/migrations');
+    const declared = readdirSync(dir)
+      .filter((name) => name.endsWith('.sql'))
+      .sort()
+      .flatMap((name) => [...readFileSync(join(dir, name), 'utf8').matchAll(/view_type\s+in\s*\(([^)]*)\)/g)])
+      .at(-1);
+
+    expect(declared, 'nessuna migration dichiara i tipi di shared_views').toBeTruthy();
+
+    const allowed = [...(declared as RegExpMatchArray)[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    expect(allowed.sort()).toEqual([...SHARED_VIEW_TYPES].sort());
+  });
+
+  it('sotto /share vive una rotta sola: il token, e niente altro', () => {
+    expect(readdirSync(join(repoRoot, 'src/routes/share'))).toEqual(['[token]']);
   });
 });
