@@ -123,6 +123,31 @@
     return () => window.removeEventListener('storage', onStorage);
   });
 
+  // Web MCP: espone al browser gli stessi strumenti che il server MCP espone a un client esterno,
+  // generati dal registry. Un agente che gira nella pagina lavora sul brand aperto con la sessione
+  // di chi sta guardando — nessuna chiave API, nessun nostro server nel mezzo.
+  //
+  // Il rilevamento sta QUI e non nel modulo: senza `document.modelContext` — cioè in ogni browser
+  // che non abbia l'origin trial acceso o un polyfill montato — l'import non parte, e né zod né i
+  // descrittori entrano nel bundle. Costo zero finché la specifica non c'è.
+  //
+  // Il segnale toglie tutto: cambiando brand si abortisce il precedente, o un agente vedrebbe gli
+  // strumenti di due brand con lo stesso nome.
+  $effect(() => {
+    const scope = appNavScope($page.url.pathname);
+    const token = (data?.session as { access_token?: string } | undefined)?.access_token;
+    if (!scope?.startsWith('brand:') || !token) return;
+    if (typeof document === 'undefined' || !('modelContext' in document)) return;
+
+    const brand = scope.slice('brand:'.length);
+
+    const abort = new AbortController();
+    import('$lib/webmcp')
+      .then(({ registerBrandWebMcp }) => registerBrandWebMcp(brand, token, abort.signal))
+      .catch((error) => console.warn('web mcp registration failed', error));
+    return () => abort.abort();
+  });
+
   // Mark the app shell so marketing CSS (e.g. landing.css `section { padding: 110px }`)
   // does not leak onto /app routes after SPA navigation. Also mark while the optimistic
   // app-entry overlay is up (URL still points at marketing during the load).
