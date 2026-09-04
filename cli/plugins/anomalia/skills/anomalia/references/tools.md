@@ -228,6 +228,26 @@ their own words.
 pastes it on the profile by hand. `get_bio` also returns the short link worth putting there — the
 one with the most clicks in the last seven days.
 
+## Knowledge
+
+| MCP | CLI |
+|-----|-----|
+| `search_knowledge` | (MCP only) |
+
+`search_knowledge` asks the brand's OWN documents a question and returns the passages that answer
+it — not a list of files. Every hit carries where it came from (`documentId`, `title`,
+`headingPath`, `chunkId`), so a claim can be attributed instead of asserted. Retrieval is hybrid
+over what is already indexed: keywords first, one embedding of the question only when keywords
+come up short. No credits, no writes.
+
+Passages are cut at 1500 characters and `truncated` says when there is more; `limit` is 6 by
+default and 20 at most, so ask a narrow question several times rather than a wide one once.
+`collection` narrows to a shelf: `brand`, `product`, `commercial`, `legal`, `operations`,
+`research`.
+
+Empty `hits` is not the same as "the brand does not know this": a document that was uploaded but
+never processed has nothing to find. `get_studio` lists what exists.
+
 ## Brand settings
 
 | MCP | CLI |
