@@ -12,9 +12,11 @@
  * every discovered post is labellable on arrival. That was the thing LinkedIn and Reddit could not
  * do (see BASELINE_CAPABLE in market-harvest.ts).
  *
- * And a video carries the payload the caption never did: `video_url` here is what feeds the Gemini
- * judge in `video-review.ts`, which watches the clip and returns hook type, scroll-stop, hold,
- * reveal timing and CTA placement. Scoring a caption with regex was always the thin version of this.
+ * And a video carries the payload the caption never did. `video_url` was harvested to feed a Gemini
+ * judge that returned hook type, scroll-stop, hold, reveal timing and CTA placement; that judge was
+ * removed on 2026-08-29, so the column is stored and currently read by nobody. Kept because
+ * harvesting it costs nothing and re-harvesting history would cost a lot — but do not assume a
+ * consumer exists.
  *
  * Parsing is defensive: these payloads are third-party and change without notice. Anything
  * unparseable is dropped rather than guessed at — a post with the wrong engagement attached is worse
