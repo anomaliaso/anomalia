@@ -33,6 +33,14 @@ LOGICA con i test (il caricamento si mocka) e nel browser verifica quello che il
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 
+**E prima di credere a un rosso locale, guarda la CI.** Lo stesso `extractUserText`/
+`extractUserImages` è tornato il 4/9 su `dev`: quei simboli non erano codice nostro ma una patch
+`patch-package`, tolta perché non applicava più alla versione installata. In locale i test
+falliscono davvero; **sulla CI passano** (verificato nel log della run, non dedotto). Segnale: un
+rosso locale su file che nessuna PR ha toccato, mentre la CI è verde. Mossa: leggere il log della
+CI PRIMA di cancellare il test — il soggetto è vivo, è l'installazione locale a essere fuori
+posto, e cancellarlo butta via copertura che funziona.
+
 ### Il worktree nuovo ha bisogno anche del `.env`
 Dopo il `npm ci` la suite parte ma cade su 40+ test con `SUPABASE_SERVICE_ROLE_KEY not configured`: Vitest carica l'env dal `.env` del worktree, che non c'è. Segnale: errori di env mancante in un worktree fresco, deterministici, su file che passano nel checkout principale. Mossa: `cp ../anomalia/.env .` alla creazione del worktree, accanto al `npm ci`.
 

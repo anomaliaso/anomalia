@@ -193,7 +193,8 @@ no stories.
 
 ## Agent evaluation, before anything that matters (a rule, not a habit)
 
-Unit tests (5200, all green) verify that the **code is well built**. They have never prevented a
+Unit tests (~7.000, green in CI — check the CI log before believing a local red: see
+LESSONS.md) verify that the **code is well built**. They have never prevented a
 single quality defect, because they run on a fake model and a fake database: brand context
 arrived empty, attachments were rejected by a constraint, the model resolved to the wrong one,
 and a read crossed every brand of the user — **green suite for everyone**.
