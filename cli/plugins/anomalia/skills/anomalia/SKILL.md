@@ -100,6 +100,12 @@ you do it. Turning one OFF is free and safe. There is no per-job cost figure —
 attributable to one job — so describe the commitment with cadence and `runs_30d`, and never
 invent a number.
 
+**Point Radar at a new place** → `get_radar` shows the platforms, the configured sources, the
+kinds this plan allows and how many sources are left; `add_radar_source` / `remove_radar_source`
+change them, naming a source by its `(kind, value)` pair. Threads, X and LinkedIn are Pro-only and
+answer `plan_required` below it, so read before you write. A source already there comes back
+`added: false` rather than failing.
+
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion
 transfer) with the models each one accepts; `set_media_model` pins one. A model that cannot do
