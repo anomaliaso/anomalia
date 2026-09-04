@@ -29,7 +29,7 @@ import { geminiFast } from '$lib/server/chat/model';
 import {
   brandContextPromptSection,
   createBrandContextTools
-} from '$lib/agent/tools/brand-context-tools';
+} from '$lib/server/brand-context-tools';
 import { imageModelFor, imageRefineModelFor } from '$lib/image-models';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';

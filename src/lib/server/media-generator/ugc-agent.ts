@@ -34,12 +34,16 @@ import { tool, stepCountIs, hasToolCall } from 'ai';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { GEMINI_MAX_OUTPUT_TOKENS } from '$lib/server/ai-output-limits';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { IMAGE_AGENT_MODEL } from '$lib/server/image-agent';
 import { llmLanguageModel } from '$lib/server/llm';
 import { createAgentBase } from '$lib/server/agent-base';
-import { createBrandContextTools } from '$lib/agent/tools/brand-context-tools';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createBrandContextTools } from '$lib/server/brand-context-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import { geminiFast } from '$lib/server/chat/model';
 import type { UgcClipPlan } from '$lib/server/media-generator/ugc-batch';
 
@@ -410,38 +414,57 @@ export async function runUgcOrchestrator(deps: UgcAgentDeps): Promise<UgcAgentOu
 	});
 
 	let steps = 0;
+	const system = ugcAgentSystemPrompt({
+		brandName: deps.brandName,
+		videoCount: plans.length,
+		sharedBlock: base.promptBlock
+	});
+	const prompt = `The batch is planned and the shared materials are shot. Produce it.\n\nStart with read_plan.`;
+	const session = createHarnessSession({
+		brandId,
+		userId,
+		agent: 'ugc_producer',
+		mode: String(plans.length),
+		model: IMAGE_AGENT_MODEL(),
+		provider: 'llm',
+		surface: 'batch'
+	});
+	session.captureRequest({ system, prompt });
+
+	const steward = createSessionSteward(session, Object.keys(tools));
+	const watchedTools = wrapTools(session, tools, steward.pipeline());
+
 	try {
-		const res = await harnessGenerateText(
-			{
-				brandId,
-				userId,
-				agent: 'ugc_producer',
-				mode: String(plans.length),
-				model: IMAGE_AGENT_MODEL(),
-				provider: 'llm',
-				surface: 'batch'
+		const res = await generateText({
+			model: llmLanguageModel(IMAGE_AGENT_MODEL()),
+			maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+			system,
+			prompt,
+			allowSystemInMessages: true,
+			tools: watchedTools,
+			stopWhen: [hasToolCall('finish'), stepCountIs(UGC_AGENT_MAX_STEPS)],
+			abortSignal: deps.abortSignal,
+			prepareStep: () => {
+				const patched = applyStewardPrepareStep(session, steward, {}, system) ?? {};
+				session.capturePrepareStep(patched);
+				return patched;
 			},
-			{
-				model: llmLanguageModel(IMAGE_AGENT_MODEL()),
-				maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-				system: ugcAgentSystemPrompt({
-					brandName: deps.brandName,
-					videoCount: plans.length,
-					sharedBlock: base.promptBlock
-				}),
-				prompt: `The batch is planned and the shared materials are shot. Produce it.\n\nStart with read_plan.`,
-				tools,
-				stopWhen: [hasToolCall('finish'), stepCountIs(UGC_AGENT_MAX_STEPS)],
-				abortSignal: deps.abortSignal
+			onStepFinish: (event) => {
+				session.recordStep(event);
 			}
-		);
+		});
+		session.recordAssistantText(res.text);
+		session.recordUsage(res.totalUsage ?? res.usage);
+		session.finish('finished');
 		steps = Array.isArray(res?.steps) ? res.steps.length : 0;
 		if (!summary && typeof res?.text === 'string') summary = res.text.trim();
 	} catch (e) {
+		session.finish('failed', e);
 		console.error('[ugc-agent] orchestrator failed', e);
 		// L'orchestratore che muore non deve portarsi dietro il batch: quello che è già reso è reso,
 		// e il chiamante decide se continuare in un'altra slice.
 	} finally {
+		persistHarnessSession(session);
 		await base.close();
 	}
 

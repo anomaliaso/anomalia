@@ -15,7 +15,7 @@ import {
   unwrapGraphicSource
 } from '$lib/design/graphic-source';
 import { createGraphicSourceEditTools, compactGraphicPersist } from '$lib/server/chat/graphic-source-edit';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import { noteRead, requireFreshRead } from '$lib/server/chat/read-guards';
 import type { RenderedGraphic } from '$lib/server/design-render';
 
