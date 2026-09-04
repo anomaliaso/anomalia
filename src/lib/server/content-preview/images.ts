@@ -157,9 +157,11 @@ export type RenderImageOpts = {
  */
 export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {}) {
   const aspectRatio = opts.aspectRatio ?? '1:1';
-  // Il default di render è Nano Banana 2 Lite, anche con riferimenti da riprodurre: decisione di
-  // prodotto presa nel 2026-08, Lite al posto di Pro su OGNI superficie. Un opts.model esplicito
-  // vince comunque — è la strada per riportare un call site su Pro senza deploy.
+  // Il default di render è Nano Banana 2 Lite OVUNQUE: decisione di prodotto del 2026-08, Lite al
+  // posto di Pro su ogni superficie. Il ramo senza riferimenti era rimasto indietro sul modello
+  // pieno, ed è dove cade la maggioranza delle immagini — un prompt e basta: misurate a $0,06 a
+  // chiamata. Un opts.model esplicito vince comunque, ed è la strada per riportare un call site
+  // sul modello pieno senza deploy; il blog lo fa già, passando BLOG_IMAGE_MODEL.
   const needsFidelity = !!(
     opts.personImages?.length ||
     opts.referenceImages?.length ||
@@ -173,7 +175,7 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   const imageModel =
     (opts.baseImage ? opts.refineModel : undefined) ??
     opts.model ??
-    (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
+    (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || NANO_BANANA_2_LITE);
   // Con foto di persona, il testo sul genere non deve mai scavalcare le foto.
   const cleanPrompt = opts.personImages?.length ? scrubPersonAppearance(imagePrompt) : imagePrompt;
   const styleSuffix = opts.visualStyle ? `\n\nBRAND VISUAL STYLE to match: ${opts.visualStyle}` : '';
