@@ -106,6 +106,13 @@ change them, naming a source by its `(kind, value)` pair. Threads, X and LinkedI
 answer `plan_required` below it, so read before you write. A source already there comes back
 `added: false` rather than failing.
 
+**Set up the blog** → `get_blog_settings` shows how it looks, how it writes, the accepted fonts,
+layouts and locales, the plan's ceilings, and the categories, tags and authors; `set_blog_settings`
+changes it, and `add_blog_term` / `remove_blog_term` maintain the three lists. `articles_per_week`
+is clamped to the plan, so read back what was saved. Before removing a term, say what it leaves
+behind: a category leaves its articles unfiled, a tag comes off every article, an author leaves no
+byline.
+
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion
 transfer) with the models each one accepts; `set_media_model` pins one. A model that cannot do
