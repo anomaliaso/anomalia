@@ -382,3 +382,45 @@ export const SET_COLORS = {
   failures: [{ error: 'colors must be an array of max 8 hex strings', status: 400 }],
   destructive: false
 } satisfies BrandEndpoint;
+
+// Rispecchia CONSENT_NOT_ATTESTED, che vive dietro $lib e da un package non si importa. Il test
+// della rotta importa entrambe e fallisce se divergono.
+export const CONSENT_NOT_ATTESTED =
+  'Confirm you have this person\u2019s consent before adding them.';
+
+export const ADD_PERSON = {
+  tool: 'add_person',
+  title: 'Add person',
+  description:
+    'Add a real person to the brand studio. Their face stays withheld from every generator ' +
+    'until consent is attested, so `consent` must be true and only the user can state it.',
+  method: 'POST',
+  pathUnderBrand: '/studio/people',
+  input: z
+    .object({
+      name: z.string().min(1),
+      role: z.string().optional(),
+      description: z.string().optional(),
+      consent: z
+        .boolean()
+        .describe(
+          'true ONLY when the USER has stated, in their own words, that they have this ' +
+            "person's consent to use their likeness. Never infer it."
+        )
+    })
+    .strict(),
+  output: z.object({
+    ok: z.literal(true),
+    person: z.looseObject({
+      id: z.string(),
+      name: z.string(),
+      role: z.string().nullable(),
+      kind: z.string()
+    })
+  }),
+  failures: [
+    { error: 'name is required', status: 400 },
+    { error: CONSENT_NOT_ATTESTED, status: 400 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;

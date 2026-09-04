@@ -79,6 +79,7 @@ import {
 import {
   ADD_COMPETITOR,
   ADD_NOTE,
+  ADD_PERSON,
   CREATE_PRODUCT,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,
@@ -139,6 +140,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   ADD_BLOG_TERM,
   ADD_COMPETITOR,
   ADD_NOTE,
+  ADD_PERSON,
   ADD_RADAR_SOURCE,
   ADS_ACTION,
   ADS_REMIX,
@@ -353,6 +355,8 @@ export type { WritingDeckAgent } from './writing-skills';
 export {
   ADD_COMPETITOR,
   ADD_NOTE,
+  ADD_PERSON,
+  CONSENT_NOT_ATTESTED,
   CREATE_PRODUCT,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,

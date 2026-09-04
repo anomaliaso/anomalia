@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pathFor, statusForFailure } from './index';
 import {
   ADD_NOTE,
+  ADD_PERSON,
   CREATE_PRODUCT,
   DELETE_COMPETITOR,
   DELETE_DOCUMENT,
@@ -132,5 +133,22 @@ describe('le scritture dello studio arrivate dai tool scritti a mano', () => {
   it('indirizzano le rotte che esistono già', () => {
     expect(pathFor(ADD_NOTE, 'demo')).toBe('/api/v1/brands/demo/studio/documents');
     expect(pathFor(SET_COLORS, 'demo')).toBe('/api/v1/brands/demo/studio/colors');
+  });
+});
+
+describe('l’aggiunta di una persona reale', () => {
+  it('non fa dichiarare il consenso al posto dell’utente: senza, non parte', () => {
+    expect(ADD_PERSON.input.safeParse({ name: 'Giulia', consent: true }).success).toBe(true);
+    expect(ADD_PERSON.input.safeParse({ name: 'Giulia' }).success).toBe(false);
+  });
+
+  it('non lascia dire che la persona è un’AI: quella è un’altra azione', () => {
+    expect(ADD_PERSON.input.safeParse({ name: 'Giulia', consent: true, kind: 'ai' }).success).toBe(
+      false
+    );
+  });
+
+  it('indirizza la rotta che esiste già', () => {
+    expect(pathFor(ADD_PERSON, 'demo')).toBe('/api/v1/brands/demo/studio/people');
   });
 });
