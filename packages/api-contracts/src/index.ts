@@ -2,7 +2,15 @@ import type { z } from 'zod';
 import { CHECK_CONTENT } from './content';
 import { GET_AUDIT_FINDINGS, LIST_AUDIT_CITATIONS, LIST_WEB_AUDITS, LIST_WEB_FIXES } from './evidence';
 import { PLAN_CADENCES, PLAN_CYCLE_WEEKS, SAVE_PLAN, SAVE_WEEK_SEEDS } from './plans';
-import { CREATE_POST, GET_CALENDAR, LIST_MEDIA, LIST_POSTS } from './posts';
+import {
+  CREATE_POST,
+  GET_CALENDAR,
+  GET_POST,
+  LIST_MEDIA,
+  LIST_POSTS,
+  RENDER_POST,
+  RESCHEDULE_POST
+} from './posts';
 
 export type EndpointFailure = { readonly error: string; readonly status: number };
 
@@ -38,7 +46,22 @@ export type ResourceEndpoint = EndpointShape & {
 
 export type BrandEndpoint = ResourcelessEndpoint | ResourceEndpoint;
 
-export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [CREATE_POST, LIST_POSTS, GET_CALENDAR, LIST_MEDIA, CHECK_CONTENT, SAVE_PLAN, SAVE_WEEK_SEEDS, LIST_WEB_AUDITS, GET_AUDIT_FINDINGS, LIST_AUDIT_CITATIONS, LIST_WEB_FIXES];
+export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
+  CREATE_POST,
+  LIST_POSTS,
+  GET_CALENDAR,
+  LIST_MEDIA,
+  CHECK_CONTENT,
+  SAVE_PLAN,
+  SAVE_WEEK_SEEDS,
+  LIST_WEB_AUDITS,
+  GET_AUDIT_FINDINGS,
+  LIST_AUDIT_CITATIONS,
+  LIST_WEB_FIXES,
+  GET_POST,
+  RESCHEDULE_POST,
+  RENDER_POST
+];
 
 export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;
 export function pathFor(endpoint: ResourceEndpoint, slug: string, id: string): string;
@@ -53,7 +76,20 @@ export function statusForFailure(endpoint: BrandEndpoint, error: string): number
   return endpoint.failures.find((f) => f.error === error)?.status ?? 500;
 }
 
-export { CHECK_CONTENT, CREATE_POST, GET_AUDIT_FINDINGS, GET_CALENDAR, LIST_AUDIT_CITATIONS, LIST_MEDIA, LIST_POSTS, LIST_WEB_AUDITS, LIST_WEB_FIXES };
+export {
+  CHECK_CONTENT,
+  CREATE_POST,
+  GET_AUDIT_FINDINGS,
+  GET_CALENDAR,
+  GET_POST,
+  LIST_AUDIT_CITATIONS,
+  LIST_MEDIA,
+  LIST_POSTS,
+  LIST_WEB_AUDITS,
+  LIST_WEB_FIXES,
+  RENDER_POST,
+  RESCHEDULE_POST
+};
 export {
   AUDIT_CITATIONS_DEFAULT,
   AUDIT_CITATIONS_MAX,

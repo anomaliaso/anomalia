@@ -167,25 +167,6 @@ export function registerBrandTools(server: McpServer) {
   );
 
   server.registerTool(
-    'get_post',
-    {
-      title: 'Get post',
-      description: 'Show a single post including carousel slides / media state. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1).describe('Post id or unambiguous prefix'),
-      }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug, id }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        const media = await api.getPostMedia(token, slug, postId);
-        return { id: postId, ...media };
-      }),
-  );
-
-  server.registerTool(
     'edit_post',
     {
       title: 'Edit post',
@@ -269,43 +250,6 @@ export function registerBrandTools(server: McpServer) {
         const postId = await resolvePostId(token, slug, id);
         await api.deletePost(token, slug, postId);
         return { ok: true, id: postId, deleted: true };
-      }),
-  );
-
-  server.registerTool(
-    'reschedule_post',
-    {
-      title: 'Reschedule post',
-      description: 'Reschedule a post. scheduled_for is an ISO datetime. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1),
-        scheduled_for: z.string().min(1).describe('ISO datetime, e.g. 2026-06-20T10:00'),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, id, scheduled_for }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        return { id: postId, ...(await api.reschedulePost(token, slug, postId, scheduled_for)) };
-      }),
-  );
-
-  server.registerTool(
-    'render_post',
-    {
-      title: 'Render post image',
-      description: 'Generate the missing image from the prompt. Bills a render. id accepts a short prefix.',
-      inputSchema: z.object({
-        slug,
-        id: z.string().min(1),
-      }),
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ slug, id }) =>
-      withAuth(async (token) => {
-        const postId = await resolvePostId(token, slug, id);
-        return { id: postId, ...(await api.renderPost(token, slug, postId)) };
       }),
   );
 

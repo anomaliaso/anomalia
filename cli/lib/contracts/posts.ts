@@ -110,6 +110,71 @@ export const LIST_POSTS = {
   destructive: false
 } satisfies BrandEndpoint;
 
+const PostStateRow = z.looseObject({
+  status: z.string(),
+  content_type: z.string().nullable(),
+  format: z.string().nullable(),
+  platform: z.string().nullable(),
+  platforms: z.array(z.string()).nullable(),
+  caption: z.string().nullable(),
+  media_url: z.string().nullable(),
+  is_carousel: z.boolean(),
+  slide_count: z.number(),
+  slides: z.array(z.record(z.string(), z.unknown())).nullable(),
+  text_only: z.boolean()
+});
+
+const NotFound = z.object({ error: z.string() });
+
+export const GET_POST = {
+  tool: 'get_post',
+  title: 'Get post',
+  description: 'Show a single post including carousel slides / media state. id accepts a short prefix.',
+  method: 'GET',
+  pathUnderBrand: '/posts/:id/media',
+  resource: 'post',
+  input: z.object({}).strict(),
+  output: z.union([PostStateRow, NotFound]),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const RESCHEDULE_POST = {
+  tool: 'reschedule_post',
+  title: 'Reschedule post',
+  description: 'Reschedule a post. scheduled_for is an ISO datetime. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/reschedule',
+  resource: 'post',
+  input: z.object({
+    scheduled_for: z.string().min(1).describe('ISO datetime, e.g. 2026-06-20T10:00')
+  }).strict(),
+  output: z.object({
+    ok: z.literal(true),
+    scheduled_for: z.string(),
+    scheduled_for_local: z.string(),
+    noAccount: z.boolean().optional()
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const RENDER_POST = {
+  tool: 'render_post',
+  title: 'Render post image',
+  description: 'Generate the missing image from the prompt. Bills a render. id accepts a short prefix.',
+  method: 'POST',
+  pathUnderBrand: '/posts/:id/render',
+  resource: 'post',
+  input: z.object({}).strict(),
+  output: z.union([
+    z.object({ ok: z.literal(true), url: z.string().nullable(), error: z.string().nullable() }),
+    z.object({ error: z.string(), url: z.string() })
+  ]),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
+
 export const GET_CALENDAR = {
   tool: 'get_calendar',
   title: 'Calendar',
