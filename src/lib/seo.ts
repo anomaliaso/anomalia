@@ -72,6 +72,7 @@ export const MARKETING_PATHS = [
   '/automation',
   '/strategy',
   '/caption-writer',
+  '/tools',
   '/tools/agent-team',
   '/tools/geo-audit',
   '/tools/keyword-research',
@@ -85,6 +86,7 @@ export const MARKETING_PATHS = [
   '/docs/getting-started',
   '/docs/credits',
   '/docs/cli',
+  '/docs/mcp',
   '/docs/api',
   '/docs/api/strategy',
   '/docs/api/analytics',
@@ -162,5 +164,49 @@ export const STATIC_SITEMAP_PATHS = [
 /** Localized path for any supported marketing locale. */
 export function localizedPath(path: string, lang: Locale): string {
   return localePath(path, lang);
+}
+
+/**
+ * Public pages that no longer exist, and the page that took their job.
+ *
+ * A deleted route is a 404, and a 404 on a URL Google already knows costs the whole domain, not
+ * just that page. So a page leaves the site in two moves that belong to the same commit: its row
+ * lands here, and its path leaves MARKETING_PATHS. `src/lib/seo.retired.test.ts` holds both.
+ *
+ * The destination is chosen, never defaulted to '/': a 301 onto an irrelevant page is worth
+ * almost as little as the 404 it replaced.
+ */
+export const RETIRED_PAGES: Record<string, string> = {
+  // Free tools nobody ever opened and Google was never told about: zero pageviews in 90 days
+  // (PostHog and Vercel agree) and absent from MARKETING_PATHS since the day they were written.
+  // The index still lists the nine that are actually used.
+  '/tools/ai-visibility': '/tools/geo-audit',
+  '/tools/backlink-checker': '/tools',
+  '/tools/broken-links': '/tools/sitemap-analyzer',
+  '/tools/competitor-gap': '/tools/keyword-research',
+  '/tools/conversation-gap': '/tools',
+  '/tools/heading-audit': '/tools',
+  '/tools/keyword-difficulty': '/tools/keyword-research',
+  '/tools/long-tail': '/tools/keyword-research',
+  '/tools/meta-tags': '/tools',
+  '/tools/page-speed': '/tools',
+  '/tools/rank-checker': '/tools',
+  '/tools/redirect-checker': '/tools/sitemap-analyzer',
+  '/tools/robots-tester': '/tools/llms-txt-validator',
+  '/tools/schema-validator': '/tools',
+  '/tools/traffic-estimator': '/tools/keyword-research'
+};
+
+/**
+ * The 301 destination for a retired page, in the locale the visitor arrived in, or `null` when the
+ * path is still live. The locale prefix is stripped before the lookup, so `/it/tools/meta-tags` and
+ * `/tools/meta-tags` read the same row and land on the Italian and the English destination.
+ */
+export function retiredPageTarget(pathname: string, lang: Locale): string | null {
+  const seg = pathname.split('/')[1];
+  const bare = SUPPORTED.includes(seg as Locale) ? pathname.slice(seg.length + 1) || '/' : pathname;
+  const dest = RETIRED_PAGES[bare.replace(/(.)\/$/, '$1')];
+
+  return dest ? localizedPath(dest, lang) : null;
 }
 
