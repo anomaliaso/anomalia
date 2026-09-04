@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { loadBrandForUser, type ApiKeyInfo, type CliBrand } from './cli-auth';
+import { readFileSync } from 'node:fs';
+import { authenticate, loadBrandForUser, type ApiKeyInfo, type CliBrand } from './cli-auth';
+import { isRlsScoped } from '$lib/server/rls-client';
 import { createTestSupabase } from '$lib/testkit/supabase';
 import { BOOKING_URL } from '$lib/links';
 
@@ -184,6 +186,38 @@ describe('una chiave di sola lettura', () => {
 
       expect(res.error?.status, method).toBe(403);
       expect(await res.error!.json(), method).toEqual({ error: 'API key is read-only' });
+    }
+  });
+});
+
+/**
+ * QUALE DEI DUE CLIENT ESCE DA `authenticate`. È la domanda su cui `query` decide di leggere, e
+ * sbagliarla non dà un errore: dà le righe di ogni brand di ogni cliente.
+ */
+describe('il marchio RLS esce solo dal percorso JWT', () => {
+  const bearer = (token: string) =>
+    new Request('https://anomalia.so/api/v1/brands/acme', { headers: { Authorization: `Bearer ${token}` } });
+
+  it('il JWT utente torna un client marchiato: chiave anon, policy dell utente', async () => {
+    const { supabase, error } = await authenticate(bearer('a.user.jwt'));
+
+    expect(error).toBeUndefined();
+    expect(isRlsScoped(supabase)).toBe(true);
+  });
+
+  /**
+   * Il percorso a chiave API costruisce la service role (`bypassrls=true`): non si marchia, e non
+   * si promuove a sessione utente nemmeno il giorno in cui avremo un segreto di firma — una chiave
+   * porta `permissions.brand_ids`, spesso più stretto dei brand del suo proprietario, e la RLS non
+   * vede quella restrizione. Coniare un JWT allargherebbe in silenzio una chiave ristretta.
+   */
+  it('il client service-role della chiave API non viene mai marchiato', () => {
+    const src = readFileSync(new URL('./cli-auth.ts', import.meta.url), 'utf8');
+    const marks = src.match(/markRlsScoped\(/g) ?? [];
+
+    expect(marks).toHaveLength(1);
+    for (const line of src.split('\n')) {
+      if (line.includes('adminKey')) expect(line).not.toContain('markRlsScoped');
     }
   });
 });

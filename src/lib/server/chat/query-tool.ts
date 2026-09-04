@@ -17,15 +17,23 @@
  *    sparisse. Qui si DICHIARA, e si aggiunge solo il pezzo che il database non copre: una
  *    connessione HTTP appesa senza nessuna query che gira (`AbortSignal.timeout`).
  *
- * LA CECITÀ, DICHIARATA: `query` funziona solo dove esiste una sessione utente, cioè sui turni
- * interattivi. Nella coda e sulla superficie CLI il client è la service role, che scavalcherebbe la
- * RLS e leggerebbe OGNI brand: lì si RIFIUTA e il rifiuto spiega perché. Un tool che «a volte legge
+ * IL CONFINE, DICHIARATO: `query` funziona dove il client porta i permessi dell'utente, e si RIFIUTA
+ * dove porta la service role — nella coda e sul percorso a chiave API. Un tool che «a volte legge
  * tutto» sarebbe peggio di un tool che a volte non c'è.
+ *
+ * Il confine non si indovina guardando il client: lo dichiara chi lo costruisce (`isRlsScoped`,
+ * `$lib/server/rls-client`). Prima si guardava `auth.getSession()`, che sembra la stessa domanda e
+ * non lo è: sul percorso API il client nasce con i cookie a vuoto, quindi è senza sessione pur
+ * essendo perfettamente scoped, e il cancello chiudeva la porta ai JWT di CLI e MCP — 46 rifiuti in
+ * produzione in dodici giorni — mentre avrebbe fatto passare una service role che una sessione ce
+ * l'avesse avuta.
  */
 import { tool } from 'ai';
 import { POST_STATUS_VOCABULARY } from '$lib/server/chat/post-status';
+import { QUERY_TABLES } from '@anomalia/api-contracts';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isRlsScoped } from '$lib/server/rls-client';
 import { logAiCall } from '$lib/server/ai-log';
 
 /** Righe di default per chiamata quando il modello non chiede un `limit`. */
@@ -70,55 +78,24 @@ const OPS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in',
 type Op = (typeof OPS)[number];
 
 /**
- * Le tabelle di `public`, lette da `pg_tables`. Qui e NON nella descrizione del tool per costo: nella
- * descrizione si pagherebbero a ogni step di ogni turno di ogni agente, per una lista che serve una
- * volta a conversazione. Qui si pagano solo quando il modello chiama `query` senza `table`.
+ * Le tabelle di `public` che `query` può nominare. GENERATA dalle migrazioni, mai battuta a mano:
+ * la lista scritta a mano era già invecchiata di 16 nomi — `thread_events`, `agent_kit_runs`,
+ * `post_verdicts`, `video_reviews` fra gli altri — e una lista che invecchia non confonde soltanto,
+ * su MCP RIFIUTA una tabella valida prima che la richiesta parta.
  *
- * ponytail: lista statica, può invecchiare di una tabella. Non è cieca — PostgREST risponde PGRST205
- * con «Perhaps you meant…» su un nome quasi giusto e `query` passa il suggerimento al modello. Il
- * giorno in cui invecchia sul serio si genera da `pg_tables` in un passo di build.
- *
- * Nomi tolti perché nessuna migration li crea: `asset_projects`, `asset_project_files` (retaggio
- * dell'editor Remotion, frontend rimosso in 5e725399) e `mcp_logs`. In produzione esistono ancora,
- * con 1, 3 e 0 righe; da un'installazione da zero non esistono affatto, e l'agente ci sbatteva.
+ * Dalle migrazioni e non dal catalogo di produzione, perché la domanda giusta è «questa tabella
+ * esiste anche da un'installazione da zero?»: in produzione sopravvivono nomi che nessuna
+ * migrazione crea, e generarli dentro rimetterebbe l'agente a sbattere dove era già sbattuto.
+ * La stessa regola tiene fuori i backup, senza doverli elencare.
  */
-const TABLES =
-  'ad_campaigns ad_metrics admins ads_remix_briefs agent_notifications agent_runs agent_sessions ' +
-  'agent_templates ai_calls api_keys app_flags article_views ' +
-  'benchmark_runs blog_authors blog_categories blog_integrations blog_month_jobs blog_tags ' +
-  'brand_app_connections brand_article_tags brand_article_versions brand_articles ' +
-  'brand_backlink_opportunities brand_backlink_orders brand_backlink_placements ' +
-  'brand_community_profiles brand_crawl_runs brand_demo_accounts brand_design_templates ' +
-  'brand_doc_chunks brand_documents brand_field_posts brand_geo_artifacts brand_geo_audits ' +
-  'brand_geo_opportunities brand_geo_prompts brand_gsc_connections brand_gsc_metrics ' +
-  'brand_internal_links brand_invites brand_job_optouts brand_kit brand_knowledge_edges ' +
-  'brand_knowledge_sources brand_market_references brand_media brand_members brand_memory ' +
-  'brand_news_items brand_news_sources brand_pages brand_rank_snapshots ' +
-  'brand_seo_keyword_strategy brand_seo_plans brand_site_pages brand_sites brand_social_handles ' +
-  'brand_strategy brand_tracked_keywords brand_triggers brand_usage brand_visual_insights ' +
-  'brand_webhooks brands chat_artifacts chat_goal_events chat_goals chat_jobs chat_messages ' +
-  'chat_thread_reads chat_threads competitors content_plans content_quality_samples credit_grants ' +
-  'custom_agent_schedules custom_agent_thread_runs custom_agents disruptive_ideas editorial_plans ' +
-  'expert_requests graphic_designs gtm_plans incidents lead_outcomes lifecycle_emails ' +
-  'loop_cursors loop_ticks market_account_baselines market_account_fetch_attempts ' +
-  'market_harvest_errors market_harvest_runs market_post_observations market_posts ' +
-  'market_teardowns market_video_analyses media_generator_items ' +
-  'media_generator_prompts motion_craft_scores motion_reference_specs motion_video_prompts ' +
-  'motion_video_references motion_videos onboarding_drafts onboarding_errors onboarding_jobs ' +
-  'onboarding_step_jobs org_members organizations people post_links post_revisions ' +
-  'post_visual_meta posts products profiles publish_logs push_subscriptions radar_feed_cache ' +
-  'radar_jobs radar_searches referral_codes referrals rubrics scheduler_runs scrapecreators_cache ' +
-  'social_accounts social_post_history social_thumb_cache talent_views talents tool_usage ' +
-  'video_renders video_requests waitlist webhook_deliveries zernio_ad_accounts';
+export const QUERY_TABLE_LIST = QUERY_TABLES.split(' ');
 
-export const QUERY_TABLE_LIST = TABLES.split(' ');
-
-/** Il rifiuto quando manca la sessione utente. Esportato perché il test lo verifica per contenuto. */
+/** Il rifiuto quando il client non porta i permessi dell'utente. Il test lo verifica per contenuto. */
 export const NO_SESSION_ERROR = {
   error: 'no_user_session',
   message:
-    '`query` reads the database AS THIS USER: anon key + their JWT, so Postgres RLS grants the agent exactly the user permissions and nothing more. This turn has no user session — it is a background/queue turn or a CLI API-key request, and both hold a service-role client that would bypass RLS and read EVERY brand in the database. Refusing to read with it.',
-  fix: 'Use the purpose-built read tools (read_posts, read_brand_kit, read_plan, …) — they scope to this brand by construction. `query` works on the interactive chat surface.'
+    '`query` reads the database AS THIS USER: anon key + their JWT, so Postgres RLS grants the agent exactly the user permissions and nothing more. This client is not user-scoped — it is a background/queue turn or a CLI API-key request, and both hold a service-role client (`bypassrls=true`) that would read EVERY brand in the database. Refusing to read with it. An API key is not promoted to a user session on purpose: a key carries `permissions.brand_ids`, often narrower than the brands its owner belongs to, and RLS cannot see that restriction — minting a session for it would silently widen a deliberately narrow key.',
+  fix: 'Use the purpose-built read tools (read_posts, read_brand_kit, read_plan, …) — they scope to this brand by construction. `query` works wherever the caller signs in as themselves: the app, `anomalia login`, and MCP.'
 } as const;
 
 /**
@@ -263,14 +240,11 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
           return out;
         };
 
-          // Nessuna sessione utente, nessuna lettura. `getSession()` è locale (cookie → JWT), nessun
-          // giro di rete; `createAdminClient()` nasce con persistSession:false, quindi la service role
-          // non ha mai una sessione e la coda cade qui per costruzione, non per convenzione.
-        const session = await supabase.auth
-          .getSession()
-          .then((r) => r.data?.session ?? null)
-          .catch(() => null);
-        if (!session?.access_token) return finish({ ...NO_SESSION_ERROR }, 'db_query:refused:no_session');
+          // Client non marchiato, nessuna lettura. Il marchio lo mette chi COSTRUISCE il client con
+          // la chiave anon (`hooks.server.ts` per il browser, `cli-auth.ts` per il percorso JWT),
+          // che è l'unico a sapere quale dei due ha in mano; la service role non lo riceve mai. Il
+          // default è il rifiuto, quindi un percorso nuovo resta chiuso finché non si dichiara.
+        if (!isRlsScoped(supabase)) return finish({ ...NO_SESSION_ERROR }, 'db_query:refused:no_session');
 
         if (!input.table) {
           return finish(
