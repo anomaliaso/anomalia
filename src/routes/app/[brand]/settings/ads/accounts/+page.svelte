@@ -1,13 +1,11 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
-  import { pageQuery } from '$lib/page-query';
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
 
   let { data, form } = $props();
-  // I parametri della pagina, non quelli dell'URL: nella modal l'URL non cambia.
-  const q = pageQuery();
+  const q = (key: string) => $page.url.searchParams.get(key);
   const brand = $derived(data.brand);
   const base = $derived(`/app/${brand.slug}`);
 

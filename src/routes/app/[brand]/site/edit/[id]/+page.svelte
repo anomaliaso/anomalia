@@ -1,15 +1,12 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { enhance } from '$app/forms';
-  import { backHref } from '$lib/page-modal-navigation';
-  import { pageModalOrigin } from '$lib/stores/page-modal';
   import BlogEditor from '$lib/components/blog/BlogEditor.svelte';
   import { jpegIfHeicFile, jpegIfHeicFormFiles } from '$lib/raster-image-client';
   import { RASTER_IMAGE_ACCEPT } from '$lib/raster-image';
 
   let { data, form } = $props();
-  const siteHref = $derived(`/app/${$page.params.brand}/site`);
-  const returnHref = $derived(backHref($pageModalOrigin, siteHref));
+  const returnHref = $derived(`/app/${$page.params.brand}/site`);
 
   let title = $state(data.article.title);
   let metaTitle = $state(data.article.metaTitle);

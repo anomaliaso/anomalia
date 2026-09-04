@@ -1,8 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { _ } from 'svelte-i18n';
-  import { backHref } from '$lib/page-modal-navigation';
-  import { pageModalOrigin } from '$lib/stores/page-modal';
 
   let { data, children } = $props();
 
@@ -10,8 +8,7 @@
   const post = $derived(data.post);
   const base = $derived(`/app/${brand.slug}/posts/${post.id}`);
   const path = $derived($page.url.pathname.replace(/\/$/, ''));
-  const calendarHref = $derived(`/app/${brand.slug}/calendar`);
-  const returnHref = $derived(backHref($pageModalOrigin, calendarHref));
+  const returnHref = $derived(`/app/${brand.slug}/calendar`);
 
   const nav = $derived([
     { href: `${base}/preview`, key: 'preview', label: $_('app.post.nav.preview') },

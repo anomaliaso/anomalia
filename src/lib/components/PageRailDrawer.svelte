@@ -1,12 +1,10 @@
 <script lang="ts">
   /**
-   * Il rail della sovrapposizione su mobile: lo stesso `PageRail` della modal, dentro un
-   * pannello che apre il burger.
+   * La mappa delle impostazioni su mobile, dentro un pannello che apre il burger.
    *
-   * Perché non la modal anche qui: su telefono le pagine restano pagine vere (la modal è
-   * armata solo su desktop, `PageModal` con `desktop=false` non fa nulla). Cambia dunque
-   * solo la NAVIGAZIONE: dentro una pagina della sovrapposizione il burger apre queste
-   * voci invece dei quattro link della dashboard, da cui non si raggiungeva nient'altro.
+   * Serve solo là: `SettingsSidebar` non è montata sotto il breakpoint, quindi da una
+   * pagina di impostazioni non si raggiungerebbe nessun'altra sezione. Fuori dalle
+   * impostazioni il burger apre la sidebar del brand, che sa già portare ovunque.
    */
   import { page } from '$app/stores';
   import { _ } from 'svelte-i18n';
@@ -16,32 +14,26 @@
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import PageRail from '$lib/components/PageRail.svelte';
   import { DEFAULT_CHAT_AGENT_AVATAR } from '$lib/agent-avatars';
-  import { overlayRoute } from '$lib/overlay-route';
   import { railDrawerOpen, railDrawerReady } from '$lib/stores/rail-drawer';
 
   let {
     base,
-    enabled = false,
-    navGroups = []
+    enabled = false
   }: {
     base: string;
-    /** Solo mobile: su desktop il rail è la colonna della modal e questo non esiste. */
+    /** Solo mobile: su desktop le impostazioni hanno la loro sidebar. */
     enabled?: boolean;
-    navGroups?: { label?: string; items?: { href: string; label: string }[] }[];
   } = $props();
 
   const path = $derived($page.url.pathname.replace(/\/$/, ''));
   const settingsBase = $derived(`${base}/settings`);
-  const route = $derived(
-    overlayRoute(path, base) ??
-      // Una sezione settings che resta pagina piena (il drill-down di `usage/sessions/<id>`):
-      // la modal non la ospita, ma il burger deve comunque aprire la mappa delle impostazioni —
-      // su mobile non esiste altra navigazione da lì, e senza questo il bottone sarebbe morto.
-      // Nessuna voce del rail corrisponde, quindi non si accende un attivo sbagliato.
-      (path.startsWith(`${settingsBase}/`) ? `settings/${path.slice(settingsBase.length + 1)}` : null)
+  // Anche un drill-down senza voce nel rail (`usage/sessions/<id>`) deve poterlo aprire: da lì
+  // su mobile non esiste altra navigazione, e senza questo il burger sarebbe morto. Nessuna voce
+  // corrisponde, quindi non si accende un attivo sbagliato.
+  const section = $derived(
+    path.startsWith(`${settingsBase}/`) ? path.slice(settingsBase.length + 1) : null
   );
-  /** C'è un rail da mostrare solo se la pagina corrente vive in una sovrapposizione. */
-  const available = $derived(enabled && route !== null);
+  const available = $derived(enabled && section !== null);
 
   $effect(() => {
     railDrawerReady.set(available);
@@ -92,13 +84,13 @@
         />
         <span>{$_('app.nav2.backToTeam')}</span>
       </a>
-      <PageRail {base} {route} {navGroups} drawer onnavigate={() => railDrawerOpen.set(false)} />
+      <PageRail {base} {section} onnavigate={() => railDrawerOpen.set(false)} />
     </aside>
   </div>
 {/if}
 
 <style>
-  /* Sopra la chrome dell'app (sidebar 30, barre 100-111), come la modal su desktop. */
+  /* Sopra la chrome dell'app (sidebar 30, barre 100-111). */
   .rd-backdrop {
     position: fixed;
     inset: 0;

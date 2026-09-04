@@ -138,7 +138,6 @@ export function seqLetter(id: string): string | null {
  * vivi, l'unico posto che sa quali sezioni esistono per questo brand — una sezione che sparisce
  * dalla nav si porta via la sua scorciatoia e la scheda `?` smette di elencarla.
  *
- * `home` NON è una rotta ospitabile nella modal: `openPageModal` la rifiuta e si naviga davvero.
  * Le lettere non collidono con quelle delle pagine-strumento sopra (c'è il test):
  *   h home · b Brand · m social Media · w Web · p Paid (Ads) · z automations (l'icona è Zap)
  */
@@ -159,8 +158,5 @@ export function resolveSequence(letter: string, targets: readonly SeqTarget[]): 
   return targets.find((t) => t.key === letter) ?? null;
 }
 
-/**
- * La palette è aperta? Store e non prop perché serve a PageModal, che sta in un altro ramo
- * dell'albero: con la palette aperta Esc deve chiudere LEI, non la modal sotto.
- */
+/** La palette è aperta? Store e non prop: la leggono rami diversi dell'albero. */
 export const paletteOpen = writable(false);
