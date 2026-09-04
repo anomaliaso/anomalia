@@ -104,3 +104,50 @@ la dashboard dei costi sbaglia di 2× su 13.265 chiamate in 30 giorni.
 Non lo tocco qui: cambiare quella tariffa cambia i crediti addebitati agli utenti, ed è una
 decisione di prodotto. Ma va deciso, perché finché resta, ogni confronto di costo fra provider
 parte da un denominatore sbagliato — incluso quello che ha motivato questa PR.
+
+## Il default gira: le immagini vanno su OpenRouter
+
+La ragione **non è il costo**. È il p95.
+
+| | chiamate | fallite | media | p95 |
+|---|---|---|---|---|
+| Google | 993 | **0** (0,0%) | 9,2s | 20,2s |
+| kie | 199 | 7 (**3,5%**) | 68,1s | **142,9s** |
+| OpenRouter | misurato | — | **3,4s** | — |
+
+Un render su kie può far aspettare **due minuti e mezzo**, e uno su ventinove non arriva affatto.
+OpenRouter è tre volte più veloce di Google e venti volte più di kie, ed è sincrono.
+
+Il prezzo, rifatto sul mix vero invece che sul confronto sbagliato — il +68% girato in giro
+confrontava OpenRouter con **kie**, ma l'83% dei render gira su **Google**:
+
+| modello | Google (produzione) | kie (produzione) | OpenRouter (misurato) |
+|---|---|---|---|
+| Nano Banana 2 — 71% dei render | $0,06891 | $0,05797 | **$0,06721** |
+| Nano Banana 2 Lite | — | $0,02000 | $0,03361 |
+| Nano Banana Pro | $0,11939 | $0,09000 | $0,13525 |
+
+Sul modello che porta il 71% dei render OpenRouter costa il **2,5% meno di Google**. Sul totale
+sono **+$13,17 al mese** (+17%), non +68%.
+
+### Due ruoli che non vanno confusi
+
+`SLOT_DEFAULT.image` è openrouter, ma `HOME['nano-banana']` resta **kie**. Non è una svista: il
+default dice dove va il traffico quando tutto funziona, `HOME` dove va quando openrouter non è
+utilizzabile. Facendoli coincidere il ripiego finiva su **Google saltando kie**, cioè l'opposto di
+«kie resta il ripiego». Un test lo tiene.
+
+### La variabile che deve cambiare a mano, o il deploy non sposta niente
+
+`IMAGE_PROVIDER=gemini` è impostata in produzione — è il motivo per cui 993 render su 1.192 girano
+su Google invece che sul default kie di prima. La vecchia variabile **batte** `SLOT_DEFAULT`,
+quindi da sola questa PR non muove un solo render.
+
+Serve una di queste due, su Vercel:
+
+    AI_ROUTE_IMAGE=nano-banana@openrouter     (batte entrambe, reversibile in una variabile)
+    oppure togliere IMAGE_PROVIDER
+
+La prima è preferibile: è additiva, non cancella l'interruttore di emergenza, e si annulla
+rimuovendola. Un test copre esattamente questo caso, perché era il modo più facile di credere che
+il cambio fosse fatto quando non lo era.
