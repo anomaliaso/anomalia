@@ -354,23 +354,6 @@ function escTs(s: string): string {
 	return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
 }
 
-/** Visible text inside HTML/TSX source — used by video-review on-screen copy. */
-export function textFromGraphicSource(source: string): string[] {
-	const html = detectGraphicSourceKind(source) === 'tsx' ? tsxToRoughHtml(source) : source;
-	const stripped = html
-		.replace(/<style[\s\S]*?<\/style>/gi, ' ')
-		.replace(/<script[\s\S]*?<\/script>/gi, ' ')
-		.replace(/<[^>]+>/g, ' ')
-		.replace(/&nbsp;/g, ' ')
-		.replace(/&amp;/g, '&')
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&quot;/g, '"');
-	return stripped
-		.split(/\n+/)
-		.map((l) => l.replace(/\s+/g, ' ').trim())
-		.filter((l) => l.length > 1);
-}
 
 function tsxToRoughHtml(source: string): string {
 	return source

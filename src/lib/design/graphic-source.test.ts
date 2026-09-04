@@ -5,7 +5,6 @@ import {
 	detectGraphicSourceKind,
 	parseGraphicCanvasSize,
 	unwrapGraphicSource,
-	textFromGraphicSource,
 	defaultGraphicHtml,
 	defaultGraphicTsx,
 	formatGraphicEditorSystemSuffix
@@ -124,9 +123,3 @@ export default function Graphic() { return <div />; }`)
 	});
 });
 
-describe('on-screen text', () => {
-	it('pulls copy out of HTML source', () => {
-		const lines = textFromGraphicSource(graphicToHtml(sample));
-		expect(lines.some((l) => l.includes('Anomalia'))).toBe(true);
-	});
-});

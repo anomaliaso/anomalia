@@ -2,8 +2,8 @@
  * Grade a harvested post AS DESIGN, and decide whether we are willing to publish it.
  *
  * WHY A SECOND SCORER. `content-quality.ts` scores TEXT with the rubric we grade our own captions
- * with, and `video-review.ts` watches a clip for hook, hold and CTA. Neither has ever looked at a
- * layout. "Which of these posts is beautiful" is a question about type, grid, colour and restraint,
+ * with. A second scorer used to watch a clip for hook, hold and CTA; it was removed on 2026-08-29
+ * when the model behind it stopped accepting video. Neither has ever looked at a layout. "Which of these posts is beautiful" is a question about type, grid, colour and restraint,
  * and none of it is recoverable from a caption or from a retention curve — so it gets its own
  * column, its own version and its own rubric rather than being folded into `quality_index`, where it
  * would silently change what every existing fit means.

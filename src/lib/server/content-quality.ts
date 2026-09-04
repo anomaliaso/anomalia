@@ -3,7 +3,8 @@
  * output benchmark. No AI call, no I/O, no clock: same input → same number, forever.
  *
  * WHY DETERMINISTIC AND NOT AN LLM JUDGE.
- * We already have an LLM judge for media (`video-review.ts`, rubric → ship/fix/kill). It is richer
+ * We had an LLM judge for media (`video-review.ts`, rubric → ship/fix/kill), removed on 2026-08-29
+ * when its model stopped accepting video. It was richer
  * than anything here, and it is the wrong instrument for a regression benchmark on its own: swap the
  * judge model — as happened when the chat tiers moved to Gemini 3.7 Flash — and every historical
  * score silently becomes incomparable, so the trend line breaks exactly when you most need it. This
@@ -363,7 +364,8 @@ function scoreHook(caption: string): { value: number; note: string } {
     value += 0.15;
     reasons.push('numero');
   }
-  // Second person = the reader is addressed, the Fekri "call out" in video-review-doctrine.ts.
+  // Second person = the reader is addressed — the Fekri "call out", from the video-review doctrine
+  // that was removed with the judge on 2026-08-29. The rule outlived the file that named it.
   if (/\b(tu|tuo|tua|tuoi|tue|ti|vi|vostro|you|your|yours)\b/.test(norm)) {
     value += 0.15;
     reasons.push('si rivolge al lettore');
