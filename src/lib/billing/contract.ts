@@ -5,8 +5,7 @@
 // server-only, unchanged, just wrapped behind this same shape. A server-side selector picks one.
 //
 // This file must stay importable from the browser: no server-only imports, no secrets, no
-// payment-provider SDK — enforced by contract.test.ts the same way
-// src/routes/app/[brand]/agent-lab/shell.test.ts guards a page shell, by reading it as text.
+// payment-provider SDK — enforced by contract.test.ts, which reads this file as text.
 
 export type QuotaKind = 'credits' | 'posts';
 
