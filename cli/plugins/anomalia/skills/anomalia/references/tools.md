@@ -233,6 +233,7 @@ one with the most clicks in the last seven days.
 | MCP | CLI |
 |-----|-----|
 | `search_knowledge` | (MCP only) |
+| `get_knowledge_status` | (MCP only) |
 
 `search_knowledge` asks the brand's OWN documents a question and returns the passages that answer
 it — not a list of files. Every hit carries where it came from (`documentId`, `title`,
@@ -245,8 +246,20 @@ default and 20 at most, so ask a narrow question several times rather than a wid
 `collection` narrows to a shelf: `brand`, `product`, `commercial`, `legal`, `operations`,
 `research`.
 
-Empty `hits` is not the same as "the brand does not know this": a document that was uploaded but
-never processed has nothing to find. `get_studio` lists what exists.
+Empty `hits` is not the same as "the brand does not know this": read `get_knowledge_status`
+before concluding anything.
+
+`get_knowledge_status` says whether the knowledge is USABLE, not just uploaded. `documents`
+counts the pipeline stage by stage — `pending` → `processing` → `ready` | `failed` — and
+`indexed` is the only number retrieval can see: a `ready` document with zero chunks is not
+searchable. `chunks.embedded` below `chunks.total` means retrieval is running on keywords alone,
+so a paraphrase misses. `failures` names each broken document and WHY it broke, `collections`
+says which shelves are worth narrowing to, and `sources` says which connected apps feed the
+corpus and when each last synced.
+
+So: `search_knowledge` empty + `searchable: true` → the brand does not know it, go add a
+document. Empty + `pending`/`failed` above zero → it may already know it and nobody has read the
+file yet. Two opposite situations, two opposite actions.
 
 ## Brand settings
 

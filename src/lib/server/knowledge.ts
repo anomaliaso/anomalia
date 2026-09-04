@@ -484,6 +484,93 @@ async function htmlFromUrl(url: string): Promise<{ markdown: string; title?: str
   return { markdown: await htmlToMarkdown(html), title: titleMatch?.[1]?.trim() };
 }
 
+/** Gli stati che un documento attraversa. Chiusi: `pending` → `processing` → `ready` | `failed`. */
+export const DOC_STATUSES = ['pending', 'processing', 'ready', 'failed'] as const;
+export type DocStatus = (typeof DOC_STATUSES)[number];
+
+/** Un guasto per volta si legge; sessanta riempiono la finestra di chi ha chiesto lo stato. */
+export const KNOWLEDGE_FAILURES_MAX = 20;
+
+/**
+ * Le fonti collegate NON stanno qui: `knowledge-sources` importa già questo modulo, e chiuderlo
+ * ad anello metterebbe il confine nel posto sbagliato. Le unisce la rotta, che è l'adattatore.
+ */
+export type KnowledgeStatus = {
+  documents: Record<DocStatus | 'total' | 'indexed', number>;
+  chunks: { total: number; embedded: number };
+  collections: Record<string, number>;
+  failures: { id: string; title: string; error: string; attempts: number }[];
+  searchable: boolean;
+};
+
+/**
+ * CARICATO NON È DIGERITO, e sono due situazioni opposte: chi cerca e non trova niente deve poter
+ * distinguere «il brand non sa questa cosa» da «il documento che la contiene non è mai stato
+ * processato» — la prima si risolve caricando, la seconda sbloccando la pipeline.
+ *
+ *   brand_documents ──processDocument──▶ brand_doc_chunks ──writeChunkEmbeddings──▶ .embedding
+ *      (status)                             (chunks.total)                       (chunks.embedded)
+ *
+ * `indexed` è l'unico numero che conta per `searchKnowledge`: un documento `ready` con zero chunk
+ * — una nota anteriore alla pipeline — esiste e non è cercabile.
+ */
+export async function knowledgeStatus(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<KnowledgeStatus> {
+  const [{ data: docs }, chunkTotal, chunkEmbedded] = await Promise.all([
+    supabase
+      .from('brand_documents')
+      .select('id, title, status, error, chunk_count, collection, attempts')
+      .eq('brand_id', brandId)
+      .neq('kind', 'image'),
+    countBrandChunks(supabase, brandId),
+    countEmbeddedChunks(supabase, brandId)
+  ]);
+
+  const rows = docs ?? [];
+  const documents = { total: rows.length, indexed: 0, pending: 0, processing: 0, ready: 0, failed: 0 };
+  const collections: Record<string, number> = {};
+  const failures: KnowledgeStatus['failures'] = [];
+
+  for (const row of rows) {
+    const status = row.status as DocStatus;
+    if (DOC_STATUSES.includes(status)) documents[status] += 1;
+
+    if (status === 'ready' && ((row.chunk_count as number) ?? 0) > 0) {
+      documents.indexed += 1;
+      const shelf = (row.collection as string | null) ?? '';
+      if (shelf) collections[shelf] = (collections[shelf] ?? 0) + 1;
+    }
+
+    if (status === 'failed' && failures.length < KNOWLEDGE_FAILURES_MAX) {
+      failures.push({
+        id: row.id as string,
+        title: (row.title as string | null) ?? 'Untitled',
+        error: (row.error as string | null) ?? 'unknown',
+        attempts: (row.attempts as number) ?? 0
+      });
+    }
+  }
+
+  return {
+    documents,
+    chunks: { total: chunkTotal, embedded: chunkEmbedded },
+    collections,
+    failures,
+    searchable: chunkTotal > 0
+  };
+}
+
+async function countEmbeddedChunks(supabase: SupabaseClient, brandId: string): Promise<number> {
+  const { count } = await supabase
+    .from('brand_doc_chunks')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .not('embedding', 'is', null);
+  return count ?? 0;
+}
+
 export async function countBrandDocuments(
   supabase: SupabaseClient,
   brandId: string
