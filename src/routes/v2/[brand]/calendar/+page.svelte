@@ -1,5 +1,4 @@
 <script lang="ts">
-  import '$lib/styles/tailwind.css';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { Badge } from '$lib/components/ui/badge/index.js';
