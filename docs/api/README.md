@@ -15,7 +15,7 @@ integrazioni esterne via API key — request, response, query params, body, erro
 | [05 — Editorial plan](05-editorial-plan.md) | `/editorial-plan` + `propose` `approve` `discard` `revise` `update` `save-brief` `replan-week` |
 | [06 — Weekly plan](06-weekly-plan.md) | `/weekly-plan` + `plan` `produce` `render` `save` |
 | [07 — Growth: SEO/GEO/web](07-growth-seo-geo.md) | `/seo`, `/geo`, `/web/audits`, `/web/fixes`, `/keywords`, `/backlinks`, `/web`, `/articles`, `/gsc`, `/ranks`, `/library/scan` |
-| [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | `/ads`, `/ads/remix`, `/voice`, `/gtm`, `/rubrics`, `/products`, `/api-keys` |
+| [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | `/ads`, `/ads/remix`, `/voice`, `/gtm`, `/rubrics`, `/products`, `/api-keys`, `/ideas`, `/market/field`, `/radar/diagnose` |
 | [09 — Connections](09-connections.md) | `/connections`, `/connections/catalog`, `/connections/:id/complete`, `/connections/:id` |
 | [10 — Shares](10-shares.md) | `/shares`, `/shares/revoke`, e la rotta pubblica `/share/:token` |
 | [11 — Billing](11-billing.md) | `/billing/portal`, `/billing/checkout` — link Stripe che l'agente consegna all'umano |

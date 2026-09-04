@@ -232,6 +232,28 @@ one with the most clicks in the last seven days.
 | `get_article` / `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
+| `get_market_field` | (MCP only) |
+| `diagnose_radar` | (MCP only) |
+| `list_ideas` | (MCP only) |
+
+`get_market_field` is what the brand's field is doing, not what the brand is doing: the topics
+being watched, the playbook distilled from them, and the catalogued posts each with a teardown —
+tone, format, hook, what made it spread, what is transferable and what to avoid. `limit` caps the
+posts (20 by default, 50 at most). A field never watched answers with `topics`, `playbook` and
+`updatedAt` at `null`: that is a state, not an error, and it means the weekly pass has not run
+for this brand yet.
+
+`diagnose_radar` answers "why does Radar find nothing". It fetches every configured source live
+and reports, per source, how many items came back — or `skipped` (source off, plan, platform
+toggle) or `error` (the endpoint failed). It spends no credits and writes nothing, but it does
+leave the building: one network request per source, so it can take seconds. Dynamic keyword
+searches are not probed here.
+
+`list_ideas` is the brand's idea bank — the disruptive ideas agents saved while working. Omit
+`status` and you get only the ones still usable (`new` and `shortlisted`); pass `all`, or one of
+`new` / `shortlisted` / `used` / `archived`, for the rest. `limit` is 50 by default, 200 at most.
+Each idea carries the contrast `device` it uses, `why_it_contrasts` and `who_it_annoys` — an idea
+that annoys nobody is not one.
 
 `get_seo` and `get_geo` answer on the **latest** audit. The four web tools let you trace a claim
 back to what was actually measured, without paying for a new audit. All four are reads: they call
