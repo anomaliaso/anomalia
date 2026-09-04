@@ -73,7 +73,7 @@ export function compactMotionPersist(row: MotionVideoRow, extra: Record<string, 
 }
 
 /**
- * Esportata per il plugin motion del kit (`src/lib/agent/plugins/motion.ts`, `motion_write`):
+ * Esportata per il tool `motion_write`:
  * STESSO percorso di scrittura di `create_motion_video` / `write_motion_source` in chat — hotlink
  * wall, compile, save — mai duplicato.
  */

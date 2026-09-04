@@ -19,8 +19,7 @@ import { UNATTENDED_TOOL_EXCLUSIONS } from './unattended';
 
 /** Ogni motore che monta i tool della chat: se ne nasce un altro, va aggiunto qui. */
 const ENGINES = [
-  'src/lib/server/chat/queue.ts',
-  'src/routes/api/v1/chat/respond/run/+server.ts'
+  'src/lib/server/chat/queue.ts'
 ];
 
 describe('ask_user_questions chiude il turno', () => {

@@ -267,12 +267,4 @@ describe('dropLiveHarnessSession — un turno morto non lascia in eredita` la su
 		await expect(dropLiveHarnessSession(undefined)).resolves.toBeUndefined();
 	});
 
-	it('il motore lo chiama quando il turno finisce male', () => {
-		const src = fs.readFileSync(new URL('./live.ts', import.meta.url), 'utf8');
-		expect(src).toContain('dropLiveHarnessSession');
-		// Sul percorso d'errore, non solo su quello felice.
-		const errAt = src.indexOf('Errore del turno: ${why');
-		const catchAt = src.lastIndexOf('} catch (error) {', errAt);
-		expect(src.slice(catchAt, errAt + 400)).toContain('dropLiveHarnessSession');
-	});
 });

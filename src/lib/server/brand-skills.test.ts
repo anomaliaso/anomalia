@@ -116,9 +116,4 @@ describe('skillsForAgent — ogni agente ha le sue skill', () => {
 		expect(src).toMatch(/skillsForAgent\(opts\.agentId\)/);
 		expect(src).toMatch(/skills\.length > 0 \? \{ skills \} : \{\}/);
 	});
-
-	it('il bridge porta l’identità dell’agente fino a startHarnessTurn', () => {
-		const src = readFileSync('src/lib/agent/bridge/live.ts', 'utf8');
-		expect(src).toMatch(/agentId:\s*spec\.id/);
-	});
 });
