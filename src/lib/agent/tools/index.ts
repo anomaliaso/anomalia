@@ -9,7 +9,7 @@ import { createContentTools } from './create-content-tools';
 import { expressionMemoryTools } from './expression-memory-tools';
 import { createDataForSeoTools } from '$lib/server/dataforseo-tools';
 import { createQueryTool } from '$lib/server/chat/query-tool';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import { createNotifyTools } from '$lib/agent/tools/notify-tools';
 import { createNotificationTools } from '$lib/agent/tools/notification-tools';
 import { createOnboardingTools } from '$lib/agent/tools/onboarding-tools';

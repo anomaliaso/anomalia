@@ -42,7 +42,7 @@ import { MOTION_ASSET_MINT_HINT } from '$lib/server/media-origin';
 import { mintStandaloneImage } from '$lib/server/mint-standalone-image';
 import { loadMediaLibraryPromptSection } from '$lib/server/brand-media';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import {
 	brandContextPromptSection,
 	createBrandContextTools
