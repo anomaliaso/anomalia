@@ -18,9 +18,8 @@ function fakeSupabase(accounts: Row[] = [], updateError: { message: string } | n
       if (table === 'social_accounts') {
         const q = {
           select: () => q,
-          eq(_col: string, _val: unknown) {
-            return _col === 'status' ? Promise.resolve({ data: accounts }) : q;
-          }
+          eq: () => q,
+          order: async () => ({ data: accounts })
         };
         return q;
       }
