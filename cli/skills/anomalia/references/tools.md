@@ -34,6 +34,8 @@ nothing brings it back.
 | `check_content` | (MCP only) |
 | `import_media_url` | (MCP only) |
 | `generate_media` | (MCP only) |
+| `generate_image` | (MCP only) |
+| `refine_image` | (MCP only) |
 | `check_media_job` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
@@ -126,6 +128,26 @@ that bills a second one. Refusals: `credits_exhausted` (402) means the brand's p
 nothing was drawn; `video_budget_exhausted` (400) means the monthly video allowance is used up,
 counting the clips still rendering; `render_failed` (502) is the model returning nothing, and
 nothing is stored; `store_failed` (502) means it was drawn but could not be filed.
+
+`generate_image` draws a NEW image into the library from a prompt. Required: `slug`, `prompt`;
+optional `count` (1-4 alternatives, **each one billed**), `aspect_ratio`, `model`, `title`. It
+bills a render per image — roughly 8 credits each — and creates nothing in the calendar, so ask
+for two or three, look at them with `list_media`, and pass only the id you keep to `create_post`.
+The response carries `model`: the model that actually drew it, so an agent that chose nothing
+still knows what it got.
+
+`refine_image` changes an image that is already in the library and files the result as a **new**
+asset — the original is never overwritten, so a refinement cannot destroy what it started from.
+Required: `slug`, `media_id` (from `list_media`, and it must belong to this brand — anything else
+is `source_not_found`), `instruction`. Say what should CHANGE, not what the whole picture should
+be. Refining has its own model slot, `imageRefineModel`.
+
+**Choosing the model.** Every generator takes an optional `model` that applies to **that call
+only** and changes no brand setting — that is the difference from `set_media_model`, which is "from
+now on". The ids each job accepts come from `get_media_models`, which also names the job each slot
+does; anything else is refused as `model_not_for_slot`, and the refusal carries `allowed`, the list
+that would have been taken. The choice moves the bill: a light image model and a heavy video model
+are two orders of magnitude apart, so read the list before spending.
 
 `check_media_job` reads those jobs back, newest first. Required: `slug`; optional `job_id` for
 one of them. Each row carries `status` (`rendering`, `done`, `failed` or `expired`), `error` when

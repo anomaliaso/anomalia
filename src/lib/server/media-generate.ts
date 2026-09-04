@@ -41,14 +41,49 @@ export type GenerateMediaOpts = {
   count?: number;
   aspectRatio?: AspectRatio;
   title?: string;
+  /** Vale per QUESTA chiamata soltanto: nessuna preferenza del brand viene toccata. */
+  model?: string;
 };
 
 export type GenerateMediaResult =
-  | { ok: true; status: 'ready'; media: GeneratedMedia[]; jobId: null }
-  | { ok: true; status: 'rendering'; media: []; jobId: string }
-  | { ok: false; error: 'render_failed' | 'store_failed' | 'video_budget_exhausted' };
+  | { ok: true; status: 'ready'; media: GeneratedMedia[]; jobId: null; model: string | null }
+  | { ok: true; status: 'rendering'; media: []; jobId: string; model: string | null }
+  | { ok: false; error: 'render_failed' | 'store_failed' | 'video_budget_exhausted' }
+  | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
 const IMAGE_MIME = 'image/png';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Quanti asset si guardano per sciogliere un prefisso: gli id soltanto, quindi una lettura corta. */
+const PREFIX_SCAN = 500;
+
+/**
+ * Un prefisso corto come lo accettano gli id dei post, ma risolto QUI e non nel livello MCP: li'
+ * varrebbe solo per chi passa da MCP, e la CLI o una chiamata HTTP diretta resterebbero senza.
+ *
+ * Ambiguo e inesistente collassano nello stesso rifiuto di proposito: in entrambi i casi non
+ * abbiamo UN asset, e ricadere sulla generazione — disegnare da zero credendo di modificare — e'
+ * il difetto che questo percorso esiste per togliere.
+ */
+async function resolveLibraryId(
+  supabase: SupabaseClient,
+  brandId: string,
+  idOrPrefix: string
+): Promise<string | null> {
+  const want = idOrPrefix.trim().toLowerCase();
+  if (!want) return null;
+  if (UUID.test(want)) return want;
+
+  const { data } = await supabase
+    .from('brand_media')
+    .select('id')
+    .eq('brand_id', brandId)
+    .limit(PREFIX_SCAN);
+  const hits = (data ?? []).filter((r) => String(r.id).toLowerCase().startsWith(want));
+
+  return hits.length === 1 ? String(hits[0].id) : null;
+}
 
 function dataUrlBytes(dataUrl: string): { bytes: Buffer; mime: string } | null {
   const [head, base64] = dataUrl.split(',');
@@ -63,7 +98,7 @@ function dataUrlBytes(dataUrl: string): { bytes: Buffer; mime: string } | null {
  */
 async function depositImage(
   supabase: SupabaseClient,
-  opts: GenerateMediaOpts,
+  opts: Pick<GenerateMediaOpts, 'brandId' | 'userId' | 'prompt' | 'title'>,
   dataUrl: string
 ): Promise<GeneratedMedia | null> {
   const decoded = dataUrlBytes(dataUrl);
@@ -106,34 +141,92 @@ async function depositImage(
   };
 }
 
-async function generateImages(
+/**
+ * UNA SOLA funzione per disegnare e per modificare, perché il motore è lo stesso: `baseImage` è
+ * l'unico segnale che `buildImageRequest` guarda per distinguere una modifica da un disegno nuovo.
+ * I tool esposti restano due — generare e rifinire sono due operazioni diverse per chi chiama, e
+ * vogliono argomenti diversi — ma qui sotto sarebbero due copie della stessa cosa.
+ */
+export type ImageJob = {
+  brandId: string;
+  userId: string;
+  /** Cosa mostrare, oppure — con `baseMediaId` — cosa cambiare. */
+  prompt: string;
+  count?: number;
+  aspectRatio?: AspectRatio;
+  title?: string;
+  /** Vale per QUESTA chiamata: non tocca `content_prefs`, che è il mestiere di set_media_model. */
+  model?: string;
+  /** L'immagine della libreria da cui partire. Presente → è una modifica. */
+  baseMediaId?: string;
+};
+
+export type ImageJobResult =
+  | { ok: true; media: GeneratedMedia[]; model: string | null }
+  | { ok: false; error: 'render_failed' | 'store_failed' | 'source_not_found' }
+  | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
+
+async function runImageJob(
   supabase: SupabaseClient,
-  opts: GenerateMediaOpts
-): Promise<GenerateMediaResult> {
-  const [{ renderPostImage }, { imageModelFor, imageRefineModelFor }] = await Promise.all([
+  job: ImageJob
+): Promise<ImageJobResult> {
+  const [
+    { renderPostImage, buildImageRequest },
+    { imageModelFor, imageRefineModelFor },
+    { mediaModelSlot, slotAccepts, slotChoices },
+    { loadLibraryMediaParts }
+  ] = await Promise.all([
     import('$lib/server/content-preview'),
-    import('$lib/image-models')
+    import('$lib/image-models'),
+    import('$lib/media-model-slots'),
+    import('$lib/server/brand-media')
   ]);
+
+  // Il catalogo è quello vero, lo stesso che governa set_media_model: un secondo elenco
+  // divergerebbe dal primo al prossimo modello aggiunto, e la metà vecchia rifiuterebbe in
+  // silenzio un modello valido.
+  const refining = !!job.baseMediaId;
+  const slot = mediaModelSlot(refining ? 'imageRefineModel' : 'imageModel');
+  if (job.model && slot && !slotAccepts(slot, job.model)) {
+    return { ok: false, error: 'model_not_for_slot', allowed: slotChoices(slot).map((c) => c.id) };
+  }
 
   const { data: brand } = await supabase
     .from('brands')
     .select('content_prefs')
-    .eq('id', opts.brandId)
+    .eq('id', job.brandId)
     .maybeSingle();
   const prefs = (brand?.content_prefs ?? {}) as Record<string, unknown>;
 
+  // `loadLibraryMediaParts` filtra per brand_id: l'id di un altro inquilino non risolve nulla, e
+  // il confine resta nella query invece che in un controllo che qualcuno dimenticherà.
+  let baseImage: { inlineData: { mimeType: string; data: string } } | undefined;
+  if (job.baseMediaId) {
+    const sourceId = await resolveLibraryId(supabase, job.brandId, job.baseMediaId);
+    if (!sourceId) return { ok: false, error: 'source_not_found' };
+
+    const parts = await loadLibraryMediaParts(supabase, job.brandId, [sourceId], 1);
+    if (!parts.length) return { ok: false, error: 'source_not_found' };
+    baseImage = parts[0];
+  }
+
+  const opts = {
+    model: refining ? imageModelFor(prefs) : (job.model ?? imageModelFor(prefs)),
+    refineModel: refining ? (job.model ?? imageRefineModelFor(prefs)) : imageRefineModelFor(prefs),
+    baseImage,
+    aspectRatio: job.aspectRatio
+  };
+
+  // Il modello riportato viene dalla STESSA funzione che costruisce la richiesta, non da una copia
+  // della sua tabella: chiedere due volte la stessa cosa è gratis, tenerne due versioni no.
+  const chosen = buildImageRequest(job.prompt, opts).model ?? null;
+
   const media: GeneratedMedia[] = [];
-  for (let i = 0; i < (opts.count ?? 1); i++) {
-    // Il primo argomento è morto da quando renderPostImage costruisce il proprio client: lo
-    // dichiara `void ai` e ogni altro chiamante gli passa null allo stesso modo.
-    const dataUrl = await renderPostImage(null as never, opts.prompt, {
-      model: imageModelFor(prefs),
-      refineModel: imageRefineModelFor(prefs),
-      aspectRatio: opts.aspectRatio
-    }).catch(() => undefined);
+  for (let i = 0; i < (job.count ?? 1); i++) {
+    const dataUrl = await renderPostImage(null as never, job.prompt, opts).catch(() => undefined);
     if (!dataUrl) break;
 
-    const deposited = await depositImage(supabase, opts, dataUrl);
+    const deposited = await depositImage(supabase, job, dataUrl);
     if (!deposited) return { ok: false, error: 'store_failed' };
 
     media.push(deposited);
@@ -143,7 +236,25 @@ async function generateImages(
   // credere che qualcosa esista.
   if (!media.length) return { ok: false, error: 'render_failed' };
 
-  return { ok: true, status: 'ready', media, jobId: null };
+  return { ok: true, media, model: chosen };
+}
+
+export async function generateBrandImages(
+  supabase: SupabaseClient,
+  job: Omit<ImageJob, 'baseMediaId'>
+): Promise<ImageJobResult> {
+  const { withBrandContext } = await import('$lib/server/ai-log');
+
+  return withBrandContext(job.brandId, () => runImageJob(supabase, job));
+}
+
+export async function refineBrandImage(
+  supabase: SupabaseClient,
+  job: ImageJob & { baseMediaId: string }
+): Promise<ImageJobResult> {
+  const { withBrandContext } = await import('$lib/server/ai-log');
+
+  return withBrandContext(job.brandId, () => runImageJob(supabase, job));
 }
 
 /**
@@ -171,6 +282,12 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     .maybeSingle();
   const prefs = (brand?.content_prefs ?? {}) as Record<string, string | number | null>;
 
+  const { mediaModelSlot, slotAccepts, slotChoices } = await import('$lib/media-model-slots');
+  const slot = mediaModelSlot('videoModel');
+  if (opts.model && slot && !slotAccepts(slot, opts.model)) {
+    return { ok: false, error: 'model_not_for_slot', allowed: slotChoices(slot).map((c) => c.id) };
+  }
+
   const { remaining } = await import('$lib/server/usage');
   const budget = await remaining(admin, opts.brandId, brand?.plan, brand?.timezone ?? 'Europe/Rome');
 
@@ -194,7 +311,7 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
       duration: prefs.videoDuration as number | undefined,
       instructions: prefs.videoInstructions as string | null | undefined,
       resolution: prefs.videoResolution as string | null | undefined,
-      model: prefs.videoModel as string | null | undefined
+      model: opts.model ?? (prefs.videoModel as string | null | undefined)
     }
   });
   if (!submitted) return { ok: false, error: 'render_failed' };
@@ -206,18 +323,33 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     .maybeSingle();
   if (!job) return { ok: false, error: 'store_failed' };
 
-  return { ok: true, status: 'rendering', media: [], jobId: job.id as string };
+  return {
+    ok: true,
+    status: 'rendering',
+    media: [],
+    jobId: job.id as string,
+    model: submitted.model ?? null
+  };
 }
 
+/**
+ * La porta d'ingresso storica, tenuta viva. Non fa piu' il lavoro: lo inoltra a generate_image e
+ * generate_video, che sono i due tool che un agente dovrebbe chiamare. Cancellarla mentre stiamo
+ * moltiplicando le capacita' toglierebbe una capacita' a chi la sta gia' usando.
+ */
 export async function generateBrandMedia(
   supabase: SupabaseClient,
   opts: GenerateMediaOpts
 ): Promise<GenerateMediaResult> {
-  const { withBrandContext } = await import('$lib/server/ai-log');
+  if (opts.kind === 'video') {
+    const { withBrandContext } = await import('$lib/server/ai-log');
+    return withBrandContext(opts.brandId, () => startVideo(opts));
+  }
 
-  return withBrandContext(opts.brandId, () =>
-    opts.kind === 'video' ? startVideo(opts) : generateImages(supabase, opts)
-  );
+  const out = await generateBrandImages(supabase, opts);
+  if (!out.ok) return out;
+
+  return { ok: true, status: 'ready', media: out.media, jobId: null, model: out.model };
 }
 
 export type MediaJob = {
