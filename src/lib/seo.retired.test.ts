@@ -41,6 +41,13 @@ describe('retired pages', () => {
     expect(retiredPageTarget(`/fr${from}`, 'fr')).toBe(`/fr${to}`);
   });
 
+  it('sends the row-backed children where their root went', () => {
+    expect(retiredPageTarget('/design/some-post-slug', 'en')).toBe('/autoposts');
+    expect(retiredPageTarget('/it/playbooks/pizzeria', 'it')).toBe('/it/usecases');
+    expect(retiredPageTarget('/styles/collage', 'en')).toBe('/autoposts');
+    expect(retiredPageTarget('/es/talents/aisha', 'es')).toBe('/es/usecases');
+  });
+
   it('leaves a live page alone, in every locale', () => {
     for (const lang of SUPPORTED) {
       const path = lang === 'en' ? '/pricing' : `/${lang}/pricing`;
