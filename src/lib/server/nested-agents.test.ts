@@ -19,7 +19,7 @@ describe('niente agenti annidati sul GTM di produzione', () => {
 // con una riga per file fa sì che due PR in parallelo tocchino righe diverse invece della stessa.
 const LOOP_DRIVER: Record<string, 'harness' | 'sdk'> = {
 	'image-agent.ts': 'sdk',
-	'produce-agent.ts': 'harness',
+	'produce-agent.ts': 'sdk',
 	'seo-agent.ts': 'sdk',
 	'strategy-agent.ts': 'sdk',
 	'week-planner-agent.ts': 'sdk'
