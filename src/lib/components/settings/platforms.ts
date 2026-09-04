@@ -47,7 +47,6 @@ export const SETTINGS_SECTIONS = [
   'blog-integrations',
   'search-console',
   'language',
-  'chat',
   'api-keys',
   'team',
   'profile',
@@ -138,7 +137,6 @@ export const SETTINGS_MODAL_SECTIONS = [
   'publishing',
   'timezone',
   'language',
-  'chat',
   'api-keys',
   'team',
   'profile',
@@ -237,7 +235,6 @@ export const SETTINGS_MODAL_GROUPS: readonly {
     labelKey: 'app.nav.workspace',
     items: [
       { section: 'language', labelKey: 'app.settings.language' },
-      { section: 'chat', labelKey: 'app.settings.chat.title' },
       { section: 'api-keys', labelKey: 'app.settings.apiKeys.title' },
       { section: 'team', labelKey: 'app.settings.team.title' }
     ]

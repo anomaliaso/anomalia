@@ -278,11 +278,9 @@ export const NAV_TEAM_TOOLS: NavTeamItem[] = [
 /** Rotte che restano PAGINA PIENA, col perché. Il criterio è uno solo: la modal non può ospitarle
  * senza rompere qualcosa di verificabile. */
 export const BRAND_PAGE_ROUTES = [
-  '.', // la home del brand è la superficie SOTTO la modal: non può ospitare sé stessa
   'activate', // checkout Stripe: esce dal sito
   'success', // ritorno dal pagamento, con la sua chrome
   'proposal', // superficie standalone, già esclusa dalla shell del brand
-  'chat/[thread]', // la chat È la superficie da cui si apre la modal (e rotta dinamica)
   'posts/[id]/analytics', // i dettagli post hanno chrome dedicata fuori dalla shell
   'posts/[id]/boost', //   (isPostDash nel +layout) e sono rotte dinamiche
   'posts/[id]/campaign',
