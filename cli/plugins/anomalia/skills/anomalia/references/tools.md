@@ -285,6 +285,32 @@ describe the commitment, and point at the usage page for the brand-wide bill.
 A brand without a paid plan runs none of them however many are on — `scheduled_work_allowed` says
 so. The calls themselves spend no credits.
 
+## Radar sources
+
+| MCP | CLI |
+|-----|-----|
+| `get_radar` | (MCP only) |
+| `set_radar_platform` | (MCP only) |
+| `add_radar_source` | (MCP only) |
+| `remove_radar_source` | (MCP only) |
+
+Where Radar looks: which platforms are on (`gnews`, `reddit`, `threads`, `x`, `linkedin`) and
+which sources are configured (`gnews_query`, `rss`, `subreddit`, `reddit_query`, plus
+`threads_query`, `x_community`, `linkedin_query`).
+
+**Read `get_radar` first.** It carries the two things you cannot guess: `allowed_kinds` for this
+plan, and `source_limit` against `sources_used`. Threads, X and LinkedIn belong to the **Pro**
+plan — below it they read as `plan_locked` and both writes answer `plan_required` (403). Past the
+limit, `add_radar_source` answers `source_limit` (403) and names the ceiling.
+
+A source is identified by the pair **(kind, value)** — there is no id to remember, and it is what
+`remove_radar_source` takes. Adding one that is already there is not an error: nothing changes and
+`added: false` says so. `rss` must be an http(s) URL; a subreddit is stored without its `r/`, and
+both writes normalise it the same way, so `r/coffee` and `coffee` are the same source.
+
+Adding a source spends no credits by itself, but Radar reads it on every run from then on.
+Removing one is permanent and stops Radar reading it; what it already found stays.
+
 ## Media models
 
 | MCP | CLI |

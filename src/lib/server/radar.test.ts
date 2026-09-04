@@ -6,7 +6,8 @@ import {
   sourceKindPlatform,
   radarBacklogExceeded,
   RADAR_PENDING_BACKLOG_CAP,
-  radarDigestHtml
+  radarDigestHtml,
+  radarSourceValue
 } from './radar';
 import { communityKeyOf, renderCommunityProfile, renderVocabularyDigest } from './community-profile';
 
@@ -245,3 +246,21 @@ describe('radarDigestHtml (la mail porta la merce: testo pronto + link diretto)'
   });
 });
 
+
+describe('radarSourceValue — la forma salvata è la forma cercata', () => {
+  it('conserva un subreddit senza il suo "r/"', () => {
+    expect(radarSourceValue('subreddit', 'r/coffee')).toBe('coffee');
+    expect(radarSourceValue('subreddit', 'R/Coffee/')).toBe('Coffee');
+  });
+
+  it('aggiungere e togliere convergono sullo stesso valore', () => {
+    // È il punto: senza questa funzione la rimozione di «r/coffee» non troverebbe «coffee», e
+    // risponderebbe «tolta» senza aver tolto niente.
+    expect(radarSourceValue('subreddit', 'r/coffee')).toBe(radarSourceValue('subreddit', 'coffee'));
+  });
+
+  it('non tocca gli altri tipi, dove "r/" non vuol dire niente', () => {
+    expect(radarSourceValue('rss', ' https://x.test/feed ')).toBe('https://x.test/feed');
+    expect(radarSourceValue('gnews_query', ' r/coffee shops ')).toBe('r/coffee shops');
+  });
+});
