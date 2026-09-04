@@ -44,6 +44,7 @@ import {
   LIST_ARTICLES,
   LIST_PRODUCTS
 } from './reads';
+import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
@@ -117,6 +118,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   CREATE_PRODUCT,
   CREATE_SHARE,
   DELETE_PRODUCT,
+  DIAGNOSE_BRAND,
   DIAGNOSE_RADAR,
   DISCARD_PLAN,
   GEO_ACTION,
@@ -129,6 +131,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_CALENDAR,
   GET_CREATION_KIT,
   GET_GEO,
+  GET_GOALS,
   GET_GSC,
   GET_GTM,
   GET_KEYWORDS,
@@ -227,6 +230,16 @@ export {
   LIST_ARTICLES,
   LIST_PRODUCTS
 };
+export {
+  DIAGNOSE_BRAND,
+  DOCTOR_GATE_STATUSES,
+  DOCTOR_LOOP_STATUSES,
+  GET_GOALS,
+  GOALS_DEFAULT,
+  GOALS_MAX,
+  GOAL_CRITERION_STATUSES,
+  GOAL_STATUSES
+} from './brand-state';
 export { DIAGNOSE_RADAR, GET_MARKET_FIELD, IDEA_STATUSES, IDEAS_DEFAULT, IDEAS_MAX, LIST_IDEAS, MARKET_FIELD_DEFAULT, MARKET_FIELD_MAX } from './market';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
