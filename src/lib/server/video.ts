@@ -712,7 +712,11 @@ async function runVideoJob(
     'video'
   );
   if (!taskId) return undefined;
-  return pollKieTask(taskId, POLL_TIMEOUT_MS, opts.abortSignal, 'video', POLL_INTERVAL_MS);
+  const job = await pollKieTask(taskId, POLL_TIMEOUT_MS, opts.abortSignal, 'video', POLL_INTERVAL_MS);
+
+  // Una scadenza non riapre niente: il task resta di kie, e chi passa dalla coda lo ripesca dal
+  // `task_id` che ha gia' scritto. Aprire un secondo task qui pagherebbe due volte lo stesso clip.
+  return job.status === 'done' ? job : undefined;
 }
 
 // Gli URL di kie non sono permanenti. La RLS dello Storage pretende che il primo segmento del path
@@ -1041,7 +1045,9 @@ export async function transformVideo(opts: {
               'video.transform'
             );
             return taskId
-              ? pollKieTask(taskId, POLL_TIMEOUT_MS, opts.abortSignal, 'video.transform', POLL_INTERVAL_MS)
+              ? pollKieTask(taskId, POLL_TIMEOUT_MS, opts.abortSignal, 'video.transform', POLL_INTERVAL_MS).then(
+                  (r) => (r.status === 'done' ? r : undefined)
+                )
               : undefined;
           })();
   } catch (e) {
@@ -1257,7 +1263,10 @@ export async function upscaleVideo(
   const t0 = Date.now();
   try {
     const newTaskId = await createKieTask(MODEL_UPSCALE, { task_id: taskId, resolution }, undefined, 'video');
-    const job = newTaskId ? await pollKieTask(newTaskId, UPSCALE_TIMEOUT_MS, undefined, 'video', POLL_INTERVAL_MS) : undefined;
+    const polled = newTaskId
+      ? await pollKieTask(newTaskId, UPSCALE_TIMEOUT_MS, undefined, 'video', POLL_INTERVAL_MS)
+      : undefined;
+    const job = polled?.status === 'done' ? polled : undefined;
     logAiCall({
       label: 'video.upscale',
       provider: 'kie',

@@ -261,13 +261,27 @@ export async function renderPostImage(
   if (route('image').endpoint === 'kie') {
     // Due tentativi, non tre: su kie il fallimento arriva già diagnosticato in pochi secondi, e
     // non serve l'insistenza che serve con la risposta vuota di Gemini.
+    //
+    // Il ritentativo vale su un RIFIUTO, che non ci è costato niente. Su una SCADENZA no: kie sta
+    // ancora renderizzando quel task e lo fatturerà comunque, quindi aprirne un secondo è chiedere
+    // lo stesso lavoro due volte — proprio quando il fornitore è in affanno — e pagarlo due volte.
+    // Si riprende lo stesso taskId.
+    let resumeTaskId: string | undefined;
     for (let attempt = 1; attempt <= 2; attempt++) {
       // L'URL di kie vive 24 ore: non deve sopravvivere alla funzione, men che meno finire in una
       // riga del database.
-      const viaKie = await generateImageOnKie(req, { context: `image:${imageModel}` });
-      if (viaKie) return viaKie;
+      const viaKie = await generateImageOnKie(req, {
+        context: `image:${imageModel}`,
+        resumeTaskId
+      });
+      if (viaKie.dataUrl) return viaKie.dataUrl;
+      resumeTaskId = viaKie.timedOutTaskId;
     }
-    throw new Error(`No image returned from kie (${imageModel}) after 2 attempts`);
+    throw new Error(
+      resumeTaskId
+        ? `kie task ${resumeTaskId} (${imageModel}) still unfinished — it is rendering and will be billed`
+        : `No image returned from kie (${imageModel}) after 2 attempts`
+    );
   }
   // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
   // Un modello che vive solo su kie non è un modello per Google: `googleImageModel` lo riporta a
