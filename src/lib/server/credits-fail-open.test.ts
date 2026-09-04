@@ -43,4 +43,33 @@ describe('gateCreditsCore fail-open', () => {
 		expect(swallowed).toHaveLength(1);
 		expect(swallowed[0].reason).toContain('brand-1');
 	});
+
+	// The org lookup and the ledger read are two separate fail-open catches since the pool moved to
+	// the org. Both give up on the same question, so both have to say so — this pins the second:
+	// the org lookup is let through (no org_id, so it resolves to null), the ledger read then throws.
+	it('reports when the ledger read fails after the org lookup got through', async () => {
+		let brandReads = 0;
+		vi.doMock('./supabase-admin', () => ({
+			createAdminClient: () => ({
+				from: () => ({
+					select: () => ({
+						eq: () => ({
+							maybeSingle: async () => {
+								brandReads++;
+								if (brandReads === 1) return { data: null, error: null };
+								throw new Error('ledger unreachable');
+							}
+						})
+					})
+				})
+			})
+		}));
+
+		const { gateCreditsCore } = await import('./credits');
+		await expect(gateCreditsCore('brand-2')).resolves.toBeUndefined();
+
+		expect(brandReads).toBeGreaterThan(1);
+		expect(swallowed).toHaveLength(1);
+		expect(swallowed[0].reason).toContain('brand-2');
+	});
 });

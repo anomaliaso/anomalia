@@ -24,10 +24,16 @@ storia intera, ventinove per richiesta la seppelliscono.
 un incidente. Distinguere i due casi è metà del valore di questa modifica: un allarme che suona
 anche quando va tutto bene viene ignorato, e allora tanto valeva il silenzio.
 
-`src/lib/server/credits.ts` — il `catch` dentro `gateCreditsCore` che concede l'azione quando non
-riesce a leggere il ledger ora riporta il `brandId` e l'errore. Qui **non** c'è il "una volta
+`src/lib/server/credits.ts` — i `catch` dentro `gateCreditsCore` che concedono l'azione quando non
+riesce a leggere il ledger ora riportano il `brandId` e l'errore. Qui **non** c'è il "una volta
 sola": è per-brand e transitorio, e se Supabase è giù è esattamente il momento in cui il segnale
 serve. Sentry raggruppa da sé per fingerprint.
+
+Sono **due**, non uno: da quando il pool è dell'org (#210) `gateCreditsCore` prima risolve l'org
+del brand e poi legge il ledger, in due `try` separati, entrambi fail-open. Rispondono alla stessa
+domanda — riesco a valutare quanto è stato speso? — e chi cade nel primo non arriva mai al secondo,
+quindi loggare solo quello sotto avrebbe lasciato metà dei casi muti come prima. Un solo
+`reportFailOpen()` serve entrambi.
 
 **Scartato: un logger nuovo.** `swallow()` esiste già, fa già console + Sentry, ed è già usato in
 tutto `src/lib/server`. Un secondo meccanismo per la stessa cosa è la duplicazione che poi diverge.
