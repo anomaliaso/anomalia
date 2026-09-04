@@ -3,7 +3,7 @@ import { CREATE_SHARE, LIST_SHARES, REVOKE_SHARE, SHARED_VIEW_TYPES } from './sh
 
 describe('il contratto delle viste pubbliche', () => {
   it('dichiara solo le viste che esistono davvero', () => {
-    expect([...SHARED_VIEW_TYPES]).toEqual(['calendar', 'monthly_report']);
+    expect([...SHARED_VIEW_TYPES]).toEqual(['calendar', 'dashboard', 'monthly_report']);
     expect(CREATE_SHARE.input.safeParse({ view: 'proposal' }).success).toBe(false);
   });
 
