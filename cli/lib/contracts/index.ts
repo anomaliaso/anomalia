@@ -26,7 +26,9 @@ import {
   SAVE_WEEK_SEEDS,
 } from './plans';
 import {
+  CHECK_MEDIA_JOB,
   CREATE_POST,
+  GENERATE_MEDIA,
   GET_CALENDAR,
   GET_POST,
   IMPORT_MEDIA_URL,
@@ -149,6 +151,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   BILLING_PORTAL_LINK,
   CHECKOUT_LINK,
   CHECK_CONTENT,
+  CHECK_MEDIA_JOB,
   CREATE_POST,
   CREATE_PRODUCT,
   CREATE_SHARE,
@@ -159,6 +162,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   DIAGNOSE_BRAND,
   DIAGNOSE_RADAR,
   DISCARD_PLAN,
+  GENERATE_MEDIA,
   GEO_ACTION,
   GET_ADS,
   GET_ANALYTICS,
@@ -261,7 +265,9 @@ export {
   ADS_ACTION,
   ADS_REMIX,
   CHECK_CONTENT,
+  CHECK_MEDIA_JOB,
   CREATE_POST,
+  GENERATE_MEDIA,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_CALENDAR,
@@ -431,6 +437,7 @@ export type {
 export { KIT_FORMATS } from './creation-kit';
 export type { GetCreationKitInput, GetCreationKitResult } from './creation-kit';
 export type { CreatePostInput, CreatePostResult } from './posts';
+export { MAX_MEDIA_ALTERNATIVES } from './posts';
 export {
   APPROVE_PLAN,
   DISCARD_PLAN,

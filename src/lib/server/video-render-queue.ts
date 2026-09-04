@@ -213,13 +213,65 @@ async function settle(
  * marked done whose post never got the url is a clip that exists, is paid for, and is reachable by
  * nothing — and no query in this module looks at `done` rows again.
  */
+/**
+ * Il clip che nessun post reclama va nella LIBRERIA del brand, o resta un file pagato che nessun
+ * tool sa raggiungere: `create_post` accetta `media_ids`, e questo è l'id che glielo procura.
+ * `source_ref` porta l'id del lavoro, così `check_media_job` ritrova l'asset senza una colonna in
+ * più su `video_renders`.
+ */
+async function applyToLibrary(
+	admin: SupabaseClient,
+	row: VideoRenderRow,
+	url: string
+): Promise<boolean> {
+	const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
+	const saved = await saveRenderedVideoToLibrary(admin, {
+		brandId: row.brand_id,
+		userId: row.user_id,
+		url,
+		title: row.prompt?.trim().slice(0, 80) || 'Generated clip',
+		durationSeconds: row.duration_seconds ?? undefined,
+		sourceRef: row.id
+	});
+	if ('error' in saved) {
+		console.error(`[video-render] clip ${url} not registered in the library:`, saved.error);
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * L'allocazione mensile la consuma un clip che ATTERRA, ovunque atterri — su un post o in
+ * libreria. Contarla solo nel ramo del post apriva un arbitraggio: genero in libreria, attacco
+ * dopo, e il video non conta mai. Un video è un video.
+ *
+ * Addebitare all'invio invece — come facevano i chiamanti, perché era lì che un clip esisteva —
+ * lascerebbe che dieci render rifiutati si mangino il margine di un mese.
+ */
+async function chargeMonthlyVideo(admin: SupabaseClient, row: VideoRenderRow): Promise<void> {
+	try {
+		const { addUsage, monthKey } = await import('$lib/server/usage');
+		const { data: brand } = await admin
+			.from('brands')
+			.select('timezone')
+			.eq('id', row.brand_id)
+			.maybeSingle();
+		await addUsage(admin, row.brand_id, monthKey((brand?.timezone as string) ?? 'Europe/Rome'), {
+			videos: 1
+		});
+	} catch (e) {
+		console.error('[video-render] usage accounting failed:', e);
+	}
+}
+
 async function applyToPost(
 	admin: SupabaseClient,
 	row: VideoRenderRow,
 	url: string,
 	thumbnailUrl?: string
 ): Promise<boolean> {
-	if (!row.post_id) return true;
+	if (!row.post_id) return applyToLibrary(admin, row, url);
 	// `.select('id')` so a zero-row match is visible: an UPDATE that hits nothing reports no error,
 	// so without this an orphaned render — post insert rolled back, post since deleted — would be
 	// billed, settled `done`, and reported to the user as attached to a post that does not exist.
@@ -247,23 +299,6 @@ async function applyToPost(
 		// Nothing to attach to and nothing to retry — the clip is stored, but its post is gone.
 		console.error(`[video-render] post ${row.post_id} no longer exists; clip ${url} is orphaned`);
 		return false;
-	}
-
-	// Only a clip that actually landed consumes the brand's monthly video budget. Charging at
-	// submit time — as the callers used to, because that was when a clip existed — would let ten
-	// rejected renders eat a month's headroom.
-	try {
-		const { addUsage, monthKey } = await import('$lib/server/usage');
-		const { data: brand } = await admin
-			.from('brands')
-			.select('timezone')
-			.eq('id', row.brand_id)
-			.maybeSingle();
-		await addUsage(admin, row.brand_id, monthKey((brand?.timezone as string) ?? 'Europe/Rome'), {
-			videos: 1
-		});
-	} catch (e) {
-		console.error('[video-render] usage accounting failed:', e);
 	}
 
 	return true;
@@ -448,6 +483,7 @@ export async function reconcileVideoRenders(
 					.then(undefined, () => {});
 				continue;
 			}
+			await chargeMonthlyVideo(admin, raw);
 			await settle(admin, raw, { status: 'done', media_url: outcome.url });
 			await notifyThread(admin, raw, "the clip is ready and attached to the post", origin);
 			done += 1;

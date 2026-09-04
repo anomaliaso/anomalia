@@ -789,7 +789,15 @@ export const publishLibraryImageAsPostMedia = (
  */
 export async function saveRenderedVideoToLibrary(
   supabase: SupabaseClient,
-  opts: { brandId: string; userId: string; url: string; title: string; durationSeconds?: number }
+  opts: {
+    brandId: string;
+    userId: string;
+    url: string;
+    title: string;
+    durationSeconds?: number;
+    /** Da dove viene il clip — l'id del lavoro, per chi dovra' ritrovare l'asset che ne e' uscito. */
+    sourceRef?: string;
+  }
 ): Promise<{ mediaId: string } | { error: string }> {
   const res = await fetch(opts.url);
   if (!res.ok) return { error: `could not read the rendered clip (${res.status})` };
@@ -811,7 +819,8 @@ export async function saveRenderedVideoToLibrary(
     durationSeconds: opts.durationSeconds,
     fileName: storagePath.split('/').pop() ?? 'generated.mp4',
     title: opts.title,
-    source: 'generate'
+    source: 'generate',
+    sourceRef: opts.sourceRef ?? null
   });
   if (error || !row) {
     swallow('rendered clip not registered in the library', error ?? 'insert returned no row');
