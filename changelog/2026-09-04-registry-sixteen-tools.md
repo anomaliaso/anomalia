@@ -66,15 +66,21 @@ la differenza. Il primo giro del test l'aveva vista, ed era rumore.
 | 3 | **non sono una chiamata HTTP**: leggono e scrivono `~/.config/anomalia/session.json` | `login`, `logout`, `whoami` |
 | 3 | **non sono una chiamata sola**: `get_status` ne fa due e ricompone, `produce_week` risolve prima il draft, `edit_post` rimodella la risposta in `{ok, id, patch}` | `get_status`, `produce_week`, `edit_post` |
 | 3 | **il percorso non sta sotto `/brands/:slug/`**, o è il brand stesso: `list_brands` è `/api/v1/brands`, `get_dashboard` è la radice del brand e `pathUnderBrand` è per contratto un sotto-percorso, `chat` non parla JSON su una rotta normale | `list_brands`, `get_dashboard`, `chat` |
-| 3 | **`DELETE` con `:id` su una risorsa**: derivabili adesso che il registry sa sostituire un id (PR #218), ma sono un gruppo a sé e vanno in una PR separata | `delete_person`, `delete_competitor`, `delete_document` |
+| 3 | **`DELETE` con `:id` su una risorsa**: derivabili, ma **non equivalenti**. Il generatore non usa l'`id` dichiarato dal contratto: lo sostituisce con `resourceId(resource)`, che è `z.string().min(1)` risolto per prefisso. Oggi questi tre chiedono un UUID stretto; migrandoli, un prefisso qualsiasi basterebbe a cancellare — su un'operazione distruttiva — e la loro descrizione (`"Delete a studio person by UUID."`) diventerebbe falsa. È un cambio di prodotto, non una migrazione | `delete_person`, `delete_competitor`, `delete_document` |
 
 13 + 4 + 4 + 3 + 3 + 3 + 3 = **33**. Con i 16 migrati fa 49, che è il numero da cui si partiva.
 
-I tre `DELETE` sono l'unico gruppo che si scioglierebbe oggi senza inventare niente:
+Sui tre `DELETE` vale la pena essere espliciti, perché sulla carta sembravano i più facili.
 `delete_person` e `delete_competitor` hanno già la loro risorsa in `BRAND_RESOURCES`,
-`delete_document` ne vuole una nuova. Sono la PR successiva.
+`delete_document` ne vorrebbe una nuova: due righe. Il problema non è quello. È che
+`delete_product`, già nel registry, accetta un prefisso, mentre questi tre pretendono un UUID —
+e il generatore non lascia scegliere: sovrascrive l'`id` del contratto con il suo. Portarli su
+significa allargare tre cancellazioni, non spostarle. **Vale la pena farlo** — l'incoerenza fra
+`delete_product` e `delete_person` la paga chi usa i tool — ma è una decisione di prodotto con
+un changelog pubblico, e va presa, non nascosta dentro un refactor che promette di non cambiare
+niente.
 
-Gli altri no. Il blocco dei 17 che rimodellano l'input non si scioglie con un campo in più: si
+Gli altri blocchi non si sciolgono affatto. Il blocco dei 17 che rimodellano l'input non si scioglie con un campo in più: si
 scioglierebbe con un meccanismo per dichiarare *costanti di body invisibili all'input schema*,
 che è un'astrazione nuova per un caso solo — o meglio, per il caso che quei tool esistano
 perché una rotta sola fa cinque cose diverse a seconda di `action`. La cosa giusta lì è
