@@ -53,7 +53,13 @@ beforeEach(() => {
     error: null
   } as never);
   vi.mocked(gateAiAction).mockResolvedValue(undefined as never);
-  generateBrandMedia.mockResolvedValue({ ok: true, status: 'ready', media: [GENERATED], jobId: null });
+  generateBrandMedia.mockResolvedValue({
+    ok: true,
+    status: 'ready',
+    media: [GENERATED],
+    jobId: null,
+    model: 'nano-banana-2-lite'
+  });
 });
 
 describe('POST /api/v1/brands/:slug/media/generate', () => {
@@ -61,7 +67,13 @@ describe('POST /api/v1/brands/:slug/media/generate', () => {
     const { res, body } = await call({ prompt: 'un banco di lavoro in noce' });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, status: 'ready', media: [GENERATED], job_id: null });
+    expect(body).toEqual({
+      ok: true,
+      status: 'ready',
+      media: [GENERATED],
+      job_id: null,
+      model: 'nano-banana-2-lite'
+    });
   });
 
   it('un brand senza crediti non genera: il gate risponde e il modello non parte', async () => {
@@ -132,13 +144,20 @@ describe('POST /api/v1/brands/:slug/media/generate', () => {
       ok: true,
       status: 'rendering',
       media: [],
-      jobId: 'job-1'
+      jobId: 'job-1',
+      model: 'grok-imagine/text-to-video'
     });
 
     const { res, body } = await call({ prompt: 'un carrello lento sul prodotto', kind: 'video' });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, status: 'rendering', media: [], job_id: 'job-1' });
+    expect(body).toEqual({
+      ok: true,
+      status: 'rendering',
+      media: [],
+      job_id: 'job-1',
+      model: 'grok-imagine/text-to-video'
+    });
   });
 
   it('un fallimento del render non finge un successo', async () => {

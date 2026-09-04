@@ -48,12 +48,22 @@ export const POST: RequestHandler = async ({ request, params }) => {
     kind: parsed.data.kind,
     count: parsed.data.count,
     aspectRatio: parsed.data.aspect_ratio,
+    model: parsed.data.model,
     title: parsed.data.title
   });
 
   if (!result.ok) {
-    return json({ error: result.error }, { status: statusForFailure(GENERATE_MEDIA, result.error) });
+    return json(
+      { error: result.error, ...('allowed' in result ? { allowed: result.allowed } : {}) },
+      { status: statusForFailure(GENERATE_MEDIA, result.error) }
+    );
   }
 
-  return json({ ok: true, status: result.status, media: result.media, job_id: result.jobId });
+  return json({
+    ok: true,
+    status: result.status,
+    media: result.media,
+    job_id: result.jobId,
+    model: result.model
+  });
 };

@@ -80,6 +80,16 @@ as `media_ids`. That is also how you post to Instagram or TikTok, which never ac
 it returns to `create_post` as `media_ids`. The file is copied into the brand library, so the post
 still has its image the day the original link dies.
 
+**Draw a new image** → `generate_image` with a prompt. It bills a render per image and creates
+nothing in the calendar, so ask for two or three with `count`, look at them, keep one.
+
+**CHANGE an image you already have** → `refine_image` with its `base_media_id` and an instruction
+("make it red", "warmer background"). It starts from that asset, so the result is that picture
+changed. Do NOT reach for `generate_image` to alter something: a new prompt draws a new picture
+from scratch, pays for a fresh render, and gives you a different subject — the commonest and most
+expensive mistake on this surface. The original is never overwritten: refining files a new asset,
+so a wrong edit costs one render and not your source.
+
 **Check your copy before you create it** → `check_content` with the same spec you would send to
 `create_post`. It returns blocking errors, warnings and a 0–100 score per platform, each naming
 the field to repair. It costs nothing and calls no model, so run it on every draft and fix what
@@ -142,6 +152,12 @@ transfer) with the models each one accepts; `set_media_model` pins one. A model 
 that job is refused with the list that would have been taken, so read before you write. `null`
 gives the job back to the platform default. No credits, no model call; it applies to the next
 render.
+
+**For ONE call only, pass `model` to the generator instead.** `set_media_model` is "from now on"
+and changes the brand; `model` on `generate_image` or `refine_image` is "just this once" and
+changes nothing. Drawing and refining are two different jobs with two different lists — read
+`get_media_models` for the right one. The response says which model actually ran, so an agent that
+chose nothing still knows what it got.
 
 **Hand over a payment link** → `create_checkout_link` (pick a plan and pay) or
 `create_billing_portal_link` (invoices, card, plan change, **cancel**). You mint the URL and give

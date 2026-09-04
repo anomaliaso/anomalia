@@ -302,6 +302,9 @@ export const GENERATE_MEDIA = {
   tool: 'generate_media',
   title: 'Generate media into the library',
   description:
+    'PREFER generate_image or generate_video: they say what they do, and refining or motion ' +
+    'control has its own tool. This one stays and keeps working, forwarding to those two. ' +
+    'To pick the model, read get_media_models and pass model — for this call only. ' +
     'Generate a new image or video into the brand media library, then pass the id it returns as ' +
     'media_ids on create_post. THIS SPENDS CREDITS: every image is a paid render and every video ' +
     'is a paid clip, so ask for what you need and no more. It creates nothing in the calendar — ' +
@@ -326,6 +329,15 @@ export const GENERATE_MEDIA = {
             '. Each one bills a render. Defaults to 1.'
         ),
       aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
+      model: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Model id for THIS call only — it changes no brand setting. Omit to use the brand’s ' +
+            'choice. Accepted ids come from get_media_models (slot imageModel for an image, ' +
+            'videoModel for a video); anything else is refused as model_not_for_slot.'
+        ),
       title: z.string().optional().describe('The name the asset carries in the library')
     })
     .strict(),
@@ -333,10 +345,15 @@ export const GENERATE_MEDIA = {
     ok: z.literal(true),
     status: z.enum(['ready', 'rendering']),
     media: z.array(GeneratedMediaSchema),
-    job_id: z.string().nullable()
+    job_id: z.string().nullable(),
+    model: z
+      .string()
+      .nullable()
+      .describe('The model that made it; null when the platform default chose')
   }),
   failures: [
     { error: 'credits_exhausted', status: 402 },
+    { error: 'model_not_for_slot', status: 400 },
     { error: 'video_budget_exhausted', status: 400 },
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }
@@ -509,6 +526,110 @@ export const EDIT_POST = {
   failures: [
     { error: 'No fields to update', status: 400 },
     { error: 'Post not found', status: 404 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+const AlternativesField = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(MAX_MEDIA_ALTERNATIVES)
+  .optional()
+  .describe(
+    'How many alternatives to draw, 1-' + MAX_MEDIA_ALTERNATIVES + '. Each one bills a render. Defaults to 1.'
+  );
+
+/**
+ * Il modello vale PER QUESTA CHIAMATA. La distinzione con `set_media_model` è la sola cosa che
+ * conta qui e va letta senza ambiguità: quello è «d'ora in poi», questo è «per questa volta».
+ * Sceglierne uno non deve lasciare dietro di sé una preferenza che nessuno ha chiesto.
+ */
+function modelField(slot: string) {
+  return z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Model id for THIS call only — it changes no brand setting. Omit to use the brand’s ' +
+        'choice. The ids this job accepts, and what each costs, come from get_media_models ' +
+        '(slot ' + slot + '); anything else is refused as model_not_for_slot.'
+    );
+}
+
+const ImageResult = z.object({
+  ok: z.literal(true),
+  media: z.array(GeneratedMediaSchema),
+  model: z.string().nullable().describe('The model that drew it; null when the platform default chose')
+});
+
+const MODEL_FAILURE = { error: 'model_not_for_slot', status: 400 } as const;
+
+export const GENERATE_IMAGE = {
+  tool: 'generate_image',
+  title: 'Generate an image',
+  description:
+    'Draw a NEW image into the brand media library from a prompt, then pass the id it returns as ' +
+    'media_ids on create_post. Call get_media_models first if you want to choose the model — ' +
+    'pass it as model, for this call only, instead of set_media_model, which changes the brand ' +
+    'default from now on. BILLS A RENDER PER IMAGE (about 8 credits each, and the model moves ' +
+    'that). It creates nothing in the calendar, so ask for two or three alternatives, look at ' +
+    'them with list_media, and attach only the one you keep. To change an image that already ' +
+    'exists use refine_image: correcting one drawing is cheaper than redrawing until it is right.',
+  method: 'POST',
+  pathUnderBrand: '/media/images',
+  input: z
+    .object({
+      prompt: z.string().min(1).describe('What the image should show'),
+      count: AlternativesField,
+      aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
+      model: modelField('imageModel'),
+      title: z.string().optional().describe('The name the asset carries in the library')
+    })
+    .strict(),
+  output: ImageResult,
+  failures: [
+    { error: 'credits_exhausted', status: 402 },
+    MODEL_FAILURE,
+    { error: 'render_failed', status: 502 },
+    { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const REFINE_IMAGE = {
+  tool: 'refine_image',
+  title: 'Refine an image',
+  description:
+    'Change an image that is already in the brand library — "make the background warmer", ' +
+    '"remove the cup on the left" — and file the result as a NEW asset. The original is left ' +
+    'untouched, so a refinement never destroys what it started from. BILLS A RENDER PER IMAGE ' +
+    '(about 8 credits each). base_media_id comes from list_media and must belong to this brand. ' +
+    'Say ' +
+    'what should CHANGE, not what the whole picture should be: the source is the subject, the ' +
+    'instruction is the edit. Refining has its own model — get_media_models, slot ' +
+    'imageRefineModel — and model here applies to this call only. base_media_id takes a short prefix, like post ids do.',
+  method: 'POST',
+  pathUnderBrand: '/media/images/refine',
+  input: z
+    .object({
+      base_media_id: z
+        .string()
+        .min(1)
+        .describe('The library image to start from — an id from list_media, or an unambiguous prefix'),
+      instruction: z.string().min(1).describe('What should change about it'),
+      count: AlternativesField,
+      model: modelField('imageRefineModel'),
+      title: z.string().optional().describe('The name the new asset carries in the library')
+    })
+    .strict(),
+  output: ImageResult,
+  failures: [
+    { error: 'credits_exhausted', status: 402 },
+    MODEL_FAILURE,
+    { error: 'source_not_found', status: 404 },
+    { error: 'render_failed', status: 502 },
+    { error: 'store_failed', status: 502 }
   ],
   destructive: false
 } satisfies BrandEndpoint;
