@@ -98,4 +98,4 @@ SECURITY, the public changelog, package READMEs — is English.
    sentence; a silent gap is not.
 
 The `anomalia` CLI, its MCP server and the publishable agent skills live in [`cli/`](cli/) of this
-same repository (AGPL-3.0, released from `cli-v*` tags). CLI changes are PRs here like any other.
+same repository (Apache-2.0, released from `cli-v*` tags). CLI changes are PRs here like any other.

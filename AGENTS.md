@@ -2,7 +2,7 @@
 
 ## CLI
 
-The `anomalia` CLI lives in this repo at **`cli/`** (AGPL-3.0, source of CLI + MCP server +
+The `anomalia` CLI lives in this repo at **`cli/`** (Apache-2.0, source of CLI + MCP server +
 agent skills + Claude/Codex plugins). It is a thin HTTP client — it never touches the database,
 it only calls the API in `src/routes/api/v1/`. CLI, endpoints and MCP tools change in the same
 PRs here; releases are `cli-v*` tags (workflow `cli-release.yml`).

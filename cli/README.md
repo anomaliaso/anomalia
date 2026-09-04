@@ -247,7 +247,7 @@ and publishes `anomalia-cli` to npm when `NPM_TOKEN` is set. Details: [`docs/dis
 
 Copyright © 2026 Andrea Buttarelli.
 
-Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). You may use, modify
+Licensed under the [Apache License 2.0](LICENSE). You may use, modify
 and redistribute it, but derivative works must stay open source under the same license, must keep
 the copyright notice, and must state their changes — including when offered to users over a
 network.

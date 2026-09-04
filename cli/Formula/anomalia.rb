@@ -13,7 +13,7 @@ class Anomalia < Formula
   desc "Command-line client for Anomalia — social media AI autopilot"
   homepage "https://anomalia.so"
   version "0.1.0"
-  license "AGPL-3.0-or-later"
+  license "Apache-2.0"
 
   livecheck do
     url "https://github.com/anomaliaso/anomalia/releases/latest"
