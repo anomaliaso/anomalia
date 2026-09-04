@@ -5,7 +5,7 @@ description: >-
   brands, posts, plans, studio, SEO/GEO, blog, and AI chat. Use when the user
   mentions Anomalia, anomalia.so, approving social posts, editorial plans,
   SEO/GEO audits, or managing brand content from an agent.
-license: AGPL-3.0-or-later
+license: Apache-2.0
 compatibility: >-
   Requires network access to anomalia.so (or PUBLIC_APP_URL). Prefer Anomalia MCP
   when connected; otherwise the anomalia CLI (Bun or installed binary) after OAuth login.
