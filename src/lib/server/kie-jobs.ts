@@ -113,6 +113,18 @@ export async function createKieTask(
 }
 
 /**
+ * L'esito di un poll. SCADUTO e FALLITO sono due cose diverse e qui non collassano piu' in un
+ * `undefined`: kie che RIFIUTA un lavoro non ci costa niente e si puo' ritentare, kie che sta
+ * ANCORA lavorando mentre noi smettiamo di guardare ci costa comunque — e ritentare li' apre un
+ * secondo task che kie fattura di nuovo, per lo stesso lavoro. Il `taskId` viaggia con la scadenza
+ * apposta: e' cio' che serve per riprendere quello invece di aprirne un altro.
+ */
+export type KiePollOutcome =
+  | { status: 'done'; url: string; taskId: string; credits?: number }
+  | { status: 'failed'; taskId: string; error: string }
+  | { status: 'timeout'; taskId: string };
+
+/**
  * Poll fino alla fine. L'URL finale sta in `data.resultJson` (una *stringa* JSON) a `resultUrls[0]`;
  * `creditsConsumed` sullo stesso payload è l'addebito ESATTO di kie — si fattura quello, mai una stima.
  *
@@ -125,16 +137,16 @@ export async function pollKieTask(
   signal?: AbortSignal,
   label = 'kie',
   intervalMs = 5000
-): Promise<KieJobResult | undefined> {
+): Promise<KiePollOutcome> {
   const deadline = Date.now() + timeoutMs;
   let first = true;
   while (Date.now() < deadline) {
-    if (signal?.aborted) return undefined;
+    if (signal?.aborted) return { status: 'timeout', taskId };
     // Si CHIEDE prima e si aspetta dopo: un job già pronto (o già rifiutato) torna subito invece di
     // costare un intervallo intero di attesa a vuoto.
     if (!first) await kieSleep(intervalMs, signal);
     first = false;
-    if (signal?.aborted) return undefined;
+    if (signal?.aborted) return { status: 'timeout', taskId };
     const infoRes = await fetch(`${KIE_JOBS_BASE}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
       headers: kieJobHeaders(),
       signal
@@ -148,7 +160,7 @@ export async function pollKieTask(
       const why =
         info?.data?.failMsg ?? info?.data?.failCode ?? info?.data?.errorMessage ?? '(nessun motivo)';
       console.error(`[${label}] kie task ${taskId} ${state}: ${String(why).slice(0, 400)}`);
-      return undefined;
+      return { status: 'failed', taskId, error: String(why).slice(0, 400) };
     }
     if (state === 'success' || state === 'completed') {
       const raw = info?.data?.resultJson;
@@ -156,18 +168,21 @@ export async function pollKieTask(
       try {
         parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       } catch {
-        return undefined;
+        return { status: 'failed', taskId, error: 'resultJson non leggibile' };
       }
       const url = parsed?.resultUrls?.[0];
-      if (!url) return undefined;
+      if (!url) return { status: 'failed', taskId, error: 'nessun resultUrl' };
       const rawCredits = info?.data?.creditsConsumed ?? info?.data?.credits_consumed;
       const credits = Number.isFinite(Number(rawCredits)) ? Number(rawCredits) : undefined;
-      return { url, taskId, credits };
+      return { status: 'done', url, taskId, credits };
     }
     // qualsiasi altro stato (waiting/queuing/generating) → si continua a chiedere
   }
+  // ABBANDONATO, non annullato: kie continua a renderizzare e a fatturare. L'API che usiamo
+  // (`createTask` + `recordInfo`) non espone un annullamento, quindi l'unica cosa onesta e'
+  // riprendere questo taskId invece di aprirne un altro.
   console.error(`[${label}] kie task ${taskId} non finito dopo ${Math.round(timeoutMs / 1000)}s`);
-  return undefined; // scaduto
+  return { status: 'timeout', taskId };
 }
 
 /**
@@ -358,10 +373,23 @@ export type GeminiImageRequest = {
  * prodotto o persona), quindi ~2–4s in più sui ~30s del render; il caso peggiore che
  * `buildImageRequest` può produrre è 6, cioè ~12s. Si caricano in parallelo apposta.
  */
+export type KieImageOutcome = {
+  dataUrl?: string;
+  /** Presente = kie sta ANCORA lavorando su questo task. Si riprende, non se ne apre un altro. */
+  timedOutTaskId?: string;
+};
+
 export async function generateImageOnKie(
   req: GeminiImageRequest,
-  opts: { label?: string; context?: string; signal?: AbortSignal } = {}
-): Promise<string | undefined> {
+  opts: {
+    label?: string;
+    context?: string;
+    signal?: AbortSignal;
+    /** Il task di un tentativo scaduto: si riprende quello, e non si carica niente due volte. */
+    resumeTaskId?: string;
+    timeoutMs?: number;
+  } = {}
+): Promise<KieImageOutcome> {
   const label = opts.label ?? 'renderPostImage';
   const parts = req.contents?.[0]?.parts ?? [];
   const prompt = parts
@@ -383,8 +411,33 @@ export async function generateImageOnKie(
       error,
       context: opts.context
     });
-    return undefined;
+    return {};
   };
+
+  /**
+   * Un task scaduto e' l'unico esito che si paga senza sapere quanto: `creditsConsumed` arriva solo
+   * dal ramo `success`, quindi senza questa riga l'addebito esiste su kie e da noi non esiste
+   * affatto. Non si inventa un numero — si scrive l'esito e il taskId, e la differenza col
+   * cruscotto di kie diventa leggibile invece che misteriosa.
+   */
+  const abandoned = (taskId: string): KieImageOutcome => {
+    logAiCall({
+      label,
+      provider: 'kie',
+      model,
+      ms: Date.now() - t0,
+      ok: false,
+      error: `task ${taskId} scaduto: kie lo sta ancora renderizzando e lo fattura, costo ignoto`,
+      context: opts.context
+    });
+    return { timedOutTaskId: taskId };
+  };
+
+  // Un tentativo che riprende un task gia' aperto non ricarica i riferimenti e non ne crea un
+  // altro: il lavoro e' gia' in corso e pagato, qui si torna solo a guardarlo.
+  if (opts.resumeTaskId) {
+    return finishKieImage(opts.resumeTaskId, label, model, t0, opts, abandoned);
+  }
 
   // I riferimenti in parallelo: sono giri di rete indipendenti, in serie sarebbero 6× la latenza.
   const refUrls = (await Promise.all(refs.map((r) => uploadKieRef(r, opts.signal)))).filter(
@@ -405,8 +458,41 @@ export async function generateImageOnKie(
   const taskId = await createKieTask(model, input, opts.signal, 'kie-image');
   if (!taskId) return fail('createTask rifiutata');
 
-  const job = await pollKieTask(taskId, IMAGE_TIMEOUT_MS, opts.signal, 'kie-image', POLL_INTERVAL_MS);
-  if (!job) return fail('job fallito o scaduto');
+  return finishKieImage(taskId, label, model, t0, opts, abandoned);
+}
+
+/** Da qui in giu' il task esiste gia': si guarda come va e si paga cio' che kie ha addebitato. */
+async function finishKieImage(
+  taskId: string,
+  label: string,
+  model: string,
+  t0: number,
+  opts: { context?: string; signal?: AbortSignal; timeoutMs?: number },
+  abandoned: (taskId: string) => KieImageOutcome
+): Promise<KieImageOutcome> {
+  const job = await pollKieTask(
+    taskId,
+    opts.timeoutMs ?? IMAGE_TIMEOUT_MS,
+    opts.signal,
+    'kie-image',
+    POLL_INTERVAL_MS
+  );
+
+  if (job.status === 'timeout') return abandoned(taskId);
+
+  if (job.status === 'failed') {
+    // Rifiutato = non addebitato. Qui `cost_usd` a null e' la verita', non un buco.
+    logAiCall({
+      label,
+      provider: 'kie',
+      model,
+      ms: Date.now() - t0,
+      ok: false,
+      error: job.error,
+      context: opts.context
+    });
+    return {};
+  }
 
   const dataUrl = await fetchAsDataUrl(job.url, opts.signal);
   logAiCall({
@@ -420,7 +506,7 @@ export async function generateImageOnKie(
     flatCostUsd: kieFlatCostUsd(job.credits),
     context: opts.context
   });
-  return dataUrl;
+  return { dataUrl };
 }
 
 // ── Voce ────────────────────────────────────────────────────────────────────────────────────
@@ -483,7 +569,7 @@ export async function generateSpeechOnKie(opts: {
   if (!taskId) return undefined;
 
   const job = await pollKieTask(taskId, TTS_TIMEOUT_MS, opts.signal, 'kie-tts', POLL_INTERVAL_MS);
-  if (!job) return undefined;
+  if (job.status !== 'done') return undefined;
 
   const res = await fetch(job.url, {
     signal: opts.signal ?? AbortSignal.timeout(60_000)

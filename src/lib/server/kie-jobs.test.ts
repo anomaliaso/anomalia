@@ -178,7 +178,7 @@ describe('generateImageOnKie', () => {
     expect(submit.input.resolution).toMatch(/^[124]K$/);
 
     // L'URL di kie vive 24h: quello che esce di qui è già un data URL scaricato.
-    expect(out?.startsWith('data:image/png;base64,')).toBe(true);
+    expect(out.dataUrl?.startsWith('data:image/png;base64,')).toBe(true);
     expect(out).not.toContain('tempfile.kie');
   });
 
@@ -248,7 +248,10 @@ describe('generateImageOnKie', () => {
     const out = await generateImageOnKie(
       geminiRequest([{ text: 'x' }, { inlineData: { mimeType: 'image/png', data: PNG_B64 } }])
     );
-    expect(out).toBeUndefined();
+    // Niente immagine e nessun task da riprendere: qui non si e' aperto nulla, quindi non c'e'
+    // niente che kie stia ancora renderizzando.
+    expect(out.dataUrl).toBeUndefined();
+    expect(out.timedOutTaskId).toBeUndefined();
     expect(logged.at(-1)).toMatchObject({ ok: false, provider: 'kie' });
   });
 });
