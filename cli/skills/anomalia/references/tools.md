@@ -208,10 +208,14 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 (captions, carousels, hooks, platform limits) or `seo-audit` depending on `agent`. Omit `agent`
 for the writing deck alone; `content` and `ugc` add `social`, `web` adds `seo-audit`.
 
-It also returns this brand's OWN procedures — what its team wrote down or the system distilled
-from repeated lessons. `source` tells them apart, and **a brand procedure overrules a product
-skill when the two disagree**: the product skill is how everyone writes, the brand procedure is
-how this one does.
+It also returns the **built-in production skills** for that agent — the ones that name the gates
+which refuse a render (`motion-voiceover-fit`, `graphic-feed-legibility`, and the rest). Write a
+motion script without them and `make_video` gets refused with no explanation.
+
+And it returns this brand's OWN procedures — what its team wrote down or the system distilled
+from repeated lessons. `source` tells product from brand, and **a brand procedure overrules a
+product skill when the two disagree**: the product skill is how everyone writes, the brand
+procedure is how this one does.
 
 Bodies arrive inline. Each skill lists its `references` by path without sending them; fetch one
 with `reference: "social/references/platform-limits.md"`, which returns that file alone and no
