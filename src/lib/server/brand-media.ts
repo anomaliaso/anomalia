@@ -13,6 +13,19 @@ const BUCKET = 'brand-knowledge';
 
 export type BrandMediaKind = 'image' | 'video';
 
+export const BRAND_MEDIA_SOURCES = [
+  'upload',
+  'chat_drop',
+  'shoot',
+  'generate',
+  'remotion_export',
+  'post_render',
+  'website_capture',
+  'agent'
+] as const;
+
+export type BrandMediaSource = (typeof BRAND_MEDIA_SOURCES)[number];
+
 export type BrandMediaRow = {
   id: string;
   brand_id: string;
@@ -341,7 +354,7 @@ export type InsertBrandMediaInput = {
   width?: number | null;
   height?: number | null;
   durationSeconds?: number | null;
-  source?: string;
+  source?: BrandMediaSource;
   title?: string | null;
 };
 
@@ -350,6 +363,7 @@ export async function insertBrandMedia(
   input: InsertBrandMediaInput
 ): Promise<{ row: BrandMediaRow | null; error?: string }> {
   const kind = inferKind(input.mime);
+  const source: BrandMediaSource = input.source ?? 'upload';
   const { data, error } = await supabase
     .from('brand_media')
     .insert({
@@ -359,7 +373,7 @@ export async function insertBrandMedia(
       storage_path: input.storagePath,
       // Private bucket: store path as url; UI signs via storage_path.
       url: input.storagePath,
-      source: input.source ?? 'upload',
+      source,
       mime: input.mime,
       bytes: input.bytes ?? null,
       width: input.width ?? null,
@@ -782,9 +796,12 @@ export async function saveRenderedVideoToLibrary(
     durationSeconds: opts.durationSeconds,
     fileName: storagePath.split('/').pop() ?? 'generated.mp4',
     title: opts.title,
-    source: 'ai'
+    source: 'generate'
   });
-  if (error || !row) return { error: error ?? 'could not register the clip in the library' };
+  if (error || !row) {
+    swallow('rendered clip not registered in the library', error ?? 'insert returned no row');
+    return { error: error ?? 'could not register the clip in the library' };
+  }
   return { mediaId: row.id };
 }
 

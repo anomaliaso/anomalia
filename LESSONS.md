@@ -636,3 +636,34 @@ diceva al prossimo lettore l'opposto della verità, che è peggio di non dire ni
 chiediti se il mock lo sta scavalcando. Se lo scavalca, resta una sola asserzione onesta: dato il
 verdetto che l'upstream produce sul serio, la route lo rispetta e non lavora. Il resto — che
 l'upstream produca quel verdetto — è un test dell'upstream, e va scritto lì o non va scritto.
+
+## Un valore che il CHECK rifiuta è invisibile a una suite che mocka il database
+
+**Segnale.** Una funzione che deposita qualcosa in una tabella «riesce» in ogni test e in
+produzione la riga non c'è. Il codice scrive una stringa in una colonna con un `CHECK ... in (…)`,
+e quella stringa non è nella lista. Nei log non c'è niente, perché il fallimento è gestito
+best-effort: `{ error }` restituito al chiamante e mai stampato.
+
+**Cosa succede.** Il vincolo vive nel database, il valore vive nel codice, e la suite mocka
+Supabase: un insert finto accetta qualunque stringa, quindi il test è verde per costruzione. È
+capitato a `brand_media.source`: `saveRenderedVideoToLibrary` scriveva `'ai'` e il `save_to_library`
+della sandbox scriveva `'sandbox'`, nessuno dei due nel vincolo. Ogni video renderizzato veniva
+pagato, caricato su storage e poi rifiutato dalla libreria con 23514 — l'esatto vicolo cieco che
+quella funzione era stata scritta per chiudere. Il best-effort è la scelta giusta (non si fa fallire
+un render pagato per un INSERT) ma trasforma il difetto in lavoro pagato e buttato in silenzio.
+
+**La mossa.** L'insieme ammesso diventa **una costante esportata accanto al modello che governa la
+colonna**, il campo è tipato su quella costante, e tre asserzioni la tengono onesta: la costante
+confrontata con l'array dell'ultima migration che definisce il vincolo; una scansione del sorgente
+che pretende ogni literal scritto in quella colonna dentro la costante; un `@ts-expect-error` sul
+valore vecchio, che fa fallire `npm run check` il giorno in cui il tipo smette di mordere. Il test
+che vale non è «il mock ha accettato l'insert» — quello non può fallire — ma «il valore è
+nell'insieme che il database ammette», e va munito di un guardiano contro il passaggio a vuoto
+(`written.length > N`): una scansione che non trova più niente deve fallire, non passare. E il
+fallimento best-effort si fa sentire — `swallow()` dove `$lib` è già in casa, `console.error('[X] …')`
+dove non lo è: resta non fatale, smette di essere muto.
+
+**Il corollario che è costato due minuti in più.** `supabase-js` **risolve** con `{ error }` su un
+23514, non rigetta. Un `.then(() => {}, () => {})` o un `.catch(() => {})` su una insert non vede il
+vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
+risolto.
