@@ -32,6 +32,8 @@ the full UUID, because an ambiguous prefix would remove the wrong row and nothin
 | `list_media` | (MCP only) |
 | `check_content` | (MCP only) |
 | `import_media_url` | (MCP only) |
+| `generate_media` | (MCP only) |
+| `check_media_job` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
 | `edit_post` | `anomalia post <slug> <id> edit …` |
@@ -107,6 +109,27 @@ that resolves to one, and a redirect that walks into one or drops back to http �
 before a byte is stored, so a rejected import leaves nothing behind. The result carries the id,
 the resolved `source_url` kept as the asset's origin, and a `signed_url` you can open to check
 that the right file arrived.
+
+`generate_media` makes a NEW image or video and puts it straight into the brand library — no
+post, nothing in the calendar. Required: `slug`, `prompt`; optional `kind` (`image` default, or
+`video`), `count`, `aspect_ratio`, `title`. **This spends credits**, unlike `import_media_url`:
+every image is a paid render and every video a paid clip. `count` draws up to 4 alternatives in
+one call and bills each one, so generate a few, look at them with `list_media`, and pass only the
+id you keep to `create_post` as `media_ids` — the calendar stays clean either way.
+
+An image comes back finished: `status` is `ready` and `media` carries the rows, each with a
+`signed_url` you can open. A video cannot: it takes minutes, longer than any single call may
+last, so it comes back with `status` `rendering` and a `job_id`, and `check_media_job` says where
+it got to. Do not call `generate_media` again for the same clip while one is still rendering —
+that bills a second one. Refusals: `credits_exhausted` (402) means the brand's pool is empty and
+nothing was drawn; `video_budget_exhausted` (400) means the monthly video allowance is used up,
+counting the clips still rendering; `render_failed` (502) is the model returning nothing, and
+nothing is stored; `store_failed` (502) means it was drawn but could not be filed.
+
+`check_media_job` reads those jobs back, newest first. Required: `slug`; optional `job_id` for
+one of them. Each row carries `status` (`rendering`, `done`, `failed` or `expired`), `error` when
+it failed, and `media_id` once the clip is in the library — that id is what `create_post` takes
+as `media_ids`. It calls no model and spends no credits, so poll it rather than guessing.
 
 `create_post` stores copy **you** wrote: Anomalia calls no model and spends no credits. It does
 not publish and does not schedule — `scheduled_for` is the proposed calendar time and stays a

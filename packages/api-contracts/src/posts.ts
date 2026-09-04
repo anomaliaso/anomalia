@@ -281,3 +281,92 @@ export const IMPORT_MEDIA_URL = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+/**
+ * Un tetto solo per le alternative, non due che divergono: lo schema rifiuta oltre questo numero,
+ * quindi il server non ha una seconda soglia da tenere allineata. È lo stesso ceiling che la
+ * pagina Media generator applica alle sue varianti — ogni alternativa è un render pagato.
+ */
+export const MAX_MEDIA_ALTERNATIVES = 4;
+
+const GeneratedMediaSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  mime: z.string().nullable(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  signed_url: z.string().nullable()
+});
+
+export const GENERATE_MEDIA = {
+  tool: 'generate_media',
+  title: 'Generate media into the library',
+  description:
+    'Generate a new image or video into the brand media library, then pass the id it returns as ' +
+    'media_ids on create_post. THIS SPENDS CREDITS: every image is a paid render and every video ' +
+    'is a paid clip, so ask for what you need and no more. It creates nothing in the calendar — ' +
+    'generate alternatives, look at them with list_media, and attach only the one you keep. ' +
+    'Images come back ready, up to ' + MAX_MEDIA_ALTERNATIVES + ' per call. A video takes minutes: ' +
+    'it comes back as a job_id with status rendering, and check_media_job says when it landed — ' +
+    'do not call this again for the same clip while one is still rendering.',
+  method: 'POST',
+  pathUnderBrand: '/media/generate',
+  input: z
+    .object({
+      prompt: z.string().min(1).describe('What the image or video should show'),
+      kind: z.enum(['image', 'video']).optional().describe('Defaults to image'),
+      count: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_MEDIA_ALTERNATIVES)
+        .optional()
+        .describe(
+          'How many alternatives to draw, images only, 1-' + MAX_MEDIA_ALTERNATIVES +
+            '. Each one bills a render. Defaults to 1.'
+        ),
+      aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
+      title: z.string().optional().describe('The name the asset carries in the library')
+    })
+    .strict(),
+  output: z.object({
+    ok: z.literal(true),
+    status: z.enum(['ready', 'rendering']),
+    media: z.array(GeneratedMediaSchema),
+    job_id: z.string().nullable()
+  }),
+  failures: [
+    { error: 'credits_exhausted', status: 402 },
+    { error: 'video_budget_exhausted', status: 400 },
+    { error: 'render_failed', status: 502 },
+    { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const CHECK_MEDIA_JOB = {
+  tool: 'check_media_job',
+  title: 'Check a media generation job',
+  description:
+    'Where the videos generate_media started have got to, newest first. status is rendering while ' +
+    'the clip is being made, done once it is in the library — and then media_id is the id ' +
+    'create_post accepts as media_ids. failed says why. Calls no model and spends no credits.',
+  method: 'GET',
+  pathUnderBrand: '/media/generate',
+  input: z
+    .object({ job_id: z.string().optional().describe('One job; omit for the brand\'s recent ones') })
+    .strict(),
+  output: z.object({
+    jobs: z.array(
+      z.object({
+        id: z.string(),
+        status: z.string(),
+        media_id: z.string().nullable(),
+        error: z.string().nullable(),
+        submitted_at: z.string().nullable()
+      })
+    )
+  }),
+  failures: [],
+  destructive: false
+} satisfies BrandEndpoint;
