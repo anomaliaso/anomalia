@@ -3689,6 +3689,20 @@
       "talkTo": "Parla con {name}",
       "agentOffer": "Qui non c’è ancora nulla — se ne può occupare {name}. Apri la chat."
     },
+    "mcpGuide": {
+      "title": "Collega il tuo agente",
+      "subtitle": "Guida questo brand da Claude, Cursor o ChatGPT",
+      "hostTitle": "Qualsiasi host MCP — Claude, Cursor, ChatGPT",
+      "hostNote": "Incolla nella configurazione MCP dell'host. La prima volta chiede di accedere (OAuth); dopo, ogni chiamata porta con sé il tuo token.",
+      "pluginTitle": "Claude Code — il plugin",
+      "pluginNote": "Contiene lo stesso server remoto più la skill di Anomalia. Su Codex: codex plugin marketplace add anomaliaso/anomalia",
+      "cliTitle": "Terminale, o un host che non sa mandare un header Bearer",
+      "cliNote": "Il login della CLI scrive la sessione che il server locale legge.",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "note": "Il server remoto è {url} e vuole un header Authorization: Bearer — un 401 senza quello è la risposta giusta, non un guasto. Se il tuo host registra un callback OAuth con schema custom e la connessione viene rifiutata, usa la CLI e il server locale.",
+      "docs": "Guida completa"
+    },
     "strategySetup": {
       "title": "Imposta il flusso di Anomalia",
       "body": "Tre passi, in ordine — Studio, Strategia, Piano editoriale. Ognuno alimenta il successivo, e ogni contenuto futuro li seguirà.",

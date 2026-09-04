@@ -17,6 +17,50 @@ import {
 import { founderVideoBudget, listVideoRequests } from '$lib/server/video-requests';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { cachedBrandPage } from '$lib/server/page-cache';
+import { viewFor, type PostDetail } from '$lib/post-state';
+import { captionPatch } from '$lib/post-caption';
+
+/** Il risultato che `PostPanel` legge: `id` dice a quale post appartiene, e senza quello il
+ *  pannello mostrerebbe l'esito di un'altra riga. */
+type PanelOutcome = {
+  id: string | null;
+  message: string | null;
+  saved: boolean;
+  approved: boolean;
+  status: string | null;
+};
+
+function panelOutcome(partial: Partial<PanelOutcome>): PanelOutcome {
+  return { id: null, message: null, saved: false, approved: false, status: null, ...partial };
+}
+
+function brandApi(slug: string, path: string): string {
+  return `/api/v1/brands/${encodeURIComponent(slug)}${path}`;
+}
+
+async function readError(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  return body?.error ?? `Request failed (${res.status})`;
+}
+
+/**
+ * Il dettaglio del post aperto nel pannello. Passa dall'endpoint invece che da Supabase perche'
+ * la' le URL dei media sono gia' firmate: rifarlo qui vorrebbe dire riscrivere quella firma.
+ */
+async function readPostDetail(
+  fetcher: typeof fetch,
+  token: string,
+  slug: string,
+  id: string
+): Promise<PostDetail | null> {
+  const res = await fetcher(brandApi(slug, `/posts/${encodeURIComponent(id)}/media`), {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) return null;
+
+  const detail = (await res.json()) as PostDetail & { error?: string };
+  return detail.error ? null : detail;
+}
 
 function parseIds(form: FormData, key = 'ids'): string[] {
   return String(form.get(key) ?? '')
@@ -77,6 +121,7 @@ export const load: PageServerLoad = async (event) => {
   const { supabase } = event.locals;
   const url = event.url;
   const { brand } = await event.parent();
+  const { session } = await event.locals.safeGetSession();
 
   // Outside the cached callback on purpose: this is a fire-and-forget reconciliation, not part
   // of the payload, and burying it inside would mean a cache hit silently skips it — a
@@ -96,11 +141,7 @@ export const load: PageServerLoad = async (event) => {
     const status = url.searchParams.get('status') ?? '';
     const filter = FILTERABLE.has(status) ? status : '';
     const rowFilter = url.searchParams.get('row') ?? '';
-    // Legacy deep link from chat previews — posts now have a dedicated dashboard.
-    const focusPostId = url.searchParams.get('post');
-    if (focusPostId) {
-      throw redirect(303, `/app/${brand.slug}/posts/${focusPostId}/preview`);
-    }
+    const selectedId = url.searchParams.get('post');
 
     const monthStart = new Date(Date.UTC(year, month - 1, 1));
     const monthEnd = new Date(Date.UTC(year, month, 0));
@@ -312,12 +353,81 @@ export const load: PageServerLoad = async (event) => {
       prevYM: `${prev.getUTCFullYear()}-${pad(prev.getUTCMonth() + 1)}`,
       nextYM: `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}`,
       currentYM: `${today.year}-${pad(today.month)}`,
-      isCurrentMonth: year === today.year && month === today.month
+      isCurrentMonth: year === today.year && month === today.month,
+      // La vista sta nell'URL, non nel client: un calendario in lista si manda a un collega.
+      view: viewFor(url.searchParams.get('view')),
+      selectedId,
+      detail:
+        selectedId && session
+          ? await readPostDetail(event.fetch, session.access_token, brand.slug, selectedId)
+          : null
     };
-  }, [url.searchParams.get('m'), url.searchParams.get('status'), url.searchParams.get('row'), url.searchParams.get('post')].join('|'));
+  }, ['m', 'status', 'row', 'post', 'view'].map((k) => url.searchParams.get(k)).join('|'));
 };
 
 export const actions: Actions = {
+  /**
+   * Le due azioni del pannello. Passano dagli endpoint invece che da Supabase perche' `approve`
+   * non e' un `update`: dietro c'e' la coda di distribuzione, e riscriverla qui vorrebbe dire
+   * tenerne due versioni.
+   */
+  editPost: async ({ request, params, fetch, locals }) => {
+    const { session } = await locals.safeGetSession();
+    if (!session) redirect(303, '/login');
+
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    if (!id) return fail(400, panelOutcome({ message: 'Missing post.' }));
+
+    const patch = captionPatch(form);
+    if (typeof patch === 'string') return fail(400, panelOutcome({ id, message: patch }));
+
+    const res = await fetch(brandApi(params.brand, `/posts/${encodeURIComponent(id)}`), {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(patch)
+    });
+
+    if (!res.ok) return fail(res.status, panelOutcome({ id, message: await readError(res) }));
+
+    return panelOutcome({ id, saved: true });
+  },
+
+  approvePost: async ({ request, params, fetch, locals }) => {
+    const { session } = await locals.safeGetSession();
+    if (!session) redirect(303, '/login');
+
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    if (!id) return fail(400, panelOutcome({ message: 'Missing post.' }));
+
+    const res = await fetch(brandApi(params.brand, `/posts/${encodeURIComponent(id)}/approve`), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    });
+
+    const result = (await res.json().catch(() => null)) as
+      | { status?: string; message?: string; error?: string }
+      | null;
+
+    if (!res.ok || result?.error) {
+      return fail(
+        res.ok ? 400 : res.status,
+        panelOutcome({ id, message: result?.error ?? 'Approval failed.' })
+      );
+    }
+
+    return panelOutcome({
+      id,
+      approved: true,
+      status: result?.status ?? 'approved',
+      message: result?.message ?? null
+    });
+  },
+
   updateCaption: async ({ request, locals: { supabase, user } }) => {
     const data = await request.formData();
     const id = String(data.get('id') ?? '');

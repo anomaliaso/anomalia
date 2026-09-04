@@ -3775,6 +3775,20 @@
       "talkTo": "Parler à {name}",
       "agentOffer": "Rien ici pour l’instant — {name} peut s’en charger. Ouvrez le chat."
     },
+    "mcpGuide": {
+      "title": "Connectez votre agent",
+      "subtitle": "Pilotez cette marque depuis Claude, Cursor ou ChatGPT",
+      "hostTitle": "N'importe quel hôte MCP — Claude, Cursor, ChatGPT",
+      "hostNote": "Collez ceci dans la configuration MCP de l'hôte. Il demande de se connecter la première fois (OAuth) ; ensuite chaque appel porte votre jeton.",
+      "pluginTitle": "Claude Code — le plugin",
+      "pluginNote": "Réunit le même serveur distant et la compétence Anomalia. Sur Codex : codex plugin marketplace add anomaliaso/anomalia",
+      "cliTitle": "Terminal, ou un hôte incapable d'envoyer un en-tête Bearer",
+      "cliNote": "La connexion via la CLI écrit la session que lit le serveur local.",
+      "copy": "Copier",
+      "copied": "Copié",
+      "note": "Le serveur distant est {url} et exige un en-tête Authorization: Bearer — un 401 sans cet en-tête est la bonne réponse, pas une panne. Si votre hôte enregistre un rappel OAuth à schéma personnalisé et que la connexion est refusée, utilisez la CLI et le serveur local.",
+      "docs": "Configuration complète"
+    },
     "strategySetup": {
       "title": "Configurez votre flux Anomalia",
       "body": "Trois étapes, dans l'ordre — Studio, Stratégie, Plan éditorial. Chacune alimente la suivante, et chaque futur post les suit.",

@@ -28,12 +28,17 @@
     id,
     detail,
     timezone,
+    fullHref,
     form,
     onclose
   }: {
     id: string;
     detail: PostDetail;
     timezone: string;
+    /** La scheda completa del post (anteprima, dettagli, analisi, boost): il pannello e' la
+     *  lettura rapida, non il suo sostituto, e senza questo link quelle cinque rotte non le
+     *  raggiungerebbe piu' nessuno. */
+    fullHref: string;
     form: Outcome | null;
     onclose: () => void;
   } = $props();
@@ -116,7 +121,7 @@
 
       <form
         method="POST"
-        action="?/edit"
+        action="?/editPost"
         class="flex flex-col gap-4"
         use:enhance={() => {
           saving = true;
@@ -155,6 +160,12 @@
         {/if}
       </form>
 
+      <a
+        href={fullHref}
+        class="text-muted-foreground text-xs underline underline-offset-4"
+        data-sveltekit-preload-data="off">Open the full post</a
+      >
+
       {#if postState.canApprove}
         <div class="border-border flex flex-col gap-3 rounded-lg border p-4">
           <h3 class="text-sm font-semibold">Approve</h3>
@@ -169,7 +180,7 @@
           {:else}
             <form
               method="POST"
-              action="?/approve"
+              action="?/approvePost"
               class="flex flex-col gap-3"
               use:enhance={() => {
                 approving = true;

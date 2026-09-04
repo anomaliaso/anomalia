@@ -1,6 +1,7 @@
 <script lang="ts">
-  // La guida sta in cima alla dashboard, non dietro un link: collegare il proprio agente è la
-  // prima cosa che il prodotto chiede di fare, e una guida che vive altrove non la fa nessuno.
+  // La guida sta in cima alla home del brand, non dietro un link: collegare il proprio agente è
+  // la prima cosa che il prodotto chiede di fare, e una guida che vive altrove non la apre
+  // nessuno.
   //
   // È un <details> nativo, e resta aperto finché non lo chiude chi legge. NON prova a indovinare
   // se un agente è già collegato: oggi non esiste nessun segnale per saperlo — l'MCP remoto
@@ -8,6 +9,8 @@
   // tabella di client (il client_id È la registrazione, firmata) e `api_keys.last_used_at` è
   // per utente e non viene mai toccato dal percorso MCP. Fingere «collegato» sarebbe peggio che
   // chiedere un click.
+
+  import { _ } from 'svelte-i18n';
 
   const MCP_URL = 'https://mcp.anomalia.so/mcp';
 
@@ -24,24 +27,9 @@
 anomalia login`;
 
   const STEPS = [
-    {
-      id: 'remote',
-      title: 'Any MCP host — Claude, Cursor, ChatGPT',
-      note: 'Paste into the host’s MCP config. It asks you to sign in the first time (OAuth); after that every call carries your token.',
-      snippet: REMOTE_CONFIG
-    },
-    {
-      id: 'plugin',
-      title: 'Claude Code — the plugin',
-      note: 'Bundles the same remote MCP plus the Anomalia skill. On Codex: codex plugin marketplace add anomaliaso/anomalia',
-      snippet: PLUGIN
-    },
-    {
-      id: 'cli',
-      title: 'Terminal, or a host that cannot send a Bearer header',
-      note: 'The CLI login writes the session the local stdio MCP server reads.',
-      snippet: CLI
-    }
+    { id: 'remote', key: 'host', snippet: REMOTE_CONFIG },
+    { id: 'plugin', key: 'plugin', snippet: PLUGIN },
+    { id: 'cli', key: 'cli', snippet: CLI }
   ];
 
   let copied = $state<string | null>(null);
@@ -58,43 +46,130 @@ anomalia login`;
   }
 </script>
 
-<details
-  open
-  class="border-border bg-card overflow-hidden rounded-xl border [&[open]_.chevron]:rotate-90"
->
-  <summary
-    class="hover:bg-muted focus-visible:ring-ring/50 flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm focus-visible:ring-3 focus-visible:outline-none"
-  >
-    <span class="chevron text-muted-foreground transition-transform" aria-hidden="true">›</span>
-    <span class="font-semibold">Connect your agent</span>
-    <span class="text-muted-foreground">Drive this brand from Claude, Cursor or ChatGPT</span>
+<details open class="mcp">
+  <summary>
+    <span class="chev" aria-hidden="true">›</span>
+    <strong>{$_('app.mcpGuide.title')}</strong>
+    <span class="muted">{$_('app.mcpGuide.subtitle')}</span>
   </summary>
 
-  <div class="border-border flex flex-col gap-4 border-t px-4 py-4">
+  <div class="body">
     {#each STEPS as step (step.id)}
-      <section class="flex flex-col gap-1.5">
-        <h3 class="text-sm font-medium">{step.title}</h3>
-        <p class="text-muted-foreground text-xs">{step.note}</p>
-        <div class="border-border bg-background flex items-start gap-2 rounded-lg border p-2">
-          <pre
-            class="min-w-0 flex-1 overflow-x-auto text-xs leading-relaxed"><code>{step.snippet}</code></pre>
-          <button
-            type="button"
-            onclick={() => copy(step.id, step.snippet)}
-            class="border-border hover:bg-muted focus-visible:ring-ring/50 flex-none rounded-md border px-2 py-1 text-xs focus-visible:ring-3 focus-visible:outline-none"
-          >
-            {copied === step.id ? 'Copied' : 'Copy'}
+      <section>
+        <h3>{$_(`app.mcpGuide.${step.key}Title`)}</h3>
+        <p class="muted">{$_(`app.mcpGuide.${step.key}Note`)}</p>
+        <div class="snippet">
+          <pre><code>{step.snippet}</code></pre>
+          <button type="button" onclick={() => copy(step.id, step.snippet)}>
+            {copied === step.id ? $_('app.mcpGuide.copied') : $_('app.mcpGuide.copy')}
           </button>
         </div>
       </section>
     {/each}
 
-    <p class="text-muted-foreground text-xs">
-      The remote server is <code>{MCP_URL}</code> and needs an
-      <code>Authorization: Bearer</code> header — a 401 without one is the correct answer, not a
-      fault. If your host registers a custom-scheme OAuth callback and the connection is refused,
-      use the CLI plus the local stdio server instead.
-      <a href="/docs/mcp" class="underline underline-offset-4">Full setup</a>.
+    <p class="muted foot">
+      {$_('app.mcpGuide.note', { values: { url: MCP_URL } })}
+      <a href="/docs/mcp">{$_('app.mcpGuide.docs')}</a>
     </p>
   </div>
 </details>
+
+<style>
+  /* La palette è quella del guscio (`--paper`, `--ink`, `--line`): la guida arriva da /v2, che
+     aveva i suoi token, e due palette nella stessa pagina si vedono. */
+  .mcp {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 13.5px;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary:hover {
+    background: var(--paper-2);
+  }
+  .chev {
+    color: var(--ink-faint);
+    transition: transform 140ms ease;
+  }
+  .mcp[open] .chev {
+    transform: rotate(90deg);
+  }
+  .muted {
+    color: var(--ink-soft);
+  }
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border-top: 1px solid var(--line);
+    padding: 16px 14px;
+  }
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  h3 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  p {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .snippet {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--paper-2);
+    padding: 8px;
+    margin-top: 3px;
+  }
+  /* Il blocco scorre da solo: la pagina non deve mai scorrere in orizzontale per un comando. */
+  pre {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  button {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--ink-soft);
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button:hover {
+    color: var(--ink);
+  }
+  .foot {
+    font-size: 11.5px;
+  }
+  .foot a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import PageHead from '$lib/components/PageHead.svelte';
   import CreateContentModal from '$lib/components/CreateContentModal.svelte';
   import { captionViolations } from '$lib/platform-limits';
@@ -105,10 +106,38 @@
   };
 
   // Mese (grid) vs Lista (chronological) — same data, two read layouts. Month is the default.
-  let view = $state<'month' | 'list'>('month');
+  // La vista sta nell'URL: un calendario in lista si manda a un collega, e il tasto indietro
+  // torna a com'era.
+  const view = $derived(data.view as 'month' | 'list');
 
+  /** Lo stesso URL con dei parametri cambiati: filtri e mese restano dove sono. */
+  function hrefWith(patch: Record<string, string | null>): string {
+    const url = new URL(page.url);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) url.searchParams.delete(key);
+      else url.searchParams.set(key, value);
+    }
+    return `${url.pathname}${url.search}`;
+  }
+
+  // Il post si apre nel pannello a destra, sopra il calendario: `?post=<id>`, quindi
+  // condivisibile e chiudibile col tasto indietro. La scheda completa resta a un link dentro.
   function postHref(id: string) {
-    return `/app/${brand.slug}/posts/${id}/preview`;
+    return hrefWith({ post: id });
+  }
+  const fullPostHref = $derived(
+    data.selectedId ? `/app/${brand.slug}/posts/${data.selectedId}/preview` : ''
+  );
+
+  let PostPanel = $state<typeof import('$lib/components/PostPanel.svelte').default | null>(null);
+  $effect(() => {
+    if (data.detail && !PostPanel) {
+      void import('$lib/components/PostPanel.svelte').then((m) => (PostPanel = m.default));
+    }
+  });
+
+  function closePanel() {
+    void goto(hrefWith({ post: null }), { noScroll: true, keepFocus: true });
   }
 
   // "Crea contenuto" — same single user-briefed create modal as Content.
@@ -477,8 +506,12 @@
 
       <div class="cal-tools">
         <div class="vtoggle">
-          <button type="button" class:on={view === 'month'} onclick={() => (view = 'month')}>{$_('app.calendar.viewMonth')}</button>
-          <button type="button" class:on={view === 'list'} onclick={() => (view = 'list')}>{$_('app.calendar.viewList')}</button>
+          <a href={hrefWith({ view: null })} class:on={view === 'month'} data-sveltekit-noscroll
+            >{$_('app.calendar.viewMonth')}</a
+          >
+          <a href={hrefWith({ view: 'list' })} class:on={view === 'list'} data-sveltekit-noscroll
+            >{$_('app.calendar.viewList')}</a
+          >
         </div>
       </div>
     </div>
@@ -756,6 +789,19 @@
   {/if}
 </div>
 
+{#if PostPanel && data.detail && data.selectedId}
+  {#key data.selectedId}
+    <PostPanel
+      id={data.selectedId}
+      detail={data.detail}
+      timezone={data.timezone}
+      fullHref={fullPostHref}
+      {form}
+      onclose={closePanel}
+    />
+  {/key}
+{/if}
+
 <style>
   .cal-page {
     display: flex;
@@ -815,9 +861,10 @@
 
   .cal-tools { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .vtoggle { display: inline-flex; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
-  .vtoggle button { padding: 7px 14px; font-size: 13px; font-weight: 600; background: var(--paper);
-    color: var(--ink-soft); border: none; cursor: pointer; font-family: inherit; }
-  .vtoggle button.on { background: rgba(var(--accent-rgb), 0.1); color: var(--accent); }
+  .vtoggle a { padding: 7px 14px; font-size: 13px; font-weight: 600; background: var(--paper);
+    color: var(--ink-soft); border: none; cursor: pointer; font-family: inherit;
+    text-decoration: none; }
+  .vtoggle a.on { background: rgba(var(--accent-rgb), 0.1); color: var(--accent); }
 
   /* Text badge replacing the 📝 blog emoji everywhere a blog article shows up. */
   .blog-label { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1; }
