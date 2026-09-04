@@ -121,6 +121,35 @@ It answers with `ok`, `errors`, `warnings`, `scores` and `versions`:
 
 It never looks at pixels — judging an image or a video is a separate, explicitly paid action.
 
+## Client links
+
+| MCP | CLI |
+|-----|-----|
+| `create_share` | (MCP only) |
+| `list_shares` | (MCP only) |
+| `revoke_share` | (MCP only) |
+
+`create_share` freezes one view as a snapshot and returns a link a client opens with no account.
+Required: `slug`, `view` (`calendar` or `monthly_report`). Optional: `month` (`YYYY-MM`, default
+the current month on the brand clock) and `expires_in_days` (1–365; without it the link lasts
+until revoked).
+
+The `token` comes back **once**, in the create response, and is never stored in readable form —
+save the `url` right away. A link you did not save cannot be recovered: revoke it and make
+another.
+
+The link grants that snapshot and nothing else. It is not a reduced account: it exposes no
+connectors, notes, prompts, costs, settings, member data or private identifiers, and it never
+re-reads live data — what it shows is what the snapshot held the day it was created. The calendar
+shows `planned` / `published`, never the internal workflow state.
+
+`list_shares` shows what exists (`live`, `revoked`, `expired`) without any token.
+`revoke_share` turns one off by `id`: from then on it answers exactly like a link that never
+existed, and brand membership is untouched.
+
+Both need the `shared_views` table. Until it is migrated the three tools answer
+`shares_not_migrated` and name the file to apply.
+
 ## Plans
 
 | MCP | CLI |
