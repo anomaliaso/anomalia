@@ -20,8 +20,6 @@ import { logOnboardingError } from '$lib/server/onboarding-errors';
 import { kickSocialHistoryWork } from '$lib/server/social-history-work';
 import { tryRedeemReferral } from '$lib/server/referrals';
 import { latestOnboardingStepJob } from '$lib/server/onboarding-steps';
-import { seedOnboardingChat } from '$lib/server/onboarding-chat';
-import { kickChatQueueWork } from '$lib/server/chat/queue';
 import { insertBrandWithSlug } from '$lib/server/brand-create';
 import { guestPostRow, parseGuestPost } from '$lib/guest-onboarding';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -48,38 +46,6 @@ function scheduleSocialHistory(platform: unknown, origin: string, brandId: strin
   const p = platform as Platform;
   if (p?.context?.waitUntil) p.context.waitUntil(kick);
   else void kick;
-}
-
-/**
- * Il nuovo atterraggio dell'onboarding: il thread di setup, dove il primo messaggio visibile è
- * l'URL che l'utente ha digitato e il vero incarico viaggia lato server (onboarding-chat.ts).
- * Se il seed fallisce si atterra sulla dashboard come prima — il create non deve mai bloccarsi
- * per colpa della chat.
- */
-async function setupChatTarget(
-  platform: unknown,
-  origin: string,
-  brand: { id: string; slug: string },
-  userId: string,
-  website: string | null,
-  name: string,
-  locale: string
-): Promise<string> {
-  const threadId = await seedOnboardingChat(createAdminClient(), {
-    brandId: brand.id,
-    userId,
-    website,
-    brandName: name,
-    locale,
-    origin
-  });
-  if (!threadId) return `/app/${brand.slug}`;
-  // Parte subito, non al prossimo cron: stesso pattern waitUntil della social history.
-  const kick = kickChatQueueWork(origin);
-  const p = platform as Platform;
-  if (p?.context?.waitUntil) p.context.waitUntil(kick);
-  else void kick;
-  return `/app/${brand.slug}/chat/${threadId}`;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -634,7 +600,7 @@ export const actions: Actions = {
         await redeemReferralQuietly(cookies, user.id, bySite.id);
         throw redirect(
           303,
-          await setupChatTarget(platform, url.origin, bySite, user.id, websiteNorm, name, locale)
+          `/app/${bySite.slug}`
         );
       }
     }
@@ -729,7 +695,7 @@ export const actions: Actions = {
     await redeemReferralQuietly(cookies, user.id, brand.id);
     throw redirect(
       303,
-      await setupChatTarget(platform, url.origin, brand, user.id, websiteNorm, name, locale)
+      `/app/${brand.slug}`
     );
   },
 
@@ -775,7 +741,7 @@ export const actions: Actions = {
       // l'utente ha appena iniziato il lavoro di instradamento. setupChatTarget è idempotente.
       throw redirect(
         303,
-        await setupChatTarget(platform, url.origin, brand, user.id, website, name, locale)
+        `/app/${brand.slug}`
       );
     }
 
@@ -847,7 +813,7 @@ export const actions: Actions = {
       pay.set('cycle', normalizeCycle(cycle));
     }
     await redeemReferralQuietly(cookies, user.id, brand.id);
-    const setupTarget = await setupChatTarget(platform, url.origin, { id: brand.id, slug }, user.id, (profile?.url as string) ?? website ?? null, name, locale);
+    const setupTarget = `/app/${slug}`;
     throw redirect(303, `${setupTarget}${pay.toString() ? `?${pay}` : ''}`);
   }
 };

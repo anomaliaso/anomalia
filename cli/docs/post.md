@@ -91,22 +91,11 @@ Elimina il post. Funziona solo per post con status `pending_user`.
 
 ## Uso con AI
 
-Tutte queste operazioni possono essere fatte anche tramite il comando `ai`:
-
-```bash
-# Modifica caption
-anomalia ai my-brand --message "Riscrivi la caption del post <id> in modo più breve"
-
-# Approva
-anomalia ai my-brand --message "Approva il post <id>"
-
-# Riprogramma
-anomalia ai my-brand --message "Sposta il post <id> a domani alle 10"
-```
+Le stesse operazioni si chiedono al proprio agente in linguaggio naturale: via MCP arriva a
+questi comandi.
 
 ## ID del post
 
 L'ID del post si ottiene da:
 - `anomalia content my-brand` — lista tutti i post con ID
-- `anomalia ai my-brand --message "Quali sono gli ultimi post?"` — l'AI li elenca
 - Dashboard web — click su un post per vedere l'ID

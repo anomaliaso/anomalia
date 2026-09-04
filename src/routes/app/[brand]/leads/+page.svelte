@@ -1,6 +1,5 @@
 <script lang="ts">
   import PageHead from '$lib/components/PageHead.svelte';
-  import AgentEmptyOffer from '$lib/components/AgentEmptyOffer.svelte';
   import { page } from '$app/stores';
   import LeadsTrend from '$lib/components/LeadsTrend.svelte';
   import { enhance } from '$app/forms';
@@ -307,7 +306,6 @@
     {:else}
       {#if $page.data.flags?.navTeam}
         <!-- FEATURE_NAV_TEAM: il vuoto lo riempie il proprietario (Radar), non un imperativo. -->
-        <p class="empty"><AgentEmptyOffer job="radar_recap" /></p>
       {:else}
         <p class="empty">{$_('app.leads.empty')}</p>
       {/if}

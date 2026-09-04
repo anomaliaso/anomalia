@@ -314,14 +314,4 @@ program
     await cmdUpdate();
   });
 
-program
-  .command('ai <slug>')
-  .description('Chatta con l\'AI di Anomalia — tutto ciò che fa il chatbot web, da CLI')
-  .option('--message <text>', 'Messaggio da inviare all\'AI')
-  .option('--pipe', 'Output raw (per agenti AI)')
-  .action(async (slug: string, opts: { message?: string; pipe?: boolean }) => {
-    const { cmdAi } = await import('./commands/ai.ts');
-    await cmdAi(slug, opts);
-  });
-
 program.parse();

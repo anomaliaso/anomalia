@@ -19,7 +19,6 @@ export function createAnomaliaMcpServer(): McpServer {
         'Local MCP shares ~/.config/anomalia/session.json with the Anomalia CLI.',
         'Always start with `list_brands` (or `whoami`) to learn brand slugs.',
         'Post and article ids accept short unambiguous prefixes from list tools.',
-        'Prefer specific tools for deterministic actions; use `chat` for open-ended multi-step work.',
       ].join(' '),
     },
   );

@@ -35,7 +35,6 @@ anomalia web <slug>                                # Blog articles (drafts too)
 # Chat goals: GET /api/v1/brands/:slug/goals (history + summary of goal mode — met_first_pass, laps, stopped_by)
 # Auto-score worker: GET/POST /api/v1/videos/review/work (cron */5)
 anomalia studio <slug> add-note --text "..."       # Add knowledge
-anomalia ai <slug> --message "..."                 # AI chat (full access)
 ```
 
 ## Architecture (this repo — the server side of the CLI)

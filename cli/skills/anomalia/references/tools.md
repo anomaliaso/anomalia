@@ -229,7 +229,6 @@ one with the most clicks in the last seven days.
 | `get_article` / `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
-| `chat` | `anomalia ai <slug> --message "…" --pipe` |
 
 `get_seo` and `get_geo` answer on the **latest** audit. The four web tools let you trace a claim
 back to what was actually measured, without paying for a new audit. All four are reads: they call

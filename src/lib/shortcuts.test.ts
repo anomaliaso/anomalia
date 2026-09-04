@@ -80,8 +80,6 @@ describe('matchShortcut', () => {
   });
 
   it('i tasti singoli fuori dai campi di testo', () => {
-    expect(matchShortcut(ev('n'))).toEqual({ type: 'run', id: 'newChat' });
-    expect(matchShortcut(ev('/'))).toEqual({ type: 'run', id: 'focusPrompt' });
     expect(matchShortcut(ev('?', { shiftKey: true }))).toEqual({ type: 'run', id: 'help' });
   });
 
@@ -172,12 +170,13 @@ describe('la scheda di aiuto è generata dal registro', () => {
 
 describe('con la palette aperta i tasti sono suoi', () => {
   // Regressione vera, vista nel browser: il fuoco non era ancora nel campo e la `n` di
-  // "calendar" ha aperto una chat dietro l'overlay, navigando via dalla ricerca.
-  // La guardia sta nel componente (`if (open && m.id !== 'palette') return`); qui si fissa il
-  // contratto su cui poggia: fuori da un campo di testo quei tasti SONO comandi, quindi
-  // qualcuno deve fermarli, e il solo `isTypingTarget` non può farlo.
-  it('fuori da un campo di testo `n` è un comando — per questo serve la guardia', () => {
-    expect(matchShortcut(ev('n'))).toEqual({ type: 'run', id: 'newChat' });
+  // "calendar" apriva una chat dietro l'overlay, navigando via dalla ricerca. La `n` non è più
+  // una scorciatoia — la chat non c'è — ma la guardia serve ancora, perché il tasto singolo che
+  // resta fa lo stesso danno. La guardia sta nel componente
+  // (`if (open && m.id !== 'palette') return`); qui si fissa il contratto su cui poggia: fuori
+  // da un campo di testo quei tasti SONO comandi, e il solo `isTypingTarget` non basta.
+  it('fuori da un campo di testo `?` è un comando — per questo serve la guardia', () => {
+    expect(matchShortcut(ev('?', { shiftKey: true }))).toEqual({ type: 'run', id: 'help' });
   });
 
   it('⌘K resta l’unico che la palette lascia passare (per chiudersi)', () => {

@@ -42,8 +42,6 @@ anomalia gtm <slug>                          # GTM Roadmap
 anomalia voice <slug>                        # Voice rules
 
 # AI Chat
-anomalia ai <slug> --message "..."           # Chatta con l'AI
-echo "..." | anomalia ai <slug>             # Pipe mode
 
 # Analytics
 anomalia analytics <slug>                    # Analytics

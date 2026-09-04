@@ -159,12 +159,8 @@ describe('la riga che l’utente legge', () => {
  */
 const ENGINES = [
 	'src/lib/server/chat/queue.ts',
-	'src/routes/app/[brand]/chat/+server.ts',
 	'src/routes/api/v1/chat/respond/run/+server.ts'
 ];
-
-/** La metà che compone la risposta (notices, ripresa) vive nel modulo estratto. */
-const CHAT_FINISH = 'src/routes/app/[brand]/chat/lib/turn-finish.ts';
 
 describe('il tetto è montato su ogni motore di chat', () => {
 	it.each(ENGINES)('%s ha tokenBudget.reached DENTRO stopWhen', (path) => {
@@ -176,7 +172,7 @@ describe('il tetto è montato su ogni motore di chat', () => {
 		expect(src).toContain('chatTokenBudget()');
 	});
 
-	it.each([ENGINES[0], ENGINES[2], CHAT_FINISH])('%s dice all’utente e nei log perché si è fermato', (path) => {
+	it.each([ENGINES[0], ENGINES[1]])('%s dice all’utente e nei log perché si è fermato', (path) => {
 		const src = readFileSync(path, 'utf8');
 		expect(src).toContain('turnTokenBudgetNotice(');
 		expect(src).toMatch(/token budget stop/);
@@ -193,7 +189,7 @@ describe('il tetto è montato su ogni motore di chat', () => {
 	 * E i due motori che sanno rimettersi in coda da soli NON lo fanno dopo un tetto sui token:
 	 * riprendere un turno fermato per costo raddoppia esattamente il costo che il tetto ferma.
 	 */
-	it.each([ENGINES[0], CHAT_FINISH])('%s non si auto-continua dopo il tetto', (path) => {
+	it.each([ENGINES[0]])('%s non si auto-continua dopo il tetto', (path) => {
 		const src = readFileSync(path, 'utf8');
 		const should = src.indexOf('const shouldContinue');
 		expect(should).toBeGreaterThan(-1);

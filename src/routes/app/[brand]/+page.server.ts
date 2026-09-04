@@ -1,27 +1,11 @@
-import type { Actions, PageServerLoad } from './$types';
-import { saveOnboardingState } from '$lib/server/onboarding';
+import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
 /**
- * La home del brand è solo la chat: niente workbench sotto, quindi niente
- * `loadHomeOverview` qui. Quelle ~30 query vivono ora in `workbench/+page.server.ts`
- * e partono soltanto quando il workbench viene aperto davvero (modal o pagina piena).
- * Restano solo i campi che il guscio legge: nessun await lungo prima del primo pixel.
+ * La home del brand era la chat, e basta: il suo corpo era il composer montato dal layout.
+ * Tolta la chat, il guscio non ha più niente da mostrare qui, quindi la home È il workbench —
+ * che quelle ~30 query di `loadHomeOverview` le fa già, e le fa solo quando lo si apre.
  */
-export const load: PageServerLoad = async ({ parent }) => {
-  const { brand } = await parent();
-  return { timezone: brand.timezone ?? 'Europe/Rome' };
-};
-
-export const actions: Actions = {
-  skipOnboarding: async ({ params, locals: { supabase } }) => {
-    const { data: brand } = await supabase.from('brands').select('id').eq('slug', params.brand).maybeSingle();
-    if (brand) await saveOnboardingState(supabase, brand.id, { status: 'paused' });
-    return { paused: true };
-  },
-
-  resumeOnboarding: async ({ params, locals: { supabase } }) => {
-    const { data: brand } = await supabase.from('brands').select('id').eq('slug', params.brand).maybeSingle();
-    if (brand) await saveOnboardingState(supabase, brand.id, { status: 'in_progress' });
-    return { resumed: true };
-  }
+export const load: PageServerLoad = () => {
+  redirect(302, './workbench');
 };

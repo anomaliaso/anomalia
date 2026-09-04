@@ -2,13 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_HOME,
   JOB_HOME,
   JOB_OWNERS,
   agentForTask,
-  jobThreadHref,
   looksLikeARole,
-  owningJobForPath,
   parseRoutineOwner,
   routineOwnerKey
 } from './agent-owners';
@@ -31,50 +28,6 @@ describe('agent-owners', () => {
     }
   });
 
-  it('ogni proprietario di pagina è un job del roster', () => {
-    // owningJobForPath può solo restituire chiavi del roster: un typo nella mappa
-    // produrrebbe un "Parla con" che punta a un agente inesistente.
-    const pages = [
-      'radar', 'leads', 'analytics', 'gtm', 'strategy', 'plan', 'calendar', 'content',
-      'approvals', 'publish', 'seo', 'seo-geo', 'keywords', 'backlinks', 'geo',
-      'citations', 'competitors'
-    ];
-    for (const seg of pages) {
-      const owner = owningJobForPath(`/app/acme/${seg}`, '/app/acme');
-      expect(owner, seg).not.toBeNull();
-      expect(ROSTER_JOB_KEYS, `${seg} → ${owner}`).toContain(owner);
-    }
-  });
-
-  it('la mappatura richiesta: pagina → agente proprietario', () => {
-    const base = '/app/acme';
-    expect(owningJobForPath(`${base}/radar`, base)).toBe('radar_recap');
-    expect(owningJobForPath(`${base}/leads`, base)).toBe('radar_recap');
-    expect(owningJobForPath(`${base}/analytics`, base)).toBe('analytics_review');
-    expect(owningJobForPath(`${base}/gtm`, base)).toBe('strategy_review');
-    expect(owningJobForPath(`${base}/plan`, base)).toBe('strategy_review');
-    expect(owningJobForPath(`${base}/seo`, base)).toBe('seo');
-    expect(owningJobForPath(`${base}/keywords`, base)).toBe('seo');
-    expect(owningJobForPath(`${base}/geo`, base)).toBe('geo');
-    expect(owningJobForPath(`${base}/competitors`, base)).toBe('market_refs');
-    // Le rotte senza proprietario chiaro non mostrano niente, chat inclusa.
-    expect(owningJobForPath(`${base}/chat/abc`, base)).toBeNull();
-    expect(owningJobForPath(`${base}/settings`, base)).toBeNull();
-  });
-
-  it('jobThreadHref: prima il diario di squadra dell\'owner, poi il vecchio thread per-job, poi il composer', () => {
-    const threads = [
-      // Una normale chat dell'utente con l'analyst NON è il diario di squadra: senza surface non conta.
-      { id: 't0', agent: 'analyst' },
-      { id: 't1', agent: 'job:radar_recap' },
-      { id: 't2', agent: null },
-      { id: 't3', agent: 'analyst', surface: 'team' }
-    ];
-    expect(jobThreadHref(threads, 'acme', 'radar_recap')).toBe('/app/acme/chat/t3');
-    // Senza thread di squadra si ripiega sul vecchio thread per-job (pre-unificazione).
-    expect(jobThreadHref(threads.slice(0, 3), 'acme', 'radar_recap')).toBe('/app/acme/chat/t1');
-    expect(jobThreadHref(threads, 'acme', 'seo')).toBe('/app/acme');
-  });
 });
 
 /**

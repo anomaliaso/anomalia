@@ -83,7 +83,6 @@ anomalia approve my-brand --all
 anomalia seo my-brand
 anomalia web my-brand generate --topic "..."
 anomalia ads my-brand --remix
-anomalia ai my-brand --message "..." --pipe
 ```
 
 Every command takes the brand slug as its first argument. `anomalia --help` lists them all;

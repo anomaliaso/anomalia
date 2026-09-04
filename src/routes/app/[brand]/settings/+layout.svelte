@@ -169,9 +169,6 @@
       [`${base}/usage`]: {
         title: $_('app.settings.usage.title')
       },
-      [`${base}/chat`]: {
-        title: $_('app.settings.chat.title')
-      },
       [`${base}/danger`]: {
         title: $_('app.settings.del.title')
       }
