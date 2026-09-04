@@ -16,8 +16,8 @@ import { createVercelSandboxProvider } from '$lib/agent/bridge/adapters';
 // che un test locale se ne accorga. Il modulo separato resta ugualmente pinnabile dai test.
 import { reapDeadKitRuns } from '$lib/server/agent-kit-recover';
 
-// Stesso scaglione degli altri tick da "poco lavoro, spesso" (vedi la nota in custom-agents/tick):
-// tre soli valori ammessi per non moltiplicare le funzioni serverless emesse.
+// Stesso scaglione degli altri tick da "poco lavoro, spesso": tre soli valori ammessi per non
+// moltiplicare le funzioni serverless emesse.
 export const config = { maxDuration: 300 };
 
 const run = async (request: Request) => {

@@ -85,7 +85,7 @@ export async function queueForLoop<T extends { id: string }>(
  * "migration non applicata" resta rumoroso perché lancia `queueForLoop`.
  *
  * ponytail: fra lettura della coda e claim c'è una finestra in cui due tick sovrapposti prendono lo
- * stesso brand — il peggio è servirlo due volte. La CAS per riga la fa già `custom-agents/tick`.
+ * stesso brand — il peggio è servirlo due volte.
  */
 export async function markServed(admin: SupabaseClient, loop: LoopName, brandId: string): Promise<void> {
   const { error } = await admin
