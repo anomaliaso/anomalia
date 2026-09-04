@@ -716,3 +716,68 @@ ignorato, e allora tanto valeva il silenzio.
 
 **Il test che lo tiene.** `src/lib/server/billing/fallback-report.test.ts`: il fallback riporta,
 la scelta esplicita no, e riporta una volta sola.
+
+## Una guardia che legge il nome dell'host, e segue i redirect, non è una guardia
+
+**Segnale.** Una funzione scarica un URL e la difesa è una lista di pattern di hostname
+(`isUrlSafe`, `!u.includes('localhost')`, una regex su `.local`), oppure il tetto di byte sta
+DOPO un `await res.arrayBuffer()`, oppure `fetch` è chiamata senza `redirect: 'manual'`. Tre
+sintomi diversi dello stesso difetto: ciò che viene controllato non è ciò che viene raggiunto.
+
+**Perché non regge.** Il nome è scelto da chi attacca e il DNS pure: `cdn-innocuo.example` può
+risolvere su `127.0.0.1` o su `169.254.169.254` e la stringa resta impeccabile. Il redirect è
+peggio, perché la destinazione non l'hai nemmeno vista: un URL pubblico risponde `302 Location:`
+e la guardia aveva già approvato l'unico URL che ha guardato. E un tetto applicato dopo aver
+bufferizzato è un tetto che si applica a memoria già consumata — 100MB entrati per rifiutarne 5.
+
+**Mossa.** Tre proprietà, e servono tutte e tre insieme:
+
+- **risolvi, poi controlla** l'indirizzo che torna dal resolver, non l'hostname;
+- **ricontrolla ogni hop** (`redirect: 'manual'` + ciclo tuo), schema compreso: un `302` da https
+  a http consegna il file a chiunque stia sul percorso;
+- **applica il tetto mentre il corpo arriva**, e per un file **rifiuta** invece di troncare — un
+  JPEG tagliato è un asset corrotto salvato come se fosse intero.
+
+In questo repo tutto ciò esiste già in `safeFetchBytes` (`tool-guard.ts`): **riusala, non
+riscriverla.** Due copie di una guardia SSRF sono due guardie che divergono, e la seconda diverge
+in silenzio. Se un chiamante ha bisogno di regole diverse (solo https, un tetto più alto, un altro
+User-Agent) quelle sono *parametri* della guardia — mai un `if` prima della chiamata, che il ciclo
+dei redirect non vedrebbe.
+
+**Dove guardare per prima.** Le funzioni il cui URL lo sceglie un MODELLO: lì l'input è già
+collegato a contenuto ostile, e il difetto smette di essere teorico.
+
+**E il test che lo prova non è quello dell'esito.** Bufferizzare-e-poi-misurare restituisce lo
+stesso rifiuto di fermarsi a metà: il test passa e non prova niente. Conta i pezzi che il lettore
+TIRA — prima ne chiedeva 400 su un tetto di venti.
+
+## Un fake che risponde alla domanda sbagliata nasconde il difetto che cercavi
+
+**Segnale.** Uno stub di `fetch` fatto a mano: `headers: { get: () => 'image/png' }`, più un
+`arrayBuffer()` e nessun corpo. Risponde `'image/png'` a `location` e a `content-length`, cioè
+racconta una risposta che nessun server manderebbe mai — e il giorno che il codice sotto comincia
+a leggere quegli header, o a leggere il corpo a stream, il test si rompe per il motivo sbagliato.
+
+**Mossa.** Negli stub di rete usa una `Response` vera: `new Response(bytes, { status, headers })`.
+Costa una riga in meno e non può mentire su un header che non hai previsto.
+
+**Corollario sulle fixture.** Un URL di prova come `https://cdn.example` smette di funzionare nel
+momento in cui la guardia RISOLVE l'host invece di leggerlo: il rifiuto arriva da `ENOTFOUND` e
+non dalla proprietà sotto esame. Usa un indirizzo scritto per esteso (`https://93.184.216.34`):
+`dns.lookup` lo restituisce senza interrogare nessuno, e resta pubblico.
+
+## Un timeout nella suite completa non è un difetto finché non lo riproduci da solo
+
+**Segnale.** `npm run test:unit` riporta `Hook timed out in 60000ms` o `Test timed out in
+30000ms` su file che non hai toccato, e la stessa suite era verde un'ora prima.
+
+**Cosa succede.** Il costo è il *transform* di Vite, non il test: con la cache fredda — o con
+altri lavori pesanti sulla stessa macchina — il grafo di `$lib/agent/tools/index` supera da solo
+il budget del `beforeAll`. Nella stessa sessione lo stesso file è passato in 53s e fallito a 60s
+solo perché in parallelo girava un'altra suite.
+
+**La mossa.** Prima di diagnosticare, isola: esegui il file DA SOLO, a macchina scarica. Se serve
+la prova che il difetto non è tuo, salva le modifiche in una patch
+(`git diff > /tmp/x.patch`, mai `git stash`), ripristina i sorgenti, riesegui: se fallisce anche
+senza le tue modifiche, è ambiente. Il timeout del `beforeAll` scritto nel file vince sul flag
+`--hookTimeout` della CLI, quindi per una diagnosi va alzato nel file e rimesso subito dopo.

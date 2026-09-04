@@ -14,6 +14,7 @@
  * URL. The harvest must never fail because a CDN was slow — and it must never hide that it did.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ARCHIVE_USER_AGENT, safeFetchBytes, SafeFetchError, type SafeFetchReason } from '$lib/server/tool-guard';
 
 const BUCKET = 'brand-knowledge';
 /** Harvested market media lives under its own prefix, apart from per-brand knowledge files. */
@@ -42,12 +43,19 @@ export type ArchivedMedia = {
  */
 export type ArchiveFailure =
   | 'bad_url'
+  | 'blocked_host'
   | 'fetch_failed'
   | 'http_error'
   | 'unsupported_type'
   | 'too_large'
   | 'empty'
   | 'upload_failed';
+
+const FAILURE_BY_FETCH_REASON: Record<SafeFetchReason, ArchiveFailure> = {
+  not_public: 'blocked_host',
+  too_large: 'too_large',
+  fetch_failed: 'fetch_failed'
+};
 
 export type ArchiveResult =
   | { ok: true; media: ArchivedMedia }
@@ -88,13 +96,19 @@ export async function archiveMarketMedia(
   const url = String(opts.url ?? '').trim();
   if (!url || !/^https?:\/\//i.test(url)) return { ok: false, reason: 'bad_url' };
 
-  let res: Response;
+  // The transfer ceiling is the largest thing we would ever keep; the per-kind cap below is the
+  // one that decides, and it can only be applied once the content-type has arrived.
+  let res;
   try {
-    res = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AnomaliaArchive/1.0)' }
+    res = await safeFetchBytes(url, {
+      maxBytes: MAX_VIDEO_BYTES,
+      timeoutMs: TIMEOUT_MS,
+      userAgent: ARCHIVE_USER_AGENT
     });
   } catch (e) {
+    if (e instanceof SafeFetchError) {
+      return { ok: false, reason: FAILURE_BY_FETCH_REASON[e.reason], detail: e.message.slice(0, 200) };
+    }
     return {
       ok: false,
       reason: 'fetch_failed',
@@ -103,44 +117,25 @@ export async function archiveMarketMedia(
   }
   if (!res.ok) return { ok: false, reason: 'http_error', detail: String(res.status) };
 
-  const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-  const kind: 'image' | 'video' | null = mime.startsWith('image/')
+  const kind: 'image' | 'video' | null = res.mime.startsWith('image/')
     ? 'image'
-    : mime.startsWith('video/')
+    : res.mime.startsWith('video/')
       ? 'video'
       : null;
-  if (!kind) return { ok: false, reason: 'unsupported_type', detail: mime || 'no content-type' };
+  if (!kind) return { ok: false, reason: 'unsupported_type', detail: res.mime || 'no content-type' };
 
   const cap = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (!res.bytes.length) return { ok: false, reason: 'empty' };
+  if (res.bytes.length > cap) return { ok: false, reason: 'too_large', detail: `${res.bytes.length} > ${cap}` };
 
-  // Reject on the declared length before buffering, when the server tells us — downloading 200MB
-  // only to discard it is the expensive way to learn the same fact.
-  const declared = Number(res.headers.get('content-length') ?? '');
-  if (Number.isFinite(declared) && declared > cap) {
-    return { ok: false, reason: 'too_large', detail: `${declared} > ${cap}` };
-  }
-
-  let buf: Buffer;
-  try {
-    buf = Buffer.from(await res.arrayBuffer());
-  } catch (e) {
-    return {
-      ok: false,
-      reason: 'fetch_failed',
-      detail: (e instanceof Error ? e.message : String(e)).slice(0, 200)
-    };
-  }
-  if (!buf.length) return { ok: false, reason: 'empty' };
-  if (buf.length > cap) return { ok: false, reason: 'too_large', detail: `${buf.length} > ${cap}` };
-
-  const ext = EXT_BY_MIME[mime] ?? (kind === 'video' ? 'mp4' : 'jpg');
+  const ext = EXT_BY_MIME[res.mime] ?? (kind === 'video' ? 'mp4' : 'jpg');
   const path = mediaPathFor(opts.platform, opts.externalId, ext);
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(path, buf, { contentType: mime, upsert: true });
+    .upload(path, res.bytes, { contentType: res.mime, upsert: true });
   if (error) return { ok: false, reason: 'upload_failed', detail: error.message.slice(0, 200) };
 
-  return { ok: true, media: { path, bytes: buf.length, kind } };
+  return { ok: true, media: { path, bytes: res.bytes.length, kind } };
 }
 
 /** Signed read URLs for archived market media. Same bucket helper the rest of the app uses. */

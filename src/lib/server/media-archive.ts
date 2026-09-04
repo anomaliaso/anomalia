@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ARCHIVE_USER_AGENT, safeFetchBytes } from '$lib/server/tool-guard';
 
 // Tiny, dependency-free media archival helpers (deliberately imports nothing from the AI modules,
 // so scrapecreators/content-preview/brand-context can all use it without import cycles).
@@ -12,24 +13,28 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
 
 // Download an external image and store it at `path` in the brand-knowledge bucket. Returns the
-// path on success, null on any failure (dead URL, non-image, oversized) — callers keep the URL
-// fallback. Upsert so re-archiving the same key is idempotent.
+// path on success, null on any failure (dead URL, non-image, oversized, a target we refuse to
+// reach) — callers keep the URL fallback. Upsert so re-archiving the same key is idempotent.
+//
+// The fetch goes through safeFetchBytes rather than bare fetch: at least one caller (the chat's
+// style-reference tool) hands it a URL a model chose, and a plain fetch of a model-chosen URL is
+// a request forger with our network position.
 export async function archiveImageToBucket(
   supabase: SupabaseClient,
   path: string,
   url: string
 ): Promise<string | null> {
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AnomaliaArchive/1.0)' }
+    const res = await safeFetchBytes(url, {
+      maxBytes: MAX_BYTES,
+      timeoutMs: TIMEOUT_MS,
+      userAgent: ARCHIVE_USER_AGENT
     });
-    if (!res.ok) return null;
-    const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-    if (!mime.startsWith('image/')) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length || buf.length > MAX_BYTES) return null;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, buf, { contentType: mime, upsert: true });
+    if (!res.ok || !res.mime.startsWith('image/') || !res.bytes.length) return null;
+
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, res.bytes, { contentType: res.mime, upsert: true });
     return error ? null : path;
   } catch {
     return null;

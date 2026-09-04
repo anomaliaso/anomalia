@@ -115,6 +115,14 @@ vi.mock('$lib/server/brand-analysis', () => ({
   extractColorsFromImage: async () => ['#112233', 'not-a-color']
 }));
 
+/**
+ * La guardia del logo RISOLVE l'host invece di leggerne il nome, e `cdn.example` non esiste: il
+ * rifiuto arriverebbe dal DNS invece che dalla proprietà sotto esame. Un indirizzo scritto per
+ * esteso lo evita — `dns.lookup` lo restituisce senza interrogare nessuno — e resta pubblico,
+ * quindi il cammino felice resta provato e non è un errore di rete travestito.
+ */
+const PUBLIC_CDN = 'https://93.184.216.34';
+
 const fontAvailable = vi.fn(async (family: string) => family !== 'Fake Sans');
 vi.mock('$lib/server/design-typography', () => ({
   fontIsAvailable: (f: string) => fontAvailable(f)
@@ -203,12 +211,12 @@ beforeEach(() => {
   pub.requireZernioCancellation.mockClear();
   pub.regeneratePost.mockClear();
   pub.createSingleContent.mockClear();
-  vi.stubGlobal('fetch', async () => ({
-    ok: true,
-    status: 200,
-    headers: { get: () => 'image/png' },
-    arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer
-  }));
+  // Una Response vera, non un oggetto a mano: la guardia legge `location`, `content-length` e il
+  // corpo a stream, e il finto headers.get() — che rispondeva 'image/png' a QUALSIASI header —
+  // raccontava una risposta che nessun server manderebbe mai.
+  vi.stubGlobal('fetch', async () =>
+    new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'image/png' } })
+  );
 });
 
 describe('update_brand_colors', () => {
@@ -235,7 +243,7 @@ describe('update_logo', () => {
   it('SOSTITUISCE lo slot invece di accodare, e salva nel bucket del brand', async () => {
     singles.brand_kit = { logos: [{ url: 'https://old.test/logo.png', type: 'uploaded' }], favicon_url: null };
     const t = tools();
-    const res = await run(t.update_logo, { image_url: 'https://cdn.example/new.png' });
+    const res = await run(t.update_logo, { image_url: `${PUBLIC_CDN}/new.png` });
 
     expect(res.success).toBe(true);
     // Un solo logo, e non è l'URL remoto passato: è la copia nel bucket `media`.
