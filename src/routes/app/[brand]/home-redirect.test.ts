@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
@@ -59,5 +62,27 @@ describe('la home del brand rimanda al workbench del brand', () => {
 	it('una rotta figlia non viene rimandata', async () => {
 		const { redirected } = await loadLayout('/app/demo/calendar', 'demo');
 		expect(redirected?.location).not.toBe('/app/demo/workbench');
+	});
+});
+
+/**
+ * Il redirect nel layout non basta a far esistere la rotta. SvelteKit costruisce il manifest
+ * dai file: senza né `+page.server.ts` né `+page.svelte`, `/app/<slug>` non è una rotta, e il
+ * 404 nasce in `resolve()` PRIMA che un solo `load` parta — layout compreso. Un test sul solo
+ * `load` del layout resta verde mentre la home è irraggiungibile per tutti: è già successo.
+ */
+const brandRouteDir = fileURLToPath(new URL('.', import.meta.url));
+
+function pageFilesIn(dir: string): string[] {
+	return readdirSync(join(brandRouteDir, dir)).filter((f) => f === '+page.server.ts' || f === '+page.svelte');
+}
+
+describe('/app/[brand] è una rotta, non solo un guscio', () => {
+	it('ha un file di pagina, altrimenti il 404 arriva prima del layout', () => {
+		expect(pageFilesIn('.')).not.toEqual([]);
+	});
+
+	it('il controllo sa dire di no: una cartella di solo endpoint non ha pagina', () => {
+		expect(pageFilesIn('credits')).toEqual([]);
 	});
 });
