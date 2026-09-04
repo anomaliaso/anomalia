@@ -1,14 +1,15 @@
 export type PostRow = {
   id: string;
   platform: string | null;
-  platforms: string[] | null;
+  platforms?: string[] | null;
   caption: string | null;
   media_url: string | null;
   slot: string | null;
   scheduled_for: string | null;
   status: string;
-  published_url: string | null;
-  created_at: string;
+  published_url?: string | null;
+  created_at?: string;
+  isDraft?: boolean;
 };
 
 export type PostState = {

@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type { PostRow } from './posts/post-state';
+import type { PostRow } from './post-state';
 import { todos, upcoming, type DashboardFacts } from './dashboard';
 
 type SchedulerRun = { status: string; error: string | null };

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { attentionLine, todos, upcoming, type DashboardFacts } from './dashboard';
-import type { PostRow } from './posts/post-state';
+import type { PostRow } from './post-state';
 
 const NOTHING_WRONG: DashboardFacts = {
   pending: 0,

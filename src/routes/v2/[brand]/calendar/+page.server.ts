@@ -1,9 +1,10 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { dayInZone, type CalendarPost } from './calendar-month';
+import { dayInZone } from './calendar-month';
+import type { PostRow } from '../post-state';
 
 type Calendar = {
-  posts: CalendarPost[];
+  posts: PostRow[];
   year: number;
   month: number;
   monthLabel: string;

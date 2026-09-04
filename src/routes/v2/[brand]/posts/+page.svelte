@@ -3,8 +3,8 @@
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { Badge } from '$lib/components/ui/badge/index.js';
-  import { platformsOf, stateOf, summarise, whenLabel, STATUS_FILTERS } from './post-state';
-  import type { PostRow } from './post-state';
+  import { platformsOf, stateOf, summarise, whenLabel, STATUS_FILTERS } from '../post-state';
+  import type { PostRow } from '../post-state';
   import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
@@ -13,13 +13,13 @@
   const posts = $derived(data.posts);
 
   let selectedId = $state<string | null>(data.selectedPostId);
-  let PostPanel = $state<typeof import('./PostPanel.svelte').default | null>(null);
+  let PostPanel = $state<typeof import('../PostPanel.svelte').default | null>(null);
 
   const selected = $derived(posts.find((p) => p.id === selectedId) ?? null);
 
   $effect(() => {
     if (selectedId && !PostPanel) {
-      import('./PostPanel.svelte').then((m) => (PostPanel = m.default));
+      import('../PostPanel.svelte').then((m) => (PostPanel = m.default));
     }
   });
 

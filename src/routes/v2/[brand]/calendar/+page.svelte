@@ -3,8 +3,9 @@
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { Badge } from '$lib/components/ui/badge/index.js';
-  import { buildMonthGrid, stateOf, timeInZone } from './calendar-month';
-  import type { CalendarPost } from './calendar-month';
+  import { buildMonthGrid, timeInZone } from './calendar-month';
+  import { stateOf } from '../post-state';
+  import type { PostRow } from '../post-state';
   import type { PageProps } from './$types';
 
   const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -19,13 +20,13 @@
   const datedCount = $derived(calendar.posts.length - grid.undated.length);
 
   let selectedId = $state<string | null>(data.selectedPostId);
-  let PostPanel = $state<typeof import('./PostPanel.svelte').default | null>(null);
+  let PostPanel = $state<typeof import('../PostPanel.svelte').default | null>(null);
 
   const selected = $derived(calendar.posts.find((p) => p.id === selectedId) ?? null);
 
   $effect(() => {
     if (selectedId && !PostPanel) {
-      import('./PostPanel.svelte').then((m) => (PostPanel = m.default));
+      import('../PostPanel.svelte').then((m) => (PostPanel = m.default));
     }
   });
 
@@ -43,7 +44,7 @@
     replaceState(url, page.state);
   }
 
-  function open(post: CalendarPost) {
+  function open(post: PostRow) {
     selectedId = post.id;
     syncUrl(post.id);
   }
@@ -53,7 +54,7 @@
     syncUrl(null);
   }
 
-  function summary(post: CalendarPost): string {
+  function summary(post: PostRow): string {
     return (post.caption ?? '').trim().slice(0, 60) || 'Untitled';
   }
 </script>
