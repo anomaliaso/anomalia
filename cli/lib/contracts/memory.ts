@@ -100,6 +100,21 @@ export const SAVE_MEMORY = {
   destructive: false
 } satisfies BrandEndpoint;
 
+/**
+ * I soli campi che una PATCH può riscrivere. `.strict()` non è cosmesi: il corpo finisce nel SET
+ * di un update scopato per `brand_id`, quindi un campo di troppo — `brand_id` — sposta la riga
+ * nel brand di un altro cliente invece di aggiornarla nel proprio.
+ */
+export const UPDATE_MEMORY_ENTRY = z
+  .object({
+    value: z.string().min(1).optional(),
+    category: z.enum(MEMORY_CATEGORIES).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    pinned: z.boolean().optional(),
+    importance: z.number().int().min(1).max(5).optional()
+  })
+  .strict();
+
 export const RECORD_MEMORY_USED = {
   tool: 'record_memory_used',
   title: 'Report memory you used',
