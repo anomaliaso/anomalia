@@ -2,6 +2,15 @@ import { requireSession } from '../lib/auth.ts';
 import { api, type SeoInitiative } from '../lib/api.ts';
 import { section, table, c, info, ok, fail } from '../lib/display.ts';
 import { resolveByPrefix } from '../lib/select.ts';
+import { SEO_ACTIONS } from '../lib/contracts/search.ts';
+
+/**
+ * `run` è una parola da terminale, non un'azione: sta qui e non nel contratto, perché il
+ * vocabolario dell'API è uno solo — quello dell'handler. La mappa che stava qui traduceva ogni
+ * azione, e nel farlo NASCONDEVA che il contratto dicesse `run` dove la rotta legge `audit`:
+ * l'agente MCP, che quella traduzione non ce l'ha, prendeva 400 sull'unica azione che conta.
+ */
+const TERMINAL_ALIASES: Record<string, string> = { run: 'audit' };
 
 type Opts = { action: string; id?: string; guidance?: string };
 
@@ -9,9 +18,11 @@ export async function cmdSeo(slug: string, opts: Opts) {
   const { access_token: t } = await requireSession();
 
   if (opts.action !== 'show') {
-    const map: Record<string, string> = { run: 'audit', plan: 'plan', more: 'more', asset: 'asset', article: 'article' };
-    const action = map[opts.action];
-    if (!action) { fail(`Azione sconosciuta: ${opts.action} (show, run, plan, more, asset, article)`); process.exit(1); }
+    const action = TERMINAL_ALIASES[opts.action] ?? opts.action;
+    if (!(SEO_ACTIONS as readonly string[]).includes(action)) {
+      fail(`Azione sconosciuta: ${opts.action} (show, ${['run', ...SEO_ACTIONS].join(', ')})`);
+      process.exit(1);
+    }
     let initiativeId = opts.id;
     if (action === 'asset' || action === 'article') {
       if (!initiativeId) { fail('Serve --id <initiativeId>'); process.exit(1); }

@@ -427,7 +427,7 @@ export {
   UPDATE_MEMORY_ENTRY
 } from './memory';
 export type { AgentMemoryCategory } from './memory';
-export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
+export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION, SEO_ACTIONS } from './search';
 export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
 export {
   GET_WRITING_SKILLS,
