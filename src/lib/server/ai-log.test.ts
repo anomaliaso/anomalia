@@ -11,7 +11,7 @@ import {
   withBrandContext,
   withOrgContext
 } from './ai-log';
-import { GEMINI_FLASH, NANO_BANANA_PRO } from './gemini';
+import { GEMINI_FLASH, NANO_BANANA_PRO } from './google-models';
 
 const GO = 'go';
 

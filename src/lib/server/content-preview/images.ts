@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext, getOrgContext } from '$lib/server/ai-log';
-import { NANO_BANANA_2_LITE } from '$lib/server/gemini';
+import { NANO_BANANA_2_LITE } from '$lib/server/google-models';
 import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { gatewayRate } from '$lib/server/openrouter-models';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { GEMINI_FLASH, geminiFlash, isGeminiFlashId, isKieFlashId, kieFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } from '$lib/server/gemini';
+import { GEMINI_FLASH, geminiFlash, isGeminiFlashId, isKieFlashId, kieFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } from '$lib/server/google-models';
 
 // Fire-and-forget observability: one ai_calls row per LLM call, written from the shared
 // chokepoints. NEVER throws and never awaited — a missing table or a dead DB must not break AI.

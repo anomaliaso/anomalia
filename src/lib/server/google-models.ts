@@ -1,3 +1,16 @@
+/**
+ * Gli id dei modelli Google, nelle forme in cui ce li fatturano — e nient'altro.
+ *
+ * Qui c'erano i due client Gemini — `makeGenaiClient` (kie o Google) e `googleGenaiClient` (Google
+ * sempre) — piu` il trasporto che sceglieva fra i due. Sono spariti con l'ultimo chiamante: ogni
+ * pixel passa dallo slot immagini, ogni testo dal centralino, e i due endpoint vivi sono kie e
+ * OpenRouter. Restano gli ID e le tariffe, che servono al registro di cassa: un modello Gemini si
+ * paga anche quando a servirlo e` qualcun altro.
+ *
+ * Si chiamava `gemini.ts`, e prometteva una linea verso Gemini che non c'e` piu`: la stessa bugia
+ * di `xiaomi.ts`, diventato `ai-text.ts`. Il nome di adesso dice di CHI sono i modelli, non con chi
+ * parliamo — perche' con Google non parla piu` nessuno.
+ */
 import { env } from '$env/dynamic/private';
 import { GEMINI_NANO_BANANA_2_LITE, GEMINI_NANO_BANANA_PRO } from '$lib/image-models';
 
@@ -38,12 +51,6 @@ export const NANO_BANANA_2_LITE = GEMINI_NANO_BANANA_2_LITE;
 export function geminiVisualCreditShare(plan?: string | null): number {
   return 1;
 }
-
-// Qui c'erano i due client Gemini — `makeGenaiClient` (kie o Google) e `googleGenaiClient` (Google
-// sempre) — piu` il trasporto che sceglieva fra i due. Sono spariti con l'ultimo chiamante: ogni
-// pixel passa dallo slot immagini, ogni testo dal centralino, e i due endpoint vivi sono kie e
-// OpenRouter. Restano gli ID e le tariffe, che servono al registro di cassa: un modello Gemini si
-// paga anche quando a servirlo e` qualcun altro.
 
 /** `gemini-3.7-flash` → `gemini-3-7-flash`, la forma che accetta il passthrough di kie. */
 export function kieFlashId(modelId: string): string {

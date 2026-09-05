@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-const { GEMINI_FLASH, geminiFlash, isGeminiFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } = await import('./gemini');
+const { GEMINI_FLASH, geminiFlash, isGeminiFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } = await import('./google-models');
 
 describe('GEMINI_FLASH', () => {
   it('is a Gemini Flash model id — the default when the env var is unset', () => {
