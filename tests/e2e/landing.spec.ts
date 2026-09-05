@@ -10,10 +10,10 @@ test('landing renders with hero heading and site nav', async ({ page }) => {
   await expect(page.locator('header.nav')).toBeVisible();
 });
 
-test('the desktop bar offers sign-in as its own link, not folded into the CTA', async ({ page }) => {
+test('sign-in lives in the drawer, and the CTA is the door on desktop', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.locator('header.nav .nav-right a[href="/login"]')).toHaveCount(1);
+  await expect(page.locator('header.nav .nav-right a[href="/login"]')).toHaveCount(0);
   await expect(page.locator('header.nav a.nav-cta')).toHaveCount(1);
 });
 
