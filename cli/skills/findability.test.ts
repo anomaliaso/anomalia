@@ -79,13 +79,22 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
 
 const HAND_WRITTEN_TARIFF = /\b\d+\s*credits?\b/i;
 
-const SKILL_DIR = fileURLToPath(new URL('./anomalia/', import.meta.url));
-const skillProse = [
-  readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8'),
-  readFileSync(join(SKILL_DIR, 'references', 'tools.md'), 'utf8')
-]
-  .join('\n')
-  .toLowerCase();
+/**
+ * `SKILL.md` E BASTA, e non più concatenata a `references/tools.md`.
+ *
+ * Le due non sono la stessa superficie: SKILL.md si carica sempre, tools.md è sotto «References
+ * (load on demand)» e un agente può non aprirla mai. Concatenandole, una parola presente solo nel
+ * riferimento faceva passare la riga mentre la superficie che si legge davvero taceva — che è
+ * ESATTAMENTE il difetto che questa tabella esiste per prendere. Preso sul vivo: togliendo
+ * `list_products` la domanda «what does this brand sell» finiva in tools.md e SKILL.md restava
+ * senza né «sell» né «products», e il test era verde.
+ *
+ * tools.md resta coperta da `tools-coverage.test.ts`, che pretende ogni tool documentato lì.
+ */
+const SKILL = readFileSync(
+  fileURLToPath(new URL('./anomalia/SKILL.md', import.meta.url)),
+  'utf8'
+).toLowerCase();
 
 const describing = (tool: string): string => {
   const found = BRAND_ENDPOINTS.find((e) => e.tool === tool);
@@ -147,8 +156,12 @@ describe('una descrizione si legge cercando il proprio problema', () => {
     });
 
     test(`«${question}» trova ${tool} anche nella skill, che si legge prima`, () => {
+      // Le parole senza il nome del tool non portano da nessuna parte: «answer» e «read» stanno in
+      // qualunque pagina di prosa. Il nome è ciò che rende la corrispondenza una chiamata.
+      expect(SKILL, `skill ← ${tool}`).toContain(tool);
+
       for (const word of words) {
-        expect(skillProse, `skill ← ${tool} ← ${word}`).toContain(word);
+        expect(SKILL, `skill ← ${tool} ← ${word}`).toContain(word);
       }
     });
   }
@@ -175,6 +188,6 @@ describe('una descrizione si legge cercando il proprio problema', () => {
   });
 
   test('nemmeno la skill la scrive: le due superfici dicono la stessa cosa', () => {
-    expect(HAND_WRITTEN_TARIFF.test(skillProse)).toBe(false);
+    expect(HAND_WRITTEN_TARIFF.test(SKILL)).toBe(false);
   });
 });

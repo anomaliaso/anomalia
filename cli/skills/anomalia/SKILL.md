@@ -71,6 +71,11 @@ name; ask for a table with no `columns` and the keys of a row are the schema. Re
 count, a join you do by hand, or a fact none of the tools below returns — instead of three calls
 that approximate it.
 
+**Ask what this brand already knows** → `search_knowledge` with the question. It reads the brand's
+own uploaded documents and returns the passages that answer it, each with the document it came
+from — not the whole corpus. Empty `hits` is not "the brand does not know": `get_knowledge_status`
+says whether anything has been indexed yet. No model, no credits.
+
 **Before you write anything** → two reads, and they answer different questions.
 
 `get_writing_skills` is **how to write**: `humanizer` and `stop-slop` always, `social` or
@@ -107,6 +112,10 @@ a brand there is no brand, and guessing one spends a real organisation's credits
 render per image and creates nothing in the calendar, so ask for two or three with `count`, look
 at them, keep one.
 
+**If you reach for `generate_media`** — the older door — it still works and forwards to
+`generate_image` and `generate_video`. Prefer those two: they name what they do, and changing a
+picture or animating one has its own tool.
+
 **Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
 returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
 To fix a single slide afterwards, `refine_image` on its id **with those tokens in the instruction** —
@@ -123,6 +132,14 @@ so it returns a `job_id`; `check_media_job` says when it landed. The model moves
 than an order of magnitude, so read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
 spending. With a slug the clip follows this brand's visual direction, so you do not have to
 describe it — and there is no switch for it here.
+
+**Give a post the image it is missing** → `render_post`. It draws from the prompt already written
+on that post and attaches it. One render. To draw a picture that is not tied to a post, use
+`generate_image` instead.
+
+**Change the image already on a post** → `regenerate_post_media` with an instruction. It REPLACES
+that post's image — one render, and the old one is gone. When you want to keep the original, use
+`refine_image` on the library asset instead: that files the result as a new asset.
 
 **CHANGE an image you already have** → `refine_image` with its `base_media_id` and an instruction
 ("make it red", "warmer background"). It starts from that asset, so the result is that picture
