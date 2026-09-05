@@ -41,7 +41,10 @@ Setup details: [references/mcp.md](references/mcp.md).
 
 ## Operating rules
 
-1. Start with `list_brands` (or `anomalia brands`) to learn **slugs**.
+1. Almost every tool acts on ONE brand and needs its **slug**; `list_brands` (or `anomalia
+   brands`) is where slugs come from. When you do not know which brand, **ask the person** —
+   never call `list_brands` to pick one yourself. Guessing spends a real organisation's
+   credits and writes into a real client's library.
 2. Pass `slug` on every brand-scoped call.
 3. Post/article ids accept **short unambiguous prefixes** from list output — never guess if ambiguous.
 4. **Before writing ANY copy** — caption, carousel, script, article, bio — call

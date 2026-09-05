@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
+import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
 
 /**
  * Un tool si trova con le parole di chi lo cerca, non con le nostre.
@@ -99,6 +100,49 @@ const describing = (tool: string): string => {
   if (!found) throw new Error(`missing endpoint ${tool}`);
   return found.description;
 };
+
+/**
+ * LA TERZA SUPERFICIE, e si legge PRIMA delle altre due. `instructions` arriva col handshake di
+ * `initialize`: il client la mostra da sola, una volta per sessione, prima di qualunque
+ * descrizione e prima della skill. Se una riga qui contraddice una descrizione, vince questa —
+ * quindi è la superficie dove un errore costa di più.
+ *
+ * L'errore che c'era: «Always start with `list_brands` (or `whoami`) to learn brand slugs.»
+ * È un ordine, ed è stato eseguito alla lettera — l'agente chiamava `list_brands` per qualunque
+ * cosa e poi sceglieva un brand a caso, spendendo i crediti di un'organizzazione vera e
+ * scrivendo nella libreria di un cliente vero. Per un gatto.
+ *
+ * Serve corta: si paga a ogni sessione, come `tools/list`.
+ */
+const INSTRUCTIONS_MAX_CHARS = 1_200;
+
+describe('le istruzioni del server sono una mappa, non un ordine', () => {
+  test('non dicono di partire SEMPRE da list_brands', () => {
+    expect(MCP_INSTRUCTIONS).not.toMatch(/always[^.]*list_brands/i);
+  });
+
+  test('dicono di non scegliere il brand da soli, che è il danno vero', () => {
+    expect(MCP_INSTRUCTIONS).toMatch(/never call `?list_brands`? to pick one/i);
+  });
+
+  test('dicono quando serve uno slug e dove si legge senza tool dedicato', () => {
+    expect(MCP_INSTRUCTIONS).toContain('slug');
+    expect(MCP_INSTRUCTIONS).toContain('query');
+  });
+
+  test('dicono che cosa non costa, non solo che cosa costa', () => {
+    expect(MCP_INSTRUCTIONS).toMatch(/reads cost nothing/i);
+    expect(MCP_INSTRUCTIONS).toMatch(/credits/i);
+  });
+
+  test('nessuna tariffa scritta a mano, come sulle altre due superfici', () => {
+    expect(HAND_WRITTEN_TARIFF.test(MCP_INSTRUCTIONS)).toBe(false);
+  });
+
+  test('restano corte: si pagano a ogni sessione', () => {
+    expect(MCP_INSTRUCTIONS.length).toBeLessThanOrEqual(INSTRUCTIONS_MAX_CHARS);
+  });
+});
 
 describe('una descrizione si legge cercando il proprio problema', () => {
   for (const { tool, question, words } of ASKED_FOR) {

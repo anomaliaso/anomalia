@@ -119,3 +119,74 @@ Elencati e non toccati, perché una descrizione migliore nasconderebbe il difett
    passa dal cancello dei crediti, o il contratto mente su cosa può rifiutare.
 4. **`generate_media` esiste solo per inoltrare** a `generate_image` e `generate_video`. Finché
    c'è, è un terzo nome per due lavori.
+
+## La causa a monte: `instructions`, la terza superficie
+
+Sopra le descrizioni e sopra la skill c'è `cli/mcp/server.ts`, il campo `instructions` del server:
+il client lo mostra da solo al handshake di `initialize`, **una volta per sessione, prima di
+tutto il resto**. Se una riga lì contraddice una descrizione, vince lei.
+
+Conteneva questo:
+
+> *«Always start with `list_brands` (or `whoami`) to learn brand slugs.»*
+
+È un ordine, ed è stato eseguito alla lettera: l'agente chiamava `list_brands` per qualunque cosa
+e poi sceglieva un brand a caso — crediti di un'organizzazione vera, libreria di un cliente vero.
+Per un gatto. Le descrizioni che ho riscritto peggioravano una cosa che partiva già storta da qui.
+
+Le vecchie istruzioni erano quattro dettagli di autenticazione e quell'ordine. Ora sono **la
+mappa**, che è il mestiere di quel campo: come è organizzato il server, quando serve un brand e
+quando no, cosa si legge con `query` quando nessun `get_*` risponde, cosa costa e cosa no. E la
+regola in negativo, la stessa delle descrizioni: *ASK the person. Never call `list_brands` to pick
+one yourself.* Restano corte — si pagano a ogni sessione, come `tools/list`, e il test tiene il
+tetto a 1200 caratteri.
+
+Andrea aveva chiesto se serve un tool «how to use»: non serve, questo campo è quello.
+
+La stessa frase stava anche nella regola 1 della skill (*«Start with `list_brands` to learn
+slugs»*) ed è corretta lì nello stesso commit — o l'agente legge due versioni e vince quella che
+incontra per prima.
+
+`findability.test.ts` copre ora tutte e tre le superfici. Il rosso osservato prima della
+riscrittura è esattamente quello indicato: `/always[^.]*list_brands/i` trovava la frase. E
+`http-app.test.ts` verifica che la mappa arrivi davvero dentro la risposta di `initialize`: una
+costante giusta che il handshake non spedisce non la legge nessuno.
+
+## Materiale per una decisione che non è mia: 45 letture accanto a `query`
+
+Supabase espone 6-7 tool perché espone **un linguaggio** — `execute_sql` copre la coda infinita
+delle letture. Noi ne esponiamo 125, di cui **45 sono letture** (34 `get_*` / `list_*`, più
+`search_knowledge`, `check_media_job`, i due `diagnose_*`), accanto a `query`, che le tabelle le
+legge già tutte.
+
+Passandoci sopra una per una, ecco quali sarebbero esprimibili come una `query` e quali no. Non
+tocco niente: è materiale, non una proposta.
+
+**Esprimibili come `query` oggi** — una tabella, un filtro, niente che il modello non possa
+scrivere: `list_posts`, `list_products`, `list_articles`, `list_ideas`, `list_shares`,
+`list_web_audits`, `list_web_fixes`, `list_audit_citations`, `get_audit_findings`, `get_article`,
+`get_calendar`, `get_bio`, `get_voice`, `get_gtm`, `get_plan`, `get_weekly_plan`, `get_keywords`,
+`get_ranks`, `get_goals`, `get_market_field`, `get_memory`, `check_media_job`. **Ventidue.**
+
+**Non esprimibili, e il motivo per ciascun gruppo:**
+
+- **Coniano qualcosa che `query` non può coniare.** `list_media`, `get_post`, `get_appearance`:
+  restituiscono un `signed_url` per uno storage privato (`brand-media.ts`, quattro
+  `createSignedUrl`). `query` restituirebbe uno `storage_path`, che nessuno può aprire.
+- **Escono in rete.** `get_gsc` (quattro `fetch` in `gsc.ts`, Google Search Console),
+  `diagnose_radar` (interroga ogni sorgente dal vivo), `get_ads` e `list_social_accounts`
+  (riconciliano con il provider — quest'ultimo da verificare, non l'ho confermato).
+- **Calcolano, non leggono.** `search_knowledge` (recupero ibrido più un embedding),
+  `get_knowledge_status` (conteggi di pipeline e aritmetica sui chunk), `get_analytics`,
+  `get_dashboard` (compone sei letture), `get_creation_kit` (selezione e taglio su molte fonti),
+  `diagnose_brand` (valuta i cancelli ciclo per ciclo), `get_seo` e `get_geo` (risolvono l'ultimo
+  audit).
+- **Leggono qualcosa che non è una tabella.** `get_writing_skills` (file su disco più righe del
+  brand), `get_media_models` (catalogo del provider più la scelta del brand).
+- **Applicano una regola che la riga nuda non porta.** `get_radar`, `get_blog_settings`,
+  `get_brand_settings`, `get_automations`: tetti di piano, vocabolari ammessi, quali generi di
+  sorgente il piano consente. La riga non lo dice; il tool sì.
+
+Ventidue su quarantacinque, e nessuna delle ventidue restituisce oggi qualcosa che `query` non
+possa. Che sia una buona idea toglierle è un'altra domanda — un `get_*` è una domanda che il
+modello non deve saper formulare — ma il conto adesso c'è.
