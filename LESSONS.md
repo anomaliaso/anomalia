@@ -1114,3 +1114,50 @@ girare sotto entrambi i runner.
 
 **La regola dietro**: un file di test che vive sotto due runner può usare solo ciò che entrambi
 hanno. `bun:test` ha un alias; il **runtime** `bun` no, e non può averlo — è un eseguibile.
+## Un client service role più un identificatore che arriva da fuori
+
+**Segnale.** Da qualche parte c'è `createAdminClient()` — o, sul percorso a chiave API, il
+`supabase` che `authenticate()` restituisce, che è la stessa cosa con un altro nome — e nella
+stessa funzione c'è un id preso da `params`, dal corpo della richiesta, o da un `formData`. Il
+codice attorno ha l'aria protetta: un `.eq('brand_id', …)` da qualche parte, un `canEnter`, un
+404 sul brand. Sembra a posto, e in quattro casi su quattro non lo era.
+
+**Cosa succede.** `service_role` ha `bypassrls=true`: le policy non vengono nemmeno valutate.
+Quindi la protezione è solo quella scritta a mano, e si rompe in tre modi che sembrano diversi e
+sono lo stesso:
+
+1. **Il `WHERE` è scopato, il bersaglio no.** L'update sull'articolo porta `brand_id`, la delete
+   sui tag che segue no. La riga vicina protetta fa sembrare protetta anche quella dopo.
+2. **Il `WHERE` è scopato, il `SET` no.** Il corpo grezzo finisce nell'update: la riga si trova
+   nel tuo brand e si riscrive col `brand_id` di un altro.
+3. **Non c'è nessun `WHERE` da scopare: il tenant È il valore che arriva da fuori.**
+   `insert({ brand_id: body.brandId })`. Qui non attraversa il dato, attraversa il **conto** —
+   `credits.ts` somma quelle righe di `ai_calls`, quindi il consumo di uno lo paga un altro.
+
+E il fallimento è muto in tutti e tre: **zero righe toccate non è un errore per PostgREST**,
+quindi un update scopato che non trova niente lascia `error` nullo e il codice prosegue fino alla
+scrittura non scopata che gli sta dietro. Un endpoint che risponde `200 {"ok":true}` su una riga
+che non ha toccato è la stessa disonestà, un gradino più in basso.
+
+Perché nessuno se n'era accorto: il cancello che sembrava un confine non lo era. `canEnter` si
+descrive da sé come *«una porta commerciale, non un confine di sicurezza»* — chi leggeva la route
+vedeva un `403` in cima e smetteva di cercare.
+
+**La mossa.** `src/no-cross-tenant-writes.test.ts`, tre regole sul sorgente, una per forma. Non
+sono state scritte per essere verdi: ognuna è stata provata sul sorgente **prima** della
+correzione e ha trovato il proprio difetto lì — 1, 1 e 6 occorrenze. Una guardia che non è mai
+stata rossa non dimostra niente, e ne abbiamo trovate cinque così in una sola giornata.
+
+Niente allowlist: la prima regola incontra sette scritture di quella forma e sei sono sane, ma
+un'allowlist da sei voci diventa un timbro alla settima. Le sei si sdoganano sul merito — una
+lettura scopata che torna indietro, o `updateBrandRow`/`deleteBrandRow`, che contano le righe che
+hanno toccato. Un update scopato che nessuno conta **non** vale come prova: quella riga sola è la
+differenza fra la regola e un placebo.
+
+Per il caso 3 la verifica sta in `ownsBrand` (`access.ts`): gira la domanda al database col client
+dell'utente, dove le policy di `brands` rispondono con la stessa regola che `loadBrandForUser`
+riapplica a mano. Un client non marchiato `markRlsScoped` riceve `false` — il default è il
+rifiuto, così un percorso nuovo che si dimentica di marchiarsi resta chiuso invece di aprirsi.
+
+Quattro occorrenze trovate solo perché qualcuno è andato a cercarle: la quinta arriverà, e allora
+il costo di questa lezione è già stato pagato.

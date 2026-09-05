@@ -17,9 +17,9 @@ import { fileURLToPath } from 'node:url';
  * vale per tutto ciò che segue nel file. Le sonde qui sotto tengono la regola onesta — se
  * smette di riconoscere il difetto, il primo test è quello che cade.
  *
- * Quello che NON vede: il caso in cui la colonna del tenant sta nel `SET` invece che nel `WHERE`
- * — `insert({ brand_id: body.brandId })` su un client service role. Lì non c'è nessun id da
- * scopare, c'è un `brand_id` da verificare, ed è un'altra regola.
+ * La terza regola prende il caso in cui la colonna del tenant sta nel `SET` invece che nel
+ * `WHERE`: lì non c'è nessun id da scopare, c'è un `brand_id` da verificare. È la forma che
+ * costava di più e si vedeva di meno — non attraversa dati, attraversa il conto.
  */
 const SRC = fileURLToPath(new URL('.', import.meta.url));
 
@@ -78,6 +78,31 @@ function unparsedBodyIntoWrite(file: string, src: string): Finding[] {
     if (!hit) continue;
 
     out.push({ file, line: src.slice(0, hit.index).split('\n').length, chain: hit[0].replace(/\s+/g, ' ') });
+  }
+  return out;
+}
+
+const TENANT_VAR = /(?:const|let)\s+(brandId|orgId|organizationId|userId|ownerId|accountId)\s*=\s*([^;]*)/g;
+const FROM_BODY = /\bbody\b|await\s+request\.json\(\)/;
+const OWNERSHIP_CHECKED = /\bownsBrand\s*\(/;
+
+/**
+ * Il tenant preso dal corpo e mai verificato. Non finisce in un `WHERE` da scopare: diventa il
+ * `brand_id` di una riga scritta col client service role, o lo scope sotto cui gira il lavoro —
+ * e da lì il costo di quel lavoro va sul conto del brand nominato. `canEnter` non lo ferma: è
+ * una porta commerciale, non un confine di sicurezza, e lo dice la sua stessa fonte.
+ */
+function unverifiedTenantFromBody(file: string, src: string): Finding[] {
+  const out: Finding[] = [];
+  for (const match of src.matchAll(TENANT_VAR)) {
+    const [, name, rhs] = match;
+    if (!FROM_BODY.test(rhs) || OWNERSHIP_CHECKED.test(src)) continue;
+
+    out.push({
+      file,
+      line: src.slice(0, match.index).split('\n').length,
+      chain: `${name} = ${rhs.replace(/\s+/g, ' ').slice(0, 90)}`
+    });
   }
   return out;
 }
@@ -174,6 +199,40 @@ describe('la regola riconosce il corpo grezzo che arriva a un SET', () => {
   });
 });
 
+const BRAND_FROM_BODY = "const brandId = typeof body?.brandId === 'string' ? body.brandId : null;\n";
+
+describe('la regola riconosce il tenant preso dal corpo', () => {
+  it('segnala un brandId dal corpo che nessuno verifica', () => {
+    const src =
+      BRAND_FROM_BODY +
+      'if (!(await canEnter(supabase))) return new Response(\'Forbidden\', { status: 403 });\n' +
+      'await startOnboardingStepJob(supabase, { kind, userId: user.id, brandId, input });';
+
+    expect(unverifiedTenantFromBody('/src/routes/app/onboarding/x/+server.ts', src)).toHaveLength(1);
+  });
+
+  it('accetta un brandId verificato contro il client dell utente', () => {
+    const src =
+      BRAND_FROM_BODY +
+      "if (brandId && !(await ownsBrand(supabase, brandId))) return new Response('Forbidden', { status: 403 });\n" +
+      'await startOnboardingStepJob(supabase, { kind, userId: user.id, brandId, input });';
+
+    expect(unverifiedTenantFromBody('/src/routes/app/onboarding/x/+server.ts', src)).toEqual([]);
+  });
+
+  it('lascia stare un id che viene da un brand gia caricato', () => {
+    const src = 'const brandId = brand.id;\nawait withBrandContext(brandId, run);';
+
+    expect(unverifiedTenantFromBody('/src/routes/app/x/+server.ts', src)).toEqual([]);
+  });
+
+  it('lascia stare un campo del corpo che non nomina un tenant', () => {
+    const src = "const draftId = typeof body?.draftId === 'string' ? body.draftId : null;";
+
+    expect(unverifiedTenantFromBody('/src/routes/app/x/+server.ts', src)).toEqual([]);
+  });
+});
+
 describe('src/ non scrive fra clienti diversi', () => {
   const files = listTsFiles(SRC);
 
@@ -194,6 +253,12 @@ describe('src/ non scrive fra clienti diversi', () => {
     const findings = files.flatMap((f) => unparsedBodyIntoWrite(f, readFileSync(f, 'utf-8')));
 
     expect(findings, `il WHERE è scopato, il SET no:\n${report(findings)}`).toEqual([]);
+  });
+
+  it('nessun tenant preso dal corpo senza verifica di proprietà', () => {
+    const findings = files.flatMap((f) => unverifiedTenantFromBody(f, readFileSync(f, 'utf-8')));
+
+    expect(findings, `il brand lo sceglie chi chiama:\n${report(findings)}`).toEqual([]);
   });
 });
 

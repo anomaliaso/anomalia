@@ -1,6 +1,6 @@
 import { swallow } from '$lib/server/swallow';
 import type { RequestHandler } from './$types';
-import { canEnter } from '$lib/server/access';
+import { canEnter, ownsBrand } from '$lib/server/access';
 import { generatePreview } from '$lib/server/content-preview';
 import { scrapeForOnboarding, type ScrapeTarget } from '$lib/server/scrapecreators';
 import { genaiClient, synthesizeBrandContext, synthesizeVisualStyle } from '$lib/server/brand-context';
@@ -36,6 +36,7 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
 
   const body = await request.json().catch(() => ({}));
   const brandId = typeof body?.brandId === 'string' ? body.brandId : null;
+  if (brandId && !(await ownsBrand(supabase, brandId))) return new Response('Forbidden', { status: 403 });
   if (!brandId) return new Response('Missing brandId', { status: 400 });
 
   return withBrandContext(brandId, async () => {

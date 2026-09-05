@@ -75,7 +75,8 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
   if (!id) return json({ error: 'id is required' }, { status: 400 });
 
   const { deleteMemory } = await import('$lib/server/brand-memory');
-  await deleteMemory(supabase, brand.id, id);
+  const failure = await deleteMemory(supabase, brand.id, id);
+  if (failure) return json({ error: failure.error }, { status: failure.status });
 
   return json({ ok: true });
 };

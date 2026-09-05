@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { canEnter } from '$lib/server/access';
+import { canEnter, ownsBrand } from '$lib/server/access';
 import { genaiClient } from '$lib/server/research';
 import { aiStructured } from '$lib/server/ai-text';
 import { localeLanguageName } from '$lib/i18n/locale';
@@ -42,6 +42,7 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
 
   const body = await request.json().catch(() => ({}));
   const brandId = typeof body?.brandId === 'string' ? body.brandId : null;
+  if (brandId && !(await ownsBrand(supabase, brandId))) return new Response('Forbidden', { status: 403 });
   if (!brandId) return new Response('Missing brandId', { status: 400 });
   return withBrandContext(brandId, async () => {
     const profile = body?.profile ?? {};
