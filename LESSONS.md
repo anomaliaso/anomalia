@@ -1195,3 +1195,21 @@ vale quanto la frase che stai per spedire a ogni agente che userà il prodotto.
 **Corollario.** Vale in entrambe le direzioni: un fatto che passi tu a un altro agente va marcato
 per quello che è. «Verificato in `file:riga`» e «me l'hanno detto» non sono la stessa cosa, e chi
 riceve non può distinguerle se non gliele distingui tu.
+
+**È la stessa forma a tre distanze diverse, e le abbiamo commesse in tre in una sessione sola.**
+Un agente ha letto un chiamante e ha concluso sul chiamato. Io ho classificato ventidue letture
+come «esprimibili con `query`» leggendone le descrizioni invece delle rotte — due erano sbagliate,
+e una avrebbe fatto uscire dalla memoria del brand le note private di un altro agente. Il terzo ha
+messo una frase dove era comodo, in `references/tools.md`, e il test l'ha dichiarata verde: il test
+leggeva quel file concatenato a `SKILL.md`, mentre la regola che pretendeva di far rispettare era
+«la superficie che si legge PER PRIMA instrada la domanda». Tre volte lo stesso movimento: il
+controllo che ci trovavamo davanti ha detto sì, e abbiamo smesso di guardare.
+
+**La domanda che le prende tutte e tre, e costa una riga:** *di che cosa è prova questo verde?*
+«Il chiamante non lo passa» non è una prova sul chiamato. «La descrizione dice una tabella» non è
+una prova sulla rotta. «`findability` è verde» non è una prova sulla superficie sempre caricata, se
+il test ne legge due concatenate. Va fatta **una volta sola, prima di citare il verde** — non è un
+protocollo, è la ragione per cui verrà davvero eseguita.
+
+Tre errori uguali fatti da tre persone diverse nello stesso giorno non sono tre sbagli: sono la
+forma di un controllo che non guarda dove crede di guardare.
