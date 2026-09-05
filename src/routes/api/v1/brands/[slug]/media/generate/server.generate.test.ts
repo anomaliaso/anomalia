@@ -27,7 +27,7 @@ const GENERATED = {
   mime: 'image/png',
   width: 1080,
   height: 1350,
-  signed_url: 'https://signed.test/a.png'
+  url: 'https://anomalia.so/a/K7BX2MQ4'
 };
 
 function call(body: unknown, slug = 'demo') {

@@ -21,7 +21,7 @@ import {
   storeBrandMediaBytes,
   type BrandMediaKind
 } from '$lib/server/brand-media';
-import { signKnowledgePaths } from '$lib/server/media-archive';
+import { mediaUrl } from '$lib/media-url';
 
 const IMAGE_MAX_BYTES = 12_000_000;
 /**
@@ -67,7 +67,7 @@ export type ImportedMedia = {
   width: number | null;
   height: number | null;
   source_url: string;
-  signed_url: string | null;
+  url: string | null;
 };
 
 export type MediaImportResult =
@@ -132,8 +132,6 @@ export async function importBrandMediaFromUrl(
   });
   if (error || !row) return { ok: false, error: 'store_failed' };
 
-  const signed = await signKnowledgePaths(supabase, [storagePath]).catch(() => new Map<string, string>());
-
   return {
     ok: true,
     media: {
@@ -144,7 +142,7 @@ export async function importBrandMediaFromUrl(
       width,
       height,
       source_url: fetched.url,
-      signed_url: signed.get(storagePath) ?? null
+      url: mediaUrl(row.short_code)
     }
   };
 }

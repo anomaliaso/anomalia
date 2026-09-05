@@ -389,7 +389,7 @@ Gli id restituiti sono quelli che `POST /posts` accetta in `media_ids`.
       "title": "Foto prodotto",
       "description": "…",
       "tags": ["prodotto"],
-      "signed_url": "https://…",
+      "url": "https://anomalia.so/a/K7BX2MQ4",
       "created_at": "2026-08-13T10:00:00.000Z"
     }
   ]
@@ -442,7 +442,7 @@ viene speso: il file viene copiato, non generato.
   "width": 1080,
   "height": 1350,
   "source_url": "https://cdn.example.com/render/final.png",
-  "signed_url": "https://…"
+  "url": "https://anomalia.so/a/K7BX2MQ4"
 }
 ```
 

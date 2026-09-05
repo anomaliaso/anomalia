@@ -212,7 +212,10 @@ const MediaRow = z.object({
   title: z.string().nullable(),
   description: z.string().nullable(),
   tags: z.array(z.string()).nullable(),
-  signed_url: z.string().nullable(),
+  // Short permanent link (/a/<code>), never the signed storage URL. What crosses this boundary is
+  // meant to be handed on — pasted to a person, embedded, kept — and a signed URL survives none of
+  // that: it expires in 2h and truncates inside an agent's output.
+  url: z.string().nullable(),
   created_at: z.string()
 });
 
@@ -254,7 +257,7 @@ const ImportMediaUrlResultSchema = z.object({
   width: z.number().nullable(),
   height: z.number().nullable(),
   source_url: z.string(),
-  signed_url: z.string().nullable()
+  url: z.string().nullable()
 });
 
 export const IMPORT_MEDIA_URL = {
@@ -295,7 +298,7 @@ const GeneratedMediaSchema = z.object({
   mime: z.string().nullable(),
   width: z.number().nullable(),
   height: z.number().nullable(),
-  signed_url: z.string().nullable()
+  url: z.string().nullable()
 });
 
 export const GENERATE_MEDIA = {
