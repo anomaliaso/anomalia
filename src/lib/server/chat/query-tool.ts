@@ -95,7 +95,7 @@ export const NO_SESSION_ERROR = {
   error: 'no_user_session',
   message:
     '`query` reads the database AS THIS USER: anon key + their JWT, so Postgres RLS grants the agent exactly the user permissions and nothing more. This client is not user-scoped — it is a background/queue turn or a CLI API-key request, and both hold a service-role client (`bypassrls=true`) that would read EVERY brand in the database. Refusing to read with it. An API key is not promoted to a user session on purpose: a key carries `permissions.brand_ids`, often narrower than the brands its owner belongs to, and RLS cannot see that restriction — minting a session for it would silently widen a deliberately narrow key.',
-  fix: 'Use the purpose-built read tools (read_posts, read_brand_kit, read_plan, …) — they scope to this brand by construction. `query` works wherever the caller signs in as themselves: the app, `anomalia login`, and MCP.'
+  fix: 'Use this surface\'s own read tools — there is one per subject, and each scopes to this brand by construction. Or come back as yourself: `query` reads wherever the caller carries their own session — the app, `anomalia login`, and MCP.'
 } as const;
 
 /**
