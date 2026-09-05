@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { client } from './plan-pipeline';
 import { type AnyRec, type ImagePart, guidanceFor } from './seed-model';
-import { BLOG_IMAGE_MODEL, PRODUCT_REF_IMAGES, aspectRatioFor, brandVisualDirective, buildImageRequest, distinctiveTokens, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderBrandImage, loadProductRefs, normalizeOfferingName, renderPostImage, uploadPostImage } from './images';
+import { BLOG_IMAGE_MODEL, PRODUCT_REF_IMAGES, aspectRatioFor, brandVisualDirective, distinctiveTokens, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderBrandImage, loadProductRefs, normalizeOfferingName, renderPostImage, uploadPostImage } from './images';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { structured } from '$lib/server/research';
@@ -215,90 +215,10 @@ export async function generateArticleImages(
   return lines.join('\n');
 }
 
-/** Where a batched image belongs once it comes back. Persisted in blog_month_jobs.manifest. */
-export type ArticleImageDest =
-  | { articleId: string; kind: 'cover' }
-  | { articleId: string; kind: 'section'; heading: string };
-
-/**
- * Costruisce (senza inviare) tutte le richieste immagine di UN articolo. Stessi prompt e contesto
- * del percorso sincrono, via buildImageRequest.
- *
- * Ordine stabile, ognuna appaiata alla sua destinazione: la Batch API risponde in ordine di
- * sottomissione, quindi il chiamante concatena e tiene i `dest` come manifesto che rimappa la
- * risposta N su articolo + slot.
- */
-export async function buildArticleImageRequests(
-  admin: SupabaseClient,
-  brand: AnyRec,
-  opts: { articleId: string; title: string; bodyMd: string; summary?: string; needCover: boolean; max?: number }
-): Promise<Array<{ request: ReturnType<typeof buildImageRequest>; dest: ArticleImageDest }>> {
-  const max = Math.max(1, Math.min(opts.max ?? 2, 4));
-  const headings = articleImageTargets(opts.bodyMd, max).map((t) => t.heading);
-
-  const { data: kit } = await admin.from('brand_kit')
-    .select('visual_style, ai_context, brand_colors, fonts').eq('brand_id', brand.id).maybeSingle();
-  const moodUrls = await loadBrandMoodImageUrls(admin, brand.id).catch((error) => { swallow('load mood image urls', error); return []; });
-  const moodImages = await loadMoodRefs(moodUrls);
-  const fontNames = (Array.isArray(kit?.fonts) ? (kit!.fonts as AnyRec[]) : []).map((f) => f?.name).filter(Boolean) as string[];
-  const baseOpts = {
-    aspectRatio: '16:9' as const,
-    model: BLOG_IMAGE_MODEL,
-    visualStyle: (kit?.visual_style as string | undefined) || undefined,
-    visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
-    brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fontNames) || undefined,
-    moodImages
-  };
-
-  const out: Array<{ request: ReturnType<typeof buildImageRequest>; dest: ArticleImageDest }> = [];
-
-  if (opts.needCover) {
-    const products = await pickArticleProductRefs(admin, brand.id, `${opts.title} ${opts.summary ?? ''}`, 2).catch((error) => { swallow('pick product references', error); return []; });
-    const referenceImages = await loadProductRefs(products.flatMap((p) => p.images).slice(0, PRODUCT_REF_IMAGES));
-    const productHint = products.length
-      ? ` Feature the brand's REAL product(s) from the attached reference photo(s): ${products.map((p) => p.name).join(', ')}. Keep each product pixel-faithful (shape, colour, materials) — restyle only the scene/lighting.`
-      : '';
-    const prompt = `A striking editorial COVER / hero image for a blog article titled "${opts.title}".${opts.summary ? ` The article is about: ${String(opts.summary).slice(0, 220)}.` : ''}${productHint} Evocative, magazine-quality, a clear focal point with room to breathe. Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
-    out.push({
-      request: buildImageRequest(prompt, { ...baseOpts, referenceImages, referenceMode: referenceImages?.length ? 'product' : undefined }),
-      dest: { articleId: opts.articleId, kind: 'cover' }
-    });
-  }
-
-  for (const heading of headings) {
-    const products = await pickArticleProductRefs(admin, brand.id, `${opts.title} ${heading}`, 1).catch((error) => { swallow('pick product references', error); return []; });
-    const referenceImages = await loadProductRefs(products.flatMap((p) => p.images).slice(0, PRODUCT_REF_IMAGES));
-    const productHint = products.length
-      ? ` Show the brand's REAL product from the attached reference: ${products.map((p) => p.name).join(', ')}. Keep it pixel-faithful — restyle only scene/lighting.`
-      : '';
-    const prompt = `An editorial image illustrating the section "${heading}" of a blog article titled "${opts.title}".${productHint} Evocative, magazine-quality, a clear focal point. Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
-    out.push({
-      request: buildImageRequest(prompt, { ...baseOpts, referenceImages, referenceMode: referenceImages?.length ? 'product' : undefined }),
-      dest: { articleId: opts.articleId, kind: 'section', heading }
-    });
-  }
-
-  return out;
-}
-
-/**
- * Innesta un'immagine sotto l'H2 il cui testo è `heading`. Il collector batch applica molto dopo
- * che il corpo è stato scritto, quindi si aggancia al TESTO del titolo e non a un numero di riga,
- * che nel frattempo sarebbe diventato stantio.
- */
-export function spliceImageUnderHeading(bodyMd: string, heading: string, url: string): string {
-  const lines = bodyMd.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^##\s+(.+)$/.exec(lines[i]);
-    if (!m || m[1].trim() !== heading) continue;
-    let j = i + 1;
-    while (j < lines.length && lines[j].trim() === '') j++;
-    if (j < lines.length && /^!\[/.test(lines[j].trim())) return bodyMd; // already illustrated
-    lines.splice(i + 1, 0, `\n![${heading}](${url})\n`);
-    return lines.join('\n');
-  }
-  return bodyMd;
-}
+// Qui vivevano `ArticleImageDest`, `buildArticleImageRequests` e `spliceImageUnderHeading`: il
+// manifesto della Batch API di Google e il collettore che rimappava la risposta N sul suo articolo.
+// Sono usciti con la Batch, che non ha mai renderizzato un'immagine in produzione. Il percorso in
+// linea qui sopra ha il suo inserimento (`lines.splice`), e non e` mai passato di li`.
 
 const REGEN_SCHEMA = {
   type: 'object' as const,

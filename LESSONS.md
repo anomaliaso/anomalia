@@ -1017,3 +1017,33 @@ un pomeriggio, invece che aggiungendo una riga a un file qualunque un venerdì.
 I 7.289 test unitari erano verdi, `svelte-check` non aveva niente da dire, e il build non era
 ancora stato provato. Un ciclo di inizializzazione si vede solo eseguendo — è precisamente il
 motivo per cui il cancello del browser non è sostituibile con una suite verde.
+
+## Un mock incompleto non fa fallire un test: fa cadere la suite, e a intermittenza
+
+CI rossa con **7.309 test verdi su 7.309**. Il job falliva su un `Unhandled Rejection`:
+`TypeError: supabase.rpc is not a function`, con dentro `home-redirect.test.ts` un file che il
+commit non aveva toccato. In locale non si riproduceva.
+
+La catena: `+layout.server.ts` lancia `loadDeferred`, una promessa che **nessuno attende** (SvelteKit
+la trasmette in streaming). Il mock supabase del test rispondeva a `from()` con un Proxy che
+accetta qualunque metodo — l'autore il rischio l'aveva previsto, e l'aveva scritto nel commento
+sopra — ma non rispondeva a `rpc()`. Dentro il differito ci si arriva:
+`remaining()` → `getCreditsUsage()` → `fetchStripePeriodStart()` → `supabase.rpc(...)`.
+
+Quindi il rifiuto c'era sempre. Quello che cambiava era **se atterrava prima che il run finisse**,
+e quello dipende da quanti file di test esistono e in che ordine vitest li distribuisce. Il commit
+ne aveva rimosso uno e aggiunto un altro: abbastanza per spostare la schedulazione e far uscire
+allo scoperto un guasto che era lì da prima.
+
+**Segnale**: `Test Files N passed`, `Tests M passed`, e il job rosso lo stesso, con `Errors 1` e un
+`Unhandled Rejection` che nomina un file che non hai toccato. Un `grep` su `FAIL|Tests ` nell'output
+locale **non lo vede**: la riga da cercare è `Errors` / `Unhandled`.
+
+**Mossa**: completare il mock alla fonte (`rpc: () => chain`, come `from`), non inseguire l'ordine
+dei test e non ritentare il job sperando che vada. Un mock che copre solo i metodi che il percorso
+felice usa è una bomba a orologeria: il primo cambiamento di schedulazione la innesca, e il file
+che esplode non è quello che l'ha piazzata.
+
+**La regola dietro**: dove il codice lancia una promessa che nessuno attende, un mock parziale non
+degrada — abbatte tutto il processo. O il mock risponde a qualunque cosa (Proxy), o quel percorso
+va atteso e asserito.

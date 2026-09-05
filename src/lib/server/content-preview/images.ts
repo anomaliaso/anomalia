@@ -228,16 +228,6 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   };
 }
 
-/** Extract the first inline image from a generateContent response as a data URL. */
-export function imageFromResponse(res: {
-  candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
-}): string | undefined {
-  for (const part of res.candidates?.[0]?.content?.parts ?? []) {
-    if (part.inlineData?.data) return `data:${part.inlineData.mimeType ?? 'image/png'};base64,${part.inlineData.data}`;
-  }
-  return undefined;
-}
-
 export async function renderPostImage(
   ai: GoogleGenAI,
   imagePrompt: string,
