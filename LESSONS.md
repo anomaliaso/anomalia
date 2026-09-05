@@ -1388,3 +1388,51 @@ restringere niente — la più larga vince sempre, e ogni policy stretta che le 
 decorativa. Quindi «aggiungo una policy più stretta» non è mai una fix: la fix è togliere la larga.
 E un test che verifica una policy deve prima **ricreare la deriva** che la produzione ha davvero,
 altrimenti misura un database che non è mai esistito e passa mentre il buco resta aperto.
+
+## Una policy RLS vincola la riga, non la colonna
+
+`profiles` aveva due policy e basta, e la seconda diceva `for update using (id = auth.uid()) with
+check (id = auth.uid())`. Letta di corsa sembra completa: «puoi scrivere solo la tua riga». È vera,
+ed è insufficiente — perché la riga contiene `approved_at`, che è il cancello della beta chiusa, e
+`with check` non ha niente da dire su QUALE colonna stai scrivendo. `PATCH
+/rest/v1/profiles?id=eq.<sé> {"approved_at":"..."}` risponde 200. La stessa forma su
+`organizations` (`org owner all`, `ALL`, `owner_id = auth.uid()`) vale soldi: `plan = 'pro'` porta
+la quota da 400 a 11.250 crediti senza passare da Stripe, perché `resolveOrgBilling` legge
+`organizations.plan` per primo e non lo confronta con niente.
+
+**Segnale**: una tabella con una policy `ALL` o `UPDATE` senza restrizione di colonna, e fra le
+colonne almeno una che **decide un diritto** invece di descrivere un dato — `approved_at`, `plan`,
+`status`, `activated_at`, `stripe_subscription_id`. Il confine che manca non è fra tenant: quello
+regge. È fra ciò che un utente **possiede** e ciò che un utente **può decidere di sé**, e non
+somiglia a un'intrusione perché è il proprietario che modifica il proprio oggetto — motivo per cui
+un red team che attacca il confine fra clienti non lo trova.
+
+**Mossa**: il livello che sa distinguere le colonne è il GRANT, non la policy. `revoke update on
+<t> from authenticated` e poi `grant update (<colonne>) on <t> to authenticated`, con lo stesso
+gesto su `insert` — una policy `ALL` lascia anche NASCERE una riga già `pro`. E l'elenco sta in UN
+posto per tutte le tabelle, non uno per tabella: tre registri in tre file divergono al primo
+cambiamento, e divergono in silenzio.
+
+**La regola dietro**: quando si aggiunge una colonna, la domanda «chi la decide?» va posta prima,
+non dopo. Il grant per colonna la pone da solo — una colonna nuova nasce non scrivibile, e il
+percorso che ne ha bisogno si rompe subito e a voce alta. Il contrario (nasce scrivibile, e si
+scopre quando qualcuno la usa) è il difetto che si è pagato qui due volte.
+
+## Un `revoke` in una migration non è uno stato: è un evento
+
+Le quattro `SECURITY DEFINER` senza controllo nel corpo — `brand_provider_spend_usd`, le tre
+`agent_kit_*` — hanno tutte la loro `revoke ... from public, anon, authenticated` scritta nella
+migration che le ha create. In produzione ha attecchito: otto combinazioni su otto false, verificate
+con `has_function_privilege`. Sullo stack self-hosted locale, stesse migration, **otto su otto
+vere**: `proacl` mostra `=X/...`, cioè PUBLIC con `execute`, su tutte e quattro.
+
+**Segnale**: due database che dicono di avere le stesse migration applicate e rispondono in modo
+diverso a `has_function_privilege('anon', '<fn>(...)', 'execute')`. Il record in
+`app_schema_migrations` dice che il file è passato, non che il suo effetto è ancora lì: un
+ripristino, una dashboard, uno strumento che ricrea la funzione e le rimette i grant di default
+lasciano il record intatto e l'ACL no — e `db:migrate` non ripasserà mai su quel file.
+
+**Mossa**: il grant si rimette, ma non è la difesa. La difesa è il filtro DENTRO il corpo, che
+regge anche se il grant torna — la forma è in `20260905120000_secdef_least_privilege.sql`. E lo
+stato vero si guarda in `pg_proc.proacl`, non nell'elenco delle migration applicate;
+`npm run test:privileges` fa esattamente quella domanda contro un Postgres vero.
