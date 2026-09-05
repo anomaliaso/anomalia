@@ -180,8 +180,18 @@ the model returning nothing.
 
 `generate_image` draws a picture from a description — "an image of a cat", a product shot, a
 background for a slide. Required: `prompt`. Optional: `slug`, `count` (1-4 alternatives, **each
-one billed**), `aspect_ratio`, `model`, `title`. The prompt is the whole instruction: nothing
-about a brand's look reaches the model, so name the style you want.
+one billed**), `aspect_ratio`, `model`, `brand_style`, `title`. With a slug, that brand's own look
+is applied by default — its colours, its fonts and the visual direction it has settled on — so you
+do not have to describe them. Without a slug there is no brand and none of that reaches the model,
+so name the style you want in the prompt.
+
+**`brand_style` turns that default off, and only a slug gives it a meaning.** Leave it out and the
+brand's look is applied, which with a slug is almost always what you want. Send `ignore` when the
+picture must take nothing from the brand: a plain UI screenshot, an illustration about somebody
+else, a neutral background — places where brand colours and fonts spoil the result. Without a slug
+there is no brand to apply or ignore, and sending it is refused as `brand_style_needs_a_brand`
+rather than quietly dropped: pass a slug, or drop `brand_style`. `refine_image` takes the same
+field, and the brand's look reaches a refinement the same way.
 
 **`slug` is optional, and which way you call it is the only choice to make.** WITHOUT it this is a
 one-off drawing: no brand, nothing filed anywhere, `id` comes back `null` and there is nothing to

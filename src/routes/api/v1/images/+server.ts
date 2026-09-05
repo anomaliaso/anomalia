@@ -52,6 +52,16 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }
 
+  if (parsed.data.brand_style) {
+    return json(
+      {
+        error: 'brand_style_needs_a_brand',
+        reason: 'brand_style governs a brand look, and no brand was named — pass a slug, or drop brand_style.'
+      },
+      { status: statusForFailure(GENERATE_IMAGE, 'brand_style_needs_a_brand') }
+    );
+  }
+
   const result = await generateImagesWithoutBrand(supabase, {
     orgId,
     userId: user.id,

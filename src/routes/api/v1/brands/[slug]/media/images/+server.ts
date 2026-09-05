@@ -29,6 +29,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     count: parsed.data.count,
     aspectRatio: parsed.data.aspect_ratio,
     model: parsed.data.model,
+    brandStyle: parsed.data.brand_style,
     title: parsed.data.title
   });
 
