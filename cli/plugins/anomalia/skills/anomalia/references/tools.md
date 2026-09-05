@@ -287,6 +287,10 @@ only (`facebook`, `linkedin`, `x`, `threads`, `bluesky`, `reddit`) unless you pa
 (required for Reddit), `subreddit`, `link_url`. The result carries the post id, its
 `pending_user` status, the stored instant and a `review_url` the operator can open.
 
+`edit_post` changes what a post SAYS. Two of its fields look like "when" and only one is: `slot`
+is the calendar day the post sits on, while `scheduled_for` — the instant it actually goes out —
+is not editable here at all. Moving a post in time is `reschedule_post`, and nothing else.
+
 `check_content` runs the checks Anomalia runs on its own copy against a spec you wrote, before
 you create anything. It calls no model, spends no credits and writes nothing, so the same spec
 always returns the same verdict. Required: `slug`, `platforms`, `caption`. Optional:

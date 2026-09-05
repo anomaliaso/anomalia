@@ -30,7 +30,8 @@ export const SET_APPEARANCE = {
   tool: 'set_appearance',
   title: 'Change how the brand looks',
   description:
-    'Change the brand’s logo, favicon, graphic fonts or visual brief. Only the fields you send ' +
+    'Change the brand’s logo, favicon, graphic fonts or visual brief. THE COLOUR PALETTE IS NOT ' +
+    'HERE: it is `set_colors`, and this tool has no colour field at all. Only the fields you send ' +
     'change. `logo_url` and `favicon_url` are DOWNLOADED and kept in our storage, not linked: the ' +
     'answer carries the address we stored, which is the one every graphic will use — a private, ' +
     'redirecting or oversized address is refused rather than half-saved. `remove_logo` clears it. ' +

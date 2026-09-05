@@ -525,7 +525,9 @@ export const EDIT_POST = {
   title: 'Edit post',
   description:
     'Change what a post says without redrawing anything: caption, title, link, platforms, the ' +
-    'slot it sits in. Only the fields you send change; `media_url: null` clears the image and ' +
+    'slot it sits in. `slot` IS THE CALENDAR DAY, NOT THE PUBLISH TIME — the time a post actually ' +
+    'goes out is `scheduled_for`, and only `reschedule_post` changes it. ' +
+    'Only the fields you send change; `media_url: null` clears the image and ' +
     'makes it text-only. No model, no credits. A post that is already scheduled is re-synced ' +
     'to the publisher automatically. It does not publish and does not approve. id accepts a ' +
     'short prefix.',
