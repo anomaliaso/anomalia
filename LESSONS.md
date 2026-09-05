@@ -1332,3 +1332,33 @@ chi stava per rimuovere ha detto QUALI TRE tool, prima di toccarli: «rimuovo qu
 lettura» non avrebbe dato niente da controllare. Quel messaggio si scrive quando il codice non
 esiste ancora — cioè quando viene peggio, e la tentazione è scriverlo dopo, a risposta nota.
 Scritto dopo non serve a niente: è un resoconto, e un resoconto non si può contraddire in tempo.
+
+## Una policy permissiva può solo aggiungere accesso, e quella nata dalla dashboard non è in nessun file
+
+Un red team ha scritto un file nella cartella di un altro utente sul bucket `media`, con un account
+autoregistrato. In `supabase/migrations` non c'era niente di sbagliato: `media insert own folder`
+(0004) chiedeva `(storage.foldername(name))[1] = auth.uid()::text` dal primo giorno. Accanto, creata
+a mano dalla dashboard e in nessun file del repo, c'era `Allow authenticated uploads to media
+bucket` — `with check (bucket_id = 'media')`, nessuna condizione sulla cartella.
+
+**Segnale**: la policy stretta esiste, la leggi, sembra giusta, e l'attacco passa lo stesso. Oppure:
+`npm run db:migrate` su un database pulito produce uno schema che si comporta **diversamente** dalla
+produzione, e nessuno dei due è rotto.
+
+**Mossa**: quando una policy «non difende», non rileggerla — **elencale tutte**, sullo stesso
+oggetto:
+
+```sql
+select policyname, roles::text, cmd, qual, with_check
+from pg_policies where schemaname = 'storage' and tablename = 'objects';
+```
+
+e confronta l'elenco con quello che le migration creano. Vale anche per i bucket
+(`storage.buckets`): `email-assets` esiste in produzione e in nessuna migration.
+`scripts/schema-drift-check.mjs` guarda tabelle e colonne, **non** policy e bucket.
+
+**La regola dietro**: le policy permissive si sommano in **OR**. Una policy permissiva non può
+restringere niente — la più larga vince sempre, e ogni policy stretta che le sta accanto è
+decorativa. Quindi «aggiungo una policy più stretta» non è mai una fix: la fix è togliere la larga.
+E un test che verifica una policy deve prima **ricreare la deriva** che la produzione ha davvero,
+altrimenti misura un database che non è mai esistito e passa mentre il buco resta aperto.

@@ -11,7 +11,8 @@ const SIGN_TTL_SECONDS = 60 * 60 * 2;
 //
 // Public by decision: the code is the only credential, which is why it is 8 chars of a 32-symbol
 // alphabet rather than something shorter. No session, no cookies, no auth — a shared link works
-// for whoever holds it, and revoking one means deleting the asset.
+// for whoever holds it, so `link_revoked_at` is the only way to take one back: the same answer
+// shared_views gives, a row you can revoke, read on every request instead of trusted once.
 //
 // The uuid form is accepted too: the media tools have always returned `id`, so an agent can
 // reasonably assemble /a/<uuid> on its own, and refusing it would break a link for nothing.
@@ -23,10 +24,10 @@ export const GET: RequestHandler = async ({ params }) => {
   const admin = createAdminClient();
   const { data: media } = await admin
     .from('brand_media')
-    .select('storage_path')
+    .select('storage_path, link_revoked_at')
     .eq(column, id)
     .maybeSingle();
-  if (!media?.storage_path) return new Response('Not found', { status: 404 });
+  if (!media?.storage_path || media.link_revoked_at) return new Response('Not found', { status: 404 });
 
   const { data: signed } = await admin.storage
     .from(BUCKET)
