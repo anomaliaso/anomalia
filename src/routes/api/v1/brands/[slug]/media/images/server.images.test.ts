@@ -61,7 +61,13 @@ beforeEach(() => {
     error: null
   } as never);
   vi.mocked(gateAiAction).mockResolvedValue(undefined as never);
-  generateBrandImages.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite', renders: 1 });
+  generateBrandImages.mockResolvedValue({
+    ok: true,
+    media: [DRAWN],
+    model: 'nano-banana-2-lite',
+    renders: 1,
+    costUsd: 0.0336
+  });
   refineBrandImage.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-pro', renders: 1 });
 });
 
@@ -70,7 +76,15 @@ describe('POST /media/images — generate_image', () => {
     const { res, body } = await generate({ prompt: 'un banco di lavoro in noce' });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite', renders: 1 });
+    expect(body).toEqual({
+      ok: true,
+      media: [DRAWN],
+      model: 'nano-banana-2-lite',
+      renders: 1,
+      // Il brand nomina da sé chi paga: `organization` serve sulla strada senza brand.
+      organization: null,
+      cost_usd: 0.0336
+    });
   });
 
   it('un brand senza crediti non disegna', async () => {

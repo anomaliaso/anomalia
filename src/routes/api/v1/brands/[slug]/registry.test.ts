@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BRAND_ENDPOINTS, pathFor, type BrandEndpoint } from '@anomalia/api-contracts';
+import { BRAND_ENDPOINTS, pathFor, pathWithoutBrand, type BrandEndpoint } from '@anomalia/api-contracts';
 
 /**
  * IL REGISTRY PROMETTE, LE ROTTE MANTENGONO. Ogni entry di BRAND_ENDPOINTS diventa da sola un
@@ -79,5 +79,36 @@ describe('BRAND_ENDPOINTS', () => {
       .map((e) => `${e.tool} -> spende crediti ma non dichiara credits_exhausted`);
 
     expect(silent).toEqual([]);
+  });
+
+  /**
+   * Una strada senza brand è una seconda promessa dello stesso contratto, e sbaglia allo stesso
+   * modo: dichiararla senza scriverla produce un tool che accetta di essere chiamato senza slug e
+   * risponde 404 — cioè l'agente torna a credere che lo strumento non ci sia.
+   */
+  it('ogni strada senza brand ha la sua rotta, e spende con un cancello che dichiara', () => {
+    const broken: string[] = [];
+
+    for (const endpoint of BRAND_ENDPOINTS) {
+      const url = pathWithoutBrand(endpoint);
+      if (!url) continue;
+
+      const file = `src/routes${url}/+server.ts`;
+      const full = join(REPO_ROOT, file);
+      if (!existsSync(full)) {
+        broken.push(`${endpoint.tool} -> ${file} non esiste`);
+        continue;
+      }
+
+      const source = readFileSync(full, 'utf8');
+      if (!exportsVerb(source, endpoint.method)) {
+        broken.push(`${endpoint.tool} -> ${file} non esporta ${endpoint.method}`);
+      }
+      if (source.includes('gateOrgAiAction') && !endpoint.failures.some((f) => f.error === 'credits_exhausted')) {
+        broken.push(`${endpoint.tool} -> spende crediti ma non dichiara credits_exhausted`);
+      }
+    }
+
+    expect(broken).toEqual([]);
   });
 });
