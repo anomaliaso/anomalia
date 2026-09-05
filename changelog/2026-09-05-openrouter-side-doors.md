@@ -162,6 +162,33 @@ del caso: **un ciclo che regge per ordine di inizializzazione è già rotto, e n
 Da notare quale controllo l'ha preso: `npm run dev` sulla rotta vera. I 7.289 test erano verdi e
 `svelte-check` muto.
 
+## Gli orfani che la Batch si è lasciata dietro
+
+Tolta la Batch, tre funzioni sono rimaste senza chiamanti e sono uscite con lei:
+`imageFromResponse` (leggeva una risposta `generateContent` che nessuno produce più),
+`buildArticleImageRequests` (costruiva il payload del lotto) e `spliceImageUnderHeading` (infilava
+sotto l'H2 giusto l'immagine che il collettore riportava indietro). Il percorso in linea degli
+articoli ha il suo inserimento (`lines.splice`) e non è mai passato di lì — controllato prima di
+cancellare, perché cancellare quella sarebbe stato togliere le immagini agli articoli. Con loro il
+tipo `ArticleImageDest`, il cui commento indicava `blog_month_jobs.manifest`: una colonna che
+nessuno scrive più.
+
+## Una CI rossa con 7.309 test verdi
+
+Il job falliva su un `Unhandled Rejection` — `supabase.rpc is not a function` — dentro
+`home-redirect.test.ts`, un file che questo ramo non tocca. In locale non si riproduceva.
+
+`loadDeferred` è una promessa che nessuno attende. Il mock supabase di quel test risponde a
+`from()` con un Proxy che accetta qualunque metodo (il rischio l'autore l'aveva previsto, sta nel
+commento sopra) ma non risponde a `rpc()`, e il differito ci arriva:
+`remaining()` → `getCreditsUsage()` → `fetchStripePeriodStart()`. Il rifiuto quindi c'era sempre;
+cambiava solo **se atterrava prima della fine del run**, cosa che dipende da quanti file di test
+esistono e in che ordine girano. Questo ramo ne ha rimosso uno e aggiunto un altro: abbastanza.
+
+Sistemato alla fonte — `rpc` risponde come `from` — e non inseguendo l'ordine dei test. Sta in
+LESSONS.md con il segnale che lo fa riconoscere: `Test Files N passed` e il job rosso lo stesso,
+e un `grep` locale su `FAIL|Tests ` che non lo vede, perché la riga da cercare è `Errors`.
+
 ## Quello che non è stato fatto
 
 Il parametro `ai` di `renderPostImage` / `renderBrandImage` / `renderCarouselSlide`
