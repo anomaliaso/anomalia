@@ -42,9 +42,9 @@ export function textRouteLabel(): string {
 // articoli del blog. Da spargere negli opts di `aiStructured` nei call site che lo vogliono.
 //
 // Terzo nome in tre giri, e ogni volta per lo stesso motivo. `DEEPSEEK_FIRST` prometteva DeepSeek
-// dopo che DeepSeek era uscito dal router; `PIN_GATEWAY` prometteva Gemini quando ormai significava
-// "il gateway", che serve un modello scelto dal catalogo. Il nome dice l'endpoint, che è la cosa
-// che questo pin decide davvero.
+// dopo che DeepSeek era uscito dal router; `PIN_GEMINI` prometteva Gemini quando ormai voleva dire
+// "il gateway", che serve il modello scelto dal catalogo. Il nome di adesso dice l'ENDPOINT, che è
+// la cosa che questo pin decide davvero.
 export const PIN_GATEWAY = { provider: 'gateway' as const };
 
 // Extra fields threaded into logAiCall so per-site labels/attribution survive both providers.
