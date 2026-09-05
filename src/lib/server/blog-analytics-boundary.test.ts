@@ -47,10 +47,12 @@ describe('i tracker di un brand non toccano la nostra origine', () => {
    */
   it('e il profilo condiviso dai due alberi non li porta con se’', () => {
     const blogSite = readFileSync(join(ROUTES, '../lib/server/blog-site.ts'), 'utf8');
-    const profile = blogSite.slice(
-      blogSite.indexOf('async function brandProfile'),
-      blogSite.indexOf('export async function siteAnalytics')
-    );
-    expect(profile).not.toMatch(/analytics/);
+    const start = blogSite.indexOf('async function brandProfile');
+    const end = blogSite.indexOf('export async function siteAnalytics');
+
+    expect(start, 'brandProfile non si chiama più così: il confine non guarda niente').toBeGreaterThan(-1);
+    expect(end, 'siteAnalytics non si chiama più così: il confine non guarda niente').toBeGreaterThan(start);
+
+    expect(blogSite.slice(start, end)).not.toMatch(/analytics/);
   });
 });
