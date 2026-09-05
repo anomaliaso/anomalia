@@ -1213,3 +1213,20 @@ protocollo, è la ragione per cui verrà davvero eseguita.
 
 Tre errori uguali fatti da tre persone diverse nello stesso giorno non sono tre sbagli: sono la
 forma di un controllo che non guarda dove crede di guardare.
+
+**Due meccanismi, e non coprono lo stesso terreno.** La domanda sopra scala a UNO: prende il caso
+in cui la prova ce l'hai già davanti e non l'hai guardata — «`findability` è verde» con il test che
+legge due file concatenati si smonta da soli, in dieci secondi, senza nessun altro sveglio. È la
+metà che sopravvive quando lavori da solo, ed è la ragione per cui vale scriverla.
+
+Quello che la domanda NON prende è la cosa che non hai motivo di guardare. `get_memory` sembrava
+una lettura di tabella: nessun verde da interrogare, nessun sospetto da inseguire, e chi stava per
+toglierlo non aveva ragione di aprire `brand-memory.ts` — dove ci sono i due filtri che gli
+avrebbero fatto uscire dalla memoria del brand le note private di un altro agente. Lì serve
+qualcun altro, con un contesto diverso, che legga la stessa affermazione.
+
+**E la pratica che l'ha fatto succedere ha un costo, o non è replicabile.** Ha funzionato perché
+chi stava per rimuovere ha detto QUALI TRE tool, prima di toccarli: «rimuovo qualche tool di
+lettura» non avrebbe dato niente da controllare. Quel messaggio si scrive quando il codice non
+esiste ancora — cioè quando viene peggio, e la tentazione è scriverlo dopo, a risposta nota.
+Scritto dopo non serve a niente: è un resoconto, e un resoconto non si può contraddire in tempo.
