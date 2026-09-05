@@ -53,7 +53,7 @@ import {
 	type ReferenceMedia
 } from '$lib/server/motion-references';
 import { isPostsDesignEnabled } from '$lib/server/posts-design';
-import { geminiTransport } from '$lib/server/gemini';
+import { can, route } from '$lib/server/model-routing';
 import { cookbookNameForMechanism } from '$lib/motion-video/transitions-cookbook';
 
 /** Stills attached per watch. Four is what the craft judge uses to read a scene sequence. */
@@ -81,7 +81,10 @@ export type MotionWatchMode = (typeof MOTION_WATCH_MODES)[number];
  * GEMINI_TRANSPORT=kie renderebbe la degradazione invisibile due volte.
  */
 export function supportsClipInToolResult(modelId: string | null | undefined): boolean {
-	if (geminiTransport() === 'kie') return false;
+	// La domanda e` una capacita` dell'endpoint, e la risposta vive nel registro: chiederla a
+	// `geminiTransport()` era la stessa regola scritta in un secondo posto, e le due sarebbero
+	// divergute al primo endpoint nuovo. `graphic-review.ts` la chiedeva gia` cosi`.
+	if (!can(route('text').endpoint, 'media-in-tool-result')) return false;
 	return /^gemini-3[.-]/.test((modelId ?? '').trim());
 }
 

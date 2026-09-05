@@ -27,20 +27,27 @@ describe('lo scambio di trasporto', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('senza GEMINI_TRANSPORT resta su Google', async () => {
-    setEnv({ GEMINI_API_KEY: 'google-test-key', KIE_API_KEY: 'kie-test-key' });
+  it('col default su openrouter il client NON e` quello di kie', async () => {
+    setEnv({ OPENROUTER_API_KEY: 'o', KIE_API_KEY: 'kie-test-key' });
     const { geminiTransport, makeGenaiClient, isKieTransport, flashModelFor, geminiFlash } = await import('./gemini');
+    // `geminiTransport()` risponde a una domanda sola: serve il passthrough di kie? Col testo su
+    // openrouter no, e il client Google che torna e` ormai il parametro `ai` che i chiamanti
+    // ignorano (`_ai` in structuredGemini/groundedGemini).
     expect(geminiTransport()).toBe('google');
     const ai = makeGenaiClient();
     expect(isKieTransport(ai)).toBe(false);
     expect(flashModelFor(ai)).toBe(geminiFlash());
   });
 
-  it('senza KIE_API_KEY non si sposta niente, anche se l’env dice kie', async () => {
-    setEnv({ GEMINI_API_KEY: 'google-test-key', GEMINI_TRANSPORT: 'kie' });
-    const { geminiTransport, makeGenaiClient, isKieTransport } = await import('./gemini');
-    expect(geminiTransport()).toBe('google');
-    expect(isKieTransport(makeGenaiClient())).toBe(false);
+  it('senza KIE_API_KEY la rotta resta kie e lo dice: Google non e` piu` una rete', async () => {
+    // Prima si ripiegava su Google. Google non e` piu` un endpoint, quindi l'unico ripiego e` kie
+    // e una chiave mancante diventa un errore di chiave, non una deviazione silenziosa altrove.
+    setEnv({ GEMINI_TRANSPORT: 'kie' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { geminiTransport } = await import('./gemini');
+    expect(geminiTransport()).toBe('kie');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('su kie il client parla con api.kie.ai in Bearer, e manda l’id modello con i trattini', async () => {
@@ -90,7 +97,7 @@ describe('le superfici sul centralino (non lo SDK Google)', () => {
   });
 
   it('1. i media dentro i risultati dei tool: su kie il clip è rifiutato, non degradato', async () => {
-    setEnv({ GEMINI_API_KEY: 'g' });
+    setEnv({ OPENROUTER_API_KEY: 'o' });
     const google = await import('./motion-video/reference-tools');
     expect(google.supportsClipInToolResult('gemini-3.7-flash')).toBe(true);
     // Nota: l'id che vuole kie passerebbe la vecchia regex — è esattamente il caso da fermare.
