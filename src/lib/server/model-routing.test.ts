@@ -20,10 +20,11 @@ describe('il registro delle rotte', () => {
     setEnv(KEYS);
   });
 
-  it('i default: testo, immagini e voce su openrouter', async () => {
+  it('i default: ogni slot su openrouter', async () => {
     const { route } = await import('./model-routing');
     expect(route('text')).toMatchObject({ family: 'gemini', endpoint: 'openrouter', provider: 'openrouter' });
     expect(route('image')).toMatchObject({ endpoint: 'openrouter', provider: 'openrouter' });
+    expect(route('video')).toMatchObject({ endpoint: 'openrouter', provider: 'openrouter' });
     expect(route('tts')).toMatchObject({ family: 'gemini-tts', endpoint: 'openrouter', provider: 'openrouter' });
   });
 
@@ -251,10 +252,31 @@ describe('il registro delle rotte', () => {
     }
   });
 
-  it('il video resta su kie: questa rotta costruisce la strada, non ci manda il traffico', async () => {
-    setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o' });
+  it('il video va su openrouter per default, e kie resta SOLO la riserva', async () => {
+    // Non e` il prezzo, che qui va nell'altro verso: OpenRouter sul video costa DI PIU` — 6x
+    // misurati su Grok Imagine. E` la disponibilita`: su kie il video fallisce il 12,5% delle volte
+    // su Seedance e il 26,8% su Grok, con medie di 248s e 49s. Chi legge dopo dara` per scontato il
+    // contrario, come per la voce.
+    setEnv({ ...KEYS });
+    const { route } = await import('./model-routing');
+    expect(route('video')).toMatchObject({ endpoint: 'openrouter', provider: 'openrouter' });
+  });
+
+  it('senza chiave openrouter il video cade su kie da solo, e lo dice', async () => {
+    // Il default e` openrouter e il ripiego e` kie: sono due ruoli, e questo test guarda il
+    // COMPORTAMENTO dei due messi insieme.
+    //
+    // Quello che NON puo` guardare, e che vale la pena sapere: se `HOME` per le famiglie video
+    // diventasse `openrouter` — cioe` se le due tabelle coincidessero — questo test resterebbe
+    // VERDE, perche' l'ultima spiaggia di `route()` e` `'kie'` scritta a mano e recupera comunque.
+    // Verificato: cambiando `HOME['grok-imagine']` in `openrouter` passano tutti e 32.
+    // `HOME` giusto qui e` quindi ridondante, non sorvegliato — chi lo cambia non trova rete.
+    setEnv({ KIE_API_KEY: 'k' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { route } = await import('./model-routing');
     expect(route('video')).toMatchObject({ endpoint: 'kie', provider: 'kie' });
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/la chiave manca/));
+    warn.mockRestore();
   });
 
   it('i modelli video: nuova variabile, vecchia variabile, default', async () => {
@@ -333,6 +355,7 @@ describe('restano solo openrouter e kie', () => {
     const { route } = await import('./model-routing');
     expect(route('text').endpoint).toBe('openrouter');
     expect(route('image').endpoint).toBe('openrouter');
+    expect(route('video').endpoint).toBe('openrouter');
     expect(route('tts').endpoint).toBe('openrouter');
   });
 
@@ -340,7 +363,7 @@ describe('restano solo openrouter e kie', () => {
     setEnv({ KIE_API_KEY: 'k' });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { route } = await import('./model-routing');
-    for (const slot of ['text', 'image', 'tts'] as const) {
+    for (const slot of ['text', 'image', 'tts', 'video'] as const) {
       expect(route(slot).endpoint, slot).toBe('kie');
     }
     warn.mockRestore();
