@@ -208,9 +208,36 @@ const SKIP_FIX = process.argv.includes('--skip-fix');
 
 /** What the dashboard put on production by hand, and no migration ever wrote down. Reproducing it
  *  is the whole point: without it this harness measures a database production has never run, and
- *  every check below would pass while the real hole stayed open. */
+ *  every check below would pass while the real hole stayed open.
+ *
+ *  It runs BEFORE the migrations, because that is the order production has: the hand-made objects
+ *  were already there when the later migrations landed, and one of them
+ *  (20260905120000_secdef_least_privilege.sql) revokes on `rls_auto_enable` — a function its own
+ *  comment says "vive solo in produzione". Without it here, that migration cannot apply to a fresh
+ *  database at all. Copied verbatim from production, event trigger included. */
 async function applyProductionDrift(client) {
   await client.query(`
+    create or replace function public.rls_auto_enable() returns event_trigger
+      language plpgsql security definer set search_path to 'pg_catalog' as $fn$
+      declare cmd record;
+      begin
+        for cmd in
+          select * from pg_event_trigger_ddl_commands()
+          where command_tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+            and object_type in ('table', 'partitioned table')
+        loop
+          if cmd.schema_name = 'public' then
+            begin
+              execute format('alter table if exists %s enable row level security', cmd.object_identity);
+            exception when others then null;
+            end;
+          end if;
+        end loop;
+      end; $fn$;
+
+    drop event trigger if exists ensure_rls;
+    create event trigger ensure_rls on ddl_command_end execute function public.rls_auto_enable();
+
     create policy "Allow authenticated uploads to media bucket" on storage.objects
       for insert to authenticated with check (bucket_id = 'media');
 
@@ -239,10 +266,10 @@ async function applyMigrations(dbPort) {
     if (!files.includes(MIGRATION_UNDER_TEST)) {
       throw new Error(`${MIGRATION_UNDER_TEST} is not in supabase/migrations`);
     }
+    await applyProductionDrift(client);
     for (const file of files.filter((f) => f !== MIGRATION_UNDER_TEST)) {
       await applyOne(client, file);
     }
-    await applyProductionDrift(client);
     if (!SKIP_FIX) await applyOne(client, MIGRATION_UNDER_TEST);
   } finally {
     await client.end();
