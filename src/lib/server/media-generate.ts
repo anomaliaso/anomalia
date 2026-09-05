@@ -223,7 +223,11 @@ async function handOverImage(
   const drawn = await storeDrawing(supabase, `${opts.userId}/media`, dataUrl);
   if (!drawn) return null;
 
+  // Senza un id, la firma è l'UNICO modo di raggiungere il file: consegnarla nulla lascerebbe chi
+  // legge `ok` con un render pagato e niente da aprire.
   const signed = await signKnowledgePaths(supabase, [drawn.storagePath]);
+  const url = signed.get(drawn.storagePath);
+  if (!url) return null;
 
   return {
     id: null,
@@ -231,7 +235,7 @@ async function handOverImage(
     mime: drawn.mime,
     width: drawn.width,
     height: drawn.height,
-    url: signed.get(drawn.storagePath) ?? null,
+    url,
     storage_path: drawn.storagePath
   };
 }
