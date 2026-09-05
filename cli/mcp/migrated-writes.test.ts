@@ -52,7 +52,9 @@ const MIGRATED_WRITES = [
     title: 'SEO action',
     properties: {
       slug: SLUG,
-      action: { type: 'string', enum: ['run', 'plan', 'more', 'asset', 'article'] },
+      // `run` fino al 2026-09-05, e non era la forma da conservare: l'handler si e' sempre
+      // ramificato su `audit`, quindi il valore pinnato qui era quello che prendeva 400.
+      action: { type: 'string', enum: ['audit', 'plan', 'more', 'asset', 'article'] },
       initiativeId: { type: 'string' },
       guidance: { type: 'string', description: 'Optional guidance when action=more' },
     },

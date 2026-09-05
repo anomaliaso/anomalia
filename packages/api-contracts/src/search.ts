@@ -1,11 +1,21 @@
 import { z } from 'zod';
 import type { BrandEndpoint } from './index';
 
+/**
+ * Le azioni che la rotta `/seo` si ramifica su, e non una parola in più.
+ *
+ * Diceva `run` dove l'handler legge `audit`: l'intersezione fra i due elenchi non conteneva
+ * l'audit, cioè il lavoro per cui il tool esiste. `audit` e non `run` perché è ciò che l'handler
+ * ha sempre gestito, perché `geo_action` lo chiama già così, e perché a un modello che legge
+ * l'enum dice cosa succede — `run` non dice niente.
+ */
+export const SEO_ACTIONS = ['audit', 'plan', 'more', 'asset', 'article'] as const;
+
 export const SEO_ACTION = {
   tool: 'seo_action',
   title: 'SEO action',
   description:
-    'Do something about the brand\'s search ranking: `run` audits the website\'s technical ' +
+    'Do something about the brand\'s search ranking: `audit` checks the website\'s technical ' +
     'health, `plan` drafts the improvements worth making, `more` appends further ones (say ' +
     'what you want in `guidance`), and `asset` or `article` writes one of them out — those ' +
     'two need the `initiativeId` they belong to. Every action here spends credits. get_seo ' +
@@ -14,7 +24,7 @@ export const SEO_ACTION = {
   pathUnderBrand: '/seo',
   input: z
     .object({
-      action: z.enum(['run', 'plan', 'more', 'asset', 'article']),
+      action: z.enum(SEO_ACTIONS),
       initiativeId: z.string().optional(),
       guidance: z.string().optional().describe('Optional guidance when action=more')
     })

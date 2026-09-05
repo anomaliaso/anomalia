@@ -198,3 +198,62 @@ describe('le rotte sotto [slug]', () => {
     expect([...declared].filter((r) => !alive.has(r) || claimed.has(r))).toEqual([]);
   });
 });
+
+/**
+ * UN VOCABOLARIO SOLO PER ROTTA, O L'AZIONE È IRRAGGIUNGIBILE.
+ *
+ * `seo_action` dichiarava `run` e l'handler si ramificava su `audit`: l'intersezione fra ciò che
+ * lo schema permette e ciò che la rotta gestisce non conteneva l'audit, cioè la cosa che quel tool
+ * esiste per fare. `run` prendeva 400, `audit` lo rifiutava zod. In produzione, per un mese.
+ *
+ * Nessuno se n'era accorto perché la CLI aveva una mappa — `{ run: 'audit', … }` in
+ * `cli/commands/seo.ts` — che traduceva prima di chiamare. La traduzione esisteva solo sul
+ * percorso che un umano prova a mano; su quello dell'agente no, e l'agente è l'unico che non si
+ * lamenta.
+ *
+ * Il test non verifica che `audit` funzioni: verifica che i due elenchi siano lo STESSO insieme,
+ * e si rompe in entrambe le direzioni — un valore dichiarato che la rotta non gestisce, e un ramo
+ * della rotta che lo schema non permette di raggiungere.
+ */
+const ACTION_BRANCH = /action\s*===\s*'([a-z_]+)'|case\s+'([a-z_]+)'\s*:/g;
+
+function actionsHandledBy(source: string): string[] {
+  return [...new Set([...source.matchAll(ACTION_BRANCH)].map((m) => m[1] ?? m[2]))].sort();
+}
+
+function declaredActions(endpoint: BrandEndpoint): string[] | null {
+  const field = (endpoint.input.shape as Record<string, unknown>).action;
+  const options = (field as { options?: unknown })?.options;
+
+  return Array.isArray(options) ? [...(options as string[])].sort() : null;
+}
+
+describe('il vocabolario del contratto e quello dell’handler sono lo stesso insieme', () => {
+  const withAction = BRAND_ENDPOINTS.filter(
+    (e) => 'action' in (e.input.shape as Record<string, unknown>)
+  );
+
+  it('ogni tool con un `action` lo dichiara come elenco chiuso, non come stringa libera', () => {
+    const untyped = withAction.filter((e) => declaredActions(e) === null).map((e) => e.tool);
+
+    expect(untyped, 'una stringa libera davanti a un elenco chiuso fa scoprire i valori sbagliando').toEqual([]);
+  });
+
+  // Se questo elenco si svuota, il test sopra non misura più niente e va capito perché.
+  it('trova i tool con un `action` da controllare', () => {
+    expect(withAction.map((e) => e.tool).sort()).toEqual(['ads_action', 'geo_action', 'seo_action']);
+  });
+
+  for (const endpoint of withAction) {
+    it(`${endpoint.tool}: la rotta gestisce esattamente le azioni che il contratto permette`, () => {
+      const declared = declaredActions(endpoint);
+      if (!declared) return;
+
+      const source = readFileSync(join(REPO_ROOT, routeFile(endpoint)), 'utf8');
+      const handled = actionsHandledBy(source);
+
+      expect(handled.length, `nessun ramo letto da ${routeFile(endpoint)}: la scansione è passata a vuoto`).toBeGreaterThan(1);
+      expect(handled).toEqual(declared);
+    });
+  }
+});
