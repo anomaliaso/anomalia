@@ -26,6 +26,7 @@ import { Client } from 'pg';
 
 const CHECK_VIOLATION = '23514';
 const NOT_NULL_VIOLATION = '23502';
+const UNIQUE_VIOLATION = '23505';
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -109,6 +110,11 @@ const CASES = [
   },
   { what: 'people.role oltre il tetto', sql: person('role', `repeat('x', 201)`), code: CHECK_VIOLATION },
 
+  {
+    what: 'competitors: due volte lo stesso nome per un brand',
+    sql: `insert into public.competitors (brand_id, name) select $1, 'Doppione' from generate_series(1, 2)`,
+    code: UNIQUE_VIOLATION
+  },
   { what: 'competitors.website non http', sql: competitor('website', `'nope'`), code: CHECK_VIOLATION },
   { what: 'competitors.handles oggetto invece che array', sql: competitor('handles', `'{"instagram":"acme"}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'competitors.top_posts non array', sql: competitor('top_posts', `'{}'::jsonb`), code: CHECK_VIOLATION },

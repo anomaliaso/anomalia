@@ -227,6 +227,15 @@ alter table public.people
 -- Corretto lì, vincolato qui. È anche la forma di `brand_social_handles`, che è dove vivono
 -- gli handle del brand.
 
+-- `chat/job-executor.ts` fa `upsert(..., { onConflict: 'brand_id,name' })` su questa tabella, ma
+-- l'unico indice unico e' la primary key: Postgres risponde 42P10 («no unique or exclusion
+-- constraint matching the ON CONFLICT specification») e la chiamata non legge `error`. Il job
+-- "ri-cerca i concorrenti" riporta i concorrenti trovati e scrive ZERO righe, in silenzio. Il
+-- vincolo che mancava e' questo, non una correzione nel writer: 0 duplicati su (brand_id, name)
+-- in produzione, anche ignorando maiuscole e spazi.
+alter table public.competitors
+  add constraint competitors_brand_id_name_key unique (brand_id, name);
+
 alter table public.competitors
   add constraint competitors_website_check
     check (website ~ '^https?://'),

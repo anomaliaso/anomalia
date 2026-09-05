@@ -45,7 +45,14 @@ di lunghezza.
 
 **`posts.content_type` è entrato, dopo tre correzioni.** `SHAPES` in `post-from-asset.ts`
 scriveva `image` e `carousel`: sono FORMATI, non tipi, e la description del tool lo dice in
-maiuscolo. Ora scrivono `uploaded_image`, che è quello che sono — asset caricati dall'utente.
+maiuscolo. Ora scrivono `generated_image`.
+
+Il primo tentativo era `uploaded_image`, e sarebbe stata una regressione di conformità: `publish.ts`
+ricava `aiGeneratedMedia: !content_type.startsWith('uploaded')`, quindi quel prefisso **decide la
+dichiarazione di contenuto AI**. Un asset preso dalla libreria può essere generato o caricato — la
+libreria lo sa (`brand_media.source`), quella tabella no — e prima della PR tutte e tre le forme
+dichiaravano. `generated_image` tiene esattamente il comportamento precedente: sovra-dichiarare è
+il verso prudente, sotto-dichiarare è il rischio, e lo dice il commento accanto a quella riga.
 `uploaded_video`, che `upload-media` scrive da sempre, era invece legittimo e semplicemente
 mancava da `POST_CONTENT_TYPES`: aggiunto. E `PostAssetShape.contentType` non è più `string` ma
 `PostContentType`, così il compilatore tiene il vocabolario da solo.
@@ -58,6 +65,14 @@ Ora passano da `sanitizeThemeColor`, accanto a `sanitizeBrandColors` e con la st
 **`brand_kit.site_type` è entrato allargato.** `media`, `mobile_app` e `service` non erano dati
 rotti: erano valori legittimi che mancavano dall'elenco. Il tipo sale da 6 a 9, e con lui l'enum
 dello schema JSON che il modello riceve — perché è da lì che arrivano.
+
+**`competitors` ha preso anche il `unique (brand_id, name)` che mancava.** `chat/job-executor.ts`
+fa `upsert(..., { onConflict: 'brand_id,name' })`, ma su quella tabella l'unico indice unico era
+la primary key: Postgres risponde **42P10** e la chiamata non legge `error`. Il job «ri-cerca i
+concorrenti» riportava i concorrenti trovati e scriveva **zero righe**, in silenzio — provato in
+locale sulla stessa istruzione. Correggere la forma degli handle non bastava: la scrittura non
+atterrava proprio. Zero duplicati su `(brand_id, name)` in produzione, anche ignorando maiuscole e
+spazi, quindi il vincolo entra pulito e rende l'upsert esprimibile.
 
 **`competitors.handles` è entrato come array, e non era una preferenza.** Tre scrittori ci
 mettevano un array di `{platform, username}`, `chat/job-executor.ts` un oggetto
@@ -113,13 +128,13 @@ l'autopilot di notte. `format` prende solo un tetto di lunghezza.
 
 Un vincolo senza un test che prova a violarlo è una speranza — e la suite qui mocka Supabase, dove
 un insert finto accetta qualunque stringa (è la lezione già pagata su `brand_media.source`).
-`scripts/constraint-harness.mjs` scrive **davvero**: 67 insert malformati contro un Postgres vero,
-ognuno passa solo se torna il 23514 atteso, tutto dentro una transazione chiusa da un `rollback`.
+`scripts/constraint-harness.mjs` scrive **davvero**: 68 scritture malformate contro un Postgres vero,
+ognuna passa solo se torna lo SQLSTATE atteso (23514, o 23505 per il vincolo unico), tutto dentro una transazione chiusa da un `rollback`.
 I casi nuovi usano i valori che i difetti producevano per davvero — `content_type: 'carousel'`,
 `theme_color: 'red'`, `handles: {"instagram":"acme"}` — non valori inventati.
 
-Prima della migration: **0/67**. Il database accettava ogni singolo valore rotto. Dopo:
-**67/67**. `DATABASE_URL` che non punta a localhost fa uscire lo script con 2 prima di connettersi:
+Prima della migration: **0/68**. Il database accettava ogni singolo valore rotto. Dopo:
+**68/68**. `DATABASE_URL` che non punta a localhost fa uscire lo script con 2 prima di connettersi:
 questo harness scrive, e scrive solo in locale.
 
 La correzione dei dati è stata provata a parte, con ogni forma su un brand pulito e un `rollback`
