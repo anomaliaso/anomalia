@@ -32,7 +32,7 @@ export const GET: RequestHandler = async ({ params, url, locals: { supabase, saf
   if (!brand) throw error(404, 'Brand not found');
   if (!adsAvailable(brand.plan, user?.email)) throw redirect(303, `/app/${params.brand}/settings/ads/accounts`);
 
-  const profileId = await ensureBrandProfile(supabase, brand);
+  const profileId = await ensureBrandProfile(brand);
   // Land back in Settings → Ads accounts so connect/manage lives next to social accounts.
   // ?connected=1 triggers syncAdAccounts on that page.
   const accountsUrl = `/app/${params.brand}/settings/ads/accounts`;

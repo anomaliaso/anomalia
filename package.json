@@ -36,7 +36,8 @@
     "postinstall": "patch-package",
     "eval:durability": "vite-node --config scripts/vite-node.config.ts scripts/eval/durability.ts",
     "test:constraints": "node scripts/constraint-harness.mjs",
-    "test:storage-policies": "node scripts/storage-policy-harness.mjs"
+    "test:storage-policies": "node scripts/storage-policy-harness.mjs",
+    "test:privileges": "node scripts/privilege-harness.mjs"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.0",
