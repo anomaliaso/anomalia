@@ -121,9 +121,10 @@ async function callApi(
  * Gli strumenti di UN brand, per la sessione di chi sta guardando. Puro: nessun accesso al DOM,
  * cosi' che la generazione si possa provare senza un browser.
  *
- * `login`, `logout` e `whoami` — che il server MCP espone — qui non ci sono, e non e' una
- * dimenticanza: quei tre esistono perche' una CLI deve procurarsi un token e dire di chi e'. In una
- * pagina la sessione e' gia' quella dell'utente, e il token arriva come argomento.
+ * `login`, `logout` e `whoami` non ci sono, e non e' una dimenticanza: in una pagina la sessione e'
+ * gia' quella dell'utente e il token arriva come argomento. Dal 2026-09-05 non ci sono nemmeno sul
+ * server MCP — su HTTP l'autenticazione la fa l'host col giro OAuth, su stdio la sessione e' quella
+ * della CLI. Le due superfici dicono la stessa cosa, adesso per lo stesso motivo.
  */
 export function brandWebMcpTools(slug: string, token: string): WebMcpTool[] {
   return BRAND_ENDPOINTS.map((endpoint) => ({

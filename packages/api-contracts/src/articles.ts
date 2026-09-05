@@ -33,13 +33,13 @@ const ArticleSchema = z.object({
 
 const GetArticleInputSchema = z
   .object({
-    id: z.string().min(1).describe('Article id, from list_articles or the Site page URL')
+    id: z.string().min(1).describe('Article id, from the Site page URL or from query({ table: "brand_articles", columns: ["id","slug","title","status","created_at"] })')
   })
   .strict();
 
 const UpdateArticleInputSchema = z
   .object({
-    id: z.string().min(1).describe('Article id, from list_articles or the Site page URL'),
+    id: z.string().min(1).describe('Article id, from the Site page URL or from query({ table: "brand_articles", columns: ["id","slug","title","status","created_at"] })'),
     title: z.string().min(1).max(MAX_TITLE).optional(),
     body_md: z
       .string()

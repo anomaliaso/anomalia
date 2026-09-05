@@ -10,9 +10,6 @@ const MCP_TOOLS = join(CLI, 'mcp', 'tools');
 const REFERENCE = join(CLI, 'skills', 'anomalia', 'references', 'tools.md');
 
 const HAND_REGISTERED_BECAUSE: Record<string, string> = {
-  login: 'la sessione OAuth vive nel client, non dietro una rotta di brand',
-  logout: 'cancella il file di sessione locale, nessuna chiamata HTTP',
-  whoami: 'legge la sessione locale o il Bearer della richiesta',
   list_brands: 'GET /api/v1/brands non sta sotto un brand, e il registry e scoped sul brand',
   get_status: 'compone due letture dell API in una risposta sola',
   approve_post: 'risolve un prefisso di id, poi chiama la rotta del singolo post',

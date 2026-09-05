@@ -30,7 +30,7 @@ export const QUERY_DATABASE = {
     'READ ONLY: there is no SQL here. You name a table, columns and filters, and it issues one ' +
     'PostgREST read, so a write has nowhere to go — no INSERT, no CTE, no function call, nothing to ' +
     'attempt. Omit `table` to list every table you can name. Ask for a table with no `columns` to get ' +
-    'real rows with every column: the keys of a row ARE the schema. One table per call — no joins, no ' +
+    'real rows with every column: the keys of a row ARE the schema. THEN NAME THE COLUMNS YOU NEED: a read with no `columns` carries every column, the 20,000-character cap cuts whole rows to fit, and you get a short answer with no sign that you asked for a long one — 50 rows of `posts` come back as nine, the same 50 rows come back whole with five columns named. One table per call — no joins, no ' +
     'embeds; read two tables and match the ids yourself. Reach for it when the answer needs a table ' +
     'nothing else exposes, a count, or a join you do by hand. ' +
     'IT IS ALSO THE READ FOR QUESTIONS THAT HAVE NO TOOL OF THEIR OWN. What this brand SELLS — its ' +

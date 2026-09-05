@@ -119,8 +119,13 @@ const describing = (tool: string): string => {
  * scrivendo nella libreria di un cliente vero. Per un gatto.
  *
  * Serve corta: si paga a ogni sessione, come `tools/list`.
+ *
+ * 1.200 → 1.300 il 2026-09-05, per una riga sola e a scadenza: i nomi delle quattro letture
+ * ritirate dentro `query`. Il protocollo risponde «tool not found» e non insegna niente, quindi
+ * questa è l'unica superficie dove chi le aveva cablate ritrova cosa chiamare. Quando nessun
+ * client le chiama più quella riga esce, e il tetto torna a 1.200.
  */
-const INSTRUCTIONS_MAX_CHARS = 1_200;
+const INSTRUCTIONS_MAX_CHARS = 1_300;
 
 describe('le istruzioni del server sono una mappa, non un ordine', () => {
   test('non dicono di partire SEMPRE da list_brands', () => {

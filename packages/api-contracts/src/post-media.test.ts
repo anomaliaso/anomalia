@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pathFor } from './index';
-import { MAKE_VIDEO, REGENERATE_POST_MEDIA, REGENERATE_SLIDE, REORDER_SLIDES } from './posts';
+import { EDIT_POST, MAKE_VIDEO, REGENERATE_POST_MEDIA, REGENERATE_SLIDE, REORDER_SLIDES, RESCHEDULE_POST } from './posts';
 
 const MEDIA = [REGENERATE_POST_MEDIA, REGENERATE_SLIDE, REORDER_SLIDES, MAKE_VIDEO];
 
@@ -37,5 +37,23 @@ describe('le quattro azioni sui media di un post', () => {
     for (const endpoint of [REGENERATE_POST_MEDIA, REGENERATE_SLIDE, MAKE_VIDEO]) {
       expect(endpoint.failures.some((f) => f.status === 402), endpoint.tool).toBe(true);
     }
+  });
+});
+
+/**
+ * Due parole per «quando», divise fra due tool: `edit_post` prende `slot` (il giorno di calendario)
+ * e NON `scheduled_for` (l'istante in cui il post esce), che si cambia solo con `reschedule_post`.
+ * Senza il rimando un agente sposta il giorno credendo di aver spostato l'ora.
+ */
+describe('le due parole per «quando» si rimandano a vicenda', () => {
+  it('edit_post dice che l’ora di pubblicazione è di reschedule_post', () => {
+    expect(Object.keys(EDIT_POST.input.shape)).toContain('slot');
+    expect(Object.keys(EDIT_POST.input.shape)).not.toContain('scheduled_for');
+    expect(EDIT_POST.description).toContain('reschedule_post');
+    expect(EDIT_POST.description).toContain('scheduled_for');
+  });
+
+  it('reschedule_post prende l’istante, e solo quello', () => {
+    expect(Object.keys(RESCHEDULE_POST.input.shape)).toContain('scheduled_for');
   });
 });

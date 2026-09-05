@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
+import { SET_APPEARANCE } from './appearance';
 import { BRAND_ENDPOINTS, statusForFailure } from './index';
 
 describe('il look del brand come contratto', () => {
   it('sta nel registry, o nessun agente lo vede', () => {
-    expect(BRAND_ENDPOINTS).toContain(GET_APPEARANCE);
     expect(BRAND_ENDPOINTS).toContain(SET_APPEARANCE);
   });
 
@@ -43,13 +42,29 @@ describe('il look del brand come contratto', () => {
 
   it('dice che scrivere il brief visivo lo blocca', () => {
     expect(SET_APPEARANCE.description).toMatch(/LOCKS it/);
-    expect(Object.keys(GET_APPEARANCE.output.shape)).toContain('appearance');
   });
 
-  it('leggere non e’ scrivere, e nessuno dei due e’ distruttivo', () => {
-    expect(GET_APPEARANCE.method).toBe('GET');
+  it('scrivere non e’ distruttivo', () => {
     expect(SET_APPEARANCE.method).toBe('PUT');
-    expect(GET_APPEARANCE.destructive).toBe(false);
     expect(SET_APPEARANCE.destructive).toBe(false);
+  });
+
+  /**
+   * `get_appearance` era un `select` di sei colonne su `brand_kit`, 736 caratteri misurati: sotto
+   * ogni tetto di `query`. L'unica regola che aggiungeva — scarta il logo `og-image`, che e' quello
+   * indovinato dal sito — la porta la riga stessa, quindi la scrittura dice dove leggerla.
+   */
+  it('dice dove si legge il look, ora che non c’e’ un tool per farlo', () => {
+    expect(SET_APPEARANCE.description).toContain('query({ table: "brand_kit"');
+    expect(SET_APPEARANCE.description).toContain('og-image');
+  });
+
+  /**
+   * Il tool si chiama «appearance» e non ha un campo colore: chi cerca «cambia i colori del brand»
+   * apre questo e non trova niente. Il rimando è l'unica cosa che lo salva dal giro a vuoto.
+   */
+  it('manda a set_colors, che è dove la palette vive davvero', () => {
+    expect(SET_APPEARANCE.description).toContain('set_colors');
+    expect(Object.keys(SET_APPEARANCE.input.shape)).not.toContain('colors');
   });
 });

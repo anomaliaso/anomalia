@@ -51,7 +51,7 @@ Anomalia API  (/api/v1/*)</code></pre>
   <li>
     {$_('docs.mcp.s22')}
     <pre><code>anomalia login
-# or, after MCP is connected, call the login tool</code></pre>
+# once, in a terminal — the CLI and the local MCP server share one session</code></pre>
   </li>
   <li>
     {$_('docs.mcp.s23')}
@@ -147,7 +147,7 @@ bun run mcp:http
   <tbody>
     <tr>
       <td>{$_('docs.mcp.s53')}</td>
-      <td><code>login</code>, <code>logout</code>, <code>whoami</code>, <code>list_brands</code></td>
+      <td><code>list_brands</code></td>
     </tr>
     <tr>
       <td>{$_('docs.mcp.s54')}</td>

@@ -35,6 +35,24 @@ const STATEMENT = new RegExp(
 );
 
 /**
+ * Il DDL, senza i commenti e senza le stringhe che lo nominano.
+ * `20260905120000_secdef_least_privilege.sql` contiene
+ * `where command_tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')` — testo dentro un
+ * event trigger, non una `create table` — e lo scanner ne ricavava una tabella di nome `as`.
+ * Un guardiano che si nomina da solo è un pattern che si ricopia, quindi si toglie la causa.
+ *
+ * I commenti spariscono PRIMA delle stringhe, e l'ordine non è cosmetico: i commenti qui sono in
+ * italiano, pieni di apostrofi, e un apostrofo spaiato fa divorare al taglio delle stringhe interi
+ * blocchi di DDL vero. Tolti i commenti prima, gli apostrofi rimasti sono letterali veri e chiusi.
+ */
+function withoutStringLiterals(sql) {
+  return sql
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/'(?:[^']|'')*'/g, "''");
+}
+
+/**
  * `public.posts` e `posts` sono la stessa tabella; `stripe.subscriptions` non è di `public` e non
  * entra. È qui che «solo lo schema public» smette di essere una raccomandazione.
  */
@@ -50,7 +68,7 @@ export function tablesFromMigrations(dir = MIGRATIONS) {
   const tables = new Set();
 
   for (const file of files) {
-    const sql = readFileSync(join(dir, file), 'utf8');
+    const sql = withoutStringLiterals(readFileSync(join(dir, file), 'utf8'));
     for (const match of sql.matchAll(STATEMENT)) {
       const created = publicTable(match.groups.created);
       if (created) {

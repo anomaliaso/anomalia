@@ -33,9 +33,15 @@ Never invent REST endpoints or API keys.
 
 ## Auth (always OAuth)
 
-1. **Local MCP / CLI:** shared session at `~/.config/anomalia/session.json`. MCP tool `login` opens the browser, or run `anomalia login`.
-2. **Remote MCP** (`https://mcp.anomalia.so/mcp`): send `Authorization: Bearer <access_token>` (same JWT the CLI stores). Missing Bearer → 401.
-3. Verify with `whoami` / `list_brands` or `anomalia brands`.
+**Signing in is not a tool** — there is nothing to call. Two paths, and both end in the same JWT:
+
+1. **Local MCP / CLI:** run `anomalia login` in a terminal, once. The session lands in
+   `~/.config/anomalia/session.json` and the CLI and the MCP server share it.
+2. **Remote MCP** (`https://mcp.anomalia.so/mcp`): your host does the OAuth round itself — it reads
+   `/.well-known/oauth-protected-resource` and answers the `401 WWW-Authenticate: Bearer`
+   challenge. Nothing for you to do; a missing Bearer is a 401, not a broken server.
+
+Confirm it worked with `list_brands`: brands come back, or you are not signed in.
 
 Setup details: [references/mcp.md](references/mcp.md).
 
@@ -50,8 +56,9 @@ Setup details: [references/mcp.md](references/mcp.md).
 4. **Before writing ANY copy** — caption, carousel, script, article, bio — call
    `get_writing_skills`. It returns the craft text Anomalia writes with, plus this brand's own
    procedures. Skipping it is how output starts reading as generated.
-5. **Read `get_memory` before asking the operator** something the brand may already know — and
-   call `record_memory_used` with the ids that actually shaped your output. An entry nobody
+5. **Read the brand's memory before asking the operator** something it may already know —
+   `query` on `brand_memory` (the recipe is under Quick workflows) — and call
+   `record_memory_used` with the ids that actually shaped your output. An entry nobody
    reports decays out of the prompts it was helping.
 6. Confirm before reject / delete / discard unless the user clearly asked.
 7. **A render is one shot.** Nothing looks at an image after the model draws it — no internal
@@ -64,13 +71,31 @@ Setup details: [references/mcp.md](references/mcp.md).
 **The flow is linear**: generate the media → pass the id it returns to `create_post`. No post is
 needed to make an image or a clip, and nothing you generate reaches the calendar on its own.
 
-**When no tool answers the question** → `query`. It reads any table in the database **as you** —
-the request carries your own session, so Postgres returns exactly the rows the app would show you
-and nothing more. Read only, one table per call, no credits. Omit `table` to list what you can
-name; ask for a table with no `columns` and the keys of a row are the schema. Reach for it for a
-count, a join you do by hand, or a fact none of the tools below returns — instead of three calls
-that approximate it. **What this brand sells** has no tool of its own: its catalogue of products,
-offers and services is the `products` table, one row per offer, read with `query`.
+**Anything that is plain rows in a table** → `query`. It reads any table in the database **as
+you** — the request carries your own session, so Postgres returns exactly the rows the app would
+show you and nothing more. Read only, one table per call, no credits. Omit `table` to list what
+you can name; ask for a table with no `columns` and the keys of a row are the schema.
+
+**Always name `columns` once you know them.** Without them `query` returns every column, and the
+20 000-character cap then silently shortens the answer instead of the rows: fifty posts asked for,
+nine returned. The same read with five named columns returns all fifty. Discover the schema with
+one call, then read with the columns you need.
+
+The `get_*` and `list_*` tools that remain are the ones doing MORE than a select — they aggregate,
+join by hand, fetch a live source, or apply a plan rule — so pick a tool by subject and `query` by
+table. Four reads that were only a select are gone, and these are what replaces them:
+
+| gone | read it with |
+|---|---|
+| `list_articles` | `query({table:"brand_articles", columns:["id","slug","title","status","scheduled_for","published_at","created_at"]})` |
+| `list_ideas` | `query({table:"disruptive_ideas", columns:["id","title","idea","device","score","status"], where:[{column:"status",op:"in",value:["new","shortlisted"]}], order:{column:"score",ascending:false}})` |
+| `get_memory` | `query({table:"brand_memory", columns:["id","key","value","category","confidence"], where:[{column:"layer",op:"neq",value:"session"},{column:"agent",op:"is",value:null}], order:{column:"confidence",ascending:false}})` |
+| `get_appearance` | `query({table:"brand_kit", columns:["logos","favicon_url","brand_colors","graphic_style","visual_style","visual_style_locked"]})` |
+
+Those two `where` clauses on `brand_memory` are not decoration: they are the filters the old tool
+imposed — no chat-session notes, no other agent's working notes. Drop them and you get both back.
+**What this brand sells** has no tool of its own either: its catalogue of products, offers and
+services is the `products` table, one row per offer, read with `query`.
 
 **Ask what this brand already knows** → `search_knowledge` with the question. It reads the brand's
 own uploaded documents and returns the passages that answer it, each with the document it came
@@ -198,8 +223,9 @@ byline. `analytics` takes a closed list of providers (`ga4`, `meta_pixel`, `plau
 with their id — there is no field for arbitrary JavaScript, and those trackers load only on a
 verified custom domain, only after the visitor accepts cookies.
 
-**Change how the brand looks** → `get_appearance` reads the logo, favicon, palette, the two Google
-Fonts graphics are composed with and the visual brief; `set_appearance` changes them. A logo is
+**Change how the brand looks** → `set_appearance` changes the logo, favicon, graphic fonts and
+visual brief; read what they are now from `brand_kit` with `query` (recipe under Quick workflows —
+the real logo is the entry whose `type` is not `og-image`). A logo is
 given as a URL and is DOWNLOADED and re-hosted, so read back the address it answers with. Fonts go
 in pairs and are checked against Google Fonts before saving — a family it will not serve is refused
 rather than rendered as Inter. Setting `visual_style` locks it against the nightly rebuild.
