@@ -79,7 +79,7 @@ export async function planCarousel(
   opts: { brandId: string; brief: string; slides: number }
 ): Promise<CarouselPlan | { error: 'plan_failed' }> {
   const [{ aiStructured }, { genaiClient }] = await Promise.all([
-    import('$lib/server/xiaomi'),
+    import('$lib/server/ai-text'),
     import('$lib/server/brand-context')
   ]);
   void supabase;
