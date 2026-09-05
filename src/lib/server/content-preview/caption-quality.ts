@@ -9,7 +9,7 @@ import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { judgeThinkingLevel } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
-import { aiStructured, AI_PROVIDER, XIAOMI_ULTRASPEED_MODEL } from '$lib/server/xiaomi';
+import { aiStructured } from '$lib/server/ai-text';
 import { PROOF_DISCIPLINE_RULE } from '$lib/server/proof-discipline';
 import { COPY_PANEL_MAX_ROUNDS, COPY_PANEL_SCHEMA, bandOfScore, bestOf, normalizeVerdict, panelSummary, stripJudgeScaffolding, toIterate, toReplace, type PanelVerdict } from '$lib/server/copy-panel';
 import { PLATFORM_CHAR_LIMITS, ensureShortNetworkCuts } from '$lib/platform-limits';
@@ -310,8 +310,6 @@ ${seedLines}
 
 Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
 
-  // MiMo ultraspeed quando il provider è Xiaomi.
-  const fastModel = AI_PROVIDER === 'xiaomi' ? XIAOMI_ULTRASPEED_MODEL : undefined;
   const parsed: AnyRec = await aiStructured(
     ai,
     prompt,
@@ -319,8 +317,7 @@ Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
     prefs.personality?.trim()
       ? 'You are an expert performance-marketing copywriter. Honour the brand personality above all; be specific, on-brand, visual and original. Zero marketing clichés. One post per seed, same order.'
       : 'You are an expert performance-marketing copywriter with a sharp, original voice. Apply the strategy precisely; be specific, on-brand and visual. Default to a fairly cynical, dry register with ALWAYS-subtle wit and zero marketing clichés or hype. One post per seed, same order.',
-    'executePlan',
-    { model: fastModel }
+    'executePlan'
   );
   const out: Array<{ caption?: string; title?: string; image_prompt?: string; slide_prompts?: string[]; alt_captions?: string[]; x_caption?: string; threads_caption?: string; first_comment?: string; hook_variants?: string[]; scene_deviation?: string }> =
     Array.isArray(parsed.posts) ? parsed.posts : [];

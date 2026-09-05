@@ -6,16 +6,19 @@ vi.mock('$lib/server/wall-digest', () => ({
   designWallDigestSection: () => Promise.resolve(digest.section)
 }));
 
-const generateContent = vi.fn();
+// Il percorso vero: kie. Prima si fingeva `{ endpoint: 'google' }` — un endpoint che il registro
+// non sa produrre — e si leggevano i prompt dal ramo Google, che nessuna richiesta poteva
+// raggiungere. Il pavimento del design si verificava su codice morto.
+const renderOnKie = vi.fn();
 
-vi.mock('$lib/server/gemini', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('$lib/server/gemini')>()),
-  googleGenaiClient: () => ({ models: { generateContent } })
+vi.mock('$lib/server/kie-jobs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('$lib/server/kie-jobs')>()),
+  generateImageOnKie: renderOnKie
 }));
 
 vi.mock('$lib/server/model-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/server/model-routing')>()),
-  route: () => ({ endpoint: 'google' })
+  route: () => ({ family: 'nano-banana', endpoint: 'kie', provider: 'kie' })
 }));
 
 vi.mock('$lib/server/research', async (importOriginal) => ({
@@ -25,9 +28,7 @@ vi.mock('$lib/server/research', async (importOriginal) => ({
 
 const { buildImageRequest, renderBrandImage, renderCarouselSlide } = await import('./images');
 
-const RENDERED = {
-  candidates: [{ content: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'image/png' } }] } }]
-};
+const RENDERED = { dataUrl: 'data:image/png;base64,AAAA' };
 
 const DESIGN_FLOOR =
   '\n\nAMBIENT DESIGN FLOOR (distilled 2026-08-20 from the strongest current feed design):\none oversized headline, 3-5 words, 60% of canvas height\n';
@@ -36,7 +37,7 @@ const PROMPT = 'A jar of honey on a linen cloth';
 const RENDER_OPTS = { visualStyle: 'warm editorial', aspectRatio: '1:1' as const };
 
 const promptsSentToModel = () =>
-  generateContent.mock.calls.map((c) => c[0].contents[0].parts[0].text as string);
+  renderOnKie.mock.calls.map((c) => c[0].contents[0].parts[0].text as string);
 
 const failingStorage = {
   storage: { from: () => ({ upload: async () => ({ error: { message: 'no bucket' } }) }) }
@@ -44,8 +45,8 @@ const failingStorage = {
 
 beforeEach(() => {
   digest.section = '';
-  generateContent.mockReset();
-  generateContent.mockResolvedValue(RENDERED);
+  renderOnKie.mockReset();
+  renderOnKie.mockResolvedValue(RENDERED);
 });
 
 describe('il pavimento di esecuzione del design arriva al percorso immagine', () => {

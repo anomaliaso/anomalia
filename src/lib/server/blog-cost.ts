@@ -52,8 +52,8 @@ const usd = (model: string, inTok: number, outTok: number, imageOut = 0): number
 /** One background text call — Gemini Flash, the model that actually writes the articles. */
 const text = (inTok: number, outTok: number) => usd(geminiFlash(), inTok, outTok);
 
-/** One Nano Banana 2 image. Batch mode is billed at 50% of interactive. */
-const image = (batch: boolean) => usd(BLOG_IMAGE_MODEL, 1777, 1347, 1347) * (batch ? 0.5 : 1);
+/** One Nano Banana 2 image, rendered in linea dallo slot immagini. */
+const image = () => usd(BLOG_IMAGE_MODEL, 1777, 1347, 1347);
 
 // La ricerca grounded (fonti esterne per il passaggio di optimize) passa da groundedText, che ora
 // parte da Google grounding: ~$0.07 fra i $14/1k query e i token Gemini, e solo se quello fallisce
@@ -99,20 +99,17 @@ export type BlogMonthEstimate = {
 
 /**
  * Estimate a whole month's generation.
- * `mode: 'fast'` skips the image batch (rendered inline at full price); 'batch' gets the 50% discount.
  * `translationsPerArticle` is the plan's extra-language count (0 below the top tier).
  */
 export function estimateBlogMonth(opts: {
   articles: number;
-  mode?: 'batch' | 'fast';
   translationsPerArticle?: number;
 }): BlogMonthEstimate {
   const articles = Math.max(0, Math.floor(opts.articles));
   const perArticleTranslations = Math.max(0, Math.floor(opts.translationsPerArticle ?? 0));
-  const batch = opts.mode !== 'fast';
 
   const textUsd = articles * articleTextUsd();
-  const imagesUsd = articles * IMAGES_PER_ARTICLE * image(batch);
+  const imagesUsd = articles * IMAGES_PER_ARTICLE * image();
   const translations = articles * perArticleTranslations;
   const translationsUsd = translations * translationUsd();
   const usd = textUsd + imagesUsd + translationsUsd;
@@ -143,7 +140,7 @@ export function estimateBlogMonth(opts: {
 export function articlesAffordable(
   wanted: number,
   remainingCredits: number | null | undefined,
-  opts: { mode?: 'batch' | 'fast'; translationsPerArticle?: number } = {}
+  opts: { translationsPerArticle?: number } = {}
 ): number {
   const want = Math.max(0, Math.floor(wanted));
   if (remainingCredits == null || !Number.isFinite(remainingCredits)) return want;

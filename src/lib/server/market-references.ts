@@ -9,7 +9,7 @@ import { archiveImageToBucket } from '$lib/server/media-archive';
 import type { ScrapeTarget } from '$lib/server/scrapecreators';
 import type { NormalizedAd } from '$lib/server/competitor-ads';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { aiStructured } from '$lib/server/xiaomi';
+import { aiStructured } from '$lib/server/ai-text';
 import { formatFieldPlaybook, type FieldPlaybook } from '$lib/server/market-field';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -14,14 +14,6 @@ describe('estimateBlogMonth', () => {
     expect(e.credits).toBeLessThan(creditQuota('starter') / 2);
   });
 
-  it('prices fast mode above batch mode — batch is the 50% image discount', () => {
-    const batch = estimateBlogMonth({ articles: 30, mode: 'batch' });
-    const fast = estimateBlogMonth({ articles: 30, mode: 'fast' });
-    expect(fast.credits).toBeGreaterThan(batch.credits);
-    // Solo le immagini cambiano fra i due modi, quindi fast sta sotto il doppio di batch.
-    expect(fast.credits).toBeLessThan(batch.credits * 2);
-  });
-
   // Il preventivo teneva le tariffe DeepSeek ($0.14/$0.28 per 1M) dopo che il lavoro era tornato
   // su Gemini Flash ($1.50/$7.50): un mese di testo veniva quotato ~31 crediti invece di ~500, e il
   // gate lasciava partire mesi che sarebbero morti a metà. Se questo numero torna piccolo, il
@@ -50,7 +42,7 @@ describe('estimateBlogMonth', () => {
   });
 
   it('a full Pro month with all translations still fits the Pro quota', () => {
-    const e = estimateBlogMonth({ articles: 30, mode: 'fast', translationsPerArticle: 3 });
+    const e = estimateBlogMonth({ articles: 30, translationsPerArticle: 3 });
     expect(e.credits).toBeLessThan(creditQuota('pro'));
   });
 

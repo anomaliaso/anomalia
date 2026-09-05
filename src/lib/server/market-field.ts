@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { genaiClient } from '$lib/server/brand-context';
-import { aiStructured } from '$lib/server/xiaomi';
+import { aiStructured } from '$lib/server/ai-text';
 import { guardrailsBlock } from '$lib/server/brand-guardrails';
 import { discoverLinkedIn, discoverReddit, discoverThreads, type DiscoveredPost } from '$lib/server/market-discovery';
 import { instagramHashtag, tiktokKeyword, type TrendingVideo } from '$lib/server/market-trends';

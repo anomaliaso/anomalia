@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-const { GEMINI_FLASH, geminiFlash, isGeminiFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare, geminiThinkingLevel, judgeThinkingLevel, genaiThinking } = await import('./gemini');
+const { GEMINI_FLASH, geminiFlash, isGeminiFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare, geminiThinkingLevel, judgeThinkingLevel } = await import('./gemini');
 
 describe('GEMINI_FLASH', () => {
   it('is a Gemini Flash model id — the default when the env var is unset', () => {
@@ -84,7 +84,6 @@ describe('thinking level', () => {
 
   it('sends every judge in at high, the level Gemini 3.x speaks', () => {
     expect(judgeThinkingLevel()).toBe('high');
-    expect(genaiThinking()).toEqual({ thinkingLevel: 'HIGH' });
   });
 
   it('takes an env override, per call — no deploy to undo a regression', () => {
@@ -106,10 +105,7 @@ describe('thinking level', () => {
     }
   });
 
-  it('speaks each SDK’s own vocabulary: uppercase for @google/genai', () => {
-    expect(genaiThinking('low')).toEqual({ thinkingLevel: 'LOW' });
-    expect(genaiThinking('medium')).toEqual({ thinkingLevel: 'MEDIUM' });
-    // The AI SDK path takes the level lowercase, exactly as judgeThinkingLevel returns it.
+  it('il livello resta minuscolo: e` la forma che il centralino manda sul filo', () => {
     expect(judgeThinkingLevel('high')).toBe('high');
   });
 });

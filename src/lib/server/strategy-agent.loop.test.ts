@@ -55,12 +55,12 @@ vi.mock('$lib/server/agent-runs', () => ({ persistAgentRun }));
 
 vi.mock('$lib/server/brand-context', () => ({ genaiClient: () => ({}) }));
 
-vi.mock('$lib/server/xiaomi', () => ({
+vi.mock('$lib/server/ai-text', () => ({
   parallelVariants,
   aiStructured: vi.fn(),
   VARIANT_LENSES: ['contrarian', 'proof', 'community'],
   CREATIVE_TEMPERATURE: 0.9,
-  PIN_GEMINI: {}
+  PIN_GATEWAY: {}
 }));
 
 vi.mock('$lib/server/research', async () => {

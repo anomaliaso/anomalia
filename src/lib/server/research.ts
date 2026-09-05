@@ -1,14 +1,13 @@
 import { swallow } from '$lib/server/swallow';
-import { GoogleGenAI } from '@google/genai';
+import type { GoogleGenAI } from '@google/genai';
 import { genaiClient, fetchImagePart } from '$lib/server/brand-context';
 import { fetchPage } from '$lib/server/brand-analysis';
 import { scrapeForOnboarding, type ScrapeTarget, type ScrapedPost } from '$lib/server/scrapecreators';
-import { aiStructured, aiText, parallelVariants } from '$lib/server/xiaomi';
+import { aiStructured, aiText, parallelVariants } from '$lib/server/ai-text';
 import { requireBrandContext } from '$lib/server/ai-log';
 import { type GeminiThinkingLevel } from '$lib/server/gemini';
 import { exaConfigured, exaGroundedAnswer } from '$lib/server/exa';
 import { tavilyConfigured, tavilyGroundedAnswer } from '$lib/server/tavily';
-import { deepseekSearchConfigured, deepseekGroundedAnswer } from '$lib/server/deepseek-search';
 import { llmGeminiSearchModel, llmImagesFromInline, llmStructured, llmText } from '$lib/server/llm';
 
 // Deep-research module for onboarding: discover competitors (web-grounded), resolve their social
@@ -53,17 +52,16 @@ export async function groundedText(
   // una sola giornata storta. Ogni anello passa la mano su una risposta VUOTA, così una fase di
   // ricerca non può perdere in silenzio il suo passaggio sul web.
   //
-  //     exa ~$0.005  ·  deepseek ~$0.0006-0.004  ·  tavily ~$0.008
+  //     exa ~$0.005  ·  tavily ~$0.008
   //
-  // DeepSeek è il più economico ma fattura a token: una domanda difficile che gli fa fare sei
-  // ricerche costa quanto Exa. In compenso è l'unico che cerca RIPETUTAMENTE per una sola domanda
-  // (6 ricerche / 38 fonti su un confronto a due parti, in UNA chiamata), quindi è il secondo:
-  // dove Exa non risponde, le domande composte tornano intere invece che a metà.
+  // DeepSeek stava in mezzo ai due, ed era il più economico. È uscito perché qui non fa il motore
+  // di ricerca: fa GENERARE la risposta a un modello DeepSeek, cioè è un fornitore di testo, e il
+  // testo passa tutto dal gateway. Resta dov'è misurato e non genera niente per noi: `geo.ts` lo
+  // interroga come motore di risposta di cui contiamo le citazioni (`citation-probe.ts`).
   const question = systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt;
 
   const webProviders: Array<[string, () => Promise<{ text: string; citations: Citation[] }>]> = [];
   if (exaConfigured()) webProviders.push(['exa', () => exaGroundedAnswer(question)]);
-  if (deepseekSearchConfigured()) webProviders.push(['deepseek', () => deepseekGroundedAnswer(question)]);
   if (tavilyConfigured()) webProviders.push(['tavily', () => tavilyGroundedAnswer(question)]);
   for (const [name, call] of webProviders) {
     const res = await call().catch((error) => { swallow('call failed', error); return ({ text: '', citations: [] }); });
@@ -147,7 +145,7 @@ export async function structured<T>(
     images?: Array<{ inlineData: { mimeType: string; data: string } }>;
     temperature?: number;
     model?: string;
-    provider?: 'gemini' | 'xiaomi' | 'kie';
+    provider?: 'gateway' | 'kie';
     noFallback?: boolean;
     /** How hard Gemini reasons on judge-style calls — see structuredGemini. */
     thinkingLevel?: GeminiThinkingLevel;
