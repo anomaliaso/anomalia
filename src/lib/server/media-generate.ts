@@ -21,6 +21,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertBrandMedia, storeBrandMediaBytes, probeImageDimensions } from '$lib/server/brand-media';
 import { mediaUrl } from '$lib/media-url';
+import { safeProviderReason } from '$lib/server/provider-reason';
 import { markImage, DIGITAL_SOURCE_TYPE } from '$lib/server/content-credentials';
 import type { AspectRatio } from '$lib/server/content-preview';
 
@@ -380,7 +381,7 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
   const submitted = await submitAndTrackVideoRender({
     admin,
     onSubmitError: (why: string) => {
-      submitReason = why;
+      submitReason = safeProviderReason(why);
     },
     brandId: opts.brandId,
     userId: opts.userId,

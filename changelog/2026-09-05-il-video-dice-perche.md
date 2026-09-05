@@ -65,3 +65,22 @@ costruito, invio partito.
 Vale però sapere che quel percorso **dipende dal fatto che il fornitore possa scaricare il nostro
 signed URL**. Se lo Storage diventasse privato si romperebbe lì — e con la correzione al punto 1,
 adesso lo direbbe.
+
+
+## Il motivo si ripassa, ma senza il token
+
+Il messaggio del fornitore cita gli argomenti che gli abbiamo mandato, URL firmati compresi. L'URL
+in sé non è un segreto — è lo stesso che il chiamante ci ha dato, e sapere **quale** riferimento è
+stato rifiutato è metà della diagnosi. **La query string sì**: la firma vive lì, e un log del
+cliente che la cattura è un token vivo in un posto in cui nessuno l'ha messo apposta.
+
+`safeProviderReason` taglia la query string di ogni URL e mette un tetto di 400 caratteri. La parte
+utile del messaggio sta comunque prima del `?`, quindi il taglio non toglie niente a chi legge:
+
+```
+Invalid reference URL: https://…/sign/media/a.png?token=eyJhbGciOi.SECRET is unreachable
+→ Invalid reference URL: https://…/sign/media/a.png is unreachable
+```
+
+Se un giorno un fornitore mettesse qualcosa di indispensabile dopo il `?`, il messaggio diventerebbe
+incomprensibile e questa scelta andrebbe ribaltata — ma si parte dal tagliare.
