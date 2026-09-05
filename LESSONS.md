@@ -94,6 +94,19 @@ Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: van
 
 ## Test: distinguere il tuo difetto dal rumore
 
+### CI rossa con zero test falliti è una promessa non attesa, non un test tuo
+`Test Files 649 passed | Tests 7259 passed | Errors 1 error`, e il job esce comunque 1. Non
+cercare il test rosso: non esiste. Vitest conta come fallimento anche una `Unhandled Rejection`
+sollevata FUORI da un test — qui `supabase.rpc is not a function` da `credits.ts`, arrivata da un
+`loadDeferred` di `+layout.server.ts` che risolve dopo la fine del file che l'aveva avviata
+(`home-redirect.test.ts`), su uno stub senza `.rpc`. Il file, eseguito da solo, passa: la promessa
+fa in tempo a essere raccolta. Segnale: la riga `This error originated in "<file>"` seguita da
+`It doesn't mean the error was thrown inside the file itself`. Mossa: prima di imputartelo,
+cerca lo **stesso** messaggio negli ultimi run di dev — `gh run list --branch dev --workflow
+ci.yml --json databaseId,conclusion` e poi `gh run view <id> --log-failed | grep -c '<messaggio>'`.
+Se compare su una run che non contiene il tuo diff, è latente e non è tuo. E non fidarti del solo
+«dev è verde»: la run di dev può essere caduta prima, sugli e2e, senza mai arrivare a scoprirlo.
+
 ### La suite completa fallisce da sola: confronta run-per-run con dev puro
 Sotto carico (worker paralleli) i test di timing e race cadono da soli: `redact` ≤ 200ms che ne impiega 404, JPEG ≤ 2MB, drain "executes exactly once". Lo stesso sottoinsieme, rilanciato isolato, passa. Prima di imputarsi un fallimento della suite completa: (1) rilancia il sottoinsieme isolato, (2) lancia la suite completa su **dev puro** nello stesso setup. Se dev fallisce uguale, il rumore non è tuo. Vero anche il rovescio: "tutta verde" sul tuo branch non dice niente se dev non lo è.
 
