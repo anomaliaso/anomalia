@@ -68,6 +68,21 @@ update public.brands set website = null
 -- output del modello non normalizzato, e un CHECK lì fermerebbe l'autopilot di notte.
 -- `uploaded_video` entra nel vocabolario perché `upload-media` lo scrive ed è legittimo; `image`
 -- e `carousel` no: erano formati finiti in una colonna di tipi, e il codice è stato corretto.
+-- `cross_post` e `founder` in `source` sono la stessa storia: nessuna riga in produzione, ma due
+-- percorsi vivi che li scrivono (il clone di `cross_post` e la consegna video dall'admin). Un
+-- vincolo che li rifiuta è il vincolo sbagliato, non i dati — li ha trovati la sezione C di
+-- `schema-drift-check.mjs`, che confronta i literal del codice con le liste di questo file.
+--
+-- `external` invece NON lo trova nessun grep di literal: al punto dell'insert
+-- (`manual-posting.ts:306`) c'è una variabile, e il valore nasce in
+-- `POST /api/v1/brands/:slug/posts`, l'endpoint con cui un agente esterno deposita un post. La
+-- fonte vera è il tipo `PostAuthorship`, e ora `POST_SOURCES` in `contracts/post-tools.ts` è
+-- l'elenco unico da cui questo `check` è derivato — con un test che fallisce se i due divergono.
+--
+-- `video_resolution` non ha un vocabolario ma una FORMA: il valore arriva da
+-- `KIE_VIDEO_RESOLUTION` / `KIE_VIDEO_UPSCALE_RESOLUTION`, cioè da configurazione. Un elenco
+-- chiuso qui si romperebbe al primo cambio di env, che è la stessa ragione per cui i tetti di
+-- piano non stanno nel database.
 
 alter table public.posts
   add constraint posts_status_check
@@ -78,11 +93,11 @@ alter table public.posts
       'uploaded_image', 'uploaded_video', 'text', 'link'
     )),
   add constraint posts_source_check
-    check (source in ('plan', 'manual', 'radar', 'guest_preview')),
+    check (source in ('plan', 'manual', 'radar', 'guest_preview', 'cross_post', 'founder', 'external')),
   add constraint posts_video_render_status_check
     check (video_render_status in ('rendering', 'done', 'failed')),
   add constraint posts_video_resolution_check
-    check (video_resolution in ('480p', '720p', '1080p')),
+    check (video_resolution ~ '^[0-9]{3,4}p$'),
   add constraint posts_video_duration_check
     check (video_duration_seconds > 0 and video_duration_seconds <= 3600),
   add constraint posts_revisions_count_check
@@ -275,8 +290,12 @@ alter table public.brand_sites
 
 -- ── brand_news_sources (265 righe) ─────────────────────────────────────────────────────────────
 
+-- `lang` è una FORMA, non l'elenco delle 12 voci del menu: il form
+-- (`settings/radar/+page.server.ts:83`) prende il valore grezzo e lo taglia a 5 caratteri senza
+-- allowlist, quindi un `pt-BR` arriva alla colonna. In produzione c'è già un `tr` che il menu non
+-- offre. Due-cinque lettere o trattino: blocca la spazzatura, non blocca il form.
 alter table public.brand_news_sources
   add constraint brand_news_sources_value_check
     check (btrim(value) <> '' and length(value) <= 500),
   add constraint brand_news_sources_lang_check
-    check (lang ~ '^([a-z]{2}|auto)$');
+    check (lang ~ '^[A-Za-z-]{2,5}$');

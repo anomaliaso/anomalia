@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { PostSource } from '$lib/contracts/post-tools';
 import { structured } from '$lib/server/research';
 import { withBrandContext } from '$lib/server/ai-log';
 import { aiActCopyGuardrail } from '$lib/ai-act';
@@ -29,7 +30,10 @@ export type ManualPostMode = 'now' | 'schedule' | 'draft' | 'propose';
 
 export type ManualPostOutcome = 'pending_user' | 'scheduled' | 'published';
 
-export type PostAuthorship = 'manual' | 'external';
+/** Chi deposita il post. `satisfies` è il punto: se uno di questi esce da `POST_SOURCES`, e
+ *  quindi dal CHECK, il compilatore lo dice qui invece che Postgres in produzione. */
+const POST_AUTHORSHIPS = ['manual', 'external'] as const satisfies readonly PostSource[];
+export type PostAuthorship = (typeof POST_AUTHORSHIPS)[number];
 
 type DateSource = (input: CreateManualPostInput, tz: string) => string | null;
 
