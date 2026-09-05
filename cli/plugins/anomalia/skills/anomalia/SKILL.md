@@ -69,7 +69,8 @@ the request carries your own session, so Postgres returns exactly the rows the a
 and nothing more. Read only, one table per call, no credits. Omit `table` to list what you can
 name; ask for a table with no `columns` and the keys of a row are the schema. Reach for it for a
 count, a join you do by hand, or a fact none of the tools below returns — instead of three calls
-that approximate it.
+that approximate it. **What this brand sells** has no tool of its own: its catalogue of products,
+offers and services is the `products` table, one row per offer, read with `query`.
 
 **Before you write anything** → two reads, and they answer different questions.
 
