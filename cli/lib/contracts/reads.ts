@@ -385,31 +385,6 @@ export const GET_VOICE = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const LIST_PRODUCTS = {
-  tool: 'list_products',
-  title: 'List products',
-  description:
-    'What this brand sells — the offers in its catalogue, each with the details a post can ' +
-    'name. create_product adds one by hand. Reads only — no model, no credits.',
-  method: 'GET',
-  pathUnderBrand: '/products',
-  input: NoInput,
-  output: z.object({
-    products: z.array(
-      z.looseObject({
-        id: z.string(),
-        title: z.string(),
-        kind: z.string(),
-        pricing: z.string().nullable(),
-        imageCount: z.number(),
-        featured: z.boolean()
-      })
-    )
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 // La dashboard è il brand stesso: `GET /api/v1/brands/:slug`, nessun segmento sotto. Con
 // `pathUnderBrand` vuoto `pathFor` produce già quell'URL — non serve un secondo registro per gli
 // endpoint fuori dal brand, ne resta fuori uno solo (`list_brands`, che di brand non ne ha uno).

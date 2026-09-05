@@ -149,6 +149,7 @@ const REST_ONLY = [
   'posts/[id]/publish',
   'posts/[id]/revoke',
   'posts/approve-all',
+  'products',
   'publishing',
   'rubrics',
   'rubrics/approve',

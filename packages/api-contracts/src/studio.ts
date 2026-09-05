@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import type { BrandEndpoint } from './index';
 
-const id = z.string().min(1).describe('Row id, verbatim from get_studio or list_products');
+const id = z.string().min(1).describe('Row id, verbatim from get_studio');
 
 // Una cancellazione non accetta prefissi: un prefisso ambiguo colpisce la riga sbagliata e non
-// c'è nessun modo di annullarla. Serve l'UUID pieno, come get_studio e list_products lo danno.
+// c'è nessun modo di annullarla. Serve l'UUID pieno, come get_studio lo dà.
 const OnlyRowUuid = z.object({ id: z.uuid() }).strict();
 
 const PRODUCT_FIELDS = {

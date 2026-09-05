@@ -36,6 +36,10 @@ Reach for it when the answer needs a count, a join you do by hand, or a table no
 exposes — that is one call instead of three that approximate it. A refusal comes back as `200`
 with `error`, `message` and often `fix` inside, so you can read why and change move.
 
+It is also the read for questions no tool of its own answers. **What this brand sells** — its
+catalogue of products, offers and services — is the `products` table: one row per offer, with
+`title`, `kind`, `pricing`, `url`, `featured` and the `images` it carries.
+
 ## Brand & posts
 
 | MCP | CLI |
@@ -48,7 +52,6 @@ with `error`, `message` and often `fix` inside, so you can read why and change m
 | `get_goals` | (MCP only) |
 | `get_gtm` | `anomalia gtm <slug>` |
 | `get_voice` / `update_voice` | `anomalia voice <slug>` |
-| `list_products` | (studio / products views) |
 | `list_posts` | `anomalia content <slug> [--status …]` |
 | `get_creation_kit` | (MCP only) |
 | `create_post` | (MCP only) |
@@ -444,7 +447,7 @@ catalog and would erase a hand-made row.
 `update_product`, `update_person` and `update_competitor` change only the fields you send: every
 other column keeps the value it had. An id from another brand answers `not_found`, exactly like
 one that does not exist anywhere. The four deletes want the UUID in full, verbatim from
-`get_studio` or `list_products`.
+`get_studio`, or `query` on the `products` table.
 
 `update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
 real person's face stays withheld from every generator until the operator states the consent in
