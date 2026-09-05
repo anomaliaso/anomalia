@@ -6,6 +6,7 @@
 import { appUrl } from './config.ts';
 import {
   pathFor,
+  pathWithoutBrand,
   type BrandEndpoint,
   type ResourceEndpoint,
   type ResourcelessEndpoint,
@@ -42,10 +43,24 @@ function post<T>(path: string, token: string, body?: unknown): Promise<T> {
   });
 }
 
+/**
+ * Nessuno slug: si va per la strada senza brand, se il registro ne dichiara una. Se non la
+ * dichiara è un errore qui e subito — cadere sulla rotta del brand costruirebbe `/brands//…`, che
+ * il server rifiuterebbe con un 404 illeggibile molto più tardi.
+ */
+function brandFreeCall(endpoint: BrandEndpoint, slug: string | null): string | null {
+  if (slug) return null;
+
+  const path = pathWithoutBrand(endpoint);
+  if (!path) throw new Error(`${endpoint.tool} needs a brand slug`);
+
+  return path;
+}
+
 export function callEndpoint<T>(
   endpoint: ResourcelessEndpoint,
   token: string,
-  slug: string,
+  slug: string | null,
   input?: Record<string, unknown>,
 ): Promise<T>;
 export function callEndpoint<T>(
@@ -58,12 +73,12 @@ export function callEndpoint<T>(
 export function callEndpoint<T>(
   endpoint: BrandEndpoint,
   token: string,
-  slug: string,
+  slug: string | null,
   input: Record<string, unknown> = {},
   id?: string,
 ): Promise<T> {
-  const path =
-    endpoint.resource === undefined ? pathFor(endpoint, slug) : pathFor(endpoint, slug, id ?? '');
+  const path = brandFreeCall(endpoint, slug)
+    ?? (endpoint.resource === undefined ? pathFor(endpoint, slug!) : pathFor(endpoint, slug!, id ?? ''));
   if (endpoint.method === 'DELETE') return request<T>(path, token, { method: 'DELETE' });
   if (endpoint.method !== 'GET') {
     return request<T>(path, token, { method: endpoint.method, body: JSON.stringify(input) });

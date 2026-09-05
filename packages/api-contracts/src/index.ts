@@ -149,11 +149,18 @@ type EndpointShape = {
 
 export type ResourcelessEndpoint = EndpointShape & {
   readonly pathUnderBrand: string;
+  /**
+   * The same tool, reachable without naming a brand. Declaring it is what makes `slug` optional
+   * and what tells the caller a second route exists — an endpoint that omits this one has no way
+   * of running outside a brand, and asking for one is an error rather than a silent fallback.
+   */
+  readonly pathWithoutBrand?: string;
   readonly resource?: undefined;
 };
 
 export type ResourceEndpoint = EndpointShape & {
   readonly pathUnderBrand: `${string}/${typeof RESOURCE_SEGMENT}${string}`;
+  readonly pathWithoutBrand?: undefined;
   readonly resource: BrandResource;
 };
 
@@ -285,6 +292,11 @@ export function pathFor(endpoint: BrandEndpoint, slug: string, id?: string): str
   if (endpoint.resource === undefined) return `${base}${endpoint.pathUnderBrand}`;
   if (!id) throw new Error(`${endpoint.tool} needs a ${endpoint.resource} id`);
   return `${base}${endpoint.pathUnderBrand.replace(RESOURCE_SEGMENT, encodeURIComponent(id))}`;
+}
+
+/** Where this tool runs when no brand is named — `null` when it only exists under one. */
+export function pathWithoutBrand(endpoint: BrandEndpoint): string | null {
+  return endpoint.pathWithoutBrand ? `/api/v1${endpoint.pathWithoutBrand}` : null;
 }
 
 // Un id accorciato è una comodità di lettura: la lista dice quale riga, il prefisso basta a
