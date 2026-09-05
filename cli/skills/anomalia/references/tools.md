@@ -191,7 +191,11 @@ picture must take nothing from the brand: a plain UI screenshot, an illustration
 else, a neutral background — places where brand colours and fonts spoil the result. Without a slug
 there is no brand to apply or ignore, and sending it is refused as `brand_style_needs_a_brand`
 rather than quietly dropped: pass a slug, or drop `brand_style`. `refine_image` takes the same
-field, and the brand's look reaches a refinement the same way.
+field, and the brand's look reaches a refinement the same way. `generate_carousel` and
+`generate_media` apply it too but take no `brand_style`: a series that is not the brand's is not a
+series, and `generate_media` is the old door — call `generate_image` when you need the switch. A
+clip filmed by `generate_video` from a prompt alone follows the brand's visual direction and cannot
+be switched off either; animating a library image takes its look from that image's pixels instead.
 
 **`slug` is optional, and which way you call it is the only choice to make.** WITHOUT it this is a
 one-off drawing: no brand, nothing filed anywhere, `id` comes back `null` and there is nothing to

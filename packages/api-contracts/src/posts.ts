@@ -314,7 +314,9 @@ export const GENERATE_MEDIA = {
     'generate alternatives, look at them with list_media, and attach only the one you keep. ' +
     'Images come back ready, up to ' + MAX_MEDIA_ALTERNATIVES + ' per call. A video takes minutes: ' +
     'it comes back as a job_id with status rendering, and check_media_job says when it landed — ' +
-    'do not call this again for the same clip while one is still rendering.',
+    'do not call this again for the same clip while one is still rendering. ' +
+    "With a slug, this brand's look is applied, and it cannot be switched off from this door: " +
+    'generate_image takes brand_style for that.',
   method: 'POST',
   pathUnderBrand: '/media/generate',
   input: z
@@ -685,7 +687,8 @@ export const REFINE_IMAGE = {
     'instruction is the edit. Refining has its own model — get_media_models, slot ' +
     "imageRefineModel — and model here applies to this call only. The brand's own look (its " +
     'colours, its fonts, its visual direction) is applied to the result as it is on ' +
-    'generate_image; brand_style: ignore leaves it out. base_media_id takes a short prefix, like post ids do.',
+    'generate_image, and brand_style: ignore turns it off when the result must take nothing from ' +
+    'the brand. base_media_id takes a short prefix, like post ids do.',
   method: 'POST',
   pathUnderBrand: '/media/images/refine',
   input: z
@@ -735,7 +738,11 @@ export const GENERATE_VIDEO = {
     'heavy one around 210, so read get_media_models (slot videoModel from a prompt, ' +
     'videoImageModel when animating an image) and pass model for this call only. A clip takes ' +
     'minutes: this returns a job_id with status rendering, and check_media_job says when it ' +
-    'landed. Do not call this again for the same clip while one is still rendering.',
+    'landed. Do not call this again for the same clip while one is still rendering. ' +
+    "Filmed from a prompt alone, the clip follows this brand's visual direction, so you do not " +
+    'have to describe it — and it cannot be switched off here. Animating a library image is ' +
+    "different: the image is the clip's first frame, so whatever look it already has comes with " +
+    'it, and the visual direction is deliberately left out of the prompt.',
   method: 'POST',
   pathUnderBrand: '/media/videos',
   input: z
@@ -789,7 +796,9 @@ export const GENERATE_CAROUSEL = {
     'in the calendar: pass the ids to create_post as media_ids, in order. TO CHANGE ONE SLIDE use ' +
     'refine_image on that slide id, and put the continuity_tokens this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
-    'light or the recurring motif without them takes that slide out of the set.',
+    'light or the recurring motif without them takes that slide out of the set. ' +
+    "With a slug, this brand's look is applied to every slide, and there is no way to switch it " +
+    "off here: a series that is not the brand's is not a series.",
   method: 'POST',
   pathUnderBrand: '/media/carousel',
   input: z
