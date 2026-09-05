@@ -502,7 +502,7 @@ async function runProduceRound(opts: {
       execute: async ({ query }) => {
         searches += 1;
         if (searches > SEARCH_BUDGET) return { error: `search budget exhausted (${SEARCH_BUDGET})` };
-        const g = await groundedText(null as never, query, 'Answer with concrete, citable facts and recent trends.', {
+        const g = await groundedText(query, 'Answer with concrete, citable facts and recent trends.', {
           brandId: opts.brandId
         });
         return {
@@ -796,7 +796,7 @@ JUSTIFICATION: ${just.slice(0, 400) || '(none)'}`;
       execute: async ({ query }) => {
         searches += 1;
         if (searches > 3) return { error: 'search budget exhausted' };
-        const g = await groundedText(null as never, query, 'Verify concisely with sources.', { brandId: opts.brandId });
+        const g = await groundedText(query, 'Verify concisely with sources.', { brandId: opts.brandId });
         return { answer: g.text.slice(0, 800), sources: g.citations.slice(0, 3) };
       }
     }),

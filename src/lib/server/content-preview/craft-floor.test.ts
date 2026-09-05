@@ -53,7 +53,7 @@ describe('il pavimento di esecuzione del design arriva al percorso immagine', ()
   it('renderBrandImage lo inietta quando il digest esiste', async () => {
     digest.section = DESIGN_FLOOR;
 
-    await renderBrandImage(null as never, PROMPT, RENDER_OPTS);
+    await renderBrandImage(PROMPT, RENDER_OPTS);
 
     expect(promptsSentToModel()[0]).toContain('AMBIENT DESIGN FLOOR');
   });
@@ -62,7 +62,6 @@ describe('il pavimento di esecuzione del design arriva al percorso immagine', ()
     digest.section = DESIGN_FLOOR;
 
     await renderCarouselSlide(
-      null as never,
       failingStorage as never,
       'user-1',
       'slide two: the mechanic',
@@ -77,7 +76,7 @@ describe('il pavimento di esecuzione del design arriva al percorso immagine', ()
   });
 
   it('senza digest il prompt resta identico a prima', async () => {
-    await renderBrandImage(null as never, PROMPT, RENDER_OPTS);
+    await renderBrandImage(PROMPT, RENDER_OPTS);
 
     expect(promptsSentToModel()[0]).toBe(buildImageRequest(PROMPT, RENDER_OPTS).contents[0].parts[0].text);
   });
@@ -85,7 +84,7 @@ describe('il pavimento di esecuzione del design arriva al percorso immagine', ()
   it('il pavimento non tocca il soggetto: entra come blocco a sé, prima dello stile del brand', async () => {
     digest.section = DESIGN_FLOOR;
 
-    await renderBrandImage(null as never, PROMPT, RENDER_OPTS);
+    await renderBrandImage(PROMPT, RENDER_OPTS);
 
     const text = promptsSentToModel()[0];
     expect(text).toContain('AMBIENT DESIGN FLOOR');

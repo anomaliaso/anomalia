@@ -6,7 +6,15 @@
  * `media_origin` devono muoversi INSIEME. Un post con un mp4 in `media_url` ma `format: 'image'`
  * e' un reel che l'editor apre come una foto e che l'utente scopre rotto in pubblicazione, senza
  * un errore da nessuna parte. Scriverli in tre punti diversi e' esattamente come e' successo.
+ *
+ * Il prefisso di `contentType` NON e' un'etichetta: `publish.ts` ne ricava
+ * `aiGeneratedMedia: !content_type.startsWith('uploaded')`, cioe' la dichiarazione di contenuto AI
+ * al momento della pubblicazione. Un asset preso dalla libreria puo' essere AI o caricato
+ * dall'utente — la libreria lo sa (`brand_media.source`), questa tabella no — quindi qui si
+ * dichiara SEMPRE, che e' il verso prudente: sotto-dichiarare e' il rischio, sovra-dichiarare no.
  */
+import type { PostContentType } from './contracts/post-tools';
+
 export const POST_ASSET_TYPES = ['image', 'video', 'carousel'] as const;
 export type PostAssetType = (typeof POST_ASSET_TYPES)[number];
 
@@ -15,16 +23,16 @@ export type PostAssetShape = {
 	mediaKind: 'image' | 'video';
 	/** Quanti asset servono: il carosello e' l'unico che ne vuole piu' di uno. */
 	multiple: boolean;
-	contentType: string;
+	contentType: PostContentType;
 	format: string;
 	/** Cosa il post ricordera' di se stesso — `read_posts` lo rilegge per sapere come modificarlo. */
 	mediaOrigin: string;
 };
 
 const SHAPES: Record<PostAssetType, PostAssetShape> = {
-	image: { mediaKind: 'image', multiple: false, contentType: 'image', format: 'image', mediaOrigin: 'user_uploaded' },
+	image: { mediaKind: 'image', multiple: false, contentType: 'generated_image', format: 'image', mediaOrigin: 'user_uploaded' },
 	video: { mediaKind: 'video', multiple: false, contentType: 'generated_video', format: 'video', mediaOrigin: 'video' },
-	carousel: { mediaKind: 'image', multiple: true, contentType: 'carousel', format: 'carousel', mediaOrigin: 'user_uploaded' }
+	carousel: { mediaKind: 'image', multiple: true, contentType: 'generated_image', format: 'carousel', mediaOrigin: 'user_uploaded' }
 };
 
 export function postAssetShape(type: unknown): PostAssetShape | undefined {

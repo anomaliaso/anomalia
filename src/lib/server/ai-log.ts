@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { gatewayRate } from '$lib/server/openrouter-models';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { GEMINI_FLASH, geminiFlash, isGeminiFlashId, isKieFlashId, kieFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } from '$lib/server/gemini';
+import { GEMINI_FLASH, geminiFlash, isGeminiFlashId, isKieFlashId, kieFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } from '$lib/server/google-models';
 
 // Fire-and-forget observability: one ai_calls row per LLM call, written from the shared
 // chokepoints. NEVER throws and never awaited — a missing table or a dead DB must not break AI.
@@ -11,7 +11,14 @@ import { GEMINI_FLASH, geminiFlash, isGeminiFlashId, isKieFlashId, kieFlashId, N
 // other; entry points wrap their work in withBrandContext(brandId, fn).
 
 type BrandLogContext = {
-  brandId: string;
+  /** `null` on a job asked for without a brand: then `orgId` is who pays, and nothing is attributed. */
+  brandId: string | null;
+  /**
+   * Chi paga quando non c'è un brand. `sum_org_ai_cost_usd` sommava passando da `brands`, quindi
+   * una riga senza brand valeva zero per ogni organizzazione: il cancello sopra sarebbe passato
+   * per sempre. La riga la porta scritta addosso (`ai_calls.org_id`), e la somma la trova.
+   */
+  orgId?: string;
   /** Set when the caller already knows the plan. `undefined` = not resolved yet (look up). */
   plan?: string | null;
   /** Crediti kie letti dalle risposte HTTP di questo scope, in attesa della riga che li scrive. */
@@ -67,6 +74,15 @@ export function withBrandContext<T>(brandId: string, fn: () => T, plan?: string 
 }
 
 /**
+ * Lo stesso scope per un lavoro che un brand non ce l'ha: a pagare è l'organizzazione, e ogni riga
+ * scritta qui dentro la nomina. Senza, la spesa non atterra da nessuna parte — nessun brand da
+ * attribuire, e la somma dell'organizzazione passa dai brand.
+ */
+export function withOrgContext<T>(orgId: string, fn: () => T): T {
+  return brandStorage.run({ brandId: null, orgId }, fn);
+}
+
+/**
  * Crediti kie visti passare in questo scope, sommati. Il turno di chat passa dall'AI SDK, che
  * espone solo i token, quindi senza questa cassetta `provider_credits` è NULL per ogni turno:
  * `kieFetch` li deposita, `logAiCall` li ritira azzerando sulla prima riga kie che non ne ha.
@@ -105,14 +121,25 @@ export function takeLlmCost(): number | undefined {
   const cost = ctx?.llmCostUsd;
   if (!ctx || cost == null) return undefined;
   ctx.llmCostUsd = undefined;
-  ctx.billedUsd = (ctx.billedUsd ?? 0) + cost;
   return cost;
 }
 
 /**
- * Quanto il gateway ha fatturato in questo scope, gia` finito nelle righe di `ai_calls`. Serve a
- * una rotta che deve dire quanto e` costata: e` lo stesso numero della riga, non un listino
- * riscritto accanto. `undefined` significa che nessuna fattura e` arrivata — non zero.
+ * La fattura che sta finendo in `ai_calls`, resa leggibile a chi deve DIRE quanto è costato. Una
+ * riga sola la deposita — `logAiCall`, appena il prezzo è certo — perché due depositi per la stessa
+ * riga raddoppierebbero il conto senza che nessuna somma lo smentisca.
+ */
+function noteBilledUsd(usd: number): void {
+  const ctx = brandStorage.getStore();
+  if (!ctx || !Number.isFinite(usd) || usd < 0) return;
+  ctx.billedUsd = (ctx.billedUsd ?? 0) + usd;
+}
+
+/**
+ * Quanto è stato fatturato in questo scope, gia` finito nelle righe di `ai_calls`. Serve a una
+ * rotta che deve dire quanto e` costata: e` lo stesso numero della riga, non un listino riscritto
+ * accanto — che è la forma che aveva «about 8 credits each» nella descrizione di generate_image.
+ * `undefined` significa che nessuna fattura e` arrivata — non zero.
  */
 export function billedUsdInScope(): number | undefined {
   return brandStorage.getStore()?.billedUsd;
@@ -126,6 +153,11 @@ export function getBrandContext(): string | null {
   return brandStorage.getStore()?.brandId ?? null;
 }
 
+/** The org paying for the current scope when no brand does (null = there is a brand, or no scope). */
+export function getOrgContext(): string | null {
+  return brandStorage.getStore()?.orgId ?? null;
+}
+
 /** `undefined` = no brand context / not resolved yet. `null` = free tier. */
 export function getBrandPlanContext(): string | null | undefined {
   return brandStorage.getStore()?.plan;
@@ -134,7 +166,7 @@ export function getBrandPlanContext(): string | null | undefined {
 /** Stamp the active scope + cache once a brands row is loaded. */
 export function setBrandPlanContext(plan: string | null): void {
   const ctx = brandStorage.getStore();
-  if (ctx) {
+  if (ctx?.brandId) {
     ctx.plan = plan;
     rememberBrandPlan(ctx.brandId, plan);
   }
@@ -365,8 +397,16 @@ export function logAiCall(entry: AiCallLog): void {
       // davvero, il provider a monte e il markup, e vale per un modello che nessuno ha listato.
       if (billed != null) entry = { ...entry, flatCostUsd: billed };
     }
+    // La stessa fattura, lasciata leggibile a chi risponde. Solo su una riga RIUSCITA e prezzata
+    // dal fornitore: `computeCostUsd` scarta un flat cost su `ok: false`, e dire un costo che
+    // nessuna riga porta sarebbe il listino scritto a mano da un'altra parte.
+    if (entry.ok && entry.flatCostUsd != null) noteBilledUsd(entry.flatCostUsd);
+
     const admin = createAdminClient();
     const brandId = entry.brandId ?? getBrandContext();
+    // Un brand c'è: la somma dell'organizzazione lo raggiunge dal join, e scrivere anche l'org
+    // aprirebbe due risposte alla stessa domanda. Nessun brand: la riga se la porta scritta.
+    const orgId = brandId ? null : getOrgContext();
     const planFromAls = getBrandPlanContext();
     void (async () => {
       const plan =
@@ -396,6 +436,7 @@ export function logAiCall(entry: AiCallLog): void {
         service_tier: entry.serviceTier ?? null,
         // Fallback allo scope: attribuisce anche i chokepoint che non passano brandId. Esplicito vince.
         brand_id: brandId,
+        org_id: orgId,
         user_id: entry.userId ?? null,
         thread_id: entry.threadId ?? null,
         context: entry.context ?? null

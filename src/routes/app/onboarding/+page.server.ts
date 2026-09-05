@@ -6,6 +6,7 @@ import { canEnter } from '$lib/server/access';
 import type { Actions, PageServerLoad } from './$types';
 import { ensureOrgForUser } from '$lib/server/org';
 import { slugifyBrand, uniqueSlug } from '$lib/brand-slug';
+import { splitWebsiteOrHandle } from '$lib/brand-fields';
 import { materializeBrandHistory, type ScrapeTarget } from '$lib/server/scrapecreators';
 import { rebuildBrandContext } from '$lib/server/brand-context';
 import { competitiveDelta } from '$lib/server/research';
@@ -74,6 +75,24 @@ function parseScrapeTargets(raw: string): ScrapeTarget[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Gli handle che l'onboarding deve salvare: quelli del campo apposito, più quello che l'utente ha
+ * scritto nel campo "sito" quando lì ha messo il proprio profilo invece del dominio. Prima quel
+ * valore finiva in `brands.website` e `brand_kit.source_url` — `Mariopuggelli1939` è in
+ * produzione — e non apriva niente: un dato giusto nel campo sbagliato, non spazzatura.
+ */
+function scrapeTargetsFrom(data: FormData): ScrapeTarget[] {
+  const targets = parseScrapeTargets(String(data.get('handles') ?? ''));
+  const { handle } = splitWebsiteOrHandle(String(data.get('website') ?? ''));
+  if (!handle) return targets;
+
+  // `brand_social_handles` tiene un handle per piattaforma: se il campo apposito ne dichiara già
+  // uno per Instagram, quello vince — è dichiarato, non dedotto da un campo sbagliato.
+  if (targets.some((t) => t.platform === handle.platform)) return targets;
+
+  return [...targets, { platform: handle.platform, username: handle.username, profileUrl: null }];
 }
 
 async function requireAdmin(
@@ -240,7 +259,7 @@ async function persistHandlesAndContext(
     }
     if (historySynced > 0 || additionalContext || delta) {
       if (!profile) await supabase.from('brand_kit').upsert({ brand_id: brandId }, { onConflict: 'brand_id' });
-      await rebuildBrandContext(supabase, brandId, undefined, delta);
+      await rebuildBrandContext(supabase, brandId, delta);
     }
   } catch (error) { swallow('rebuild brand context', error); }
 }
@@ -555,7 +574,7 @@ export const actions: Actions = {
   create: async ({ request, url, platform, cookies, locals: { supabase, safeGetSession, locale } }) => {
     const user = await requireAdmin(supabase, safeGetSession);
     const data = await request.formData();
-    const website = String(data.get('website') ?? '').trim() || null;
+    const website = splitWebsiteOrHandle(String(data.get('website') ?? '')).website;
     const profile = parseProfile(data);
     const name = (String(data.get('name') ?? '').trim() || (profile?.name as string) || '').trim();
     if (!name) return fail(400, { error: 'Brand name is required', website });
@@ -590,7 +609,7 @@ export const actions: Actions = {
         .maybeSingle();
       if (bySite) {
         await persistBrandKit(supabase, bySite.id, profile, website, locale, { seedRadar: false });
-        const scrapeTargets = parseScrapeTargets(String(data.get('handles') ?? ''));
+        const scrapeTargets = scrapeTargetsFrom(data);
         await persistHandlesAndContext(supabase, bySite.id, scrapeTargets, '', '', profile, {
           syncHistory: false
         });
@@ -683,7 +702,7 @@ export const actions: Actions = {
     // Kit + handles only — radar seed and ScrapeCreators run in the social-history worker.
     await persistBrandKit(supabase, brand.id, profile, website, locale, { seedRadar: false });
 
-    const scrapeTargets = parseScrapeTargets(String(data.get('handles') ?? ''));
+    const scrapeTargets = scrapeTargetsFrom(data);
     await persistHandlesAndContext(supabase, brand.id, scrapeTargets, '', '', profile, {
       syncHistory: false
     });
@@ -705,7 +724,7 @@ export const actions: Actions = {
   finish: async ({ request, url, platform, cookies, locals: { supabase, safeGetSession, locale } }) => {
     const user = await requireAdmin(supabase, safeGetSession);
     const data = await request.formData();
-    const website = String(data.get('website') ?? '').trim() || null;
+    const website = splitWebsiteOrHandle(String(data.get('website') ?? '')).website;
     const profile = parseProfile(data);
     const name = (String(data.get('name') ?? '').trim() || (profile?.name as string) || '').trim();
     if (!name) return fail(400, { error: 'Brand name is required', website });
@@ -724,7 +743,7 @@ export const actions: Actions = {
 
       const delta = await persistSecondHalf(supabase, brand, data);
       const additionalContext = String(data.get('additional_context') ?? '').trim();
-      const scrapeTargets = parseScrapeTargets(String(data.get('handles') ?? ''));
+      const scrapeTargets = scrapeTargetsFrom(data);
       // Context note + competitive delta → refresh AI context; handles usually already saved.
       if (additionalContext || delta) {
         await persistHandlesAndContext(supabase, brand.id, scrapeTargets, additionalContext, delta, profile);
@@ -797,7 +816,7 @@ export const actions: Actions = {
 
     await persistBrandKit(supabase, brand.id, profile, website, locale);
     const delta = await persistSecondHalf(supabase, brand, data);
-    const scrapeTargets = parseScrapeTargets(String(data.get('handles') ?? ''));
+    const scrapeTargets = scrapeTargetsFrom(data);
     const additionalContext = String(data.get('additional_context') ?? '').trim();
     await persistHandlesAndContext(supabase, brand.id, scrapeTargets, additionalContext, delta, profile);
 

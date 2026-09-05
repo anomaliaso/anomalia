@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { handleMcpFetch } from './http-app.ts';
 import { routeMcpHttp } from './http-router.ts';
 import { authServerUrl } from '../lib/config.ts';
+import { MCP_INSTRUCTIONS } from './server.ts';
 
 describe('mcp HTTP transport', () => {
   test('health endpoint', async () => {
@@ -54,6 +55,9 @@ describe('mcp HTTP transport', () => {
     expect(initRes.status).toBe(200);
     const initBody = await initRes.json();
     expect(initBody.result?.serverInfo?.name).toBe('anomalia');
+    // La mappa del server viaggia nel handshake, prima di qualunque descrizione: se non arriva
+    // qui, il client non la vede mai e la superficie che decide per prima resta muta.
+    expect(initBody.result?.instructions).toBe(MCP_INSTRUCTIONS);
 
     const listRes = await handleMcpFetch(
       new Request('http://localhost/mcp', {

@@ -100,6 +100,54 @@ git merge-base --is-ancestor <merge-commit> origin/dev && echo LANDED || echo NE
 ```
 Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: vanno riportate a mano sul branch di destinazione (cherry-pick del merge commit, che essendo squash ha un solo genitore), e la risoluzione dei conflitti è il prezzo di averlo scoperto tardi.
 
+### Un difetto e la sua correzione nello stesso ramo sono una trappola armata
+La #372 aveva cinque commit, e il terzo annullava una regressione introdotta dal secondo: una
+dichiarazione di contenuto AI spenta senza volerlo (`content_type` che perde il prefisso
+`uploaded`, e `publish.ts` che da quel prefisso ricava se dichiarare). Il merge è stato fatto **al
+secondo commit**. Risultato: su `dev` è finito il difetto senza la correzione, e chi lo aveva
+scritto lo dava per consegnato perché sul SUO ramo era a posto.
+
+Non è un errore di verifica del merge — quello è il sintomo, ed è coperto dalla lezione qui sopra.
+La causa è la **forma della consegna**: una PR non è un'unità atomica, e chi la scrive non decide
+dove viene tagliata. Cinque commit sono cinque stati possibili del ramo base, e se il commit N
+introduce un difetto che il commit N+2 ripara, due di quei tagli lasciano il prodotto **peggio di
+non aver mergiato niente**. La trappola resta armata finché qualcuno non preme merge nel punto
+sbagliato, e nessuna review la vede: il diff completo della PR è corretto.
+
+Segnale: nel ramo esiste un commit il cui messaggio dice «fix», «undo», «revert» o «restore» di
+qualcosa che un commit precedente **dello stesso ramo** ha fatto.
+
+Mossa: **nessun commit lascia il ramo in uno stato peggiore del precedente.** Se una tua correzione
+annulla un tuo difetto introdotto prima nello stesso ramo, i due si fondono con `rebase -i` *prima*
+della review, così non esiste taglio che possa separarli. È la regola di Kent Beck che questo repo
+già ha — riordino separato dal cambio di comportamento — applicata al ramo invece che al singolo
+commit. Il controllo, prima di chiedere la review:
+```bash
+git log --oneline <base>..HEAD                    # ogni prefisso è uno stato che può finire in produzione
+git log --oneline <base>..HEAD -- <file-rischioso>   # quanti commit lo toccano: uno solo = sicuro per costruzione
+```
+**La domanda giusta è sulla STRUTTURA, non sul contenuto**: *quali commit toccano il file
+rischioso*, non *quale stringa ci compare*. Il secondo comando risponde in una riga, senza loop e
+senza pipe da cui possa uscire qualcosa di diverso a ogni giro. Se quel file è toccato da un commit solo, la trappola è
+impossibile per costruzione — ogni prefisso lo contiene — e non serve leggere una riga. Se è
+toccato da due e il secondo ripara il primo, è armata comunque, qualunque cosa dica il grep.
+
+**E la stessa cura vale per come si SCRIVE il risultato.** «Solo il primo di quattro commit tocca
+quel file» invecchia al quinto commit e obbliga a riverificare; «un solo commit tocca quel file»
+resta vero finché nessuno lo tocca una seconda volta — che è esattamente la condizione di pericolo.
+Un'affermazione che nomina un conteggio va rifatta a ogni push, una che nomina la proprietà si
+difende da sola.
+
+**E il controllo si sceglie perché non oscilla, non perché è breve.** Verificando proprio questa
+cosa, `grep` su un `git cat-file` in un `for` ha dato a due persone tre risposte diverse alla stessa
+domanda (`5, 2, 0, 0`, poi zero ovunque, poi righe di diff al posto del contenuto). `--name-only`
+non oscilla: risponde con l'elenco dei file, che è un fatto del commit e non del modo in cui lo
+interroghi. Un controllo che devi rifare per credergli non è un controllo — e qui la lezione sul
+non fidarsi del proprio ramo stava per essere depositata sulla base di un loop mai testato.
+
+Questa lezione è più forte delle altre due che l'hanno accompagnata, perché quelle dipendono da
+qualcuno che si ricordi di controllare; questa toglie la possibilità che il taglio sia dannoso.
+
 ## Test: distinguere il tuo difetto dal rumore
 
 ### CI rossa con zero test falliti è una promessa non attesa, non un test tuo
@@ -738,6 +786,113 @@ dove non lo è: resta non fatale, smette di essere muto.
 vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
 risolto.
 
+## Un presidio creato a mano in produzione costa due volte, e la seconda non fa rumore
+
+**Segnale.** Una migrazione che gira da settimane in produzione uccide `db:migrate` su un database
+pulito, con un errore che nomina un oggetto che nessuno ha mai scritto in un file: qui
+`42883 — function public.rls_auto_enable() does not exist`, da una `revoke` su una funzione che
+esisteva solo in produzione perché era stata creata dalla dashboard.
+
+**Cosa succede.** Il primo costo si vede: la catena si ferma, e siccome ogni file gira nella sua
+transazione non si perde una riga, si perde tutto quello che viene dopo. Il secondo costo non si
+vede ed è più caro: **un ambiente nuovo nasce senza il presidio**. `ensure_rls` accende la row level
+security su ogni tabella nuova di `public`; senza, ogni tabella creata da lì in poi resta scoperta
+finché qualcuno non legge `pg_class`. Un controllo di sicurezza che esiste in un ambiente solo non
+è un controllo: è una coincidenza che regge finché non si ricrea il database.
+
+**Perché la suite non lo vede.** Gira su Supabase mockato, dove nessuna migrazione viene applicata
+davvero. A trovarlo è stato un agente che ricostruiva un database da zero per un altro lavoro — cioè
+l'unica cosa che esercita l'ordine reale di applicazione. Vale la regola generale già pagata qui: chi
+scrive la modifica la rilegge da autore, e la riga accanto la vede solo chi non ha una posta in gioco
+su quella modifica.
+
+**La mossa.** Quando `psql` o la dashboard creano qualcosa che deve esistere sempre — una funzione, un
+event trigger, una policy, un bucket — quella cosa entra in una migrazione **nello stesso giorno**, in
+forma idempotente: `create or replace` per una funzione, e per ciò che non ha un `if not exists`
+(gli event trigger non ce l'hanno) una guardia sul catalogo. E la prova che serve non è che il file
+gira in produzione, dove l'oggetto c'è già: è che gira su un database **vuoto**. Un database usa e
+getta e due `psql` sono dieci minuti, e sono l'unico posto dove il difetto è visibile.
+
+## Il vocabolario di una colonna si deriva dal CODICE, non dalle righe che ci sono
+
+**Segnale.** Una correzione ovvia: un valore fuori dall'enum, sostituito con quello «giusto»
+guardando la costante. Nessun test rosso, il vincolo passa, la PR sembra più pulita di prima.
+
+**Cosa succede.** `posts.content_type` sembrava nomenclatura, e `post-from-asset.ts` ci scriveva
+`image` e `carousel` — che sono FORMATI, non tipi. Sostituirli con `uploaded_image` era corretto
+guardando `POST_CONTENT_TYPES` e sbagliato guardando `publish.ts:380`, che fa
+`aiGeneratedMedia: !content_type.startsWith('uploaded')`: quel prefisso **è** la dichiarazione di
+contenuto AI al momento della pubblicazione. Prima di quella modifica tutte e tre le forme
+dichiaravano; dopo, immagini e caroselli presi dalla libreria smettevano di dichiarare. Un enum
+allineato e una conformità spenta, nello stesso commit, senza un solo test rosso — perché nessun
+test lega il prefisso di una stringa a ciò che viene dichiarato a un social.
+
+**La mossa.** Prima di cambiare un valore in una colonna, `grep` di chi la **legge**, non solo di
+chi la scrive — e in particolare di chi ne legge un *pezzo* (`startsWith`, `includes`, uno `split`),
+perché quello non compare cercando il valore intero. Se un lettore ne ricava una decisione di
+conformità, di pagamento o di pubblicazione, il valore non è nomenclatura: è un contratto, e la
+riga accanto va letta prima di toccarlo. Il default in caso di dubbio lo dice già il commento
+accanto a quella riga: sovra-dichiarare non è un rischio, sotto-dichiarare sì.
+
+**E l'altra metà della stessa regola: nemmeno chi la SCRIVE.** Lo stesso giorno, nella stessa PR,
+il vincolo `posts.source in ('plan','manual','radar','guest_preview')` è stato costruito contando
+le righe di produzione — zero violazioni, elenco confermato. Ma due percorsi vivi scrivono
+`cross_post` (il clone cross-post) e `founder` (la consegna video dall'admin): sono rari e non
+avevano ancora prodotto righe. Il vincolo sarebbe morto con un 23514 alla prima esecuzione di uno
+dei due, cioè avrebbe rotto quello che il codice scrive oggi.
+
+**Un vocabolario convalidato contro i dati esistenti non è convalidato contro il codice.** Le righe
+dicono soltanto se la migration passa adesso; non dicono se il vincolo è giusto. L'elenco si deriva
+dai punti di SCRITTURA — e qui lo strumento c'è già: la sezione C di `scripts/schema-drift-check.mjs`
+confronta ogni literal del codice con le liste `CHECK` dei file di migration e stampa file e riga.
+
+**E conta QUANDO la lanci: prima di decidere, non prima di aprire la PR.** Non è una sfumatura.
+Lanciata prima di scegliere il vocabolario, ti dice qual è la lista ammessa: è un input. Lanciata
+quando la lista l'hai già scelta, ti dice solo se per caso avevi ragione — e a quel punto la leggi
+da autore, cioè cercando conferma. Qui è stata lanciata dopo il merge, ed è esattamente per questo
+che il difetto è passato: lo strumento aveva la risposta dal primo minuto, io sono arrivato con una
+tesi da difendere. Il momento in cui guardi decide se stai leggendo o se ti stai dando ragione.
+
+**Il corollario sul metodo.** A trovarlo non è stato un vincolo né la suite: è stato un altro
+agente che leggeva la riga accanto per un lavoro diverso. E non e' «due persone attente»: ognuno
+ha preso il difetto dell'ALTRO, mai il proprio. Chi scrive la modifica la rilegge da autore, e la
+riga accanto la vede solo chi non ha una posta in gioco su quella modifica.
+
+## Un `onConflict` sbagliato ha due facce: una non scrive, l'altra cancella
+
+**Segnale.** Due segnali opposti, stessa causa. O una funzione riporta di aver salvato N righe e la
+tabella non le ha — nessun log, nessuna eccezione, risultato positivo al chiamante. Oppure la
+scrittura riesce e una riga che c'era prima non c'è più.
+
+**Cosa succede.** `onConflict: 'brand_id,name'` esige un indice UNIQUE su quella coppia. Se non
+c'è, Postgres risponde **42P10** (*no unique or exclusion constraint matching the ON CONFLICT
+specification*) e `supabase-js` **risolve** con `{ error }` — non rigetta. Una chiamata che non
+destruttura `error` non se ne accorge: su `competitors` esisteva solo `competitors_brand_idx`, che
+è un indice normale, e il job «ri-cerca i concorrenti» riportava i concorrenti trovati scrivendo
+zero righe. Non è un caso raro: `create index` e `create unique index` si leggono uguali di
+sfuggita, e l'`onConflict` viene scritto guardando le colonne, non gli indici.
+
+**L'altra faccia, che è la peggiore.** Se l'indice unico c'è ma è su una coppia DIVERSA da quella
+che hai in testa, non c'è nessun errore: l'upsert riesce e **sovrascrive**. `brand_social_handles`
+è unica su `(brand_id, platform)` — un handle per rete, non uno per nome — quindi scrivere un
+secondo handle Instagram per lo stesso brand non ne aggiunge uno: cancella quello che c'era. È
+stata una quasi-vittima in questa stessa PR, in due punti: la migration che spostava gli handle dal
+campo sito (guardia scritta su `username`, cioè sulla colonna sbagliata: sarebbe morta con un 23505
+abortendo TUTTA la migration) e il codice che li raccoglie in onboarding, che avrebbe silenziosamente
+rimpiazzato un handle dichiarato dall'utente con uno dedotto da un campo compilato male. Il primo
+caso fa rumore, il secondo no.
+
+**La mossa per questa faccia.** Prima di un `onConflict`, leggi la coppia unica REALE e chiediti
+cosa significa come regola di prodotto: `(brand_id, platform)` non è un dettaglio di indice, dice
+«un brand ha un solo account per rete». Se la tua scrittura può produrre due righe che collidono su
+quella coppia, stai scegliendo quale delle due sopravvive — quindi scegli esplicitamente
+(`do nothing` per tenere l'esistente, `do update` per sostituirlo) invece di scoprirlo dopo.
+
+**La mossa, per entrambe.** Ogni `onConflict` va verificato contro `pg_indexes` della tabella, non
+contro l'intenzione: `select indexdef from pg_indexes where tablename = '<t>'` e cercare `UNIQUE`. È una
+riga di SQL contro un difetto che non lascia tracce. E l'errore va **letto**: `const { error } =
+await supabase.from(...).upsert(...)`, sempre — vale per il 42P10 come per il 23514.
+
 ## Un `catch` muto su un percorso di ricavi nasconde il difetto finché non lo cerchi a mano
 
 **Segnale.** Nessun errore, nessun allarme, tutto verde — e un limite che non limita niente. Qui:
@@ -1055,3 +1210,256 @@ che esplode non è quello che l'ha piazzata.
 **La regola dietro**: dove il codice lancia una promessa che nessuno attende, un mock parziale non
 degrada — abbatte tutto il processo. O il mock risponde a qualunque cosa (Proxy), o quel percorso
 va atteso e asserito.
+
+## `set role` non è `auth.role()`: una security-definer interrogata da psql risponde zero
+
+Verificando che `sum_org_ai_cost_usd` contasse finalmente una riga senza brand, la funzione ha
+risposto **0** mentre la stessa somma scritta a mano sulla tabella rispondeva `0.033646`. Sembrava
+esattamente il difetto che stavo chiudendo — la migration non applicata, o il `left join` che non
+teneva.
+
+Non era né l'una né l'altro. La funzione porta una guardia:
+
+```sql
+and ( auth.role() = 'service_role' or p_org_id in (select public.auth_org_ids()) )
+```
+
+`auth.role()` legge il **claim del JWT** (`request.jwt.claims`), non il ruolo Postgres. Da psql
+quel claim non c'è, quindi la guardia è falsa per ogni riga, il `where` non ne seleziona nessuna e
+`coalesce(sum(...), 0)` restituisce uno zero perfettamente legittimo. `set role service_role` non
+cambia niente: è l'altro concetto di ruolo.
+
+**Segnale**: una funzione `security definer` sotto RLS risponde `0` o zero righe da psql, mentre la
+query equivalente scritta a mano risponde. Nessun errore, nessun permesso negato — solo un vuoto
+che si legge come un difetto della funzione.
+
+**Mossa**: mettere il claim prima di chiamarla, nella stessa sessione.
+
+```sql
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select public.sum_org_ai_cost_usd(...);
+```
+
+**La regola dietro**: una funzione che decide chi può vedere cosa va interrogata con l'identità che
+avrà in produzione. Interrogarla senza è come chiamarla da un utente anonimo e concludere che la
+tabella è vuota — e la conclusione sbagliata qui è la peggiore possibile, perché «somma zero» è
+proprio la forma del difetto che si sta cercando.
+
+## Un test rosso può importare `bun`, non `bun:test` — e vitest non ha un alias per quello
+
+In un worktree pulito la suite chiude con `Test Files 2 failed | 664 passed` e **`Tests 7387
+passed`, zero test falliti**: i due file non falliscono, non si caricano proprio. Uno è
+`hooks.server.test.ts` (manca `.env`, già qui sopra). L'altro è `cli/mcp/vercel-config.test.ts`:
+
+```
+Failed to load url bun (resolved id: bun) in cli/mcp/vercel-config.test.ts
+```
+
+`vite.config.ts` aliasa `bun:test` → `vitest`, che è ciò che fa girare i test della CLI sotto
+vitest. Ma quel file importa anche `import { $ } from 'bun'` — il **runtime**, non il framework di
+test — e per quello non c'è alias possibile: è l'eseguibile bun.
+
+**Segnale**: `Test Files N failed` con `Tests M passed` e **zero** `×`. I file non hanno test
+rossi, hanno un import che non risolve. Cerca `Failed to load url`, non `FAIL`.
+
+**Mossa**: prima di attribuirsi il rosso, `git log -1 <file>` — se non l'hai toccato tu,
+riproducilo sul checkout principale. E poi **aggiustalo**, perché blocca la CI di tutti: in questo
+caso `$` serviva a una riga sola (`git ls-files`), e `execFileSync` da `node:child_process` la fa
+girare sotto entrambi i runner.
+
+**La regola dietro**: un file di test che vive sotto due runner può usare solo ciò che entrambi
+hanno. `bun:test` ha un alias; il **runtime** `bun` no, e non può averlo — è un eseguibile.
+## Un client service role più un identificatore che arriva da fuori
+
+**Segnale.** Da qualche parte c'è `createAdminClient()` — o, sul percorso a chiave API, il
+`supabase` che `authenticate()` restituisce, che è la stessa cosa con un altro nome — e nella
+stessa funzione c'è un id preso da `params`, dal corpo della richiesta, o da un `formData`. Il
+codice attorno ha l'aria protetta: un `.eq('brand_id', …)` da qualche parte, un `canEnter`, un
+404 sul brand. Sembra a posto, e in quattro casi su quattro non lo era.
+
+**Cosa succede.** `service_role` ha `bypassrls=true`: le policy non vengono nemmeno valutate.
+Quindi la protezione è solo quella scritta a mano, e si rompe in tre modi che sembrano diversi e
+sono lo stesso:
+
+1. **Il `WHERE` è scopato, il bersaglio no.** L'update sull'articolo porta `brand_id`, la delete
+   sui tag che segue no. La riga vicina protetta fa sembrare protetta anche quella dopo.
+2. **Il `WHERE` è scopato, il `SET` no.** Il corpo grezzo finisce nell'update: la riga si trova
+   nel tuo brand e si riscrive col `brand_id` di un altro.
+3. **Non c'è nessun `WHERE` da scopare: il tenant È il valore che arriva da fuori.**
+   `insert({ brand_id: body.brandId })`. Qui non attraversa il dato, attraversa il **conto** —
+   `credits.ts` somma quelle righe di `ai_calls`, quindi il consumo di uno lo paga un altro.
+
+E il fallimento è muto in tutti e tre: **zero righe toccate non è un errore per PostgREST**,
+quindi un update scopato che non trova niente lascia `error` nullo e il codice prosegue fino alla
+scrittura non scopata che gli sta dietro. Un endpoint che risponde `200 {"ok":true}` su una riga
+che non ha toccato è la stessa disonestà, un gradino più in basso.
+
+Perché nessuno se n'era accorto: il cancello che sembrava un confine non lo era. `canEnter` si
+descrive da sé come *«una porta commerciale, non un confine di sicurezza»* — chi leggeva la route
+vedeva un `403` in cima e smetteva di cercare.
+
+**La mossa.** `src/no-cross-tenant-writes.test.ts`, tre regole sul sorgente, una per forma. Non
+sono state scritte per essere verdi: ognuna è stata provata sul sorgente **prima** della
+correzione e ha trovato il proprio difetto lì — 1, 1 e 6 occorrenze. Una guardia che non è mai
+stata rossa non dimostra niente, e ne abbiamo trovate cinque così in una sola giornata.
+
+Niente allowlist: la prima regola incontra sette scritture di quella forma e sei sono sane, ma
+un'allowlist da sei voci diventa un timbro alla settima. Le sei si sdoganano sul merito — una
+lettura scopata che torna indietro, o `updateBrandRow`/`deleteBrandRow`, che contano le righe che
+hanno toccato. Un update scopato che nessuno conta **non** vale come prova: quella riga sola è la
+differenza fra la regola e un placebo.
+
+Per il caso 3 la verifica sta in `ownsBrand` (`access.ts`): gira la domanda al database col client
+dell'utente, dove le policy di `brands` rispondono con la stessa regola che `loadBrandForUser`
+riapplica a mano. Un client non marchiato `markRlsScoped` riceve `false` — il default è il
+rifiuto, così un percorso nuovo che si dimentica di marchiarsi resta chiuso invece di aprirsi.
+
+Quattro occorrenze trovate solo perché qualcuno è andato a cercarle: la quinta arriverà, e allora
+il costo di questa lezione è già stato pagato.
+## Il fatto che ti passa un altro agente è un'affermazione, non una prova
+
+**Segnale.** Stai scrivendo una descrizione — o un commento, o un test — su un fatto che non hai
+letto tu, ma che ti è arrivato da chi sta lavorando su quel codice. Sembra la fonte migliore
+possibile: è l'unica persona che lo sta toccando.
+
+**Cosa succede.** In una sessione con quattro agenti sullo stesso contratto, un fatto è girato
+tre volte e si è rivelato falso alla terza. «Il renderer video non ha un canale per lo stile
+visivo»: su quella base ho scritto *«The brand's look does not reach a clip filmed from a prompt
+alone»*, che sarebbe finita in `tools/list`. `RenderVideoOpts.visualStyle` esiste
+(`src/lib/server/video.ts:331`) ed entra nel prompt sul ramo text-to-video (`video.ts:481`). Il
+fatto vero era un altro e più stretto: `startVideo` non lo passava sul percorso MCP mentre il
+percorso dei post sì — un difetto di comportamento, non un'assenza di progetto.
+
+Una descrizione falsa è peggio di una descrizione vaga: quella vaga fa cercare altrove, quella
+falsa fa smettere di cercare. Ed è esattamente il difetto che questo lavoro esisteva per chiudere.
+
+**Come nasce, che è la parte utile.** Chi me l'ha passato non se l'è inventato: aveva letto
+`startVideo`, aveva visto che non passa `visualStyle`, e ne ha concluso che il canale non esiste.
+**Ha letto il chiamante e ha concluso sul chiamato.** Quello che sapeva davvero era «`startVideo`
+non lo passa» — verificato, vero, e già di per sé il difetto — ma è arrivato a me nella forma più
+larga e più falsa. Un'assenza in un chiamante non è un'assenza nel chiamato: dice solo che
+quel percorso non la usa.
+
+**Mossa.** Il fatto si verifica dove è DEFINITO, non dove è usato, prima di scriverci sopra una
+frase — anche quando arriva da chi ha le mani in quel file: `grep` del campo, lettura del ramo, e
+il commento accanto alla definizione. In quel caso diceva già tutto («Solo nel prompt di ripiego
+TEXT-TO-VIDEO: con una cover allegata lo stile è già nei pixel», `video.ts:330`), e avrebbe
+prodotto una frase MIGLIORE di quella che mi era stata data, non solo una vera. Costa un minuto e
+vale quanto la frase che stai per spedire a ogni agente che userà il prodotto.
+
+**Corollario.** Vale in entrambe le direzioni: un fatto che passi tu a un altro agente va marcato
+per quello che è. «Verificato in `file:riga`» e «me l'hanno detto» non sono la stessa cosa, e chi
+riceve non può distinguerle se non gliele distingui tu.
+
+**È la stessa forma a tre distanze diverse, e le abbiamo commesse in tre in una sessione sola.**
+Un agente ha letto un chiamante e ha concluso sul chiamato. Io ho classificato ventidue letture
+come «esprimibili con `query`» leggendone le descrizioni invece delle rotte — due erano sbagliate,
+e una avrebbe fatto uscire dalla memoria del brand le note private di un altro agente. Il terzo ha
+messo una frase dove era comodo, in `references/tools.md`, e il test l'ha dichiarata verde: il test
+leggeva quel file concatenato a `SKILL.md`, mentre la regola che pretendeva di far rispettare era
+«la superficie che si legge PER PRIMA instrada la domanda». Tre volte lo stesso movimento: il
+controllo che ci trovavamo davanti ha detto sì, e abbiamo smesso di guardare.
+
+**La domanda che le prende tutte e tre, e costa una riga:** *di che cosa è prova questo verde?*
+«Il chiamante non lo passa» non è una prova sul chiamato. «La descrizione dice una tabella» non è
+una prova sulla rotta. «`findability` è verde» non è una prova sulla superficie sempre caricata, se
+il test ne legge due concatenate. Va fatta **una volta sola, prima di citare il verde** — non è un
+protocollo, è la ragione per cui verrà davvero eseguita.
+
+Tre errori uguali fatti da tre persone diverse nello stesso giorno non sono tre sbagli: sono la
+forma di un controllo che non guarda dove crede di guardare.
+
+**Due meccanismi, e non coprono lo stesso terreno.** La domanda sopra scala a UNO: prende il caso
+in cui la prova ce l'hai già davanti e non l'hai guardata — «`findability` è verde» con il test che
+legge due file concatenati si smonta da soli, in dieci secondi, senza nessun altro sveglio. È la
+metà che sopravvive quando lavori da solo, ed è la ragione per cui vale scriverla.
+
+Quello che la domanda NON prende è la cosa che non hai motivo di guardare. `get_memory` sembrava
+una lettura di tabella: nessun verde da interrogare, nessun sospetto da inseguire, e chi stava per
+toglierlo non aveva ragione di aprire `brand-memory.ts` — dove ci sono i due filtri che gli
+avrebbero fatto uscire dalla memoria del brand le note private di un altro agente. Lì serve
+qualcun altro, con un contesto diverso, che legga la stessa affermazione.
+
+**E la pratica che l'ha fatto succedere ha un costo, o non è replicabile.** Ha funzionato perché
+chi stava per rimuovere ha detto QUALI TRE tool, prima di toccarli: «rimuovo qualche tool di
+lettura» non avrebbe dato niente da controllare. Quel messaggio si scrive quando il codice non
+esiste ancora — cioè quando viene peggio, e la tentazione è scriverlo dopo, a risposta nota.
+Scritto dopo non serve a niente: è un resoconto, e un resoconto non si può contraddire in tempo.
+
+## Una policy permissiva può solo aggiungere accesso, e quella nata dalla dashboard non è in nessun file
+
+Un red team ha scritto un file nella cartella di un altro utente sul bucket `media`, con un account
+autoregistrato. In `supabase/migrations` non c'era niente di sbagliato: `media insert own folder`
+(0004) chiedeva `(storage.foldername(name))[1] = auth.uid()::text` dal primo giorno. Accanto, creata
+a mano dalla dashboard e in nessun file del repo, c'era `Allow authenticated uploads to media
+bucket` — `with check (bucket_id = 'media')`, nessuna condizione sulla cartella.
+
+**Segnale**: la policy stretta esiste, la leggi, sembra giusta, e l'attacco passa lo stesso. Oppure:
+`npm run db:migrate` su un database pulito produce uno schema che si comporta **diversamente** dalla
+produzione, e nessuno dei due è rotto.
+
+**Mossa**: quando una policy «non difende», non rileggerla — **elencale tutte**, sullo stesso
+oggetto:
+
+```sql
+select policyname, roles::text, cmd, qual, with_check
+from pg_policies where schemaname = 'storage' and tablename = 'objects';
+```
+
+e confronta l'elenco con quello che le migration creano. Vale anche per i bucket
+(`storage.buckets`): `email-assets` esiste in produzione e in nessuna migration.
+`scripts/schema-drift-check.mjs` guarda tabelle e colonne, **non** policy e bucket.
+
+**La regola dietro**: le policy permissive si sommano in **OR**. Una policy permissiva non può
+restringere niente — la più larga vince sempre, e ogni policy stretta che le sta accanto è
+decorativa. Quindi «aggiungo una policy più stretta» non è mai una fix: la fix è togliere la larga.
+E un test che verifica una policy deve prima **ricreare la deriva** che la produzione ha davvero,
+altrimenti misura un database che non è mai esistito e passa mentre il buco resta aperto.
+
+## Una policy RLS vincola la riga, non la colonna
+
+`profiles` aveva due policy e basta, e la seconda diceva `for update using (id = auth.uid()) with
+check (id = auth.uid())`. Letta di corsa sembra completa: «puoi scrivere solo la tua riga». È vera,
+ed è insufficiente — perché la riga contiene `approved_at`, che è il cancello della beta chiusa, e
+`with check` non ha niente da dire su QUALE colonna stai scrivendo. `PATCH
+/rest/v1/profiles?id=eq.<sé> {"approved_at":"..."}` risponde 200. La stessa forma su
+`organizations` (`org owner all`, `ALL`, `owner_id = auth.uid()`) vale soldi: `plan = 'pro'` porta
+la quota da 400 a 11.250 crediti senza passare da Stripe, perché `resolveOrgBilling` legge
+`organizations.plan` per primo e non lo confronta con niente.
+
+**Segnale**: una tabella con una policy `ALL` o `UPDATE` senza restrizione di colonna, e fra le
+colonne almeno una che **decide un diritto** invece di descrivere un dato — `approved_at`, `plan`,
+`status`, `activated_at`, `stripe_subscription_id`. Il confine che manca non è fra tenant: quello
+regge. È fra ciò che un utente **possiede** e ciò che un utente **può decidere di sé**, e non
+somiglia a un'intrusione perché è il proprietario che modifica il proprio oggetto — motivo per cui
+un red team che attacca il confine fra clienti non lo trova.
+
+**Mossa**: il livello che sa distinguere le colonne è il GRANT, non la policy. `revoke update on
+<t> from authenticated` e poi `grant update (<colonne>) on <t> to authenticated`, con lo stesso
+gesto su `insert` — una policy `ALL` lascia anche NASCERE una riga già `pro`. E l'elenco sta in UN
+posto per tutte le tabelle, non uno per tabella: tre registri in tre file divergono al primo
+cambiamento, e divergono in silenzio.
+
+**La regola dietro**: quando si aggiunge una colonna, la domanda «chi la decide?» va posta prima,
+non dopo. Il grant per colonna la pone da solo — una colonna nuova nasce non scrivibile, e il
+percorso che ne ha bisogno si rompe subito e a voce alta. Il contrario (nasce scrivibile, e si
+scopre quando qualcuno la usa) è il difetto che si è pagato qui due volte.
+
+## Un `revoke` in una migration non è uno stato: è un evento
+
+Le quattro `SECURITY DEFINER` senza controllo nel corpo — `brand_provider_spend_usd`, le tre
+`agent_kit_*` — hanno tutte la loro `revoke ... from public, anon, authenticated` scritta nella
+migration che le ha create. In produzione ha attecchito: otto combinazioni su otto false, verificate
+con `has_function_privilege`. Sullo stack self-hosted locale, stesse migration, **otto su otto
+vere**: `proacl` mostra `=X/...`, cioè PUBLIC con `execute`, su tutte e quattro.
+
+**Segnale**: due database che dicono di avere le stesse migration applicate e rispondono in modo
+diverso a `has_function_privilege('anon', '<fn>(...)', 'execute')`. Il record in
+`app_schema_migrations` dice che il file è passato, non che il suo effetto è ancora lì: un
+ripristino, una dashboard, uno strumento che ricrea la funzione e le rimette i grant di default
+lasciano il record intatto e l'ACL no — e `db:migrate` non ripasserà mai su quel file.
+
+**Mossa**: il grant si rimette, ma non è la difesa. La difesa è il filtro DENTRO il corpo, che
+regge anche se il grant torna — la forma è in `20260905120000_secdef_least_privilege.sql`. E lo
+stato vero si guarda in `pg_proc.proacl`, non nell'elenco delle migration applicate;
+`npm run test:privileges` fa esattamente quella domanda contro un Postgres vero.

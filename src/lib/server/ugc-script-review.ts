@@ -15,7 +15,6 @@
  * Deterministic prefilter uses scriptFits / scriptWordBudget so the model is not asked to invent
  * a word count the renderer already enforces.
  */
-import type { GoogleGenAI } from '@google/genai';
 import { structured } from '$lib/server/research';
 import {
   scriptFits,
@@ -25,7 +24,7 @@ import {
   type UgcScript
 } from '$lib/server/ugc';
 import { UGC_ORGANIC_MAX_DURATION, UGC_AD_DURATION } from '$lib/server/video';
-import { judgeThinkingLevel } from '$lib/server/gemini';
+import { judgeReasoningEffort } from '$lib/server/ai-text';
 
 export type UgcScriptSeed = {
   format?: string;
@@ -106,7 +105,6 @@ export function isUgcTalkingSeed(seed: UgcScriptSeed): boolean {
  * Returns the same array reference. Best-effort — on any failure returns seeds unchanged.
  */
 export async function reviewUgcScripts<T extends UgcScriptSeed>(
-  ai: GoogleGenAI,
   seeds: T[],
   opts: { brandName?: string; language?: string; theme?: string } = {}
 ): Promise<T[]> {
@@ -166,9 +164,9 @@ ${list}
 
 Return JSON.`;
 
-    const parsed = await structured(ai, prompt, SCRIPT_REVIEW_SCHEMA, undefined, {
+    const parsed = await structured(prompt, SCRIPT_REVIEW_SCHEMA, undefined, {
       label: 'reviewUgcScripts',
-      thinkingLevel: judgeThinkingLevel()
+      reasoningEffort: judgeReasoningEffort()
     });
     const fixes: Array<Record<string, unknown>> = Array.isArray((parsed as { fixes?: unknown }).fixes)
       ? ((parsed as { fixes: Array<Record<string, unknown>> }).fixes)

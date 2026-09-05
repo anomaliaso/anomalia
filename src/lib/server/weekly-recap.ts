@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, groundedText, structured } from './research';
+import { groundedText, structured } from './research';
 import { syncZernioAnalytics } from './zernio';
 import { ensureBrandHistory } from './scrapecreators';
 import { analyzePostHistory, type HistoryPost } from './post-history-insights';
@@ -407,6 +407,22 @@ async function gatherRecapData(
 
 // ─── AI generation ─────────────────────────────────────────────────────────
 
+// The formats we are willing to re-serve from our own public bucket, and the name we give each one.
+// The remote server's header decides nothing beyond which row it selects: forwarding it is how an
+// `image/svg+xml` ended up on a public URL of ours, and how a `;charset=` parameter ended up in a
+// stored content type. One table, so the next format is a row and not a fourth ternary.
+const HOSTED_IMAGE_TYPES: Record<string, { ext: string; contentType: string }> = {
+  'image/png': { ext: 'png', contentType: 'image/png' },
+  'image/webp': { ext: 'webp', contentType: 'image/webp' },
+  'image/jpeg': { ext: 'jpg', contentType: 'image/jpeg' },
+  'image/jpg': { ext: 'jpg', contentType: 'image/jpeg' },
+  'image/gif': { ext: 'gif', contentType: 'image/gif' }
+};
+
+export function hostedImageType(header: string): { ext: string; contentType: string } | null {
+  return HOSTED_IMAGE_TYPES[header.split(';')[0].trim().toLowerCase()] ?? null;
+}
+
 // Fetch an image from a URL and host it on Supabase Storage for email embedding.
 // Tries OG image first, then falls back to the first large image on the page.
 async function fetchAndHostOgImage(supabase: SupabaseClient, url: string): Promise<string | null> {
@@ -427,15 +443,14 @@ async function fetchAndHostOgImage(supabase: SupabaseClient, url: string): Promi
     const absoluteUrl = new URL(imgUrl, url).href;
     const imgRes = await fetch(absoluteUrl, { signal: AbortSignal.timeout(8000) });
     if (!imgRes.ok) return null;
-    const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg';
-    if (!contentType.startsWith('image/')) return null;
+    const hosted = hostedImageType(imgRes.headers.get('content-type') ?? '');
+    if (!hosted) return null;
     const buf = await imgRes.arrayBuffer();
     if (buf.byteLength > 2_000_000) return null;
 
-    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-    const path = `trends/${crypto.randomUUID()}.${ext}`;
+    const path = `trends/${crypto.randomUUID()}.${hosted.ext}`;
     const { error } = await supabase.storage.from('email-assets').upload(path, Buffer.from(buf), {
-      contentType,
+      contentType: hosted.contentType,
       upsert: false
     });
     if (error) return null;
@@ -447,11 +462,9 @@ async function fetchAndHostOgImage(supabase: SupabaseClient, url: string): Promi
 }
 
 async function generateTrends(brandName: string, brandContext: string, outputLanguage = 'Italian'): Promise<{ topic: string; relevance: string; sourceUrl?: string }[]> {
-  const ai = genaiClient();
   try {
     // Use groundedText to get real web results + citations
     const grounded = await groundedText(
-      ai,
       `What are the trending topics and news this week relevant to a brand called "${brandName}"? Context: ${brandContext}. Find 3-5 specific, actionable trends. For each, explain why it matters to this brand. When you find a trend, note the exact URL of the source article you found it from.`,
       `You are a social media trends analyst. Be specific and actionable. Write in ${outputLanguage}.`
     );
@@ -471,7 +484,6 @@ async function generateTrends(brandName: string, brandContext: string, outputLan
     };
 
     const raw = await structured<{ topic: string; relevance: string; sourceUrl?: string }[]>(
-      ai,
       `From this analysis, extract 3-5 trends as a JSON array. Each trend must have topic, relevance, and sourceUrl (the actual URL of the source, or "" if not available). Write topic and relevance in ${outputLanguage}.\n\nANALYSIS:\n${grounded.text}`,
       schema,
       undefined,
@@ -499,7 +511,6 @@ async function generateTrends(brandName: string, brandContext: string, outputLan
 }
 
 async function generateSuggestions(data: Omit<WeeklyRecap, 'trends' | 'suggestions' | 'actionItems' | 'growth'>, outputLanguage = 'Italian'): Promise<{ type: string; message: string }[]> {
-  const ai = genaiClient();
   // No own published-post metrics (source='zernio') in the window → the engagement section is
   // genuinely empty. Say so explicitly instead of letting the model infer performance from zeros.
   const noOwnHistory =
@@ -590,7 +601,6 @@ async function generateSuggestions(data: Omit<WeeklyRecap, 'trends' | 'suggestio
 
   try {
     const result = await structured(
-      ai,
       `Based on this weekly social media performance data, suggest 3-5 specific, actionable improvements:
 
 Brand: ${data.brandName}
@@ -850,9 +860,7 @@ async function runWeeklyReflectionInner(supabase: SupabaseClient, brandId: strin
     ].filter(Boolean);
     if (!lines.length) return 0;
 
-    const ai = genaiClient();
     const parsed = await structured<{ insights?: Array<{ key: string; value: string; category: MemoryCategory; confidence: number }> }>(
-      ai,
       `You are Anomalia's weekly retrospective for one brand's AI content system. Below is what actually happened over the last two weeks. Extract 0-3 GENERALIZABLE operating lessons the content pipeline should apply from now on — recurring quality failures to prevent, radar-filter calibrations, voice rules the owner's behaviour implies. Skip anything one-off. Reuse stable keys so repeated lessons reinforce.\n\n${lines.join('\n')}\n\nReturn JSON.`,
       REFLECTION_SCHEMA,
       'You distill operational retrospectives into terse, actionable rules. No filler; an empty list is a valid answer.'

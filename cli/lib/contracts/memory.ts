@@ -44,7 +44,7 @@ export const GET_MEMORY = {
   title: 'Brand memory',
   description:
     "What this brand already knows, so you do not rebuild it every conversation: its voice, the constraints it works under, the facts it has confirmed, the preferences it has stated, and what previous work learned. " +
-    'Read it before asking the operator something the brand has already answered. ' +
+    'Read it before asking the person something the brand has already answered. ' +
     `\`category\` narrows (${MEMORY_CATEGORIES.join(', ')}); \`limit\` is ${MEMORY_ENTRIES_DEFAULT} by default and ${MEMORY_ENTRIES_MAX} at most. ` +
     'Chat-session notes and other agents\' working notes are never returned — only what belongs to the brand. ' +
     'Reading changes nothing and counts nothing: when an entry actually shaped what you produced, say so with `record_memory_used`, or the entry decays as if it had never helped.',
@@ -75,8 +75,8 @@ export const SAVE_MEMORY = {
   title: 'Save to brand memory',
   description:
     'Record something you learned about this brand so the next conversation starts from it. ' +
-    `Writable categories: ${AGENT_MEMORY_CATEGORIES.join(', ')}. \`voice\` and \`constraint\` are NOT writable here — they govern everything downstream and only the operator sets them. ` +
-    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: you take it to the operator, you do not win by arriving last. Sending the same value again reinforces it. ' +
+    `Writable categories: ${AGENT_MEMORY_CATEGORIES.join(', ')}. \`voice\` and \`constraint\` are NOT writable here — they govern everything downstream and only the brand's own people set them. ` +
+    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: you take it to the person, you do not win by arriving last. Sending the same value again reinforces it. ' +
     'Entries land as brand knowledge, never scoped to a chat, and arrive with the confidence of something a model inferred rather than something a person stated.',
   method: 'POST',
   pathUnderBrand: '/memory',
@@ -99,6 +99,21 @@ export const SAVE_MEMORY = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+/**
+ * I soli campi che una PATCH può riscrivere. `.strict()` non è cosmesi: il corpo finisce nel SET
+ * di un update scopato per `brand_id`, quindi un campo di troppo — `brand_id` — sposta la riga
+ * nel brand di un altro cliente invece di aggiornarla nel proprio.
+ */
+export const UPDATE_MEMORY_ENTRY = z
+  .object({
+    value: z.string().min(1).optional(),
+    category: z.enum(MEMORY_CATEGORIES).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    pinned: z.boolean().optional(),
+    importance: z.number().int().min(1).max(5).optional()
+  })
+  .strict();
 
 export const RECORD_MEMORY_USED = {
   tool: 'record_memory_used',

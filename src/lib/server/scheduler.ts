@@ -43,7 +43,6 @@ import {
   proposeGtmDual
 } from './gtm';
 import { generateWeeklyRecap } from './weekly-recap';
-import { genaiClient } from './research';
 import { countForFrequency, blogArticlesPerWeek, blogArticlesPerWeekMax, isExportOnlyPlan } from './plans';
 import { localeLanguageName } from '$lib/i18n/locale';
 import { syncZernioAnalytics } from './zernio';
@@ -551,7 +550,7 @@ export async function runAutopilotForBrand(
           .limit(1);
         if (!existingProposals?.length) {
           try {
-            const newGtm = await proposeGtmDual(genaiClient(), profile, {
+            const newGtm = await proposeGtmDual(profile, {
               platforms,
               outputLanguage: localeLanguageName(ownerLocale),
               topPosts,
@@ -613,7 +612,7 @@ export async function runAutopilotForBrand(
         } else {
           // No active, no proposed — generate a fresh plan
           const gtmBriefForPlan = await activeGtmBrief(supabase, brand.id, brand.timezone).catch((error) => { swallow('load gtm brief', error); return ''; });
-          const newPlan = await proposePlan(genaiClient(), profile, {
+          const newPlan = await proposePlan(profile, {
             platforms,
             allowedCadences: cadenceAllowed(brand.plan),
             outputLanguage: localeLanguageName(ownerLocale),

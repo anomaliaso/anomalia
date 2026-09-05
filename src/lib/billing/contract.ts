@@ -10,7 +10,10 @@
 export type QuotaKind = 'credits' | 'posts';
 
 export type BillingContext = {
-  brandId: string;
+  /** Absent on work asked for WITHOUT a brand — then `orgId` names who pays. One of the two is always set. */
+  brandId?: string;
+  /** The organization that pays when no brand does. Unread while a brandId is here: a brand reaches its own org. */
+  orgId?: string;
   /** Not always known by the caller (e.g. the credits chokepoint only has a brandId) — optional. */
   plan?: string | null;
   brandSlug?: string;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { $ } from 'bun';
+import { execFileSync } from 'node:child_process';
 import vercelConfig from './vercel.json';
 
 const MCP_ROOT = dirname(fileURLToPath(import.meta.url));
@@ -16,8 +16,14 @@ describe('vercel.json functions', () => {
     }
   });
 
-  it('names files git tracks, since Vercel validates the pattern before installing', async () => {
-    const tracked = await $`git ls-files --cached ${functionPatterns}`.cwd(MCP_ROOT).text();
+  it('names files git tracks, since Vercel validates the pattern before installing', () => {
+    // `node:child_process` e non lo shell di bun: questo file gira sotto DUE runner — `bun test`
+    // e vitest, che aliasa `bun:test` ma non puo` aliasare il runtime `bun`, e senza di questo
+    // non si carica affatto (zero test falliti, un file rosso).
+    const tracked = execFileSync('git', ['ls-files', '--cached', ...functionPatterns], {
+      cwd: MCP_ROOT,
+      encoding: 'utf8'
+    });
 
     for (const pattern of functionPatterns) {
       expect(tracked).toContain(pattern);

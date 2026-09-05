@@ -3,7 +3,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions } from '@sveltejs/kit';
 import { rebuildBrandContext } from '$lib/server/brand-context';
 import { invalidateBrandNav } from '$lib/server/nav-cache';
-import { genaiClient, discoverCompetitors } from '$lib/server/research';
+import { discoverCompetitors } from '$lib/server/research';
 import { localeLanguageName } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
 import { syncBrandPostHistoryFromSocials, type ScrapeSyncResult } from '$lib/server/scrapecreators';
@@ -852,7 +852,7 @@ export const studioActions: Actions = {
 
       let discovered;
       try {
-        ({ competitors: discovered } = await discoverCompetitors(genaiClient(), profile, localeLanguageName(locale)));
+        ({ competitors: discovered } = await discoverCompetitors(profile, localeLanguageName(locale)));
       } catch (e) {
         return fail(400, { error: e instanceof Error ? e.message : 'Competitor research failed' });
       }
@@ -875,7 +875,7 @@ export const studioActions: Actions = {
           ? (brandRow.target_platforms as string[]).filter(Boolean)
           : ['instagram', 'tiktok'];
         const { resolveCompetitorHandles } = await import('$lib/server/research');
-        const handleMap = await resolveCompetitorHandles(genaiClient(), fresh, platforms).catch((error) => { swallow('resolve competitor handles', error); return new Map(); });
+        const handleMap = await resolveCompetitorHandles(fresh, platforms).catch((error) => { swallow('resolve competitor handles', error); return new Map(); });
 
         const rows = fresh.map((c) => ({
           brand_id: brand.id,

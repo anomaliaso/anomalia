@@ -177,7 +177,11 @@ const Ok = z.object({ ok: z.literal(true) });
 export const PROPOSE_PLAN = {
   tool: 'propose_plan',
   title: 'Propose editorial plan',
-  description: 'Generate the first / a new editorial plan proposal.',
+  description:
+    'Have the AI decide what this brand should post about — the strategy, the platforms, the ' +
+    'cadence and the first weeks. It spends credits. It lands as a proposal and changes ' +
+    'nothing: the active plan stands until approve_plan. save_plan stores a plan you wrote ' +
+    'yourself, for free.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/propose',
   input: NoInput,
@@ -189,7 +193,10 @@ export const PROPOSE_PLAN = {
 export const REVISE_PLAN = {
   tool: 'revise_plan',
   title: 'Revise editorial plan',
-  description: 'Request a revision of the proposed plan with feedback.',
+  description:
+    'Ask the AI to redo the proposed plan with your feedback — what to change, what to keep. ' +
+    'It spends credits. It replaces the pending proposal; the active plan is untouched until ' +
+    'approve_plan.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/revise',
   input: z.object({ feedback: z.string().min(1) }).strict(),
@@ -201,7 +208,10 @@ export const REVISE_PLAN = {
 export const APPROVE_PLAN = {
   tool: 'approve_plan',
   title: 'Approve editorial plan',
-  description: 'Approve the proposed editorial plan.',
+  description:
+    'Make the proposed editorial plan the one this brand actually follows, replacing the ' +
+    'active one. Ask the person before doing it unless they clearly asked. discard_plan ' +
+    'throws the proposal away instead. No model, no credits.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/approve',
   input: NoInput,
@@ -213,7 +223,9 @@ export const APPROVE_PLAN = {
 export const DISCARD_PLAN = {
   tool: 'discard_plan',
   title: 'Discard editorial plan',
-  description: 'Discard the proposed editorial plan.',
+  description:
+    'Throw away the proposed editorial plan and leave the active one exactly as it is. It ' +
+    'does not come back. No model, no credits.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/discard',
   input: NoInput,
@@ -232,7 +244,10 @@ const WEEK_REQUIRED = { error: 'week_index is required', status: 400 };
 export const SAVE_BRIEF = {
   tool: 'save_brief',
   title: 'Save week brief',
-  description: 'Save the brief for an editorial week (0-based index). Optional featured products.',
+  description:
+    'Write down what one week should be about, so whoever produces it works from your ' +
+    'direction instead of guessing. `week` is 0 for the current week; name the products to ' +
+    'feature if some matter. No model, no credits.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/save-brief',
   input: z
@@ -250,7 +265,10 @@ export const SAVE_BRIEF = {
 export const REPLAN_WEEK = {
   tool: 'replan_week',
   title: 'Replan week',
-  description: 'Regenerate an editorial week from a brief.',
+  description:
+    'Have the AI redo one week from a brief you give it — when the seeds it produced are not ' +
+    'what you wanted. It spends credits and replaces that week. `week` is 0 for the current ' +
+    'week.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/replan-week',
   input: z.object({ week, brief: z.string().min(1) }).strict(),
@@ -267,7 +285,11 @@ export const REPLAN_WEEK = {
 export const PLAN_WEEK = {
   tool: 'plan_week',
   title: 'Generate weekly seeds',
-  description: 'Generate content seeds for a week (0-based index).',
+  description:
+    'Have the AI decide what this brand should post in one week — one seed per intended post, ' +
+    'no copy and no images yet. `week` is 0 for the current week. It spends credits and ' +
+    'replaces the week draft in review. save_week_seeds stores a week you planned yourself, ' +
+    'for free.',
   method: 'POST',
   pathUnderBrand: '/weekly-plan/plan',
   input: z.object({ week }).strict(),

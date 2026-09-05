@@ -1,7 +1,5 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { GoogleGenAI } from '@google/genai';
-import { genaiClient } from './research';
 import { aiStructured, parallelVariants } from './ai-text';
 import type { GeoSnapshot } from './geo';
 
@@ -36,7 +34,6 @@ export type GeoArtifact = {
 // Generate `count` variants of a structured payload, then let a GEO reviewer pick the best. The
 // caller supplies how to summarise a variant for the judge (only the fields that matter to ranking).
 export async function bestVariant<T>(
-  ai: GoogleGenAI,
   makePrompt: () => string,
   schema: AnyRec,
   systemInstruction: string,
@@ -45,15 +42,14 @@ export async function bestVariant<T>(
   opts?: { provider?: 'gateway' | 'kie'; model?: string; noFallback?: boolean }
 ): Promise<T> {
   return parallelVariants<T>(
-    ai,
-    () => aiStructured<T>(ai, makePrompt(), schema, systemInstruction, `return_${label}`, opts),
+    () => aiStructured<T>(makePrompt(), schema, systemInstruction, `return_${label}`, opts),
     async (variants) => {
       if (variants.length === 1) return variants[0];
       const list = variants.map((v, i) => `\nOPTION ${i + 1}:\n${summarize(v)}`).join('\n---');
       const prompt = `You are a GEO reviewer. Pick the variant most likely to get this brand CITED by AI answer engines: factually accurate (invents nothing), directly answers the target questions, on-brand, and genuinely useful. Reject anything that reads like marketing fluff.\n${list}\nReturn JSON: { "winner": <1-based index> }`;
       const s = { type: 'object' as const, properties: { winner: { type: 'number' as const } }, required: ['winner'] };
       try {
-        const raw = await aiStructured<{ winner?: number }>(ai, prompt, s, systemInstruction, 'pick_best', opts);
+        const raw = await aiStructured<{ winner?: number }>(prompt, s, systemInstruction, 'pick_best', opts);
         const idx = Math.max(0, Math.min(variants.length - 1, (raw?.winner ?? 1) - 1));
         return variants[idx];
       } catch {
@@ -106,9 +102,8 @@ function assembleFaq(title: string, faqs: Array<{ question: string; answer: stri
   ];
 }
 
-async function generateFaq(ai: GoogleGenAI, profile: AnyRec, questions: string[]): Promise<GeoArtifact | null> {
+async function generateFaq(profile: AnyRec, questions: string[]): Promise<GeoArtifact | null> {
   const payload = await bestVariant<{ title: string; faqs: Array<{ question: string; answer: string }> }>(
-    ai,
     () => `Write an FAQ page for this brand that answers the questions its buyers actually ask AI engines — so the brand becomes the cited source.
 
 Brand: ${profile?.name ?? ''}
@@ -142,9 +137,8 @@ const ORG_SCHEMA = {
   required: ['description', 'sameAs']
 };
 
-async function generateOrgSchema(ai: GoogleGenAI, profile: AnyRec, siteUrl: string, logo: string | null): Promise<GeoArtifact | null> {
+async function generateOrgSchema(profile: AnyRec, siteUrl: string, logo: string | null): Promise<GeoArtifact | null> {
   const payload = await bestVariant<{ description: string; sameAs: string[] }>(
-    ai,
     () => `Write the Organization metadata for this brand — the facts an AI engine needs to attribute claims to it.
 
 Brand: ${profile?.name ?? ''}
@@ -266,10 +260,9 @@ function assembleProduct(payload: ProductPayload, brandName: string, siteUrl: st
 }
 
 async function generateProductSchema(
-  ai: GoogleGenAI, profile: AnyRec, siteUrl: string, sourceFinding: string
+  profile: AnyRec, siteUrl: string, sourceFinding: string
 ): Promise<GeoArtifact | null> {
   const payload = await bestVariant<ProductPayload>(
-    ai,
     () => `Write the product page building blocks for this brand — the description and specification table an AI assistant reads when a buyer asks it to compare options in this category.
 
 Brand: ${profile?.name ?? ''}
@@ -313,10 +306,9 @@ const LLMS_SCHEMA = {
 
 // extraPaths = pages we're creating in THIS same batch (e.g. /faq). They MUST appear in llms.txt,
 // otherwise the artifacts we hand the user contradict each other.
-async function generateLlmsTxt(ai: GoogleGenAI, profile: AnyRec, siteUrl: string, extraPaths: string[] = []): Promise<GeoArtifact | null> {
+async function generateLlmsTxt(profile: AnyRec, siteUrl: string, extraPaths: string[] = []): Promise<GeoArtifact | null> {
   const origin = (() => { try { return new URL(siteUrl).origin; } catch { return ''; } })();
   const payload = await bestVariant<{ summary: string; links: Array<{ title: string; path: string; note: string }> }>(
-    ai,
     () => `Write an llms.txt for this brand — the curated map that tells AI engines which pages matter and what the brand is.
 
 Brand: ${profile?.name ?? ''}
@@ -362,24 +354,23 @@ export async function generateGeoArtifacts(admin: SupabaseClient, brand: AnyRec,
   // Citation gaps: the category questions where the brand was NOT named — the FAQ's target list.
   const gapQuestions = (snapshot.citations ?? []).filter((c) => !c.brandMentioned).map((c) => c.prompt);
 
-  const ai = genaiClient();
 
   // Pages we create must exist BEFORE llms.txt is written, so llms.txt can list them (otherwise the
   // artifacts contradict each other). Two waves: page artifacts first → collect their paths → the
   // rest (llms.txt gets those paths; org_schema is independent).
   const pageJobs: Array<Promise<GeoArtifact | null>> = [];
   // FAQ addresses both the missing schema AND the citation gaps — generate it if either applies.
-  if (hasIssue(snapshot, 'no-faq-schema') || gapQuestions.length) pageJobs.push(generateFaq(ai, profile, gapQuestions.slice(0, 8)));
+  if (hasIssue(snapshot, 'no-faq-schema') || gapQuestions.length) pageJobs.push(generateFaq(profile, gapQuestions.slice(0, 8)));
   const pageArtifacts = (await Promise.all(pageJobs.map((j) => j.catch((error) => { swallow('pageJobs.map failed', error); return null; })))).filter((a): a is GeoArtifact => !!a);
   const newPaths = pageArtifacts.map((a) => a.targetPath).filter((p) => p.startsWith('/'));
 
   const restJobs: Array<Promise<GeoArtifact | null>> = [];
-  if (hasIssue(snapshot, 'no-org-schema')) restJobs.push(generateOrgSchema(ai, profile, siteUrl, logo));
+  if (hasIssue(snapshot, 'no-org-schema')) restJobs.push(generateOrgSchema(profile, siteUrl, logo));
   // Any point on the offer ladder — no Product at all, or a Product whose Offer is unrankable —
   // is closed by the same artifact, so the first finding present is the one it is filed against.
   const offerFinding = OFFER_FINDINGS.find((id) => hasIssue(snapshot, id));
-  if (offerFinding) restJobs.push(generateProductSchema(ai, profile, siteUrl, offerFinding));
-  if (hasIssue(snapshot, 'no-llms-txt') && siteUrl) restJobs.push(generateLlmsTxt(ai, profile, siteUrl, newPaths));
+  if (offerFinding) restJobs.push(generateProductSchema(profile, siteUrl, offerFinding));
+  if (hasIssue(snapshot, 'no-llms-txt') && siteUrl) restJobs.push(generateLlmsTxt(profile, siteUrl, newPaths));
   const restArtifacts = (await Promise.all(restJobs.map((j) => j.catch((error) => { swallow('restJobs.map failed', error); return null; })))).filter((a): a is GeoArtifact => !!a);
 
   const artifacts = [...pageArtifacts, ...restArtifacts];

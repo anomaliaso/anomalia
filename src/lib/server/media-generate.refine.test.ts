@@ -28,7 +28,8 @@ vi.mock('$lib/server/content-preview', () => ({
   renderPostImage: (...args: unknown[]) => renderPostImage(...args),
   buildImageRequest: (_prompt: string, opts: { baseImage?: unknown; refineModel?: string; model?: string }) => ({
     model: (opts.baseImage ? opts.refineModel : undefined) ?? opts.model ?? null
-  })
+  }),
+  loadBrandVisualContext: async () => ({})
 }));
 vi.mock('$lib/server/brand-media', () => ({
   loadLibraryMediaParts: (...args: unknown[]) => loadLibraryMediaParts(...args),
@@ -44,6 +45,7 @@ vi.mock('$lib/server/content-credentials', () => ({
   DIGITAL_SOURCE_TYPE: { synthetic: 'trainedAlgorithmicMedia' }
 }));
 vi.mock('$lib/server/ai-log', () => ({
+  billedUsdInScope: () => undefined,
   withBrandContext: <T>(_brandId: string, fn: () => T) => fn()
 }));
 
@@ -94,7 +96,7 @@ describe('rifinire un asset della libreria', () => {
       1
     );
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     // Questa è la riga che distingue «rendilo rosso» da «disegna un gatto rosso».
     expect(opts.baseImage).toEqual(ORIGINAL);
     expect(opts.refineModel).toBe(REFINE_MODEL);
@@ -131,7 +133,7 @@ describe('rifinire un asset della libreria', () => {
       prompt: 'un gatto rosso'
     });
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     expect(opts.baseImage).toBeUndefined();
     expect(loadLibraryMediaParts).not.toHaveBeenCalled();
   });

@@ -1,5 +1,5 @@
 import type { BillingProvider } from '$lib/billing/contract';
-import { creditQuota, gateCreditsCore, orgPlanForBrand } from '$lib/server/credits';
+import { creditQuota, gateCreditsCore, gateOrgCreditsCore, orgPlanForBrand } from '$lib/server/credits';
 import { isTopPlan, plansAbove, postQuota } from '$lib/server/plans';
 import { createAdminClient } from '$lib/server/supabase-admin';
 
@@ -9,7 +9,8 @@ import { createAdminClient } from '$lib/server/supabase-admin';
  * migrates is the frozen rollback copy — right often enough to hide the times it is stale. It
  * stays as the fallback so a failed lookup never shrinks a paying brand's quota.
  */
-async function planForQuota(ctx: { brandId: string; plan?: string | null }): Promise<string | null> {
+async function planForQuota(ctx: { brandId?: string; plan?: string | null }): Promise<string | null> {
+  if (!ctx.brandId) return ctx.plan ?? null;
   try {
     return (await orgPlanForBrand(createAdminClient(), ctx.brandId)) ?? ctx.plan ?? null;
   } catch {
@@ -21,9 +22,10 @@ export const anomaliaBillingProvider: BillingProvider = {
   kind: 'anomalia',
 
   async gate(kind, ctx) {
-    if (kind === 'credits') {
-      await gateCreditsCore(ctx.brandId);
-    }
+    if (kind !== 'credits') return;
+    // Il brand vince quando c'è: raggiunge la sua organizzazione da solo, e la cassa è la stessa.
+    if (ctx.brandId) return gateCreditsCore(ctx.brandId);
+    if (ctx.orgId) return gateOrgCreditsCore(ctx.orgId);
   },
 
   async quota(kind, ctx) {

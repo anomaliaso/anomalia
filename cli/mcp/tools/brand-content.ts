@@ -11,6 +11,16 @@ import { resolvePostId, resolveResourceId, withAuth } from '../util.ts';
 
 const slug = z.string().min(1).describe('Brand URL slug');
 
+/**
+ * Il registro dichiara una strada che non passa da un brand: qui diventa un `slug` che si può
+ * omettere, e il campo lo dice da sé. Senza quella frase l'opzionale non si vede — un modello
+ * riempie comunque un parametro che nessuno gli ha detto quando lasciare vuoto, e sceglie un
+ * brand a caso, i cui crediti sono di qualcun altro.
+ */
+const optionalSlug = slug
+  .optional()
+  .describe('Brand URL slug. Optional here: omit it to run without a brand — the tool description says what changes.');
+
 const resourceId = (resource: BrandResource) =>
   z.string().min(1).describe(`${BRAND_RESOURCES[resource]} id or unambiguous prefix`);
 
@@ -24,7 +34,7 @@ function registerDeclaredEndpoints(server: McpServer) {
         description: endpoint.description,
         inputSchema: byPrefix
           ? endpoint.input.extend({ slug, id: resourceId(endpoint.resource) })
-          : endpoint.input.extend({ slug }),
+          : endpoint.input.extend({ slug: endpoint.pathWithoutBrand ? optionalSlug : slug }),
         annotations: {
           readOnlyHint: endpoint.method === 'GET',
           destructiveHint: endpoint.destructive,
@@ -34,7 +44,7 @@ function registerDeclaredEndpoints(server: McpServer) {
       async ({ slug: brandSlug, ...input }) =>
         withAuth(async (token) => {
           if (endpoint.resource === undefined) {
-            return callEndpoint(endpoint, token, brandSlug as string, input);
+            return callEndpoint(endpoint, token, (brandSlug as string | undefined) ?? null, input);
           }
 
           const { id, ...payload } = input as { id: string } & Record<string, unknown>;
@@ -61,7 +71,10 @@ export function registerBrandTools(server: McpServer) {
     'get_status',
     {
       title: 'Brand status',
-      description: 'Compact status: pending posts, quota signals, last runs.',
+      description:
+        'How this brand is doing right now, in one short answer: how many posts wait for someone ' +
+        'to approve them, whether the plan still has room, and how the last recurring jobs went. ' +
+        'get_dashboard is the fuller picture. Reads only — no model, no credits.',
       inputSchema: z.object({ slug }),
       annotations: { readOnlyHint: true },
     },
@@ -90,7 +103,10 @@ export function registerBrandTools(server: McpServer) {
     'approve_posts',
     {
       title: 'Approve all pending posts',
-      description: 'Approve and publish all posts in pending_user status for a brand.',
+      description:
+        'Say yes to every post waiting for approval, in one go — they are published or scheduled ' +
+        'from that moment. This is the irreversible one: ask the person first unless they clearly ' +
+        'said "approve them all". approve_post takes one at a time. No model, no credits.',
       inputSchema: z.object({ slug }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
@@ -101,7 +117,10 @@ export function registerBrandTools(server: McpServer) {
     'approve_post',
     {
       title: 'Approve post',
-      description: 'Approve a single pending post. id accepts a short prefix.',
+      description:
+        'Say yes to one post waiting for approval, so it goes out. Read it first with get_post — ' +
+        'approving is what authorises distribution, and it does not come back. edit_post changes ' +
+        'the copy before you do. id accepts a short prefix. No model, no credits.',
       inputSchema: z.object({
         slug,
         id: z.string().min(1),
@@ -119,7 +138,10 @@ export function registerBrandTools(server: McpServer) {
     'publish_post',
     {
       title: 'Publish post',
-      description: 'Publish a post immediately. id accepts a short prefix.',
+      description:
+        'Put one post out NOW, skipping its scheduled time. There is no undo from here: what a ' +
+        'platform has received is on the platform. reschedule_post moves it instead. id accepts a ' +
+        'short prefix. No model, no credits.',
       inputSchema: z.object({
         slug,
         id: z.string().min(1),
@@ -137,7 +159,9 @@ export function registerBrandTools(server: McpServer) {
     'reject_post',
     {
       title: 'Reject / delete post',
-      description: 'Delete a pending post. id accepts a short prefix.',
+      description:
+        'Throw away one post that has not gone out yet. It does not come back, and its copy goes ' +
+        'with it. A post already published cannot be deleted from here. id accepts a short prefix.',
       inputSchema: z.object({
         slug,
         id: z.string().min(1),

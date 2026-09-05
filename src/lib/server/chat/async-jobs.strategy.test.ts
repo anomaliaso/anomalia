@@ -145,7 +145,6 @@ describe('runGenerateStrategy', () => {
       onboarding: false
     });
     expect(proposeGtmDual).toHaveBeenCalledWith(
-      expect.anything(),
       expect.objectContaining({ name: 'HepAntalya' }),
       expect.objectContaining({
         brandId: 'brand-1',

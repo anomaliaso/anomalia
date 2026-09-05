@@ -490,7 +490,7 @@ async function streamMediaGeneratorInner(opts: MediaGeneratorOpts) {
             const promptText = baseImage
               ? `${prompt}\n\nEdit the attached BASE photo (Ref ${hasExplicitBase ? baseRefIndex : 0}) in place — keep the scene, subject and composition; apply only what this prompt asks. Do not replace the photo with a blank canvas.`
               : prompt;
-            const dataUrl = await renderPostImage(ai, promptText, {
+            const dataUrl = await renderPostImage(promptText, {
               model: imageModelFor(contentPrefs),
               refineModel: imageRefineModelFor(contentPrefs),
               baseImage,

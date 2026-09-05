@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { updateBrandRow, deleteBrandRow, type RowFailure } from './brand-rows';
 import { structured } from './research';
 import { withBrandContext } from './ai-log';
 import { defaultSkillsFor } from './default-skills';
@@ -527,9 +528,14 @@ export async function promoteMemoryToProject(
 // ── Delete / archive ───────────────────────────────────────────────────────────
 
 // brandId is required, not optional: these run under the service-role client on the CLI path, where
-// an id alone would reach any brand's memory.
-export async function deleteMemory(supabase: SupabaseClient, brandId: string, entryId: string): Promise<void> {
-  await supabase.from('brand_memory').delete().eq('id', entryId).eq('brand_id', brandId);
+// an id alone would reach any brand's memory. E chi non tocca niente lo dice: zero righe non e' un
+// errore per PostgREST, quindi senza il conteggio l'endpoint risponde `ok` sulla riga di un altro.
+export async function deleteMemory(
+  supabase: SupabaseClient,
+  brandId: string,
+  entryId: string
+): Promise<RowFailure | null> {
+  return deleteBrandRow(supabase, 'brand_memory', brandId, entryId);
 }
 
 export async function updateMemoryEntry(
@@ -537,10 +543,11 @@ export async function updateMemoryEntry(
   brandId: string,
   entryId: string,
   patch: Partial<Pick<MemoryEntry, 'value' | 'category' | 'confidence' | 'pinned' | 'importance'>>
-): Promise<void> {
-  await supabase.from('brand_memory')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', entryId).eq('brand_id', brandId);
+): Promise<RowFailure | null> {
+  return updateBrandRow(supabase, 'brand_memory', brandId, entryId, {
+    ...patch,
+    updated_at: new Date().toISOString()
+  });
 }
 
 // ── Conflict detection ─────────────────────────────────────────────────────────
@@ -614,8 +621,6 @@ export async function extractMemoryFromChat(
   // falling back to project — that was the bug this phase fixes.
   if (!threadId) return 0;
 
-  const { genaiClient } = await import('$lib/server/brand-context');
-  const ai = genaiClient();
 
   // Load existing memory keys (project + this session) to avoid re-extracting known facts
   const { data: existing } = await supabase
@@ -651,7 +656,7 @@ Rules:
 - Return a JSON array, nothing else`;
 
   try {
-    const raw = await structured<unknown>(ai, prompt, {
+    const raw = await structured<unknown>(prompt, {
           type: 'array' as const,
           items: {
             type: 'object' as const,
@@ -734,8 +739,6 @@ export async function learnFromCaptionEdit(
   if (!a || !b || a === b || b.length < 10) return 0;
 
   try {
-    const { genaiClient } = await import('$lib/server/brand-context');
-    const ai = genaiClient();
 
     const { data: existing } = await supabase
       .from('brand_memory')
@@ -761,7 +764,7 @@ Rules:
 - Each entry: key (short snake_case, stable across similar edits, e.g. "caption_length", "emoji_usage"), value (one imperative sentence, e.g. "Keep captions under ~3 short sentences"), category ("voice" | "preference" | "constraint"), confidence 0.0-1.0.
 Return a JSON array, nothing else.`;
 
-    const raw = await structured<unknown>(ai, prompt, {
+    const raw = await structured<unknown>(prompt, {
           type: 'array' as const,
           items: {
             type: 'object' as const,
@@ -1036,8 +1039,6 @@ async function synthesizeSkills(
     // Prova: qui sarebbe partita la chiamata AI. Contarla senza farla è il punto della modalità.
     if (dryRun) return { written: 0, called: true };
 
-    const { genaiClient } = await import('$lib/server/brand-context');
-    const ai = genaiClient();
 
     const prompt = `You maintain the operating procedures ("skills") of a brand's AI assistant.
 
@@ -1056,7 +1057,6 @@ For each skill:
 Return at most ${Math.min(slots, 3)} skills. If no clear repeated procedure exists, return an empty array — that is the normal answer.`;
 
     const raw = await structured<unknown>(
-      ai,
       prompt,
       {
         type: 'array' as const,

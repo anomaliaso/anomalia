@@ -432,7 +432,7 @@ describe('extractMemoryFromChat', () => {
   it('chiede di RIEMETTERE la chiave già nota invece di saltarla', async () => {
     const prompts: string[] = [];
     vi.doMock('./research', () => ({
-      structured: async (_ai: unknown, prompt: string) => {
+      structured: async (prompt: string) => {
         prompts.push(prompt);
         return [];
       }

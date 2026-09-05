@@ -1,5 +1,4 @@
 import { swallow } from '$lib/server/swallow';
-import { client } from './plan-pipeline';
 import { type AnyRec, type ImagePart, guidanceFor } from './seed-model';
 import { BLOG_IMAGE_MODEL, PRODUCT_REF_IMAGES, aspectRatioFor, brandVisualDirective, distinctiveTokens, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderBrandImage, loadProductRefs, normalizeOfferingName, renderPostImage, uploadPostImage } from './images';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -76,7 +75,7 @@ export async function generateArticleCover(
     : '';
 
   const prompt = `A striking editorial COVER / hero image for a blog article titled "${opts.title}".${opts.summary ? ` The article is about: ${String(opts.summary).slice(0, 220)}.` : ''}${productHint} Evocative, magazine-quality, a clear focal point with room to breathe. Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
-  const dataUrl = await renderPostImage(client(), prompt, {
+  const dataUrl = await renderPostImage(prompt, {
     aspectRatio: '16:9',
     model: BLOG_IMAGE_MODEL,
     visualStyle: (kit?.visual_style as string | undefined) || undefined,
@@ -118,7 +117,7 @@ User request: ${feedback}
 Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
 
   // Nessun override: `baseImage` seleziona da sé il modello di fedeltà in buildImageRequest.
-  const dataUrl = await renderPostImage(client(), prompt, {
+  const dataUrl = await renderPostImage(prompt, {
     aspectRatio: '16:9',
     visualStyle: (kit?.visual_style as string | undefined) || undefined,
     visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
@@ -197,7 +196,7 @@ export async function generateArticleImages(
         ? ` Show the brand's REAL product from the attached reference: ${products.map((p) => p.name).join(', ')}. Keep it pixel-faithful — restyle only scene/lighting.`
         : '';
       const prompt = `An editorial image illustrating the section "${t.heading}" of a blog article titled "${opts.title}".${productHint} Evocative, magazine-quality, a clear focal point. Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
-      const dataUrl = await renderPostImage(client(), prompt, {
+      const dataUrl = await renderPostImage(prompt, {
         ...baseOpts,
         referenceImages,
         referenceMode: referenceImages?.length ? 'product' : undefined
@@ -265,7 +264,6 @@ export async function regeneratePost(opts: {
   baseImageUrl?: string | null;
   brandId?: string;
 }): Promise<{ caption: string; imagePrompt: string; imageUrl?: string; notes?: string; costUsd?: number; credits?: number }> {
-  const ai = client();
   const langLine = opts.language?.trim()
     ? `Write the caption in ${opts.language.trim()}.`
     : 'Keep the caption in the same language as the current caption.';
@@ -289,7 +287,7 @@ User feedback: ${opts.feedback}
 ${langLine}${guideLine}
 Return JSON with the improved "caption"${imagePromptInstruction}.`;
 
-  const parsed: AnyRec = await structured(ai, prompt, REGEN_SCHEMA,
+  const parsed: AnyRec = await structured(prompt, REGEN_SCHEMA,
     'You are an expert performance-marketing content planner. Apply the feedback precisely; keep it on-brand.',
     { label: 'regeneratePost', brandId: opts.brandId, userId: opts.userId, context: 'regenerate_post' });
   const caption = (parsed.caption as string) || opts.caption || '';
@@ -335,7 +333,7 @@ Return JSON with the improved "caption"${imagePromptInstruction}.`;
       aspectRatio: aspectRatioFor(opts.platform)
     };
     // Un render, come ovunque: niente critico e niente anello che ridisegna.
-    const dataUrl = await renderBrandImage(ai, imagePrompt, renderOpts);
+    const dataUrl = await renderBrandImage(imagePrompt, renderOpts);
     if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, aspectRatioFor(opts.platform));
   }
   return { caption, imagePrompt, imageUrl, notes, costUsd, credits };

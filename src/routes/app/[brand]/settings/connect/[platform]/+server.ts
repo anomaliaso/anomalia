@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ params, url, locals: { supabase, saf
     throw redirect(303, `/app/${params.brand}/settings/connected-accounts?error=limit`);
   }
 
-  const profileId = await ensureBrandProfile(supabase, brand);
+  const profileId = await ensureBrandProfile(brand);
   // After authorising on Zernio, come back INTO our app (not stranded on Zernio). ?connected=1
   // triggers an immediate account sync. The onboarding setup flow returns to /activate so it can
   // resume at the connect step; everywhere else returns to Settings.

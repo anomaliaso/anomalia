@@ -41,7 +41,10 @@ Setup details: [references/mcp.md](references/mcp.md).
 
 ## Operating rules
 
-1. Start with `list_brands` (or `anomalia brands`) to learn **slugs**.
+1. Almost every tool acts on ONE brand and needs its **slug**; `list_brands` (or `anomalia
+   brands`) is where slugs come from. When you do not know which brand, **ask the person** —
+   never call `list_brands` to pick one yourself. Guessing spends a real organisation's
+   credits and writes into a real client's library.
 2. Pass `slug` on every brand-scoped call.
 3. Post/article ids accept **short unambiguous prefixes** from list output — never guess if ambiguous.
 4. **Before writing ANY copy** — caption, carousel, script, article, bio — call
@@ -66,7 +69,13 @@ the request carries your own session, so Postgres returns exactly the rows the a
 and nothing more. Read only, one table per call, no credits. Omit `table` to list what you can
 name; ask for a table with no `columns` and the keys of a row are the schema. Reach for it for a
 count, a join you do by hand, or a fact none of the tools below returns — instead of three calls
-that approximate it.
+that approximate it. **What this brand sells** has no tool of its own: its catalogue of products,
+offers and services is the `products` table, one row per offer, read with `query`.
+
+**Ask what this brand already knows** → `search_knowledge` with the question. It reads the brand's
+own uploaded documents and returns the passages that answer it, each with the document it came
+from — not the whole corpus. Empty `hits` is not "the brand does not know": `get_knowledge_status`
+says whether anything has been indexed yet. No model, no credits.
 
 **Before you write anything** → two reads, and they answer different questions.
 
@@ -94,8 +103,19 @@ as `media_ids`. That is also how you post to Instagram or TikTok, which never ac
 it returns to `create_post` as `media_ids`. The file is copied into the brand library, so the post
 still has its image the day the original link dies.
 
-**Draw a new image** → `generate_image` with a prompt. It bills a render per image and creates
-nothing in the calendar, so ask for two or three with `count`, look at them, keep one.
+**Draw a new image** → `generate_image` with a prompt — "an image of a cat", a product shot, a
+background. `slug` is OPTIONAL: leave it out for a one-off drawing (no brand, filed nowhere, `id`
+comes back `null`, and a signed `url` that expires), pass it when the picture belongs to a brand
+or is going to become a post. With a slug the brand's own look — colours, fonts, visual direction —
+is applied by default; `brand_style: ignore` leaves it out when the picture must take nothing from
+the brand. Do NOT call `list_brands` to decide where to draw: if nobody named
+a brand there is no brand, and guessing one spends a real organisation's credits. It bills a
+render per image and creates nothing in the calendar, so ask for two or three with `count`, look
+at them, keep one.
+
+**If you reach for `generate_media`** — the older door — it still works and forwards to
+`generate_image` and `generate_video`. Prefer those two: they name what they do, and changing a
+picture or animating one has its own tool.
 
 **Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
 returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
@@ -104,14 +124,23 @@ without them that slide drifts out of the series.
 
 **Animate an image you already have** → `generate_video` with its `base_media_id`. That is how
 "make a 5s clip of this photo" works, and it needs **no post**: the clip lands in the library and
-`create_post` takes its id as `media_ids`. `make_video` still exists but only attaches a clip to an
-existing post — reach for it when you already have the post, not to get a video.
+`create_post` takes its id as `media_ids`. `make_video` animates the cover of a post you
+already have and attaches the clip back to it — reach for it when you already have the post, not
+to get a video.
 
 **Film from nothing** → `generate_video` with a prompt and no `base_media_id`. A clip takes minutes,
 so it returns a `job_id`; `check_media_job` says when it landed. The model moves this bill by more
-than an order of magnitude — roughly 12 credits for a light clip against 210 for a heavy one — so
-read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
-spending.
+than an order of magnitude, so read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
+spending. With a slug the clip follows this brand's visual direction, so you do not have to
+describe it — and there is no switch for it here.
+
+**Give a post the image it is missing** → `render_post`. It draws from the prompt already written
+on that post and attaches it. One render. To draw a picture that is not tied to a post, use
+`generate_image` instead.
+
+**Change the image already on a post** → `regenerate_post_media` with an instruction. It REPLACES
+that post's image — one render, and the old one is gone. When you want to keep the original, use
+`refine_image` on the library asset instead: that files the result as a new asset.
 
 **CHANGE an image you already have** → `refine_image` with its `base_media_id` and an instruction
 ("make it red", "warmer background"). It starts from that asset, so the result is that picture
@@ -206,6 +235,15 @@ access to the brand.
 **Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).
 
 **Blog draft** → `generate_article` → optional `optimize_article` → `publish_article` when asked.
+
+**Make the copy sound like this brand** → `get_voice` for how it is supposed to sound — mood,
+tone, register, the words it avoids, the rules that change per platform — and `update_voice` to
+change any of them. This is the brand; `get_writing_skills` is the craft. Read both before writing.
+
+**Do ChatGPT, Perplexity and Google's AI mention this brand?** → `get_geo` reads the last answer
+for free: share of voice, which answers cited the brand, and fixes already written. `geo_action`
+with `audit` asks the engines again and `fix` writes the pages that would get it cited — both
+spend credits. `list_audit_citations` is the question-by-question evidence behind the number.
 
 **Back a SEO/GEO claim with the audit behind it** → `list_web_audits` to see every audit →
 `get_audit_findings` for what one of them observed → `list_audit_citations` for the probes behind

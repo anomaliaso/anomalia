@@ -1,5 +1,4 @@
 import { renderDesignDoc } from '$lib/server/brand-design-doc';
-import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { aiStructured, parallelVariants, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GATEWAY } from '$lib/server/ai-text';
@@ -695,7 +694,7 @@ const PLAN_SYSTEM =
 // Propose a brand-new 4-week editorial plan from the research output. Called at the end of the
 // onboarding research pipeline (replacing the old immediate post-planning) and on demand for
 // legacy brands from the strategy page.
-export async function proposePlan(ai: GoogleGenAI, profile: BrandProfile, opts: ProposePlanOpts): Promise<EditorialPlan> {
+export async function proposePlan(profile: BrandProfile, opts: ProposePlanOpts): Promise<EditorialPlan> {
   const agentPlan = await invokeEditorialAgent(profile, opts, 'propose', buildProposeSeedBrief(opts));
   if (agentPlan) return agentPlan;
 
@@ -724,8 +723,7 @@ Return JSON.`;
   const schema = planSchema(opts.allowedCadences);
 
   const raw = await parallelVariants<AnyRec>(
-    ai,
-    (i) => aiStructured<AnyRec>(ai, makePrompt(VARIANT_LENSES[i % VARIANT_LENSES.length]), schema, PLAN_SYSTEM, 'return_editorial_plan', { temperature: CREATIVE_TEMPERATURE, model, ...PIN_GATEWAY }),
+    (i) => aiStructured<AnyRec>(makePrompt(VARIANT_LENSES[i % VARIANT_LENSES.length]), schema, PLAN_SYSTEM, 'return_editorial_plan', { temperature: CREATIVE_TEMPERATURE, model, ...PIN_GATEWAY }),
     async (picked) => {
       if (picked.length === 1) return picked[0];
       const summaries = picked.map((v, i) => {
@@ -735,7 +733,7 @@ Return JSON.`;
       const prompt = `Compare these ${picked.length} editorial plans and pick the BEST one. Consider: strategic coherence, arc progression, realistic cadence, platform mix groundedness, and whether every week has a concrete theme.\n${summaries}\nReturn JSON: { "winner": <1-based index> }`;
       const selSchema = { type: 'object' as const, properties: { winner: { type: 'number' as const } }, required: ['winner'] };
       try {
-        const result = await aiStructured<{ winner?: number }>(ai, prompt, selSchema, PLAN_SYSTEM, 'pick_best', { model, ...PIN_GATEWAY });
+        const result = await aiStructured<{ winner?: number }>(prompt, selSchema, PLAN_SYSTEM, 'pick_best', { model, ...PIN_GATEWAY });
         const idx = Math.max(0, Math.min(picked.length - 1, (result?.winner ?? 1) - 1));
         return picked[idx];
       } catch { return picked[0]; }
@@ -774,7 +772,6 @@ export function planForPrompt(plan: EditorialPlan): string {
 // Full-plan revision from conversational feedback. Returns a NEW plan (the caller inserts it as
 // status 'proposed' with parent_id) + changes_summary bullets for the review UI.
 export async function revisePlan(
-  ai: GoogleGenAI,
   current: EditorialPlan,
   feedback: string,
   profile: BrandProfile,
@@ -798,7 +795,7 @@ Cadence must be ONE of [${opts.allowedCadences.join(', ')}]. Return the FULL rev
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 
-  const raw = await structured<AnyRec>(ai, prompt, planSchema(opts.allowedCadences, true), PLAN_SYSTEM);
+  const raw = await structured<AnyRec>(prompt, planSchema(opts.allowedCadences, true), PLAN_SYSTEM);
   return normalizePlan(raw, opts.allowedCadences);
 }
 
@@ -806,7 +803,6 @@ Return JSON.`;
 // untouched. Returns the new week; the caller splices it into plan.weeks (preserving week_start,
 // index and the brief itself).
 export async function replanWeek(
-  ai: GoogleGenAI,
   plan: EditorialPlan,
   weekIndex: number,
   brief: string,
@@ -854,7 +850,7 @@ CLIENT BRIEF FOR THIS WEEK (authoritative): ${brief.trim()}
 Return the new week: theme, focus, a content mix whose counts sum to the weekly cadence, rationale. ${languageLine(outputLanguage)}
 Return JSON.`;
 
-  const raw = await structured<AnyRec>(ai, prompt, WEEK_SCHEMA, PLAN_SYSTEM);
+  const raw = await structured<AnyRec>(prompt, WEEK_SCHEMA, PLAN_SYSTEM);
   const next = normWeek(raw, weekIndex);
   // Preserve identity fields the LLM doesn't own.
   next.week_start = week?.week_start ?? null;
@@ -867,7 +863,6 @@ Return JSON.`;
 // Inserted as status 'proposed' (source 'rollover') for the user to approve — or auto-activated
 // by the scheduler when the old cycle has fully lapsed, so autopilot never stalls.
 export async function proposeNextCycle(
-  ai: GoogleGenAI,
   previous: EditorialPlan,
   profile: BrandProfile,
   opts: ProposePlanOpts
@@ -893,7 +888,7 @@ Cadence must be ONE of [${opts.allowedCadences.join(', ')}]. Keep the gtm sectio
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 
-  const raw = await structured<AnyRec>(ai, prompt, planSchema(opts.allowedCadences), PLAN_SYSTEM);
+  const raw = await structured<AnyRec>(prompt, planSchema(opts.allowedCadences), PLAN_SYSTEM);
   return normalizePlan(raw, opts.allowedCadences);
 }
 

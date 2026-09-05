@@ -27,7 +27,7 @@
  * Sovrastimare è sicuro; sottostimare fa partire un lavoro che non può finire.
  */
 import { computeCostUsd } from '$lib/server/ai-log';
-import { geminiFlash } from '$lib/server/gemini';
+import { geminiFlash } from '$lib/server/google-models';
 
 // Nano Banana 2 — lo stesso id che content-preview.ts usa per le immagini degli articoli
 // (BLOG_IMAGE_MODEL). Importato come stringa e non dal modulo: content-preview si porta dietro

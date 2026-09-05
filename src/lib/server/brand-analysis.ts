@@ -11,9 +11,8 @@
  * package.
  */
 import { swallow } from '$lib/server/swallow';
-import type { GoogleGenAI } from '@google/genai';
+import { SITE_TYPES, clampSiteType, sanitizeThemeColor } from '$lib/brand-fields';
 import { browserlessContent, isBrowserlessConfigured } from './browserless';
-import { aiStructured } from '$lib/server/ai-text';
 import { structured } from '$lib/server/research';
 import { llmStructured } from '$lib/server/llm';
 import {
@@ -161,9 +160,9 @@ const brandProfileSchema = {
         category: { type: 'string' as const, description: 'Business category (e.g. "AI Application Development")' },
         site_type: {
             type: 'string' as const,
-            enum: ['ecommerce', 'saas', 'portfolio', 'local_service', 'creator', 'generic'],
+            enum: [...SITE_TYPES],
             description:
-                'The business archetype of this site. ecommerce = sells physical/digital products with a cart; saas = software/tech product with pricing/signup/docs; portfolio = freelancer/creative/agency showcasing work & case-studies; local_service = a physical local business (restaurant, gym, salon, clinic, hotel); creator = personal brand / media / publisher monetising audience; generic = none of these clearly. Use the DETECTED ARCHETYPE hint as a strong prior but decide from the actual content.',
+                'The business archetype of this site. ecommerce = sells physical/digital products with a cart; saas = software/tech product with pricing/signup/docs; portfolio = freelancer/creative/agency showcasing work & case-studies; local_service = a physical local business (restaurant, gym, salon, clinic, hotel); creator = personal brand monetising an audience; media = publisher/newsroom whose product is the content itself; mobile_app = a phone app as the product; service = a service business that is not tied to one place; generic = none of these clearly. Use the DETECTED ARCHETYPE hint as a strong prior but decide from the actual content.',
         },
         content_pillars: {
             type: 'array' as const,
@@ -345,7 +344,7 @@ The website may be in any language — extract information regardless. Write the
     // analyzeBrand's `client` is deliberately mock-shaped for tests; structured() only ever
     // calls models.generateContent on it, so the narrow shape is safe to widen here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed: any = await structured(client as unknown as GoogleGenAI, prompt, brandProfileSchema,
+    const parsed: any = await structured(prompt, brandProfileSchema,
         `You are an expert brand analyst. Analyze websites and extract structured brand profiles. Be specific and detailed, but NEVER fabricate: only report what the site actually shows — an empty products list is correct for sites with no catalog, and ai_character should be omitted when a human spokesperson doesn't fit the brand. When you do include an AI character, describe a photorealistic person (appearance, clothing, setting, expression) that authentically represents the brand's values and audience.`,
         { label: 'brandProfile', images: imageParts });
     if (!parsed.name) throw new Error('LLM returned invalid brand profile');
@@ -382,7 +381,6 @@ const ANNOUNCEMENTS_SCHEMA = {
 export async function extractAnnouncements(
     pageTexts: Record<string, string>,
     client: { models: { generateContent: (params: any) => Promise<{ text?: string | null }> } },
-    ai?: GoogleGenAI,
 ): Promise<Array<{ title: string; date?: string; summary?: string }>> {
     const ctx = Object.entries(pageTexts)
         .map(([u, t]) => `--- ${u} ---\n${t.slice(0, 8000)}`)
@@ -394,14 +392,12 @@ export async function extractAnnouncements(
 
     try {
         void client;
-        const parsed = ai
-            ? await aiStructured<{ announcements?: Array<Record<string, unknown>> }>(ai, prompt, ANNOUNCEMENTS_SCHEMA, systemInstruction, 'return_announcements')
-            : await llmStructured<{ announcements?: Array<Record<string, unknown>> }>({
-                prompt,
-                schema: ANNOUNCEMENTS_SCHEMA,
-                system: systemInstruction,
-                label: 'announcements'
-              });
+        const parsed = await llmStructured<{ announcements?: Array<Record<string, unknown>> }>({
+            prompt,
+            schema: ANNOUNCEMENTS_SCHEMA,
+            system: systemInstruction,
+            label: 'announcements'
+        });
         if (!Array.isArray(parsed.announcements)) return [];
         return parsed.announcements
             .slice(0, 8)
@@ -586,11 +582,11 @@ export async function runBrandAnalysis(
     // the model returned nothing usable.
     profile.site_type = ecommerceProducts.length > 0
         ? 'ecommerce'
-        : ((profile.site_type as SiteType) ?? archetypeHint);
+        : (clampSiteType(profile.site_type) ?? archetypeHint);
     if (metadata.faviconUrl) profile.favicon_url = metadata.faviconUrl;
     if (metadata.logos.length > 0) profile.logos = metadata.logos;
     if (metadata.fonts.length > 0) profile.fonts = metadata.fonts;
-    if (metadata.themeColor) profile.theme_color = metadata.themeColor;
+    if (metadata.themeColor) profile.theme_color = sanitizeThemeColor(metadata.themeColor) ?? undefined;
 
     // Immagini del sito: OG image + immagini reali raccolte dalla pagina + foto prodotti e-commerce
     const siteImages: string[] = [];
@@ -643,7 +639,7 @@ export async function runBrandAnalysis(
                 const html = await loadPageHtml(annUrl, undefined, browserRenderer);
                 if (html) annTexts[annUrl] = extractVisibleText(html);
             }
-            const announcements = await extractAnnouncements(annTexts, client, client as GoogleGenAI);
+            const announcements = await extractAnnouncements(annTexts, client);
             if (announcements.length) {
                 profile.announcements = announcements.map((a) => ({ ...a, url: Object.keys(annTexts)[0] }));
             }

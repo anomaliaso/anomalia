@@ -146,7 +146,10 @@ const NoInput = z.object({}).strict();
 export const GENERATE_ARTICLE = {
   tool: 'generate_article',
   title: 'Generate article',
-  description: 'Generate a blog article draft from a topic.',
+  description:
+    'Write a whole blog article from a topic, as a draft. It spends credits. It publishes ' +
+    'nothing — publish_article is the separate step, and update_article is how you save text ' +
+    'you wrote yourself, for free.',
   method: 'POST',
   pathUnderBrand: '/web/generate',
   input: z.object({ topic: z.string().min(1) }).strict(),
@@ -163,7 +166,9 @@ export const OPTIMIZE_ARTICLE = {
   tool: 'optimize_article',
   title: 'Optimize article',
   description:
-    'Rewrite an article for SEO (meta title/description included). id accepts a short prefix.',
+    'Rewrite an article so it ranks better in search, meta title and description included. It ' +
+    'spends credits and REPLACES the text that is there; keep a copy if you might want it ' +
+    'back. It does not publish. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/web/article/:id/optimize',
   resource: 'article',
@@ -176,7 +181,9 @@ export const OPTIMIZE_ARTICLE = {
 export const PUBLISH_ARTICLE = {
   tool: 'publish_article',
   title: 'Publish article',
-  description: 'Publish a blog article. id accepts a short prefix.',
+  description:
+    'Put a blog article live on the brand\'s site. unpublish_article takes it down again ' +
+    'without losing it. No model, no credits. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/web/article/:id/publish',
   resource: 'article',
@@ -189,7 +196,10 @@ export const PUBLISH_ARTICLE = {
 export const UNPUBLISH_ARTICLE = {
   tool: 'unpublish_article',
   title: 'Unpublish article',
-  description: 'Unpublish a blog article. id accepts a short prefix.',
+  description:
+    'Take a live article off the site while keeping it: it becomes a draft again and nothing ' +
+    'is deleted. This is also what you do before editing one — update_article refuses a ' +
+    'published article. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/web/article/:id/unpublish',
   resource: 'article',
@@ -202,7 +212,9 @@ export const UNPUBLISH_ARTICLE = {
 export const DELETE_ARTICLE = {
   tool: 'delete_article',
   title: 'Delete article',
-  description: 'Delete a blog article by UUID.',
+  description:
+    'Delete one blog article for good. It does not come back. To take a live article off the ' +
+    'site without losing it, use unpublish_article instead. id accepts a short prefix.',
   method: 'DELETE',
   pathUnderBrand: '/web/article/:id',
   resource: 'article',

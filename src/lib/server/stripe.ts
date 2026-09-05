@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { createAdminClient } from './supabase-admin';
 import type { Currency } from '$lib/plans';
 
 let client: Stripe | null = null;
@@ -71,18 +71,23 @@ export function geoCouponFor(country: string | null | undefined): string | undef
  * A brand's Stripe customer, created on first need. The id on the row is what migration 0007's
  * trigger joins on to mirror the subscription back into `brands.plan` / `brands.status`, so it
  * has to be written before checkout, not after it.
+ *
+ * Written with the service role and not with the caller's session: that join key is a right, not a
+ * preference — another customer's id on this row would mirror their subscription onto this brand.
+ * `20260905210000_self_write_columns.sql` keeps `authenticated` out of the column.
  */
-export async function ensureBrandCustomer(
-  supabase: SupabaseClient,
-  brand: { id: string; name: string; stripe_customer_id: string | null }
-): Promise<string> {
+export async function ensureBrandCustomer(brand: {
+  id: string;
+  name: string;
+  stripe_customer_id: string | null;
+}): Promise<string> {
   if (brand.stripe_customer_id) return brand.stripe_customer_id;
 
   const customer = await stripe().customers.create({
     name: brand.name,
     metadata: { brand_id: brand.id }
   });
-  await supabase.from('brands').update({ stripe_customer_id: customer.id }).eq('id', brand.id);
+  await createAdminClient().from('brands').update({ stripe_customer_id: customer.id }).eq('id', brand.id);
 
   return customer.id;
 }

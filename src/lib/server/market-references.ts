@@ -4,7 +4,6 @@
 import { swallow } from '$lib/server/swallow';
 import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient } from '$lib/server/brand-context';
 import { archiveImageToBucket } from '$lib/server/media-archive';
 import type { ScrapeTarget } from '$lib/server/scrapecreators';
 import type { NormalizedAd } from '$lib/server/competitor-ads';
@@ -220,7 +219,6 @@ async function ensureCompetitorHandles(
     const { resolveCompetitorHandles } = await import('$lib/server/research');
     const wanted = platforms.length ? platforms : ['instagram', 'tiktok'];
     const handleMap = await resolveCompetitorHandles(
-      genaiClient(),
       missing.map((c) => ({
         name: String(c.name),
         website: String(c.website ?? ''),
@@ -339,8 +337,7 @@ POSTS:
 ${list}`;
 
   try {
-    const ai = genaiClient();
-    return await aiStructured<CatalogAi>(ai, prompt, CATALOG_SCHEMA, undefined, 'market_catalog', {
+    return await aiStructured<CatalogAi>(prompt, CATALOG_SCHEMA, undefined, 'market_catalog', {
       context: 'marketReferencesCatalog',
       temperature: 0.4
     });

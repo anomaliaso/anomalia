@@ -75,11 +75,7 @@ const M = vi.hoisted(() => ({
   llmText: vi.fn(),
   llmImagesFromInline: vi.fn(() => undefined),
   structuredKie: vi.fn(),
-  textKie: vi.fn(),
-  // Nessuno importa più deepseek.ts dal router. Il mock sta qui perché se qualcuno lo
-  // re-importasse, questi contatori lo direbbero invece di lasciarlo passare in silenzio.
-  deepseekAlive: vi.fn(() => true),
-  noteDeepseekFailure: vi.fn()
+  textKie: vi.fn()
 }));
 const env = M.env;
 vi.mock('$env/dynamic/private', () => ({ env: M.env }));
@@ -90,11 +86,6 @@ vi.mock('$lib/server/llm', async () => ({
   llmImagesFromInline: M.llmImagesFromInline
 }));
 vi.mock('$lib/server/kie', () => ({ structuredKie: M.structuredKie, textKie: M.textKie }));
-vi.mock('$lib/server/deepseek', () => ({
-  DEEPSEEK_MODEL: 'deepseek-v4-flash',
-  deepseekAlive: M.deepseekAlive,
-  noteDeepseekFailure: M.noteDeepseekFailure
-}));
 vi.mock('$lib/server/ai-log', () => ({
   logAiCall: vi.fn(),
   requireBrandContext: () => 'brand-1'
@@ -115,7 +106,7 @@ describe('routing del lavoro strutturato', () => {
     Object.assign(env, overrides);
     const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
+    return aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
   }
 
   it('manda il lavoro strutturato al gateway LLM, e a nessun altro endpoint', async () => {
@@ -137,7 +128,7 @@ describe('routing del lavoro strutturato', () => {
     M.structuredKie.mockRejectedValueOnce(new Error('boom'));
     const { aiStructured } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', {
+    const res = await aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', {
       brandId: 'b',
       provider: 'kie'
     });
@@ -152,11 +143,53 @@ describe('routing del lavoro strutturato', () => {
     expect(src).not.toContain('structuredXiaomi');
     expect(src).not.toContain('textXiaomi');
   });
+});
 
-  it('non tocca DeepSeek: né la chiave, né una chiamata', async () => {
-    await callBackgroundWork({ DEEPSEEK_API_KEY: 'chiave-viva' });
-    expect(M.deepseekAlive).not.toHaveBeenCalled();
-    expect(M.llmStructured).toHaveBeenCalledTimes(1);
+/**
+ * La manopola dei giudici arrivava fino a QUI e finiva nel nulla: `aiStructured` la destrutturava
+ * in `_thinkingLevel` e non la passava a nessuno. Un operatore che abbassava
+ * GEMINI_JUDGE_THINKING_LEVEL vedeva la stessa spesa e lo stesso ragionamento di prima, senza un
+ * errore da nessuna parte.
+ */
+describe('lo sforzo di ragionamento chiesto da un giudice', () => {
+  const SCHEMA = { type: 'object' as const, properties: { plan: { type: 'string' } }, required: ['plan'] };
+
+  beforeEach(() => {
+    for (const k of Object.keys(env)) delete env[k];
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('arriva al gateway invece di fermarsi negli opts', async () => {
+    const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', {
+      brandId: 'b',
+      ...PIN_GATEWAY,
+      reasoningEffort: 'low'
+    });
+    expect(M.llmStructured.mock.calls[0][0]).toMatchObject({ reasoningEffort: 'low' });
+  });
+
+  it('senza richiesta il gateway decide da sé: nessuno sforzo inventato qui', async () => {
+    const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
+    expect(M.llmStructured.mock.calls[0][0].reasoningEffort).toBeUndefined();
+  });
+
+  it('judgeReasoningEffort legge la variabile a ogni chiamata, e ripiega su high', async () => {
+    const { judgeReasoningEffort } = await import('./ai-text');
+    expect(judgeReasoningEffort()).toBe('high');
+    env.GEMINI_JUDGE_THINKING_LEVEL = 'low';
+    expect(judgeReasoningEffort()).toBe('low');
+    env.GEMINI_JUDGE_THINKING_LEVEL = 'MEDIUM';
+    expect(judgeReasoningEffort()).toBe('medium');
+    expect(judgeReasoningEffort('low')).toBe('low');
+    delete env.GEMINI_JUDGE_THINKING_LEVEL;
+    for (const junk of ['1024', 'off', 'max', '', undefined, null]) {
+      expect(judgeReasoningEffort(junk)).toBe('high');
+    }
   });
 });
 

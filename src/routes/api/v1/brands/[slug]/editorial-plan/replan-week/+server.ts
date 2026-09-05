@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
-import { genaiClient } from '$lib/server/brand-context';
 import { cadenceAllowed, loadActivePlan, replanWeek } from '$lib/server/editorial-plan';
 import { localeLanguageName } from '$lib/i18n/locale';
 import { plannerProfile, planEvidence } from '$lib/server/planner-inputs';
@@ -29,7 +28,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
       planEvidence(supabase, brand.id)
     ]);
 
-    const week = await replanWeek(genaiClient(), plan, week_index, brief, profile, localeLanguageName(null), {
+    const week = await replanWeek(plan, week_index, brief, profile, localeLanguageName(null), {
       platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
       allowedCadences: cadenceAllowed(brand.plan),
       benchmark: evidence.benchmark,

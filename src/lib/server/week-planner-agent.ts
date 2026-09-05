@@ -342,7 +342,7 @@ ${knownSubreddits.length ? `\n${knownSubredditsBlock(knownSubreddits)}` : ''}`;
         budget.usdSpent += ESTIMATED_RESEARCH_USD;
         budget.usdRemaining = Math.max(0, budget.usdRemaining - ESTIMATED_RESEARCH_USD);
         const { groundedText } = await import('$lib/server/research');
-        const { text, citations } = await groundedText(null as never, question, undefined, { brandId: opts.brandId });
+        const { text, citations } = await groundedText(question, undefined, { brandId: opts.brandId });
         for (const c of citations) {
           if (c.uri) researchedUrls.add(c.uri);
         }

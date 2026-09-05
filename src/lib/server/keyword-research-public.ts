@@ -1,7 +1,7 @@
 // Public (unauthenticated) keyword research for the free marketing tool.
 // Mixes a light AI niche read with DataForSEO suggestions/metrics. Caps free
 // results at FREE_LIMIT; full lists live behind sign-in → brand Keywords page.
-import { genaiClient, groundedText, structured } from './research';
+import { groundedText, structured } from './research';
 import {
   dataforseoConfigured,
   fetchDomainKeywords,
@@ -85,19 +85,16 @@ function dedupeSort(items: KeywordOpportunity[]): KeywordOpportunity[] {
 }
 
 async function discoverSeeds(input: string): Promise<SeedResult> {
-  const ai = genaiClient();
   const asUrl = isUrl(input);
   const prompt = asUrl
     ? `Look at this website and identify the SEO niche + 3-6 seed keywords people would search to find this business or its topics.\nURL: ${normalizeUrl(input)}\nReturn seeds in the site's primary language.`
     : `Identify the SEO niche for this topic/brand description and list 3-6 seed keywords people actually search for.\nTopic: ${input}\nPrefer the language of the input.`;
 
   const grounded = await groundedText(
-    ai,
     prompt,
     'You are an SEO research assistant. Use web search. Return only real, searchable keyword phrases — never invent demand.'
   );
   const seeded = await structured<SeedResult>(
-    ai,
     `Normalise into focusSummary, language (it|en), and 3-6 seed keywords.\n\nRESEARCH:\n${grounded.text}`,
     SEED_SCHEMA
   );

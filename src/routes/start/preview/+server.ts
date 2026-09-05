@@ -4,7 +4,7 @@ import { assertPublicUrl, guardTool } from '$lib/server/tool-guard';
 import { runBrandAnalysis } from '$lib/server/brand-analysis';
 import { planPreviewPosts, renderPreviewImages } from '$lib/server/content-preview/weekly-planner';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { NANO_BANANA_2_LITE } from '$lib/server/gemini';
+import { NANO_BANANA_2_LITE } from '$lib/server/google-models';
 import { localeLanguageName } from '$lib/i18n/locale';
 
 /**

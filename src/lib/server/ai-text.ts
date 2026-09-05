@@ -1,10 +1,17 @@
-import type { GoogleGenAI } from '@google/genai';
 import { structuredKie, textKie } from '$lib/server/kie';
 import { requireBrandContext } from '$lib/server/ai-log';
-import { type GeminiThinkingLevel } from '$lib/server/gemini';
 import { env } from '$env/dynamic/private';
 import { route } from '$lib/server/model-routing';
-import { llmBaseUrl, llmConfigured, llmImagesFromInline, llmModels, llmStructured, llmText } from '$lib/server/llm';
+import {
+  llmBaseUrl,
+  llmConfigured,
+  llmImagesFromInline,
+  llmModels,
+  llmStructured,
+  llmText,
+  reasoningEffort,
+  type ReasoningEffort
+} from '$lib/server/llm';
 
 // ── Il centralino del testo ─────────────────────────────────────────────────
 // Ogni chiamata di testo e di JSON del prodotto passa da qui e finisce su UNO dei due endpoint vivi:
@@ -50,6 +57,30 @@ export const PIN_GATEWAY = { provider: 'gateway' as const };
 // Extra fields threaded into logAiCall so per-site labels/attribution survive both providers.
 export type AiLogExtras = { brandId?: string; userId?: string; threadId?: string; context?: string };
 
+let warnedStaleBudget = false;
+
+/**
+ * Quanto ragiona ogni chiamata di giudizio / revisione / QC. Letta a ogni chiamata, così una
+ * regressione si disinnesca cambiando la variabile invece che con un deploy.
+ *
+ * Stava in `gemini.ts` e si chiamava `judgeThinkingLevel`, nel vocabolario di Google — ma il valore
+ * viaggia su `reasoning.effort` di OpenRouter, e da lì passa. Il nome vecchio prometteva
+ * `thinkingLevel`, un campo che nessuna chiamata di questo prodotto manda più.
+ *
+ * Le vecchie *_THINKING_BUDGET numeriche sono morte: si avvisa una volta invece di lasciarle
+ * sembrare vive nella configurazione.
+ */
+export function judgeReasoningEffort(rawOverride?: string | null): ReasoningEffort {
+  if (!warnedStaleBudget && (env.GEMINI_JUDGE_THINKING_BUDGET || env.PREPUBLISH_THINKING_BUDGET)) {
+    warnedStaleBudget = true;
+    console.warn(
+      '[AI] GEMINI_JUDGE_THINKING_BUDGET / PREPUBLISH_THINKING_BUDGET are ignored: the gateway takes ' +
+        'reasoning.effort, not a token budget. Use GEMINI_JUDGE_THINKING_LEVEL=low|medium|high.'
+    );
+  }
+  return reasoningEffort(rawOverride ?? env.GEMINI_JUDGE_THINKING_LEVEL);
+}
+
 /**
  * DeepSeek runs in `json_object` mode with the schema in the prompt — valid JSON is guaranteed,
  * conformance is NOT. So check what the caller actually depends on (top-level `required` keys, and
@@ -77,7 +108,6 @@ export function satisfiesSchema(value: unknown, schema: AnyRec): boolean {
 // `opts.provider` forces a specific provider for this call (e.g. blog writing → xiaomi + cheap pro).
 // `opts.noFallback` skips the Gemini safety net when set.
 export async function aiStructured<T>(
-  _ai: GoogleGenAI,
   prompt: string,
   schema: AnyRec,
   systemInstruction?: string,
@@ -88,8 +118,8 @@ export async function aiStructured<T>(
     model?: string;
     provider?: 'gateway' | 'kie';
     noFallback?: boolean;
-    /** How hard Gemini reasons (see structuredGemini). Ignored by the non-Gemini providers. */
-    thinkingLevel?: GeminiThinkingLevel;
+    /** Lo sforzo di ragionamento per QUESTA chiamata. Assente = il default del gateway. */
+    reasoningEffort?: ReasoningEffort;
   } & AiLogExtras
 ): Promise<T> {
   const brandId = requireBrandContext(opts);
@@ -100,7 +130,7 @@ export async function aiStructured<T>(
         ? 'kie'
         : 'gateway';
   const t0 = Date.now();
-  const { images, temperature, model, provider: _forced, noFallback, thinkingLevel: _thinkingLevel, ...logExtras } = opts ?? {};
+  const { images, temperature, model, provider: _forced, noFallback, reasoningEffort: effort, ...logExtras } = opts ?? {};
 
   // Un percorso che fallisce sempre e viene sempre salvato da un altro non è un risparmio: è
   // latenza e rumore nei log che nasconde i guasti veri. È il motivo per cui prima DeepSeek e poi
@@ -115,6 +145,7 @@ export async function aiStructured<T>(
       images: llmImagesFromInline(images),
       temperature,
       model,
+      reasoningEffort: effort,
       label: toolName
     });
   try {
@@ -156,7 +187,6 @@ export async function aiStructured<T>(
 
 // Testo libero: kie quando la rotta lo chiede, il gateway altrimenti, con ripiego sul gateway.
 export async function aiText(
-  _ai: GoogleGenAI | undefined,
   prompt: string,
   systemInstruction?: string,
   opts?: { label?: string; images?: ImagePart[] } & AiLogExtras
@@ -217,7 +247,6 @@ export const VARIANT_LENSES = [
 export const CREATIVE_TEMPERATURE = 0.9;
 
 export async function parallelVariants<T>(
-  ai: GoogleGenAI,
   // Receives the 0-based variant index so callers can differentiate each variant (lens, seed…).
   generateFn: (variantIndex: number) => Promise<T>,
   selectFn: (variants: T[]) => Promise<T>,

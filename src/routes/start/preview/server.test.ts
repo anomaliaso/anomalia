@@ -14,7 +14,7 @@ const lookupMock = vi.fn(async (host: string) => {
 });
 vi.mock('node:dns/promises', () => ({ lookup: (host: string) => lookupMock(host) }));
 vi.mock('$lib/server/supabase-admin', () => ({ createAdminClient: vi.fn(() => ({})) }));
-vi.mock('$lib/server/gemini', async (orig) => ({
+vi.mock('$lib/server/google-models', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   NANO_BANANA_2_LITE: 'gemini-3.1-flash-lite-image'
 }));

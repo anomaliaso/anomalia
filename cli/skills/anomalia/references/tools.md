@@ -36,6 +36,10 @@ Reach for it when the answer needs a count, a join you do by hand, or a table no
 exposes — that is one call instead of three that approximate it. A refusal comes back as `200`
 with `error`, `message` and often `fix` inside, so you can read why and change move.
 
+It is also the read for questions no tool of its own answers. **What this brand sells** — its
+catalogue of products, offers and services — is the `products` table: one row per offer, with
+`title`, `kind`, `pricing`, `url`, `featured` and the `images` it carries.
+
 ## Brand & posts
 
 | MCP | CLI |
@@ -48,7 +52,6 @@ with `error`, `message` and often `fix` inside, so you can read why and change m
 | `get_goals` | (MCP only) |
 | `get_gtm` | `anomalia gtm <slug>` |
 | `get_voice` / `update_voice` | `anomalia voice <slug>` |
-| `list_products` | (studio / products views) |
 | `list_posts` | `anomalia content <slug> [--status …]` |
 | `get_creation_kit` | (MCP only) |
 | `create_post` | (MCP only) |
@@ -178,15 +181,45 @@ one post per platform, so a sequence is for pasting by hand, not for `create_pos
 `credits_exhausted` (402) means the pool is empty and nothing was written; `no_captions` (502) is
 the model returning nothing.
 
-`generate_image` draws a NEW image into the library from a prompt. Required: `slug`, `prompt`;
-optional `count` (1-4 alternatives, **each one billed**), `aspect_ratio`, `model`, `title`. It
-bills a render per image — roughly 8 credits each — and creates nothing in the calendar, so ask
-for two or three, look at them with `list_media`, and pass only the id you keep to `create_post`.
-The response carries two facts worth reading. `model` is the model that **actually** drew it,
-after the brand's choice and the platform default — read it rather than assuming your request won,
-because an environment override can still outrank it. `renders` is how many renders were **billed**,
-which can exceed the images you got back: a render that succeeds and is then discarded downstream
-is paid for all the same, so trust `renders` over your own count when reconciling spend.
+`generate_image` draws a picture from a description — "an image of a cat", a product shot, a
+background for a slide. Required: `prompt`. Optional: `slug`, `count` (1-4 alternatives, **each
+one billed**), `aspect_ratio`, `model`, `brand_style`, `title`. With a slug, that brand's own look
+is applied by default — its colours, its fonts and the visual direction it has settled on — so you
+do not have to describe them. Without a slug there is no brand and none of that reaches the model,
+so name the style you want in the prompt.
+
+**`brand_style` turns that default off, and only a slug gives it a meaning.** Leave it out and the
+brand's look is applied, which with a slug is almost always what you want. Send `ignore` when the
+picture must take nothing from the brand: a plain UI screenshot, an illustration about somebody
+else, a neutral background — places where brand colours and fonts spoil the result. Without a slug
+there is no brand to apply or ignore, and sending it is refused as `brand_style_needs_a_brand`
+rather than quietly dropped: pass a slug, or drop `brand_style`. `refine_image` takes the same
+field, and the brand's look reaches a refinement the same way. `generate_carousel` and
+`generate_media` apply it too but take no `brand_style`: a series that is not the brand's is not a
+series, and `generate_media` is the old door — call `generate_image` when you need the switch. A
+clip filmed by `generate_video` from a prompt alone follows the brand's visual direction and cannot
+be switched off either; animating a library image takes its look from that image's pixels instead.
+
+**`slug` is optional, and which way you call it is the only choice to make.** WITHOUT it this is a
+one-off drawing: no brand, nothing filed anywhere, `id` comes back `null` and there is nothing to
+hand to `create_post` — you get a `storage_path` and a signed `url` that expires in two hours, so
+save what you want to keep. WITH it the image lands in that brand's library, `list_media` finds it
+again, and its `id` is what `create_post` takes as `media_ids`: that is the path for anything that
+belongs to a brand or is going to become a post.
+
+**Do NOT call `list_brands` to decide where to draw.** If nobody named a brand there is no brand.
+Guessing one spends a real organisation's credits and litters a real library — call it without
+`slug` instead. Without `slug` the credits come from your organisation, and the response names it
+in `organization` so the bill is never anonymous.
+
+It creates nothing in the calendar and publishes nothing, so ask for two or three, look at them,
+keep one. The response carries three facts worth reading. `model` is the model that **actually**
+drew it, after the brand's choice and the platform default — read it rather than assuming your
+request won, because an environment override can still outrank it. `renders` is how many renders
+were **billed**, which can exceed the images you got back: a render that succeeds and is then
+discarded downstream is paid for all the same, so trust `renders` over your own count when
+reconciling spend. `cost_usd` is what those renders actually cost, read off the invoice — `null`
+when no invoice came back, never `0`.
 
 **One prompt, one render, no safety net.** Nothing inspects the image after the model draws it:
 there is no quality control, no critic that rejects a bad frame, no retry you did not ask for.
@@ -414,7 +447,7 @@ catalog and would erase a hand-made row.
 `update_product`, `update_person` and `update_competitor` change only the fields you send: every
 other column keeps the value it had. An id from another brand answers `not_found`, exactly like
 one that does not exist anywhere. The four deletes want the UUID in full, verbatim from
-`get_studio` or `list_products`.
+`get_studio`, or `query` on the `products` table.
 
 `update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
 real person's face stays withheld from every generator until the operator states the consent in

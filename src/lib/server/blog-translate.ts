@@ -12,7 +12,7 @@
  */
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, structured } from './research';
+import { structured } from './research';
 import { PIN_GATEWAY } from './ai-text';
 import { BLOG_LOCALE_LANGUAGE, type BlogLocale } from './blog-locales';
 
@@ -81,11 +81,11 @@ Requirements:
 - The slug must be in ${language}, ASCII, lowercase and hyphenated.
 Return JSON.`;
 
-  const out = await structured<AnyRec>(genaiClient(), prompt, TRANSLATION_SCHEMA, SYSTEM, {
+  const out = await structured<AnyRec>(prompt, TRANSLATION_SCHEMA, SYSTEM, {
     label: 'translate_article',
     brandId: brand.id as string,
     ...PIN_GATEWAY
-  }).catch((error) => { swallow('genaiClient failed', error); return null; });
+  }).catch((error) => { swallow('translate article failed', error); return null; });
   if (!out?.bodyMarkdown || !out?.title) return null;
 
   const row = {

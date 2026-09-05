@@ -71,10 +71,12 @@ describe('le superfici sul centralino (non lo SDK Google)', () => {
     const llm = readFileSync(join(HERE, 'llm.ts'), 'utf8');
     expect(chat).not.toContain('googleSearch');
     expect(chat).not.toContain('webSearch');
-    expect(research).toContain('webSearch: true');
+    expect(research).toContain("webSearch: 'native'");
     expect(research).toContain('llmGeminiSearchModel');
     expect(research).not.toContain('tools: [{ googleSearch');
-    expect(geo).toContain('groundedGemini');
+    // La GEO non eredita più il modello dal picker: ogni motore ha il suo id in ANSWER_ENGINES.
+    expect(geo).toContain('ANSWER_ENGINES');
+    expect(geo).toContain("search: 'native'");
     expect(llm).toContain("engine: 'native'");
   });
 });
@@ -87,7 +89,7 @@ describe('la fatturazione di una chiamata passata da kie', () => {
 
   it('non prezza mai a listino Google: 16 volte il costo reale, e senza errori', async () => {
     const { computeCostUsd } = await import('./ai-log');
-    const { GEMINI_FLASH, kieFlashId } = await import('./gemini');
+    const { GEMINI_FLASH, kieFlashId } = await import('./google-models');
     const usage = { ms: 0, ok: true, inputTokens: 100_000, outputTokens: 10_000, thinkingTokens: 20_000 };
     const google = computeCostUsd({ label: 'x', provider: 'gemini', model: GEMINI_FLASH, ...usage });
     const kie = computeCostUsd({ label: 'x', provider: 'gemini', model: kieFlashId(GEMINI_FLASH), ...usage });
@@ -98,7 +100,7 @@ describe('la fatturazione di una chiamata passata da kie', () => {
 
   it('kie non ha il tier di cache: i token ripetuti costano pieni (e più che su Google)', async () => {
     const { computeCostUsd } = await import('./ai-log');
-    const { GEMINI_FLASH, kieFlashId } = await import('./gemini');
+    const { GEMINI_FLASH, kieFlashId } = await import('./google-models');
     const cached = { ms: 0, ok: true, inputTokens: 100_000, cachedTokens: 100_000, outputTokens: 0 };
     const google = computeCostUsd({ label: 'x', provider: 'gemini', model: GEMINI_FLASH, ...cached })!;
     const kie = computeCostUsd({ label: 'x', provider: 'gemini', model: kieFlashId(GEMINI_FLASH), ...cached })!;

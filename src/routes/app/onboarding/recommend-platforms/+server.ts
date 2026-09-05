@@ -1,6 +1,5 @@
 import type { RequestHandler } from './$types';
-import { canEnter } from '$lib/server/access';
-import { genaiClient } from '$lib/server/research';
+import { canEnter, ownsBrand } from '$lib/server/access';
 import { aiStructured } from '$lib/server/ai-text';
 import { localeLanguageName } from '$lib/i18n/locale';
 import { logOnboardingError } from '$lib/server/onboarding-errors';
@@ -42,13 +41,13 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
 
   const body = await request.json().catch(() => ({}));
   const brandId = typeof body?.brandId === 'string' ? body.brandId : null;
+  if (brandId && !(await ownsBrand(supabase, brandId))) return new Response('Forbidden', { status: 403 });
   if (!brandId) return new Response('Missing brandId', { status: 400 });
   return withBrandContext(brandId, async () => {
     const profile = body?.profile ?? {};
   const outputLanguage = localeLanguageName(locale);
 
   try {
-    const ai = genaiClient();
     const prompt = `Recommend the best social platforms for this brand to PUBLISH on, choosing ONLY from: ${ALLOWED.join(', ')}.
 
 Brand: ${profile?.name ?? ''}
@@ -59,7 +58,6 @@ Target audience: ${profile?.target_audience ?? ''}
 
 Pick the 2-4 platforms where THIS brand's audience and content format will perform best (most important first). Be realistic for the niche — don't just list the biggest networks. Write the one-line rationale in ${outputLanguage}.`;
     const out = await aiStructured<{ recommended: string[]; rationale: string }>(
-      ai,
       prompt,
       SCHEMA,
       'You are a senior social-media strategist. Recommend platforms grounded in the brand and its audience, not generic advice.'

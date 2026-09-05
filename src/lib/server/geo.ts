@@ -1,19 +1,10 @@
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { GoogleGenAI } from '@google/genai';
 import { fetchPage } from './brand-analysis';
-import { genaiClient, groundedGemini, structured } from './research';
+import { structured } from './research';
 import { exaConfigured, exaGroundedAnswer } from './exa';
-import { deepseekSearchConfigured, deepseekGroundedAnswer } from './citation-probe';
-import { perplexityConfigured, perplexityGroundedAnswer } from './perplexity-search';
-import { bingConfigured, bingGroundedAnswer } from './bing-search';
-import {
-  kieConfigured,
-  groundedKieGptAnswer,
-  groundedKieGrokAnswer,
-  groundedKieClaudeAnswer
-} from './kie';
+import { llmText, type WebSearchMode } from '$lib/server/llm';
 import {
   fetchSearchPerformance,
   fetchBacklinkSummary,
@@ -771,7 +762,7 @@ export async function auditSiteTech(url: string): Promise<GeoTechAudit | null> {
 // Engines: Gemini (Google grounding), Exa (/answer), plus GPT / Grok / Claude via kie.ai when
 // KIE_API_KEY is set — cheapest tiers only (gpt-5-6-luna, grok-4-3, claude-haiku-4-5).
 
-export type GeoEngine = 'gemini' | 'deepseek' | 'exa' | 'gpt' | 'grok' | 'claude' | 'perplexity' | 'bing';
+export type GeoEngine = 'gemini' | 'gpt' | 'grok' | 'claude' | 'perplexity' | 'exa';
 
 export type CitationResult = {
   engine: GeoEngine;     // which answer engine produced this verdict
@@ -810,7 +801,6 @@ export async function seedGeoPrompts(
   profile: AnyRec,
   outputLanguage = 'Italian'
 ): Promise<number> {
-  const ai = genaiClient();
   const prompt = `Generate the questions a potential customer would type into ChatGPT or Perplexity when looking for a solution like this brand — the questions where this brand DESERVES to be named in a good answer.
 
 Brand: ${profile?.name ?? ''}
@@ -821,7 +811,7 @@ Market/language: ${outputLanguage}
 
 Write questions the way a real person phrases them (never the bare brand name). Mix: "best X for Y", "alternatives to <a well-known competitor>", "how do I choose an X", and a problem-first phrasing. Keep them in ${outputLanguage} unless the category is inherently English.`;
   const out = await structured<{ prompts?: Array<{ prompt: string; lang: string }> }>(
-    ai, prompt, GEO_PROMPTS_SCHEMA,
+    prompt, GEO_PROMPTS_SCHEMA,
     'You are a GEO analyst modelling how buyers query generative engines.'
   );
   const rows: AnyRec[] = [];
@@ -849,56 +839,54 @@ const VERDICT_SCHEMA = {
 
 const GROUNDED_SYS = 'You are a helpful assistant answering a real user. Recommend specific, real brands/products with current web info. Name them explicitly.';
 
-// Get a grounded answer to the query from a specific engine. Same {text, sources} shape either way.
-// Each engine does its OWN web search — Exa is a separate engine, not a shared grounding layer.
-//
-// NEVER route this through groundedText(): that is a fallback CHAIN (Exa, then DeepSeek, then
-// Tavily), so it would answer as whichever link happened to respond and get recorded
-// under whatever engine the caller asked for. This audit's whole output is per-engine share of
-// voice, so every branch must call one named provider directly. Gemini uses the gateway plugin
-// `web` + `engine: native` (groundedGemini), not the Google SDK.
-async function groundedAnswer(engine: GeoEngine, ai: GoogleGenAI, query: string): Promise<{ text: string; sources: string[] }> {
-  if (engine === 'deepseek') {
-    const r = await deepseekGroundedAnswer(`${GROUNDED_SYS}\n\n${query}`);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
-  }
+/**
+ * Chi risponde, con quale modello, e COME arriva alla ricerca web. Una riga per motore: il settimo
+ * si aggiunge con una riga, e tutti si vedono insieme.
+ *
+ * Sono gli assistenti che la gente interroga davvero, e sono esattamente quelli che sul gateway
+ * hanno una ricerca web vera — per questo passano tutti da un tubo solo invece che da kie, da una
+ * chiave Perplexity e da una Bing come prima.
+ *
+ * `search` è la sola differenza fra i cinque, ed è MISURATA: Perplexity col plugin `web` risponde
+ * 404 e senza plugin torna la lista di fonti più ricca del roster. Sparpagliare quella differenza
+ * in due `if` è come nasce una regola che diverge al primo cambiamento.
+ *
+ * Gli id sono fissati, non presi dal picker della chat: l'audit deve interrogare un modello NOTO,
+ * o il confronto fra due cicli non vuol dire niente.
+ */
+const ANSWER_ENGINES: Record<Exclude<GeoEngine, 'exa'>, { model: string; search: WebSearchMode }> = {
+  gemini: { model: 'google/gemini-3.7-flash', search: 'native' },
+  gpt: { model: 'openai/gpt-5.6-luna', search: 'native' },
+  grok: { model: 'x-ai/grok-4.6', search: 'native' },
+  claude: { model: 'anthropic/claude-sonnet-5', search: 'native' },
+  perplexity: { model: 'perplexity/sonar', search: 'built-in' }
+};
+
+const sourcesOf = (citations: Array<{ uri: string }>): string[] =>
+  [...new Set(citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8);
+
+// Una risposta web-grounded da UN motore nominato. Mai da groundedText(): quella è una catena di
+// ripieghi, e risponderebbe come il primo link disponibile facendosi registrare sotto il nome di
+// chi il chiamante aveva chiesto. Qui l'intero risultato è la share of voice PER MOTORE, quindi
+// ogni ramo deve chiamare un fornitore nominato e uno solo.
+async function groundedAnswer(engine: GeoEngine, query: string): Promise<{ text: string; sources: string[] }> {
   if (engine === 'exa') {
     const r = await exaGroundedAnswer(query);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
+    return { text: r.text, sources: sourcesOf(r.citations) };
   }
-  if (engine === 'gpt') {
-    const r = await groundedKieGptAnswer(query);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
-  }
-  if (engine === 'grok') {
-    const r = await groundedKieGrokAnswer(query);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
-  }
-  if (engine === 'claude') {
-    const r = await groundedKieClaudeAnswer(query);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
-  }
-  if (engine === 'perplexity') {
-    const r = await perplexityGroundedAnswer(query);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
-  }
-  if (engine === 'bing') {
-    const r = await bingGroundedAnswer(query);
-    return { text: r.text, sources: [...new Set(r.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
-  }
-  const g = await groundedGemini(ai, query, GROUNDED_SYS);
-  return { text: g.text, sources: [...new Set(g.citations.map((c) => domainOf(c.uri)).filter(Boolean))].slice(0, 8) };
+  const { model, search } = ANSWER_ENGINES[engine];
+  const r = await llmText({ prompt: query, system: GROUNDED_SYS, model, webSearch: search, label: `geo.${engine}` });
+  return { text: r.text, sources: sourcesOf(r.citations) };
 }
 
-// Ask one category question against one engine, then extract the verdict (verdict step is always
-// Gemini — it just parses the answer text). Best-effort.
-async function auditOnePrompt(engine: GeoEngine, ai: GoogleGenAI, brandName: string, p: { prompt: string; lang?: string | null }): Promise<CitationResult> {
+// Ask one category question against one engine, then extract the verdict (verdict step just parses
+// the answer text). Best-effort.
+async function auditOnePrompt(engine: GeoEngine, brandName: string, p: { prompt: string; lang?: string | null }): Promise<CitationResult> {
   const empty: CitationResult = { engine, prompt: p.prompt, brandMentioned: false, rank: null, competitors: [], sources: [], error: null };
   try {
-    const { text, sources } = await groundedAnswer(engine, ai, p.prompt);
+    const { text, sources } = await groundedAnswer(engine, p.prompt);
     if (!text) return { ...empty, error: 'empty_answer' };
     const v = await structured<{ brandMentioned?: boolean; rank?: number; competitors?: string[] }>(
-      ai,
       `The brand we care about is "${brandName}". From the answer below, determine whether "${brandName}" is named, its 1-based rank among all brands named (0 if absent), and list the OTHER brands named.\n\nANSWER:\n${text}`,
       VERDICT_SCHEMA
     );
@@ -931,16 +919,14 @@ export type CitationAudit = {
   samplesPerPrompt: number;
 };
 
-/** Engines enabled for this run — each does its own web search. Exa is an extra engine, not shared grounding. */
+/**
+ * I motori di questo giro. I cinque del gateway non si accendono uno alla volta: hanno UNA chiave
+ * sola, e una sonda che fallisce esce già dal conteggio come errore invece di valere «non citato».
+ * Exa ha una chiave sua, quindi resta condizionata.
+ */
 export function citationEngines(): GeoEngine[] {
-  const engines: GeoEngine[] = ['gemini'];
-  // DeepSeek's own web search, as a tracked engine in its own right (it is a real answer surface,
-  // and by far the cheapest of the set).
-  if (deepseekSearchConfigured()) engines.push('deepseek');
+  const engines = Object.keys(ANSWER_ENGINES) as GeoEngine[];
   if (exaConfigured()) engines.push('exa');
-  if (kieConfigured()) engines.push('gpt', 'grok', 'claude');
-  if (perplexityConfigured()) engines.push('perplexity');
-  if (bingConfigured()) engines.push('bing');
   return engines;
 }
 
@@ -959,7 +945,6 @@ export async function runCitationAudit(
 ): Promise<CitationAudit> {
   if (!prompts.length) return { shareOfVoice: 0, results: [], perEngine: {}, domainCitedShare: 0, samplesPerPrompt: 0 };
   const samplesPerPrompt = Math.max(1, Math.min(5, opts.samplesPerPrompt ?? CITATION_SAMPLES));
-  const ai = genaiClient();
   const engines = citationEngines();
   const tasks: Array<Promise<CitationResult>> = [];
   // Ask each question MORE THAN ONCE. Citation is non-deterministic — the same query returns
@@ -967,15 +952,18 @@ export async function runCitationAudit(
   // measurement, and a share-of-voice built on n=1 per question moved every week for no reason.
   for (const engine of engines) {
     for (const p of prompts) {
-      for (let i = 0; i < samplesPerPrompt; i++) tasks.push(auditOnePrompt(engine, ai, brandName, p));
+      for (let i = 0; i < samplesPerPrompt; i++) tasks.push(auditOnePrompt(engine, brandName, p));
     }
   }
   const results = await Promise.all(tasks);
   // Le percentuali si calcolano solo sulle risposte che ci sono STATE. Una sonda fallita (chiave
   // morta, 429, timeout, risposta vuota) non è la prova che il brand non sia citato: contarla come
-  // non-menzione trasformava il guasto di un provider in un voto più basso per il brand, ed è
-  // esattamente come una chiave DeepSeek a saldo zero peggiorava il grado di visibilità AI senza
-  // che nessuno avesse mai raggiunto quel motore. Meglio un motore in meno che un motore inventato.
+  // non-menzione trasformava il guasto di un provider in un voto più basso per il brand, senza che
+  // nessuno avesse mai raggiunto quel motore. Meglio un motore in meno che un motore inventato.
+  //
+  // Da non confondere con una risposta SENZA FONTI, che è un'altra cosa e resta nel conteggio:
+  // OpenAI cita qualcosa in circa una risposta su tre, e quelle senza citazioni sono risposte
+  // valide di cui si legge il testo — valgono zero solo sul dominio citato.
   const answered = results.filter((r) => !r.error);
   const share = (n: number, total: number): number => (total ? Math.round((n / total) * 100) : 0);
   const perEngine: Record<string, number> = {};

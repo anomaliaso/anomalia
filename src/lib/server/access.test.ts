@@ -128,3 +128,46 @@ describe('userCanEnter', () => {
     expect(await userCanEnter('user-1')).toBe(false);
   });
 });
+
+describe('ownsBrand', () => {
+  /** Le policy di `brands` restituiscono la riga solo a chi è proprietario dell'org o membro. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const brandsVisibleTo = (visible: string[]): any => ({
+    from: () => {
+      let wanted: unknown = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const q: any = {
+        select: () => q,
+        eq: (_column: string, value: unknown) => {
+          wanted = value;
+          return q;
+        },
+        maybeSingle: async () => ({
+          data: visible.includes(wanted as string) ? { id: wanted } : null,
+          error: null
+        })
+      };
+      return q;
+    }
+  });
+
+  it('riconosce un brand del chiamante', async () => {
+    const { ownsBrand } = await freshAccess();
+    const { markRlsScoped } = await import('./rls-client');
+
+    expect(await ownsBrand(markRlsScoped(brandsVisibleTo(['brand-mio'])), 'brand-mio')).toBe(true);
+  });
+
+  it('nega un brand che le policy non gli mostrano', async () => {
+    const { ownsBrand } = await freshAccess();
+    const { markRlsScoped } = await import('./rls-client');
+
+    expect(await ownsBrand(markRlsScoped(brandsVisibleTo(['brand-mio'])), 'brand-altrui')).toBe(false);
+  });
+
+  it('nega su un client che non dichiara di essere scoped', async () => {
+    const { ownsBrand } = await freshAccess();
+
+    expect(await ownsBrand(brandsVisibleTo(['brand-altrui']), 'brand-altrui')).toBe(false);
+  });
+});

@@ -51,7 +51,6 @@ vi.mock('$lib/server/motion-references', () => ({
 	})
 }));
 vi.mock('$lib/server/posts-design', () => ({ isPostsDesignEnabled: () => true }));
-vi.mock('$lib/server/gemini', () => ({ geminiTransport: () => 'google' }));
 
 import { createMotionReferenceTools, type ReferenceStudy } from './reference-tools';
 

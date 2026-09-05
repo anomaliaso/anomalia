@@ -92,7 +92,7 @@ type ImagePart = { inlineData: { mimeType: string; data: string } };
 // qui.
 async function genImage(text: string, refs: ImagePart[] = []): Promise<string | undefined> {
   const { renderPostImage } = await import('./content-preview/images');
-  return await renderPostImage(null as never, text, { personImages: refs, aspectRatio: '1:1' });
+  return await renderPostImage(text, { personImages: refs, aspectRatio: '1:1' });
 }
 
 function dataUrlToImagePart(dataUrl: string): ImagePart | null {
@@ -261,7 +261,6 @@ export async function inferMissingPersonAttributes(
         const part = await fetchImagePart(url);
         if (!part) return;
         const parsed = await structured<{ gender?: string; ageRange?: string }>(
-          null as never,
           'Look at the attached reference photo of a real person and report their perceived gender presentation and approximate age range. This is used only to describe them accurately and respectfully in generated content.',
           ATTR_SCHEMA,
           undefined,

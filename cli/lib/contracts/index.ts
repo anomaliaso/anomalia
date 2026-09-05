@@ -68,8 +68,7 @@ import {
   GET_STUDIO,
   GET_VOICE,
   GET_WEEKLY_PLAN,
-  LIST_ARTICLES,
-  LIST_PRODUCTS
+  LIST_ARTICLES
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import {
@@ -149,11 +148,18 @@ type EndpointShape = {
 
 export type ResourcelessEndpoint = EndpointShape & {
   readonly pathUnderBrand: string;
+  /**
+   * The same tool, reachable without naming a brand. Declaring it is what makes `slug` optional
+   * and what tells the caller a second route exists — an endpoint that omits this one has no way
+   * of running outside a brand, and asking for one is an error rather than a silent fallback.
+   */
+  readonly pathWithoutBrand?: string;
   readonly resource?: undefined;
 };
 
 export type ResourceEndpoint = EndpointShape & {
   readonly pathUnderBrand: `${string}/${typeof RESOURCE_SEGMENT}${string}`;
+  readonly pathWithoutBrand?: undefined;
   readonly resource: BrandResource;
 };
 
@@ -228,7 +234,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_IDEAS,
   LIST_MEDIA,
   LIST_POSTS,
-  LIST_PRODUCTS,
   LIST_SHARES,
   LIST_SOCIAL_ACCOUNTS,
   LIST_WEB_AUDITS,
@@ -285,6 +290,11 @@ export function pathFor(endpoint: BrandEndpoint, slug: string, id?: string): str
   if (endpoint.resource === undefined) return `${base}${endpoint.pathUnderBrand}`;
   if (!id) throw new Error(`${endpoint.tool} needs a ${endpoint.resource} id`);
   return `${base}${endpoint.pathUnderBrand.replace(RESOURCE_SEGMENT, encodeURIComponent(id))}`;
+}
+
+/** Where this tool runs when no brand is named — `null` when it only exists under one. */
+export function pathWithoutBrand(endpoint: BrandEndpoint): string | null {
+  return endpoint.pathWithoutBrand ? `/api/v1${endpoint.pathWithoutBrand}` : null;
 }
 
 // Un id accorciato è una comodità di lettura: la lista dice quale riga, il prefisso basta a
@@ -362,8 +372,7 @@ export {
   GET_STUDIO,
   GET_VOICE,
   GET_WEEKLY_PLAN,
-  LIST_ARTICLES,
-  LIST_PRODUCTS
+  LIST_ARTICLES
 };
 export { STUDIO_DOCUMENT_MODES } from './reads';
 export type { StudioDocumentMode } from './reads';
@@ -421,7 +430,8 @@ export {
   MEMORY_ENTRIES_MAX,
   MEMORY_USED_MAX,
   RECORD_MEMORY_USED,
-  SAVE_MEMORY
+  SAVE_MEMORY,
+  UPDATE_MEMORY_ENTRY
 } from './memory';
 export type { AgentMemoryCategory } from './memory';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';

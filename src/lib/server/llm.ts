@@ -193,13 +193,30 @@ function userContent(
  * Su questo modello il reasoning non si può nemmeno spegnere: `{enabled:false}` risponde 400,
  * «Reasoning is mandatory for this endpoint».
  */
-export const LLM_REASONING_EFFORT = (() => {
-  const raw = env.LLM_REASONING_EFFORT?.trim().toLowerCase();
-  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'high';
-})();
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 
-/** Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT. */
-const reasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+const EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high'];
+
+/**
+ * Un valore qualunque letto come effort. Fuori vocabolario ripiega invece di 400-are il lavoro:
+ * qui arrivano anche i vecchi budget numerici, che per il gateway sono spazzatura.
+ */
+export function reasoningEffort(raw: unknown, fallback: ReasoningEffort = 'high'): ReasoningEffort {
+  const v = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return (EFFORTS as string[]).includes(v) ? (v as ReasoningEffort) : fallback;
+}
+
+export const LLM_REASONING_EFFORT: ReasoningEffort = reasoningEffort(env.LLM_REASONING_EFFORT);
+
+/**
+ * Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT.
+ *
+ * Il chiamante può chiedere il SUO sforzo — un giudice che rilegge una didascalia non deve pensare
+ * quanto un pianificatore. Se non chiede niente decide il default, che resta dichiarato.
+ */
+const reasoningOptions = (asked?: ReasoningEffort) => ({
+  reasoning: { effort: asked ?? LLM_REASONING_EFFORT }
+});
 
 /**
  * Quanto si aspetta una risposta dal centralino prima di considerarla persa.
@@ -227,6 +244,7 @@ export async function llmStructured<T>(opts: {
 	images?: LlmMediaPart[];
 	file?: LlmMediaPart;
 	temperature?: number;
+	reasoningEffort?: ReasoningEffort;
 	label?: string;
 }): Promise<T> {
 	const modelId = opts.model ?? llmDefaultModel();
@@ -239,7 +257,7 @@ export async function llmStructured<T>(opts: {
 			system: opts.system,
 			temperature: opts.temperature,
 			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-			providerOptions: { openai: reasoningOptions() },
+			providerOptions: { openai: reasoningOptions(opts.reasoningEffort) },
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }]
 		});
 		logAiCall({
@@ -269,6 +287,16 @@ export async function llmStructured<T>(opts: {
 const WEB_PLUGIN = [{ id: 'web', engine: 'native' }];
 
 /**
+ * Come un modello arriva alla ricerca web.
+ *
+ * `native` glielo chiede col plugin `web` di OpenRouter; `built-in` non chiede niente perché il
+ * modello cerca comunque. Non è una preferenza: `perplexity/sonar` col plugin risponde **404**
+ * («does not support native web search»), e senza plugin torna la lista di fonti più ricca del
+ * roster. Chi sta da che parte è dichiarato una volta sola, accanto al roster in `geo.ts`.
+ */
+export type WebSearchMode = 'native' | 'built-in';
+
+/**
  * La chiamata con ricerca web, mandata A MANO invece che dall'AI SDK.
  *
  * `plugins` è un'estensione di OpenRouter, non un parametro OpenAI: passandola in
@@ -282,6 +310,7 @@ const WEB_PLUGIN = [{ id: 'web', engine: 'native' }];
  */
 async function groundedCall(
 	modelId: string,
+	mode: WebSearchMode,
 	opts: { prompt: string; system?: string }
 ): Promise<{ text: string; citations: Array<{ uri: string; title: string }> } & { cost?: number }> {
 	const messages = [
@@ -291,7 +320,12 @@ async function groundedCall(
 	const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
 		method: 'POST',
 		headers: { authorization: `Bearer ${llmApiKey() ?? ''}`, 'content-type': 'application/json' },
-		body: JSON.stringify({ model: modelId, messages, plugins: WEB_PLUGIN, usage: { include: true } }),
+		body: JSON.stringify({
+			model: modelId,
+			messages,
+			...(mode === 'native' ? { plugins: WEB_PLUGIN } : {}),
+			usage: { include: true }
+		}),
 		signal: AbortSignal.timeout(LLM_TIMEOUT_MS)
 	});
 	const body = (await res.json()) as {
@@ -319,8 +353,9 @@ export async function llmText(opts: {
 	model?: string;
 	images?: LlmMediaPart[];
 	file?: LlmMediaPart;
-	/** Google Search nativo su un Gemini via OpenRouter (`plugins: web, engine: native`). */
-	webSearch?: boolean;
+	/** Ricerca web via OpenRouter: col plugin (`native`) o lasciata al modello (`built-in`). */
+	webSearch?: WebSearchMode;
+	reasoningEffort?: ReasoningEffort;
 	label?: string;
 }): Promise<{ text: string; citations: Array<{ uri: string; title: string }> }> {
 	const modelId = opts.model ?? (opts.webSearch ? llmGeminiSearchModel() : llmDefaultModel());
@@ -329,7 +364,7 @@ export async function llmText(opts: {
 
 	if (opts.webSearch) {
 		try {
-			const { text, citations, cost } = await groundedCall(modelId, opts);
+			const { text, citations, cost } = await groundedCall(modelId, opts.webSearch, opts);
 			logAiCall({ label, provider: 'llm', model: modelId, prompt: opts.prompt, ms: Date.now() - t0, ok: true, flatCostUsd: cost });
 			return { text, citations };
 		} catch (e) {
@@ -346,7 +381,7 @@ export async function llmText(opts: {
 			system: opts.system,
 			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
-			providerOptions: { openai: reasoningOptions() }
+			providerOptions: { openai: reasoningOptions(opts.reasoningEffort) }
 		});
 		logAiCall({
 			label,

@@ -10,7 +10,11 @@ export function registerPlanTools(server: McpServer) {
     'produce_week',
     {
       title: 'Produce weekly seeds',
-      description: 'Produce the current week seeds into posts. Uses the active seeds draft for the brand.',
+      description:
+        'Turn this week\'s plan into actual posts — copy and images, one per seed. It spends ' +
+        'credits, once per post. The posts land waiting for approval; nothing is published. ' +
+        'plan_week or save_week_seeds is what puts the seeds there first, and get_weekly_plan ' +
+        'shows them. row_index produces one seed only.',
       inputSchema: z.object({
         slug,
         week: z.number().int().min(0).optional().describe('Unused for API resolve — seeds draft is auto-detected'),

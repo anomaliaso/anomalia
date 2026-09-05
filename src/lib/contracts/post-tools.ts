@@ -38,9 +38,28 @@ export const POST_CONTENT_TYPES = [
   'generated_video',
   'generated_graphic',
   'uploaded_image',
+  'uploaded_video',
   'text',
   'link'
 ] as const;
+export type PostContentType = (typeof POST_CONTENT_TYPES)[number];
+
+/**
+ * I valori che `posts.source` assume davvero. Non è deducibile da un grep: al punto dell'insert
+ * (`manual-posting.ts`) c'è una variabile, e `external` — l'agente esterno che deposita un post
+ * via `POST /api/v1/brands/:slug/posts` — nasce quattordici file più in là. L'elenco sta qui
+ * perché il CHECK del database è derivato da QUESTO, e un test lo tiene onesto.
+ */
+export const POST_SOURCES = [
+  'plan',
+  'manual',
+  'radar',
+  'guest_preview',
+  'cross_post',
+  'founder',
+  'external'
+] as const;
+export type PostSource = (typeof POST_SOURCES)[number];
 
 // ── update_post ──────────────────────────────────────────────────────────────
 

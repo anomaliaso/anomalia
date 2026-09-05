@@ -1,6 +1,5 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient } from '$lib/server/brand-context';
 import { aiStructured } from '$lib/server/ai-text';
 import { guardrailsBlock } from '$lib/server/brand-guardrails';
 import { discoverLinkedIn, discoverReddit, discoverThreads, type DiscoveredPost } from '$lib/server/market-discovery';
@@ -130,7 +129,6 @@ export async function ensureFieldTopics(
   if (ctx.length < 20) return { queries: [], hashtags: [] };
 
   const out = await aiStructured<FieldTopics>(
-    genaiClient(),
     `${ctx}\n\nDammi le query e gli hashtag per andare a vedere COME COMUNICA chi ottiene attenzione in questo campo. Non cerco i concorrenti per nome: cerco i post che il pubblico di questo brand vede passare.`,
     TOPICS_SCHEMA,
     'Sai dove guarda un pubblico. Scegli termini che restituiscono post reali di un campo, non slogan da brochure.',
@@ -261,7 +259,6 @@ export async function harvestBrandField(
   let kept = unique.map((c, i) => ({ c, relevance: 60, i }));
   try {
     const verdict = await aiStructured<{ keep?: Array<{ index: number; relevance: number }> }>(
-      genaiClient(),
       `Brand: ${brand.name ?? ''}. Campo osservato con le query: ${topics.queries.join(' | ')}.\n\nPOST TROVATI:\n${unique.map((c, i) => `${i}. [${c.platform}] ${c.text || '(nessun testo)'}`).join('\n')}\n\nQuali di questi appartengono davvero a questo campo e possono insegnare qualcosa su COME ci si comunica dentro? Scarta il fuori tema, la pubblicità pura e i post senza contenuto.`,
       RELEVANCE_SCHEMA,
       'Sei severo: un post fuori campo che entra nel playbook insegna la cosa sbagliata a tutti i post futuri del brand.',
@@ -354,7 +351,6 @@ export async function teardownFieldPosts(
     .in('id', todo);
   if (!posts?.length) return 0;
 
-  const ai = genaiClient();
   let written = 0;
   for (const p of posts) {
     try {
@@ -364,7 +360,6 @@ export async function teardownFieldPosts(
       if (!body && !spoken) continue; // niente testo, niente teardown: non si inventa
 
       const out = await aiStructured<AnyRec>(
-        ai,
         `Un post su ${p.platform} che ha ottenuto attenzione. Smontalo.
 
 TESTO: ${body || '(nessuna caption)'}${spoken}
@@ -477,7 +472,6 @@ export async function buildFieldPlaybook(
   const guardrails = guardrailsBlock(kit?.ai_context);
 
   const out = await aiStructured<AnyRec>(
-    genaiClient(),
     `Brand: ${brand.name ?? ''} — ${String(kit?.about ?? '').slice(0, 400)}${kit?.category ? ` (${kit.category})` : ''}
 
 POST CHE HANNO GIRATO NEL SUO CAMPO, GIÀ SMONTATI:
