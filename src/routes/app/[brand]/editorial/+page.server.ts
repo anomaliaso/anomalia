@@ -2,7 +2,6 @@ import { swallow } from '$lib/server/swallow';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient } from '$lib/server/research';
 import { plannerProfile, planEvidence, proposeFirstPlan } from '$lib/server/planner-inputs';
 import { remaining } from '$lib/server/usage';
 import { withBrandContext } from '$lib/server/ai-log';
@@ -202,7 +201,7 @@ export const actions: Actions = {
 
       try {
         const [profile, evidence] = await Promise.all([plannerProfile(supabase, brand), planEvidence(supabase, brand.id)]);
-        const week = await replanWeek(genaiClient(), plan, weekIndex, brief, profile, localeLanguageName(locale), {
+        const week = await replanWeek(plan, weekIndex, brief, profile, localeLanguageName(locale), {
           platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
           allowedCadences: cadenceAllowed(brand.plan),
           benchmark: evidence.benchmark,
@@ -250,7 +249,7 @@ export const actions: Actions = {
           planEvidence(supabase, brand.id),
           activeGtmBrief(supabase, brand.id, brand.timezone).catch((error) => { swallow('load gtm brief', error); return ''; })
         ]);
-        const revised = await revisePlan(genaiClient(), current, feedback, profile, {
+        const revised = await revisePlan(current, feedback, profile, {
           platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
           allowedCadences: cadenceAllowed(brand.plan),
           outputLanguage: localeLanguageName(locale),

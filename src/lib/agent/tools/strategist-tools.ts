@@ -55,7 +55,6 @@ export function withStrategistTools<T extends Record<string, unknown>>(
 				const { plannerProfile, planEvidence } = await import('$lib/server/chat/async-jobs');
 				const { activeGtmBrief } = await import('$lib/server/gtm');
 				const { loadApprovedRubrics } = await import('$lib/server/rubrics');
-				const { genaiClient } = await import('$lib/server/research');
 				const { localeLanguageName } = await import('$lib/i18n/locale');
 				const { data: brandRow } = await supabase
 					.from('brands')
@@ -69,7 +68,7 @@ export function withStrategistTools<T extends Record<string, unknown>>(
 					activeGtmBrief(supabase, brandId, tz).catch(() => ''),
 					loadApprovedRubrics(supabase, brandId).catch(() => [])
 				]);
-				const next = await proposeNextCycle(genaiClient(), current, profile, {
+				const next = await proposeNextCycle(current, profile, {
 					platforms: Array.isArray(brandRow?.target_platforms)
 						? (brandRow!.target_platforms as string[])
 						: [],

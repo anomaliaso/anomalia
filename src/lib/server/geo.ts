@@ -1,9 +1,8 @@
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { GoogleGenAI } from '@google/genai';
 import { fetchPage } from './brand-analysis';
-import { genaiClient, structured } from './research';
+import { structured } from './research';
 import { exaConfigured, exaGroundedAnswer } from './exa';
 import { llmText, type WebSearchMode } from '$lib/server/llm';
 import {
@@ -802,7 +801,6 @@ export async function seedGeoPrompts(
   profile: AnyRec,
   outputLanguage = 'Italian'
 ): Promise<number> {
-  const ai = genaiClient();
   const prompt = `Generate the questions a potential customer would type into ChatGPT or Perplexity when looking for a solution like this brand — the questions where this brand DESERVES to be named in a good answer.
 
 Brand: ${profile?.name ?? ''}
@@ -813,7 +811,7 @@ Market/language: ${outputLanguage}
 
 Write questions the way a real person phrases them (never the bare brand name). Mix: "best X for Y", "alternatives to <a well-known competitor>", "how do I choose an X", and a problem-first phrasing. Keep them in ${outputLanguage} unless the category is inherently English.`;
   const out = await structured<{ prompts?: Array<{ prompt: string; lang: string }> }>(
-    ai, prompt, GEO_PROMPTS_SCHEMA,
+    prompt, GEO_PROMPTS_SCHEMA,
     'You are a GEO analyst modelling how buyers query generative engines.'
   );
   const rows: AnyRec[] = [];
@@ -889,7 +887,6 @@ async function auditOnePrompt(engine: GeoEngine, brandName: string, p: { prompt:
     const { text, sources } = await groundedAnswer(engine, p.prompt);
     if (!text) return { ...empty, error: 'empty_answer' };
     const v = await structured<{ brandMentioned?: boolean; rank?: number; competitors?: string[] }>(
-      genaiClient(),
       `The brand we care about is "${brandName}". From the answer below, determine whether "${brandName}" is named, its 1-based rank among all brands named (0 if absent), and list the OTHER brands named.\n\nANSWER:\n${text}`,
       VERDICT_SCHEMA
     );

@@ -11,7 +11,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createHash } from 'node:crypto';
 import { env as publicEnv } from '$env/dynamic/public';
 import { fetchPage, extractVisibleText } from './brand-analysis';
-import { genaiClient } from './brand-context';
 import { aiStructured } from './ai-text';
 
 // ponytail: one pass grabs the first N sitemap pages at ~2 req/s (N×delay must stay under the
@@ -124,7 +123,6 @@ async function enrichPages(
   pages: Array<{ title: string; description: string; body_text: string }>
 ): Promise<Array<{ topics: string[]; relevance: number }>> {
   if (!pages.length) return [];
-  const ai = genaiClient();
   const list = pages
     .map((p, i) => `${i}. ${p.title || '(untitled)'} — ${p.description || p.body_text.slice(0, 160)}`)
     .join('\n');
@@ -136,8 +134,7 @@ ${brandContext.slice(0, 1500)}
 PAGES:
 ${list}`;
   try {
-    const out = await aiStructured<{ pages?: Array<{ index?: number; topics?: string[]; relevance?: number }> }>(
-      ai, prompt, ENRICH_SCHEMA, 'You classify web pages precisely. Never invent pages not in the list.', 'return_page_enrichment'
+    const out = await aiStructured<{ pages?: Array<{ index?: number; topics?: string[]; relevance?: number }> }>(prompt, ENRICH_SCHEMA, 'You classify web pages precisely. Never invent pages not in the list.', 'return_page_enrichment'
     );
     const byIdx = new Map((out.pages ?? []).map((p) => [Number(p.index), p]));
     return pages.map((_, i) => {

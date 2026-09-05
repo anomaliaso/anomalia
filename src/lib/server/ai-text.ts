@@ -1,4 +1,3 @@
-import type { GoogleGenAI } from '@google/genai';
 import { structuredKie, textKie } from '$lib/server/kie';
 import { requireBrandContext } from '$lib/server/ai-log';
 import { env } from '$env/dynamic/private';
@@ -109,7 +108,6 @@ export function satisfiesSchema(value: unknown, schema: AnyRec): boolean {
 // `opts.provider` forces a specific provider for this call (e.g. blog writing → xiaomi + cheap pro).
 // `opts.noFallback` skips the Gemini safety net when set.
 export async function aiStructured<T>(
-  _ai: GoogleGenAI,
   prompt: string,
   schema: AnyRec,
   systemInstruction?: string,
@@ -189,7 +187,6 @@ export async function aiStructured<T>(
 
 // Testo libero: kie quando la rotta lo chiede, il gateway altrimenti, con ripiego sul gateway.
 export async function aiText(
-  _ai: GoogleGenAI | undefined,
   prompt: string,
   systemInstruction?: string,
   opts?: { label?: string; images?: ImagePart[] } & AiLogExtras
@@ -250,7 +247,6 @@ export const VARIANT_LENSES = [
 export const CREATIVE_TEMPERATURE = 0.9;
 
 export async function parallelVariants<T>(
-  ai: GoogleGenAI,
   // Receives the 0-based variant index so callers can differentiate each variant (lens, seed…).
   generateFn: (variantIndex: number) => Promise<T>,
   selectFn: (variants: T[]) => Promise<T>,

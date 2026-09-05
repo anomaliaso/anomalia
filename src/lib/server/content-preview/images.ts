@@ -1,6 +1,5 @@
 import { swallow } from '$lib/server/swallow';
 import { type AnyRec, type BrandProfile, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PreviewPost, platformKey } from './seed-model';
-import type { GoogleGenAI } from '@google/genai';
 import { DIGITAL_SOURCE_TYPE, markImage } from '$lib/server/content-credentials';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
@@ -229,7 +228,6 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
 }
 
 export async function renderPostImage(
-  ai: GoogleGenAI,
   imagePrompt: string,
   opts: RenderImageOpts = {}
 ): Promise<string | undefined> {
@@ -267,7 +265,6 @@ export async function renderPostImage(
   // ancora renderizzando quel task e lo fatturerà comunque, quindi aprirne un secondo è chiedere
   // lo stesso lavoro due volte — proprio quando il fornitore è in affanno — e pagarlo due volte.
   // Si riprende lo stesso taskId.
-  void ai;
   let resumeTaskId: string | undefined;
   for (let attempt = 1; attempt <= 2; attempt++) {
     // L'URL di kie vive 24 ore: non deve sopravvivere alla funzione, men che meno finire in una
@@ -322,11 +319,10 @@ export function carouselSeriesDirective(slideIndex: number, totalSlides: number)
  * chiamanti non se lo ricopiano e non se lo dimenticano.
  */
 export async function renderBrandImage(
-  ai: GoogleGenAI,
   imagePrompt: string,
   renderOpts: RenderImageOpts = {}
 ): Promise<string | undefined> {
-  return renderPostImage(ai, imagePrompt, {
+  return renderPostImage(imagePrompt, {
     ...renderOpts,
     craftFloor: renderOpts.craftFloor ?? (await designWallDigestSection())
   });
@@ -346,13 +342,12 @@ type CritiqueOpts = {
 };
 
 export async function renderCarouselSlide(
-  ai: GoogleGenAI,
   supabase: SupabaseClient,
   userId: string,
   slidePrompt: string,
   slideIndex: number, // 0-based among ALL slides; first call is 1 (slide 2 of N)
   totalSlides: number,
-  renderOpts: NonNullable<Parameters<typeof renderPostImage>[2]>,
+  renderOpts: NonNullable<Parameters<typeof renderPostImage>[1]>,
   slideOneAnchor: ImagePart | undefined,
   critiqueOpts: CritiqueOpts
 ): Promise<string | undefined> {
@@ -362,7 +357,7 @@ export async function renderCarouselSlide(
   try {
     // Un render per slide. Il ritentativo su verdetto del critico e' sparito con il critico: una
     // slide storta si corregge con refine_image guardandola, non ridisegnandola a scatola chiusa.
-    const dataUrl = await renderPostImage(ai, slidePrompt + seriesDirective, opts);
+    const dataUrl = await renderPostImage(slidePrompt + seriesDirective, opts);
     return dataUrl ? await uploadPostImage(supabase, userId, dataUrl, opts.aspectRatio) : undefined;
   } catch (e) {
     console.error(`[renderCarouselSlide] slide ${slideIndex + 1}/${totalSlides} failed: ${e instanceof Error ? e.message : String(e)}`);

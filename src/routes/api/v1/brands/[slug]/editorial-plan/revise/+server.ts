@@ -2,7 +2,6 @@ import { swallow } from '$lib/server/swallow';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
-import { genaiClient } from '$lib/server/brand-context';
 import { cadenceAllowed, loadActivePlan, revisePlan } from '$lib/server/editorial-plan';
 import { activeGtmBrief } from '$lib/server/gtm';
 import { localeLanguageName } from '$lib/i18n/locale';
@@ -28,7 +27,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
       activeGtmBrief(supabase, brand.id, brand.timezone).catch((error) => { swallow('load gtm brief', error); return ''; })
     ]);
 
-    const revised = await revisePlan(genaiClient(), current, feedback, profile, {
+    const revised = await revisePlan(current, feedback, profile, {
       platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
       allowedCadences: cadenceAllowed(brand.plan),
       outputLanguage: localeLanguageName(null),

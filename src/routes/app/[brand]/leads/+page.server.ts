@@ -214,9 +214,7 @@ async function rewriteSuggestion(
   const platform = isThreads ? 'Threads' : isX ? 'X' : 'Reddit';
 
   return withBrandContext(brand.id, async () => {
-  const { genaiClient } = await import('$lib/server/brand-context');
   const { aiStructured } = await import('$lib/server/ai-text');
-  const ai = genaiClient();
 
   const REWRITE_SCHEMA = {
     type: 'object' as const,
@@ -227,7 +225,6 @@ async function rewriteSuggestion(
   };
 
   const result = await aiStructured<{ text?: string }>(
-    ai,
     `You are rewriting a ${field === 'dm' ? 'private DM to the post author' : 'public reply comment'} for a brand engaging in an online conversation on ${platform}.
 
 Brand: ${brandRow?.name ?? ''} — ${String(kit?.about ?? '').slice(0, 300)}

@@ -85,7 +85,7 @@ function primeRenderers() {
 	for (const m of Object.values(M)) {
 		m.mockReset();
 	}
-	M.renderPostImage.mockImplementation(async (_ai: unknown, prompt: string) => {
+	M.renderPostImage.mockImplementation(async (prompt: string) => {
 		renders += 1;
 		const label = prompt.startsWith(CAST_PROMPT_HEAD) ? `cast${renders}` : `frame${renders}`;
 		return `data:image/png;base64,${label}`;
@@ -130,7 +130,7 @@ function faceRefsPerClip(): string[][] {
 }
 
 function castRenders(): unknown[] {
-	return M.renderPostImage.mock.calls.filter((c) => String(c[1]).startsWith(CAST_PROMPT_HEAD));
+	return M.renderPostImage.mock.calls.filter((c) => String(c[0]).startsWith(CAST_PROMPT_HEAD));
 }
 
 describe('UGC batch senza persona esplicita', () => {

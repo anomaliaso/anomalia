@@ -1,7 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, strategyBriefFromReport, type Benchmark, type StrategyReport } from '$lib/server/research';
+import { strategyBriefFromReport, type Benchmark, type StrategyReport } from '$lib/server/research';
 import { rankRecentWinners } from '$lib/server/scheduler';
 import { withBrandContext } from '$lib/server/ai-log';
 import {
@@ -194,7 +194,7 @@ export const actions: Actions = {
       const objective = String(data.get('objective') ?? '').trim();
       try {
         const [profile, evidence] = await Promise.all([plannerProfile(supabase, brand), planEvidence(supabase, brand.id)]);
-        const plan = await proposeGtmDual(genaiClient(), profile, {
+        const plan = await proposeGtmDual(profile, {
           objective,
           platforms: platformsOf(brand),
           outputLanguage: localeLanguageName(locale),
@@ -240,7 +240,7 @@ export const actions: Actions = {
 
       try {
         const [profile, evidence] = await Promise.all([plannerProfile(supabase, brand), planEvidence(supabase, brand.id)]);
-        const revised = await redirectGtmDual(genaiClient(), current, feedback, phaseIndex, profile, {
+        const revised = await redirectGtmDual(current, feedback, phaseIndex, profile, {
           platforms: platformsOf(brand),
           outputLanguage: localeLanguageName(locale),
           benchmark: evidence.benchmark,
@@ -330,7 +330,7 @@ export const actions: Actions = {
         ]);
         const digest = phasePerformanceDigest(posts ?? [], history ?? [], phase);
         const planForReview = { ...plan, phases: phases6m };
-        const review = await reviewPhase(genaiClient(), planForReview, phaseIndex, digest, profile, localeLanguageName(locale));
+        const review = await reviewPhase(planForReview, phaseIndex, digest, profile, localeLanguageName(locale));
 
         if (review.verdict === 'adjust' && review.plan) {
           const mergedPhases = review.plan.phases.map((p, i) => ({ ...p, start_date: phases6m[i]?.start_date ?? p.start_date, end_date: phases6m[i]?.end_date ?? p.end_date }));
@@ -380,7 +380,7 @@ export const actions: Actions = {
             : ''
         ].filter(Boolean).join(' — ');
 
-        const new90d = await proposeGtm(genaiClient(), profile, {
+        const new90d = await proposeGtm(profile, {
           horizon: '90d',
           objective: contextualObjective,
           platforms: platformsOf(brand),

@@ -1,4 +1,3 @@
-import type { GoogleGenAI } from '@google/genai';
 import { CAROUSEL_CRAFT } from '$lib/server/carousel-craft';
 import { scrubPersonAppearance } from './images';
 import { brandLines, detectSceneCollapse, seedToPost } from './plan-pipeline';
@@ -210,7 +209,6 @@ export function sealOnImageText(prompt: string): string {
 }
 
 export async function executePlan(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   strategy: WeeklyStrategy,
   prefs: ContentPrefs = {},
@@ -311,7 +309,6 @@ ${seedLines}
 Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
 
   const parsed: AnyRec = await aiStructured(
-    ai,
     prompt,
     EXEC_SCHEMA,
     prefs.personality?.trim()
@@ -377,7 +374,7 @@ Return JSON with a "posts" array in the SAME ORDER as the seeds.`;
   // PASS 2.5. L'angolo di ogni seed viaggia come i fatti ammessi di QUEL post: un seed Radar
   // porta lì i fatti della fonte, e il chief non deve togliere ciò che la fonte sostiene.
   const seedBriefs = strategy.seeds.map((s, i) => `${i}. ${String(s.angle ?? '').slice(0, 500)}`).join('\n');
-  return reviewCaptions(ai, profile, posts, prefs, seedBriefs);
+  return reviewCaptions(profile, posts, prefs, seedBriefs);
 }
 
 // Compact verdict the copy chief returns per caption it wants to rewrite.
@@ -406,7 +403,6 @@ const CAPTION_REVIEW_SCHEMA = {
 // caption che aprono con lo stesso pattern). Riscrive solo ciò che segnala, in loco, e non lancia
 // mai — una review mancante è meglio di un batch perso.
 async function reviewCaptions(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   posts: PreviewPost[],
   prefs: ContentPrefs = {},
@@ -492,7 +488,7 @@ Rewrite a caption when:
 - REDDIT: missing title/subreddit, marketing tone, hashtags, or self-promo + URL spam risk — rewrite as a community-native member post (keep title/subreddit fields intact via the caption body only; title/subreddit are structural).
 Keep good captions out of "fixes". A rewrite keeps the post's angle and platform register; it never changes which product/person the post is about. Return JSON.`;
 
-    const parsed: AnyRec = await structured(ai, prompt, CAPTION_REVIEW_SCHEMA, undefined, {
+    const parsed: AnyRec = await structured(prompt, CAPTION_REVIEW_SCHEMA, undefined, {
       label: 'reviewCaptions',
       // Chiamata di verdetto, non prosa da leggere: lasciata libera ragionava 9x l'output che
       // produceva, e il thinking si paga a tariffa output.
@@ -517,7 +513,7 @@ Keep good captions out of "fixes". A rewrite keeps the post's angle and platform
 
     // PASS 2.6 — il PANEL. Il chief è binario (segnalata o spedita) e lascia intatta tutta la
     // fascia competente-e-dimenticabile: il panel la itera su un'obiezione specifica per giro.
-    await runCopyPanel(ai, posts, { profile, prefs, factLines, language, playbook });
+    await runCopyPanel(posts, { profile, prefs, factLines, language, playbook });
 
     // Un judge può restituire una riscrittura con l'INDICE sbagliato, e due post escono con la
     // stessa identica caption — peggio di qualsiasi caption mediocre. Il duplicato torna alla SUA
@@ -584,7 +580,6 @@ Keep good captions out of "fixes". A rewrite keeps the post's angle and platform
  * spedire l'ultimo tentativo farebbe di un passo di qualità un lancio di moneta. Best-effort.
  */
 async function runCopyPanel(
-  ai: GoogleGenAI,
   posts: PreviewPost[],
   ctx: { profile: BrandProfile; prefs: ContentPrefs; factLines: string; language: string; playbook: string }
 ): Promise<void> {
@@ -635,7 +630,7 @@ ${list}
 
 Restituisci JSON.`;
 
-      const parsed: AnyRec = await structured(ai, prompt, COPY_PANEL_SCHEMA, undefined, {
+      const parsed: AnyRec = await structured(prompt, COPY_PANEL_SCHEMA, undefined, {
         label: `copyPanel:r${round}`,
         reasoningEffort: judgeReasoningEffort()
       });

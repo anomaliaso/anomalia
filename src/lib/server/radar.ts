@@ -3,7 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createHash, randomUUID } from 'node:crypto';
 import { env as publicEnv } from '$env/dynamic/public';
 import { env } from '$env/dynamic/private';
-import { genaiClient } from './brand-context';
 import { aiStructured } from './ai-text';
 import { withBrandContext } from './ai-log';
 import { fetchPage } from './brand-analysis';
@@ -259,7 +258,6 @@ export async function seedSourcesForBrand(
   plan?: string | null
 ): Promise<number> {
   console.log(`[radar] seedSourcesForBrand called for brand ${brandId}, profile name: ${profile?.name ?? 'n/a'}`);
-  const ai = genaiClient();
   const pillars = Array.isArray(profile?.content_pillars) ? profile.content_pillars.join('; ') : '';
   const prompt = `Design the NEWS SOURCES for this brand's instant-marketing radar — the searches that will surface the news, debates and events this brand should react to with timely posts.
 
@@ -273,8 +271,7 @@ Brand language: ${outputLanguage}
 Queries must be SPECIFIC to the beat (never generic like "news" or the bare brand name) and use OR-groups of synonyms the way a press office would. Only propose subreddits you are confident actually exist and are active.`;
   let out: { gnews_queries?: Array<{ query: string; lang: string }>; subreddits?: string[]; reddit_queries?: string[] };
   try {
-    out = await aiStructured<{ gnews_queries?: Array<{ query: string; lang: string }>; subreddits?: string[]; reddit_queries?: string[] }>(
-      ai, prompt, SOURCES_SCHEMA, 'You are a media-monitoring specialist setting up press-review sources.', 'return_radar_sources'
+    out = await aiStructured<{ gnews_queries?: Array<{ query: string; lang: string }>; subreddits?: string[]; reddit_queries?: string[] }>(prompt, SOURCES_SCHEMA, 'You are a media-monitoring specialist setting up press-review sources.', 'return_radar_sources'
     );
   } catch (e) {
     console.warn('[radar] seedSourcesForBrand AI call failed:', e instanceof Error ? e.message : e);
@@ -499,7 +496,6 @@ export async function radarScan(
   const weekIdx = plan ? currentWeekIndex(plan, brand.timezone || 'Europe/Rome') : null;
   const weekTheme = plan && weekIdx != null ? plan.weeks?.[weekIdx]?.theme ?? '' : '';
 
-  const ai = genaiClient();
 
   // Static sources: read from shared DB cache; refetch stale/missing. Each item is tagged with
   // its ORIGIN source key so the fair-share round-robin below can give every source a slot.
@@ -560,7 +556,6 @@ export async function radarScan(
       if (searchers.length) {
         const platformsLabel = searchers.map((s) => (s.kind === 'reddit_query' ? 'Reddit' : s.kind === 'threads_query' ? 'Threads' : 'LinkedIn')).join(', ');
         const dq = await aiStructured<{ queries: string[] }>(
-          ai,
           `Generate 1-2 keyword search queries to find recent conversations (on ${platformsLabel}) where this brand can help with its expertise. Plain keywords, no boolean operators. Brand context: ${ctx.slice(0, 600)}${leadCriteria}`,
           { type: 'object' as const, properties: { queries: { type: 'array' as const, items: { type: 'string' as const } } }, required: ['queries'] },
           'You are a search query generator. Return only queries that would find real discussions where a brand expert could contribute.',
@@ -663,7 +658,7 @@ Judge EVERY item. Be selective: a feed is mostly noise.${leadCriteria ? " The US
 ${blogEnabled ? "- The brand's BLOG IS ACTIVE, so action 'article' is available for any news item (not conversations) that has enough substance for a long-form, evergreen blog post from the brand's expertise. Prefer 'article' over 'post' when the topic genuinely warrants depth (a full guide, analysis, or definitive take) rather than a quick social reaction.\n" : "- The brand's BLOG IS NOT ACTIVE — NEVER use action 'article'.\n"}
 Duplicated stories: keep the best one, skip the rest ("duplicate"). Never invent facts beyond the title/snippet. ALL angles (post, comment, article) are user-facing rationale shown to the owner: write them in the BRAND'S language. Comment angles = one line on what the brand's reply should contribute (the reply itself gets drafted later in the THREAD'S language); article angles = the blog post's thesis in one line.`;
 
-  const out = await aiStructured<{ verdicts?: AnyRec[] }>(ai, prompt, VERDICT_SCHEMA, 'You are a sharp press-review editor. Selective, strategic, never sensationalist for its own sake.', 'return_radar_verdicts');
+  const out = await aiStructured<{ verdicts?: AnyRec[] }>(prompt, VERDICT_SCHEMA, 'You are a sharp press-review editor. Selective, strategic, never sensationalist for its own sake.', 'return_radar_verdicts');
 
   const results: RadarVerdictItem[] = [];
   for (const v of out.verdicts ?? []) {
@@ -760,7 +755,6 @@ export async function radarEngage(
   ]);
   // The full https:// URL to point people to (never just the name or a bare domain).
   const siteUrl = normalizeSiteUrl(brand.website ?? brandRow?.website);
-  const ai = genaiClient();
   const out: RadarEngageRow[] = [];
 
   for (const it of items) {
@@ -839,7 +833,6 @@ export async function radarEngage(
       const styleHint = prefs?.replyStyle ? `\nSTYLE INSTRUCTIONS (PRIORITY — override any conflicting rules below): ${prefs.replyStyle}` : '';
 
       const draft = await aiStructured<{ worth_it?: boolean; comment?: string; dm?: string }>(
-        ai,
         buildEngagePrompt({
           brandName: String(brand.name ?? ''),
           about: String(kit?.about ?? '').slice(0, 800),

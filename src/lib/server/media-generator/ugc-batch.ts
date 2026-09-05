@@ -4,7 +4,6 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { bilingualNoticeLocale } from '$lib/i18n/locale';
-import type { GoogleGenAI } from '@google/genai';
 import { createUIMessageStream, createUIMessageStreamResponse } from 'ai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -394,7 +393,6 @@ function clipsToPlans(
 
 /** One-shot fallback when the tool-using planner fails. */
 async function planClipScriptsFallback(
-  ai: GoogleGenAI,
   prompt: string,
   productAssignments: (UgcProductRef | null)[],
   modelAssignments: (UgcModelRef | null)[],
@@ -466,7 +464,6 @@ async function planClipScriptsFallback(
   let planned: Planned | null = null;
   try {
     planned = await aiStructured<Planned>(
-      ai,
       // + il pavimento dal wall /trending (digest settimanale già distillato, niente AI qui;
       // stantio ⇒ stringa vuota). Stesso blocco che riceve il planner primario in ugc-plan-agent.
       buildUgcBatchPlanPrompt({
@@ -499,12 +496,11 @@ async function planClipScriptsFallback(
 
 async function renderCastPortrait(
   opts: UgcBatchOpts,
-  ai: GoogleGenAI,
   aspect: AspectRatio,
   setting: string
 ): Promise<string | null> {
   const prompt = buildUgcCastPortraitPrompt({ setting });
-  const data = await renderPostImage(ai, prompt, {
+  const data = await renderPostImage(prompt, {
     visualStyle: UGC_VISUAL_STYLE,
     model: UGC_COVER_MODEL,
     aspectRatio: aspect === '16:9' ? '16:9' : '9:16'
@@ -523,11 +519,6 @@ async function renderCastPortrait(
     ugc: true
   });
   return url;
-}
-
-function genaiClient(): GoogleGenAI {
-  // Dummy: renderPostImage costruisce Google da solo sul ripiego pixel.
-  return null as unknown as GoogleGenAI;
 }
 
 /**
@@ -563,8 +554,6 @@ export type UgcClipRunContext = {
   clipSeconds: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   platform: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ai: any;
   finished: Set<number>;
   /**
    * Indice → PERCHÉ è fallita. Prima una clip fallita finiva dentro `finished` ("settled"), e
@@ -599,7 +588,6 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
     refVideoUrls,
     clipSeconds,
     platform,
-    ai,
     finished,
     failed,
     baseSharedRefUrls,
@@ -660,7 +648,7 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
           const stillPrompt = buildUgcProductStillPrompt(plan.product.name, {
             setting: plan.setting
           });
-          const stillData = await renderPostImage(ai, stillPrompt, {
+          const stillData = await renderPostImage(stillPrompt, {
             model: UGC_COVER_MODEL,
             aspectRatio: aspect === '16:9' ? '16:9' : '9:16'
           });
@@ -764,7 +752,7 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
             : undefined
         });
 
-        const coverDataUrl = await renderPostImage(ai, framePrompt, {
+        const coverDataUrl = await renderPostImage(framePrompt, {
           referenceImages: sceneReferenceImages.length ? sceneReferenceImages : undefined,
           referenceMode: productParts.length || productStillParts.length ? 'product' : undefined,
           personImages: hasPerson ? castParts.slice(0, 3) : undefined,
@@ -829,7 +817,7 @@ export async function runOneUgcClip(ctx: UgcClipRunContext, plan: UgcClipPlan): 
 
         for (const frame of frames) {
           try {
-            const dataUrl = await renderPostImage(ai, frame.prompt, {
+            const dataUrl = await renderPostImage(frame.prompt, {
               referenceImages: frameSceneRefs.length ? frameSceneRefs : undefined,
               referenceMode:
                 productParts.length || productStillParts.length ? 'product' : undefined,
@@ -1029,7 +1017,6 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
     execute: async ({ writer }) => {
       await withBrandContext(opts.brandId, async () => {
         const t0 = Date.now();
-        const ai = genaiClient();
         const textId = `ugc-text-${Date.now()}`;
         writer.write({ type: 'text-start', id: textId });
         const planBits = [
@@ -1166,7 +1153,6 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
               toolName: 'plan_ugc_batch'
             });
             plans = await planClipScriptsFallback(
-              ai,
               opts.prompt,
               productAssignments,
               modelAssignments,
@@ -1235,7 +1221,7 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
         const castPortraitUrl =
           plans.find((p) => p.castPortraitUrl)?.castPortraitUrl ??
           (needsInventedFace
-            ? await renderCastPortrait(opts, ai, aspect, plans[0]!.setting).catch((e) => {
+            ? await renderCastPortrait(opts, aspect, plans[0]!.setting).catch((e) => {
                 console.warn('[ugc-batch] cast portrait failed', e);
                 return null;
               })
@@ -1277,7 +1263,6 @@ export function streamUgcBatchResponse(opts: UgcBatchOpts): Response {
           refVideoUrls,
           clipSeconds,
           platform,
-          ai,
           finished,
           failed,
           baseSharedRefUrls,

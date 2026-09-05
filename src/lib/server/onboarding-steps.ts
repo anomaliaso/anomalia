@@ -19,7 +19,6 @@ import { scrapeForOnboarding, type ScrapeTarget } from '$lib/server/scrapecreato
 import { synthesizeBrandContext, synthesizeVisualStyle, synthesizeVisualPlaybook } from '$lib/server/brand-context';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
 import {
-  genaiClient,
   discoverCompetitors,
   resolveCompetitorHandles,
   scrapeCompetitors,
@@ -478,7 +477,6 @@ async function processCompetitors(
 
   const run = async () => {
     try {
-      const ai = genaiClient();
 
       // Creator path (no analyzed website): read their socials so discovery has niche + voice.
       const hasSite = !!(profile?.url || profile?.website);
@@ -487,7 +485,7 @@ async function processCompetitors(
         try {
           const { posts } = await scrapeForOnboarding(handles);
           if (posts.length) {
-            const ctx = await synthesizeBrandContext(ai, {
+            const ctx = await synthesizeBrandContext({
               name: profile?.name ?? '',
               kit: {
                 about: profile?.about,
@@ -503,7 +501,7 @@ async function processCompetitors(
       }
 
       await note(admin, jobId, 'scanning', 'Scanning the market for your competitors…');
-      const { competitors, citations } = await discoverCompetitors(ai, profile, outputLanguage);
+      const { competitors, citations } = await discoverCompetitors(profile, outputLanguage);
       await note(admin, jobId, 'found', `Found ${competitors.length} competitors`);
 
       const result = { competitors, citations, platforms };
@@ -617,7 +615,6 @@ async function processResearch(
 
   const run = async () => {
     try {
-      const ai = genaiClient();
 
       const runMarketStudy = async (): Promise<MarketStudy> => {
         // Phase 1 (parallel): scrape the brand's own posts while resolving competitor social handles.
@@ -627,7 +624,7 @@ async function processResearch(
             ? scrapeForOnboarding(brandHandles).catch((error) => { swallow('scrape onboarding profile', error); return ({ posts: [], errors: [] }); })
             : Promise.resolve({ posts: [], errors: [] }),
           competitors.length
-            ? resolveCompetitorHandles(ai, competitors, platforms)
+            ? resolveCompetitorHandles(competitors, platforms)
             : Promise.resolve(new Map<string, ScrapeTarget[]>())
         ]);
         const brandPosts = brandScrape.posts;
@@ -663,7 +660,7 @@ async function processResearch(
 
         const brandWork = Promise.all([
           brandPosts.length
-            ? synthesizeBrandContext(ai, {
+            ? synthesizeBrandContext({
                 name: profile?.name ?? '',
                 kit: {
                   about: profile?.about,
@@ -678,11 +675,11 @@ async function processResearch(
                 }))
               }).catch((error) => { swallow('brandPosts.map failed', error); return ''; })
             : Promise.resolve(''),
-          brandPosts.length ? synthesizeVisualStyle(ai, topThumbs).catch((error) => { swallow('synthesize visual style', error); return ''; }) : Promise.resolve(''),
+          brandPosts.length ? synthesizeVisualStyle(topThumbs).catch((error) => { swallow('synthesize visual style', error); return ''; }) : Promise.resolve(''),
           brandPosts.length
-            ? synthesizeVisualPlaybook(ai, topThumbs).catch((error) => { swallow('synthesize visual playbook', error); return ''; })
+            ? synthesizeVisualPlaybook(topThumbs).catch((error) => { swallow('synthesize visual playbook', error); return ''; })
             : Promise.resolve(''),
-          generateBuyerPersonas(ai, profile, competitors, platforms, outputLanguage).catch((error) => { swallow('generate buyer personas', error); return [] as BuyerPersona[]; })
+          generateBuyerPersonas(profile, competitors, platforms, outputLanguage).catch((error) => { swallow('generate buyer personas', error); return [] as BuyerPersona[]; })
         ]);
 
         const [competitorPosts, [brandCtx, brandStyle, visualPlaybook, buyerPersonas]] =
@@ -719,7 +716,7 @@ async function processResearch(
         });
 
         await pushProgress('analysis', 'Studying what wins in your category…');
-        const qualitative = await analyzeCompetitorContent(ai, benchmark, outputLanguage);
+        const qualitative = await analyzeCompetitorContent(benchmark, outputLanguage);
         if (qualitative) {
           await attachStepResult('analysis', { text: qualitative });
         }
@@ -740,7 +737,6 @@ async function processResearch(
         const fastModel = undefined;
 
         const report = await synthesizeStrategyReport(
-          ai,
           profile,
           benchmark,
           qualitative,
@@ -811,7 +807,7 @@ async function processResearch(
         language: profile?.language
       }).catch((error) => { swallow('find timely hooks', error); return ''; });
       const allowedCadences = cadenceAllowed(planTier);
-      const editorialPlan = await proposePlan(ai, profile, {
+      const editorialPlan = await proposePlan(profile, {
         platforms,
         allowedCadences,
         outputLanguage,

@@ -2,7 +2,6 @@ import { swallow } from '$lib/server/swallow';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess, gateAiAction } from '$lib/server/cli-auth';
-import { genaiClient } from '$lib/server/research';
 import { withBrandContext } from '$lib/server/ai-log';
 import { plannerProfile, planEvidence } from '$lib/server/planner-inputs';
 import { activeGtmBrief } from '$lib/server/gtm';
@@ -42,7 +41,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
         planEvidence(supabase, brand.id),
         activeGtmBrief(supabase, brand.id, String(brand.timezone ?? 'Europe/Rome')).catch((error) => { swallow('String failed', error); return ''; })
       ]);
-      const candidates = await proposeRubrics(genaiClient(), profile, {
+      const candidates = await proposeRubrics(profile, {
         platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
         outputLanguage,
         strategyBrief: [gtmBrief, evidence.strategyBrief].filter(Boolean).join('\n\n'),

@@ -181,9 +181,9 @@ export function genaiClient(): GoogleGenAI {
 
 // Synthesise the text BRAND CONTEXT BRIEF (voice/themes/what-works). Reusable in-memory (onboarding)
 // and from the DB (rebuildBrandContext).
-export async function synthesizeBrandContext(ai: GoogleGenAI, input: ContextInputs): Promise<string> {
+export async function synthesizeBrandContext(input: ContextInputs): Promise<string> {
   try {
-    return await aiText(ai, buildContextPrompt(input), 'You are an expert brand strategist writing a briefing for another AI. Be concise, factual, specific.');
+    return await aiText(buildContextPrompt(input), 'You are an expert brand strategist writing a briefing for another AI. Be concise, factual, specific.');
   } catch (e) {
     console.error('synthesizeBrandContext failed:', e);
     return '';
@@ -214,7 +214,6 @@ export async function fetchImagePart(url: string): Promise<{ inlineData: { mimeT
 // Uses structured JSON output (VISUAL_BRIEF_SCHEMA) and serializes to labelled text via
 // visualBriefToText. Firma invariata (Promise<string>) → zero modifiche nei consumer.
 export async function synthesizeVisualStyle(
-  ai: GoogleGenAI,
   imageUrls: string[],
   opts: { brandColors?: string[] | null; archetype?: string | null; fonts?: string[] | null } = {}
 ): Promise<string> {
@@ -227,7 +226,7 @@ export async function synthesizeVisualStyle(
   const fontLine = opts.fonts?.length ? `\nBrand fonts: ${opts.fonts.join(', ')}.` : '';
   const prompt = `You are an art director. These images are from ONE brand (its social posts and/or its website). Analyse the brand's consistent VISUAL STYLE and return a structured JSON brief so an AI image generator can match it. For the palette, list each colour with its hex code, role (primary/accent/background/etc), and approximate usage percentage. For photography, describe lighting, lens feel, and colour grading. For composition, describe typical framing and layout. Also cover: typical subjects/scenes, graphic language (photo vs illustration), on-image text usage, overall mood, and 2-3 concrete do's and don'ts.${colorLine}${archLine}${fontLine}`;
   try {
-    const raw = await structured<unknown>(ai, prompt, VISUAL_BRIEF_SCHEMA, undefined, { label: 'visualBrief', images: parts });
+    const raw = await structured<unknown>(prompt, VISUAL_BRIEF_SCHEMA, undefined, { label: 'visualBrief', images: parts });
     if (isVisualBrief(raw)) return visualBriefToText(raw);
     // Model returned something that doesn't match the schema — no usable brief.
     return '';
@@ -241,14 +240,14 @@ export async function synthesizeVisualStyle(
 // aggregate look. Distinct from synthesizeVisualStyle (which describes the consistent style):
 // this is performance-driven, prescriptive direction. Pass top-engagement thumbnails first. '' if
 // nothing usable.
-export async function synthesizeVisualPlaybook(ai: GoogleGenAI, topThumbnailUrls: string[]): Promise<string> {
+export async function synthesizeVisualPlaybook(topThumbnailUrls: string[]): Promise<string> {
   const urls = topThumbnailUrls.filter(Boolean).slice(0, STYLE_IMAGES);
   if (!urls.length) return '';
   const parts = (await Promise.all(urls.map(fetchImagePart))).filter(Boolean) as { inlineData: { mimeType: string; data: string } }[];
   if (!parts.length) return '';
   const prompt = `These are this brand's BEST-PERFORMING social posts (highest engagement first). Identify the VISUAL patterns that win HERE and that the brand should keep doing: recurring subjects, composition & framing, format (single photo / carousel / graphic / UGC), styling & props, lighting, and on-image-text usage. Output 3-5 SHORT, prescriptive directives an AI image generator should follow to match what performs. Be concrete; no preamble, just the directives.`;
   try {
-    const txt = (await aiText(ai, prompt, undefined, { label: 'visualWinners', images: parts })).trim();
+    const txt = (await aiText(prompt, undefined, { label: 'visualWinners', images: parts })).trim();
     return txt ? `### WHAT WORKS VISUALLY\n(from the brand's best-performing posts — repeat these patterns)\n${txt}` : '';
   } catch {
     return '';
@@ -262,7 +261,6 @@ export async function synthesizeVisualPlaybook(ai: GoogleGenAI, topThumbnailUrls
 export async function rebuildBrandContext(
   supabase: SupabaseClient,
   brandId: string,
-  ai?: GoogleGenAI,
   extraContext?: string
 ): Promise<string> {
   const { data: brand } = await supabase.from('brands').select('name').eq('id', brandId).maybeSingle();
@@ -295,11 +293,10 @@ export async function rebuildBrandContext(
     .map((p) => signedThumbs.get((p as AnyRec).thumbnail_path as string) ?? p.thumbnail_url)
     .filter((u): u is string => !!u);
 
-  const genai = ai ?? genaiClient();
   const styleOpts = { brandColors: kit?.brand_colors, archetype: kit?.site_type, fonts: normalizeFonts(kit?.fonts) };
   const [context, visualPlaybook] = await Promise.all([
-    synthesizeBrandContext(genai, { name: brand?.name ?? '', kit: kit ?? null, documents: documents ?? [], posts }),
-    synthesizeVisualPlaybook(genai, thumbs) // thumbs are top-engagement first → "what works visually"
+    synthesizeBrandContext({ name: brand?.name ?? '', kit: kit ?? null, documents: documents ?? [], posts }),
+    synthesizeVisualPlaybook(thumbs) // thumbs are top-engagement first → "what works visually"
   ]);
 
   // Visual style with a FALLBACK image chain. History thumbnails alone are not enough: they are
@@ -308,7 +305,7 @@ export async function rebuildBrandContext(
   // Fallbacks, in order of fidelity: the brand's uploaded/archived images (private bucket paths —
   // NON-expiring, includes the auto-archived top posts), the site imagery captured at analysis,
   // the product photos.
-  let visualStyle = thumbs.length ? await synthesizeVisualStyle(genai, thumbs, styleOpts) : '';
+  let visualStyle = thumbs.length ? await synthesizeVisualStyle(thumbs, styleOpts) : '';
   if (!visualStyle) {
     const { data: imageDocs } = await supabase
       .from('brand_documents').select('file_url').eq('brand_id', brandId).eq('kind', 'image')
@@ -326,7 +323,7 @@ export async function rebuildBrandContext(
       .flatMap((p) => (Array.isArray(p.images) ? p.images : []).map((i: any) => (typeof i === 'string' ? i : i?.src ?? i?.url)))
       .filter((u): u is string => typeof u === 'string' && !!u);
     const fallback = [...signedUrls, ...siteImages, ...productImages];
-    if (fallback.length) visualStyle = await synthesizeVisualStyle(genai, fallback, styleOpts);
+    if (fallback.length) visualStyle = await synthesizeVisualStyle(fallback, styleOpts);
   }
 
   // History mining: "what works here" (best times / formats / hashtags / cadence) from the brand's

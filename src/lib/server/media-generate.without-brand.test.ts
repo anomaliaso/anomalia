@@ -97,7 +97,7 @@ describe('disegnare senza un brand', () => {
 
     expect(loadBrandVisualContext).not.toHaveBeenCalled();
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     expect(opts.visualStyle).toBeUndefined();
     expect(opts.brandLook).toBeUndefined();
     expect(opts.logoImage).toBeUndefined();

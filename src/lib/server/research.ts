@@ -1,5 +1,4 @@
 import { swallow } from '$lib/server/swallow';
-import type { GoogleGenAI } from '@google/genai';
 import { genaiClient, fetchImagePart } from '$lib/server/brand-context';
 import { fetchPage } from '$lib/server/brand-analysis';
 import { scrapeForOnboarding, type ScrapeTarget, type ScrapedPost } from '$lib/server/scrapecreators';
@@ -30,7 +29,6 @@ export type Citation = { uri: string; title: string };
 // `ai` non viene più usato (la risposta arriva dai provider web, non da Gemini): la firma resta
 // com'era perché cambiarla vorrebbe dire toccare tutti i chiamanti per togliere un argomento.
 export async function groundedText(
-  _ai: GoogleGenAI,
   prompt: string,
   systemInstruction?: string,
   opts?: { brandId?: string }
@@ -80,7 +78,6 @@ export async function groundedText(
  * fissa un id di modello per motore invece di ereditare il picker della chat.
  */
 export async function groundedGemini(
-  _ai: GoogleGenAI,
   prompt: string,
   systemInstruction?: string,
   opts?: { brandId?: string }
@@ -98,7 +95,6 @@ export async function groundedGemini(
 // JSON vincolato sul centralino. Firma invariata (il client Google non viene più usato) perché
 // ogni call site passa già `ai` — toglierlo è un lotto a parte.
 export async function structuredGemini<T>(
-  _ai: GoogleGenAI,
   prompt: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: AnyRec,
@@ -135,7 +131,6 @@ export async function structuredGemini<T>(
 // tier), Gemini otherwise — with automatic Gemini fallback either way. Every structured caller
 // in the codebase (blog, GEO, personas, normalisation, …) switches provider through this one door.
 export async function structured<T>(
-  ai: GoogleGenAI,
   prompt: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: AnyRec,
@@ -155,7 +150,7 @@ export async function structured<T>(
   }
 ): Promise<T> {
   const { label = 'structured', ...rest } = opts ?? {};
-  return aiStructured<T>(ai, prompt, schema, systemInstruction, label, rest);
+  return aiStructured<T>(prompt, schema, systemInstruction, label, rest);
 }
 
 // ---- shared types ---------------------------------------------------------------------------
@@ -227,7 +222,6 @@ const DISCOVERY_SCHEMA = {
 
 // Find 3-5 real direct/indirect competitors via web search, then normalise to typed candidates.
 export async function discoverCompetitors(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   // Language for the user-facing rationale prose (follows the site locale). Defaults to English.
   outputLanguage = 'English'
@@ -236,7 +230,6 @@ export async function discoverCompetitors(
     ? profile.products.slice(0, 8).map((p: BrandProfile) => p?.name ?? p?.title).filter(Boolean).join(', ')
     : '';
   const grounded = await groundedText(
-    ai,
     `Find the real competitors of this brand using current web information.
 
 Brand: ${profile?.name ?? ''}
@@ -252,7 +245,6 @@ List 3-5 REAL competitors that actually exist. Prefer brands of comparable size 
   );
 
   const norm = await structured<{ competitors: CompetitorCandidate[] }>(
-    ai,
     `From the analysis below, extract the competitors as structured data. Keep only real named brands; drop vague mentions. Normalise websites to "https://domain" form (empty string if none was given). Write each rationale in ${outputLanguage}; keep brand names and websites unchanged.\n\nANALYSIS:\n${grounded.text}`,
     DISCOVERY_SCHEMA
   );
@@ -334,7 +326,6 @@ const HANDLES_SCHEMA = {
 // Resolve each confirmed competitor's handles for the selected platforms. HTML scrape first
 // (cheap), then ONE batched grounded call for whatever's still missing. Parallel, best-effort.
 export async function resolveCompetitorHandles(
-  ai: GoogleGenAI,
   competitors: CompetitorCandidate[],
   platforms: string[]
 ): Promise<Map<string, ScrapeTarget[]>> {
@@ -374,12 +365,10 @@ export async function resolveCompetitorHandles(
         [...byCompetitor.entries()].map(async ([name, platforms]) => {
           try {
             const grounded = await groundedText(
-              ai,
               `Find the OFFICIAL ${platforms.join(', ')} social media handles for ${name}. Only report if confident it's the real, official account. Return each as "Brand — platform — @handle" (or "unknown").`,
               'You verify official social accounts via web search. Never guess; say unknown if unsure.'
             );
             const norm = await structured<{ handles: Array<{ name: string; platform: string; username: string }> }>(
-              ai,
               `Extract the handles from the text below as structured data. username without @, empty string if unknown.\n\n${grounded.text}`,
               HANDLES_SCHEMA
             );
@@ -500,7 +489,7 @@ export function benchmarkCompetitors(
 
 // Look at the top competitor posts (captions + a few thumbnails) and describe how the field
 // positions itself: angles, visual language, tone, recurring hooks. Free-text, no grounding.
-export async function analyzeCompetitorContent(ai: GoogleGenAI, benchmark: Benchmark, outputLanguage = 'English'): Promise<string> {
+export async function analyzeCompetitorContent(benchmark: Benchmark, outputLanguage = 'English'): Promise<string> {
   const captionLines: string[] = [];
   const thumbUrls: string[] = [];
   for (const c of benchmark.competitors) {
@@ -515,7 +504,7 @@ export async function analyzeCompetitorContent(ai: GoogleGenAI, benchmark: Bench
   const prompt = `These are top-performing social posts from a brand's competitors (captions below; some thumbnails attached). In ~250 words describe how this competitive field positions itself: dominant content angles & pillars, visual language, tone of voice, recurring hooks/CTAs, and what they all seem to compete on (price? status? education? community?). Be concrete and comparative. Write the analysis in ${outputLanguage}. Use light Markdown (short ## headings, **bold** key phrases, and bullet lists) so it reads cleanly. Output only the analysis.\n\nCAPTIONS:\n${captionLines.join('\n') || '(none)'}`;
 
   try {
-    return (await aiText(ai, prompt, undefined, { label: 'competitorQualitative', images: imageParts })).trim();
+    return (await aiText(prompt, undefined, { label: 'competitorQualitative', images: imageParts })).trim();
   } catch {
     return '';
   }
@@ -564,7 +553,6 @@ export function benchmarkDigest(b: Benchmark): string {
 }
 
 export async function synthesizeStrategyReport(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   benchmark: Benchmark,
   qualitative: string,
@@ -595,15 +583,14 @@ Write: a summary, the competitive landscape, concrete WHITE SPACE openings the b
 Return JSON.`;
 
   const report = await parallelVariants<StrategyReport>(
-    ai,
-    () => aiStructured<StrategyReport>(ai, makePrompt(), REPORT_SCHEMA, systemInstruction, 'return_strategy_report', { model }),
+    () => aiStructured<StrategyReport>(makePrompt(), REPORT_SCHEMA, systemInstruction, 'return_strategy_report', { model }),
     async (picked) => {
       if (picked.length === 1) return picked[0];
       const summaries = picked.map((v, i) => `\nOPTION ${i + 1}:\nSummary: ${v.summary}\nWhite space: ${(Array.isArray(v.whiteSpace) ? v.whiteSpace : []).join('; ')}\nAngles: ${(Array.isArray(v.recommendedAngles) ? v.recommendedAngles : []).join('; ')}\nDifferentiators: ${(Array.isArray(v.differentiators) ? v.differentiators : []).join('; ')}`).join('\n---');
       const prompt = `Compare these ${picked.length} strategy reports and pick the BEST one. Consider: specificity, data-grounding, actionable recommendations, honest assessment.\n${summaries}\nReturn JSON: { "winner": <1-based index> }`;
       const schema = { type: 'object' as const, properties: { winner: { type: 'number' as const } }, required: ['winner'] };
       try {
-        const raw = await aiStructured<{ winner?: number }>(ai, prompt, schema, systemInstruction, 'pick_best', { model });
+        const raw = await aiStructured<{ winner?: number }>(prompt, schema, systemInstruction, 'pick_best', { model });
         const idx = Math.max(0, Math.min(picked.length - 1, (raw?.winner ?? 1) - 1));
         return picked[idx];
       } catch { return picked[0]; }
@@ -696,7 +683,6 @@ export function personasDigest(contentText: string | null | undefined): string {
 }
 
 export async function generateBuyerPersonas(
-  ai: GoogleGenAI,
   profile: AnyRec,
   competitors: { name: string }[],
   platforms: string[],
@@ -747,7 +733,7 @@ Output ONLY the JSON array, no markdown, no explanation.`;
       required: ['name', 'role', 'objectives', 'painPoints', 'preferredChannels']
     }
   };
-  const result = await structured<BuyerPersona[]>(ai, prompt, PERSONAS_SCHEMA);
+  const result = await structured<BuyerPersona[]>(prompt, PERSONAS_SCHEMA);
   if (!Array.isArray(result)) return [];
 
   // Fetch images from Unsplash for each persona

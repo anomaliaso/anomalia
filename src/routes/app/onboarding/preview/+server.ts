@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { canEnter, ownsBrand } from '$lib/server/access';
 import { generatePreview } from '$lib/server/content-preview';
 import { scrapeForOnboarding, type ScrapeTarget } from '$lib/server/scrapecreators';
-import { genaiClient, synthesizeBrandContext, synthesizeVisualStyle } from '$lib/server/brand-context';
+import { synthesizeBrandContext, synthesizeVisualStyle } from '$lib/server/brand-context';
 import { withBrandContext } from '$lib/server/ai-log';
 
 // Generating six preview posts (each an image via Nano Banana Pro) in one streamed request runs
@@ -66,15 +66,14 @@ export const POST: RequestHandler = async ({ request, locals: { supabase, safeGe
             send({ type: 'progress', step: 'reading', message: 'Reading your past posts…' });
             const { posts } = await scrapeForOnboarding(handles);
             if (posts.length) {
-              const ai = genaiClient();
               const [ctx, style] = await Promise.all([
-                synthesizeBrandContext(ai, {
+                synthesizeBrandContext({
                   name: profile?.name ?? '',
                   kit: { about: profile?.about, category: profile?.category, target_audience: profile?.target_audience },
                   documents: [],
                   posts: posts.map((p) => ({ content: p.content, platform: p.platform, metrics: p.metrics }))
                 }),
-                synthesizeVisualStyle(ai, posts.map((p) => p.thumbnailUrl).filter((u): u is string => !!u))
+                synthesizeVisualStyle(posts.map((p) => p.thumbnailUrl).filter((u): u is string => !!u))
               ]);
               if (ctx) profile.ai_context = ctx;
               if (style) profile.visual_style = style;

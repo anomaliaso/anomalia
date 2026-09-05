@@ -110,12 +110,11 @@ export async function runGenerateStrategy(
     return { error: 'The Studio must be approved before generating the Strategy.' };
   }
 
-  const { genaiClient } = await import('$lib/server/research');
   const { proposeGtmDual } = await import('$lib/server/gtm');
   const { localeLanguageName } = await import('$lib/i18n/locale');
   const platforms = Array.isArray(brandRow?.target_platforms) ? (brandRow!.target_platforms as string[]) : [];
   const [profile, evidence] = await Promise.all([plannerProfile(supabase, brandId), planEvidence(supabase, brandId)]);
-  const plan = await proposeGtmDual(genaiClient(), profile, {
+  const plan = await proposeGtmDual(profile, {
     objective: params.objective ?? '',
     platforms,
     outputLanguage: localeLanguageName(params.locale ?? 'en'),
@@ -188,7 +187,6 @@ export async function runGenerateEditorialPlan(
     return { error: 'The Strategy must be approved before generating the Editorial plan.' };
   }
 
-  const { genaiClient } = await import('$lib/server/research');
   const { proposePlan, cadenceAllowed } = await import('$lib/server/editorial-plan');
   const { activeGtmBrief } = await import('$lib/server/gtm');
   const { localeLanguageName } = await import('$lib/i18n/locale');
@@ -199,7 +197,7 @@ export async function runGenerateEditorialPlan(
     planEvidence(supabase, brandId),
     activeGtmBrief(supabase, brandId, tz).catch(() => '')
   ]);
-  const proposal = await proposePlan(genaiClient(), profile, {
+  const proposal = await proposePlan(profile, {
     platforms,
     allowedCadences: cadenceAllowed(brandRow?.plan ?? null),
     outputLanguage: localeLanguageName(params.locale ?? 'en'),

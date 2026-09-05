@@ -1,6 +1,5 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient } from './brand-context';
 import { aiStructured } from './ai-text';
 import { outcomeDigestFor } from './lead-outcomes';
 
@@ -166,7 +165,6 @@ export async function refreshCommunityProfiles(
     .slice(0, MAX_PROFILES_PER_RUN);
   if (!due.length) return 0;
 
-  const ai = genaiClient();
   let written = 0;
   for (const [k, bucket] of due) {
     try {
@@ -186,7 +184,6 @@ export async function refreshCommunityProfiles(
       const outcomes = await outcomeDigestFor(admin, brand.id, bucket.community).catch((error) => { swallow('outcome digest', error); return ''; });
 
       const result = await aiStructured<AnyRec>(
-        ai,
         `You are keeping a living profile of ${bucket.community} — a real community of people, studied from what they actually posted. This profile is read before every reply we write there, so it has to describe THESE people, not the topic in general.
 
 ${prevBlock}

@@ -1,6 +1,6 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, strategyBriefFromReport, type Benchmark, type StrategyReport } from '$lib/server/research';
+import { strategyBriefFromReport, type Benchmark, type StrategyReport } from '$lib/server/research';
 import { rankRecentWinners } from '$lib/server/scheduler';
 import { ensureBrandHistory } from '$lib/server/scrapecreators';
 import { attachBrandPages } from '$lib/server/content-library';
@@ -155,7 +155,7 @@ export async function proposeFirstPlan(
     activeGtmBrief(supabase, brand.id, brand.timezone).catch((error) => { swallow('load gtm brief', error); return ''; }),
     loadApprovedRubrics(supabase, brand.id).catch((error) => { swallow('load approved rubrics', error); return []; })
   ]);
-  const proposal = await proposePlan(genaiClient(), profile, {
+  const proposal = await proposePlan(profile, {
     platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
     allowedCadences: cadenceAllowed(brand.plan),
     outputLanguage: localeLanguageName(locale),

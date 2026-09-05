@@ -147,9 +147,8 @@ export function createBrandContextTools(opts: BrandContextToolsOptions): ToolSet
 					// on one provider's key — that used to refuse the tool outright when only DeepSeek
 					// had one.
 					const { groundedText } = await import('$lib/server/research');
-					const { genaiClient } = await import('$lib/server/brand-context');
 					webSearchesUsed++;
-					const { text, citations } = await groundedText(genaiClient(), query, undefined, {
+					const { text, citations } = await groundedText(query, undefined, {
 						brandId
 					});
 					if (!text && !citations.length) return { error: 'Nessun risultato web', query };

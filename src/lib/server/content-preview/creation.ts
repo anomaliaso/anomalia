@@ -1,6 +1,6 @@
 import { swallow } from '$lib/server/swallow';
 import { houseVoiceFor, loadCaptionKnowledge } from './caption-quality';
-import { brandLines, client } from './plan-pipeline';
+import { brandLines } from './plan-pipeline';
 import { type AspectRatio, type QcVerdict, aspectRatioFor, brandVisualDirective, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderBrandImage, renderCarouselSlide, uploadPostImage } from './images';
 import { imageModelFor, imageRefineModelFor } from '$lib/image-models';
 import { type AnyRec, type BrandProfile, CAROUSEL_MIN_SLIDES, CAROUSEL_PLATFORMS, type ContentPrefs, type ImagePart, type PreviewPost, carouselMaxSlides, guidanceFor, platformKey } from './seed-model';
@@ -77,7 +77,6 @@ export async function createSingleContent(opts: {
   fromLibrary?: string;
   knowledgeChunkIds?: string[];
 }> {
-  const ai = client();
   const prefs = opts.prefs ?? {};
   const { languageLine, contextBlock, visualStyleBlock, avoidLine, voiceExamplesBlock, voiceBlock, personalityLine } = brandLines(opts.profile, prefs);
   const guide = guidanceFor(opts.platform, prefs);
@@ -150,7 +149,7 @@ USER BRIEF (steer the angle, but stay true to the photo):
 ${opts.brief}
 ${knowledgeSection}
 Return JSON with "caption" and "image_prompt" (set image_prompt to "Use library asset as-is").`;
-      const parsed: AnyRec = await structured(ai, captionPrompt, CREATE_SINGLE_SCHEMA,
+      const parsed: AnyRec = await structured(captionPrompt, CREATE_SINGLE_SCHEMA,
         'Write a sharp on-brand caption for the attached real photo. Describe only what you see; never invent a different visual.',
         {
           label: 'createSingleContent',
@@ -252,7 +251,7 @@ Produce:
 - "caption": scroll-stopping, on-brand, at the platform's native length and hashtag count.
 ${slideCountLine}
 Return JSON.`;
-    const parsed: AnyRec = await structured(ai, prompt, CREATE_CAROUSEL_SCHEMA,
+    const parsed: AnyRec = await structured(prompt, CREATE_CAROUSEL_SCHEMA,
       'You are an expert performance-marketing copywriter and art director. The user brief is authoritative; design a carousel that reads as one coherent, on-brand series.',
       { label: 'createSingleContent', brandId: opts.brandId, userId: opts.userId, context: 'create_carousel' });
     const caption = String(parsed.caption ?? '').trim();
@@ -265,7 +264,7 @@ Return JSON.`;
     // on the first prompt (never ship half a series).
     if (slidePrompts.length >= 2) {
       const coverPrompt = slidePrompts[0];
-      const dataUrl = await renderBrandImage(ai, coverPrompt, renderOpts);
+      const dataUrl = await renderBrandImage(coverPrompt, renderOpts);
   const qc = undefined;
       if (dataUrl) {
         const cover = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
@@ -275,7 +274,7 @@ Return JSON.`;
           const total = slidePrompts.length;
           const rest = await Promise.all(
             slidePrompts.slice(1).map((sp, idx) =>
-              renderCarouselSlide(ai, opts.supabase, opts.userId, sp, idx + 1, total, renderOpts, anchor, critiqueOpts)
+              renderCarouselSlide(opts.supabase, opts.userId, sp, idx + 1, total, renderOpts, anchor, critiqueOpts)
             )
           );
           const urls = [cover, ...rest.filter((u): u is string => !!u)];
@@ -292,7 +291,7 @@ Return JSON.`;
     }
     // Under-delivered slides → single image on whatever prompt we have.
     const only = slidePrompts[0] || `Photorealistic, scroll-stopping social photo: ${opts.brief}`;
-    const dataUrl = await renderBrandImage(ai, only, renderOpts);
+    const dataUrl = await renderBrandImage(only, renderOpts);
   const qc = undefined;
     const imageUrl = dataUrl ? await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio) : undefined;
     await stampCompositeLibrary(!!imageUrl);
@@ -320,7 +319,7 @@ Produce:
 - "image_prompt": a photorealistic, scroll-stopping ${isVideo ? 'COVER FRAME for a short vertical video' : 'image'} that delivers the brief and matches the brand visual style. Do NOT specify an aspect ratio.
 Return JSON.`;
 
-  const parsed: AnyRec = await structured(ai, prompt, CREATE_SINGLE_SCHEMA,
+  const parsed: AnyRec = await structured(prompt, CREATE_SINGLE_SCHEMA,
     'You are an expert performance-marketing copywriter with a sharp, original voice. The user brief is authoritative; be specific, on-brand and visual.',
     { label: 'createSingleContent', brandId: opts.brandId, userId: opts.userId, context: 'create_post' });
   const caption = String(parsed.caption ?? '').trim();
@@ -332,7 +331,7 @@ Return JSON.`;
     ? (await import('$lib/server/ugc')).buildUgcFramePrompt({ hook: opts.hook })
     : imagePrompt;
 
-  const dataUrl = await renderBrandImage(ai, coverPromptFinal, renderOpts);
+  const dataUrl = await renderBrandImage(coverPromptFinal, renderOpts);
   const qc = undefined;
   let imageUrl: string | undefined;
   if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
@@ -370,7 +369,6 @@ export async function createSingleCarousel(opts: {
   slideCount: number;
   prefs?: ContentPrefs;
 }): Promise<{ caption: string; imagePrompts: string[]; imageUrls: string[]; qc?: QcVerdict }> {
-  const ai = client();
   const prefs = opts.prefs ?? {};
   const n = Math.max(CAROUSEL_MIN_SLIDES, Math.min(carouselMaxSlides(), Math.round(Number(opts.slideCount) || 5)));
   const { languageLine, contextBlock, visualStyleBlock, avoidLine, voiceExamplesBlock, voiceBlock, personalityLine } = brandLines(opts.profile, prefs);
@@ -396,7 +394,7 @@ Produce:
 - "slide_prompts": EXACTLY ${n} prompts forming one coherent visual series — slide 1 the hook/cover, each later slide advancing the brief one concrete step (a list item, a process step, a comparison side, a story beat). Each prompt standalone. Do NOT specify an aspect ratio.
 Return JSON.`;
 
-  const parsed: AnyRec = await structured(ai, prompt, CAROUSEL_SINGLE_SCHEMA,
+  const parsed: AnyRec = await structured(prompt, CAROUSEL_SINGLE_SCHEMA,
     'You are an expert performance-marketing copywriter and art director. The user brief is authoritative; make every slide earn its place and keep the series visually coherent.',
     { label: 'createSingleCarousel', brandId: opts.brandId, userId: opts.userId, context: 'create_post_carousel' });
 
@@ -423,7 +421,7 @@ Return JSON.`;
   };
 
   // Slide 1 (cover) at full quality, then slides 2..N in parallel anchored to it.
-  const dataUrl = await renderBrandImage(ai, slidePrompts[0], renderOpts);
+  const dataUrl = await renderBrandImage(slidePrompts[0], renderOpts);
   const qc = undefined;
   if (!dataUrl) return { caption, imagePrompts: slidePrompts, imageUrls: [], qc };
   const cover = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
@@ -434,7 +432,7 @@ Return JSON.`;
   const total = slidePrompts.length;
   const rest = await Promise.all(
     slidePrompts.slice(1).map((slidePrompt, idx) =>
-      renderCarouselSlide(ai, opts.supabase, opts.userId, slidePrompt, idx + 1, total, renderOpts, anchor, { visualStyle: renderOpts.visualStyle })
+      renderCarouselSlide(opts.supabase, opts.userId, slidePrompt, idx + 1, total, renderOpts, anchor, { visualStyle: renderOpts.visualStyle })
     )
   );
   const imageUrls = [cover, ...rest.filter((u): u is string => !!u)];
@@ -456,7 +454,6 @@ export async function generateStandaloneImage(opts: {
   /** Arbitrary images to hand the renderer as visual references (chat picks, user attachments). */
   referenceUrls?: string[];
 }): Promise<{ imageUrl?: string; qc?: QcVerdict; notes?: string; costUsd?: number; credits?: number }> {
-  const ai = client();
 
   const doneStandalone = async (
     result: { imageUrl?: string; qc?: QcVerdict; notes?: string; costUsd?: number; credits?: number }
@@ -535,7 +532,7 @@ export async function generateStandaloneImage(opts: {
     aspectRatio
   };
 
-  const dataUrl = await renderBrandImage(ai, editBrief, renderOpts);
+  const dataUrl = await renderBrandImage(editBrief, renderOpts);
   const qc = undefined;
 
   let imageUrl: string | undefined;

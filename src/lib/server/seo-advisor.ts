@@ -1,8 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { GoogleGenAI } from '@google/genai';
 import { randomUUID } from 'node:crypto';
-import { genaiClient, groundedText } from './research';
+import { groundedText } from './research';
 import { bestVariant, type GeoBlock } from './geo-artifacts';
 
 // ── SEO growth advisor ──────────────────────────────────────────────────────────────────────────
@@ -140,7 +139,6 @@ export async function generateSeoPlan(admin: SupabaseClient, brand: AnyRec): Pro
     console.warn('[seo-advisor] agent plan failed, falling back:', e instanceof Error ? e.message : e);
   }
 
-  const ai = genaiClient();
   const { profile, siteUrl, language } = await loadProfile(admin, brand);
   const { data: audit } = await admin
     .from('brand_geo_audits').select('tech_score, tech, share_of_voice, citations')
@@ -155,7 +153,6 @@ export async function generateSeoPlan(admin: SupabaseClient, brand: AnyRec): Pro
 
   // Ground the real SERP landscape (separate call — grounding can't share JSON mode).
   const grounded = await groundedText(
-    ai,
     `Research the SEO landscape for this brand using current web information.
 Brand: ${profile.name} — ${String(profile.about).slice(0, 300)}
 Category: ${profile.category}. Audience: ${profile.target_audience}. Products: ${(profile.products as string[]).join(', ') || 'n/a'}
@@ -185,8 +182,7 @@ When GSC data is present, at least 3 initiatives MUST target real GSC queries.
 CHIUDI SEMPRE con evaluation.gaps: cosa non sei riuscito a determinare e cosa lo determinerebbe. Un report che non dichiara i propri buchi si legge come completo quando non lo è, e chi poi scopre il buco scarta tutto il resto insieme a quello. Non riempire un buco con una stima: dichiaralo.
 Write ALL prose in ${language}. Return JSON.`;
 
-  const plan = await bestVariant<SeoPlan>(
-    ai, makePrompt, PLAN_SCHEMA, REVIEWER, 'seo_plan',
+  const plan = await bestVariant<SeoPlan>(makePrompt, PLAN_SCHEMA, REVIEWER, 'seo_plan',
     (v) => `Grade ${v?.evaluation?.grade}. Initiatives: ${(v?.initiatives ?? []).map((i) => `${i.type}:${i.title}`).slice(0, 6).join(' | ')}`
   ).catch((error) => { swallow('join failed', error); return null; });
 
@@ -226,7 +222,6 @@ export async function addSeoInitiatives(admin: SupabaseClient, brand: AnyRec, op
     console.warn('[seo-advisor] agent more-initiatives failed, falling back:', e instanceof Error ? e.message : e);
   }
 
-  const ai = genaiClient();
   const { profile, siteUrl, language } = await loadProfile(admin, brand);
   const { data: plan } = await admin
     .from('brand_seo_plans').select('id, initiatives').eq('brand_id', brand.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -234,7 +229,6 @@ export async function addSeoInitiatives(admin: SupabaseClient, brand: AnyRec, op
   const existingList = existing.map((i) => `- [${i.type}] ${i.title} (query: ${i.targetQuery})`).join('\n') || '(none)';
 
   const grounded = await groundedText(
-    ai,
     `Research the SEO landscape for ${profile.name} (${profile.category}). Site: ${siteUrl || 'n/a'}. What do buyers search on Google around this? Which competitors rank? Where is white space?`,
     'You are an SEO strategist using live web search. Cite real competitors and realistic queries; never fabricate.'
   ).catch((error) => { swallow('groundedText failed', error); return ({ text: '', citations: [] }); });
@@ -252,8 +246,7 @@ ${grounded.text || '(no data)'}
 
 Types: blog, landing_page, free_tool, comparison, glossary, programmatic. For each: type, title, target Google query, why (grounded), effort (low/medium/high), impact (low/medium/high), 2-3 examples. Write in ${language}. Return JSON.`;
 
-  const out = await bestVariant<{ initiatives: SeoInitiative[] }>(
-    ai, makePrompt, INITIATIVES_SCHEMA, REVIEWER, 'seo_initiatives',
+  const out = await bestVariant<{ initiatives: SeoInitiative[] }>(makePrompt, INITIATIVES_SCHEMA, REVIEWER, 'seo_initiatives',
     (v) => (v?.initiatives ?? []).map((i) => `${i.type}:${i.title}`).slice(0, 6).join(' | ')
   ).catch((error) => { swallow('join failed', error); return null; });
   if (!out?.initiatives?.length) return null;
@@ -304,8 +297,8 @@ const TOOL_SCHEMA = {
   required: ['name', 'whatItDoes', 'inputs', 'outputs', 'seoAngle', 'mvpScope', 'landingCopy']
 };
 
-async function genBlog(ai: GoogleGenAI, profile: AnyRec, init: SeoInitiative, language: string): Promise<Asset | null> {
-  const p = await bestVariant<AnyRec>(ai, () => `Write a blog article OUTLINE (not the full text) for this brand that will rank for "${init.targetQuery}".
+async function genBlog(profile: AnyRec, init: SeoInitiative, language: string): Promise<Asset | null> {
+  const p = await bestVariant<AnyRec>(() => `Write a blog article OUTLINE (not the full text) for this brand that will rank for "${init.targetQuery}".
 Brand: ${profile.name} — ${String(profile.about).slice(0, 300)}. Voice: ${String(profile.ai_context).slice(0, 500)}
 Angle: ${init.title}. Give a title, an SEO meta title (<60 chars) and meta description (<155 chars), and 5-8 sections each with 2-4 key points. Write in ${language}.`,
     BLOG_SCHEMA, REVIEWER, 'seo_blog', (v) => `${v.title}: ${(v.outline ?? []).map((s: AnyRec) => s.heading).slice(0, 5).join(', ')}`).catch((error) => { swallow('join failed', error); return null; });
@@ -314,8 +307,8 @@ Angle: ${init.title}. Give a title, an SEO meta title (<60 chars) and meta descr
   return { kind: 'blog', title: p.title || init.title, targetPath: `/blog/${slug(p.title || init.title)}`, blocks: [{ labelKey: 'blogOutline', content: md }, metaBlock(p.metaTitle, p.metaDescription)] };
 }
 
-async function genLanding(ai: GoogleGenAI, profile: AnyRec, init: SeoInitiative, language: string): Promise<Asset | null> {
-  const p = await bestVariant<AnyRec>(ai, () => `Write a landing page targeting the Google query "${init.targetQuery}" for this brand.
+async function genLanding(profile: AnyRec, init: SeoInitiative, language: string): Promise<Asset | null> {
+  const p = await bestVariant<AnyRec>(() => `Write a landing page targeting the Google query "${init.targetQuery}" for this brand.
 Brand: ${profile.name} — ${String(profile.about).slice(0, 300)}. Voice: ${String(profile.ai_context).slice(0, 500)}
 Angle: ${init.title}. Give an H1, an intro, an SEO meta title + meta description, 3-5 sections (heading + body), 3-5 FAQ (q+a), and a CTA. Concrete and on-brand, answer-first. Write in ${language}.`,
     LANDING_SCHEMA, REVIEWER, 'seo_landing', (v) => `${v.h1}: ${(v.sections ?? []).map((s: AnyRec) => s.heading).slice(0, 4).join(', ')}`).catch((error) => { swallow('join failed', error); return null; });
@@ -324,8 +317,8 @@ Angle: ${init.title}. Give an H1, an intro, an SEO meta title + meta description
   return { kind: init.type, title: p.h1 || init.title, targetPath: `/${slug(p.h1 || init.title)}`, blocks: [{ labelKey: 'landingCopy', content: md }, metaBlock(p.metaTitle, p.metaDescription)] };
 }
 
-async function genTool(ai: GoogleGenAI, profile: AnyRec, init: SeoInitiative, language: string): Promise<Asset | null> {
-  const p = await bestVariant<AnyRec>(ai, () => `Spec a FREE TOOL this brand could publish to attract organic traffic for "${init.targetQuery}".
+async function genTool(profile: AnyRec, init: SeoInitiative, language: string): Promise<Asset | null> {
+  const p = await bestVariant<AnyRec>(() => `Spec a FREE TOOL this brand could publish to attract organic traffic for "${init.targetQuery}".
 Brand: ${profile.name} — ${String(profile.about).slice(0, 300)}
 Idea: ${init.title}. Give the tool name, what it does, its inputs, its outputs, the SEO angle (why it earns links/traffic), a lean MVP scope, and short landing-page copy. Realistic and genuinely useful. Write in ${language}.`,
     TOOL_SCHEMA, REVIEWER, 'seo_tool', (v) => `${v.name}: ${v.whatItDoes}`).catch((error) => { swallow('angle failed', error); return null; });
@@ -342,14 +335,13 @@ export async function generateSeoAsset(admin: SupabaseClient, brand: AnyRec, ini
   const init = ((plan?.initiatives as SeoInitiative[]) ?? []).find((i) => i.id === initiativeId);
   if (!init) return 0;
 
-  const ai = genaiClient();
   const { profile, language } = await loadProfile(admin, brand);
   // ponytail: comparison/glossary/programmatic are structurally landing pages — reuse genLanding
   // until one of them needs its own shape.
   const asset =
-    init.type === 'blog' ? await genBlog(ai, profile, init, language)
-    : init.type === 'free_tool' ? await genTool(ai, profile, init, language)
-    : await genLanding(ai, profile, init, language);
+    init.type === 'blog' ? await genBlog(profile, init, language)
+    : init.type === 'free_tool' ? await genTool(profile, init, language)
+    : await genLanding(profile, init, language);
   if (!asset) return 0;
 
   const source = `seo:${initiativeId}`;

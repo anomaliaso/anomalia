@@ -2,7 +2,6 @@ import { swallow } from '$lib/server/swallow';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient } from '$lib/server/research';
 import { withBrandContext } from '$lib/server/ai-log';
 import { plannerProfile, planEvidence } from '$lib/server/planner-inputs';
 import { activeGtmBrief } from '$lib/server/gtm';
@@ -68,7 +67,7 @@ export const actions: Actions = {
           planEvidence(supabase, brand.id),
           activeGtmBrief(supabase, brand.id, brand.timezone).catch((error) => { swallow('load gtm brief', error); return ''; })
         ]);
-        const candidates = await proposeRubrics(genaiClient(), profile, {
+        const candidates = await proposeRubrics(profile, {
           platforms: Array.isArray(brand.target_platforms) ? (brand.target_platforms as string[]) : [],
           outputLanguage: localeLanguageName(locale),
           strategyBrief: [gtmBrief, evidence.strategyBrief].filter(Boolean).join('\n\n'),

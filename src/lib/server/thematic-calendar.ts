@@ -26,7 +26,6 @@ export async function upcomingTimelyHooks(
   const today = opts.today ?? new Date().toISOString().slice(0, 10);
   try {
     const txt = (await aiText(
-      undefined,
       buildCalendarPrompt({ ...opts, today }),
       'You surface only genuinely relevant, real upcoming calendar moments for a brand. Be concrete; never invent holidays; output nothing if nothing fits.',
       { label: 'timelyHooks' }

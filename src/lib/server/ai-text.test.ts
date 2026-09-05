@@ -106,7 +106,7 @@ describe('routing del lavoro strutturato', () => {
     Object.assign(env, overrides);
     const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
+    return aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
   }
 
   it('manda il lavoro strutturato al gateway LLM, e a nessun altro endpoint', async () => {
@@ -128,7 +128,7 @@ describe('routing del lavoro strutturato', () => {
     M.structuredKie.mockRejectedValueOnce(new Error('boom'));
     const { aiStructured } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', {
+    const res = await aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', {
       brandId: 'b',
       provider: 'kie'
     });
@@ -163,7 +163,7 @@ describe('lo sforzo di ragionamento chiesto da un giudice', () => {
   it('arriva al gateway invece di fermarsi negli opts', async () => {
     const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', {
+    await aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', {
       brandId: 'b',
       ...PIN_GATEWAY,
       reasoningEffort: 'low'
@@ -174,7 +174,7 @@ describe('lo sforzo di ragionamento chiesto da un giudice', () => {
   it('senza richiesta il gateway decide da sé: nessuno sforzo inventato qui', async () => {
     const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
+    await aiStructured<any>('prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
     expect(M.llmStructured.mock.calls[0][0].reasoningEffort).toBeUndefined();
   });
 
