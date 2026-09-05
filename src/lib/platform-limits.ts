@@ -123,12 +123,15 @@ export function truncateForPlatform(text: string, limit: number): string {
   if (raw.length <= limit) return raw;
   const budget = Math.max(1, limit);
   const slice = raw.slice(0, budget);
-  // Prefer breaking on sentence, then newline, then word — but only if the break isn't too early.
+  // Prefer breaking on sentence, then newline, then clause, then word — never too early.
   const candidates = [
     slice.lastIndexOf('. '),
     slice.lastIndexOf('! '),
     slice.lastIndexOf('? '),
     slice.lastIndexOf('\n'),
+    slice.lastIndexOf(', '),
+    slice.lastIndexOf('; '),
+    slice.lastIndexOf(': '),
     slice.lastIndexOf(' ')
   ];
   const minBreak = Math.floor(budget * 0.5);
@@ -142,6 +145,37 @@ export function truncateForPlatform(text: string, limit: number): string {
   const cut = (breakAt >= 0 ? slice.slice(0, breakAt + (slice[breakAt] === ' ' ? 0 : 1)) : slice).trim();
   // If we still overflow somehow (edge: no spaces), hard slice.
   return cut.length <= budget ? cut : cut.slice(0, budget).trim();
+}
+
+const widestNumbering = (parts: number) => 2 * String(parts).length + 2;
+
+const packToBudget = (text: string, budget: number): string[] => {
+  const room = Math.max(1, budget);
+  const parts: string[] = [];
+  let rest = text;
+
+  while (rest.length > room) {
+    const head = truncateForPlatform(rest, room);
+    parts.push(head);
+    rest = rest.slice(head.length).trim();
+  }
+  if (rest) parts.push(rest);
+
+  return parts;
+};
+
+export function splitForPlatform(text: string, limit: number): string[] {
+  const raw = text.trim();
+  if (raw.length <= limit) return [raw];
+
+  let reserved = 0;
+  let parts = packToBudget(raw, limit);
+  while (widestNumbering(parts.length) > reserved) {
+    reserved = widestNumbering(parts.length);
+    parts = packToBudget(raw, limit - reserved);
+  }
+
+  return parts.map((part, i) => `${part} ${i + 1}/${parts.length}`);
 }
 
 /**
