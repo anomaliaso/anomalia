@@ -74,3 +74,28 @@ export function isKnownTimezone(value: unknown): boolean {
     return false;
   }
 }
+
+/**
+ * Primo logo utilizzabile da `brand_kit.logos` (stringa oppure `{ url }`), saltando le og-image.
+ *
+ * Sta qui e non in `blog-site.ts` perche` la leggono anche il renderer delle immagini e la
+ * composizione grafica, e quel file tira dentro il blog pubblico intero — Marked, il client admin,
+ * i referral. Il grafo si chiudeva in cerchio (immagini → blog-site → referrals → crediti →
+ * scheduler → director → content-preview → immagini) e restava in piedi solo grazie all'ORDINE in
+ * cui i moduli si inizializzavano: togliere un import morto altrove lo faceva cadere. Un ciclo
+ * tenuto insieme dall'ordine e` un ciclo, e si taglia dove il pezzo condiviso non ha dipendenze.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const firstLogoUrl = (logos: any): string | null => {
+  const arr = Array.isArray(logos) ? logos : [];
+  const first = arr.find((l: unknown) => {
+    if (!l) return false;
+    if (typeof l === 'string') return true;
+    if (typeof l === 'object' && l !== null && 'url' in l) {
+      const url = (l as { url?: unknown }).url;
+      return typeof url === 'string' && !!url && (l as { type?: string }).type !== 'og-image';
+    }
+    return false;
+  });
+  return typeof first === 'string' ? first : (first?.url ?? null);
+};

@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // Il registro sostituisce cinque interruttori nati separatamente. Le due cose che devono reggere
 // sono: le vecchie variabili continuano a funzionare (sono già scritte in produzione), e una rotta
@@ -288,25 +293,43 @@ describe('il registro delle rotte', () => {
   });
 });
 
+/**
+ * Famiglia ed endpoint sono DUE assi, e restano due.
+ *
+ * Prima qui si leggeva `AI_PROVIDER`, una costante che li ricollassava in uno: valeva `'kie'` o
+ * `'gemini'`, e `'gemini'` voleva dire "il gateway" — cioè il valore diceva una famiglia e
+ * significava un endpoint. Quattro rami del prodotto confrontavano quella costante con `'xiaomi'`,
+ * un valore che il tipo non poteva assumere: sempre falsi, mai visti fallire.
+ *
+ * Ora si interroga il registro, che i due assi li tiene separati per costruzione.
+ */
 describe('i due assi non si collassano', () => {
   beforeEach(() => vi.resetModules());
 
-  it('AI_ROUTE_TEXT=grok@kie sposta il default, ma non il trasporto di Gemini', async () => {
+  it('la famiglia si sposta senza portarsi dietro l endpoint', async () => {
     setEnv({ ...KEYS, AI_ROUTE_TEXT: 'grok@kie' });
-    const { geminiTransport } = await import('./gemini');
-    const { AI_PROVIDER } = await import('./xiaomi');
-    // Il default del lavoro strutturato diventa kie/Grok…
-    expect(AI_PROVIDER).toBe('kie');
-    // …ma le 28 chiamate con PIN_GEMINI restano Gemini, e Gemini resta su Google.
-    expect(geminiTransport()).toBe('google');
+    const { route } = await import('./model-routing');
+    expect(route('text')).toMatchObject({ family: 'grok', endpoint: 'kie' });
   });
 
-  it('AI_ROUTE_TEXT=gemini@kie sposta il trasporto, non la famiglia', async () => {
+  it('l endpoint si sposta senza portarsi dietro la famiglia', async () => {
     setEnv({ ...KEYS, AI_ROUTE_TEXT: 'gemini@kie' });
-    const { geminiTransport } = await import('./gemini');
-    const { AI_PROVIDER } = await import('./xiaomi');
-    expect(geminiTransport()).toBe('kie');
-    expect(AI_PROVIDER).toBe('gemini');
+    const { route } = await import('./model-routing');
+    expect(route('text')).toMatchObject({ family: 'gemini', endpoint: 'kie' });
+
+    vi.resetModules();
+    setEnv({ ...KEYS, AI_ROUTE_TEXT: 'gemini@openrouter' });
+    const { route: route2 } = await import('./model-routing');
+    expect(route2('text')).toMatchObject({ family: 'gemini', endpoint: 'openrouter' });
+  });
+
+  it('nessuna costante derivata dalla rotta: si legge al momento della chiamata', () => {
+    const src = readFileSync(join(HERE, 'ai-text.ts'), 'utf8');
+    // Il NOME puo` comparire in un commento che racconta perche` non c'e` piu`; quello che non
+    // deve tornare e` la DICHIARAZIONE, e la chiamata a `route()` fuori da una funzione — una foto
+    // scattata al caricamento del modulo invecchia e mente.
+    expect(src).not.toMatch(/^\s*export const AI_PROVIDER/m);
+    expect(src).not.toMatch(/^const \w+ = route\(/m);
   });
 });
 

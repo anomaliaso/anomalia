@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { env as publicEnv } from '$env/dynamic/public';
 import { env } from '$env/dynamic/private';
 import { genaiClient } from './brand-context';
-import { aiStructured } from './xiaomi';
+import { aiStructured } from './ai-text';
 import { withBrandContext } from './ai-log';
 import { fetchPage } from './brand-analysis';
 import { scrapeCreatorsGet } from './scrapecreators';

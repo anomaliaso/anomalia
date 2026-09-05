@@ -40,7 +40,6 @@ export {
   buildImageRequest,
   collectBatchReviewImages,
   extractVisualPlaybook,
-  imageFromResponse,
   isProduceApproved,
   loadBrandLogoImagePart,
   loadBrandMoodImageUrls,
@@ -55,15 +54,12 @@ export {
 export type { AspectRatio, RenderImageOpts } from './content-preview/images';
 
 export {
-  buildArticleImageRequests,
   editArticleImage,
   generateArticleCover,
   generateArticleImages,
   regeneratePost,
   replaceMarkdownImageUrl,
-  spliceImageUnderHeading
 } from './content-preview/articles';
-export type { ArticleImageDest } from './content-preview/articles';
 
 export {
   draftWeekSeeds,

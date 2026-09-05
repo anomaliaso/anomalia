@@ -11,9 +11,12 @@
  * OpenRouter non sa: l'ultima cosa in quell'elenco era il TTS, e non era vera.
  *
  * Due assi, che non si collassano mai in uno:
- *   · famiglia — QUALE modello scrive. È la garanzia di qualità: `PIN_GEMINI` vuol dire "questo
- *     lavoro lo fa Gemini", e non deve mai diventare un interruttore di trasporto.
- *   · endpoint — CHI lo serve e chi ci fattura. Gemini lo servono sia openrouter sia kie.
+ *   · famiglia — QUALE modello scrive. È la garanzia di qualità, e non deve mai diventare un
+ *     interruttore di trasporto.
+ *   · endpoint — CHI lo serve e chi ci fattura. Gemini lo servono sia openrouter sia kie, e
+ *     `PIN_GATEWAY` fissa QUESTO asse: "questo lavoro lo serve il gateway", e niente sulla
+ *     famiglia. Si chiamava `PIN_GEMINI`, cioè nominava l'asse sbagliato: il collasso dei due
+ *     assi comincia da un nome così, prima che da una riga di codice.
  * `AI_ROUTE_TEXT=gemini@kie` = famiglia Gemini, servita da kie. Senza `@`, l'endpoint di casa.
  *
  * Le tabelle sono allineate apposta: aggiungere o togliere un endpoint è UNA RIGA per tabella, e

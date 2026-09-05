@@ -1,5 +1,4 @@
 import { swallow } from '$lib/server/swallow';
-import { genWithRetry } from './plan-pipeline';
 import { type AnyRec, type BrandProfile, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PreviewPost, platformKey } from './seed-model';
 import type { GoogleGenAI } from '@google/genai';
 import { DIGITAL_SOURCE_TYPE, markImage } from '$lib/server/content-credentials';
@@ -8,7 +7,7 @@ import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { getBrandContext } from '$lib/server/ai-log';
-import { googleGenaiClient, judgeThinkingLevel, NANO_BANANA_2_LITE } from '$lib/server/gemini';
+import { NANO_BANANA_2_LITE } from '$lib/server/gemini';
 import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
@@ -18,7 +17,7 @@ import { route } from '$lib/server/model-routing';
 import { signPaths } from '$lib/server/people';
 import { svgToPng } from '$lib/server/brand-analysis';
 import { normalizeContentFormat } from '$lib/content-formats';
-import { firstLogoUrl } from '$lib/server/blog-site';
+import { firstLogoUrl } from '$lib/brand-fields';
 import { designWallDigestSection } from '$lib/server/wall-digest';
 
 
@@ -229,16 +228,6 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   };
 }
 
-/** Extract the first inline image from a generateContent response as a data URL. */
-export function imageFromResponse(res: {
-  candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
-}): string | undefined {
-  for (const part of res.candidates?.[0]?.content?.parts ?? []) {
-    if (part.inlineData?.data) return `data:${part.inlineData.mimeType ?? 'image/png'};base64,${part.inlineData.data}`;
-  }
-  return undefined;
-}
-
 export async function renderPostImage(
   ai: GoogleGenAI,
   imagePrompt: string,
@@ -267,59 +256,29 @@ export async function renderPostImage(
   }
   // Nano Banana gira su kie: stesso modello, −33%/−40% per immagine (misurato sui crediti
   // addebitati). È l'UNICO punto da cambiare perché ogni render del prodotto passa di qui.
-  // `AI_ROUTE_IMAGE=nano-banana@google` riporta tutto su Google senza deploy.
-  // Il Batch di blog-month.ts resta su Google apposta: kie non ha una batch API, e lì lo sconto
-  // del 50% del batch vale più della differenza di listino.
-  if (route('image').endpoint === 'kie') {
-    // Due tentativi, non tre: su kie il fallimento arriva già diagnosticato in pochi secondi, e
-    // non serve l'insistenza che serve con la risposta vuota di Gemini.
-    //
-    // Il ritentativo vale su un RIFIUTO, che non ci è costato niente. Su una SCADENZA no: kie sta
-    // ancora renderizzando quel task e lo fatturerà comunque, quindi aprirne un secondo è chiedere
-    // lo stesso lavoro due volte — proprio quando il fornitore è in affanno — e pagarlo due volte.
-    // Si riprende lo stesso taskId.
-    let resumeTaskId: string | undefined;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      // L'URL di kie vive 24 ore: non deve sopravvivere alla funzione, men che meno finire in una
-      // riga del database.
-      const viaKie = await generateImageOnKie(req, {
-        context: `image:${imageModel}`,
-        resumeTaskId
-      });
-      if (viaKie.dataUrl) return viaKie.dataUrl;
-      resumeTaskId = viaKie.timedOutTaskId;
-    }
-    throw new Error(
-      resumeTaskId
-        ? `kie task ${resumeTaskId} (${imageModel}) still unfinished — it is rendering and will be billed`
-        : `No image returned from kie (${imageModel}) after 2 attempts`
-    );
-  }
-  // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
-  // Un modello che vive solo su kie non è un modello per Google: `googleImageModel` lo riporta a
-  // quello di casa e lo dice, invece di far fallire ogni immagine con un 400.
-  req.model = googleImageModel(req.model, NANO_BANANA_2_LITE);
-  const googleAi = googleGenaiClient();
+  //
+  // Due tentativi, non tre: su kie il fallimento arriva già diagnosticato in pochi secondi.
+  // Il ritentativo vale su un RIFIUTO, che non ci è costato niente. Su una SCADENZA no: kie sta
+  // ancora renderizzando quel task e lo fatturerà comunque, quindi aprirne un secondo è chiedere
+  // lo stesso lavoro due volte — proprio quando il fornitore è in affanno — e pagarlo due volte.
+  // Si riprende lo stesso taskId.
   void ai;
-  // genWithRetry ritenta gli ERRORI, ma il modello risponde spesso 200 SENZA parte immagine — un
-  // fallimento transitorio che lascia il post senza immagine. Qui si ritenta il render intero, e si
-  // esce subito solo su un blocco di sicurezza, che non si risolve riprovando.
-  const MAX_IMAGE_ATTEMPTS = 3;
-  let lastInfo = '';
-  for (let attempt = 1; attempt <= MAX_IMAGE_ATTEMPTS; attempt++) {
-    const res = await genWithRetry(() => googleAi.models.generateContent(req), 'renderPostImage', { model: req.model });
-    const found = imageFromResponse(res);
-    if (found) return found;
-    const out = res.candidates?.[0]?.content?.parts ?? [];
-    // Nessuna immagine: si dice PERCHÉ (blocco di sicurezza, candidato vuoto, risposta testuale).
-    const finishReason = res.candidates?.[0]?.finishReason;
-    const blockReason = res.promptFeedback?.blockReason;
-    const textParts = out.filter((p) => p.text).map((p) => p.text).join(' ').slice(0, 200);
-    lastInfo = `finishReason=${finishReason ?? '?'}, blockReason=${blockReason ?? 'none'}${textParts ? `, text="${textParts}"` : ''}`;
-    if (blockReason) break; // hard refusal — retrying won't help
-    if (attempt < MAX_IMAGE_ATTEMPTS) console.warn(`[renderPostImage] no image (attempt ${attempt}/${MAX_IMAGE_ATTEMPTS}: ${lastInfo}) — retrying`);
+  let resumeTaskId: string | undefined;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    // L'URL di kie vive 24 ore: non deve sopravvivere alla funzione, men che meno finire in una
+    // riga del database.
+    const viaKie = await generateImageOnKie(req, {
+      context: `image:${imageModel}`,
+      resumeTaskId
+    });
+    if (viaKie.dataUrl) return viaKie.dataUrl;
+    resumeTaskId = viaKie.timedOutTaskId;
   }
-  throw new Error(`No image returned after ${MAX_IMAGE_ATTEMPTS} attempts (${lastInfo})`);
+  throw new Error(
+    resumeTaskId
+      ? `kie task ${resumeTaskId} (${imageModel}) still unfinished — it is rendering and will be billed`
+      : `No image returned from kie (${imageModel}) after 2 attempts`
+  );
 }
 
 /**

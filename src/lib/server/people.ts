@@ -7,18 +7,19 @@
 //      brand profile as `profile.people`, which content-preview turns into image references so the
 //      person's face stays consistent across generated posts.
 import { swallow } from '$lib/server/swallow';
-import { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, fetchImagePart } from './brand-context';
+import { fetchImagePart } from './brand-context';
 import { structured } from './research';
-import { logAiCall, extractGeminiUsage, getBrandContext } from './ai-log';
 import { jpegIfHeic } from './raster-image';
 
 const BUCKET = 'brand-knowledge';
 const SIGN_TTL_SECONDS = 60 * 60 * 2; // 2h — long enough for a generation run
 
-// Same model the post image generator defaults to, so people render in a matching look.
-const IMAGE_MODEL = 'gemini-3.1-flash-lite-image';
+// Nessun id modello scritto qui: le facce escono dallo SLOT IMMAGINI come ogni altro render del
+// prodotto, quindi il modello lo sceglie il registro e cambia con lui. Prima c'era
+// `gemini-3.1-flash-lite-image` — l'id GOOGLE dello stesso Nano Banana 2 Lite che lo slot serve —
+// e con lui l'unico client Google costruito fuori dal registro: gli avatar erano l'unica immagine
+// del prodotto che non passava di lì, e nessuno l'aveva deciso.
 
 export type PersonImage = { path: string; label?: string };
 
@@ -83,36 +84,15 @@ function buildPersonPrompt(attributes: PersonAttributes | null | undefined, desc
 
 type ImagePart = { inlineData: { mimeType: string; data: string } };
 
-// One Gemini image call → a base64 data URL (or undefined). `refs` condition the output on prior
-// images (used to lock the same face across poses).
-async function genImage(ai: GoogleGenAI, text: string, refs: ImagePart[] = []): Promise<string | undefined> {
-  // Credits circuit breaker on the image chokepoint (same rationale as renderImage).
-  const gateBrand = getBrandContext();
-  if (gateBrand) {
-    const { gateCredits } = await import('./credits');
-    await gateCredits(gateBrand);
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parts: any[] = [{ text }, ...refs];
-  const t0 = Date.now();
-  let res;
-  try {
-    res = await ai.models.generateContent({
-      model: IMAGE_MODEL,
-      contents: [{ role: 'user', parts }],
-      config: { responseModalities: ['TEXT', 'IMAGE'] }
-    });
-    logAiCall({ label: 'personImage', provider: 'gemini', model: IMAGE_MODEL, prompt: text, ms: Date.now() - t0, ok: true, ...extractGeminiUsage(res) });
-  } catch (e) {
-    logAiCall({ label: 'personImage', provider: 'gemini', model: IMAGE_MODEL, prompt: text, ms: Date.now() - t0, ok: false, error: e instanceof Error ? e.message : String(e) });
-    throw e;
-  }
-  for (const part of res.candidates?.[0]?.content?.parts ?? []) {
-    if (part.inlineData?.data) {
-      return `data:${part.inlineData.mimeType ?? 'image/png'};base64,${part.inlineData.data}`;
-    }
-  }
-  return undefined;
+// Un render dallo slot immagini → un data URL base64 (o undefined). `refs` sono le foto che
+// bloccano la stessa faccia da una posa all'altra: `personImages` è lo slot giusto, perché è quello
+// che dice al modello che le foto SONO l'identità e non un suggerimento di stile.
+//
+// L'import è dinamico per non chiudere il ciclo: `content-preview/images.ts` importa `signPaths` da
+// qui.
+async function genImage(text: string, refs: ImagePart[] = []): Promise<string | undefined> {
+  const { renderPostImage } = await import('./content-preview/images');
+  return await renderPostImage(null as never, text, { personImages: refs, aspectRatio: '1:1' });
 }
 
 function dataUrlToImagePart(dataUrl: string): ImagePart | null {
@@ -131,11 +111,10 @@ const POSES = [
 // Generate an AI person: one canonical base portrait, then POSES.length consistent variations. Returns
 // base64 data URLs (base first). Variations reuse the base as a reference so the identity stays fixed.
 export async function generateAiPersonImages(
-  opts: { attributes?: PersonAttributes; description?: string; ai?: GoogleGenAI }
+  opts: { attributes?: PersonAttributes; description?: string }
 ): Promise<string[]> {
-  const ai = opts.ai ?? genaiClient();
   const basePrompt = buildPersonPrompt(opts.attributes, opts.description ?? '');
-  const base = await genImage(ai, basePrompt);
+  const base = await genImage(basePrompt);
   if (!base) return [];
 
   const baseRef = dataUrlToImagePart(base);
@@ -145,7 +124,6 @@ export async function generateAiPersonImages(
   const variants = await Promise.all(
     POSES.map((pose) =>
       genImage(
-        ai,
         `Same person, same face, same identity as the attached reference image — keep visual ` +
           `consistency. ${pose}. Photorealistic, natural lighting, neutral background, 8k. No text.`,
         [baseRef]
@@ -265,8 +243,7 @@ const ATTR_SCHEMA = {
 // misgenders ambiguous names. One flash vision call per person; best-effort, never throws.
 export async function inferMissingPersonAttributes(
   supabase: SupabaseClient,
-  brandId: string,
-  ai?: GoogleGenAI
+  brandId: string
 ): Promise<void> {
   const { data: rows } = await supabase
     .from('people')
@@ -276,7 +253,6 @@ export async function inferMissingPersonAttributes(
     (r) => !(r.attributes as PersonAttributes | null)?.gender && Array.isArray(r.images) && r.images.length
   );
   if (!todo.length) return;
-  const genai = ai ?? genaiClient();
   await Promise.all(
     todo.map(async (r) => {
       try {
@@ -285,7 +261,7 @@ export async function inferMissingPersonAttributes(
         const part = await fetchImagePart(url);
         if (!part) return;
         const parsed = await structured<{ gender?: string; ageRange?: string }>(
-          genai,
+          null as never,
           'Look at the attached reference photo of a real person and report their perceived gender presentation and approximate age range. This is used only to describe them accurately and respectfully in generated content.',
           ATTR_SCHEMA,
           undefined,

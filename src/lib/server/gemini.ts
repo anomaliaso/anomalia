@@ -1,6 +1,4 @@
 import { env } from '$env/dynamic/private';
-import { GoogleGenAI, type ThinkingLevel } from '@google/genai';
-import { route } from '$lib/server/model-routing';
 import { GEMINI_NANO_BANANA_2_LITE, GEMINI_NANO_BANANA_PRO } from '$lib/image-models';
 
 /** Default Gemini Flash text/vision model when `GEMINI_FLASH` is unset. */
@@ -48,10 +46,10 @@ export function geminiVisualCreditShare(plan?: string | null): number {
  */
 export type GeminiThinkingLevel = 'low' | 'medium' | 'high';
 
-export const GEMINI_THINKING_LEVELS: GeminiThinkingLevel[] = ['low', 'medium', 'high'];
+const GEMINI_THINKING_LEVELS: GeminiThinkingLevel[] = ['low', 'medium', 'high'];
 
 /** Where every non-chat Gemini call starts. Chat has its own per-tier scale (chat-reasoning.ts). */
-export const DEFAULT_GEMINI_THINKING: GeminiThinkingLevel = 'high';
+const DEFAULT_GEMINI_THINKING: GeminiThinkingLevel = 'high';
 
 function isThinkingLevel(v: unknown): v is GeminiThinkingLevel {
   return typeof v === 'string' && (GEMINI_THINKING_LEVELS as string[]).includes(v);
@@ -86,81 +84,11 @@ export function judgeThinkingLevel(rawOverride?: string | null): GeminiThinkingL
   return geminiThinkingLevel(rawOverride ?? env.GEMINI_JUDGE_THINKING_LEVEL);
 }
 
-/**
- * `config.thinkingConfig` for @google/genai, whose ThinkingLevel is the UPPERCASE proto enum.
- * The AI SDK wants the lowercase level instead — pass it the level as-is.
- */
-export function genaiThinking(level: GeminiThinkingLevel = judgeThinkingLevel()): {
-  thinkingLevel: ThinkingLevel;
-} {
-  return { thinkingLevel: level.toUpperCase() as ThinkingLevel };
-}
-
-// Trasporto: lo STESSO modello Gemini, via Google o via il passthrough kie.ai. Cambia solo chi
-// fattura, per questo il knob sta nel client e non nei 28 call site con `PIN_GEMINI`.
-//
-// Non è uno sconto incondizionato: kie non ha il tier di prompt cache ($0.225/1M contro $0.15/1M
-// Google), quindi su un turno lungo e molto cacheato costa DI PIÙ. Il -85% vale sui token freschi.
-//
-// Quattro superfici restano su Google per misura, e non passano di qui: media nei risultati dei
-// tool (kie li scarta in silenzio), i giudici video (kie ignora videoMetadata.fps), lo streaming
-// della chat (79.6s al primo token contro 4.7s), e tutto ciò che legge groundingMetadata.
-export type GeminiTransport = 'google' | 'kie';
-
-const KIE_GEMINI_BASE_URL = 'https://api.kie.ai/gemini';
-
-/** Trasporto per questa chiamata, letto per richiesta: si torna su Google senza deploy. */
-export function geminiTransport(): GeminiTransport {
-  // Famiglia e trasporto sono due assi distinti: `AI_ROUTE_TEXT=grok@kie` sposta il default di
-  // `aiStructured`, ma non ha titolo per spostare il trasporto delle chiamate `PIN_GEMINI`. Solo
-  // una rotta della famiglia gemini lo sposta.
-  const chosen = route('text');
-  return chosen.family === 'gemini' && chosen.endpoint === 'kie' ? 'kie' : 'google';
-}
-
-// L'id modello da mandare dipende dal client che il chiamante ha in mano, non dall'env in questo
-// istante. Un client costruito a mano con `new GoogleGenAI(...)` non è qui dentro: è Google.
-const kieClients = new WeakSet<object>();
-
-/** True quando questo client parla con kie invece che con Google. */
-export function isKieTransport(ai: unknown): boolean {
-  return !!ai && typeof ai === 'object' && kieClients.has(ai as object);
-}
-
-/**
- * Client Gemini sul trasporto scelto. Su kie servono tutte e tre insieme: `apiVersion: 'v1'`
- * (l'SDK mette v1beta e kie dà 404), `Authorization: Bearer` (con `x-goog-api-key` è 401) e l'id
- * modello con i trattini (vedi flashModelFor).
- */
-export function makeGenaiClient(): GoogleGenAI {
-  if (geminiTransport() === 'kie') {
-    const key = env.KIE_API_KEY ?? '';
-    const ai = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: { apiVersion: 'v1', baseUrl: KIE_GEMINI_BASE_URL, headers: { Authorization: `Bearer ${key}` } }
-    });
-    kieClients.add(ai);
-    return ai;
-  }
-  return googleGenaiClient();
-}
-
-/**
- * Client Gemini SEMPRE su Google: le superfici dove kie è una regressione silenziosa (giudici
- * video a fps 4, grounding con citazioni) chiamano questa, non `makeGenaiClient`.
- */
-export function googleGenaiClient(): GoogleGenAI {
-  return new GoogleGenAI({ apiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY });
-}
-
-/**
- * L'id Flash che va con QUESTO client: kie risponde 404 all'id con i punti. Tenere i due id
- * separati è anche il registro di cassa — le tariffe Google non possono raggiungere una riga kie
- * perché l'id non le corrisponde (vedi RATES in ai-log.ts).
- */
-export function flashModelFor(ai: unknown): string {
-  return isKieTransport(ai) ? kieFlashId(geminiFlash()) : geminiFlash();
-}
+// Qui c'erano i due client Gemini — `makeGenaiClient` (kie o Google) e `googleGenaiClient` (Google
+// sempre) — piu` il trasporto che sceglieva fra i due. Sono spariti con l'ultimo chiamante: ogni
+// pixel passa dallo slot immagini, ogni testo dal centralino, e i due endpoint vivi sono kie e
+// OpenRouter. Restano gli ID e le tariffe, che servono al registro di cassa: un modello Gemini si
+// paga anche quando a servirlo e` qualcun altro.
 
 /** `gemini-3.7-flash` → `gemini-3-7-flash`, la forma che accetta il passthrough di kie. */
 export function kieFlashId(modelId: string): string {

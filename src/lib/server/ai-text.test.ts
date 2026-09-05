@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { satisfiesSchema } from './xiaomi';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { satisfiesSchema } from './ai-text';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // Il secondario (MiMo via tool calling, Grok via kie) restituisce JSON valido ma NON impone lo
 // schema al modo Google. Questa guardia è ciò che impedisce a un oggetto parzialmente riempito di
@@ -53,12 +58,11 @@ describe('satisfiesSchema (guardia di conformità sul secondario)', () => {
 /**
  * IL LAVORO STRUTTURATO DI SFONDO VA SUL GATEWAY LLM (OpenAI-compatibile).
  *
- * Qui c'era la suite che difendeva la deviazione su DeepSeek, poi quella che difendeva Gemini Flash;
- * entrambe difendevano un TRASPORTO che oggi non esiste più. Il default di `aiStructured` non passa
- * né da Google né da nessun SDK per-famiglia: va dritto a `llmStructured` sul gateway, e il pseudo
- * provider 'gemini' è ormai solo il nome del ramo "gateway" dentro xiaomi.ts. Le varianti pin ne
- * ereditano la rotta; forzare `provider: 'xiaomi' | 'kie'` resta possibile come SECONDARIO, con il
- * gateway come rete di conformità allo schema.
+ * Qui c'era la suite che difendeva la deviazione su DeepSeek, poi quella su Gemini Flash, poi
+ * quella su MiMo: tutte difendevano un TRASPORTO che non esiste più. Restano DUE strade, e sono i
+ * due endpoint del registro: il gateway (`llmStructured`) e kie (`structuredKie`), con il gateway
+ * come rete di conformità allo schema. Il pseudo provider 'gemini' si chiamava così mentendo — ora
+ * si chiama 'gateway', che è l'endpoint che sceglie davvero.
  *
  * Come prima, questi test guardano dove finisce davvero la chiamata — sulla doppia `llmStructured`
  * mockata, oppure sulla fetch — e non l'ortografia del sorgente.
@@ -88,14 +92,11 @@ vi.mock('$lib/server/llm', async () => ({
 vi.mock('$lib/server/kie', () => ({ structuredKie: M.structuredKie, textKie: M.textKie }));
 vi.mock('$lib/server/deepseek', () => ({
   DEEPSEEK_MODEL: 'deepseek-v4-flash',
-  DEEPSEEK_PRO_MODEL: 'deepseek-v4-pro',
   deepseekAlive: M.deepseekAlive,
   noteDeepseekFailure: M.noteDeepseekFailure
 }));
 vi.mock('$lib/server/ai-log', () => ({
   logAiCall: vi.fn(),
-  extractXiaomiUsage: () => ({}),
-  extractGeminiUsage: () => ({}),
   requireBrandContext: () => 'brand-1'
 }));
 
@@ -112,9 +113,9 @@ describe('routing del lavoro strutturato', () => {
 
   async function callBackgroundWork(overrides: Record<string, string | undefined> = {}) {
     Object.assign(env, overrides);
-    const { aiStructured, PIN_GEMINI } = await import('./xiaomi');
+    const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GEMINI });
+    return aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
   }
 
   it('manda il lavoro strutturato al gateway LLM, e a nessun altro endpoint', async () => {
@@ -122,31 +123,34 @@ describe('routing del lavoro strutturato', () => {
     expect(M.llmStructured).toHaveBeenCalledTimes(1);
     expect(M.llmStructured.mock.calls[0][0]).toMatchObject({ label: 'return_plan' });
     expect(M.structuredKie).not.toHaveBeenCalled();
-    // structuredXiaomi vive dentro xiaomi.ts e non è mockabile: la sua unica traccia è la fetch.
-    // Zero chiamate = nessun endpoint a pagamento è stato sfiorato, sotto QUALUNQUE nome.
+    // Zero fetch = nessun endpoint a pagamento è stato sfiorato, sotto QUALUNQUE nome.
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('ci va anche con GTM_PROVIDER=xiaomi: il pin batte la variabile d\'ambiente', async () => {
-    expect(await callBackgroundWork({ GTM_PROVIDER: 'xiaomi', XIAOMI_MIMO_API_KEY: 'k' })).toEqual({ plan: 'ok' });
+  it('ci va anche con GTM_PROVIDER=xiaomi: un endpoint morto non sposta niente', async () => {
+    expect(await callBackgroundWork({ GTM_PROVIDER: 'xiaomi' })).toEqual({ plan: 'ok' });
     expect(M.llmStructured).toHaveBeenCalledTimes(1);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('forzare provider:"xiaomi" parla con MiMo, e se fallisce ripiega sul gateway', async () => {
-    fetchSpy.mockResolvedValue(new Response('boom', { status: 500 }));
-    const { aiStructured } = await import('./xiaomi');
+  it('forzare provider:"kie" usa il secondario, e se fallisce ripiega sul gateway', async () => {
+    M.structuredKie.mockRejectedValueOnce(new Error('boom'));
+    const { aiStructured } = await import('./ai-text');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', {
       brandId: 'b',
-      provider: 'xiaomi'
+      provider: 'kie'
     });
-    // Il secondario parte davvero — la fetch è il fiato di structuredXiaomi...
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(String(fetchSpy.mock.calls[0][0])).toContain('api.xiaomimimo.com');
-    // ...e il ripiego non è più Gemini ma il gateway LLM.
+    expect(M.structuredKie).toHaveBeenCalledTimes(1);
     expect(M.llmStructured).toHaveBeenCalledTimes(1);
     expect(res).toEqual({ plan: 'ok' });
+  });
+
+  it('MiMo non è più un secondario: nessun fornitore fuori da gateway e kie', async () => {
+    const src = readFileSync(join(HERE, 'ai-text.ts'), 'utf8');
+    expect(src).not.toContain('api.xiaomimimo.com');
+    expect(src).not.toContain('structuredXiaomi');
+    expect(src).not.toContain('textXiaomi');
   });
 
   it('non tocca DeepSeek: né la chiave, né una chiamata', async () => {
@@ -156,7 +160,7 @@ describe('routing del lavoro strutturato', () => {
   });
 });
 
-describe('satisfiesSchema (xiaomi/kie fall-through guard)', () => {
+describe('satisfiesSchema (guardia del ripiego kie → gateway)', () => {
   const brandProfile = {
     type: 'object',
     properties: {
@@ -219,18 +223,18 @@ describe('textRouteLabel — chi serve il testo, per il log di boot', () => {
 
   it('senza rotte forzate nomina il gateway e i suoi modelli, mai un id Gemini', async () => {
     Object.assign(env, { LLM_API_KEY: 'k', LLM_DEFAULT_MODEL: 'z-ai/glm-5.3-flash' });
-    const { textRouteLabel } = await import('./xiaomi');
+    const { textRouteLabel } = await import('./ai-text');
     expect(textRouteLabel()).toBe('openrouter.ai (z-ai/glm-5.3-flash)');
   });
 
   it('una rotta deviata su kie lo dice, col modello che kie riceverà', async () => {
     Object.assign(env, { LLM_API_KEY: 'k', AI_ROUTE_TEXT: 'grok@kie', KIE_API_KEY: 'k' });
-    const { textRouteLabel } = await import('./xiaomi');
+    const { textRouteLabel } = await import('./ai-text');
     expect(textRouteLabel()).toBe('kie (grok-4-5)');
   });
 
   it('senza la chiave del centralino annuncia il guasto, non un modello', async () => {
-    const { textRouteLabel } = await import('./xiaomi');
+    const { textRouteLabel } = await import('./ai-text');
     expect(textRouteLabel()).toBe('not configured (LLM_API_KEY missing)');
   });
 });

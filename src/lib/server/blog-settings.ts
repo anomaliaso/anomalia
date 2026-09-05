@@ -2,7 +2,8 @@ import { swallow } from '$lib/server/swallow';
 import { fail } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { FONT_KEYS, firstLogoUrl } from '$lib/server/blog-site';
+import { FONT_KEYS } from '$lib/server/blog-site';
+import { firstLogoUrl } from '$lib/brand-fields';
 
 const domainsApi = async () => {
   try {

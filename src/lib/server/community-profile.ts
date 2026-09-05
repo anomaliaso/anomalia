@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { genaiClient } from './brand-context';
-import { aiStructured } from './xiaomi';
+import { aiStructured } from './ai-text';
 import { outcomeDigestFor } from './lead-outcomes';
 
 // ── Community profiles: the memory the Radar was missing ────────────────────────────────────────

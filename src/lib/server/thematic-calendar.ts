@@ -1,4 +1,4 @@
-import { aiText } from './xiaomi';
+import { aiText } from './ai-text';
 
 // Niche thematic calendar: surface UPCOMING moments (holidays, observances, seasonal/industry
 // events) a brand could authentically post around, so the planner can ride timely hooks instead of

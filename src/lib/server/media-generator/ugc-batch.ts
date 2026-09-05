@@ -48,7 +48,7 @@ import {
   type UgcPlatformId
 } from '$lib/ugc-formats';
 import { disruptiveBriefSection } from '$lib/disruptive';
-import { aiStructured } from '$lib/server/xiaomi';
+import { aiStructured } from '$lib/server/ai-text';
 import { trendingWallDigestSection } from '$lib/server/wall-digest';
 import { GROK_IMAGINE_VIDEO_MODEL, isSeedanceFamily, SEEDANCE_25_MODEL } from '$lib/video-models';
 import {

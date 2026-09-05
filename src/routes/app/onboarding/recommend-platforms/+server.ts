@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { canEnter } from '$lib/server/access';
 import { genaiClient } from '$lib/server/research';
-import { aiStructured } from '$lib/server/xiaomi';
+import { aiStructured } from '$lib/server/ai-text';
 import { localeLanguageName } from '$lib/i18n/locale';
 import { logOnboardingError } from '$lib/server/onboarding-errors';
 import { withBrandContext } from '$lib/server/ai-log';
@@ -58,7 +58,6 @@ About: ${String(profile?.about ?? '').slice(0, 600)}
 Target audience: ${profile?.target_audience ?? ''}
 
 Pick the 2-4 platforms where THIS brand's audience and content format will perform best (most important first). Be realistic for the niche — don't just list the biggest networks. Write the one-line rationale in ${outputLanguage}.`;
-    // Uses mimo-v2.5-pro-ultraspeed when AI_PROVIDER=xiaomi (fast), with a Gemini fallback.
     const out = await aiStructured<{ recommended: string[]; rationale: string }>(
       ai,
       prompt,

@@ -215,7 +215,7 @@ async function rewriteSuggestion(
 
   return withBrandContext(brand.id, async () => {
   const { genaiClient } = await import('$lib/server/brand-context');
-  const { aiStructured } = await import('$lib/server/xiaomi');
+  const { aiStructured } = await import('$lib/server/ai-text');
   const ai = genaiClient();
 
   const REWRITE_SCHEMA = {

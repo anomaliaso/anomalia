@@ -11,7 +11,7 @@ import {
 import { GRAPHIC_CRAFT_SPECS } from '$lib/design/graphic-craft';
 import { logoIssue, type GraphicIssue } from '$lib/design/graphic-check';
 import { structuredKie, KIE_MODEL } from '$lib/server/kie';
-import { firstLogoUrl } from '$lib/server/blog-site';
+import { firstLogoUrl } from '$lib/brand-fields';
 import { isUrlSafe } from '$lib/server/brand-analysis';
 
 /**

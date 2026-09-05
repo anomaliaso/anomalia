@@ -11,7 +11,7 @@
  * which is what makes this safe to roll out and safe to turn off again.
  */
 import { drainChatQueue } from '$lib/server/chat/queue';
-import { textRouteLabel } from '$lib/server/xiaomi';
+import { textRouteLabel } from '$lib/server/ai-text';
 
 /** Nothing to do → wait this long before asking again. The queue is a table, not a firehose. */
 const IDLE_POLL_MS = Number(process.env.WORKER_IDLE_POLL_MS ?? 2_000);

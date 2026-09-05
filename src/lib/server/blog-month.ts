@@ -5,19 +5,16 @@
  * in one request (300s function cap, and a single article takes 1-2 minutes), so this module is a
  * state machine advanced one step per invocation by /api/v1/blog/month/work:
  *
- *     pending ──write texts (chunked)──▶ writing ──submit ONE image batch──▶ imaging ──▶ ready
+ *     pending ──write texts + images (chunked)──▶ writing ──▶ translating ──▶ ready
  *
- * WHY BATCH THE IMAGES: measured live 2026-08-04, the Gemini Batch API accepts Nano Banana 2 with
- * imageConfig.aspectRatio AND inline base64 reference images, and returned a 2-request job in ~3
- * minutes. It bills at 50% of interactive, on top of Nano Banana 2 already being half of Nano Banana
- * Pro — so ~4x cheaper per image than rendering synchronously. The published SLA is 24h, which is
- * why the UI promises 12-24h and the owner gets an email instead of watching a spinner.
- *
- * 'fast' mode (top plan) skips the batch and renders inline: minutes instead of hours, full price.
+ * Le immagini si rendono in linea, dallo slot immagini come ogni altro render del prodotto. Prima
+ * esisteva una seconda strada: la Batch API di Google, a metà prezzo con una SLA di 24 ore. Era
+ * l'ultimo punto del prodotto che parlava con Google, e in produzione non l'ha percorsa nessuno —
+ * `blog_month_jobs` non ha mai avuto una riga. Uno sconto su un traffico che non esiste non paga
+ * un fornitore in più.
  */
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { googleGenaiClient } from '$lib/server/gemini';
 import { env } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import { withBrandContext } from '$lib/server/ai-log';
@@ -25,20 +22,16 @@ import { withBrandContext } from '$lib/server/ai-log';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
 
-export type BlogMonthMode = 'batch' | 'fast';
-export type BlogMonthStatus = 'pending' | 'writing' | 'imaging' | 'translating' | 'ready' | 'failed';
+export type BlogMonthStatus = 'pending' | 'writing' | 'translating' | 'ready' | 'failed';
 
 export type BlogMonthJob = {
   id: string;
   brand_id: string;
   user_id: string | null;
   status: BlogMonthStatus;
-  mode: BlogMonthMode;
   progress: {
     planned?: number;
     written?: number;
-    images_expected?: number;
-    images_applied?: number;
     translations?: number;
     /** Originals still to translate. Drained a chunk at a time, like the writing step. */
     translate_queue?: string[];
@@ -48,22 +41,16 @@ export type BlogMonthJob = {
     // picked up articles the daily drip wrote in the same window.
     article_ids?: string[];
   };
-  batch_name: string | null;
-  manifest: Array<{ articleId: string; kind: 'cover' | 'section'; heading?: string }>;
   attempts: number;
   notified_at: string | null;
 };
 
 // How many article bodies to write per invocation. Each is a Gemini Flash call plus a humanize and
-// an optimize pass; 3 fits comfortably inside the 300s budget with room for the image submit.
+// an optimize pass, and now the images too; 3 resta dentro il budget di 300s.
 const WRITE_CHUNK = 3;
 // A step that has been 'processing' longer than this is treated as stalled and retried.
 const STALL_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 3;
-
-function client() {
-  return googleGenaiClient();
-}
 
 /** Fire-and-forget nudge so a job starts moving without waiting for the next cron tick. */
 export async function kickBlogMonthWork(origin: string): Promise<void> {
@@ -80,16 +67,15 @@ export async function kickBlogMonthWork(origin: string): Promise<void> {
 export async function startBlogMonthJob(
   admin: SupabaseClient,
   brand: AnyRec,
-  userId: string | null,
-  mode: BlogMonthMode = 'batch'
+  userId: string | null
 ): Promise<{ jobId: string | null; planned: number }> {
   // One live job per brand: a second click while the first is still running would write the same
-  // placeholders twice and submit two image batches for them.
+  // placeholders twice.
   const { data: live } = await admin
     .from('blog_month_jobs')
     .select('id')
     .eq('brand_id', brand.id)
-    .in('status', ['pending', 'writing', 'imaging', 'translating'])
+    .in('status', ['pending', 'writing', 'translating'])
     .limit(1)
     .maybeSingle();
   if (live?.id) return { jobId: live.id as string, planned: 0 };
@@ -104,8 +90,7 @@ export async function startBlogMonthJob(
       brand_id: brand.id,
       user_id: userId,
       status: 'pending',
-      mode,
-      progress: { planned, written: 0, images_expected: 0, images_applied: 0 },
+      progress: { planned, written: 0 },
       step_started_at: new Date().toISOString()
     })
     .select('id')
@@ -121,7 +106,7 @@ export async function currentBlogMonthJob(
 ): Promise<BlogMonthJob | null> {
   const { data } = await supabase
     .from('blog_month_jobs')
-    .select('id, brand_id, user_id, status, mode, progress, batch_name, manifest, attempts, notified_at')
+    .select('id, brand_id, user_id, status, progress, attempts, notified_at')
     .eq('brand_id', brandId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -135,8 +120,8 @@ export async function claimBlogMonthJobs(admin: SupabaseClient, limit = 2): Prom
   const stallIso = new Date(Date.now() - STALL_MS).toISOString();
   const { data } = await admin
     .from('blog_month_jobs')
-    .select('id, brand_id, user_id, status, mode, progress, batch_name, manifest, attempts, notified_at')
-    .in('status', ['pending', 'writing', 'imaging', 'translating'])
+    .select('id, brand_id, user_id, status, progress, attempts, notified_at')
+    .in('status', ['pending', 'writing', 'translating'])
     .or(`step_started_at.is.null,step_started_at.lt.${stallIso}`)
     .order('created_at', { ascending: true })
     .limit(limit);
@@ -186,7 +171,6 @@ export async function advanceBlogMonthJob(admin: SupabaseClient, job: BlogMonthJ
     // Everything below bills to this brand's credits.
     return await withBrandContext(brand.id as string, async () => {
       if (job.status === 'pending' || job.status === 'writing') return await stepWrite(admin, job, brand);
-      if (job.status === 'imaging') return await stepCollectImages(admin, job, brand);
       if (job.status === 'translating') return await stepTranslate(admin, job, brand);
       return false;
     });
@@ -197,8 +181,8 @@ export async function advanceBlogMonthJob(admin: SupabaseClient, job: BlogMonthJ
 }
 
 /**
- * Write up to WRITE_CHUNK article bodies from the month's 'planned' placeholders. When the last one
- * is written, submit the image batch (or, in fast mode, finish — images were rendered inline).
+ * Write up to WRITE_CHUNK article bodies from the month's 'planned' placeholders, images included.
+ * When the last one is written the job moves on to the translations.
  */
 async function stepWrite(admin: SupabaseClient, job: BlogMonthJob, brand: AnyRec): Promise<boolean> {
   const { data: planned } = await admin
@@ -209,23 +193,13 @@ async function stepWrite(admin: SupabaseClient, job: BlogMonthJob, brand: AnyRec
     .order('scheduled_for', { ascending: true })
     .limit(WRITE_CHUNK);
 
-  if (!planned?.length) {
-    // All bodies written → hand the images to the batch API (or wrap up in fast mode).
-    // Fast mode rendered its images inline while writing, so it skips straight to translations.
-    if (job.mode === 'fast') return await enterTranslateOrFinish(admin, job, brand);
-    return await submitImageBatch(admin, job, brand);
-  }
+  if (!planned?.length) return await enterTranslateOrFinish(admin, job, brand);
 
   const { generatePlannedArticle } = await import('$lib/server/blog-generate');
   let written = job.progress?.written ?? 0;
   const articleIds = [...(job.progress?.article_ids ?? [])];
   for (const p of planned) {
-    // In batch mode the images come later, so skip the inline render: withImages=false. In fast mode
-    // generatePlannedArticle's normal path renders them now.
-    const id = await generatePlannedArticle(admin, brand, p.id as string, {
-      skipNotify: true,
-      skipImages: job.mode === 'batch'
-    });
+    const id = await generatePlannedArticle(admin, brand, p.id as string, { skipNotify: true });
     if (id) {
       written++;
       articleIds.push(id);
@@ -239,128 +213,6 @@ async function stepWrite(admin: SupabaseClient, job: BlogMonthJob, brand: AnyRec
     step_started_at: null
   });
   return true;
-}
-
-/** Build every image request for the month's articles and submit them as ONE batch job. */
-async function submitImageBatch(admin: SupabaseClient, job: BlogMonthJob, brand: AnyRec): Promise<boolean> {
-  const ids = job.progress?.article_ids ?? [];
-  if (!ids.length) {
-    await markReady(admin, job, brand, 'no articles were written');
-    return false;
-  }
-  const { data: articles } = await admin
-    .from('brand_articles')
-    .select('id, title, body_md, meta_description, cover_image')
-    .eq('brand_id', brand.id)
-    .in('id', ids);
-
-  const todo = (articles ?? []).filter((a) => a.body_md);
-  if (!todo.length) {
-    await markReady(admin, job, brand);
-    return false;
-  }
-
-  const { buildArticleImageRequests, BLOG_IMAGE_MODEL } = await import('$lib/server/content-preview');
-  const requests: AnyRec[] = [];
-  const manifest: BlogMonthJob['manifest'] = [];
-  for (const a of todo) {
-    const built = await buildArticleImageRequests(admin, brand, {
-      articleId: a.id as string,
-      title: String(a.title ?? ''),
-      bodyMd: String(a.body_md ?? ''),
-      summary: (a.meta_description as string | null) ?? undefined,
-      needCover: !a.cover_image,
-      max: 2
-    });
-    for (const b of built) {
-      // The batch job carries ONE model; buildImageRequest sets it per request, so drop it here and
-      // keep only contents+config (a per-request model would be ignored anyway).
-      requests.push({ contents: b.request.contents, config: b.request.config });
-      manifest.push(b.dest);
-    }
-  }
-  if (!requests.length) {
-    await markReady(admin, job, brand);
-    return false;
-  }
-
-  const batch = await client().batches.create({ model: BLOG_IMAGE_MODEL, src: requests });
-  console.log(`[blog-month] job ${job.id}: submitted ${requests.length} images as ${batch.name}`);
-  await patch(admin, job.id, {
-    status: 'imaging',
-    batch_name: batch.name,
-    manifest,
-    progress: { ...job.progress, images_expected: requests.length, images_applied: 0 },
-    attempts: 0,
-    error: null,
-    step_started_at: null
-  });
-  return false; // nothing to do until the provider finishes
-}
-
-/** Poll the image batch; when it's done, upload each image and apply it to its article. */
-async function stepCollectImages(admin: SupabaseClient, job: BlogMonthJob, brand: AnyRec): Promise<boolean> {
-  if (!job.batch_name) {
-    await markReady(admin, job, brand);
-    return false;
-  }
-  const batch = await client().batches.get({ name: job.batch_name });
-  const state = String(batch.state ?? '');
-  if (state.endsWith('PENDING') || state.endsWith('RUNNING')) {
-    console.log(`[blog-month] job ${job.id}: batch ${state}`);
-    await patch(admin, job.id, { step_started_at: null }); // re-arm for the next tick
-    return false;
-  }
-  if (!state.endsWith('SUCCEEDED')) {
-    // FAILED / CANCELLED / EXPIRED — the articles keep their text, they just stay imageless.
-    console.warn(`[blog-month] job ${job.id}: batch ended ${state}`);
-    await markReady(admin, job, brand, `image batch ended ${state}`);
-    return false;
-  }
-
-  const { uploadPostImage, imageFromResponse, spliceImageUnderHeading } = await import('$lib/server/content-preview');
-  const responses = batch.dest?.inlinedResponses ?? [];
-  // Group by article so each body is read and written once, not once per image.
-  const byArticle = new Map<string, Array<{ dest: BlogMonthJob['manifest'][number]; dataUrl: string }>>();
-  job.manifest.forEach((dest, i) => {
-    const dataUrl = imageFromResponse((responses[i]?.response ?? {}) as never);
-    if (!dataUrl) return;
-    byArticle.set(dest.articleId, [...(byArticle.get(dest.articleId) ?? []), { dest, dataUrl }]);
-  });
-
-  let applied = 0;
-  for (const [articleId, items] of byArticle) {
-    const { data: a } = await admin
-      .from('brand_articles')
-      .select('body_md, cover_image')
-      .eq('id', articleId)
-      .eq('brand_id', brand.id)
-      .maybeSingle();
-    if (!a) continue;
-    let bodyMd = String(a.body_md ?? '');
-    let cover = (a.cover_image as string | null) ?? null;
-    for (const { dest, dataUrl } of items) {
-      const url = await uploadPostImage(admin, brand.id as string, dataUrl, '16:9').catch((error) => { swallow('upload post image', error); return undefined; });
-      if (!url) continue;
-      if (dest.kind === 'cover') cover = cover ?? url;
-      else if (dest.heading) bodyMd = spliceImageUnderHeading(bodyMd, dest.heading, url);
-      applied++;
-    }
-    await admin
-      .from('brand_articles')
-      .update({ body_md: bodyMd, cover_image: cover, updated_at: new Date().toISOString() })
-      .eq('id', articleId)
-      .eq('brand_id', brand.id);
-  }
-
-  console.log(`[blog-month] job ${job.id}: applied ${applied}/${job.manifest.length} images`);
-  await patch(admin, job.id, { progress: { ...job.progress, images_applied: applied } });
-  return await enterTranslateOrFinish(
-    admin,
-    { ...job, progress: { ...job.progress, images_applied: applied } },
-    brand,
-    applied ? undefined : 'no images returned'
-  );
 }
 
 /**
