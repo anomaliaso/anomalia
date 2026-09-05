@@ -243,6 +243,36 @@ export async function gateAiAction(
   return undefined;
 }
 
+/**
+ * Lo stesso cancello per un'azione che un brand non ce l'ha: paga l'organizzazione, e senza questo
+ * la strada nuova sarebbe l'unica del prodotto a spendere senza controllare il saldo.
+ */
+export async function gateOrgAiAction(
+  orgId: string,
+  apiKey: ApiKeyInfo | undefined
+): Promise<Response | undefined> {
+  const write = checkApiKeyWriteAccess(apiKey);
+  if (write) return write;
+
+  const { gateOrgCredits, CreditsExhaustedError } = await import('./credits');
+  try {
+    await gateOrgCredits(orgId);
+  } catch (e) {
+    if (e instanceof CreditsExhaustedError) return json({ error: 'credits_exhausted' }, { status: 402 });
+    throw e;
+  }
+  return undefined;
+}
+
+/**
+ * Una chiave che vale solo per certi brand. Dove un brand si nomina, `checkApiKeyBrandAccess` la
+ * confronta con quello; dove NON si nomina non c'è niente da confrontare, e lasciarla passare
+ * allargherebbe in silenzio una restrizione che l'utente ha scelto.
+ */
+export function apiKeyIsBrandScoped(apiKey: ApiKeyInfo | undefined): boolean {
+  return !!apiKey && apiKey.permissions.brand_ids !== '*';
+}
+
 /** The columns loadBrandForUser selects — typed, so callers don't get `unknown` everywhere. */
 export type CliBrand = {
   id: string;

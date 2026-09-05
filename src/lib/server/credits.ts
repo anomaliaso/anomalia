@@ -462,12 +462,55 @@ export async function gateCredits(brandId: string): Promise<void> {
 }
 
 /**
+ * Lo stesso cancello per un lavoro senza brand: il pagante è l'organizzazione, e passa dallo stesso
+ * provider — un fork self-hosted, che di fatturazione non ne ha, non deve trovarsi contato proprio
+ * su questa strada perché è nuova.
+ */
+export async function gateOrgCredits(orgId: string): Promise<void> {
+  const { billingProvider } = await import('./billing');
+  const provider = await billingProvider();
+  await provider.gate('credits', { orgId });
+}
+
+/**
  * Both fail-open paths below give up on the same thing — evaluating the ledger — and both let the
  * action through on purpose: a transient Supabase error must not block a paying customer. Neither
  * may do it silently. Unmetered AI nobody is told about is exactly how a week of it went unnoticed.
  */
 function reportFailOpen(brandId: string, err: unknown): void {
   swallow(`credits: allowed brand ${brandId} without evaluating its ledger`, err);
+}
+
+/**
+ * L'applicazione vera per chi il brand non ce l'ha. Stessa cassa e stessa chiave di `gateCredits`
+ * — che risolve l'organizzazione e poi mette in cache SU DI ESSA — quindi una generazione senza
+ * brand e una con lo stesso brand leggono la stessa riga invece di pagarsi due copie dello stesso
+ * conto. Non per uso diretto: si chiama `gateOrgCredits`.
+ */
+export async function gateOrgCreditsCore(orgId: string): Promise<void> {
+  const { isCreditExempt } = await import('./ai-log');
+  if (isCreditExempt()) return;
+
+  // Fuori dal try di proposito: un rifiuto qui è il cancello che fa il suo mestiere, e non deve
+  // finire nel catch che lascia passare.
+  const hit = gateCache.get(orgId);
+  if (hit && Date.now() - hit.at < GATE_TTL_MS) {
+    assertCreditsAvailable(hit.usage);
+    return;
+  }
+
+  let usage: CreditsUsage;
+  try {
+    const admin = createAdminClient();
+    const org = await readOrgBillingById(admin, orgId);
+    if (!org) return;
+    usage = await orgCreditsUsage(admin, org);
+    gateCache.set(orgId, { usage, at: Date.now() });
+  } catch (e) {
+    reportFailOpen(orgId, e);
+    return;
+  }
+  assertCreditsAvailable(usage);
 }
 
 /**
