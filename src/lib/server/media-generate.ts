@@ -127,6 +127,42 @@ function dataUrlBytes(dataUrl: string): { bytes: Buffer; mime: string } | null {
   return { bytes: Buffer.from(base64, 'base64'), mime: head?.match(/data:([^;]+)/)?.[1] ?? IMAGE_MIME };
 }
 
+type StoredDrawing = {
+  storagePath: string;
+  fileName: string;
+  mime: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+};
+
+/**
+ * I byte nel bucket privato, e nient'altro: né una riga, né un id. Il primo segmento del percorso
+ * è ciò che le policy dello storage guardano, quindi è sempre lo user.
+ */
+async function storeDrawing(
+  supabase: SupabaseClient,
+  folder: string,
+  dataUrl: string
+): Promise<StoredDrawing | null> {
+  const decoded = dataUrlBytes(dataUrl);
+  if (!decoded) return null;
+
+  // Marcata sintetica prima di toccare lo storage: un'immagine di modello che gira senza la sua
+  // provenienza è un problema che non si ripara a valle.
+  const bytes = await markImage(decoded.bytes, decoded.mime, DIGITAL_SOURCE_TYPE.synthetic);
+  const ext = decoded.mime.includes('jpeg') ? 'jpg' : decoded.mime.includes('webp') ? 'webp' : 'png';
+  const fileName = `generated-${crypto.randomUUID()}.${ext}`;
+  const storagePath = `${folder}/${fileName}`;
+
+  const stored = await storeBrandMediaBytes(supabase, storagePath, bytes, decoded.mime);
+  if (stored.error) return null;
+
+  const { width, height } = await probeImageDimensions(bytes);
+
+  return { storagePath, fileName, mime: decoded.mime, bytes: bytes.length, width, height };
+}
+
 /**
  * Un'immagine generata finisce nel bucket privato della libreria, non fra i media pubblici dei
  * post: è materiale del brand, riutilizzabile, e nessuno deve poterla leggere senza una firma.
@@ -136,29 +172,18 @@ async function depositImage(
   opts: Pick<GenerateMediaOpts, 'brandId' | 'userId' | 'prompt' | 'title'>,
   dataUrl: string
 ): Promise<GeneratedMedia | null> {
-  const decoded = dataUrlBytes(dataUrl);
-  if (!decoded) return null;
+  const drawn = await storeDrawing(supabase, `${opts.userId}/${opts.brandId}/media`, dataUrl);
+  if (!drawn) return null;
 
-  // Marcata sintetica prima di toccare lo storage: un'immagine di modello che gira senza la sua
-  // provenienza è un problema che non si ripara a valle.
-  const bytes = await markImage(decoded.bytes, decoded.mime, DIGITAL_SOURCE_TYPE.synthetic);
-  const ext = decoded.mime.includes('jpeg') ? 'jpg' : decoded.mime.includes('webp') ? 'webp' : 'png';
-  const fileName = `generated-${crypto.randomUUID()}.${ext}`;
-  const storagePath = `${opts.userId}/${opts.brandId}/media/${fileName}`;
-
-  const stored = await storeBrandMediaBytes(supabase, storagePath, bytes, decoded.mime);
-  if (stored.error) return null;
-
-  const { width, height } = await probeImageDimensions(bytes);
   const { row } = await insertBrandMedia(supabase, {
     brandId: opts.brandId,
     userId: opts.userId,
-    storagePath,
-    fileName,
-    mime: decoded.mime,
-    bytes: bytes.length,
-    width,
-    height,
+    storagePath: drawn.storagePath,
+    fileName: drawn.fileName,
+    mime: drawn.mime,
+    bytes: drawn.bytes,
+    width: drawn.width,
+    height: drawn.height,
     source: 'generate',
     title: opts.title?.trim() || opts.prompt.slice(0, 80)
   });
@@ -167,9 +192,9 @@ async function depositImage(
   return {
     id: row.id,
     kind: row.kind,
-    mime: decoded.mime,
-    width,
-    height,
+    mime: drawn.mime,
+    width: drawn.width,
+    height: drawn.height,
     url: mediaUrl(row.short_code)
   };
 }
