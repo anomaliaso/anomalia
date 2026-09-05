@@ -150,7 +150,7 @@ export function ugcDurationCap(
 /** I gradini offerti in Settings, filtrati su ciò che `model` sa davvero produrre. */
 export function videoDurationOptions(model?: string | null): number[] {
   const caps = videoModelCaps(model?.trim() || envModelI2V());
-  const floor = Math.min(Math.max(caps.minDuration, MIN_DURATION), caps.maxDuration);
+  const floor = caps.minDuration;
   const candidates = [10, 13, 15, 20, 22, 30];
   const opts = candidates.filter((s) => s >= floor && s <= caps.maxDuration);
   // Il tetto del modello resta sempre scegliibile, anche se non è uno dei gradini.
@@ -159,12 +159,21 @@ export function videoDurationOptions(model?: string | null): number[] {
 }
 
 /**
- * Nella finestra del modello SCELTO, poi nel pavimento di prodotto. Il tetto è sempre
- * `videoModelCaps(model).maxDuration` — mai una env var, mai una costante globale.
+ * Nella finestra del modello SCELTO, e basta. Il minimo e il tetto vengono ENTRAMBI da
+ * `videoModelCaps(model)` — mai una env var, mai una costante globale.
+ *
+ * C'era un pavimento di prodotto a 10 secondi che vinceva sul minimo dichiarato dal modello, e ha
+ * fatto pagare 10 secondi a chi ne aveva chiesti 5: i video si fatturano al secondo, quindi era il
+ * doppio, in silenzio. Il catalogo pubblica `supported_durations` per modello e per `wan-3.0`
+ * parte da 2.
+ *
+ * Un DEFAULT si puo' scavalcare, un PAVIMENTO no — ed e' la differenza che questo cambio ripristina.
+ * Chi non chiede niente riceve `DEFAULT_VIDEO_DURATION`, che non e' stato toccato; chi chiede una
+ * durata la ottiene, se il modello la sa fare.
  */
 export function clampVideoDuration(seconds: unknown, model?: string | null): number {
   const caps = videoModelCaps(model?.trim() || envModelI2V());
-  const floor = Math.min(Math.max(caps.minDuration, MIN_DURATION), caps.maxDuration);
+  const floor = caps.minDuration;
   const fallback = Math.min(Math.max(DEFAULT_VIDEO_DURATION, floor), caps.maxDuration);
   const n = Math.round(Number(seconds));
   if (!Number.isFinite(n)) return fallback;
