@@ -3,10 +3,9 @@ import type { GoogleGenAI } from '@google/genai';
 import { structured } from '$lib/server/research';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { analyzePostHistory, historyInsightsDigest } from '$lib/server/post-history-insights';
-import { aiText } from '$lib/server/xiaomi';
+import { aiText } from '$lib/server/ai-text';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { GUARDRAILS_INSTRUCTION } from '$lib/server/brand-guardrails';
-import { makeGenaiClient } from '$lib/server/gemini';
 
 const RECENT_LIMIT = 25;
 const TOP_LIMIT = 15;
@@ -167,11 +166,17 @@ ${history || '(no history available yet)'}
 Return only the brief.`;
 }
 
-// Il client Gemini condiviso di tutto il lavoro di sfondo. Il trasporto (Google o kie.ai) lo
-// decide `makeGenaiClient` leggendo GEMINI_TRANSPORT: da qui in giù non cambia niente, perché il
-// modello resta Gemini Flash in entrambi i casi.
+/**
+ * Il parametro `ai` che mezzo prodotto si passa ancora di mano, e che NESSUNO legge piu`: ogni
+ * funzione a valle lo riceve come `_ai` e instrada da se`, dal centralino o dallo slot immagini.
+ *
+ * Costruiva un client Gemini vero — su Google quando la rotta del testo non era `gemini@kie`, che
+ * e` il default. Cinquanta call site aprivano cosi` una connessione verso un fornitore che poi non
+ * chiamavano: invisibile, perche` non fallisce niente. Torna `null`, che e` esattamente quanto ne
+ * usa il codice sotto; togliere il parametro dalle firme e` il lotto dopo, ed e` solo meccanica.
+ */
 export function genaiClient(): GoogleGenAI {
-  return makeGenaiClient();
+  return null as never;
 }
 
 // Synthesise the text BRAND CONTEXT BRIEF (voice/themes/what-works). Reusable in-memory (onboarding)

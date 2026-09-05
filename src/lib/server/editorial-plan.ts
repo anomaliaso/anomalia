@@ -2,7 +2,7 @@ import { renderDesignDoc } from '$lib/server/brand-design-doc';
 import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
-import { aiStructured, parallelVariants, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GEMINI } from '$lib/server/xiaomi';
+import { aiStructured, parallelVariants, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GATEWAY } from '$lib/server/ai-text';
 import { countForFrequency } from '$lib/server/plans';
 import { PLAN_WEEKS } from '$lib/plans';
 export { PLAN_WEEKS };
@@ -725,7 +725,7 @@ Return JSON.`;
 
   const raw = await parallelVariants<AnyRec>(
     ai,
-    (i) => aiStructured<AnyRec>(ai, makePrompt(VARIANT_LENSES[i % VARIANT_LENSES.length]), schema, PLAN_SYSTEM, 'return_editorial_plan', { temperature: CREATIVE_TEMPERATURE, model, ...PIN_GEMINI }),
+    (i) => aiStructured<AnyRec>(ai, makePrompt(VARIANT_LENSES[i % VARIANT_LENSES.length]), schema, PLAN_SYSTEM, 'return_editorial_plan', { temperature: CREATIVE_TEMPERATURE, model, ...PIN_GATEWAY }),
     async (picked) => {
       if (picked.length === 1) return picked[0];
       const summaries = picked.map((v, i) => {
@@ -735,7 +735,7 @@ Return JSON.`;
       const prompt = `Compare these ${picked.length} editorial plans and pick the BEST one. Consider: strategic coherence, arc progression, realistic cadence, platform mix groundedness, and whether every week has a concrete theme.\n${summaries}\nReturn JSON: { "winner": <1-based index> }`;
       const selSchema = { type: 'object' as const, properties: { winner: { type: 'number' as const } }, required: ['winner'] };
       try {
-        const result = await aiStructured<{ winner?: number }>(ai, prompt, selSchema, PLAN_SYSTEM, 'pick_best', { model, ...PIN_GEMINI });
+        const result = await aiStructured<{ winner?: number }>(ai, prompt, selSchema, PLAN_SYSTEM, 'pick_best', { model, ...PIN_GATEWAY });
         const idx = Math.max(0, Math.min(picked.length - 1, (result?.winner ?? 1) - 1));
         return picked[idx];
       } catch { return picked[0]; }

@@ -2,7 +2,7 @@ import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { GoogleGenAI } from '@google/genai';
 import { genaiClient } from './research';
-import { aiStructured, parallelVariants } from './xiaomi';
+import { aiStructured, parallelVariants } from './ai-text';
 import type { GeoSnapshot } from './geo';
 
 // ── GEO artifacts: generate the FIXES for the gaps the audit finds ──────────────────────────────
@@ -42,7 +42,7 @@ export async function bestVariant<T>(
   systemInstruction: string,
   label: string,
   summarize: (v: T) => string,
-  opts?: { provider?: 'gemini' | 'xiaomi' | 'kie'; model?: string; noFallback?: boolean }
+  opts?: { provider?: 'gateway' | 'kie'; model?: string; noFallback?: boolean }
 ): Promise<T> {
   return parallelVariants<T>(
     ai,

@@ -6,8 +6,8 @@
  * È stato tolto perché il ripiego su Gemini funzionava troppo bene: con la chiave a saldo zero ogni
  * chiamata faceva un tentativo condannato, aspettava il 402 e rifaceva il lavoro su Gemini, senza
  * che niente si rompesse in superficie. Le funzioni sono sparite con quel percorso; restano le
- * costanti, che servono ancora alla web search (`deepseek-search.ts`), all'agente di strategia e
- * al modello che l'utente può scegliere a mano in chat.
+ * costante, che serve ancora alla sonda di citazioni (`citation-probe.ts`): lì DeepSeek non genera
+ * niente per noi, è il motore di risposta di cui MISURIAMO le citazioni del brand.
  *
  * L'INTERRUTTORE è la parte che mancava allora. `deepseekConfigured()` guardava solo se la variabile
  * d'ambiente ESISTEVA — "configurata" non ha mai voluto dire "ha credito", ed è per questo che il
@@ -18,8 +18,6 @@
 import { env } from '$env/dynamic/private';
 
 export const DEEPSEEK_MODEL = env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
-/** Chat custom-model option. Official API id; currently serving DeepSeek-V4-Pro-0813. */
-export const DEEPSEEK_PRO_MODEL = env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro';
 
 // Vale per il processo, non per sempre: su Vercel le funzioni si riciclano di continuo, quindi una
 // chiave ricaricata torna viva al prossimo cold start senza che nessuno debba fare niente.

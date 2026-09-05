@@ -13,7 +13,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { genaiClient, structured } from './research';
-import { PIN_GEMINI } from './xiaomi';
+import { PIN_GATEWAY } from './ai-text';
 import { BLOG_LOCALE_LANGUAGE, type BlogLocale } from './blog-locales';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,7 +84,7 @@ Return JSON.`;
   const out = await structured<AnyRec>(genaiClient(), prompt, TRANSLATION_SCHEMA, SYSTEM, {
     label: 'translate_article',
     brandId: brand.id as string,
-    ...PIN_GEMINI
+    ...PIN_GATEWAY
   }).catch((error) => { swallow('genaiClient failed', error); return null; });
   if (!out?.bodyMarkdown || !out?.title) return null;
 

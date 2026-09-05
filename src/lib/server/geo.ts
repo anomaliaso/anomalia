@@ -5,7 +5,7 @@ import type { GoogleGenAI } from '@google/genai';
 import { fetchPage } from './brand-analysis';
 import { genaiClient, groundedGemini, structured } from './research';
 import { exaConfigured, exaGroundedAnswer } from './exa';
-import { deepseekSearchConfigured, deepseekGroundedAnswer } from './deepseek-search';
+import { deepseekSearchConfigured, deepseekGroundedAnswer } from './citation-probe';
 import { perplexityConfigured, perplexityGroundedAnswer } from './perplexity-search';
 import { bingConfigured, bingGroundedAnswer } from './bing-search';
 import {

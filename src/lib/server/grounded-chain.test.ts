@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Ordine della catena di grounding in groundedText(): Exa, poi DeepSeek, poi Tavily. Google NON è
-// più nella catena — costava ~$0.07 a risposta contro $0.005-0.008, e qui nessuno misura CHI ha
-// risposto (quando conta il motore si chiama groundedGemini). Ogni provider è mockato: si controlla
+// Ordine della catena di grounding in groundedText(): Exa, poi Tavily. Né Google né DeepSeek sono
+// nella catena. Google è uscito per il prezzo (~$0.07 a risposta contro $0.005-0.008) e qui nessuno
+// misura CHI ha risposto — quando conta il motore si chiama groundedGemini. DeepSeek è uscito per
+// un motivo diverso e più importante: lì la risposta la GENERA un modello DeepSeek, e ogni parola
+// che il prodotto scrive passa dal gateway. Resta come sonda di citazioni in geo.ts, dove è il
+// soggetto della misura e non il suo autore. Ogni provider è mockato: si controlla
 // l'instradamento, non i provider.
 
 const env: Record<string, string | undefined> = {};
@@ -10,7 +13,6 @@ vi.mock('$env/dynamic/private', () => ({ env }));
 
 const calls: string[] = [];
 const answers: Record<string, { text: string; citations: Array<{ uri: string; title: string }> }> = {
-  deepseek: { text: '', citations: [] },
   exa: { text: '', citations: [] },
   tavily: { text: '', citations: [] }
 };
@@ -29,7 +31,7 @@ vi.mock('$lib/server/tavily', () => ({
     return answers.tavily;
   }
 }));
-vi.mock('$lib/server/deepseek-search', () => ({
+vi.mock('$lib/server/citation-probe', () => ({
   deepseekSearchConfigured: () => true,
   deepseekGroundedAnswer: async () => {
     calls.push('deepseek');
@@ -60,7 +62,6 @@ function googleSpy() {
 describe('groundedText provider order', () => {
   beforeEach(() => {
     calls.length = 0;
-    answers.deepseek = { text: '', citations: [] };
     answers.exa = { text: '', citations: [] };
     answers.tavily = { text: '', citations: [] };
   });
@@ -73,24 +74,23 @@ describe('groundedText provider order', () => {
     expect(calls).toEqual(['exa']);
   });
 
-  it('falls through to DeepSeek when Exa comes back empty', async () => {
-    answers.deepseek = { text: 'deepseek answer', citations: [{ uri: 'https://d.dev', title: 'D' }] };
-    const res = await groundedText(googleSpy(), 'question');
-    expect(res.text).toBe('deepseek answer');
-    expect(calls).toEqual(['exa', 'deepseek']);
-  });
-
-  it('keeps walking the chain in order: exa → deepseek → tavily', async () => {
-    answers.tavily = { text: 'tavily answer', citations: [] };
+  it('falls through to Tavily when Exa comes back empty', async () => {
+    answers.tavily = { text: 'tavily answer', citations: [{ uri: 'https://t.dev', title: 'T' }] };
     const res = await groundedText(googleSpy(), 'question');
     expect(res.text).toBe('tavily answer');
-    expect(calls).toEqual(['exa', 'deepseek', 'tavily']);
+    expect(calls).toEqual(['exa', 'tavily']);
+  });
+
+  it('non chiama DeepSeek: qui si genera, e generare passa dal gateway', async () => {
+    answers.tavily = { text: 'tavily answer', citations: [] };
+    await groundedText(googleSpy(), 'question');
+    expect(calls).not.toContain('deepseek');
   });
 
   it('returns empty — never a Google call — when every provider is silent', async () => {
     const res = await groundedText(googleSpy(), 'question');
     expect(res).toEqual({ text: '', citations: [] });
-    expect(calls).toEqual(['exa', 'deepseek', 'tavily']);
+    expect(calls).toEqual(['exa', 'tavily']);
     expect(calls).not.toContain('google');
   });
 });

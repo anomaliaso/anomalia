@@ -3,7 +3,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { genaiClient } from './research';
-import { aiStructured, PIN_GEMINI } from './xiaomi';
+import { aiStructured, PIN_GATEWAY } from './ai-text';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -75,7 +75,7 @@ Return JSON with the full humanized bodyMarkdown and a brief changes summary.`;
     genaiClient(), prompt, HUMANIZE_SCHEMA,
     'You are a precise editor. Preserve all factual content, links, and structure. Only change writing style to sound more human.',
     'humanize_article',
-    PIN_GEMINI
+    PIN_GATEWAY
   ).catch((error) => { swallow('genaiClient failed', error); return null; });
 
   if (!out?.bodyMarkdown) return null;

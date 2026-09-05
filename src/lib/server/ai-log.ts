@@ -18,6 +18,8 @@ type BrandLogContext = {
   kieCredits?: number;
   /** Costo fatturato dal gateway in questo scope, sommato: la fattura vera del turno. */
   llmCostUsd?: number;
+  /** Le fatture gia` ritirate e scritte in `ai_calls`, per chi deve DIRE quanto e` costato. */
+  billedUsd?: number;
 };
 
 const brandStorage = new AsyncLocalStorage<BrandLogContext>();
@@ -103,7 +105,17 @@ export function takeLlmCost(): number | undefined {
   const cost = ctx?.llmCostUsd;
   if (!ctx || cost == null) return undefined;
   ctx.llmCostUsd = undefined;
+  ctx.billedUsd = (ctx.billedUsd ?? 0) + cost;
   return cost;
+}
+
+/**
+ * Quanto il gateway ha fatturato in questo scope, gia` finito nelle righe di `ai_calls`. Serve a
+ * una rotta che deve dire quanto e` costata: e` lo stesso numero della riga, non un listino
+ * riscritto accanto. `undefined` significa che nessuna fattura e` arrivata — non zero.
+ */
+export function billedUsdInScope(): number | undefined {
+  return brandStorage.getStore()?.billedUsd;
 }
 
 /** $5 = 1000 crediti kie. */
@@ -161,7 +173,7 @@ export type AiCallLog = {
   //   'submitforbacklinks' a flat per-submission fee; 'sandbox' microVM seconds.
   //   'internal' is an agent EVENT, not a call: `cost_usd` stays null, so it can't touch credits or
   //   rate limits (both filter `cost_usd is not null`) and the Usage page excludes it by provider.
-  provider: 'gemini' | 'xiaomi' | 'kie' | 'openrouter' | 'opencode' | 'llm' | 'deepseek' | 'scrapecreators' | 'exa' | 'tavily' | 'dataforseo' | 'pagespeed' | 'ads' | 'submitforbacklinks' | 'sandbox' | 'internal';
+  provider: 'gemini' | 'kie' | 'openrouter' | 'opencode' | 'llm' | 'deepseek' | 'scrapecreators' | 'exa' | 'tavily' | 'dataforseo' | 'pagespeed' | 'ads' | 'submitforbacklinks' | 'sandbox' | 'internal';
   model?: string;
   // Flat per-request price for non-token providers; when set it wins over the token rates.
   flatCostUsd?: number;
@@ -225,10 +237,6 @@ const RATES: Record<string, { input: number; cachedInput: number; output: number
   // Nano Banana 2 Lite: no published Google rate found — priced at Nano Banana 2 as the prudent
   // upper bound. On kie (the default transport) the real cost comes from credits_consumed anyway.
   'gemini-3.1-flash-lite-image': { input: 0.5, cachedInput: 0.5, output: 3, imageOutput: 60 },
-  'mimo-v2.5-pro': { input: 0.435, cachedInput: 0.0036, output: 0.87, searchPerQuery: 0.005, thinkingInOutput: true },
-  // The only MiMo that accepts image input; used as the vision model.
-  'mimo-v2.5': { input: 0.14, cachedInput: 0.003, output: 0.28, searchPerQuery: 0.005, thinkingInOutput: true },
-  'mimo-v2.5-pro-ultraspeed': { input: 1.305, cachedInput: 0.0108, output: 2.61, searchPerQuery: 0.005, thinkingInOutput: true },
   // DeepSeek ha una fascia oraria: peak 01:00-04:00 e 06:00-10:00 UTC si paga il DOPPIO, e i
   // nostri cron ci cadono quasi tutti dentro (06:00-09:00). Qui teniamo la tariffa PEAK.
   'deepseek-v4-flash': { input: 0.44, cachedInput: 0.014, output: 1.32 },
@@ -335,20 +343,6 @@ export function computeCostUsd(entry: AiCallLog, plan?: string | null): number |
   return Math.round(usd * share * 1e6) / 1e6;
 }
 
-// Per i call site diretti che non passano dai chokepoint. Stesso contratto: logga successo e
-// fallimento con i token, non inghiotte mai l'errore.
-export async function loggedGemini<T>(label: string, fn: () => Promise<T>, extra?: Partial<AiCallLog>): Promise<T> {
-  const brandId = requireBrandContext(extra);
-  const t0 = Date.now();
-  try {
-    const res = await fn();
-    logAiCall({ label, provider: 'gemini', model: geminiFlash(), ms: Date.now() - t0, ok: true, ...extractGeminiUsage(res), ...extra, brandId: extra?.brandId ?? brandId ?? undefined });
-    return res;
-  } catch (e) {
-    logAiCall({ label, provider: 'gemini', model: geminiFlash(), ms: Date.now() - t0, ok: false, error: e instanceof Error ? e.message : String(e), ...extra, brandId: extra?.brandId ?? brandId ?? undefined });
-    throw e;
-  }
-}
 
 export function promptHash(prompt: string | undefined): string | null {
   if (!prompt) return null;
@@ -453,75 +447,6 @@ function tokenCount(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
-/** Token usage from a Gemini response, or undefined when the API didn't report any. */
-export function extractGeminiUsage(response: unknown): {
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens: number;
-  thinkingTokens: number;
-  imageOutputTokens: number;
-  serviceTier: string;
-} | undefined {
-  const res = response as {
-    usageMetadata?: {
-      promptTokenCount?: number;
-      candidatesTokenCount?: number;
-      totalTokenCount?: number;
-      cachedContentTokenCount?: number;
-      thoughtsTokenCount?: number;
-      // kie manda `thinkingTokenCount` dove Google manda `thoughtsTokenCount`: senza, i token di
-      // ragionamento loggano zero, e sono il 38% della spesa di Flash.
-      thinkingTokenCount?: number;
-      promptTokensDetails?: Array<{ modality?: string; tokenCount?: number }>;
-      candidatesTokensDetails?: Array<{ modality?: string; tokenCount?: number }>;
-      serviceTier?: string;
-    };
-  } | undefined;
-  if (!res?.usageMetadata) return undefined;
-  const meta = res.usageMetadata;
-  const imageOutputTokens = (meta.candidatesTokensDetails ?? [])
-    .filter((d) => d.modality === 'IMAGE')
-    .reduce((sum, d) => sum + (d.tokenCount ?? 0), 0);
-  return {
-    inputTokens: meta.promptTokenCount ?? 0,
-    outputTokens: meta.candidatesTokenCount ?? 0,
-    cachedTokens: meta.cachedContentTokenCount ?? 0,
-    thinkingTokens: meta.thoughtsTokenCount ?? meta.thinkingTokenCount ?? 0,
-    imageOutputTokens,
-    serviceTier: meta.serviceTier ?? ''
-  };
-}
-
-/** Token usage from a Xiaomi/OpenAI-compatible response, or undefined when absent. */
-export function extractXiaomiUsage(response: unknown): {
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens: number;
-  thinkingTokens: number;
-  groundingQueries: number;
-  serviceTier: string;
-} | undefined {
-  const res = response as {
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-      prompt_tokens_details?: { cached_tokens?: number };
-      completion_tokens_details?: { reasoning_tokens?: number };
-      // Xiaomi web_search: nested inside usage, `tool_usage` = billable invocations ($5/1k).
-      web_search_usage?: { tool_usage?: number; page_usage?: number };
-    };
-    web_search_usage?: { tool_usage?: number; page_usage?: number };
-  } | undefined;
-  if (!res?.usage) return undefined;
-  const u = res.usage;
-  return {
-    inputTokens: u.prompt_tokens ?? 0,
-    outputTokens: u.completion_tokens ?? 0,
-    cachedTokens: u.prompt_tokens_details?.cached_tokens ?? 0,
-    // SUBSET of completion_tokens: `thinkingInOutput` stops computeCostUsd pricing them twice.
-    thinkingTokens: u.completion_tokens_details?.reasoning_tokens ?? 0,
-    groundingQueries: u.web_search_usage?.tool_usage ?? res.web_search_usage?.tool_usage ?? 0,
-    serviceTier: ''
-  };
-}
+// Qui stavano `extractGeminiUsage` e `extractXiaomiUsage`, i due lettori di consumo delle
+// risposte Google e MiMo. Nessuno dei due ha piu` una risposta da leggere: il consumo del
+// gateway lo legge `extractSdkUsage`, quello di kie arriva dai crediti che kie ha addebitato.

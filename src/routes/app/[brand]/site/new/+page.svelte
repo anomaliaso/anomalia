@@ -5,13 +5,12 @@
   import PageHead from '$lib/components/PageHead.svelte';
   import UpgradeLink from '$lib/components/UpgradeLink.svelte';
   import { _ } from 'svelte-i18n';
-  import { ArrowLeft, Sparkles, CalendarDays, Zap, Loader } from '@lucide/svelte';
+  import { ArrowLeft, Sparkles, CalendarDays, Loader } from '@lucide/svelte';
 
   let { form, data } = $props();
   // The month job is refused server-side when the balance can't cover it; mirror that here so the
   // button explains itself instead of failing on submit.
-  const enoughForBatch = $derived(data.credits >= data.estimate.credits);
-  const enoughForFast = $derived(data.credits >= data.estimateFast.credits);
+  const enoughForMonth = $derived(data.credits >= data.estimate.credits);
   const busy = new SvelteSet<string>();
   const isBusy = (key: string) => busy.has(key);
   const withBusy = (key: string) => () => {
@@ -90,21 +89,13 @@
           {#if data.monthJob.status === 'translating'}
             Testi e immagini pronti. Ora stiamo traducendo nelle altre lingue del blog
             ({data.monthJob.progress?.translations ?? 0} fatte).
-          {:else if data.monthJob.status === 'imaging'}
-            Testi pronti ({data.monthJob.progress?.written ?? 0}). Ora stiamo generando le immagini
-            {#if data.monthJob.progress?.images_expected}({data.monthJob.progress.images_expected} in coda){/if}.
           {:else}
             Scrittura degli articoli in corso — {data.monthJob.progress?.written ?? 0} di
             {data.monthJob.progress?.planned ?? 0} completati.
           {/if}
         </p>
         <p class="muted small">
-          {#if data.monthJob.mode === 'fast'}
-            Generazione veloce attiva: di solito è questione di minuti. <b>Ti avvisiamo via email</b> quando è tutto pronto.
-          {:else}
-            <b>Ti avvisiamo via email entro 12-24 ore</b>, quando gli articoli sono scritti e illustrati. Puoi
-            chiudere questa pagina — il lavoro continua.
-          {/if}
+          <b>Ti avvisiamo via email</b> quando è tutto pronto. Puoi chiudere questa pagina — il lavoro continua.
         </p>
       </div>
     {:else if data.usage.remaining <= 0}
@@ -133,39 +124,22 @@
             class="btn primary"
             class:loading={isBusy('plan-month')}
             type="submit"
-            disabled={isBusy('plan-month') || isBusy('plan-month-fast') || !enoughForBatch}
-            title={enoughForBatch
-              ? 'Pianifica il mese e genera tutto in background. Ti avvisiamo via email entro 12-24 ore.'
+            disabled={isBusy('plan-month') || !enoughForMonth}
+            title={enoughForMonth
+              ? 'Pianifica il mese e genera tutto in background. Ti avvisiamo via email quando è pronto.'
               : `Servono circa ${data.estimate.credits} crediti, ne hai ${data.credits}.`}
           >
             <CalendarDays size={14} /> Pianifica il mese
           </button>
         </form>
-        <form method="POST" action="?/planMonth" use:enhance={withBusy('plan-month-fast')}>
-          <input type="hidden" name="mode" value="fast" />
-          <button
-            class="btn ghost"
-            class:loading={isBusy('plan-month-fast')}
-            type="submit"
-            disabled={isBusy('plan-month') || isBusy('plan-month-fast') || (data.fastAvailable && !enoughForFast)}
-            title={data.fastAvailable
-              ? 'Genera subito, senza attendere la coda. Richiede il piano Pro.'
-              : 'Disponibile con il piano Pro: genera subito invece di attendere 12-24 ore.'}
-          >
-            <Zap size={14} /> Fast generation
-            {#if !data.fastAvailable}<span class="badge">Pro</span>{/if}
-          </button>
-        </form>
       </div>
       <p class="muted tiny">
         <b>{data.usage.remaining}</b> di {data.usage.cap} articoli disponibili questo mese{#if data.usage.remaining < data.usage.cap} ({data.usage.used} già usati){/if}.
-        Costo stimato: <b>~{data.estimate.credits} crediti</b> in batch{#if data.fastAvailable}, ~{data.estimateFast.credits} in fast{/if}
-        — ne hai <b>{data.credits}</b>.
+        Costo stimato: <b>~{data.estimate.credits} crediti</b> — ne hai <b>{data.credits}</b>.
         {#if data.estimate.translations}
           Incluse {data.estimate.translations} traduzioni.
         {/if}
-        La generazione normale usa la coda batch: costa molto meno e arriva entro 12-24 ore.
-        <b>Fast generation</b> genera subito{#if !data.fastAvailable} ed è inclusa nel piano Pro{/if}.
+        Gli articoli si scrivono e si illustrano in background: di solito è questione di minuti.
       </p>
     {/if}
   </section>

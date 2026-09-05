@@ -33,6 +33,14 @@ LOGICA con i test (il caricamento si mocka) e nel browser verifica quello che il
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 
+**E il worktree nuovo non ha nemmeno `.env`: `hooks.server.test.ts` fallisce da solo.** Con
+`node_modules` a posto resta un rosso che sembra tuo: `TypeError: Invalid URL` all'import, un file
+solo, in un test che la tua modifica non sfiora. Non è una regressione — è una variabile
+d'ambiente che manca, e il checkout principale ce l'ha. Segnale: quel test è l'UNICO rosso su
+~7.300 passati, e passa nel checkout principale. Mossa: rilancialo nel checkout principale prima
+di indagare; se lì è verde, è l'ambiente, non il tuo diff. Ha già fatto perdere tempo a due
+agenti lo stesso giorno.
+
 **E prima di credere a un rosso locale, guarda la CI.** Lo stesso `extractUserText`/
 `extractUserImages` è tornato il 4/9 su `dev`: quei simboli non erano codice nostro ma una patch
 `patch-package`, tolta perché non applicava più alla versione installata. In locale i test
@@ -978,3 +986,72 @@ Supported values are: 'pcm16'` conteneva già la risposta, e chi si è fermato a
 cercato. Un'assenza va dichiarata con l'endpoint interrogato accanto, o è un'opinione travestita
 da fatto — e finisce in `MISSING`, dove la testata promette «fatti misurati, non ipotesi di
 listino».
+
+## Un ciclo di import tenuto in piedi dall'ordine cade quando togli un import morto
+
+Cancellato `genWithRetry` — zero chiamanti — e con lui l'`import` che stava alla **riga 2** di
+`content-preview/images.ts`. Il server ha smesso di partire: `500` su ogni rotta, e nei log
+`[vite] The dependency module is not yet fully initialized due to circular dependency`.
+
+Il ciclo non l'avevo creato io. Era già lì, e si chiudeva così:
+
+```
+referrals → credits → scheduler → director → content-preview → caption-quality
+    ↑                                                                │
+    └───────────────── blog-site ◄─── images ◄───────────────────────┘
+```
+
+`images.ts` importava `blog-site.ts` per **una funzione pura di cinque righe** (`firstLogoUrl`,
+che legge il primo logo da un array), e `blog-site.ts` è il blog pubblico intero: Marked, client
+admin, referral. Finché la riga 2 tirava dentro `plan-pipeline` per primo, i moduli si
+inizializzavano in un ordine in cui il cerchio si chiudeva dopo che i pezzi che servivano erano
+già pronti. Togliere quell'import ha cambiato l'ordine, e basta.
+
+**Segnale**: una cancellazione di codice morto — un import inutilizzato, una funzione senza
+chiamanti — fa comparire `circular dependency` su moduli che non hai toccato. Il file nell'errore
+(qui `referrals.ts`) non è il colpevole: è solo dove il cerchio si è chiuso per primo.
+
+**Mossa**: non rimettere l'import morto, e non spostare la cancellazione. Trova il ciclo leggendo
+in ordine i `Error when evaluating SSR module` nel log — sono la catena, dall'ultimo al primo — e
+**taglialo dove il pezzo condiviso non ha dipendenze**: `firstLogoUrl` è finita in
+`$lib/brand-fields.ts`, che è un foglio (zero import) fatto apposta per le funzioni pure sui campi
+del brand. Un modulo pesante importato per un helper puro è sempre l'anello da tagliare.
+
+**E la lezione più larga**: un ciclo che regge solo grazie all'ordine di inizializzazione è già
+rotto, semplicemente non te l'ha ancora detto. Vale la pena scoprirlo togliendo un import morto in
+un pomeriggio, invece che aggiungendo una riga a un file qualunque un venerdì.
+
+**Il controllo che l'ha preso, e quello che non l'avrebbe preso**: `npm run dev` sulla rotta vera.
+I 7.289 test unitari erano verdi, `svelte-check` non aveva niente da dire, e il build non era
+ancora stato provato. Un ciclo di inizializzazione si vede solo eseguendo — è precisamente il
+motivo per cui il cancello del browser non è sostituibile con una suite verde.
+
+## Un mock incompleto non fa fallire un test: fa cadere la suite, e a intermittenza
+
+CI rossa con **7.309 test verdi su 7.309**. Il job falliva su un `Unhandled Rejection`:
+`TypeError: supabase.rpc is not a function`, con dentro `home-redirect.test.ts` un file che il
+commit non aveva toccato. In locale non si riproduceva.
+
+La catena: `+layout.server.ts` lancia `loadDeferred`, una promessa che **nessuno attende** (SvelteKit
+la trasmette in streaming). Il mock supabase del test rispondeva a `from()` con un Proxy che
+accetta qualunque metodo — l'autore il rischio l'aveva previsto, e l'aveva scritto nel commento
+sopra — ma non rispondeva a `rpc()`. Dentro il differito ci si arriva:
+`remaining()` → `getCreditsUsage()` → `fetchStripePeriodStart()` → `supabase.rpc(...)`.
+
+Quindi il rifiuto c'era sempre. Quello che cambiava era **se atterrava prima che il run finisse**,
+e quello dipende da quanti file di test esistono e in che ordine vitest li distribuisce. Il commit
+ne aveva rimosso uno e aggiunto un altro: abbastanza per spostare la schedulazione e far uscire
+allo scoperto un guasto che era lì da prima.
+
+**Segnale**: `Test Files N passed`, `Tests M passed`, e il job rosso lo stesso, con `Errors 1` e un
+`Unhandled Rejection` che nomina un file che non hai toccato. Un `grep` su `FAIL|Tests ` nell'output
+locale **non lo vede**: la riga da cercare è `Errors` / `Unhandled`.
+
+**Mossa**: completare il mock alla fonte (`rpc: () => chain`, come `from`), non inseguire l'ordine
+dei test e non ritentare il job sperando che vada. Un mock che copre solo i metodi che il percorso
+felice usa è una bomba a orologeria: il primo cambiamento di schedulazione la innesca, e il file
+che esplode non è quello che l'ha piazzata.
+
+**La regola dietro**: dove il codice lancia una promessa che nessuno attende, un mock parziale non
+degrada — abbatte tutto il processo. O il mock risponde a qualunque cosa (Proxy), o quel percorso
+va atteso e asserito.

@@ -5,7 +5,7 @@ import { swallow } from '$lib/server/swallow';
 import { renderProductsSection, type DesignDocProduct } from '$lib/server/brand-design-doc';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { genaiClient, fetchImagePart } from '$lib/server/brand-context';
-import { aiStructured, type ImagePart } from '$lib/server/xiaomi';
+import { aiStructured, type ImagePart } from '$lib/server/ai-text';
 import { refreshCompetitorAds, type NormalizedAd } from '$lib/server/competitor-ads';
 import { metaAdLibraryUrl, type MetaAdDigestItem } from '$lib/server/meta-ad-library';
 

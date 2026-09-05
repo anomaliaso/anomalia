@@ -2,7 +2,7 @@ import { swallow } from '$lib/server/swallow';
 import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { isTopPlan, blogTranslationLanguages } from '$lib/server/plans';
+import { blogTranslationLanguages } from '$lib/server/plans';
 import { brandBySlug } from '$lib/server/blog-settings';
 import { blogMonthlyUsage } from '$lib/server/blog-generate';
 import { estimateBlogMonth } from '$lib/server/blog-cost';
@@ -29,9 +29,6 @@ async function creditsRemaining(brandId: string): Promise<number> {
 
 export const load: PageServerLoad = async ({ parent, locals: { supabase } }) => {
   const { brand } = await parent();
-  // Fast generation renders images inline instead of via the (cheaper, slower) batch API, so it's
-  // the top tier's perk — below it the button becomes an upgrade CTA.
-  const fastAvailable = isTopPlan(brand.plan);
   const [job, usage, credits] = await Promise.all([
     currentBlogMonthJob(supabase, brand.id).catch((error) => { swallow('current month job', error); return null; }),
     blogMonthlyUsage(createAdminClient(), brand.id, brand.plan).catch((error) => { swallow('createAdminClient failed', error); return ({ cap: 0, used: 0, remaining: 0 }); }),
@@ -40,15 +37,12 @@ export const load: PageServerLoad = async ({ parent, locals: { supabase } }) => 
   // Quote the month the user would actually get — the REMAINING allowance, not the full cap.
   const translationsPerArticle = blogTranslationLanguages(brand.plan);
   const estimate = estimateBlogMonth({ articles: usage.remaining, translationsPerArticle });
-  const estimateFast = estimateBlogMonth({ articles: usage.remaining, mode: 'fast', translationsPerArticle });
   return {
-    fastAvailable,
     usage,
     credits,
     estimate,
-    estimateFast,
     monthJob: job && job.status !== 'ready' && job.status !== 'failed'
-      ? { status: job.status, mode: job.mode, progress: job.progress }
+      ? { status: job.status, progress: job.progress }
       : null
   };
 };
@@ -83,34 +77,21 @@ export const actions: Actions = {
     const usage = await blogMonthlyUsage(admin, brand.id, brand.plan);
     if (usage.remaining <= 0) return fail(429, { error: 'month_cap_reached' });
 
-    const wantsFast = String((await request.formData()).get('mode') ?? '') === 'fast';
-    // Fast mode is gated on the top plan. Asking for it without the plan sends the user to checkout
-    // rather than silently downgrading them to the slow path.
-    if (wantsFast && !isTopPlan(brand.plan)) {
-      throw redirect(303, `/app/${params.brand}/activate?plan=pro&from=blog-fast`);
-    }
-
     // Credit pre-flight. gateCredits() is REACTIVE — it would abort mid-month and leave half the
     // placeholders empty for the user to clean up. Refusing up front turns that into a number they
     // can act on.
     const estimate = estimateBlogMonth({
       articles: usage.remaining,
-      mode: wantsFast ? 'fast' : 'batch',
       translationsPerArticle: blogTranslationLanguages(brand.plan)
     });
     if ((await creditsRemaining(brand.id)) < estimate.credits) {
       return fail(402, { error: 'insufficient_credits' });
     }
 
-    const { jobId, planned } = await startBlogMonthJob(
-      admin,
-      brand,
-      user?.id ?? null,
-      wantsFast ? 'fast' : 'batch'
-    );
+    const { jobId, planned } = await startBlogMonthJob(admin, brand, user?.id ?? null);
     if (!jobId) return fail(502, { error: 'plan_month_failed' });
     // Start immediately instead of waiting up to 2 minutes for the cron.
     void kickBlogMonthWork(url.origin);
-    throw redirect(303, `/app/${params.brand}/site?from=month&n=${planned}&job=${wantsFast ? 'fast' : 'batch'}`);
+    throw redirect(303, `/app/${params.brand}/site?from=month&n=${planned}`);
   }
 };

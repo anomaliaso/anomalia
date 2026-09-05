@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { env as publicEnv } from '$env/dynamic/public';
 import { fetchPage, extractVisibleText } from './brand-analysis';
 import { genaiClient } from './brand-context';
-import { aiStructured } from './xiaomi';
+import { aiStructured } from './ai-text';
 
 // ponytail: one pass grabs the first N sitemap pages at ~2 req/s (N×delay must stay under the
 // route's 120s maxDuration). A site with more pages than this just needs another scan — add

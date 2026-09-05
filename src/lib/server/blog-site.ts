@@ -5,6 +5,7 @@ import { Marked } from 'marked';
 import { createAdminClient } from './supabase-admin';
 import { BLOG_LOCALE_LANGUAGE, resolveBlogLocales, type BlogLocaleConfig } from './blog-locales';
 import { referralCodeForBrand } from './referrals';
+import { firstLogoUrl } from '$lib/brand-fields';
 
 /**
  * Which language version of the blog a request is for.
@@ -93,22 +94,6 @@ export type BlogArticle = {
   category: BlogCategory | null;
   tags: BlogTag[];
   author: BlogAuthor | null;
-};
-
-/** First usable logo URL from brand_kit.logos (string or { url }). */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const firstLogoUrl = (logos: any): string | null => {
-  const arr = Array.isArray(logos) ? logos : [];
-  const first = arr.find((l: unknown) => {
-    if (!l) return false;
-    if (typeof l === 'string') return true;
-    if (typeof l === 'object' && l !== null && 'url' in l) {
-      const url = (l as { url?: unknown }).url;
-      return typeof url === 'string' && !!url && (l as { type?: string }).type !== 'og-image';
-    }
-    return false;
-  });
-  return typeof first === 'string' ? first : (first?.url ?? null);
 };
 
 async function brandProfile(brandId: string): Promise<BlogBrand | null> {

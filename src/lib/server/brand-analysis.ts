@@ -13,7 +13,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { GoogleGenAI } from '@google/genai';
 import { browserlessContent, isBrowserlessConfigured } from './browserless';
-import { aiStructured } from '$lib/server/xiaomi';
+import { aiStructured } from '$lib/server/ai-text';
 import { structured } from '$lib/server/research';
 import { llmStructured } from '$lib/server/llm';
 import {

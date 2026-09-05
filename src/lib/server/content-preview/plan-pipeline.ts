@@ -2,8 +2,6 @@ import type { GoogleGenAI } from '@google/genai';
 import { STORY_FAILURE_MODES, normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
-import { logAiCall, extractGeminiUsage } from '$lib/server/ai-log';
-import { geminiFlash } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
 import { upcomingTimelyHooks } from '$lib/server/thematic-calendar';
 import { normalizeContentFormat } from '$lib/content-formats';
@@ -15,34 +13,6 @@ import { knownSubredditsBlock } from '$lib/server/platform-hygiene';
 /** Dummy: structured()/testo ignorano il client; le immagini Google le costruisce images.ts. */
 export function client(): GoogleGenAI {
   return null as unknown as GoogleGenAI;
-}
-
-// Ritenta su 429/503 con backoff esponenziale + jitter: la generazione immagini fa fan-out
-// (batch × QC × retry) e sotto carico un post partirebbe senza immagine. Gli errori non transitori
-// rilanciano subito, e tre tentativi tengono veloce il fallimento di una chiamata davvero morta.
-export async function genWithRetry<T>(fn: () => Promise<T>, label = 'gemini', context?: { brandId?: string; userId?: string; threadId?: string; context?: string; model?: string }): Promise<T> {
-  const MAX = 3;
-  const t0 = Date.now();
-  // La colonna `model` guida il prezzo in ai-log.ts: non deve mai restare null.
-  for (let attempt = 0; attempt < MAX; attempt++) {
-    try {
-      const out = await fn();
-      const usage = extractGeminiUsage(out);
-      logAiCall({ label, provider: 'gemini', model: geminiFlash(), ms: Date.now() - t0, ok: true, ...usage, ...context });
-      return out;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const transient = /\b(429|503|rate.?limit|quota|overloaded|unavailable|resource.?exhausted)\b/i.test(msg);
-      if (!transient || attempt === MAX - 1) {
-        logAiCall({ label, provider: 'gemini', model: geminiFlash(), ms: Date.now() - t0, ok: false, error: msg, ...context });
-        throw e;
-      }
-      const delay = Math.min(2000 * 2 ** attempt, 10000) + Math.random() * 1000;
-      console.warn(`[${label}] transient error (attempt ${attempt + 1}/${MAX}), retrying in ${Math.round(delay)}ms: ${msg.slice(0, 120)}`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  throw new Error(`${label}: exhausted retries`);
 }
 
 // Frammenti condivisi dai DUE passaggi: le regole di precedenza sono sottili e duplicarle

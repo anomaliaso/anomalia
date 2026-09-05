@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { mondayOf } from '$lib/server/editorial-plan';
 import type { PastWinner } from '$lib/server/content-preview';
-import { aiStructured, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GEMINI } from '$lib/server/xiaomi';
+import { aiStructured, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GATEWAY } from '$lib/server/ai-text';
 import { clampFunnelSpec, funnelBrief, stampFunnelGoals, ratesLabel, DEFAULT_RATES, type FunnelSpec } from '$lib/server/funnel';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -390,7 +390,7 @@ ${opts.objective ? `Business objective (user-stated — derive the final metric/
 ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
-    const raw = await aiStructured<AnyRec>(ai, prompt, FUNNEL_SPEC_SCHEMA, GTM_SYSTEM, 'return_funnel_spec', { ...PIN_GEMINI });
+    const raw = await aiStructured<AnyRec>(ai, prompt, FUNNEL_SPEC_SCHEMA, GTM_SYSTEM, 'return_funnel_spec', { ...PIN_GATEWAY });
     return clampFunnelSpec({
       final: { metric: raw?.final_metric, value: raw?.final_value },
       rates: {
@@ -497,7 +497,7 @@ ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 
-  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GEMINI });
+  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
   const plan = normalizeGtm(raw, opts.horizon);
   if (plan.phases.length === 0) {
     console.error(`[GTM] generateGtmVariant: 0 phases for ${opts.horizon}. Raw:`, JSON.stringify(raw).slice(0, 1000));
@@ -544,7 +544,7 @@ Return JSON.`;
 
   try {
     console.log(`[GTM] selecting best ${horizonLabel} from ${variants.length} variants…`);
-    const raw = await aiStructured<{ winner?: number }>(ai, prompt, schema, GTM_SYSTEM, 'return_result', { ...PIN_GEMINI });
+    const raw = await aiStructured<{ winner?: number }>(ai, prompt, schema, GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
     const idx = Math.max(0, Math.min(variants.length - 1, (raw?.winner ?? 1) - 1));
     console.log(`[GTM] selected variant ${idx + 1} as best ${horizonLabel}`);
     return variants[idx];
@@ -572,7 +572,7 @@ ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 
-  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { ...PIN_GEMINI });
+  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
   const plan = normalizeGtm(raw, opts.horizon);
   // Code owns the numbers: stamp deterministic funnel goals over whatever the model wrote.
   plan.phases = stampFunnelGoals(plan.phases, funnel);
@@ -726,7 +726,7 @@ Return the FULL revised plan, plus:
 ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
-      const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GEMINI });
+      const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
       return normalizeGtm(raw, '90d');
     })
   );
@@ -756,7 +756,7 @@ Return the FULL revised 6-month plan, plus:
 ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
-      const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GEMINI });
+      const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
       return normalizeGtm(raw, '6m');
     })
   );
@@ -832,7 +832,7 @@ ${HONESTY_LINE}
 ${languageLine(outputLanguage)}
 Return JSON.`;
 
-  const raw = await aiStructured<AnyRec>(ai, prompt, REVIEW_SCHEMA, GTM_SYSTEM, 'return_result', { ...PIN_GEMINI });
+  const raw = await aiStructured<AnyRec>(ai, prompt, REVIEW_SCHEMA, GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
   const verdict = raw?.verdict === 'adjust' ? 'adjust' : 'on_track';
   const revised = verdict === 'adjust' ? normalizeGtm({ objective: plan.objective, phases: raw?.phases }, plan.horizon) : null;
   // A course correction keeps the funnel spec; the numeric goals are re-stamped in code.

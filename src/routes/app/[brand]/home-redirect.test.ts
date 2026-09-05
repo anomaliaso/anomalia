@@ -45,7 +45,17 @@ async function loadLayout(pathname: string, brand: string, session: unknown = { 
 		{ then: (res: (v: unknown) => unknown) => Promise.resolve({ data: [], count: 0, error: null }).then(res) },
 		{ get: (t, k) => (k in t ? (t as Record<string | symbol, unknown>)[k] : () => chain) }
 	);
-	const supabase = { auth: { getSession: async () => ({ data: { session } }) }, from: () => chain };
+	// `rpc` esattamente come `from`, e per la stessa ragione scritta qui sopra: il differito arriva
+	// fino a `remaining()` → `getCreditsUsage()` → `fetchStripePeriodStart()`, che chiama
+	// `supabase.rpc(...)`. Senza questa riga moriva con `supabase.rpc is not a function` — e non
+	// faceva fallire un test, faceva cadere l'INTERA suite come Unhandled Rejection, perche` quella
+	// promessa non l'aspetta nessuno. In modo intermittente: dipende da quando il rifiuto atterra
+	// rispetto alla fine del run, cioe` da quanti file di test ci sono e in che ordine girano.
+	const supabase = {
+		auth: { getSession: async () => ({ data: { session } }) },
+		from: () => chain,
+		rpc: () => chain
+	};
 	try {
 		await (mod.load as (e: unknown) => Promise<unknown>)({
 			url: new URL(`https://app.test${pathname}`),

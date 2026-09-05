@@ -16,7 +16,7 @@ import { blogStyleBlock } from './blog-style';
 import { wallClockToUtc } from './schedule';
 import { blogArticlesPerWeek, blogArticlesPerWeekMax, blogArticlesPerMonth } from './plans';
 import { ensureKeywordStrategy, keywordStrategyBlock } from './seo-keyword-strategy';
-import { PIN_GEMINI } from './xiaomi';
+import { PIN_GATEWAY } from './ai-text';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -26,7 +26,7 @@ type AnyRec = Record<string, any>;
 // fell through to Gemini anyway, after paying for the failed call). Poi ci ha provato DeepSeek, con
 // lo stesso esito silenzioso: un tentativo condannato prima di ogni articolo. Il prezzo di questo
 // lavoro è quello di Gemini Flash, e blog-cost.ts lo calcola da lì.
-const BLOG_AI = PIN_GEMINI;
+const BLOG_AI = PIN_GATEWAY;
 
 const REVIEWER =
   'You are a senior content editor. Reward articles that are specific, genuinely useful and factually careful. Penalize fluff, hype, invented statistics and any claim not supported by the brand context. NEVER fabricate facts, sources or URLs.';

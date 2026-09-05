@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { PROOF_DISCIPLINE_RULE } from '$lib/server/proof-discipline';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import { genaiClient, structured } from './research';
-import { PIN_GEMINI } from './xiaomi';
+import { PIN_GATEWAY } from './ai-text';
 import { parseAdsSettings, SUPPORTED_GOALS, type AdsChannel } from './ads';
 import { normalizeUrl } from '$lib/ads-fee';
 
@@ -146,7 +146,7 @@ Return JSON.`;
   const out = await structured<Record<string, unknown>>(genaiClient(), prompt, DRAFT_SCHEMA, SYSTEM, {
     label: 'ads_campaign_draft',
     brandId: brand.id,
-    ...PIN_GEMINI
+    ...PIN_GATEWAY
   });
 
   const strList = (v: unknown, max: number, limit: number) =>

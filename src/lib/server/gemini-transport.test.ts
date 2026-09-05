@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-// GEMINI_TRANSPORT=kie fa uscire lo stesso Gemini Flash dal passthrough di kie.ai invece che
-// dall'API di Google. Qui si difendono le tre cose che rendono la migrazione reversibile senza
-// danni: il client giusto, le quattro superfici che NON devono spostarsi, e la fatturazione che
-// non prezza mai una chiamata kie a listino Google.
+// Le superfici che devono restare sul centralino, e la fatturazione di una chiamata passata da kie.
+//
+// Qui c'era anche `lo scambio di trasporto`: quattro test su `makeGenaiClient` /
+// `googleGenaiClient` / `GEMINI_TRANSPORT`, cioe` sulla scelta fra Google e kie per lo stesso
+// Gemini. Quella scelta non esiste piu` — non esiste piu` un client Google da scegliere — e
+// l'invariante che la sostituisce e` in `no-side-doors.test.ts`, che e` piu` forte: nessun file
+// costruisce un client verso un fornitore, senza eccezioni.
 
 const M = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
 vi.mock('$env/dynamic/private', () => ({ env: M.env }));
@@ -18,77 +21,7 @@ function setEnv(vars: Record<string, string | undefined>) {
   Object.assign(M.env, vars);
 }
 
-const KIE_ENV = { KIE_API_KEY: 'kie-test-key', GEMINI_API_KEY: 'google-test-key', GEMINI_TRANSPORT: 'kie' };
-
-describe('lo scambio di trasporto', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    setEnv({});
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('col default su openrouter il client NON e` quello di kie', async () => {
-    setEnv({ OPENROUTER_API_KEY: 'o', KIE_API_KEY: 'kie-test-key' });
-    const { geminiTransport, makeGenaiClient, isKieTransport, flashModelFor, geminiFlash } = await import('./gemini');
-    // `geminiTransport()` risponde a una domanda sola: serve il passthrough di kie? Col testo su
-    // openrouter no, e il client Google che torna e` ormai il parametro `ai` che i chiamanti
-    // ignorano (`_ai` in structuredGemini/groundedGemini).
-    expect(geminiTransport()).toBe('google');
-    const ai = makeGenaiClient();
-    expect(isKieTransport(ai)).toBe(false);
-    expect(flashModelFor(ai)).toBe(geminiFlash());
-  });
-
-  it('senza KIE_API_KEY la rotta resta kie e lo dice: Google non e` piu` una rete', async () => {
-    // Prima si ripiegava su Google. Google non e` piu` un endpoint, quindi l'unico ripiego e` kie
-    // e una chiave mancante diventa un errore di chiave, non una deviazione silenziosa altrove.
-    setEnv({ GEMINI_TRANSPORT: 'kie' });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { geminiTransport } = await import('./gemini');
-    expect(geminiTransport()).toBe('kie');
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  it('su kie il client parla con api.kie.ai in Bearer, e manda l’id modello con i trattini', async () => {
-    setEnv(KIE_ENV);
-    const { makeGenaiClient, isKieTransport, flashModelFor, geminiFlash, kieFlashId } = await import('./gemini');
-    const ai = makeGenaiClient();
-    expect(isKieTransport(ai)).toBe(true);
-    expect(flashModelFor(ai)).toBe(kieFlashId(geminiFlash()));
-    expect(flashModelFor(ai)).toMatch(/^gemini-\d+-\d+-flash$/);
-
-    const seen: Array<{ url: string; headers: Record<string, string> }> = [];
-    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
-      seen.push({
-        url: String(url),
-        headers: Object.fromEntries(new Headers(init?.headers as HeadersInit).entries())
-      });
-      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
-    });
-    await ai.models.generateContent({
-      model: flashModelFor(ai),
-      contents: [{ role: 'user', parts: [{ text: 'ciao' }] }]
-    });
-
-    expect(seen).toHaveLength(1);
-    // /v1 e non /v1beta: con la versione di default il passthrough risponde 404.
-    expect(seen[0].url).toContain('https://api.kie.ai/gemini/v1/models/');
-    expect(seen[0].url).toContain(':generateContent');
-    expect(seen[0].headers.authorization).toBe('Bearer kie-test-key');
-  });
-
-  it('googleGenaiClient ignora GEMINI_TRANSPORT (è la porta delle superfici bloccate)', async () => {
-    setEnv(KIE_ENV);
-    const { googleGenaiClient, isKieTransport, flashModelFor, geminiFlash } = await import('./gemini');
-    const ai = googleGenaiClient();
-    expect(isKieTransport(ai)).toBe(false);
-    expect(flashModelFor(ai)).toBe(geminiFlash());
-  });
-});
+const KIE_ENV = { KIE_API_KEY: 'kie-test-key', AI_ROUTE_TEXT: 'gemini@kie' };
 
 describe('le superfici sul centralino (non lo SDK Google)', () => {
   beforeEach(() => {
@@ -181,18 +114,6 @@ describe('la fatturazione di una chiamata passata da kie', () => {
     expect(cost).toBeNull();
   });
 
-  it('legge i thinking token anche quando kie li chiama thinkingTokenCount', async () => {
-    const { extractGeminiUsage } = await import('./ai-log');
-    const kie = extractGeminiUsage({
-      usageMetadata: { promptTokenCount: 13, candidatesTokenCount: 15, thinkingTokenCount: 333, totalTokenCount: 361 }
-    });
-    expect(kie?.thinkingTokens).toBe(333);
-    const google = extractGeminiUsage({
-      usageMetadata: { promptTokenCount: 13, candidatesTokenCount: 15, thoughtsTokenCount: 333 }
-    });
-    expect(google?.thinkingTokens).toBe(333);
-  });
-
   it('i crediti kie del turno di chat arrivano fino alla riga di log', async () => {
     const inserted: Record<string, unknown>[] = [];
     vi.doMock('$lib/server/supabase-admin', () => ({
@@ -212,7 +133,7 @@ describe('la fatturazione di una chiamata passata da kie', () => {
 
 describe('la rete di sicurezza sullo structured output', () => {
   it('aiStructured passa da llmStructured sul centralino, non dallo SDK Google', () => {
-    const src = readFileSync(join(HERE, 'xiaomi.ts'), 'utf8');
+    const src = readFileSync(join(HERE, 'ai-text.ts'), 'utf8');
     expect(src).toContain('llmStructured');
     expect(src).not.toContain('createGoogleGenerativeAI');
     expect(src).toContain('falling back to the LLM gateway');
