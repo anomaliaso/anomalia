@@ -259,7 +259,10 @@ export type ImageJob = {
   model?: string;
   /** L'immagine della libreria da cui partire. Presente → è una modifica. */
   baseMediaId?: string;
+  brandStyle?: BrandStyleUse;
 };
+
+export type BrandStyleUse = 'apply' | 'ignore';
 
 export type ImageJobResult =
   | {
@@ -295,7 +298,7 @@ async function runImageJob(
   job: ImageJob
 ): Promise<ImageJobResult> {
   const [
-    { renderPostImage, buildImageRequest },
+    { renderPostImage, buildImageRequest, loadBrandVisualContext },
     { imageModelFor, imageRefineModelFor },
     { mediaModelSlot, slotAccepts, slotChoices },
     { loadLibraryMediaParts }
@@ -332,7 +335,13 @@ async function runImageJob(
     baseImage = parts[0];
   }
 
+  const brandVisuals =
+    job.brandId && job.brandStyle !== 'ignore'
+      ? await loadBrandVisualContext(supabase, job.brandId)
+      : {};
+
   const opts = {
+    ...brandVisuals,
     model: refining ? imageModelFor(prefs) : (job.model ?? imageModelFor(prefs)),
     refineModel: refining ? (job.model ?? imageRefineModelFor(prefs)) : imageRefineModelFor(prefs),
     baseImage,
