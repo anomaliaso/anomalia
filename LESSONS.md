@@ -123,8 +123,21 @@ della review, così non esiste taglio che possa separarli. È la regola di Kent 
 già ha — riordino separato dal cambio di comportamento — applicata al ramo invece che al singolo
 commit. Il controllo, prima di chiedere la review:
 ```bash
-git log --oneline <base>..HEAD    # ogni prefisso di questa lista è uno stato che può finire in produzione
+git log --oneline <base>..HEAD              # ogni prefisso è uno stato che può finire in produzione
+git show --format= --name-only <commit>     # quali commit toccano il file che porta il rischio
 ```
+**La domanda giusta è sulla STRUTTURA, non sul contenuto**: *quali commit toccano il file
+rischioso*, non *quale stringa ci compare*. Se quel file è toccato da un commit solo, la trappola è
+impossibile per costruzione — ogni prefisso lo contiene — e non serve leggere una riga. Se è
+toccato da due e il secondo ripara il primo, è armata comunque, qualunque cosa dica il grep.
+
+**E il controllo si sceglie perché non oscilla, non perché è breve.** Verificando proprio questa
+cosa, `grep` su un `git cat-file` in un `for` ha dato a due persone tre risposte diverse alla stessa
+domanda (`5, 2, 0, 0`, poi zero ovunque, poi righe di diff al posto del contenuto). `--name-only`
+non oscilla: risponde con l'elenco dei file, che è un fatto del commit e non del modo in cui lo
+interroghi. Un controllo che devi rifare per credergli non è un controllo — e qui la lezione sul
+non fidarsi del proprio ramo stava per essere depositata sulla base di un loop mai testato.
+
 Questa lezione è più forte delle altre due che l'hanno accompagnata, perché quelle dipendono da
 qualcuno che si ricordi di controllare; questa toglie la possibilità che il taglio sia dannoso.
 
