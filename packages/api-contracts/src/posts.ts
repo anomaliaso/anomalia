@@ -740,11 +740,12 @@ export const GENERATE_CAROUSEL = {
   tool: 'generate_carousel',
   title: 'Generate a carousel',
   description:
-    'Draw a SERIES of images that read as one object, not N unrelated pictures, and file them in ' +
-    'the brand media library. Slide 1 is the cover and must work at thumbnail size; every later ' +
-    'slide advances the angle one concrete step and carries exactly one idea. BILLS A RENDER PER ' +
-    'SLIDE, so a 5-slide carousel is five renders — ask for the count you mean. It creates nothing ' +
-    'in the calendar: pass the ids to create_post as media_ids, in order. TO CHANGE ONE SLIDE use ' +
+    'To make a carousel — a SERIES of images that read as one object, not N unrelated pictures. ' +
+    'Slide 1 is the cover and must work at thumbnail size; every later slide advances the angle ' +
+    'one concrete step and carries exactly one idea. It spends credits: one render per slide, so ' +
+    'a 5-slide carousel is five renders — ask for the count you mean. It creates nothing in the ' +
+    'calendar and publishes nothing: pass the ids to create_post as media_ids, in order. TO ' +
+    'CHANGE ONE SLIDE use ' +
     'refine_image on that slide id, and put the continuity_tokens this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
     'light or the recurring motif without them takes that slide out of the set.',
