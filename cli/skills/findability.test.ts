@@ -29,6 +29,10 @@ import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
  * i changelog citano cifre perché quelle cifre SONO l'argomento di una decisione presa.
  */
 const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly string[] }> = [
+  // La domanda che ha aperto tutto questo: «puoi generare la img di un gatto?», e l'agente ha
+  // risposto di non avere lo strumento. Le parole stanno nella prima riga della descrizione e in
+  // apertura di entrambe le superfici della skill, perche' e' li' che un modello scorre.
+  { tool: 'generate_image', question: 'generate an image of a cat', words: ['image', 'cat', 'draw'] },
   { tool: 'refine_image', question: 'make this photo red', words: ['change', 'photo', 'red'] },
   {
     tool: 'generate_video',
