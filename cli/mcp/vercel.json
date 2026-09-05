@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "buildCommand": "npm install --prefix .. && node ../scripts/build-vercel.mjs",
+  "outputDirectory": "public",
   "headers": [
     {
       "source": "/(.*)",
