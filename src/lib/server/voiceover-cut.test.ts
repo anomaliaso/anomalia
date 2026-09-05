@@ -1,8 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Il modulo che genera tocca rete, chiave e registro: qui si sostituiscono i tre, così anche la
 // parte non pura di `gemini-audio` si prova senza uscire dal processo.
-vi.mock('$env/dynamic/private', () => ({ env: { GEMINI_API_KEY: 'test-key', LLM_API_KEY: 'test-key', KIE_API_KEY: 'test-key' } }));
+const M = vi.hoisted(() => ({ env: {} as Record<string, string | undefined> }));
+vi.mock('$env/dynamic/private', () => ({ env: M.env }));
+const KEYS = { GEMINI_API_KEY: 'test-key', LLM_API_KEY: 'test-key', KIE_API_KEY: 'test-key' };
+function setEnv(vars: Record<string, string | undefined>) {
+	for (const k of Object.keys(M.env)) delete M.env[k];
+	Object.assign(M.env, vars);
+}
+setEnv(KEYS);
 const logged = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock('$lib/server/ai-log', () => ({
 	logAiCall: (row: Record<string, unknown>) => {
@@ -345,11 +352,16 @@ function wavOf(samples: Int16Array, format = { sampleRate: TTS_SAMPLE_RATE, chan
 	);
 }
 
+const uploaded: Buffer[] = [];
+
 function fakeSupabase(uploadError?: string): SupabaseClient {
 	return {
 		storage: {
 			from: () => ({
-				upload: async () => ({ error: uploadError ? { message: uploadError } : null }),
+				upload: async (_path: string, body: Buffer) => {
+					uploaded.push(body);
+					return { error: uploadError ? { message: uploadError } : null };
+				},
 				getPublicUrl: (p: string) => ({ data: { publicUrl: BASE + p } })
 			})
 		}
@@ -499,7 +511,10 @@ describe('generateMusicBed', () => {
 	});
 });
 
-describe('generateVoiceOver', () => {
+describe('generateVoiceOver sul ripiego kie', () => {
+	beforeEach(() => setEnv({ ...KEYS, AI_ROUTE_TTS: 'gemini-tts@kie' }));
+	afterEach(() => setEnv(KEYS));
+
 	it('un caricamento fallito lascia una riga nel registro, non il silenzio', async () => {
 		kieJobs.generateSpeechOnKie.mockResolvedValue({
 			wav: wavFromPcm(new Uint8Array(TTS_SAMPLE_RATE * 2)),
@@ -514,5 +529,98 @@ describe('generateVoiceOver', () => {
 			})
 		).rejects.toThrow(/Audio upload failed/);
 		expect(logged.at(-1)).toMatchObject({ label: 'voiceover', ok: false });
+	});
+});
+
+/**
+ * LA VOCE SU OPENROUTER.
+ *
+ * `POST /audio/speech` torna PCM GREZZO, senza intestazione: la frequenza la dichiara solo
+ * `content-type: audio/pcm;rate=24000;channels=1`. Il primo test non è "arrivano dei byte" — con
+ * quello passerebbe anche un 48 kHz stereo, che non fallisce, produce pezzi lunghi la metà e una
+ * voce al doppio della velocità. Si prova la FORMA che il tagliatore accetta.
+ */
+function speech(pcm: ArrayBuffer, rate = TTS_SAMPLE_RATE, channels = 1) {
+	return new Response(pcm, { headers: { 'content-type': `audio/pcm;rate=${rate};channels=${channels}` } });
+}
+
+function spokenPcm(samples: Int16Array): ArrayBuffer {
+	const bytes = new Uint8Array(samples.length * 2);
+	for (let i = 0; i < samples.length; i++) {
+		bytes[i * 2] = samples[i] & 0xff;
+		bytes[i * 2 + 1] = (samples[i] >> 8) & 0xff;
+	}
+	return bytes.buffer;
+}
+
+describe('generateVoiceOver su openrouter', () => {
+	const take = concat(tone(1000), hush(400), tone(1000));
+
+	beforeEach(() => {
+		setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o' });
+		uploaded.length = 0;
+	});
+	afterEach(() => setEnv(KEYS));
+
+	it('carica un WAV che il tagliatore riaccetta: 24 kHz mono 16 bit', async () => {
+		const res = await withFetch(
+			(async () => speech(spokenPcm(take))) as typeof fetch,
+			() => generateVoiceOver({ supabase: fakeSupabase(), brandId: 'b', lines: ['una riga', 'due'] })
+		);
+		const read = pcmFromWav(uploaded[0]);
+		expect({ sampleRate: read.sampleRate, channels: read.channels, bitsPerSample: read.bitsPerSample }).toEqual({
+			sampleRate: TTS_SAMPLE_RATE,
+			channels: 1,
+			bitsPerSample: 16
+		});
+		expect(Array.from(read.samples)).toEqual(Array.from(take));
+		expect(res.fullDurationSeconds).toBeCloseTo(take.length / TTS_SAMPLE_RATE, 6);
+		expect(logged.at(-1)).toMatchObject({ label: 'voiceover', ok: true, provider: 'openrouter' });
+	});
+
+	it('un PCM che non è 24 kHz mono si rifiuta, non si taglia a metà velocità', async () => {
+		for (const [rate, channels] of [
+			[48_000, 1],
+			[TTS_SAMPLE_RATE, 2]
+		] as const) {
+			await expect(
+				withFetch(
+					(async () => speech(spokenPcm(take), rate, channels)) as typeof fetch,
+					() => generateVoiceOver({ supabase: fakeSupabase(), brandId: 'b', lines: ['una riga'] })
+				),
+				`${rate} Hz ${channels}ch`
+			).rejects.toThrow(/the cutter needs/i);
+			expect(uploaded).toHaveLength(0);
+			expect(logged.at(-1)).toMatchObject({ label: 'voiceover', ok: false });
+		}
+	});
+
+	it('una generazione sola per tutte le righe, non una per riga', async () => {
+		const lines = ['uno', 'due', 'tre', 'quattro', 'cinque', 'sei'];
+		const calls: string[] = [];
+		await withFetch(
+			(async (_url: string, init: RequestInit) => {
+				calls.push(String(init.body));
+				return speech(spokenPcm(take));
+			}) as unknown as typeof fetch,
+			() => generateVoiceOver({ supabase: fakeSupabase(), brandId: 'b', lines })
+		);
+		expect(calls).toHaveLength(1);
+		for (const line of lines) expect(calls[0]).toContain(line);
+	});
+
+	it('senza chiave openrouter la voce ripiega su kie, e lo dice', async () => {
+		setEnv({ KIE_API_KEY: 'test-key' });
+		kieJobs.generateSpeechOnKie.mockResolvedValue({
+			wav: wavFromPcm(new Uint8Array(spokenPcm(take))),
+			credits: 1,
+			model: 'gemini-3.5-pro-preview-tts'
+		});
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const res = await generateVoiceOver({ supabase: fakeSupabase(), brandId: 'b', lines: ['una riga'] });
+		expect(res.fullDurationSeconds).toBeCloseTo(take.length / TTS_SAMPLE_RATE, 6);
+		expect(logged.at(-1)).toMatchObject({ label: 'voiceover', ok: true, provider: 'kie' });
+		expect(warn).toHaveBeenCalledWith(expect.stringMatching(/AI_ROUTE_TTS.*Ripiego su kie/));
+		warn.mockRestore();
 	});
 });

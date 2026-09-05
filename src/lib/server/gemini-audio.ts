@@ -12,6 +12,11 @@
  *
  * Gli id dei modelli si leggono dall'ambiente: la suite audio di Gemini si muove più in fretta
  * della nostra release, e un id cablato costa un deploy mentre una variabile costa un minuto.
+ *
+ * La famiglia è Gemini da entrambi i trasporti, ed è il motivo per cui lo slot si sposta senza che
+ * il brand cambi voce: openrouter e kie servono gli stessi preset. Il costo lo scrive solo kie
+ * (`creditsConsumed`); su openrouter `/audio/speech` non porta nessuna fattura e la riga resta
+ * senza costo — un buco visibile, che qui è la regola.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { spawnSync } from 'node:child_process';
@@ -26,6 +31,8 @@ import {
 	LYRIA_CLIP_SECONDS,
 	LYRIA_COST_USD,
 	llmChatCompletions,
+	llmSpeech,
+	llmTtsModel,
 	lyriaModel,
 	musicBytesFromChatCompletion,
 	type MusicTier
@@ -36,14 +43,33 @@ import {
 	findGaps,
 	pcmFromWav,
 	planCuts,
+	samplesFromPcm,
 	sliceToWav,
+	wavFromPcm,
 	type DroppedCut,
-	type Gap
+	type Gap,
+	type PcmFormat
 } from '$lib/server/voiceover-cut';
 
-/** Il modello TTS. Sovrascrivibile senza deploy — vedi l'intestazione. */
-export function ttsModel(): string {
-	return env.GEMINI_TTS_MODEL?.trim() || 'gemini-2.5-flash-preview-tts';
+/** Due minuti coprono un copione lungo con margine, su entrambi i trasporti. */
+const TTS_TIMEOUT_MS = 120_000;
+
+/**
+ * Il formato che il tagliatore sa usare, in UN posto solo perché la regola è una sola. Il taglio a
+ * valle assume L16 24 kHz mono e lo assume in SILENZIO: un 48 kHz stereo non fallisce, produce
+ * pezzi lunghi la metà e una voce al doppio della velocità.
+ */
+function assertCuttable(model: string, format: PcmFormat): void {
+	if (
+		format.sampleRate === TTS_PCM.sampleRate &&
+		format.channels === TTS_PCM.channels &&
+		format.bitsPerSample === TTS_PCM.bitsPerSample
+	) {
+		return;
+	}
+	throw new Error(
+		`${model} returned ${format.sampleRate} Hz ${format.channels}-channel ${format.bitsPerSample}-bit audio; the cutter needs ${TTS_PCM.sampleRate} Hz mono ${TTS_PCM.bitsPerSample}-bit.`
+	);
 }
 
 /**
@@ -180,12 +206,9 @@ export async function generateVoiceOver(opts: {
 	const lines = opts.lines.map((l) => String(l ?? '').trim()).filter(Boolean);
 	if (!lines.length) throw new Error('No lines to read.');
 	const voice = opts.voice && isVoiceOverVoice(opts.voice) ? opts.voice : DEFAULT_VOICE;
-	/**
-	 * La voce passa da kie: il centralino non fa TTS. Un endpoint diverso si ferma qui, senza
-	 * cadere sullo SDK Google.
-	 */
-	const useKie = route('tts').endpoint === 'kie';
-	const model = useKie ? kieTtsModel() : ttsModel();
+	const endpoint = route('tts').endpoint;
+	const useKie = endpoint === 'kie';
+	const model = useKie ? kieTtsModel() : llmTtsModel();
 	let credits: number | undefined;
 	const t0 = Date.now();
 
@@ -209,28 +232,32 @@ export async function generateVoiceOver(opts: {
 			});
 			if (!spoken) throw new Error('kie returned no audio.');
 			credits = spoken.credits;
-			// Il taglio a valle assume L16 24 kHz mono e lo assume in SILENZIO: un WAV a 48 kHz
-			// stereo non fallisce, produce pezzi lunghi la metà e una voce al doppio della velocità.
 			const decoded = pcmFromWav(spoken.wav);
-			if (
-				decoded.sampleRate !== TTS_PCM.sampleRate ||
-				decoded.channels !== TTS_PCM.channels ||
-				decoded.bitsPerSample !== TTS_PCM.bitsPerSample
-			) {
-				throw new Error(
-					`${model} returned ${decoded.sampleRate} Hz ${decoded.channels}-channel ${decoded.bitsPerSample}-bit audio; the cutter needs ${TTS_PCM.sampleRate} Hz mono ${TTS_PCM.bitsPerSample}-bit.`
-				);
-			}
+			assertCuttable(model, decoded);
 			samples = decoded.samples;
 			// Il WAV di kie è già valido e il suo URL vive 24h: si carica subito.
 			fullUrl = await uploadAudio(opts.supabase, opts.brandId, spoken.wav, 'full');
 		} else {
-			throw new Error('TTS is kie-only. Google speech is not on the gateway.');
+			// UNA chiamata per tutte le righe anche qui: il copione intero è l'`input`. La direzione
+			// di lettura ci sta dentro senza essere letta ad alta voce — misurato, il take con la
+			// direzione non dura più di quello senza.
+			const spoken = await llmSpeech({
+				model,
+				input: buildVoiceOverPrompt(lines, opts.style),
+				voice: voiceName(voice),
+				timeoutMs: TTS_TIMEOUT_MS,
+				abortSignal: opts.abortSignal
+			});
+			// I 16 bit per campione non stanno nel `content-type`: sono la definizione di L16, e
+			// `wavFromPcm` è ciò che li scrive nell'intestazione che il PCM grezzo non ha.
+			assertCuttable(model, { ...spoken, bitsPerSample: TTS_PCM.bitsPerSample });
+			samples = samplesFromPcm(spoken.pcm);
+			fullUrl = await uploadAudio(opts.supabase, opts.brandId, wavFromPcm(spoken.pcm), 'full');
 		}
 	} catch (e) {
 		logAiCall({
 			label: 'voiceover',
-			provider: useKie ? 'kie' : 'gemini',
+			provider: endpoint,
 			model,
 			ms: Date.now() - t0,
 			ok: false,
@@ -248,7 +275,7 @@ export async function generateVoiceOver(opts: {
 
 	logAiCall({
 		label: 'voiceover',
-		provider: useKie ? 'kie' : 'gemini',
+		provider: endpoint,
 		model,
 		ms: Date.now() - t0,
 		ok: true,
