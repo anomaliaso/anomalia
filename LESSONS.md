@@ -1178,11 +1178,19 @@ percorso dei post sì — un difetto di comportamento, non un'assenza di progett
 Una descrizione falsa è peggio di una descrizione vaga: quella vaga fa cercare altrove, quella
 falsa fa smettere di cercare. Ed è esattamente il difetto che questo lavoro esisteva per chiudere.
 
-**Mossa.** Il fatto si verifica al call site prima di scriverci sopra una frase, anche quando
-arriva da chi ha le mani in quel file: `grep` del campo, lettura del ramo, e il commento accanto
-alla definizione — in quel caso diceva già tutto («Solo nel prompt di ripiego TEXT-TO-VIDEO: con
-una cover allegata lo stile è già nei pixel», `video.ts:330`). Costa un minuto e vale quanto la
-frase che stai per spedire a ogni agente che userà il prodotto.
+**Come nasce, che è la parte utile.** Chi me l'ha passato non se l'è inventato: aveva letto
+`startVideo`, aveva visto che non passa `visualStyle`, e ne ha concluso che il canale non esiste.
+**Ha letto il chiamante e ha concluso sul chiamato.** Quello che sapeva davvero era «`startVideo`
+non lo passa» — verificato, vero, e già di per sé il difetto — ma è arrivato a me nella forma più
+larga e più falsa. Un'assenza in un chiamante non è un'assenza nel chiamato: dice solo che
+quel percorso non la usa.
+
+**Mossa.** Il fatto si verifica dove è DEFINITO, non dove è usato, prima di scriverci sopra una
+frase — anche quando arriva da chi ha le mani in quel file: `grep` del campo, lettura del ramo, e
+il commento accanto alla definizione. In quel caso diceva già tutto («Solo nel prompt di ripiego
+TEXT-TO-VIDEO: con una cover allegata lo stile è già nei pixel», `video.ts:330`), e avrebbe
+prodotto una frase MIGLIORE di quella che mi era stata data, non solo una vera. Costa un minuto e
+vale quanto la frase che stai per spedire a ogni agente che userà il prodotto.
 
 **Corollario.** Vale in entrambe le direzioni: un fatto che passi tu a un altro agente va marcato
 per quello che è. «Verificato in `file:riga`» e «me l'hanno detto» non sono la stessa cosa, e chi
