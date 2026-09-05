@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 import { brandVoice, writeCaptions } from '$lib/server/caption-writer';
 import { GENERATE_CAPTIONS, TARGET_PLATFORMS, statusForFailure } from '@anomalia/api-contracts';
-import { withBrandContext } from '$lib/server/ai-log';
+import { billedUsdInScope, withBrandContext } from '$lib/server/ai-log';
 
 export const POST: RequestHandler = async ({ request, params }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -21,18 +21,20 @@ export const POST: RequestHandler = async ({ request, params }) => {
   }
 
   const platforms = parsed.data.platforms ?? [...TARGET_PLATFORMS];
-  const captions = await withBrandContext(brand.id, async () =>
-    writeCaptions({
+  const { captions, costUsd } = await withBrandContext(brand.id, async () => {
+    const written = await writeCaptions({
       topic: parsed.data.topic,
       platforms,
       format: parsed.data.format ?? 'single',
       voice: await brandVoice(supabase, brand.id)
-    })
-  );
+    });
+
+    return { captions: written, costUsd: billedUsdInScope() ?? null };
+  });
 
   if (!captions.length) {
     return json({ error: 'no_captions' }, { status: statusForFailure(GENERATE_CAPTIONS, 'no_captions') });
   }
 
-  return json({ ok: true, captions });
+  return json({ ok: true, captions, cost_usd: costUsd });
 };

@@ -26,6 +26,14 @@ describe('il contratto delle didascalie', () => {
     expect(pathFor(GENERATE_CAPTIONS, 'demo')).toBe('/api/v1/brands/demo/captions/generate');
   });
 
+  it('dice quanto e` costato, e sa dire che non lo sa', () => {
+    const ok = { ok: true, captions: [], cost_usd: 0.004 };
+    expect(GENERATE_CAPTIONS.output.safeParse(ok).success).toBe(true);
+    expect(GENERATE_CAPTIONS.output.safeParse({ ...ok, cost_usd: null }).success).toBe(true);
+    // Un costo assente non e` un costo zero: il campo c'e` sempre.
+    expect(GENERATE_CAPTIONS.output.safeParse({ ok: true, captions: [] }).success).toBe(false);
+  });
+
   it('dice che non pubblica: chi legge tools/list deve trovare create_post da qui', () => {
     expect(GENERATE_CAPTIONS.description).toContain('create_post');
     expect(GENERATE_CAPTIONS.description).toMatch(/no post is created/i);

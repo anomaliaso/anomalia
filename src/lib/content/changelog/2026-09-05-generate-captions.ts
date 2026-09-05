@@ -7,6 +7,7 @@ export default {
     'Ask for captions on a topic and every platform gets its own, composed for that network and already inside its character limit.',
     'Ask for one platform and you get one platform, written to its own limit with nothing shortened on top.',
     'X and Threads can come back as a numbered sequence, split on whole sentences and never through a link or a mention.',
-    'It writes text only and creates no post: keep the caption you want and publish it as usual.'
+    'It writes text only and creates no post: keep the caption you want and publish it as usual.',
+    'Every call reports what it cost, taken from the bill we are charged rather than an estimate.'
   ]
 } satisfies ChangelogEntry;

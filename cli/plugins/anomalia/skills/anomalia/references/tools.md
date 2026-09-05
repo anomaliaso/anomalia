@@ -165,6 +165,11 @@ trimmed nine different ways. Name `platforms` and you get only those, written to
 with no further shortening — asking for X alone costs one caption, not nine with eight thrown
 away. Every entry comes back with `parts`, the platform's `limit`, and `publishable`.
 
+The response carries `cost_usd`: what the gateway billed for that call, the same figure written
+to the usage ledger, not a price list rewritten here. `null` means no invoice came back — that is
+**unknown, not free** — so reconcile against the ledger rather than reading a missing number as
+zero.
+
 `format` defaults to `single`: one post per platform, guaranteed to fit. `format: "thread"` lets
 X and Threads run as long as the idea needs and returns `parts` as a numbered sequence — each
 part whole words only, never a URL or a mention cut in two, with the `1/4` counted inside the

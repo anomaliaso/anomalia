@@ -50,7 +50,17 @@ export const GENERATE_CAPTIONS = {
         )
     })
     .strict(),
-  output: z.object({ ok: z.literal(true), captions: z.array(Caption) }),
+  output: z.object({
+    ok: z.literal(true),
+    captions: z.array(Caption),
+    cost_usd: z
+      .number()
+      .nullable()
+      .describe(
+        'What the gateway billed for this call, the same figure written to the usage ledger. ' +
+          'null means no invoice came back: unknown, not free'
+      )
+  }),
   failures: [
     { error: 'invalid_input', status: 400 },
     { error: 'credits_exhausted', status: 402 },

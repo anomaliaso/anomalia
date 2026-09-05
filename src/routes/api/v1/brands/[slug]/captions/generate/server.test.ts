@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const writeCaptions = vi.fn();
 const brandVoice = vi.fn();
+const billedUsdInScope = vi.fn();
 
 vi.mock('$lib/server/cli-auth', () => ({
   authenticate: vi.fn(),
   loadBrandForUser: vi.fn(),
   gateAiAction: vi.fn()
+}));
+vi.mock('$lib/server/ai-log', () => ({
+  withBrandContext: (_brandId: string, fn: () => unknown) => fn(),
+  billedUsdInScope: () => billedUsdInScope()
 }));
 vi.mock('$lib/server/caption-writer', () => ({
   writeCaptions: (...args: unknown[]) => writeCaptions(...args),
@@ -43,6 +48,7 @@ beforeEach(() => {
   } as never);
   vi.mocked(gateAiAction).mockResolvedValue(undefined as never);
   brandVoice.mockResolvedValue('');
+  billedUsdInScope.mockReturnValue(0.0042);
   writeCaptions.mockResolvedValue([
     { platform: 'x', parts: ['a caption'], limit: 280, publishable: true }
   ]);
@@ -96,13 +102,22 @@ describe('POST /api/v1/brands/:slug/captions/generate', () => {
     expect(body.error).toBe('no_captions');
   });
 
-  it('returns the captions it wrote', async () => {
+  it('returns the captions it wrote, and what the gateway billed for them', async () => {
     const { res, body } = await call({ topic: 'a launch', platforms: ['x'] });
 
     expect(res.status).toBe(200);
     expect(body).toEqual({
       ok: true,
-      captions: [{ platform: 'x', parts: ['a caption'], limit: 280, publishable: true }]
+      captions: [{ platform: 'x', parts: ['a caption'], limit: 280, publishable: true }],
+      cost_usd: 0.0042
     });
+  });
+
+  it('an invoice that never arrived is null, not a free call', async () => {
+    billedUsdInScope.mockReturnValue(undefined);
+
+    const { body } = await call({ topic: 'a launch', platforms: ['x'] });
+
+    expect(body.cost_usd).toBeNull();
   });
 });

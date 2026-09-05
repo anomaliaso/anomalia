@@ -55,10 +55,16 @@ crediti si fermano prima che qualcosa costi, e il test che conta lo verifica gua
 modello **non** sia partito. La chiamata sta dentro `withBrandContext`, così la riga in
 `ai_calls` è attribuita al brand e il prezzo è quello che OpenRouter ci fattura.
 
-La risposta **non** porta un campo con il costo, ed è una scelta: nessuna rotta lo fa, e l'unico
-modo per metterlo lì sarebbe stato ricalcolarlo — cioè una tariffa scritta a mano accanto a
-`ai_calls`, una seconda verità che diverge al primo cambio di listino. La descrizione dice
-«Costs credits», come `ads_remix`.
+E la risposta **lo dice**, in `cost_usd`. Non è un ricalcolo: `takeLlmCost`, oltre a consegnare la
+fattura alla riga che la scrive, ora la lascia leggibile nello scope (`billedUsdInScope`), così la
+rotta restituisce **lo stesso numero** finito in `ai_calls` invece di riscriversi un listino
+accanto. È la terza strada che avevo mancato al primo giro: non una tariffa nostra e non una
+seconda fonte di verità, ma la fattura di OpenRouter — quella che `llm-usage-cost.ts` chiede con
+`usage: { include: true }` e che copre il modello che ha risposto davvero.
+
+`null` significa **sconosciuto, non gratis**, e un test lo tiene: la #328 ha stabilito che una riga
+riuscita senza prezzo è un difetto di prezzatura, e uno `0` di comodo lo nasconderebbe. La
+descrizione dice comunque «Costs credits», come `ads_remix`.
 
 ## Scartato
 
