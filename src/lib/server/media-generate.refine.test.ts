@@ -44,6 +44,7 @@ vi.mock('$lib/server/content-credentials', () => ({
   DIGITAL_SOURCE_TYPE: { synthetic: 'trainedAlgorithmicMedia' }
 }));
 vi.mock('$lib/server/ai-log', () => ({
+  billedUsdInScope: () => undefined,
   withBrandContext: <T>(_brandId: string, fn: () => T) => fn()
 }));
 

@@ -599,19 +599,65 @@ const ImageResult = z.object({
 
 const MODEL_FAILURE = { error: 'model_not_for_slot', status: 400 } as const;
 
+/**
+ * Un disegno chiesto senza brand non entra in nessuna libreria, quindi non ha un id da mostrare:
+ * `null` è il fatto, e dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con
+ * `list_media`. Non è la stessa forma di `refine_image` o `generate_media`, che un brand ce
+ * l'hanno sempre e un id lo restituiscono sempre — allargare anche il loro schema significherebbe
+ * togliere una promessa che quei due mantengono.
+ */
+const DrawnMediaSchema = GeneratedMediaSchema.extend({
+  id: z
+    .string()
+    .nullable()
+    .describe(
+      'The library asset id — null when the image was drawn without a brand, and then it is in no ' +
+        'library: create_post will not take it and list_media will not find it.'
+    ),
+  storage_path: z
+    .string()
+    .nullable()
+    .describe('Where the file lives. Present on a brand-free drawing, whose url is a signed link that expires.')
+});
+
+const DrawnImageResult = z.object({
+  ok: z.literal(true),
+  media: z.array(DrawnMediaSchema),
+  model: ImageResult.shape.model,
+  renders: ImageResult.shape.renders,
+  organization: z
+    .object({ id: z.string(), name: z.string().nullable() })
+    .nullable()
+    .describe(
+      'Whose credits paid, named — set when no brand was given, null when one was (the brand names its own payer).'
+    ),
+  cost_usd: z
+    .number()
+    .nullable()
+    .describe('What this call actually cost, read from the invoice. null when no invoice came back — never 0.')
+});
+
 export const GENERATE_IMAGE = {
   tool: 'generate_image',
   title: 'Generate an image',
   description:
-    'Draw a NEW image into the brand media library from a prompt, then pass the id it returns as ' +
-    'media_ids on create_post. Call get_media_models first if you want to choose the model — ' +
-    'pass it as model, for this call only, instead of set_media_model, which changes the brand ' +
-    'default from now on. BILLS A RENDER PER IMAGE (about 8 credits each, and the model moves ' +
-    'that). It creates nothing in the calendar, so ask for two or three alternatives, look at ' +
-    'them with list_media, and attach only the one you keep. To change an image that already ' +
-    'exists use refine_image: correcting one drawing is cheaper than redrawing until it is right.',
+    'To draw a picture from a description — "an image of a cat", a product shot, a background ' +
+    "for a slide. The prompt is the whole instruction: nothing about a brand's look reaches " +
+    'the model, so name the style you want. WITHOUT slug this is a one-off drawing — no brand, ' +
+    'nothing filed anywhere, id comes back null and there is nothing to hand to create_post. ' +
+    "WITH slug the image lands in that brand's library and its id is what create_post takes as " +
+    'media_ids: use it when the picture belongs to a brand, or is going to become a post. Do ' +
+    'NOT call list_brands to decide where to draw — if nobody named a brand there is no brand, ' +
+    "and guessing one spends a real organisation's credits and litters a real library. It " +
+    'spends credits: one render per image, renders in the answer says how many were billed and ' +
+    'cost_usd what they actually cost. It creates nothing in the calendar and publishes nothing, ' +
+    'so ask for two or three with count, look at them, keep one. To CHANGE a picture that ' +
+    'already exists use refine_image — correcting one drawing beats redrawing until it is ' +
+    'right. To pick the model read get_media_models and pass model, for this call only; ' +
+    'set_media_model is the one that changes the brand from now on.',
   method: 'POST',
   pathUnderBrand: '/media/images',
+  pathWithoutBrand: '/images',
   input: z
     .object({
       prompt: z.string().min(1).describe('What the image should show'),
@@ -621,7 +667,7 @@ export const GENERATE_IMAGE = {
       title: z.string().optional().describe('The name the asset carries in the library')
     })
     .strict(),
-  output: ImageResult,
+  output: DrawnImageResult,
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
