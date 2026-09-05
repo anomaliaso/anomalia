@@ -56,7 +56,7 @@ Setup details: [references/mcp.md](references/mcp.md).
 6. Confirm before reject / delete / discard unless the user clearly asked.
 7. **A render is one shot.** Nothing looks at an image after the model draws it — no internal
    critic, no automatic retry, no second attempt you did not ask for. **You** are the quality
-   control: open the `signed_url`, judge it, and when it is wrong call `refine_image` on that
+   control: open the `signed_url`, judge it, and when it is wrong call `refine_media` on that
    asset. Prompting again buys a different picture at a second render's price.
 
 ## Quick workflows
@@ -114,12 +114,12 @@ render per image and creates nothing in the calendar, so ask for two or three wi
 at them, keep one.
 
 **If you reach for `generate_media`** — the older door — it still works and forwards to
-`generate_image` and `generate_video`. Prefer those two: they name what they do, and changing a
-picture or animating one has its own tool.
+`generate_image` and `generate_video`. Prefer those two: they name what they do. And changing
+something that already exists is neither of them: that is `refine_media`.
 
 **Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
 returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
-To fix a single slide afterwards, `refine_image` on its id **with those tokens in the instruction** —
+To fix a single slide afterwards, `refine_media` on its id **with those tokens in the instruction** —
 without them that slide drifts out of the series.
 
 **Animate an image you already have** → `generate_video` with its `base_media_id`. That is how
@@ -140,14 +140,18 @@ on that post and attaches it. One render. To draw a picture that is not tied to 
 
 **Change the image already on a post** → `regenerate_post_media` with an instruction. It REPLACES
 that post's image — one render, and the old one is gone. When you want to keep the original, use
-`refine_image` on the library asset instead: that files the result as a new asset.
+`refine_media` on the library asset instead: that files the result as a new asset.
 
-**CHANGE an image you already have** → `refine_image` with its `base_media_id` and an instruction
-("make it red", "warmer background"). It starts from that asset, so the result is that picture
-changed. Do NOT reach for `generate_image` to alter something: a new prompt draws a new picture
-from scratch, pays for a fresh render, and gives you a different subject — the commonest and most
-expensive mistake on this surface. The original is never overwritten: refining files a new asset,
-so a wrong edit costs one render and not your source.
+**CHANGE something you already made** → `refine_media` with its `base_media_id` and an
+instruction ("make it red", "warmer background", "keep the movement but make it night"). One door
+for every kind: an image or a video from the brand's **library**, and the asset's own kind picks
+the engine — you never say which it is. It starts from that asset, so the result is that picture
+or that clip changed. Do NOT reach for `generate_image`, `generate_video` or `generate_media` to
+alter something: a new prompt starts from nothing, pays for a fresh render, and gives you a
+different subject — the commonest and most expensive mistake on this surface. The original is
+never overwritten: refining files a new asset, so a wrong edit costs one render and not your
+source. A clip needs the brand to have chosen a video refine model; until it has, `refine_media`
+says `no_refine_model` instead of quietly filming a new one.
 
 **Check your copy before you create it** → `check_content` with the same spec you would send to
 `create_post`. It returns blocking errors, warnings and a 0–100 score per platform, each naming
@@ -213,7 +217,7 @@ gives the job back to the platform default. No credits, no model call; it applie
 render.
 
 **For ONE call only, pass `model` to the generator instead.** `set_media_model` is "from now on"
-and changes the brand; `model` on `generate_image` or `refine_image` is "just this once" and
+and changes the brand; `model` on `generate_image` or `refine_media` is "just this once" and
 changes nothing. Drawing and refining are two different jobs with two different lists — read
 `get_media_models` for the right one. The response says which model actually ran, so an agent that
 chose nothing still knows what it got.

@@ -12,7 +12,7 @@ import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
  * Se la descrizione non contiene quelle parole il modello scorre `tools/list` e non lo riconosce:
  * è così che «puoi generare la img di un gatto?» ha ricevuto «non ho uno strumento di generazione
  * immagini» con `generate_image` nella lista, e «rendi rossa questa foto» ha prodotto un disegno
- * nuovo con `refine_image` nella stessa lista.
+ * nuovo con `refine_media` nella stessa lista.
  *
  * IL CONTROLLO VALE SU DUE SUPERFICI, non una. La skill si legge PRIMA dei contratti, quindi non
  * sono «il lavoro e il suo allineamento»: sono due prompt in concorrenza, e vince quello che
@@ -33,7 +33,10 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
   // risposto di non avere lo strumento. Le parole stanno nella prima riga della descrizione e in
   // apertura di entrambe le superfici della skill, perche' e' li' che un modello scorre.
   { tool: 'generate_image', question: 'generate an image of a cat', words: ['image', 'cat', 'draw'] },
-  { tool: 'refine_image', question: 'make this photo red', words: ['change', 'photo', 'red'] },
+  { tool: 'refine_media', question: 'make this photo red', words: ['change', 'photo', 'red'] },
+  // Un video gia' in libreria si CORREGGE, non si rifilma: e' la meta' che mancava, e la sola
+  // superficie su cui un agente puo' scoprirlo e' questa.
+  { tool: 'refine_media', question: 'change this video I already made', words: ['change', 'video', 'library'] },
   {
     tool: 'generate_video',
     question: 'animate this photo with a 5 second video',
@@ -53,7 +56,7 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
   {
     tool: 'regenerate_post_media',
     question: 'change the image on this post',
-    words: ['change', 'image', 'post', 'refine_image']
+    words: ['change', 'image', 'post', 'refine_media']
   },
   {
     tool: 'search_knowledge',

@@ -403,13 +403,181 @@ export async function generateImagesWithoutBrand(
   return withOrgContext(job.orgId, () => runImageJob(supabase, { ...job, brandId: null }));
 }
 
-export async function refineBrandImage(
+export type RefineMediaJob = {
+  brandId: string;
+  userId: string;
+  /** L'asset di partenza. Il SUO tipo sceglie il motore: non lo dichiara chi chiama. */
+  baseMediaId: string;
+  instruction: string;
+  count?: number;
+  model?: string;
+  brandStyle?: BrandStyleUse;
+  title?: string;
+};
+
+export type RefinedKind = 'image' | 'video';
+
+export type RefineMediaResult =
+  | { ok: true; kind: RefinedKind; media: GeneratedMedia[]; model: string | null; renders: number }
+  | {
+      ok: false;
+      error: 'source_not_found' | 'kind_not_refinable' | 'no_refine_model' | 'render_failed' | 'store_failed';
+    }
+  | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
+
+type Refiner = (
   supabase: SupabaseClient,
-  job: ImageJob & { brandId: string; baseMediaId: string }
-): Promise<ImageJobResult> {
+  job: RefineMediaJob & { sourceId: string }
+) => Promise<RefineMediaResult>;
+
+async function refineLibraryImage(
+  supabase: SupabaseClient,
+  job: RefineMediaJob & { sourceId: string }
+): Promise<RefineMediaResult> {
+  const out = await runImageJob(supabase, {
+    brandId: job.brandId,
+    userId: job.userId,
+    prompt: job.instruction,
+    baseMediaId: job.sourceId,
+    count: job.count,
+    model: job.model,
+    brandStyle: job.brandStyle,
+    title: job.title
+  });
+  if (!out.ok) return out;
+
+  return { ok: true, kind: 'image', media: out.media, model: out.model, renders: out.renders };
+}
+
+/** Il link permanente di una riga appena scritta, letto dalla riga e non ricostruito a mano. */
+async function libraryLink(supabase: SupabaseClient, mediaId: string): Promise<string | null> {
+  const { data } = await supabase.from('brand_media').select('short_code').eq('id', mediaId).maybeSingle();
+
+  return mediaUrl((data?.short_code ?? null) as string | null);
+}
+
+async function signedSourceUrl(
+  supabase: SupabaseClient,
+  brandId: string,
+  mediaId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('brand_media')
+    .select('storage_path')
+    .eq('id', mediaId)
+    .eq('brand_id', brandId)
+    .maybeSingle();
+  const path = String(data?.storage_path ?? '');
+  if (!path) return null;
+
+  return (await signKnowledgePaths(supabase, [path])).get(path) ?? null;
+}
+
+/**
+ * Il poll di `transformVideo` arriva a 600s, la funzione muore a 300 (`maxDuration` sulla rotta):
+ * senza un tetto proprio il client non riceve un errore, riceve una connessione che cade. Qui si
+ * smette PRIMA del muro, così la risposta esiste e dice `render_failed`.
+ *
+ * È un soffitto noto, non una soluzione: una clip più lenta di questo resta pagata e non
+ * consegnata. La strada per toglierlo è la coda `video_renders`, che `generate_video` usa già —
+ * si sottomette, si torna con un job_id, e il reconciler del cron la deposita.
+ */
+const VIDEO_REFINE_BUDGET_MS = 280_000;
+
+/**
+ * Riscrivere una clip è un mestiere con un modello suo, e un brand può non averlo ancora scelto:
+ * `videoRefineModel` esiste in `set_media_model` da prima di questo percorso e finora nessun tool
+ * lo chiamava. Senza modello si RIFIUTA — filmare da capo consegnerebbe una clip nuova a chi ha
+ * chiesto di correggere la sua, che è il difetto da cui questo percorso nasce.
+ */
+async function refineLibraryVideo(
+  supabase: SupabaseClient,
+  job: RefineMediaJob & { sourceId: string }
+): Promise<RefineMediaResult> {
+  const [{ mediaModelSlot, slotAccepts, slotChoices }, { videoModelForRole }] = await Promise.all([
+    import('$lib/media-model-slots'),
+    import('$lib/video-models')
+  ]);
+
+  const slot = mediaModelSlot('videoRefineModel');
+  if (job.model && slot && !slotAccepts(slot, job.model)) {
+    return { ok: false, error: 'model_not_for_slot', allowed: slotChoices(slot).map((c) => c.id) };
+  }
+
+  const prefs = await brandContentPrefs(supabase, job.brandId);
+  if (!job.model && !videoModelForRole(prefs, 'refine')) return { ok: false, error: 'no_refine_model' };
+
+  const videoUrl = await signedSourceUrl(supabase, job.brandId, job.sourceId);
+  if (!videoUrl) return { ok: false, error: 'source_not_found' };
+
+  const { transformVideo } = await import('$lib/server/video');
+  const out = await transformVideo({
+    supabase,
+    userId: job.userId,
+    role: 'refine',
+    videoUrl,
+    prompt: job.instruction,
+    model: job.model,
+    prefs,
+    abortSignal: AbortSignal.timeout(VIDEO_REFINE_BUDGET_MS)
+  });
+  if (!out) return { ok: false, error: 'render_failed' };
+
+  const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
+  const saved = await saveRenderedVideoToLibrary(supabase, {
+    brandId: job.brandId,
+    userId: job.userId,
+    url: out.url,
+    title: job.title?.trim() || job.instruction.slice(0, 80),
+    sourceRef: out.taskId
+  });
+  if (!('mediaId' in saved)) return { ok: false, error: 'store_failed' };
+
+  return {
+    ok: true,
+    kind: 'video',
+    media: [
+      {
+        id: saved.mediaId,
+        kind: 'video',
+        mime: 'video/mp4',
+        width: null,
+        height: null,
+        url: await libraryLink(supabase, saved.mediaId)
+      }
+    ],
+    model: out.model,
+    renders: 1
+  };
+}
+
+/**
+ * Come si rifinisce ogni tipo di asset della libreria: UNA riga per tipo, accanto al modello che
+ * la governa. Il tipo successivo si aggiunge qui, e nessun ramo sparso altrove deve saperlo.
+ *
+ * Le grafiche non sono una riga: in `brand_media` un logo o una illustrazione È un'immagine —
+ * `kind` vale image, ed è `media_kind` del catalogo a distinguerle — quindi le rifinisce il motore
+ * delle immagini. Il motion graphic programmatico (Remotion) non è un modello generativo e non
+ * passa di qui.
+ */
+const REFINERS: Record<string, Refiner> = {
+  image: refineLibraryImage,
+  video: refineLibraryVideo
+};
+
+export async function refineBrandMedia(
+  supabase: SupabaseClient,
+  job: RefineMediaJob
+): Promise<RefineMediaResult> {
+  const source = await resolveLibraryId(supabase, job.brandId, job.baseMediaId);
+  if (!source) return { ok: false, error: 'source_not_found' };
+
+  const refine = REFINERS[source.kind];
+  if (!refine) return { ok: false, error: 'kind_not_refinable' };
+
   const { withBrandContext } = await import('$lib/server/ai-log');
 
-  return withBrandContext(job.brandId, () => runImageJob(supabase, job));
+  return withBrandContext(job.brandId, () => refine(supabase, { ...job, sourceId: source.id }));
 }
 
 /**

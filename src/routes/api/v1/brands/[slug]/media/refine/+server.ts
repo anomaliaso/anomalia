@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
-import { refineBrandImage } from '$lib/server/media-generate';
-import { REFINE_IMAGE, statusForFailure } from '@anomalia/api-contracts';
+import { refineBrandMedia } from '$lib/server/media-generate';
+import { REFINE_MEDIA, statusForFailure } from '@anomalia/api-contracts';
 
 export const config = { maxDuration: 300 };
 
@@ -16,18 +16,16 @@ export const POST: RequestHandler = async ({ request, params }) => {
   const gate = await gateAiAction(brand, apiKey);
   if (gate) return gate;
 
-  const parsed = REFINE_IMAGE.input.safeParse(await request.json().catch(() => null));
+  const parsed = REFINE_MEDIA.input.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }
 
-  const result = await refineBrandImage(supabase, {
+  const result = await refineBrandMedia(supabase, {
     brandId: brand.id,
     userId: user.id,
-    // L'istruzione È il prompt: `baseMediaId` rende la richiesta una modifica, e il modello legge
-    // "cosa cambiare" avendo davanti l'immagine di partenza.
-    prompt: parsed.data.instruction,
     baseMediaId: parsed.data.base_media_id,
+    instruction: parsed.data.instruction,
     count: parsed.data.count,
     model: parsed.data.model,
     brandStyle: parsed.data.brand_style,
@@ -37,9 +35,15 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (!result.ok) {
     return json(
       { error: result.error, ...('allowed' in result ? { allowed: result.allowed } : {}) },
-      { status: statusForFailure(REFINE_IMAGE, result.error) }
+      { status: statusForFailure(REFINE_MEDIA, result.error) }
     );
   }
 
-  return json({ ok: true, media: result.media, model: result.model, renders: result.renders });
+  return json({
+    ok: true,
+    kind: result.kind,
+    media: result.media,
+    model: result.model,
+    renders: result.renders
+  });
 };

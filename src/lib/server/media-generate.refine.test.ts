@@ -49,7 +49,7 @@ vi.mock('$lib/server/ai-log', () => ({
   withBrandContext: <T>(_brandId: string, fn: () => T) => fn()
 }));
 
-import { refineBrandImage, generateBrandImages } from './media-generate';
+import { refineBrandMedia, generateBrandImages } from './media-generate';
 
 const REFINE_MODEL = 'gemini-3.1-flash-image';
 
@@ -81,10 +81,10 @@ beforeEach(() => {
 
 describe('rifinire un asset della libreria', () => {
   it('parte DALL ORIGINALE: baseImage è l asset, non un disegno nuovo', async () => {
-    const out = await refineBrandImage(supabaseWith({ imageRefineModel: REFINE_MODEL }), {
+    const out = await refineBrandMedia(supabaseWith({ imageRefineModel: REFINE_MODEL }), {
       brandId: 'brand-1',
       userId: 'user-1',
-      prompt: 'me lo fai rosso',
+      instruction: 'me lo fai rosso',
       baseMediaId: FULL_ID
     });
 
@@ -103,9 +103,9 @@ describe('rifinire un asset della libreria', () => {
   });
 
   it('sceglie il modello di REFINE, non quello di generazione', async () => {
-    const out = await refineBrandImage(
+    const out = await refineBrandMedia(
       supabaseWith({ imageModel: 'gemini-3.1-flash-lite-image', imageRefineModel: REFINE_MODEL }),
-      { brandId: 'brand-1', userId: 'user-1', prompt: 'più caldo', baseMediaId: FULL_ID }
+      { brandId: 'brand-1', userId: 'user-1', instruction: 'più caldo', baseMediaId: FULL_ID }
     );
 
     expect(out.ok && out.model).toBe(REFINE_MODEL);
@@ -114,10 +114,10 @@ describe('rifinire un asset della libreria', () => {
   it('un asset che non esiste FERMA la richiesta invece di disegnarne uno nuovo', async () => {
     loadLibraryMediaParts.mockResolvedValue([]);
 
-    const out = await refineBrandImage(supabaseWith({}, []), {
+    const out = await refineBrandMedia(supabaseWith({}, []), {
       brandId: 'brand-1',
       userId: 'user-1',
-      prompt: 'me lo fai rosso',
+      instruction: 'me lo fai rosso',
       baseMediaId: 'media-di-un-altro-brand'
     });
 
@@ -139,10 +139,10 @@ describe('rifinire un asset della libreria', () => {
   });
 
   it('accetta un prefisso corto, come gli id dei post', async () => {
-    await refineBrandImage(supabaseWith({}, [{ id: FULL_ID, kind: 'image' }, { id: '99999999-0000-0000-0000-000000000000', kind: 'image' }]), {
+    await refineBrandMedia(supabaseWith({}, [{ id: FULL_ID, kind: 'image' }, { id: '99999999-0000-0000-0000-000000000000', kind: 'image' }]), {
       brandId: 'brand-1',
       userId: 'user-1',
-      prompt: 'più caldo',
+      instruction: 'più caldo',
       baseMediaId: '1111'
     });
 
@@ -150,9 +150,9 @@ describe('rifinire un asset della libreria', () => {
   });
 
   it('un prefisso che combacia con due asset non ne sceglie uno a caso', async () => {
-    const out = await refineBrandImage(
+    const out = await refineBrandMedia(
       supabaseWith({}, [{ id: '1111aaaa-0000-0000-0000-000000000000', kind: 'image' }, { id: '1111bbbb-0000-0000-0000-000000000000', kind: 'image' }]),
-      { brandId: 'brand-1', userId: 'user-1', prompt: 'x', baseMediaId: '1111' }
+      { brandId: 'brand-1', userId: 'user-1', instruction: 'x', baseMediaId: '1111' }
     );
 
     expect(out).toEqual({ ok: false, error: 'source_not_found' });
@@ -191,10 +191,10 @@ describe('rifinire un asset della libreria', () => {
   });
 
   it('l originale non viene sovrascritto: esce un asset NUOVO', async () => {
-    await refineBrandImage(supabaseWith({}), {
+    await refineBrandMedia(supabaseWith({}), {
       brandId: 'brand-1',
       userId: 'user-1',
-      prompt: 'più caldo',
+      instruction: 'più caldo',
       baseMediaId: FULL_ID
     });
 

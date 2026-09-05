@@ -55,8 +55,8 @@ describe('slug opzionale, e solo dove il registro lo dichiara', () => {
     expect(tool.inputSchema?.properties?.slug?.description).toMatch(/omit/i);
   });
 
-  test('refine_image continua a pretendere il brand: la sorgente vive nella sua libreria', async () => {
-    const tool = find(await tools(), 'refine_image');
+  test('refine_media continua a pretendere il brand: la sorgente vive nella sua libreria', async () => {
+    const tool = find(await tools(), 'refine_media');
 
     expect(tool.inputSchema?.required ?? []).toContain('slug');
   });
