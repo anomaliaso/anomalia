@@ -424,6 +424,11 @@ export type MediaJob = {
 
 const JOBS_PAGE = 20;
 
+export const CLIP_NOT_IN_LIBRARY = 'not_in_library';
+const NOTHING_CLAIMED_IT =
+  'the clip rendered and is stored, but it never reached the library, so there is no media_id to ' +
+  'use — generating it again would pay for a second copy';
+
 /**
  * I lavori di questo brand, e SOLO di questo brand: l'id arriva da `loadBrandForUser`, mai dal
  * chiamante, quindi un job_id indovinato di un altro brand non trova niente.
