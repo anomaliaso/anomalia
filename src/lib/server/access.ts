@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '$lib/server/supabase-admin';
+import { isRlsScoped } from '$lib/server/rls-client';
 
 // can_enter() depends on the caller's session (admin bypass), so it can only be cached per
 // request, not globally. Keyed by the per-request supabase client (WeakMap so entries die
@@ -66,4 +67,21 @@ export async function flagEnabled(
   const value = data === true;
   flagCache.set(cacheKey, { value, expires: Date.now() + FLAG_TTL_MS });
   return value;
+}
+
+/**
+ * Il brand che il chiamante ha nominato nel corpo è suo? La risposta non sta nel valore — arriva
+ * da fuori — ma nelle policy: la SELECT su `brands` restituisce solo i brand di cui sei
+ * proprietario dell'org o membro, ed è la stessa regola che `loadBrandForUser` riapplica a mano
+ * sul percorso a chiave API. Quindi la domanda si gira al database, col client dell'utente.
+ *
+ * Un client non marchiato come scoped è service role, o un percorso nuovo che ha dimenticato di
+ * marchiarsi: in entrambi i casi la risposta è no, perché un client che scavalca la RLS
+ * risponderebbe di sì per il brand di chiunque.
+ */
+export async function ownsBrand(supabase: SupabaseClient, brandId: string): Promise<boolean> {
+  if (!isRlsScoped(supabase)) return false;
+
+  const { data } = await supabase.from('brands').select('id').eq('id', brandId).maybeSingle();
+  return Boolean(data);
 }

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { canEnter } from '$lib/server/access';
+import { canEnter, ownsBrand } from '$lib/server/access';
 import { localeLanguageName } from '$lib/i18n/locale';
 import {
   startOnboardingStepJob,
@@ -24,6 +24,7 @@ export const POST: RequestHandler = async ({
 
   const body = await request.json().catch(() => ({}));
   const brandId = typeof body?.brandId === 'string' ? body.brandId : null;
+  if (brandId && !(await ownsBrand(supabase, brandId))) return new Response('Forbidden', { status: 403 });
   if (!brandId) return new Response('Missing brandId', { status: 400 });
 
   const draftId = typeof body?.draftId === 'string' ? body.draftId : null;
