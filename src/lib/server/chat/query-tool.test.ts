@@ -126,6 +126,25 @@ describe('il cancello: senza sessione utente non si legge', () => {
   it('il rifiuto nomina anche la chiave API, che è più stretta dei brand dell utente', () => {
     expect(NO_SESSION_ERROR.message).toMatch(/brand_ids/);
   });
+
+  /**
+   * Chi legge questo rifiuto NON è nella chat: `query` si nega solo alla service role, cioè al
+   * percorso a chiave API e alla coda. `read_posts`, `read_brand_kit` e `read_plan` esistono
+   * davvero — sono tool della chat — ma su quella superficie non ci sono, quindi il consiglio
+   * mandava a cercare tre nomi che il chiamante non può vedere.
+   *
+   * E una lista di nomi in un messaggio d'errore invecchia da sola: i tool di lettura si stanno
+   * unificando dentro `query`. Il rimedio nomina la SUPERFICIE, che non cambia.
+   */
+  it('il rimedio non manda a cercare tool che il chiamante non ha', () => {
+    for (const chatOnly of ['read_posts', 'read_brand_kit', 'read_plan']) {
+      expect(NO_SESSION_ERROR.fix).not.toContain(chatOnly);
+    }
+  });
+
+  it('il rimedio dice come si torna dentro, non solo che si è fuori', () => {
+    expect(NO_SESSION_ERROR.fix).toMatch(/anomalia login/);
+  });
 });
 
 /**
