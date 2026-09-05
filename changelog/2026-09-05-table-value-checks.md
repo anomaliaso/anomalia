@@ -124,6 +124,53 @@ Stesso ragionamento per `posts.platform`, `posts.platforms` e `posts.format`: i 
 planner/onboarding ci scrivono l'output del modello senza normalizzarlo, e un CHECK lì fermerebbe
 l'autopilot di notte. `format` prende solo un tetto di lunghezza.
 
+## `external` non lo trova nessun grep, e il motivo cambia il metodo
+
+`cross_post` e `founder` erano letterali scritti nel punto dell'insert, quindi una ricerca testuale
+li trova. `external` no: al punto dell'insert (`manual-posting.ts:306`) c'è una **variabile**
+— `opts.input.source ?? 'manual'` — e il valore nasce in
+`POST /api/v1/brands/:slug/posts`, l'endpoint con cui un agente esterno deposita un post già
+scritto. Il vincolo senza `external` gli avrebbe dato 23514 su **ogni** chiamata, e in produzione
+non si sarebbe visto applicando la migration: `posts.source` ha solo `plan`, `radar` e `manual`,
+quindi l'`add constraint` riesce lo stesso. Si sarebbe visto alla prima scrittura.
+
+Quindi la domanda giusta non è «manca un valore?» ma **«su quali colonne vincolate il valore
+arriva da un parametro invece che da una costante?»** — e per ognuna si risale ai chiamanti fino
+alla costante vera. Rifatto il giro su tutte le colonne della migration, sono uscite altre tre
+cose, nessuna delle quali era un valore mancante:
+
+- **`posts.video_resolution` non è un vocabolario, è una forma.** Il valore arriva da
+  `KIE_VIDEO_RESOLUTION` e `KIE_VIDEO_UPSCALE_RESOLUTION`, cioè dalla configurazione, e
+  `clampVideoResolution` restituisce il default d'ambiente quando l'input non è in elenco. Un
+  elenco chiuso si sarebbe rotto al primo cambio di env — la stessa ragione per cui i tetti di
+  piano non stanno nel database. Ora è `^[0-9]{3,4}p$`.
+- **`brand_news_sources.lang` idem, e per un motivo peggiore.** Il form
+  (`settings/radar/+page.server.ts:83`) prende il valore grezzo e lo taglia a cinque caratteri
+  senza allowlist: il menu ha dodici voci, l'endpoint accetta qualunque cosa, e un `pt-BR` sarebbe
+  arrivato alla colonna. Ora è `^[A-Za-z-]{2,5}$`.
+- **`brand_kit.site_type` era un cast, non un controllo.** `(profile.site_type as SiteType)` non
+  guarda niente: il modello risponde su uno schema con `enum`, ma resta un modello, e un decimo
+  valore avrebbe fatto fallire l'onboarding invece di degradare a `generic`. Ora passa da
+  `clampSiteType`, accanto a `sanitizeThemeColor`.
+
+`posts.content_type` invece regge: tutte le vie che ci arrivano da variabile
+(`manual-posting`, `scheduler`, `async-jobs`, `createSingleContent`) risolvono dentro i sette.
+
+## Un test che rompe da solo, invece di un caso in più
+
+Un caso in più nell'harness copre un valore in più; non fallisce il giorno in cui il codice ne
+impara un settimo. `src/lib/db-vocabularies.test.ts` confronta l'insieme dichiarato nel codice con
+quello ammesso dalla migration, per `posts.status`, `posts.content_type`, `posts.source` e
+`brand_kit.site_type`, e rompe **in entrambe le direzioni**: valore nuovo nel codice e CHECK
+fermo, oppure CHECK allargato e costante rimasta indietro. Visto rosso in tutte e due prima di
+essere verde, e con la guardia contro il passaggio a vuoto (una scansione che non trova più niente
+fallisce, non passa).
+
+Perché funzioni serviva l'elenco unico che non c'era: `POST_SOURCES` in `contracts/post-tools.ts`,
+da cui il CHECK è derivato. E `PostAuthorship` adesso è
+`['manual','external'] as const satisfies readonly PostSource[]`: se un giorno esce dall'elenco, lo
+dice il compilatore qui invece di Postgres in produzione.
+
 ## Il test: guardarlo fallire prima
 
 Un vincolo senza un test che prova a violarlo è una speranza — e la suite qui mocka Supabase, dove

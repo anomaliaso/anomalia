@@ -37,6 +37,30 @@ export function sanitizeThemeColor(input: unknown): string | null {
   return HEX_COLOR.test(v) ? v : null;
 }
 
+/**
+ * Gli archetipi che `brand_kit.site_type` ammette — ed è da QUESTO elenco che il CHECK del
+ * database è derivato, non viceversa. Il valore arriva da un modello: risponde su uno schema con
+ * `enum`, ma resta un modello, e prima c'era un cast (`as SiteType`) che non guardava niente. Un
+ * decimo valore inventato arriverebbe alla colonna e la farebbe rifiutare, cioè romperebbe
+ * l'onboarding invece di degradare a `generic`.
+ */
+export const SITE_TYPES = [
+  'ecommerce',
+  'saas',
+  'portfolio',
+  'local_service',
+  'creator',
+  'media',
+  'mobile_app',
+  'service',
+  'generic'
+] as const;
+
+export function clampSiteType(value: unknown): (typeof SITE_TYPES)[number] | undefined {
+  const v = String(value ?? '').trim();
+  return (SITE_TYPES as readonly string[]).includes(v) ? (v as (typeof SITE_TYPES)[number]) : undefined;
+}
+
 /** Un sito digitato a mano diventa un URL cliccabile; vuoto resta null. */
 export function normalizeWebsite(raw: string): string | null {
   const v = String(raw ?? '').trim();
