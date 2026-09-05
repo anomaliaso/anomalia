@@ -641,3 +641,54 @@ export const REFINE_IMAGE = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+const VideoJobResult = z.object({
+  ok: z.literal(true),
+  status: z.literal('rendering'),
+  job_id: z.string(),
+  model: z.string().nullable().describe('The model that is filming it; null when the platform default chose')
+});
+
+export const GENERATE_VIDEO = {
+  tool: 'generate_video',
+  title: 'Generate a video',
+  description:
+    'Film a NEW clip into the brand media library — from a prompt alone, or from an image you ' +
+    'already have. TO ANIMATE A LIBRARY IMAGE, pass its id as base_media_id: that is how "animate ' +
+    'this photo" works, and it needs no post. It creates nothing in the calendar; when the clip ' +
+    'lands, pass its media_id to create_post as media_ids. THIS SPENDS CREDITS, and the model ' +
+    'moves the bill by more than an order of magnitude — a light clip is around 12 credits and a ' +
+    'heavy one around 210, so read get_media_models (slot videoModel from a prompt, ' +
+    'videoImageModel when animating an image) and pass model for this call only. A clip takes ' +
+    'minutes: this returns a job_id with status rendering, and check_media_job says when it ' +
+    'landed. Do not call this again for the same clip while one is still rendering.',
+  method: 'POST',
+  pathUnderBrand: '/media/videos',
+  input: z
+    .object({
+      prompt: z.string().min(1).describe('What the clip should show, or how the image should move'),
+      base_media_id: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'A library IMAGE to animate, from list_media — an id or an unambiguous prefix. Omit to film from the prompt alone.'
+        ),
+      duration: z.coerce.number().int().min(1).max(30).optional().describe('Seconds, e.g. 5'),
+      aspect_ratio: z.enum(['1:1', '9:16', '16:9']).optional(),
+      model: modelField('videoModel, or videoImageModel when base_media_id is set'),
+      title: z.string().optional().describe('The name the clip carries in the library')
+    })
+    .strict(),
+  output: VideoJobResult,
+  failures: [
+    { error: 'credits_exhausted', status: 402 },
+    MODEL_FAILURE,
+    { error: 'video_budget_exhausted', status: 400 },
+    { error: 'source_not_found', status: 404 },
+    { error: 'source_not_an_image', status: 400 },
+    { error: 'render_failed', status: 502 },
+    { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;

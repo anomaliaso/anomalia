@@ -53,7 +53,10 @@ const REFINE_MODEL = 'gemini-3.1-flash-image';
 
 const FULL_ID = '11111111-2222-3333-4444-555555555555';
 
-function supabaseWith(prefs: Record<string, unknown>, media: Array<{ id: string }> = []) {
+function supabaseWith(
+  prefs: Record<string, unknown>,
+  media: Array<{ id: string; kind?: string }> = [{ id: FULL_ID, kind: 'image' }]
+) {
   return {
     from: (table: string) => ({
       select: () => ({
@@ -109,7 +112,7 @@ describe('rifinire un asset della libreria', () => {
   it('un asset che non esiste FERMA la richiesta invece di disegnarne uno nuovo', async () => {
     loadLibraryMediaParts.mockResolvedValue([]);
 
-    const out = await refineBrandImage(supabaseWith({}), {
+    const out = await refineBrandImage(supabaseWith({}, []), {
       brandId: 'brand-1',
       userId: 'user-1',
       prompt: 'me lo fai rosso',
@@ -134,7 +137,7 @@ describe('rifinire un asset della libreria', () => {
   });
 
   it('accetta un prefisso corto, come gli id dei post', async () => {
-    await refineBrandImage(supabaseWith({}, [{ id: FULL_ID }, { id: '99999999-0000-0000-0000-000000000000' }]), {
+    await refineBrandImage(supabaseWith({}, [{ id: FULL_ID, kind: 'image' }, { id: '99999999-0000-0000-0000-000000000000', kind: 'image' }]), {
       brandId: 'brand-1',
       userId: 'user-1',
       prompt: 'più caldo',
@@ -146,7 +149,7 @@ describe('rifinire un asset della libreria', () => {
 
   it('un prefisso che combacia con due asset non ne sceglie uno a caso', async () => {
     const out = await refineBrandImage(
-      supabaseWith({}, [{ id: '1111aaaa-0000-0000-0000-000000000000' }, { id: '1111bbbb-0000-0000-0000-000000000000' }]),
+      supabaseWith({}, [{ id: '1111aaaa-0000-0000-0000-000000000000', kind: 'image' }, { id: '1111bbbb-0000-0000-0000-000000000000', kind: 'image' }]),
       { brandId: 'brand-1', userId: 'user-1', prompt: 'x', baseMediaId: '1111' }
     );
 

@@ -43,6 +43,10 @@ export type GenerateMediaOpts = {
   title?: string;
   /** Vale per QUESTA chiamata soltanto: nessuna preferenza del brand viene toccata. */
   model?: string;
+  /** Un'IMMAGINE della libreria da animare. Presente → image-to-video, ed e' «anima questa foto». */
+  baseMediaId?: string;
+  /** Secondi. Assente → la preferenza del brand. */
+  durationSeconds?: number;
 };
 
 export type GenerateMediaResult =
@@ -55,7 +59,15 @@ export type GenerateMediaResult =
       renders: number;
     }
   | { ok: true; status: 'rendering'; media: []; jobId: string; model: string | null; renders: 0 }
-  | { ok: false; error: 'render_failed' | 'store_failed' | 'video_budget_exhausted' }
+  | {
+      ok: false;
+      error:
+        | 'render_failed'
+        | 'store_failed'
+        | 'video_budget_exhausted'
+        | 'source_not_found'
+        | 'source_not_an_image';
+    }
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
 const IMAGE_MIME = 'image/png';
@@ -77,19 +89,22 @@ async function resolveLibraryId(
   supabase: SupabaseClient,
   brandId: string,
   idOrPrefix: string
-): Promise<string | null> {
+): Promise<{ id: string; kind: string } | null> {
   const want = idOrPrefix.trim().toLowerCase();
   if (!want) return null;
-  if (UUID.test(want)) return want;
 
+  // Si interroga SEMPRE, anche per un id completo. Prima l'id intero saltava la lettura e passava
+  // dritto: l'appartenenza la scopriva solo il passo dopo, che sa dire «non e' un'immagine» ma non
+  // «non e' tua» — e un id di un altro inquilino tornava con l'errore sbagliato.
   const { data } = await supabase
     .from('brand_media')
-    .select('id')
+    .select('id, kind')
     .eq('brand_id', brandId)
     .limit(PREFIX_SCAN);
-  const hits = (data ?? []).filter((r) => String(r.id).toLowerCase().startsWith(want));
+  const rows = (data ?? []) as Array<{ id: string; kind: string }>;
+  const hits = rows.filter((r) => String(r.id).toLowerCase().startsWith(want));
 
-  return hits.length === 1 ? String(hits[0].id) : null;
+  return hits.length === 1 ? { id: String(hits[0].id), kind: String(hits[0].kind) } : null;
 }
 
 function dataUrlBytes(dataUrl: string): { bytes: Buffer; mime: string } | null {
@@ -207,10 +222,10 @@ async function runImageJob(
   // il confine resta nella query invece che in un controllo che qualcuno dimenticherà.
   let baseImage: { inlineData: { mimeType: string; data: string } } | undefined;
   if (job.baseMediaId) {
-    const sourceId = await resolveLibraryId(supabase, job.brandId, job.baseMediaId);
-    if (!sourceId) return { ok: false, error: 'source_not_found' };
+    const source = await resolveLibraryId(supabase, job.brandId, job.baseMediaId);
+    if (!source) return { ok: false, error: 'source_not_found' };
 
-    const parts = await loadLibraryMediaParts(supabase, job.brandId, [sourceId], 1);
+    const parts = await loadLibraryMediaParts(supabase, job.brandId, [source.id], 1);
     if (!parts.length) return { ok: false, error: 'source_not_found' };
     baseImage = parts[0];
   }
@@ -292,10 +307,31 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     .maybeSingle();
   const prefs = (brand?.content_prefs ?? {}) as Record<string, string | number | null>;
 
+  // Animare una foto e filmare da un prompt sono due MESTIERI, e il catalogo lo sa gia': lo slot
+  // cambia, quindi cambia anche l'elenco dei modelli ammessi. Sceglierne uno solo accetterebbe un
+  // modello che poi il renderer scarta.
   const { mediaModelSlot, slotAccepts, slotChoices } = await import('$lib/media-model-slots');
-  const slot = mediaModelSlot('videoModel');
+  const slot = mediaModelSlot(opts.baseMediaId ? 'videoImageModel' : 'videoModel');
   if (opts.model && slot && !slotAccepts(slot, opts.model)) {
     return { ok: false, error: 'model_not_for_slot', allowed: slotChoices(slot).map((c) => c.id) };
+  }
+
+  // La copertina e' l'immagine da animare, e vive nella libreria di QUESTO brand: la risoluzione
+  // passa da resolveBrandImageIds, che filtra `brand_id` nella query e per un id di un altro
+  // inquilino non restituisce niente. Non trovarla FERMA la richiesta: filmare da zero un prompt
+  // quando qualcuno ha chiesto di animare la sua foto e' il difetto travestito da rimedio.
+  let coverUrl: string | undefined;
+  if (opts.baseMediaId) {
+    const source = await resolveLibraryId(admin, opts.brandId, opts.baseMediaId);
+    if (!source) return { ok: false, error: 'source_not_found' };
+    if (source.kind !== 'image') return { ok: false, error: 'source_not_an_image' };
+
+    const { resolveBrandImageIds } = await import('$lib/server/brand-media');
+    const urls = await resolveBrandImageIds(admin, opts.brandId, [source.id]);
+    // resolveBrandImageIds guarda solo `kind = 'image'`: un id che esiste ma e' un video non
+    // risolve, e va detto con un errore suo invece che confuso con «non esiste».
+    if (!urls.length) return { ok: false, error: 'source_not_an_image' };
+    coverUrl = urls[0];
   }
 
   const { remaining } = await import('$lib/server/usage');
@@ -318,10 +354,15 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     imagePrompt: opts.prompt,
     render: {
       aspectRatio: videoAspect(opts.aspectRatio),
-      duration: prefs.videoDuration as number | undefined,
+      // Con una copertina il modello parte da quei pixel: soggetto, scena e stile sono gia' li',
+      // e il prompt dirige il MOVIMENTO.
+      imageUrl: coverUrl,
+      duration: opts.durationSeconds ?? (prefs.videoDuration as number | undefined),
       instructions: prefs.videoInstructions as string | null | undefined,
       resolution: prefs.videoResolution as string | null | undefined,
-      model: opts.model ?? (prefs.videoModel as string | null | undefined)
+      model:
+        opts.model ??
+        ((opts.baseMediaId ? prefs.videoImageModel : prefs.videoModel) as string | null | undefined)
     }
   });
   if (!submitted) return { ok: false, error: 'render_failed' };
@@ -348,6 +389,16 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
  * generate_video, che sono i due tool che un agente dovrebbe chiamare. Cancellarla mentre stiamo
  * moltiplicando le capacita' toglierebbe una capacita' a chi la sta gia' usando.
  */
+/**
+ * Un clip verso la LIBRERIA, senza post. Con `baseMediaId` e' «anima questa foto»: la strada che
+ * mancava, e per cui l'agente esterno rispondeva che serviva prima una bozza.
+ */
+export async function generateBrandVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult> {
+  const { withBrandContext } = await import('$lib/server/ai-log');
+
+  return withBrandContext(opts.brandId, () => startVideo(opts));
+}
+
 export async function generateBrandMedia(
   supabase: SupabaseClient,
   opts: GenerateMediaOpts
