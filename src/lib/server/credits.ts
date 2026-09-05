@@ -175,6 +175,14 @@ async function readOrgBilling(
   const orgId = (brand as { org_id?: string } | null)?.org_id;
   if (!orgId) return null;
 
+  return readOrgBillingById(supabase, orgId);
+}
+
+/** The same reading for a caller that already holds the org and has no brand to reach it through. */
+export async function readOrgBillingById(
+  supabase: SupabaseClient,
+  orgId: string
+): Promise<OrgBilling | null> {
   const { data } = await supabase
     .from('organizations')
     .select(
@@ -249,9 +257,21 @@ export async function getCreditsUsage(
   // alone, exactly as before org-level billing. Never leave a caller without a budget.
   if (!org) return brandCreditsUsage(supabase, brand);
 
+  return orgCreditsUsage(supabase, org, brand.activated_at);
+}
+
+/**
+ * The pool as the org sees it. Split out of getCreditsUsage unchanged: a brand-free render has
+ * no brand row to carry an anchor, and everything below the org already ignored the brand.
+ */
+export async function orgCreditsUsage(
+  supabase: SupabaseClient,
+  org: OrgBilling,
+  activatedAtFallback: string | null = null
+): Promise<CreditsUsage> {
   const periodStart = await fetchOrgPeriodStart(supabase, org);
   const { start, end } = currentBillingPeriod(
-    { activated_at: org.activatedAt ?? brand.activated_at },
+    { activated_at: org.activatedAt ?? activatedAtFallback },
     periodStart
   );
   const planQuota = creditQuota(org.plan);
