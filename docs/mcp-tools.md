@@ -1,6 +1,6 @@
 # I tool MCP di Anomalia — inventario e piano di aggregazione
 
-**125 tool.** 114 dichiarati nel registro dei contratti, 11 registrati a mano.
+**127 tool.** 116 dichiarati nel registro dei contratti, 11 registrati a mano.
 45 sono letture. 13 distruggono qualcosa.
 
 Questo documento è generato dal registro, non scritto a mano: rigenerarlo è uno script, non un lavoro.
@@ -33,7 +33,7 @@ interessante. Contati dai server MCP realmente collegati a questa sessione:
 | **Stripe** | 10 | di cui **4 sono un proxy generico**: `api_read`, `api_write`, `api_search`, `api_details` |
 | **Supabase** | 29 | di cui **1 (`execute_sql`) copre tutte le letture**; le altre 28 sono gestione progetto |
 | **Vercel** | 37 | deployment, log, domini, analytics — nessuna primitiva generica |
-| **Anomalia** | **125** | |
+| **Anomalia** | **127** | |
 
 **Quindi il punto non è che ne hanno pochi: è dove li hanno messi.**
 
@@ -48,7 +48,11 @@ la chiama deve vederli prima.
 
 **È esattamente la nostra divisione.** Noi abbiamo già `query` — SQL in sola lettura coi permessi
 dell'utente. Il problema è che ci convivono 45 tool di lettura.
-Estratto dal registro (`packages/api-contracts/src/`) — **114 tool**, **239 parametri**. Gli altri 11 sono registrati a mano in `cli/mcp/tools/`: `login`, `logout`, `whoami`, `list_brands`, `get_status`, `approve_post`, `approve_posts`, `reject_post`, `publish_post`, `produce_week`, `generate_person`.
+Estratto da `d099e02a` — **116 tool** nel registro, **247 parametri**. Altri 11 sono registrati a mano in `cli/mcp/tools/`: `login`, `logout`, `whoami`, `list_brands`, `get_status`, `approve_post`, `approve_posts`, `reject_post`, `publish_post`, `produce_week`, `generate_person`.
+
+> Il numero si muove: fra la prima stesura di questo documento e la sua revisione, novanta minuti dopo,
+> `generate_captions` e `generate_carousel` sono entrati. Per questo l'inventario si rigenera invece
+> di mantenersi — e per questo porta il commit da cui è stato estratto.
 
 
 ### `/studio` — 15 tool
@@ -135,11 +139,12 @@ Estratto dal registro (`packages/api-contracts/src/`) — **114 tool**, **239 pa
 | `save_brief` | POST | `week`, `brief`, `products`? |  |
 | `save_plan` | POST | `strategy`, `voice`, `cadence`, `platform_mix`, `gtm`?, `weeks` |  |
 
-### `/media` — 7 tool
+### `/media` — 8 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `check_media_job` | GET | `job_id`? |  |
+| `generate_carousel` | POST | `brief`, `slides`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `generate_image` | POST | `prompt`, `count`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `generate_media` | POST | `prompt`, `kind`?, `count`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `generate_video` | POST | `prompt`, `base_media_id`?, `duration`?, `aspect_ratio`?, `model`?, `title`? |  |
@@ -260,6 +265,12 @@ Estratto dal registro (`packages/api-contracts/src/`) — **114 tool**, **239 pa
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `diagnose_radar` | GET | — |  |
+
+### `/captions` — 1 tool
+
+| tool | metodo | parametri | dist. |
+|---|---|---|---|
+| `generate_captions` | POST | `topic`, `platforms`?, `format`? |  |
 
 ### `/analytics` — 1 tool
 
@@ -438,22 +449,18 @@ da una lista lunga a un enum illeggibile.
 
 ---
 
-## Come rigenerare l'inventario
+## Cosa manca ancora, al momento di questa revisione
 
-L'elenco sopra è estratto dal registro, non scritto a mano:
+| | stato |
+|---|---|
+| `refine_video` | **non esiste su nessun branch.** Bloccato finché `transformVideo` non prende la forma del lavoro: oggi è sincrono da capo a fondo, con polling fino a 600s, e esporlo così terrebbe appeso un client MCP per dieci minuti |
+| `upscale_video` | progettato, non scritto. Tool suo e non parametro, perché l'ingrandimento di kie prende il `task_id` del lavoro originale e non tocca la libreria, mentre quello di OpenRouter prende un URL: **non sono la stessa capacità con due trasporti** |
+| `upscale_image` | **nessun modello lo fa su OpenRouter** — verificati tutti e 50. Chiedere a un modello di generazione di «rifare l'immagine più grande» è una rigenerazione, non un ingrandimento: torna un'immagine *diversa* a risoluzione maggiore |
 
-```bash
-bun run - <<'TS' > /tmp/tools.json
-import { BRAND_ENDPOINTS } from './cli/lib/contracts/index';
-console.log(JSON.stringify(BRAND_ENDPOINTS.map((e: any) => ({
-  tool: e.tool, method: e.method, path: e.pathUnderBrand,
-  destructive: !!e.destructive,
-  params: Object.entries(e.input?.shape ?? {}).map(([k, v]: any) =>
-    ({ name: k, optional: v.isOptional?.() ?? false }))
-})), null, 1));
-TS
-```
+I tool per **modificare** un carosello non ci sono di proposito, e la ragione è nel piano sopra: se
+`generate_carousel` restituisce N id di media, l'array è dell'agente. Riordinare è l'ordine degli
+argomenti a `create_post`, togliere è ometterne uno, cambiare una slide è `refine_image` sul suo id,
+aggiungerne una è `generate_image` con i `continuity_tokens` che il carosello ha restituito.
 
-Gli 11 registrati a mano non passano di lì: stanno in `cli/mcp/tools/`, e la ragione per cui
-`list_brands` resta a mano è scritta in `cli/mcp/tools/auth.ts` — il registro è scoped sul brand,
-e un secondo registro per un endpoint solo costerebbe più di quello.
+`regenerate_slide` e `reorder_slides` esistono perché **un post possiede le sue slide** e l'agente
+non può toccarle direttamente. Senza post quel vincolo non c'è.
