@@ -24,14 +24,20 @@ export type { LinkedInOrg, PendingOAuthData, FacebookPage };
 
 type BrandRef = { id: string; name: string; zernio_profile_id: string | null };
 
-export async function ensureBrandProfile(supabase: SupabaseClient, brand: BrandRef): Promise<string> {
+/**
+ * Written with the service role and not with the caller's session: this id is the profile the brand
+ * publishes THROUGH, so another tenant's value on this row would inherit their connected accounts.
+ * `20260905210000_self_write_columns.sql` keeps `authenticated` out of the column.
+ */
+export async function ensureBrandProfile(brand: BrandRef): Promise<string> {
   if (brand.zernio_profile_id) return brand.zernio_profile_id;
 
   const profileId = await publisher.createProfile({
     name: `Anomalia · ${brand.name}`,
     description: `Anomalia brand ${brand.id}`
   });
-  await supabase.from('brands').update({ zernio_profile_id: profileId }).eq('id', brand.id);
+  const { createAdminClient } = await import('./supabase-admin');
+  await createAdminClient().from('brands').update({ zernio_profile_id: profileId }).eq('id', brand.id);
   return profileId;
 }
 

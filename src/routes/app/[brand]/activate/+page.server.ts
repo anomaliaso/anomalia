@@ -50,7 +50,7 @@ export const actions: Actions = {
     if (!brand) throw redirect(303, '/app');
 
     const checkoutUrl = await createCheckoutSession({
-      customerId: await ensureBrandCustomer(supabase, brand),
+      customerId: await ensureBrandCustomer(brand),
       brandId: brand.id,
       plan,
       priceId,
