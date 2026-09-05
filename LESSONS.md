@@ -1161,3 +1161,29 @@ rifiuto, così un percorso nuovo che si dimentica di marchiarsi resta chiuso inv
 
 Quattro occorrenze trovate solo perché qualcuno è andato a cercarle: la quinta arriverà, e allora
 il costo di questa lezione è già stato pagato.
+## Il fatto che ti passa un altro agente è un'affermazione, non una prova
+
+**Segnale.** Stai scrivendo una descrizione — o un commento, o un test — su un fatto che non hai
+letto tu, ma che ti è arrivato da chi sta lavorando su quel codice. Sembra la fonte migliore
+possibile: è l'unica persona che lo sta toccando.
+
+**Cosa succede.** In una sessione con quattro agenti sullo stesso contratto, un fatto è girato
+tre volte e si è rivelato falso alla terza. «Il renderer video non ha un canale per lo stile
+visivo»: su quella base ho scritto *«The brand's look does not reach a clip filmed from a prompt
+alone»*, che sarebbe finita in `tools/list`. `RenderVideoOpts.visualStyle` esiste
+(`src/lib/server/video.ts:331`) ed entra nel prompt sul ramo text-to-video (`video.ts:481`). Il
+fatto vero era un altro e più stretto: `startVideo` non lo passava sul percorso MCP mentre il
+percorso dei post sì — un difetto di comportamento, non un'assenza di progetto.
+
+Una descrizione falsa è peggio di una descrizione vaga: quella vaga fa cercare altrove, quella
+falsa fa smettere di cercare. Ed è esattamente il difetto che questo lavoro esisteva per chiudere.
+
+**Mossa.** Il fatto si verifica al call site prima di scriverci sopra una frase, anche quando
+arriva da chi ha le mani in quel file: `grep` del campo, lettura del ramo, e il commento accanto
+alla definizione — in quel caso diceva già tutto («Solo nel prompt di ripiego TEXT-TO-VIDEO: con
+una cover allegata lo stile è già nei pixel», `video.ts:330`). Costa un minuto e vale quanto la
+frase che stai per spedire a ogni agente che userà il prodotto.
+
+**Corollario.** Vale in entrambe le direzioni: un fatto che passi tu a un altro agente va marcato
+per quello che è. «Verificato in `file:riga`» e «me l'hanno detto» non sono la stessa cosa, e chi
+riceve non può distinguerle se non gliele distingui tu.
