@@ -36,6 +36,7 @@ nothing brings it back.
 | `generate_media` | (MCP only) |
 | `generate_image` | (MCP only) |
 | `refine_image` | (MCP only) |
+| `generate_video` | (MCP only) |
 | `check_media_job` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
@@ -144,6 +145,21 @@ asset — the original is never overwritten, so a refinement cannot destroy what
 Required: `slug`, `media_id` (from `list_media`, and it must belong to this brand — anything else
 is `source_not_found`), `instruction`. Say what should CHANGE, not what the whole picture should
 be. Refining has its own model slot, `imageRefineModel`.
+
+`generate_video` films a NEW clip into the library. Required: `slug`, `prompt`; optional
+`base_media_id`, `duration`, `aspect_ratio`, `model`, `title`. **`base_media_id` pointing at a
+library IMAGE is how you animate a photo** — the image becomes the clip's first frame, so subject,
+scene and style come from those pixels and the prompt directs the movement only. Without it the clip
+is filmed from the prompt alone. It creates nothing in the calendar; when the clip lands, pass its
+`media_id` to `create_post`.
+
+A clip takes minutes, so this returns `status: rendering` and a `job_id`, and `check_media_job` says
+when it is done — do not call it again for the same clip while one is rendering, that bills a second.
+Animating and filming are two different jobs with two different model lists (`videoImageModel` and
+`videoModel`): a model valid for one is refused for the other with `model_not_for_slot` and the
+accepted list. Refusals: `source_not_found` (404) means the id is not this brand's or does not
+resolve to one asset; `source_not_an_image` (400) means it exists but is a video;
+`video_budget_exhausted` (400) counts the clips still rendering, not just the ones that landed.
 
 **Choosing the model.** Every generator takes an optional `model` that applies to **that call
 only** and changes no brand setting — that is the difference from `set_media_model`, which is "from
