@@ -99,7 +99,10 @@ export const CREATE_POST = {
 export const LIST_POSTS = {
   tool: 'list_posts',
   title: 'List posts',
-  description: 'Posts for a brand, newest first, with an optional status filter.',
+  description:
+    'The brand\'s posts, newest first. Filter by `status` to find what is waiting for a person ' +
+    'to approve it (`pending_user`), what is scheduled, or what already went out. get_post ' +
+    'opens one in full. Reads only — no model, no credits.',
   method: 'GET',
   pathUnderBrand: '/posts',
   input: z.object({
@@ -129,7 +132,9 @@ const NotFound = z.object({ error: z.string() });
 export const GET_POST = {
   tool: 'get_post',
   title: 'Get post',
-  description: 'Show a single post including carousel slides / media state. id accepts a short prefix.',
+  description:
+    'Open one post in full: its copy, its status, and the state of its image, video or ' +
+    'carousel slides. Reads only — no model, no credits. id accepts a short prefix.',
   method: 'GET',
   pathUnderBrand: '/posts/:id/media',
   resource: 'post',
@@ -142,7 +147,10 @@ export const GET_POST = {
 export const RESCHEDULE_POST = {
   tool: 'reschedule_post',
   title: 'Reschedule post',
-  description: 'Reschedule a post. scheduled_for is an ISO datetime. id accepts a short prefix.',
+  description:
+    'Move a post to a different date and time. `scheduled_for` is an ISO datetime. It does ' +
+    'not publish and does not approve — it only changes when. No model, no credits. id ' +
+    'accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/reschedule',
   resource: 'post',
@@ -162,7 +170,10 @@ export const RESCHEDULE_POST = {
 export const RENDER_POST = {
   tool: 'render_post',
   title: 'Render post image',
-  description: 'Generate the missing image from the prompt. Bills a render. id accepts a short prefix.',
+  description:
+    'Draw the image a post is missing, from the prompt already written on it, and attach it. ' +
+    'It spends credits: one render. To draw a picture that is not tied to a post, use ' +
+    'generate_image. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/render',
   resource: 'post',
@@ -179,8 +190,9 @@ export const GET_CALENDAR = {
   tool: 'get_calendar',
   title: 'Calendar',
   description:
-    'Content calendar for one month. Dated posts appear in the month they are dated for; ' +
-    'undated drafts come back flagged isDraft.',
+    'What this brand is posting and when, for one month. Posts with a date appear in the ' +
+    'month they are dated for; drafts with no date come back flagged `isDraft`. Reads only — ' +
+    'no model, no credits.',
   method: 'GET',
   pathUnderBrand: '/calendar',
   input: z.object({
@@ -366,11 +378,12 @@ export const CHECK_MEDIA_JOB = {
   tool: 'check_media_job',
   title: 'Check a media generation job',
   description:
-    'Where the videos generate_media started have got to, newest first. status is rendering while ' +
-    'the clip is being made, done once it is in the library — and then media_id is the id ' +
-    'create_post accepts as media_ids. failed says why. not_in_library means the clip was ' +
-    'rendered and paid for but never filed, so there is no media_id and a second render buys ' +
-    'a second copy. Calls no model and spends no credits.',
+    'Where a video you started has got to — the ones from generate_video or generate_media, ' +
+    'newest first. `status` is `rendering` while the clip is being made and `done` once it is ' +
+    'in the library; then `media_id` is the id create_post accepts as `media_ids`. `failed` ' +
+    'says why. `not_in_library` means the clip was rendered and paid for but never filed, so ' +
+    'there is no media_id and rendering it again buys a second copy. Poll this rather than ' +
+    'starting the clip again. No model, no credits.',
   method: 'GET',
   pathUnderBrand: '/media/generate',
   input: z
@@ -408,7 +421,10 @@ export const REGENERATE_POST_MEDIA = {
   tool: 'regenerate_post_media',
   title: 'Regenerate post media',
   description:
-    'Refine a single image with an instruction (bills one render). id accepts a short prefix.',
+    'Change the image already on a post, in place — give an instruction like "make it ' +
+    'warmer", not a whole new prompt. The old image is REPLACED. It spends credits: one ' +
+    'render. To change a library image and keep the original, use refine_image, which files ' +
+    'the result as a new asset instead. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/regenerate',
   resource: 'post',
@@ -424,7 +440,9 @@ export const REGENERATE_SLIDE = {
   tool: 'regenerate_slide',
   title: 'Regenerate carousel slide',
   description:
-    'Re-render one carousel slide (index 0 = cover). Bills a render. id accepts a short prefix.',
+    'Redraw one slide of a carousel — index 0 is the cover. Only that slide changes. It ' +
+    'spends credits: one render. reorder_slides moves or drops slides for free. id accepts a ' +
+    'short prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/slide',
   resource: 'post',
@@ -448,7 +466,9 @@ export const REORDER_SLIDES = {
   tool: 'reorder_slides',
   title: 'Reorder carousel slides',
   description:
-    'Reorder or drop slides without rendering. order is e.g. [0,2,1]. id accepts a short prefix.',
+    'Change the order of a carousel\'s slides, or drop some, without redrawing anything and ' +
+    'without spending credits. `order` lists the slides you want kept, in the order you want ' +
+    'them: [0,2,1]. Anything left out is dropped. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/order',
   resource: 'post',
@@ -502,8 +522,11 @@ export const EDIT_POST = {
   tool: 'edit_post',
   title: 'Edit post',
   description:
-    'Edit post fields without rendering (no credits). Editing a scheduled post re-syncs to ' +
-    'Zernio. id accepts a short prefix.',
+    'Change what a post says without redrawing anything: caption, title, link, platforms, the ' +
+    'slot it sits in. Only the fields you send change; `media_url: null` clears the image and ' +
+    'makes it text-only. No model, no credits. A post that is already scheduled is re-synced ' +
+    'to the publisher automatically. It does not publish and does not approve. id accepts a ' +
+    'short prefix.',
   method: 'PUT',
   pathUnderBrand: '/posts/:id',
   resource: 'post',

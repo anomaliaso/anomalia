@@ -207,6 +207,15 @@ access to the brand.
 
 **Blog draft** → `generate_article` → optional `optimize_article` → `publish_article` when asked.
 
+**Make the copy sound like this brand** → `get_voice` for how it is supposed to sound — mood,
+tone, register, the words it avoids, the rules that change per platform — and `update_voice` to
+change any of them. This is the brand; `get_writing_skills` is the craft. Read both before writing.
+
+**Do ChatGPT, Perplexity and Google's AI mention this brand?** → `get_geo` reads the last answer
+for free: share of voice, which answers cited the brand, and fixes already written. `geo_action`
+with `audit` asks the engines again and `fix` writes the pages that would get it cited — both
+spend credits. `list_audit_citations` is the question-by-question evidence behind the number.
+
 **Back a SEO/GEO claim with the audit behind it** → `list_web_audits` to see every audit →
 `get_audit_findings` for what one of them observed → `list_audit_citations` for the probes behind
 the share of voice (engine, question asked, verdict, domains cited) → `list_web_fixes` for the fix

@@ -8,14 +8,12 @@ const MIGRATED_READS = [
   {
     name: 'get_plan',
     title: 'Editorial plan',
-    description: 'View active editorial plan and any pending proposal.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'get_weekly_plan',
     title: 'Weekly plan',
-    description: 'View weekly plan seeds and related posts.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
@@ -24,11 +22,6 @@ const MIGRATED_READS = [
     title: 'Studio',
     // Cambiata di proposito, due volte: l'elenco dei documenti dice se sono stati digeriti, e il
     // testo non viaggia più per difetto — `documents: "full"` lo restituisce a chi lo leggeva.
-    description:
-      'Full studio dump: kit, people, documents, competitors, products, history summary. ' +
-      'Each document carries `status` and `chunkCount` (a document that is not `ready` with at least one chunk exists here but is invisible to `search_knowledge`) and `textBytes`, which says how much text it holds. ' +
-      'The text itself is NOT included: to answer a question, ask `search_knowledge` — it returns the passages that answer it with the document each came from, instead of the whole corpus. ' +
-      '`documents: "full"` restores the complete text of every document; it exists for callers that were reading it before and is almost never what you want.',
     properties: {
       slug: SLUG_PROPERTY,
       documents: {
@@ -42,35 +35,30 @@ const MIGRATED_READS = [
   {
     name: 'get_seo',
     title: 'SEO overview',
-    description: 'Tech score, search performance, SEO grade and initiatives.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'get_geo',
     title: 'GEO overview',
-    description: 'AI visibility: share of voice, citations, ready fixes.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'get_keywords',
     title: 'Keywords',
-    description: 'Keyword strategy: volume, difficulty, opportunity, action.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'get_ads',
     title: 'Ads overview',
-    description: 'Ad campaigns summary, candidates, and connected ad accounts.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'list_articles',
     title: 'List blog articles',
-    description: 'List web/blog articles. status: draft, scheduled, published, or all.',
     properties: {
       slug: SLUG_PROPERTY,
       status: { type: 'string', enum: ['draft', 'scheduled', 'published', 'all'] },
@@ -80,28 +68,24 @@ const MIGRATED_READS = [
   {
     name: 'get_analytics',
     title: 'Analytics',
-    description: 'Brand analytics: totals, engagement, recent activity.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'get_gtm',
     title: 'GTM roadmap',
-    description: 'View the go-to-market roadmap for a brand.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'get_voice',
     title: 'Voice rules',
-    description: 'View brand voice framework and platform rules.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
   {
     name: 'list_products',
     title: 'List products',
-    description: 'List products in the brand catalog.',
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
@@ -143,14 +127,18 @@ const find = (all: Tool[], name: string): Tool => {
 };
 
 describe('le letture migrate sul registry', () => {
-  test('restano identiche dall’esterno: titolo, descrizione, campi, obbligatori', async () => {
+  // La descrizione NON si confronta qui, e la copia in questo file non esiste piu`: sarebbe la
+  // stessa prosa scritta in due posti, che diverge alla prima riscrittura. Il confronto vero e`
+  // automatico e sta piu` sotto — `ogni endpoint del registry esiste in tools/list come lo
+  // dichiara` legge la descrizione DAL registry, quindi non puo` invecchiare. Qui resta la forma:
+  // titolo, campi, obbligatori, annotazioni, cioe` cio` che si rompe in silenzio.
+  test('restano identiche dall’esterno: titolo, campi, obbligatori', async () => {
     const all = await tools();
 
     for (const expected of MIGRATED_READS) {
       const tool = find(all, expected.name);
 
       expect(tool.title, expected.name).toBe(expected.title);
-      expect(tool.description, expected.name).toBe(expected.description);
       expect(tool.inputSchema?.properties, expected.name).toEqual(expected.properties);
       expect(tool.inputSchema?.required ?? [], expected.name).toEqual([...expected.required]);
     }

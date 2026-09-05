@@ -13,7 +13,10 @@ export const GET_GSC = {
   tool: 'get_gsc',
   title: 'Search Console',
   description:
-    'Google Search Console over the last 28 days: clicks, impressions, top queries and pages, and whether the property is connected.',
+    'How this brand\'s website does in Google search over the last 28 days: clicks, ' +
+    'impressions, the queries people arrived on and the pages they landed on — and whether ' +
+    'the property is connected at all. This is website traffic, not post engagement; that one ' +
+    'is get_analytics. Reads only — no model, no credits.',
   method: 'GET',
   pathUnderBrand: '/gsc',
   input: NoInput,
@@ -36,7 +39,9 @@ export const GET_RANKS = {
   tool: 'get_ranks',
   title: 'Rank tracking',
   description:
-    'Tracked keywords with their current Google position, the previous one, the move between them, the ranking URL and whether an AI Overview showed.',
+    'Where this brand actually sits in Google for the keywords it tracks: the current ' +
+    'position, the previous one, the move between them, the page that ranks, and whether an ' +
+    'AI Overview appeared above it. Reads only — no model, no credits.',
   method: 'GET',
   pathUnderBrand: '/ranks',
   input: NoInput,
@@ -79,7 +84,9 @@ export const GET_BACKLINKS = {
   tool: 'get_backlinks',
   title: 'Backlink network',
   description:
-    'Backlink network: links given and received, open give/receive opportunities, and whether the network is unlocked for this brand (Starter or above, plus opt-in).',
+    'Who links to this brand\'s site and who it links to, plus the exchanges still open and ' +
+    'whether the network is unlocked for this brand at all (Starter plan or above, and opted ' +
+    'in). Reads only — no model, no credits.',
   method: 'GET',
   pathUnderBrand: '/backlinks',
   input: NoInput,

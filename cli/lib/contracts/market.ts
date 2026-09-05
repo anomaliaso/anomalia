@@ -53,7 +53,9 @@ export const GET_MARKET_FIELD = {
   tool: 'get_market_field',
   title: 'Field watch',
   description:
-    "What moves in the brand's field: the topics being watched, the playbook distilled from them, and the catalogued posts with the teardown of why each one spread.",
+    'What is moving in this brand\'s field right now: the topics being watched, the pattern ' +
+    'distilled from them, and the posts catalogued with a teardown of why each one spread. ' +
+    'Reads what was already gathered — no model, no credits.',
   method: 'GET',
   pathUnderBrand: '/market/field',
   input: z.object({ limit: limitUpTo(MARKET_FIELD_MAX, MARKET_FIELD_DEFAULT) }).strict(),
@@ -123,7 +125,10 @@ export const LIST_IDEAS = {
   tool: 'list_ideas',
   title: 'Idea bank',
   description:
-    'Disruptive ideas saved for this brand. Omit status for the ones still usable (new and shortlisted); pass all, or one status, to see the rest.',
+    'Ideas saved for this brand that nobody has used yet — the sharp ones, kept so they are ' +
+    'not lost between conversations. Omit `status` for the ones still usable (new and ' +
+    'shortlisted); pass `all`, or one status, to see the rest. Reads only — no model, no ' +
+    'credits.',
   method: 'GET',
   pathUnderBrand: '/ideas',
   input: z

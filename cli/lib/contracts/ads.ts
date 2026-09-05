@@ -18,9 +18,12 @@ export const ADS_REMIX = {
   tool: 'ads_remix',
   title: 'Ads remix',
   description:
-    'Harvest competitor/trending ads, analyze with vision, and return ranked remix briefs in ' +
-    'brand voice (hook, headline, body, CTA, product, visualPrompt). Replaces previous briefs. ' +
-    'Costs credits.',
+    'Find the ads that are working — competitors\' and the ones trending in this market — look ' +
+    'at them, and come back with ranked briefs for ads of your own: hook, headline, body, ' +
+    'call to action, product, and a prompt for the picture. It spends credits, and it ' +
+    'replaces the briefs from last time. It creates no ad and launches nothing: ads_action is ' +
+    'what does that. `no_competitor_ads` means there was nothing to learn from — add ' +
+    'competitors first.',
   method: 'POST',
   pathUnderBrand: '/ads/remix',
   input: z.object({}).strict(),
@@ -39,10 +42,12 @@ export const ADS_ACTION = {
   tool: 'ads_action',
   title: 'Ads action',
   description:
-    'Run an ads action. Common actions: sync, propose, create, reject, pause, resume, toggle, ' +
-    'duplicate, delete. Pass campaignId; for a single creative add adId (and next active|paused ' +
-    'for toggle). duplicate creates a paused copy as a new proposal; approve it to launch. Pass ' +
-    'extra fields as needed.',
+    'Change the brand\'s paid campaigns: `sync` pulls the current state from the advertising ' +
+    'account, `propose` has the AI draft new ads, then `create`, `reject`, `pause`, `resume`, ' +
+    '`toggle`, `duplicate` and `delete` act on what is there. Pass `campaignId`, and `adId` ' +
+    'in `extra` when it is one creative (`next` is active or paused for `toggle`). ' +
+    '`duplicate` makes a paused copy as a new proposal — approving it is what launches it. ' +
+    'Read get_ads first: `ads_not_on_plan` means this brand\'s plan has no advertising at all.',
   method: 'POST',
   pathUnderBrand: '/ads',
   input: z
