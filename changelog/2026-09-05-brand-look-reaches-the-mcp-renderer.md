@@ -94,5 +94,18 @@ legge dopo.
   persone citabili per id** sono i punti 2 e 3 del brief, e stanno in un'altra PR.
   Il punto 1 vale da solo: le immagini del brand smettono di essere generiche
   senza che nessuno debba chiedere niente.
-- **`generate_video` non è toccato.** Il renderer video non ha un canale per lo
-  stile visivo: la sua strada passa da `video_renders` e dalle sue preferenze.
+- **`generate_video` ha lo stesso buco, e si chiude qui.** `RenderVideoOpts` un
+  canale per lo stile visivo ce l'ha sempre avuto, e il percorso dei post lo
+  riempie (`create-single/+server.ts` passa `visualStyle: profile.visual_style`).
+  `startVideo` no: un clip chiesto da MCP tornava con lo stile di nessuno. Ora
+  legge `brand_kit.visual_style` e lo passa — con una copertina il renderer lo
+  scarta di proposito, perché il look sta già nei pixel del frame da animare, e
+  quel comportamento non è stato toccato.
+
+- **`brand_style` non c'è su `generate_video`, `generate_carousel` e
+  `generate_media`, ma la sua assenza è dichiarata.** Un carosello per definizione
+  è una serie del brand; `generate_media` è la porta storica; su un clip
+  l'interruttore avrebbe un solo ramo dove significa qualcosa. Quello che serviva
+  davvero era una frase per ciascuno che dice che l'interruttore lì non c'è —
+  senza, un agente lo cerca, e il costo di un'asimmetria è la ricerca, non
+  l'asimmetria.

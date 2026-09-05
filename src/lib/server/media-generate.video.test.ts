@@ -27,6 +27,7 @@ vi.mock('$lib/server/ai-log', () => ({ withBrandContext: <T>(_b: string, fn: () 
 
 const FULL_ID = '11111111-2222-3333-4444-555555555555';
 const COVER = 'https://signed.test/gatto-bianco.png';
+const VISUAL_STYLE = 'monochrome editorial, hard light';
 
 let mediaRows: Array<{ id: string; kind: string }> = [];
 
@@ -41,7 +42,9 @@ const admin = {
                 data:
                   table === 'brands'
                     ? { plan: 'pro', timezone: 'Europe/Rome', content_prefs: {} }
-                    : { id: 'job-1' },
+                    : table === 'brand_kit'
+                      ? { visual_style: VISUAL_STYLE }
+                      : { id: 'job-1' },
                 error: null
               })
             }
@@ -66,6 +69,15 @@ const run = async (over: Record<string, unknown> = {}) => {
     ...over
   } as never);
 };
+
+describe('lo stile visivo del brand su un clip', () => {
+  it('filmando da un prompt, lo stile del brand arriva al fornitore', async () => {
+    await run({ durationSeconds: 12 });
+
+    const sent = submitAndTrackVideoRender.mock.calls[0][0];
+    expect(sent.render.visualStyle).toBe(VISUAL_STYLE);
+  });
+});
 
 describe('animare un immagine della libreria', () => {
   it('la foto di partenza arriva al fornitore come copertina', async () => {

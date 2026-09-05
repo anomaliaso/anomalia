@@ -422,6 +422,19 @@ function videoAspect(ratio?: AspectRatio) {
   return VIDEO_ASPECTS.find((a) => a === ratio);
 }
 
+async function brandVisualStyle(
+  admin: SupabaseClient,
+  brandId: string
+): Promise<string | undefined> {
+  const { data } = await admin
+    .from('brand_kit')
+    .select('visual_style')
+    .eq('brand_id', brandId)
+    .maybeSingle();
+
+  return (data?.visual_style as string | null) || undefined;
+}
+
 async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult> {
   const [{ createAdminClient }, { countOutstandingVideoRenders, submitAndTrackVideoRender }] =
     await Promise.all([
@@ -436,6 +449,8 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     .eq('id', opts.brandId)
     .maybeSingle();
   const prefs = (brand?.content_prefs ?? {}) as Record<string, string | number | null>;
+
+  const visualStyle = await brandVisualStyle(admin, opts.brandId);
 
   // Animare una foto e filmare da un prompt sono due MESTIERI, e il catalogo lo sa gia': lo slot
   // cambia, quindi cambia anche l'elenco dei modelli ammessi. Sceglierne uno solo accetterebbe un
@@ -514,6 +529,7 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
       // e il prompt dirige il MOVIMENTO.
       imageUrl: coverUrl,
       duration: opts.durationSeconds ?? (prefs.videoDuration as number | undefined),
+      visualStyle,
       instructions: prefs.videoInstructions as string | null | undefined,
       resolution: prefs.videoResolution as string | null | undefined,
       model:

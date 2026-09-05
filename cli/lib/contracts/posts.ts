@@ -323,7 +323,9 @@ export const GENERATE_MEDIA = {
     'It spends credits. It creates nothing in the calendar and publishes nothing; pass the id ' +
     'you keep to create_post as media_ids. Images come back ready, up to ' +
     MAX_MEDIA_ALTERNATIVES + ' per call; a clip takes minutes and returns a job_id, and ' +
-    'check_media_job says when it landed — calling this again for the same clip bills a second one.',
+    'check_media_job says when it landed — calling this again for the same clip bills a second one.' +
+    "With a slug, this brand's look is applied, and it cannot be switched off from this door: " +
+    'generate_image takes brand_style for that.',
   method: 'POST',
   pathUnderBrand: '/media/generate',
   input: z
@@ -814,7 +816,9 @@ export const GENERATE_CAROUSEL = {
     'CHANGE ONE SLIDE use ' +
     'refine_image on that slide id, and put the continuity_tokens this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
-    'light or the recurring motif without them takes that slide out of the set.',
+    'light or the recurring motif without them takes that slide out of the set. ' +
+    "With a slug, this brand's look is applied to every slide, and there is no way to switch it " +
+    "off here: a series that is not the brand's is not a series.",
   method: 'POST',
   pathUnderBrand: '/media/carousel',
   input: z
