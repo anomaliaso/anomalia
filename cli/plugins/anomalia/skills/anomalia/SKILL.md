@@ -97,6 +97,11 @@ still has its image the day the original link dies.
 **Draw a new image** → `generate_image` with a prompt. It bills a render per image and creates
 nothing in the calendar, so ask for two or three with `count`, look at them, keep one.
 
+**Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
+returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
+To fix a single slide afterwards, `refine_image` on its id **with those tokens in the instruction** —
+without them that slide drifts out of the series.
+
 **Animate an image you already have** → `generate_video` with its `base_media_id`. That is how
 "make a 5s clip of this photo" works, and it needs **no post**: the clip lands in the library and
 `create_post` takes its id as `media_ids`. `make_video` still exists but only attaches a clip to an

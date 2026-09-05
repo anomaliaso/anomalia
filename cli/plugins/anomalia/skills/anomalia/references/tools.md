@@ -59,6 +59,7 @@ with `error`, `message` and often `fix` inside, so you can read why and change m
 | `generate_image` | (MCP only) |
 | `refine_image` | (MCP only) |
 | `generate_video` | (MCP only) |
+| `generate_carousel` | (MCP only) |
 | `check_media_job` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |
@@ -192,6 +193,18 @@ names the nearest it accepts. A refusal from the provider comes back as `render_
 `reason`** saying what it objected to — read it before retrying, because retrying the same request
 buys the same refusal. The success response carries `duration_seconds`, the seconds actually
 submitted: a clip is billed per second, so read it rather than assuming your number was taken.
+
+`generate_carousel` draws a SERIES that reads as one object. Required: `slug`, `brief`; optional
+`slides` (3-8), `aspect_ratio`, `model`, `title`. **It bills a render per slide** — five slides is
+five renders — and files them in order, slide 1 first. Pass the ids to `create_post` as `media_ids`
+in that order.
+
+The response carries `continuity_tokens`: the 2-3 literal tokens — palette words, a recurring motif,
+a lighting phrase — repeated verbatim in every slide prompt. They are what makes it a series rather
+than N unrelated pictures. **To change one slide, use `refine_image` on that slide's id and put those
+tokens back into the instruction**; an edit touching palette, light or the motif without them takes
+that slide out of the set, and nothing warns you. There is no separate slide tool: `refine_image`
+edits the pixels you already have, which holds continuity better than re-prompting from scratch.
 
 **Choosing the model.** Every generator takes an optional `model` that applies to **that call
 only** and changes no brand setting — that is the difference from `set_media_model`, which is "from
