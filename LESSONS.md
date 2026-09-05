@@ -738,6 +738,49 @@ dove non lo è: resta non fatale, smette di essere muto.
 vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
 risolto.
 
+## Il vocabolario di una colonna non si decide senza sapere CHI la legge
+
+**Segnale.** Una correzione ovvia: un valore fuori dall'enum, sostituito con quello «giusto»
+guardando la costante. Nessun test rosso, il vincolo passa, la PR sembra più pulita di prima.
+
+**Cosa succede.** `posts.content_type` sembrava nomenclatura, e `post-from-asset.ts` ci scriveva
+`image` e `carousel` — che sono FORMATI, non tipi. Sostituirli con `uploaded_image` era corretto
+guardando `POST_CONTENT_TYPES` e sbagliato guardando `publish.ts:380`, che fa
+`aiGeneratedMedia: !content_type.startsWith('uploaded')`: quel prefisso **è** la dichiarazione di
+contenuto AI al momento della pubblicazione. Prima di quella modifica tutte e tre le forme
+dichiaravano; dopo, immagini e caroselli presi dalla libreria smettevano di dichiarare. Un enum
+allineato e una conformità spenta, nello stesso commit, senza un solo test rosso — perché nessun
+test lega il prefisso di una stringa a ciò che viene dichiarato a un social.
+
+**La mossa.** Prima di cambiare un valore in una colonna, `grep` di chi la **legge**, non solo di
+chi la scrive — e in particolare di chi ne legge un *pezzo* (`startsWith`, `includes`, uno `split`),
+perché quello non compare cercando il valore intero. Se un lettore ne ricava una decisione di
+conformità, di pagamento o di pubblicazione, il valore non è nomenclatura: è un contratto, e la
+riga accanto va letta prima di toccarlo. Il default in caso di dubbio lo dice già il commento
+accanto a quella riga: sovra-dichiarare non è un rischio, sotto-dichiarare sì.
+
+**Il corollario sul metodo.** A trovarlo non è stato un vincolo né la suite: è stato un altro
+agente che leggeva la riga accanto per un lavoro diverso. Due letture indipendenti dello stesso
+codice hanno preso due difetti (questo e il 42P10 qui sotto) che nessuna delle due suite vedeva.
+
+## Un `upsert` con `onConflict` senza indice unico non scrive, e non lo dice
+
+**Segnale.** Una funzione riporta di aver salvato N righe e la tabella non le ha. Nessun log,
+nessuna eccezione, il chiamante riceve un risultato positivo.
+
+**Cosa succede.** `onConflict: 'brand_id,name'` esige un indice UNIQUE su quella coppia. Se non
+c'è, Postgres risponde **42P10** (*no unique or exclusion constraint matching the ON CONFLICT
+specification*) e `supabase-js` **risolve** con `{ error }` — non rigetta. Una chiamata che non
+destruttura `error` non se ne accorge: su `competitors` esisteva solo `competitors_brand_idx`, che
+è un indice normale, e il job «ri-cerca i concorrenti» riportava i concorrenti trovati scrivendo
+zero righe. Non è un caso raro: `create index` e `create unique index` si leggono uguali di
+sfuggita, e l'`onConflict` viene scritto guardando le colonne, non gli indici.
+
+**La mossa.** Ogni `onConflict` va verificato contro `pg_indexes` della tabella, non contro
+l'intenzione: `select indexdef from pg_indexes where tablename = '<t>'` e cercare `UNIQUE`. È una
+riga di SQL contro un difetto che non lascia tracce. E l'errore va **letto**: `const { error } =
+await supabase.from(...).upsert(...)`, sempre — vale per il 42P10 come per il 23514.
+
 ## Un `catch` muto su un percorso di ricavi nasconde il difetto finché non lo cerchi a mano
 
 **Segnale.** Nessun errore, nessun allarme, tutto verde — e un limite che non limita niente. Qui:
