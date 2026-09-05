@@ -921,3 +921,34 @@ indipendenti: due dicevano «la patch non applica», il terzo «il pacchetto non
 sintomi di **una causa sola** — l'albero di `node_modules` rotto — e nessuno dei tre parlava delle
 patch. Dopo un `npm install` pulito applicano tutte e tre. Più errori insieme invitano a
 concludere; guarda invece se hanno un antenato comune.
+
+## Il catalogo di un gateway non elenca le sue superfici separate
+
+Tre volte in un giorno abbiamo concluso «OpenRouter non lo fa» interrogando `GET /api/v1/models`,
+e tre volte era falso. I **video** non compaiono lì: stanno su `POST /api/v1/videos` con catalogo
+proprio su `GET /api/v1/videos/models`, 28 modelli. Il **text-to-speech** non compare lì:
+`google/gemini-3.1-flash-tts-preview` vive su `POST /api/v1/audio/speech` e risponde
+`audio/pcm; rate=24000; channels=1`, esattamente il formato che il nostro tagliatore pretende.
+
+Il costo delle tre volte: una famiglia di tool video rimandata come impossibile, un `MISSING` che
+dichiarava `tts` assente su openrouter mentre funzionava, e un'ora spesa a cercare un ripiego per
+un limite che non c'era.
+
+**Segnale**: un catalogo interrogato per modalità risponde «zero» per una capacità che il
+fornitore documenta o pubblicizza. Un `GET` su un endpoint che vuole `POST` risponde 404, che si
+legge identico a «non esiste».
+
+**Mossa**: chiama il modello sull'endpoint che credi sbagliato e **leggi l'errore per intero** —
+un gateway ben fatto ti dice dove sta la superficie giusta:
+
+> `google/gemini-3.1-flash-tts-preview is a text-to-speech model and cannot be used with the
+> chat/completions endpoint. Use the /api/v1/audio/speech endpoint instead.`
+
+Vale anche per il messaggio che rifiuta un parametro: `does not support 'wav' when stream=true.
+Supported values are: 'pcm16'` conteneva già la risposta, e chi si è fermato alla parola
+«rifiutato» ha concluso che la voce non si potesse spostare.
+
+**La regola dietro**: «l'ho cercato e non c'è» non è una misura finché non sai **dove** hai
+cercato. Un'assenza va dichiarata con l'endpoint interrogato accanto, o è un'opinione travestita
+da fatto — e finisce in `MISSING`, dove la testata promette «fatti misurati, non ipotesi di
+listino».
