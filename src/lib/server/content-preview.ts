@@ -43,6 +43,7 @@ export {
   isProduceApproved,
   loadBrandLogoImagePart,
   loadBrandMoodImageUrls,
+  loadBrandVisualContext,
   loadCompetitorThumbUrls,
   loadPlannerMarketSignals,
   markProduceApproved,
@@ -51,7 +52,7 @@ export {
   scrubPersonAppearance,
   uploadPostImage
 } from './content-preview/images';
-export type { AspectRatio, RenderImageOpts } from './content-preview/images';
+export type { AspectRatio, BrandVisualContext, RenderImageOpts } from './content-preview/images';
 
 export {
   editArticleImage,

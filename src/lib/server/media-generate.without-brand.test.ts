@@ -17,6 +17,7 @@ const storeBrandMediaBytes = vi.fn();
 const signKnowledgePaths = vi.fn();
 const withBrandContext = vi.fn();
 const withOrgContext = vi.fn();
+const loadBrandVisualContext = vi.fn();
 
 const PNG_DATA_URL = 'data:image/png;base64,AAAA';
 
@@ -24,7 +25,8 @@ let billedUsd: number | undefined;
 
 vi.mock('$lib/server/content-preview', () => ({
   renderPostImage: (...args: unknown[]) => renderPostImage(...args),
-  buildImageRequest: (_prompt: string, opts: { model?: string }) => ({ model: opts.model ?? null })
+  buildImageRequest: (_prompt: string, opts: { model?: string }) => ({ model: opts.model ?? null }),
+  loadBrandVisualContext: (...args: unknown[]) => loadBrandVisualContext(...args)
 }));
 vi.mock('$lib/server/brand-media', () => ({
   loadLibraryMediaParts: async () => [],
@@ -88,6 +90,17 @@ describe('disegnare senza un brand', () => {
     const out = await generateImagesWithoutBrand(supabaseThatHasNoBrands(), job);
 
     expect(out.ok).toBe(true);
+  });
+
+  it('nessun aspetto di brand entra nella richiesta: non c è un brand da cui prenderlo', async () => {
+    await generateImagesWithoutBrand(supabaseThatHasNoBrands(), job);
+
+    expect(loadBrandVisualContext).not.toHaveBeenCalled();
+
+    const opts = renderPostImage.mock.calls[0][2];
+    expect(opts.visualStyle).toBeUndefined();
+    expect(opts.brandLook).toBeUndefined();
+    expect(opts.logoImage).toBeUndefined();
   });
 
   it('addebita all organizzazione, che è chi paga quando nessun brand paga', async () => {

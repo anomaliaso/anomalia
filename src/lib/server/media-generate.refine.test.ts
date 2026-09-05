@@ -28,7 +28,8 @@ vi.mock('$lib/server/content-preview', () => ({
   renderPostImage: (...args: unknown[]) => renderPostImage(...args),
   buildImageRequest: (_prompt: string, opts: { baseImage?: unknown; refineModel?: string; model?: string }) => ({
     model: (opts.baseImage ? opts.refineModel : undefined) ?? opts.model ?? null
-  })
+  }),
+  loadBrandVisualContext: async () => ({})
 }));
 vi.mock('$lib/server/brand-media', () => ({
   loadLibraryMediaParts: (...args: unknown[]) => loadLibraryMediaParts(...args),

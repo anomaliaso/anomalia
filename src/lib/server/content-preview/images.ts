@@ -649,6 +649,47 @@ export async function loadMoodRefs(urls: string[] | undefined): Promise<ImagePar
   return parts.length ? parts : undefined;
 }
 
+export type BrandVisualContext = Pick<
+  RenderImageOpts,
+  'visualStyle' | 'visualPlaybook' | 'brandLook' | 'logoImage' | 'moodImages'
+>;
+
+export async function loadBrandVisualContext(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<BrandVisualContext> {
+  const { data: kit } = await supabase
+    .from('brand_kit')
+    .select('visual_style, ai_context, brand_colors, fonts, logos')
+    .eq('brand_id', brandId)
+    .maybeSingle();
+
+  const fonts = (Array.isArray(kit?.fonts) ? (kit.fonts as AnyRec[]) : [])
+    .map((f) => f?.name)
+    .filter(Boolean) as string[];
+
+  const [logoImage, moodImages] = await Promise.all([
+    loadBrandLogoImagePart(kit?.logos).catch((error) => {
+      swallow('load brand logo part', error);
+      return null;
+    }),
+    loadBrandMoodImageUrls(supabase, brandId)
+      .then(loadMoodRefs)
+      .catch((error) => {
+        swallow('load mood image urls', error);
+        return undefined;
+      })
+  ]);
+
+  return {
+    visualStyle: (kit?.visual_style as string | null) || undefined,
+    visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
+    brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fonts) || undefined,
+    logoImage: logoImage ?? undefined,
+    moodImages
+  };
+}
+
 // Larghezza fissa a 1080, altezza calcolata.
 const ASPECT_TARGETS: Record<AspectRatio, { w: number; h: number }> = {
   '1:1':  { w: 1080, h: 1080 },
