@@ -737,8 +737,7 @@ async function processResearch(
         if (visualPlaybook) baseContext = [baseContext, visualPlaybook].filter(Boolean).join('\n\n');
         profile.ai_context = baseContext;
 
-        const { XIAOMI_ULTRASPEED_MODEL, AI_PROVIDER } = await import('$lib/server/xiaomi');
-        const fastModel = AI_PROVIDER === 'xiaomi' ? XIAOMI_ULTRASPEED_MODEL : undefined;
+        const fastModel = undefined;
 
         const report = await synthesizeStrategyReport(
           ai,
@@ -802,8 +801,7 @@ async function processResearch(
       if (planInputs.visualStyle) profile.visual_style = planInputs.visualStyle;
       const strategyBrief = strategyBriefFromReport(report);
       const benchmark = researchData?.benchmark ?? null;
-      const { XIAOMI_ULTRASPEED_MODEL: ULTRASPEED, AI_PROVIDER: PROVIDER } = await import('$lib/server/xiaomi');
-      const planModel = PROVIDER === 'xiaomi' ? ULTRASPEED : undefined;
+      const planModel = undefined;
 
       await pushProgress('editorialPlan', 'Drafting your editorial plan…');
       const topPosts = planInputs.topPosts;

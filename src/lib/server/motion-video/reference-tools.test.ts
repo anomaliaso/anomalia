@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Il clip dentro il risultato di un tool e` una CAPACITA` DELL'ENDPOINT, non del modello: la
+// domanda passa dal registro. Senza una chiave la rotta ripiega su kie, che i media nei risultati
+// dei tool li scarta in silenzio — quindi qui si dichiara la rotta viva, altrimenti si misura il
+// ripiego invece della regola.
+vi.mock('$env/dynamic/private', () => ({ env: { OPENROUTER_API_KEY: 'o', KIE_API_KEY: 'k' } }));
+
 import { MOTION_REFERENCE_PROMPT, supportsClipInToolResult } from './reference-tools';
 
 describe('supportsClipInToolResult', () => {

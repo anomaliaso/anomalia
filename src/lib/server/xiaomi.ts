@@ -44,11 +44,7 @@ function toXiaomiContent(prompt: string, images?: ImagePart[]) {
 // "xiaomi che sta per prendere una sfilza di 401".
 const TEXT_ROUTE = route('text');
 export const AI_PROVIDER =
-  TEXT_ROUTE.provider === 'xiaomi'
-    ? 'xiaomi'
-    : TEXT_ROUTE.provider === 'kie' && TEXT_ROUTE.family !== 'gemini'
-      ? 'kie'
-      : 'gemini';
+  TEXT_ROUTE.provider === 'kie' && TEXT_ROUTE.family !== 'gemini' ? 'kie' : 'gemini';
 /**
  * Chi serve il testo DAVVERO, per la riga di boot. Non è la famiglia richiesta: da quando ogni
  * testo passa dal centralino, `AI_PROVIDER === 'gemini'` vuol dire "gateway", e la riga di prima
@@ -56,7 +52,6 @@ export const AI_PROVIDER =
  * diagnosi dalla parte sbagliata prima ancora di cominciare.
  */
 export function textRouteLabel(): string {
-  if (AI_PROVIDER === 'xiaomi') return `xiaomi (${XIAOMI_MODEL})`;
   if (AI_PROVIDER === 'kie') return `kie (${env.KIE_MODEL || 'grok-4-5'})`;
   if (!llmConfigured()) return 'not configured (LLM_API_KEY missing)';
   const host = llmBaseUrl().replace(/^https?:\/\//, '').split('/')[0];
