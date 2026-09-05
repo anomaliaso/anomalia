@@ -51,8 +51,22 @@ Setup details: [references/mcp.md](references/mcp.md).
    call `record_memory_used` with the ids that actually shaped your output. An entry nobody
    reports decays out of the prompts it was helping.
 6. Confirm before reject / delete / discard unless the user clearly asked.
+7. **A render is one shot.** Nothing looks at an image after the model draws it — no internal
+   critic, no automatic retry, no second attempt you did not ask for. **You** are the quality
+   control: open the `signed_url`, judge it, and when it is wrong call `refine_image` on that
+   asset. Prompting again buys a different picture at a second render's price.
 
 ## Quick workflows
+
+**The flow is linear**: generate the media → pass the id it returns to `create_post`. No post is
+needed to make an image or a clip, and nothing you generate reaches the calendar on its own.
+
+**When no tool answers the question** → `query`. It reads any table in the database **as you** —
+the request carries your own session, so Postgres returns exactly the rows the app would show you
+and nothing more. Read only, one table per call, no credits. Omit `table` to list what you can
+name; ask for a table with no `columns` and the keys of a row are the schema. Reach for it for a
+count, a join you do by hand, or a fact none of the tools below returns — instead of three calls
+that approximate it.
 
 **Before you write anything** → two reads, and they answer different questions.
 
