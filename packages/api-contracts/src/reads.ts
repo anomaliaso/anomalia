@@ -280,38 +280,6 @@ export const GET_ADS = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const LIST_ARTICLES = {
-  tool: 'list_articles',
-  title: 'List blog articles',
-  description:
-    'The blog articles this brand has, drafts included. status narrows to draft, scheduled or ' +
-    'published; all shows everything. get_article opens one in full, with its body. Reads ' +
-    'only — no model, no credits.',
-  method: 'GET',
-  pathUnderBrand: '/web',
-  input: z
-    .object({ status: z.enum(['draft', 'scheduled', 'published', 'all']).optional() })
-    .strict(),
-  output: z.object({
-    articles: z.array(
-      z.object({
-        id: z.string(),
-        slug: z.string(),
-        title: z.string(),
-        meta_title: z.string().nullable(),
-        meta_description: z.string().nullable(),
-        status: z.string(),
-        scheduled_for: z.string().nullable(),
-        published_at: z.string().nullable(),
-        source_initiative_id: z.string().nullable(),
-        created_at: z.string()
-      })
-    )
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const GET_ANALYTICS = {
   tool: 'get_analytics',
   title: 'Analytics',

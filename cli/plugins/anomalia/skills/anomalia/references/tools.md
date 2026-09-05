@@ -9,10 +9,12 @@ nothing brings it back.
 
 | MCP | CLI |
 |-----|-----|
-| `login` | `anomalia login` |
-| `logout` | `anomalia logout` |
-| `whoami` | (session file / brands imply identity) |
+| (none — the host does OAuth on HTTP, `anomalia login` locally) | `anomalia login` / `anomalia logout` |
 | `list_brands` | `anomalia brands` |
+
+There is no sign-in tool. On remote HTTP the host walks the OAuth round itself; on stdio the
+session is the CLI's, so `anomalia login` in a terminal covers both. `list_brands` is how you
+confirm: brands come back, or nobody is signed in.
 
 ## Database
 
@@ -372,15 +374,25 @@ A brand keeps one draft in review, so saving replaces the one that is there (`re
 
 | MCP | CLI |
 |-----|-----|
-| `get_memory` | (MCP only) |
 | `save_memory` | (MCP only) |
 | `record_memory_used` | (MCP only) |
 
-`get_memory` is what the brand already knows, so you stop asking the operator things it has
-already answered: its voice, the constraints it works under, the facts it confirmed, the
-preferences it stated, what previous work learned. `category` narrows to one kind; `limit` is 50
-by default, 200 at most. Chat-session notes and other agents' working notes never come out — only
-what belongs to the brand.
+What the brand already knows lives in `brand_memory` and is read with `query`, so you stop asking
+the operator things it has already answered: its voice, the constraints it works under, the facts
+it confirmed, the preferences it stated, what previous work learned.
+
+```
+query({ table: "brand_memory",
+        columns: ["id","key","value","category","confidence"],
+        where: [{column:"layer",op:"neq",value:"session"},
+                {column:"agent",op:"is",value:null}],
+        order: {column:"confidence",ascending:false} })
+```
+
+Those two filters are the ones `get_memory` used to impose before it was retired: no chat-session
+notes, no other agent's working notes. Drop them and both come back. `category` narrows with one
+more `eq` clause. `query` returns at most 100 rows where the old tool went to 200 — for a brand
+with more memory than that, filter by `category` instead of raising the limit.
 
 **Reading is not using.** The read changes nothing and counts nothing. When an entry actually
 shaped what you produced, say so with `record_memory_used` and the ids you used — a handful, not
@@ -619,13 +631,21 @@ The blog icon and an author's avatar are images and cannot be set through these 
 
 | MCP | CLI |
 |-----|-----|
-| `get_appearance` | (MCP only) |
 | `set_appearance` | (MCP only) |
 
 The look every render follows: logo, favicon, colour palette, the two Google Fonts graphics are
-composed with, and the visual brief.
+composed with, and the visual brief. It is one row of `brand_kit`, so it is read with `query`:
 
-**Read `get_appearance` first** — a font it does not carry is a font Google Fonts will not serve,
+```
+query({ table: "brand_kit",
+        columns: ["logos","favicon_url","brand_colors","graphic_style",
+                  "visual_style","visual_style_locked"] })
+```
+
+The brand's logo is the entry in `logos` whose `type` is **not** `og-image` — that one is the
+picture we guessed off the site, not the one anybody chose.
+
+**Read it before writing** — a font the row does not carry is a font Google Fonts will not serve,
 and the graphics would silently come out in Inter.
 
 `logo_url` and `favicon_url` are **downloaded and re-hosted**, not linked: the answer carries the
@@ -679,14 +699,13 @@ writes it.
 | `get_gsc` | (MCP only) |
 | `get_ranks` | (MCP only) |
 | `get_backlinks` | (MCP only) |
-| `list_articles` / `generate_article` / `optimize_article` | `anomalia web <slug> …` |
+| `generate_article` / `optimize_article` | `anomalia web <slug> …` |
 | `get_article` / `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
 | `ads_remix` | (MCP only) |
 | `get_market_field` | (MCP only) |
 | `diagnose_radar` | (MCP only) |
-| `list_ideas` | (MCP only) |
 
 `get_market_field` is what the brand's field is doing, not what the brand is doing: the topics
 being watched, the playbook distilled from them, and the catalogued posts each with a teardown —
@@ -701,11 +720,25 @@ toggle) or `error` (the endpoint failed). It spends no credits and writes nothin
 leave the building: one network request per source, so it can take seconds. Dynamic keyword
 searches are not probed here.
 
-`list_ideas` is the brand's idea bank — the disruptive ideas agents saved while working. Omit
-`status` and you get only the ones still usable (`new` and `shortlisted`); pass `all`, or one of
-`new` / `shortlisted` / `used` / `archived`, for the rest. `limit` is 50 by default, 200 at most.
-Each idea carries the contrast `device` it uses, `why_it_contrasts` and `who_it_annoys` — an idea
-that annoys nobody is not one.
+The brand's idea bank — the disruptive ideas agents saved while working — is the
+`disruptive_ideas` table, read with `query`:
+
+```
+query({ table: "disruptive_ideas",
+        columns: ["id","title","idea","device","why_it_contrasts","who_it_annoys","score","status"],
+        where: [{column:"status",op:"in",value:["new","shortlisted"]}],
+        order: {column:"score",ascending:false} })
+```
+
+That `where` is the default the retired `list_ideas` applied: only the ideas still usable. Drop it,
+or filter on `used` / `archived`, for the rest. Each idea carries the contrast `device` it uses,
+`why_it_contrasts` and `who_it_annoys` — an idea that annoys nobody is not one. `query` sorts on
+one column, so ideas with the same score come back in whatever order the planner picks; the old
+tool broke that tie by newest.
+
+The list of articles is the same move — `query({ table: "brand_articles", columns: ["id","slug",
+"title","status","scheduled_for","published_at","created_at"] })`. Name those columns: without
+them the read drags `body_md` in and the character cap returns one article instead of twenty.
 
 `get_seo` and `get_geo` answer on the **latest** audit. The four web tools let you trace a claim
 back to what was actually measured, without paying for a new audit. All four are reads: they call
@@ -752,7 +785,8 @@ fixes. Filter with `fix_id` or `status` (`draft` / `accepted` / `dismissed`); bo
 `get_article` returns one article **in full and in any state** — draft, planned, approved or
 published: `body_md`, `meta_title`, `meta_description`, `cover_image`, `category`, `tags`,
 `author`, `language`, `status`, `scheduled_for` (plus the brand-local reading) and
-`translation_of`. `list_articles` only summarises; read this one before editing and again after.
+`translation_of`. A `query` on `brand_articles` only summarises; read this one before editing and
+again after.
 
 `update_article` writes text and metadata you already have: `title`, `body_md` (the COMPLETE
 markdown, a replacement not a diff), `meta_title`, `meta_description`, `category_id`,

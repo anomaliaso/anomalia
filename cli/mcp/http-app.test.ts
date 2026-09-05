@@ -78,8 +78,49 @@ describe('mcp HTTP transport', () => {
     const listBody = await listRes.json();
     const names = (listBody.result?.tools ?? []).map((t: { name: string }) => t.name);
     expect(names).toContain('list_brands');
-    expect(names).toContain('login');
     expect(names.length).toBeGreaterThan(50);
+  });
+
+  /**
+   * Su HTTP l'autenticazione non e' mai stata di questi tre tool: la fa l'host, con la scoperta a
+   * `/.well-known/oauth-protected-resource` e il 401 che porta `WWW-Authenticate: Bearer`, ed e'
+   * verificata dai due test qui sopra e da quello sotto.
+   *
+   * `logout` andava via anche senza il conteggio: `clearSession()` e' un `unlinkSync` dentro un
+   * `catch {}` sul file di sessione DELLA MACCHINA CHE ESEGUE IL SERVER. Da remoto quel file non
+   * e' del chiamante, l'unlink fallisce, il catch se lo mangia e il tool rispondeva comunque
+   * `{ loggedOut: true }`: un successo falso a ogni chiamata.
+   */
+  test('login, logout e whoami non sono piu tool: su HTTP autentica l’host', async () => {
+    await handleMcpFetch(
+      new Request('http://localhost/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '0.0.1' } },
+        }),
+      }),
+    );
+    const listRes = await handleMcpFetch(
+      new Request('http://localhost/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+      }),
+    );
+    const names = ((await listRes.json()).result?.tools ?? []).map((t: { name: string }) => t.name);
+
+    for (const gone of ['login', 'logout', 'whoami']) expect(names, gone).not.toContain(gone);
+  });
+
+  /** Tolto il tool, il modo di autenticarsi deve restare scritto dove si legge per primo. */
+  test('le istruzioni dicono come si entra, ora che non c’e’ un tool', () => {
+    expect(MCP_INSTRUCTIONS).toContain('anomalia login');
+    expect(MCP_INSTRUCTIONS).toMatch(/Bearer/);
+    expect(MCP_INSTRUCTIONS).not.toMatch(/`login`/);
   });
 
   test('requires bearer when MCP_REQUIRE_BEARER=1', async () => {

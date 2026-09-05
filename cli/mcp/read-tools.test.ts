@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
+import { MCP_INSTRUCTIONS } from './server.ts';
 
 const SLUG_PROPERTY = { type: 'string', minLength: 1, description: 'Brand URL slug' };
 
@@ -54,15 +55,6 @@ const MIGRATED_READS = [
     name: 'get_ads',
     title: 'Ads overview',
     properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'list_articles',
-    title: 'List blog articles',
-    properties: {
-      slug: SLUG_PROPERTY,
-      status: { type: 'string', enum: ['draft', 'scheduled', 'published', 'all'] },
-    },
     required: ['slug'],
   },
   {
@@ -171,5 +163,49 @@ describe('le letture migrate sul registry', () => {
     const names = (await tools()).map((t) => t.name);
 
     expect(names).toEqual([...new Set(names)]);
+  });
+});
+
+/**
+ * Le quattro letture il cui handler era un `select` che `query` sa già scrivere. Il criterio non è
+ * il nome: `list_posts` si chiama come loro ed è rimasto, perché il tetto di 20.000 caratteri gli
+ * taglia 35 righe su 50.
+ */
+const RITIRATE = ['get_appearance', 'get_memory', 'list_articles', 'list_ideas'] as const;
+
+/** Letture che `query` NON copre: la riga grezza è più larga dei tetti, o il tool aggrega. */
+const NON_COPERTE = ['list_posts', 'list_shares', 'get_article', 'list_web_fixes', 'get_dashboard'] as const;
+
+describe('le letture che `query` copriva già', () => {
+  test('non sono più in tools/list', async () => {
+    const names = (await tools()).map((t) => t.name);
+
+    for (const name of RITIRATE) expect(names, name).not.toContain(name);
+  });
+
+  test('non sono più nel registry, quindi nemmeno sul percorso CLI', () => {
+    const declared = BRAND_ENDPOINTS.map((e) => e.tool);
+
+    for (const name of RITIRATE) expect(declared, name).not.toContain(name);
+  });
+
+  test('quelle che `query` taglierebbe restano, e restano letture', async () => {
+    const all = await tools();
+
+    for (const name of NON_COPERTE) {
+      expect(find(all, name).annotations?.readOnlyHint, name).toBe(true);
+    }
+  });
+
+  /**
+   * Il "tool not found" del protocollo non insegna niente. Chi aveva cablato una delle quattro
+   * ritrova il nome QUI, nella mappa che il client mostra al handshake prima di ogni descrizione —
+   * ed è anche l'unico posto dove sta la regola che le rende usabili: senza `columns` la lettura
+   * torna monca e nessuno lo dice.
+   */
+  test('le istruzioni del handshake dicono cosa si chiama al loro posto', () => {
+    for (const name of RITIRATE) expect(MCP_INSTRUCTIONS, name).toContain(name);
+
+    expect(MCP_INSTRUCTIONS).toContain('columns');
   });
 });
