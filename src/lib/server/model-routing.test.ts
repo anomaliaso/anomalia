@@ -20,11 +20,11 @@ describe('il registro delle rotte', () => {
     setEnv(KEYS);
   });
 
-  it('i default: testo e immagini su openrouter, voce su kie', async () => {
+  it('i default: testo, immagini e voce su openrouter', async () => {
     const { route } = await import('./model-routing');
     expect(route('text')).toMatchObject({ family: 'gemini', endpoint: 'openrouter', provider: 'openrouter' });
     expect(route('image')).toMatchObject({ endpoint: 'openrouter', provider: 'openrouter' });
-    expect(route('tts')).toMatchObject({ endpoint: 'kie', provider: 'kie' });
+    expect(route('tts')).toMatchObject({ family: 'gemini-tts', endpoint: 'openrouter', provider: 'openrouter' });
   });
 
   it('dice i due assi separatamente: famiglia @ endpoint', async () => {
@@ -91,7 +91,9 @@ describe('il registro delle rotte', () => {
     expect(missingCapabilities('kie')).toEqual(
       expect.arrayContaining(['grounding', 'media-in-tool-result', 'video-fps', 'prompt-cache', 'embeddings', 'music'])
     );
-    expect(missingCapabilities('openrouter')).toEqual(['tts']);
+    // Nessuna: l'ultima assenza era il TTS, ed era falsa. `/audio/speech` con
+    // `google/gemini-3.1-flash-tts-preview` torna `audio/pcm;rate=24000;channels=1`.
+    expect(missingCapabilities('openrouter')).toEqual([]);
   });
 
   it('openrouter è una rotta, e AI_ROUTE_IMAGE la seleziona', async () => {
@@ -123,7 +125,7 @@ describe('il registro delle rotte', () => {
     // `geminiTransport()` conosce solo kie e google: il testo verso openrouter atterrerebbe su
     // Google IN SILENZIO, cioè la rotta si legge come rispettata e non lo è. Vale identico per le
     // coppie che erano già cieche prima di openrouter — una regola sola, non un'eccezione.
-    for (const raw of ['gemini-tts@openrouter', 'grok@openrouter', 'gpt@openrouter']) {
+    for (const raw of ['grok@openrouter', 'gpt@openrouter']) {
       vi.resetModules();
       setEnv({ ...KEYS, AI_ROUTE_TEXT: raw });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -142,7 +144,8 @@ describe('il registro delle rotte', () => {
       ['grok@kie', 'text', 'kie'],
       ['nano-banana@openrouter', 'image', 'openrouter'],
       ['nano-banana@kie', 'image', 'kie'],
-      ['gemini-tts@kie', 'tts', 'kie']
+      ['gemini-tts@kie', 'tts', 'kie'],
+      ['gemini-tts@openrouter', 'tts', 'openrouter']
     ] as const) {
       vi.resetModules();
       setEnv({ ...KEYS, [SLOT_VAR[slot]]: raw });
@@ -161,9 +164,16 @@ describe('il registro delle rotte', () => {
     expect(route('image')).toMatchObject({ family: 'nano-banana', endpoint: 'openrouter' });
   });
 
-  it('la voce NON si sposta col resto: OpenRouter non fa TTS', async () => {
+  it('la voce si sposta col resto, e kie resta il ripiego', async () => {
     const { route } = await import('./model-routing');
-    expect(route('tts').endpoint).toBe('kie');
+    expect(route('tts').endpoint).toBe('openrouter');
+    vi.resetModules();
+    setEnv({ KIE_API_KEY: 'k' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { route: routeWithoutKey } = await import('./model-routing');
+    expect(routeWithoutKey('tts').endpoint).toBe('kie');
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/AI_ROUTE_TTS.*Ripiego su kie/));
+    warn.mockRestore();
   });
 
   it('senza chiave openrouter le immagini ripiegano su kie, che resta il ripiego', async () => {
@@ -202,7 +212,7 @@ describe('il registro delle rotte', () => {
     // servita rende il test rosso — rumoroso, quindi innocuo; una che diventa NON PARSABILE lo
     // farebbe restare verde misurando il ripiego al default invece dell'invariante. Sono due modi
     // opposti di sbagliare, e solo uno si vede.
-    for (const raw of ['grok@openrouter', 'gpt@openrouter', 'gemini-tts@openrouter']) {
+    for (const raw of ['grok@openrouter', 'gpt@openrouter']) {
       vi.resetModules();
       setEnv({ ...KEYS, OPENROUTER_API_KEY: 'o', AI_ROUTE_VIDEO: raw });
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -323,10 +333,7 @@ describe('restano solo openrouter e kie', () => {
     const { route } = await import('./model-routing');
     expect(route('text').endpoint).toBe('openrouter');
     expect(route('image').endpoint).toBe('openrouter');
-    // Il TTS resta su kie: MISURATO, non assunto. `lyria-3` su OpenRouter e` MUSICA, e
-    // `openai/gpt-audio` pretende stream:true per l'audio ma rifiuta il WAV in streaming —
-    // mentre il nostro tagliatore vuole L16 24 kHz mono 16 bit.
-    expect(route('tts').endpoint).toBe('kie');
+    expect(route('tts').endpoint).toBe('openrouter');
   });
 
   it('il ripiego di ogni slot e` kie, mai altro', async () => {
@@ -339,10 +346,13 @@ describe('restano solo openrouter e kie', () => {
     warn.mockRestore();
   });
 
-  it('openrouter non sa fare il TTS, ed e` scritto nel registro', async () => {
+  it('openrouter sa fare il TTS, e ora il registro lo dice', async () => {
+    // Era scritto il contrario, e la prova che lo smentisce e` una chiamata sola:
+    // `POST /audio/speech` con `google/gemini-3.1-flash-tts-preview` risponde 200 e
+    // `content-type: audio/pcm;rate=24000;channels=1` — la forma esatta che il tagliatore vuole.
     const { missingCapabilities, can } = await import('./model-routing');
-    expect(can('openrouter', 'tts')).toBe(false);
+    expect(can('openrouter', 'tts')).toBe(true);
     expect(can('kie', 'tts')).toBe(true);
-    expect(missingCapabilities('openrouter')).toContain('tts');
+    expect(missingCapabilities('openrouter')).not.toContain('tts');
   });
 });

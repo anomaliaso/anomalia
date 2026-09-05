@@ -487,3 +487,63 @@ export async function llmChatCompletions(opts: {
 	}
 	return res.json();
 }
+
+export const GEMINI_TTS = 'google/gemini-3.1-flash-tts-preview';
+
+export function llmTtsModel(): string {
+	return env.OPENROUTER_TTS_MODEL?.trim() || GEMINI_TTS;
+}
+
+/**
+ * Una voce, in una richiesta sola. `POST /audio/speech` risponde con PCM GREZZO: nessuna
+ * intestazione dentro i byte, quindi la frequenza e i canali li dice soltanto il `content-type`
+ * (`audio/pcm;rate=24000;channels=1`) e vanno riportati a chi chiama, che è l'unico a sapere quale
+ * formato sa usare. Darli per scontati è il guasto che non fallisce: un 48 kHz stereo letto come
+ * 24 kHz mono non lancia, dura il doppio e parla a metà velocità.
+ *
+ * Non è streaming, di proposito: la chat completions serve `openai/gpt-audio` e pretende
+ * `stream: true` con `format: "pcm16"`, cioè cambia fornitore, cambia la voce e va ricomposta a
+ * pezzi. Qui la famiglia resta Gemini, com'era su kie.
+ *
+ * `mp3` esiste come `response_format` sull'endpoint ma non per questo modello (400 esplicito), e
+ * il costo NON torna: nessuna intestazione lo porta, e `GET /generation?id=` è già stato misurato
+ * e scartato in `llm-usage-cost.ts` — il record compare nove secondi dopo.
+ */
+export async function llmSpeech(opts: {
+	model: string;
+	input: string;
+	voice: string;
+	timeoutMs: number;
+	abortSignal?: AbortSignal;
+}): Promise<{ pcm: Uint8Array; sampleRate: number; channels: number }> {
+	const key = llmApiKey();
+	if (!key) throw new Error('LLM_API_KEY is not configured');
+	const res = await fetch(`${llmBaseUrl()}/audio/speech`, {
+		method: 'POST',
+		headers: {
+			authorization: `Bearer ${key}`,
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({
+			model: opts.model,
+			input: opts.input,
+			voice: opts.voice,
+			response_format: 'pcm'
+		}),
+		signal: AbortSignal.any([
+			...(opts.abortSignal ? [opts.abortSignal] : []),
+			AbortSignal.timeout(opts.timeoutMs)
+		])
+	});
+	if (!res.ok) {
+		const detail = (await res.text().catch(() => '')).slice(0, 300);
+		throw new Error(`${opts.model} answered ${res.status}. ${detail}`);
+	}
+	const contentType = res.headers.get('content-type') ?? '';
+	const sampleRate = Number(/rate=(\d+)/.exec(contentType)?.[1]);
+	const channels = Number(/channels=(\d+)/.exec(contentType)?.[1]);
+	if (!Number.isFinite(sampleRate) || !Number.isFinite(channels)) {
+		throw new Error(`${opts.model} answered "${contentType}", which does not say what PCM this is.`);
+	}
+	return { pcm: new Uint8Array(await res.arrayBuffer()), sampleRate, channels };
+}

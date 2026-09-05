@@ -7,7 +7,8 @@
  * Restano DUE trasporti: **openrouter serve, kie ripiega.** Google, Xiaomi e DeepSeek sono usciti —
  * non per prezzo, ma perché su questo non ci si fonda: kie fallisce il 3,5% dei render con un p95
  * di 142,9s contro i 3,4s di OpenRouter, e DeepSeek falliva il 41,3% di 5.122 chiamate. kie resta
- * perché il TTS lo fa e OpenRouter no, e perché un secondo trasporto vale più di zero.
+ * come RIPIEGO — un secondo trasporto vale più di zero — non perché sappia fare qualcosa che
+ * OpenRouter non sa: l'ultima cosa in quell'elenco era il TTS, e non era vera.
  *
  * Due assi, che non si collassano mai in uno:
  *   · famiglia — QUALE modello scrive. È la garanzia di qualità: `PIN_GEMINI` vuol dire "questo
@@ -91,9 +92,12 @@ const ALL: Capability[] = [
  * parte capace di tutto e si scopre incapace un guasto alla volta.
  */
 const MISSING: Record<Endpoint, Partial<Record<Capability, string>>> = {
-  openrouter: {
-    tts: 'OpenRouter non fa sintesi vocale: lyria-3 è MUSICA, e gpt-audio pretende stream:true per l\'audio ma rifiuta il WAV in streaming — mentre il tagliatore vuole L16 24 kHz mono 16 bit'
-  },
+  // Vuoto, e ci è voluto sbagliare due volte per arrivarci: qui c'era scritto che OpenRouter non
+  // fa sintesi vocale. Era falso. `POST /audio/speech` con `google/gemini-3.1-flash-tts-preview`
+  // risponde 200 e `content-type: audio/pcm;rate=24000;channels=1` — la forma esatta che il
+  // tagliatore vuole. Cercarla su `chat/completions` (dove risponde solo `gpt-audio`, e solo in
+  // streaming) e cercarla su `/audio/speech` con id inventati sono due modi di non trovarla.
+  openrouter: {},
   kie: {
     grounding: 'kie non restituisce groundingMetadata: le citazioni tornano vuote',
     'media-in-tool-result': 'kie scarta i media dentro i risultati dei tool, in silenzio',
@@ -116,6 +120,7 @@ const MISSING: Record<Endpoint, Partial<Record<Capability, string>>> = {
  */
 const HOME: Record<ModelFamily, Endpoint> = {
   gemini: 'kie',
+  // Come `nano-banana` e `grok-imagine`: openrouter è il DEFAULT dello slot, kie è dove si ripiega.
   'gemini-tts': 'kie',
   'nano-banana': 'kie',
   grok: 'kie',
@@ -137,7 +142,7 @@ const HOME: Record<ModelFamily, Endpoint> = {
  */
 const SERVED_BY: Record<ModelFamily, Endpoint[]> = {
   gemini: ['kie', 'openrouter'],
-  'gemini-tts': ['kie'],
+  'gemini-tts': ['kie', 'openrouter'],
   'nano-banana': ['kie', 'openrouter'],
   grok: ['kie'],
   gpt: ['kie'],
@@ -177,8 +182,10 @@ const SLOT_DEFAULT: Record<Slot, Route> = {
   text: r('gemini', 'openrouter'),
   // Non il prezzo: kie fallisce il 3,5% dei render con un p95 di 142,9s contro i 3,4s di OpenRouter.
   image: r('nano-banana', 'openrouter'),
-  // La voce resta su kie perche' OpenRouter NON fa sintesi vocale — misurato, sta in MISSING.
-  tts: r('gemini-tts', 'kie'),
+  // Stessa famiglia Gemini servita da openrouter: le voci sono le stesse (Kore, Puck, Charon,
+  // Aoede, Fenrir tutte accettate), quindi per il cliente non cambia nulla. Il costo nemmeno —
+  // stesso copione, kie 1,19 crediti = $0,00595 contro $0,005772. Cambia il ripiego, che ora c'e'.
+  tts: r('gemini-tts', 'openrouter'),
   // Il video resta dov'è, e OpenRouter costa 6× kie su Grok Imagine (misurato): spostarlo e` una
   // decisione esplicita, non un effetto dell'uniformita'. La famiglia qui e` la LINEA DI DEFAULT,
   // non il modello del render — quello lo scelgono le preferenze del brand (`videoModelForRole`) e
