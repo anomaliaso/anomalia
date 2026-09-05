@@ -90,14 +90,26 @@ describe('il fornitore rifiuta: il motivo deve arrivare a chi ha chiamato', () =
 
 describe('la durata non si riporta di nascosto', () => {
   it('sotto il minimo del modello si rifiuta, dicendo la finestra', async () => {
-    // Grok Imagine dichiara minDuration 1, ma il pavimento di prodotto e' 10: 5 non e' ottenibile.
-    const out = await run({ durationSeconds: 5, model: 'grok-imagine-video-1-5-preview' });
+    // Seedance 2.5 parte da 4 secondi: uno non e' ottenibile su QUEL modello.
+    //
+    // L'esempio era 5 secondi su Grok, che il pavimento di prodotto a 10 rendeva irraggiungibile.
+    // Quel pavimento e' stato tolto — il minimo ora viene dal modello, e Grok dichiara 1, quindi 5
+    // si ottiene eccome. Il rifiuto resta giusto, cambia solo quando scatta: sui numeri che il
+    // modello davvero non fa, non su una preferenza nostra.
+    const out = await run({ durationSeconds: 1, model: 'bytedance/seedance-2-5' });
 
     expect(out.ok).toBe(false);
     expect('error' in out && out.error).toBe('duration_out_of_range');
     // Senza i numeri il rifiuto e' un vicolo cieco: l'agente non sa cosa richiedere.
-    expect('reason' in out && String(out.reason)).toMatch(/10/);
+    expect('reason' in out && String(out.reason)).toMatch(/4/);
     expect(submitAndTrackVideoRender).not.toHaveBeenCalled();
+  });
+
+  it('cinque secondi ora si ottengono: e il conto che Andrea aveva pagato doppio', async () => {
+    const out = await run({ durationSeconds: 5, model: 'grok-imagine-video-1-5-preview' });
+
+    expect(out.ok).toBe(true);
+    expect(submitAndTrackVideoRender.mock.calls[0][0].render.duration).toBe(5);
   });
 
   it('una durata ottenibile passa e viene dichiarata nella risposta', async () => {

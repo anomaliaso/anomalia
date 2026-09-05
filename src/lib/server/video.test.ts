@@ -264,10 +264,15 @@ describe('videoModelCaps', () => {
 });
 
 describe('clampVideoDuration (model-aware)', () => {
-  it('raises anything under the product floor — a clip too short to hold a cta is not a saving', () => {
-    expect(clampVideoDuration(3, 'grok-imagine-video-1-5-preview')).toBe(MIN_DURATION);
-    expect(clampVideoDuration(6, 'bytedance/seedance-2-5')).toBe(MIN_DURATION);
-    expect(clampVideoDuration(1, 'bytedance/seedance-2')).toBe(MIN_DURATION);
+  // Questo test asseriva il PAVIMENTO DI PRODOTTO a 10 secondi — «una clip troppo corta per reggere
+  // una cta non e' un risparmio». Era una decisione difendibile e Andrea l'ha rovesciata: ha chiesto
+  // 5 secondi e ne ha pagati 10, e i video si fatturano al secondo. Il minimo ora viene dal modello,
+  // che e' un fatto pubblicato, non da una costante nostra.
+  it('scende al minimo DEL MODELLO, che e un fatto e non una nostra preferenza', () => {
+    expect(clampVideoDuration(3, 'grok-imagine-video-1-5-preview')).toBe(3);
+    expect(clampVideoDuration(6, 'bytedance/seedance-2-5')).toBe(6);
+    // Seedance 2 parte da 4: uno non e' ottenibile e diventa quattro, non dieci.
+    expect(clampVideoDuration(1, 'bytedance/seedance-2')).toBe(4);
   });
 
   it('caps at the CHOSEN model ceiling — not a global constant', () => {
