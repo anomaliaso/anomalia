@@ -86,10 +86,11 @@ describe('le annotazioni dicono la verita’ nel vocabolario giusto', () => {
 });
 
 /**
- * `login`, `logout` e `whoami` esistono nel server MCP perche' una CLI deve procurarsi un token e
- * dire di chi e'. In una pagina la sessione e' gia' quella di chi sta guardando: esporli darebbe a
- * un agente nel browser tre strumenti che non possono fare niente di utile — e uno di essi,
- * `logout`, farebbe un danno.
+ * In una pagina la sessione e' gia' quella di chi sta guardando: esporli darebbe a un agente nel
+ * browser tre strumenti che non possono fare niente di utile — e uno di essi, `logout`, farebbe un
+ * danno. Dal 2026-09-05 non esistono nemmeno sul server MCP, per ragioni parallele: su HTTP il giro
+ * OAuth lo fa l'host, e `logout` la' rispondeva `{ loggedOut: true }` dopo un unlink fallito e
+ * ingoiato. Questo test resta perche' misura QUESTA superficie, che non deve riacquistarli.
  */
 describe('l’autenticazione nel browser non e’ quella di una CLI', () => {
   it('non offre login, logout o whoami', () => {

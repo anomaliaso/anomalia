@@ -26,22 +26,6 @@ const Appearance = z.object({
   visual_style_locked: z.boolean()
 });
 
-export const GET_APPEARANCE = {
-  tool: 'get_appearance',
-  title: 'How the brand looks',
-  description:
-    'The brand’s look as every render sees it: logo, favicon, colour palette, the two Google Fonts ' +
-    'graphics are composed with, and the visual brief every image follows. Read it before ' +
-    'set_appearance — a font this answer does not carry is a font Google Fonts will not serve, and ' +
-    'the graphics would silently come out in Inter instead.',
-  method: 'GET',
-  pathUnderBrand: '/studio/appearance',
-  input: z.object({}).strict(),
-  output: z.object({ brand: z.string(), appearance: Appearance }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_APPEARANCE = {
   tool: 'set_appearance',
   title: 'Change how the brand looks',
@@ -53,7 +37,10 @@ export const SET_APPEARANCE = {
     '`display_font` and `body_font` must be families Google Fonts actually serves and are checked ' +
     'before saving, because a name it will not serve renders as Inter with nothing said. Setting ' +
     '`visual_style` LOCKS it: the nightly rebuild stops rewriting the brand’s visual brief until ' +
-    'someone regenerates it from the browser. Calls no model and spends no credits.',
+    'someone regenerates it from the browser. To see the look it has NOW, read the row: ' +
+    'query({ table: "brand_kit", columns: ["logos","favicon_url","brand_colors","graphic_style",' +
+    '"visual_style","visual_style_locked"] }) — the logo is the entry whose `type` is not ' +
+    '"og-image", which is the one we guessed from the site. Calls no model and spends no credits.',
   method: 'PUT',
   pathUnderBrand: '/studio/appearance',
   input: z

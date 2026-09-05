@@ -790,7 +790,7 @@ curl -s -X DELETE "https://anomalia.so/api/v1/brands/mio-brand/api-keys/KEY_ID" 
 
 ## `GET /api/v1/brands/:slug/ideas`
 
-Tool MCP: `list_ideas`.
+Tool MCP: nessuno — la lettura è `query` su `disruptive_ideas`.
 
 Il banco delle idee dirompenti del brand — quello che gli agenti salvano mentre lavorano
 (`save_disruptive_idea`). Nessuna chiamata AI: lettura pura.

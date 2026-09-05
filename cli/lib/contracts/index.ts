@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import { ADS_ACTION, ADS_REMIX } from './ads';
-import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
+import { SET_APPEARANCE } from './appearance';
 import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
 import { GENERATE_CAPTIONS } from './captions';
@@ -67,8 +67,7 @@ import {
   GET_SEO,
   GET_STUDIO,
   GET_VOICE,
-  GET_WEEKLY_PLAN,
-  LIST_ARTICLES
+  GET_WEEKLY_PLAN
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import {
@@ -78,9 +77,9 @@ import {
   SET_BLOG_SETTINGS
 } from './blog-settings';
 import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
-import { DIAGNOSE_RADAR, GET_MARKET_FIELD, LIST_IDEAS } from './market';
+import { DIAGNOSE_RADAR, GET_MARKET_FIELD } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
-import { GET_MEMORY, RECORD_MEMORY_USED, SAVE_MEMORY } from './memory';
+import { RECORD_MEMORY_USED, SAVE_MEMORY } from './memory';
 import { GET_KNOWLEDGE_STATUS, SEARCH_KNOWLEDGE } from './knowledge';
 import {
   ADD_RADAR_SOURCE,
@@ -199,7 +198,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GEO_ACTION,
   GET_ADS,
   GET_ANALYTICS,
-  GET_APPEARANCE,
   GET_ARTICLE,
   GET_AUDIT_FINDINGS,
   GET_AUTOMATIONS,
@@ -218,7 +216,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_KNOWLEDGE_STATUS,
   GET_MARKET_FIELD,
   GET_MEDIA_MODELS,
-  GET_MEMORY,
   GET_PLAN,
   GET_POST,
   GET_RADAR,
@@ -229,9 +226,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_WEEKLY_PLAN,
   GET_WRITING_SKILLS,
   IMPORT_MEDIA_URL,
-  LIST_ARTICLES,
   LIST_AUDIT_CITATIONS,
-  LIST_IDEAS,
   LIST_MEDIA,
   LIST_POSTS,
   LIST_SHARES,
@@ -371,8 +366,7 @@ export {
   GET_SEO,
   GET_STUDIO,
   GET_VOICE,
-  GET_WEEKLY_PLAN,
-  LIST_ARTICLES
+  GET_WEEKLY_PLAN
 };
 export { STUDIO_DOCUMENT_MODES } from './reads';
 export type { StudioDocumentMode } from './reads';
@@ -392,7 +386,7 @@ export {
   GOAL_CRITERION_STATUSES,
   GOAL_STATUSES
 } from './brand-state';
-export { DIAGNOSE_RADAR, GET_MARKET_FIELD, IDEA_STATUSES, IDEAS_DEFAULT, IDEAS_MAX, LIST_IDEAS, MARKET_FIELD_DEFAULT, MARKET_FIELD_MAX } from './market';
+export { DIAGNOSE_RADAR, GET_MARKET_FIELD, MARKET_FIELD_DEFAULT, MARKET_FIELD_MAX } from './market';
 export {
   GET_MEDIA_MODELS,
   MEDIA_MODEL_JOBS,
@@ -424,7 +418,6 @@ export {
 export type { KnowledgeCollection } from './knowledge';
 export {
   AGENT_MEMORY_CATEGORIES,
-  GET_MEMORY,
   MEMORY_CATEGORIES,
   MEMORY_ENTRIES_DEFAULT,
   MEMORY_ENTRIES_MAX,
@@ -491,7 +484,7 @@ export {
   SET_BLOG_SETTINGS
 } from './blog-settings';
 export type { BlogAnalyticsProvider, BlogTermKind } from './blog-settings';
-export { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
+export { SET_APPEARANCE } from './appearance';
 export { BILLING_PORTAL_LINK, CHECKOUT_LINK };
 export type { BillingPortalLinkResult, CheckoutLinkInput, CheckoutLinkResult } from './billing';
 export type { CheckContentInput, CheckContentResult } from './content';
