@@ -1,4 +1,3 @@
-import type { GoogleGenAI } from '@google/genai';
 import { structured } from '$lib/server/research';
 
 // Operational-strategy engine: derives the brand's STYLE MANUAL (voice framework + per-platform
@@ -76,7 +75,6 @@ const DERIVE_SCHEMA = {
 // Derive the full operational strategy from the Studio's knowledge. Prose fields are written in
 // the user's UI language (it's a document the client reads and edits).
 export async function deriveOperationalStrategy(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   platforms: string[],
   outputLanguage = 'English'
@@ -98,7 +96,6 @@ Write all prose in ${outputLanguage}; keep platform names and the enum values un
 Return JSON.`;
 
   const raw = await structured<AnyRec>(
-    ai,
     prompt,
     DERIVE_SCHEMA,
     'You are a senior brand copy chief writing a style manual. Concrete, honest, zero hype.'

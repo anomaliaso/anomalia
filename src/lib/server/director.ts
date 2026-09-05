@@ -70,7 +70,6 @@ async function rewriteCaption(post: PreviewPost, instruction: string, language: 
   try {
     const { structured } = await import('./research');
     const parsed = await structured<{ caption?: string }>(
-      null as never,
       `Rewrite this ${post.platform} caption applying the review instruction EXACTLY, keeping the platform's register and length${language ? ` and the ${language} language` : ''}.\n${platformPlaybook([post.platform], {})}\nCURRENT CAPTION:\n${post.caption}\n\nINSTRUCTION: ${instruction}\n\nReturn JSON.`,
       { type: 'object', properties: { caption: { type: 'string' } }, required: ['caption'] },
       undefined,
@@ -134,7 +133,7 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
           execute: async ({ query }: { query: string }) => {
             const over = spend('search_web');
             if (over) return record('search_web', { query }, { error: over });
-            const g = await groundedText(null as never, query, 'Answer concisely with verifiable facts and dates.');
+            const g = await groundedText(query, 'Answer concisely with verifiable facts and dates.');
             return record('search_web', { query }, {
               answer: g.text.slice(0, 1200),
               sources: g.citations.slice(0, 4).map((c) => c.uri)

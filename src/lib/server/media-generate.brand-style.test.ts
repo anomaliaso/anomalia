@@ -65,7 +65,7 @@ describe('lo stile del brand nella richiesta di render', () => {
 
     expect(loadBrandVisualContext).toHaveBeenCalledWith(expect.anything(), 'brand-1');
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     expect(opts.visualStyle).toBe(VISUAL_STYLE);
     expect(opts.brandLook).toBe(BRAND_LOOK);
     expect(opts.visualPlaybook).toBe(PLAYBOOK);
@@ -82,7 +82,7 @@ describe('lo stile del brand nella richiesta di render', () => {
 
     expect(loadBrandVisualContext).not.toHaveBeenCalled();
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     expect(opts.visualStyle).toBeUndefined();
     expect(opts.brandLook).toBeUndefined();
     expect(opts.visualPlaybook).toBeUndefined();
@@ -98,7 +98,7 @@ describe('lo stile del brand nella richiesta di render', () => {
       prompt: 'un gatto'
     });
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     expect(opts.visualStyle).toBeUndefined();
     expect(opts.brandLook).toBeUndefined();
   });

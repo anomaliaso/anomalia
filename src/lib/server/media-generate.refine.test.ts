@@ -96,7 +96,7 @@ describe('rifinire un asset della libreria', () => {
       1
     );
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     // Questa è la riga che distingue «rendilo rosso» da «disegna un gatto rosso».
     expect(opts.baseImage).toEqual(ORIGINAL);
     expect(opts.refineModel).toBe(REFINE_MODEL);
@@ -133,7 +133,7 @@ describe('rifinire un asset della libreria', () => {
       prompt: 'un gatto rosso'
     });
 
-    const opts = renderPostImage.mock.calls[0][2];
+    const opts = renderPostImage.mock.calls[0][1];
     expect(opts.baseImage).toBeUndefined();
     expect(loadLibraryMediaParts).not.toHaveBeenCalled();
   });

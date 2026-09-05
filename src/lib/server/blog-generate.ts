@@ -6,7 +6,7 @@ import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PROOF_DISCIPLINE_RULE } from '$lib/server/proof-discipline';
 import { env as publicEnv } from '$env/dynamic/public';
-import { genaiClient, structured, groundedText } from './research';
+import { structured, groundedText } from './research';
 import { bestVariant } from './geo-artifacts';
 import { getBrandPages } from './content-library';
 import { formatProductsList, getBrandProductsForAi } from './product-context';
@@ -212,8 +212,7 @@ ${existingTitles}
 
 Alignment rule: same strategic direction as social, complementary NOT duplicative — a blog piece is the deep/evergreen anchor, not a rewrite of a social post. Where a strategy keyword fits, each topic should attack one (set targetKeyword to it; empty string otherwise). Return exactly ${count} DISTINCT topics (title + angle + targetKeyword).`;
 
-  const out = await bestVariant<{ topics?: Array<{ title: string; angle: string; targetKeyword?: string }> }>(
-    genaiClient(), () => prompt, TOPICS_SCHEMA, REVIEWER, 'blog_plan_topics',
+  const out = await bestVariant<{ topics?: Array<{ title: string; angle: string; targetKeyword?: string }> }>(() => prompt, TOPICS_SCHEMA, REVIEWER, 'blog_plan_topics',
     (v) => (v?.topics ?? []).map((t) => t.title).slice(0, 4).join(' | '),
     BLOG_AI
   ).catch((error) => { swallow('join failed', error); return null; });
@@ -431,9 +430,7 @@ Write the article that will rank for "${init.targetQuery}".
 ARTICLE ANGLE: ${init.title}
 ${init.rationale ? `Why it matters: ${init.rationale}` : ''}`;
 
-  const ai = genaiClient();
-  const article = await bestVariant<AnyRec>(
-    ai, makePrompt, ARTICLE_SCHEMA, REVIEWER, 'blog_article',
+  const article = await bestVariant<AnyRec>(makePrompt, ARTICLE_SCHEMA, REVIEWER, 'blog_article',
     (v) => `${v?.title ?? ''} (${String(v?.bodyMarkdown ?? '').split(/\s+/).length} words)`,
     BLOG_AI
   ).catch((error) => { swallow('split failed', error); return null; });
@@ -548,7 +545,7 @@ export async function optimizeArticleForScore(
   let research = '';
   if (fixable.length) {
     const query = `Authoritative sources and concrete statistics for a blog article titled "${a.title}" (language: ${language}). Prefer credible, current sources; list specific data points with attribution. Never invent URLs or numbers.`;
-    const g = await groundedText(genaiClient(), query, undefined, { brandId: brand.id }).catch(() => ({
+    const g = await groundedText(query, undefined, { brandId: brand.id }).catch(() => ({
       text: '',
       citations: [] as { uri: string; title: string }[]
     }));
@@ -592,10 +589,10 @@ Requirements:
 - 1200-2500 words. metaTitle <= 60 chars; metaDescription 50-155 chars.
 - Write in ${language}. Return JSON: title (H1, not repeated in body), slug, metaTitle, metaDescription, bodyMarkdown.`;
 
-  const improved = await structured<AnyRec>(genaiClient(), prompt, ARTICLE_SCHEMA, REVIEWER, {
+  const improved = await structured<AnyRec>(prompt, ARTICLE_SCHEMA, REVIEWER, {
     label: 'blog_optimize',
     ...BLOG_AI
-  }).catch((error) => { swallow('genaiClient failed', error); return null; });
+  }).catch((error) => { swallow('blog optimize failed', error); return null; });
   let title = a.title;
   let metaTitle = a.meta_title as string | null;
   let metaDescription = a.meta_description as string | null;

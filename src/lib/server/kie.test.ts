@@ -98,9 +98,7 @@ describe('aiStructured: ripiego dal secondario sul gateway LLM', () => {
     const { structuredKie } = await import('./kie');
     const { aiStructured } = await import('./ai-text');
 
-    const ai = {} as import('@google/genai').GoogleGenAI;
     const result = await aiStructured<{ plan: string }>(
-      ai,
       'prompt',
       { type: 'object', properties: { plan: { type: 'string' } } },
       'system',

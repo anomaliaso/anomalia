@@ -54,7 +54,7 @@ beforeEach(() => {
 
 describe('il cancello dei crediti senza un brand', () => {
   it('chiede all organizzazione, che è chi paga quando nessun brand paga', async () => {
-    await withOrgContext('org-1', () => renderPostImage(null as never, 'un gatto', {}));
+    await withOrgContext('org-1', () => renderPostImage('un gatto', {}));
 
     expect(gateOrgCredits).toHaveBeenCalledWith('org-1');
     expect(gateCredits).not.toHaveBeenCalled();
@@ -64,14 +64,14 @@ describe('il cancello dei crediti senza un brand', () => {
     gateOrgCredits.mockRejectedValue(new Exhausted('AI credits exhausted for this billing period'));
 
     await expect(
-      withOrgContext('org-1', () => renderPostImage(null as never, 'un gatto', {}))
+      withOrgContext('org-1', () => renderPostImage('un gatto', {}))
     ).rejects.toThrow(/exhausted/);
 
     expect(generateImageOnOpenrouter).not.toHaveBeenCalled();
   });
 
   it('con un brand resta il cancello di sempre, senza passare dall organizzazione', async () => {
-    await withBrandContext('brand-1', () => renderPostImage(null as never, 'un banco in noce', {}));
+    await withBrandContext('brand-1', () => renderPostImage('un banco in noce', {}));
 
     expect(gateCredits).toHaveBeenCalledWith('brand-1');
     expect(gateOrgCredits).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe('il cancello dei crediti senza un brand', () => {
     gateCredits.mockRejectedValue(new Exhausted('AI credits exhausted for this billing period'));
 
     await expect(
-      withBrandContext('brand-1', () => renderPostImage(null as never, 'x', {}))
+      withBrandContext('brand-1', () => renderPostImage('x', {}))
     ).rejects.toThrow(/exhausted/);
 
     expect(generateImageOnOpenrouter).not.toHaveBeenCalled();

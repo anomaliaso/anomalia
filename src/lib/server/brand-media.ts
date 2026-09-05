@@ -5,7 +5,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
-import { genaiClient, fetchImagePart } from '$lib/server/brand-context';
+import { fetchImagePart } from '$lib/server/brand-context';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { structured } from '$lib/server/research';
 
@@ -263,7 +263,6 @@ async function runCatalog(
   supabase: SupabaseClient,
   media: BrandMediaRow
 ): Promise<Partial<BrandMediaRow>> {
-  const ai = genaiClient();
   const mime = media.mime ?? 'application/octet-stream';
   const fileName = media.file_name || media.storage_path.split('/').pop() || 'asset';
   const dims =
@@ -320,7 +319,7 @@ Return structured JSON:
     }
   }
 
-  const raw = await structured<CatalogResult>(ai, prompt, CATALOG_SCHEMA, undefined, {
+  const raw = await structured<CatalogResult>(prompt, CATALOG_SCHEMA, undefined, {
     label: 'mediaCatalog',
     images,
     brandId: media.brand_id

@@ -23,7 +23,6 @@ import {
   fetchUsdBudget,
   type StrategyBudget
 } from '$lib/server/strategy-agent';
-import { genaiClient } from '$lib/server/brand-context';
 import { buildClockSection, resolveScheduleInput } from '$lib/server/clock';
 import { writeMemory } from '$lib/server/brand-memory';
 import { analyzePostHistory, historyInsightsDigest, type HistoryPost } from '$lib/server/post-history-insights';
@@ -459,7 +458,6 @@ ${digest.slice(0, 6000)}`;
 
         const baseDigest = phasePerformanceDigest(phasePosts ?? [], phaseHistory ?? [], phase);
         const review = await reviewPhase(
-          genaiClient(),
           gtm,
           phaseIdx,
           `${baseDigest}\n\nANALYTICS AGENT RATIONALE:\n${reason}\n\nFULL DIGEST:\n${digest.slice(0, 2500)}`,
@@ -521,7 +519,7 @@ ${digest.slice(0, 6000)}`;
         const platforms = Array.isArray(brand.target_platforms)
           ? (brand.target_platforms as string[])
           : [];
-        const revised = await revisePlan(genaiClient(), current, feedback, profile, {
+        const revised = await revisePlan(current, feedback, profile, {
           platforms,
           allowedCadences: cadenceAllowed(brand.plan),
           outputLanguage: language,

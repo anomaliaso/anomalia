@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { canEnter } from '$lib/server/access';
-import { genaiClient, strategyBriefFromReport, type Benchmark, type StrategyReport } from '$lib/server/research';
+import { strategyBriefFromReport, type Benchmark, type StrategyReport } from '$lib/server/research';
 import { rankRecentWinners } from '$lib/server/scheduler';
 import { proposeGtm, activateGtm, gtmRowToPlan, activeGtmBrief } from '$lib/server/gtm';
 import {
@@ -117,7 +117,7 @@ export const POST: RequestHandler = async ({ params, request, locals: { supabase
       content_pillars: kit?.content_pillars ?? []
     };
 
-    const plan = await proposeGtm(genaiClient(), profile, {
+    const plan = await proposeGtm(profile, {
       horizon: '6m',
       objective: '',
       platforms,
@@ -164,7 +164,6 @@ export const POST: RequestHandler = async ({ params, request, locals: { supabase
       .eq('brand_id', brand.id)
       .maybeSingle();
     const { voiceFramework, platformRules } = await deriveOperationalStrategy(
-      genaiClient(),
       { name: brand.name, category: kit?.category ?? '', about: kit?.about ?? '', target_audience: kit?.target_audience ?? '', ai_context: kit?.ai_context ?? '' },
       platforms,
       outputLanguage

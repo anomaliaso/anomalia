@@ -4,7 +4,7 @@
 import { swallow } from '$lib/server/swallow';
 import { renderProductsSection, type DesignDocProduct } from '$lib/server/brand-design-doc';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, fetchImagePart } from '$lib/server/brand-context';
+import { fetchImagePart } from '$lib/server/brand-context';
 import { aiStructured, type ImagePart } from '$lib/server/ai-text';
 import { refreshCompetitorAds, type NormalizedAd } from '$lib/server/competitor-ads';
 import { metaAdLibraryUrl, type MetaAdDigestItem } from '$lib/server/meta-ad-library';
@@ -351,7 +351,6 @@ export async function remixAdsPool(
   let analyzed: { briefs: Array<AnyRec> };
   try {
     analyzed = await aiStructured<{ briefs: Array<AnyRec> }>(
-      genaiClient(),
       buildRemixPrompt({
         brandName: brand.name,
         kit: {

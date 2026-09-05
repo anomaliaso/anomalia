@@ -259,7 +259,7 @@ async function persistHandlesAndContext(
     }
     if (historySynced > 0 || additionalContext || delta) {
       if (!profile) await supabase.from('brand_kit').upsert({ brand_id: brandId }, { onConflict: 'brand_id' });
-      await rebuildBrandContext(supabase, brandId, undefined, delta);
+      await rebuildBrandContext(supabase, brandId, delta);
     }
   } catch (error) { swallow('rebuild brand context', error); }
 }

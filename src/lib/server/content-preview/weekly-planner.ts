@@ -6,7 +6,7 @@
 import { swallow } from '$lib/server/swallow';
 import { PRODUCT_REF_IMAGES, aspectRatioFor, brandOfferings, brandVisualDirective, extractVisualPlaybook, fetchLogoPart, loadMoodRefs, loadProductRefs, markProduceApproved, personImageMap, personReference, referenceModeFor, renderBrandImage, renderCarouselSlide, resolveOffering, uploadPostImage } from './images';
 import { type CaptionKnowledgeCtx, executePlan } from './caption-quality';
-import { client, planStrategy, warnOnSceneCollapse } from './plan-pipeline';
+import { planStrategy, warnOnSceneCollapse } from './plan-pipeline';
 import { normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, type PastWinner, type PostSeed, type PreviewPost, type Progress, VISUAL_REQUIRED, type WeeklyStrategy, carouselMaxPerBatch, clampCarousels, clampMediaCapabilities, clampVideos, platformKey } from './seed-model';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -180,7 +180,6 @@ export async function draftWeekSeeds(
   count: number,
   briefOverride?: string
 ): Promise<WeeklyStrategy> {
-  const ai = client();
   const maxVideos = Math.max(0, opts.maxVideos ?? 0);
   const maxCarousels = Math.max(0, opts.maxCarousels ?? 0);
   let knownSubreddits = opts.knownSubreddits ?? [];
@@ -192,9 +191,7 @@ export async function draftWeekSeeds(
   ) {
     knownSubreddits = await loadKnownSubreddits(opts.supabase, opts.brandId);
   }
-  return planStrategy(
-    ai,
-    profile,
+  return planStrategy(profile,
     opts.platforms ?? [],
     count,
     opts.prefs ?? {},
@@ -285,7 +282,6 @@ export async function executeWeekStrategy(
   // hand, so nothing here pays for an extra query.
   ladder?: LadderContext
 ): Promise<PreviewPost[]> {
-  const ai = client();
   // Defensive re-normalisation: some callers (the CLI produce route) pass seeds straight from the
   // DB without going through normalizeWeeklyStrategy — legacy formats and edited rows land here.
   // Idempotent for already-normalised input (row ids are preserved).
@@ -326,7 +322,7 @@ export async function executeWeekStrategy(
     }
   }
 
-  const posts = await executePlan(ai, profile, normalized, prefs, knowledge);
+  const posts = await executePlan(profile, normalized, prefs, knowledge);
   clampVideos(posts, Math.max(0, maxVideos), ladder);
   return markProduceApproved(warnOnSceneCollapse(posts), false);
 }
@@ -391,7 +387,6 @@ export async function renderPreviewImages(
   posts: PreviewPost[],
   opts: RenderPreviewOpts
 ): Promise<void> {
-  const ai = client();
   // La preferenza del brand si legge QUI e non nei sette chiamanti: è la produzione della
   // settimana, e sette posti da ricordare sono sette posti da dimenticare. Un `imageModel`
   // esplicito (l'anteprima ospite) vince comunque.
@@ -420,7 +415,7 @@ export async function renderPreviewImages(
   let visualStyle = profile?.visual_style as string | undefined;
   if (!visualStyle && Array.isArray(profile?.images) && profile.images.length) {
     visualStyle =
-      (await synthesizeVisualStyle(ai, profile.images, { brandColors: profile?.brand_colors, archetype: profile?.site_type }).catch((error) => { swallow('synthesize visual style', error); return ''; })) || undefined;
+      (await synthesizeVisualStyle(profile.images, { brandColors: profile?.brand_colors, archetype: profile?.site_type }).catch((error) => { swallow('synthesize visual style', error); return ''; })) || undefined;
   }
   // Concrete palette/typography directive enforced on every render (stops off-brand graphics).
   const brandLook = brandVisualDirective(profile?.brand_colors, (profile?.fonts ?? []).map((f: AnyRec) => f?.name).filter(Boolean));
@@ -562,7 +557,7 @@ export async function renderPreviewImages(
               })
             : post.image_prompt;
 
-          const dataUrl = await renderBrandImage(ai, framePrompt, renderOpts);
+          const dataUrl = await renderBrandImage(framePrompt, renderOpts);
           const qc = undefined;
           // Expose the verdict so callers can surface it (CLI --verbose).
           if (qc) (post as AnyRec).__qc = qc;
@@ -579,7 +574,7 @@ export async function renderPreviewImages(
               const total = post.image_prompts!.length;
               const rest = await Promise.all(
                 post.image_prompts!.slice(1).map((slidePrompt, idx) =>
-                  renderCarouselSlide(ai, opts.supabase, opts.userId, slidePrompt, idx + 1, total, renderOpts, anchor, {
+                  renderCarouselSlide(opts.supabase, opts.userId, slidePrompt, idx + 1, total, renderOpts, anchor, {
                     productName: post.product,
                     productKind: featured?.kind,
                     referenceImages,

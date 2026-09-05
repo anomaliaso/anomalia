@@ -1,4 +1,3 @@
-import type { GoogleGenAI } from '@google/genai';
 import { STORY_FAILURE_MODES, normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type ImagePart, MAX_COMPETITOR_MOOD_IMAGES, type PastWinner, type PostSeed, type PreviewPost, STRATEGY_SCHEMA, type WeeklyStrategy, carouselMaxSlides, clampCarousels, clampMediaCapabilities, enforceFaceBrandPeople, enforceHookComponents, faceBrandMode, peopleGuidanceBlock, peopleList, platformKey, platformPlaybook, primaryPersonName, resolveSeedWithRubrics, sanitizeSeed, strategySchemaWithRubrics } from './seed-model';
 import sharp from 'sharp';
 import { fetchImagePart } from '$lib/server/brand-context';
@@ -9,11 +8,6 @@ import { ladderBrief, type LadderContext } from '$lib/server/production-ladder';
 import { guardrailsBlock } from '$lib/server/brand-guardrails';
 import { rubricsBrief, type Rubric } from '$lib/server/rubrics';
 import { knownSubredditsBlock } from '$lib/server/platform-hygiene';
-
-/** Dummy: structured()/testo ignorano il client; le immagini Google le costruisce images.ts. */
-export function client(): GoogleGenAI {
-  return null as unknown as GoogleGenAI;
-}
 
 // Frammenti condivisi dai DUE passaggi: le regole di precedenza sono sottili e duplicarle
 // significa vederle divergere.
@@ -81,7 +75,6 @@ export function brandLines(profile: BrandProfile, prefs: ContentPrefs) {
 // PASS 1 — decide the batch's editorial angle and break it into `count` distinct post seeds,
 // grounded in the brand's voice (ai_context) and, when available, its real top-performing posts.
 export async function planStrategy(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   platforms: string[],
   count: number,
@@ -289,7 +282,7 @@ Return JSON.`;
 
   // Il campo rubrica entra nello schema SOLO se esistono rubriche approvate.
   const schema = rubrics.length ? strategySchemaWithRubrics(rubrics.map((r) => r.name)) : STRATEGY_SCHEMA;
-  const parsed: AnyRec = await structured(ai, prompt, schema,
+  const parsed: AnyRec = await structured(prompt, schema,
     'You are an expert performance-marketing strategist. Be specific and on-brand; make every post earn its place. Vary offerings, content pillars and angles deliberately — never collapse the batch into near-identical posts.',
     { label: 'planStrategy', images: competitorParts });
   const rawSeeds = Array.isArray(parsed.seeds) ? parsed.seeds : [];
@@ -392,11 +385,11 @@ Return JSON.`;
   };
 
   // Pass 1.5: un secondo modello riscrive in loco i seed deboli. Best-effort.
-  const reviewed = await reviewSeeds(ai, profile, strategy, plats, rubrics);
+  const reviewed = await reviewSeeds(profile, strategy, plats, rubrics);
   // Pass 1.6 — panel sui copioni UGC PRIMA di spendere un frame: il renderer rende bellissimi
   // anche i copioni deboli, ed è esattamente la trappola. Best-effort.
   const { reviewUgcScripts } = await import('$lib/server/ugc-script-review');
-  await reviewUgcScripts(ai, reviewed.seeds, {
+  await reviewUgcScripts(reviewed.seeds, {
     brandName: String(profile?.name ?? ''),
     language: String(prefs.language ?? profile?.language ?? ''),
     theme: reviewed.theme
@@ -479,7 +472,6 @@ export function applySeedFix<T extends PostSeed>(
 }
 
 async function reviewSeeds(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   strategy: WeeklyStrategy,
   plats: string[],
@@ -539,7 +531,7 @@ Flag and fix a seed when:
 - A "story:" seed you cannot FOLLOW. Read its beats as someone who knows nothing about this brand or this subject: by the last panel you must be able to say what happened, to whom, and why it mattered — from the panels alone, with the caption covered. If you have to already know the topic to understand it, the story is not written yet: rewrite the beats so the situation explains itself as it goes. The commonest way this fails is a line of dialogue that only makes sense to someone inside it — a rule quoted, a form named, an objection raised — with nothing in the panel showing what it means for the person in front of it.
 Leave good seeds out of "fixes". Return JSON.`;
 
-    const parsed: AnyRec = await structured(ai, prompt, SEED_REVIEW_SCHEMA, undefined, { label: 'reviewSeeds' });
+    const parsed: AnyRec = await structured(prompt, SEED_REVIEW_SCHEMA, undefined, { label: 'reviewSeeds' });
     const fixes: AnyRec[] = Array.isArray(parsed.fixes) ? parsed.fixes : [];
     if (!fixes.length) return strategy;
 

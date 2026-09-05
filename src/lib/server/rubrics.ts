@@ -1,4 +1,3 @@
-import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { CONTENT_FORMATS, normalizeContentFormat, mediaForFormat, type ContentFormat } from '$lib/content-formats';
@@ -124,7 +123,7 @@ export type ProposeRubricsOpts = {
 
 // Propose 5-8 candidate rubrics for the client to edit/approve. Pure generation — persistence is
 // the caller's job (saveProposedRubrics).
-export async function proposeRubrics(ai: GoogleGenAI, profile: BrandProfile, opts: ProposeRubricsOpts): Promise<Rubric[]> {
+export async function proposeRubrics(profile: BrandProfile, opts: ProposeRubricsOpts): Promise<Rubric[]> {
   const pillars = Array.isArray(profile?.content_pillars) ? profile.content_pillars.filter(Boolean) : [];
   // Cosa ha funzionato QUI, e le leve di contrasto che il repo conosce già: senza, una serie nasce
   // dalla sola idea che il modello si è fatto della categoria — cioè dal luogo comune.
@@ -158,7 +157,7 @@ Rules:
 Write ALL prose in ${opts.outputLanguage || 'English'}; keep format values unchanged.
 Return JSON.`;
 
-  const parsed: AnyRec = await structured(ai, prompt, RUBRICS_SCHEMA,
+  const parsed: AnyRec = await structured(prompt, RUBRICS_SCHEMA,
     'You are a senior editorial strategist at an agency, designing the recurring series (rubriche) a brand becomes known for. Be specific and grounded; a series must be repeatable 20 times without wearing out.',
     { label: 'proposeRubrics' });
   const raw: AnyRec[] = Array.isArray(parsed?.rubrics) ? parsed.rubrics : [];

@@ -359,7 +359,7 @@ async function runImageJob(
   let renders = 0;
   for (let i = 0; i < (job.count ?? 1); i++) {
     renders += 1;
-    const dataUrl = await renderPostImage(null as never, job.prompt, opts).catch(() => undefined);
+    const dataUrl = await renderPostImage(job.prompt, opts).catch(() => undefined);
     if (!dataUrl) break;
 
     const filed = job.brandId

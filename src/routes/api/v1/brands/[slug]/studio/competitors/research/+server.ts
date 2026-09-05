@@ -49,7 +49,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
   try {
     const { discoverCompetitors } = await import('$lib/server/research');
 
-    const { competitors: discovered } = await discoverCompetitors(null as never, profile, 'italiano');
+    const { competitors: discovered } = await discoverCompetitors(profile, 'italiano');
 
     // Deduplicate and insert
     let added = 0;

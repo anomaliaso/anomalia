@@ -12,9 +12,7 @@
  */
 import { swallow } from '$lib/server/swallow';
 import { SITE_TYPES, clampSiteType, sanitizeThemeColor } from '$lib/brand-fields';
-import type { GoogleGenAI } from '@google/genai';
 import { browserlessContent, isBrowserlessConfigured } from './browserless';
-import { aiStructured } from '$lib/server/ai-text';
 import { structured } from '$lib/server/research';
 import { llmStructured } from '$lib/server/llm';
 import {
@@ -346,7 +344,7 @@ The website may be in any language — extract information regardless. Write the
     // analyzeBrand's `client` is deliberately mock-shaped for tests; structured() only ever
     // calls models.generateContent on it, so the narrow shape is safe to widen here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed: any = await structured(client as unknown as GoogleGenAI, prompt, brandProfileSchema,
+    const parsed: any = await structured(prompt, brandProfileSchema,
         `You are an expert brand analyst. Analyze websites and extract structured brand profiles. Be specific and detailed, but NEVER fabricate: only report what the site actually shows — an empty products list is correct for sites with no catalog, and ai_character should be omitted when a human spokesperson doesn't fit the brand. When you do include an AI character, describe a photorealistic person (appearance, clothing, setting, expression) that authentically represents the brand's values and audience.`,
         { label: 'brandProfile', images: imageParts });
     if (!parsed.name) throw new Error('LLM returned invalid brand profile');
@@ -383,7 +381,6 @@ const ANNOUNCEMENTS_SCHEMA = {
 export async function extractAnnouncements(
     pageTexts: Record<string, string>,
     client: { models: { generateContent: (params: any) => Promise<{ text?: string | null }> } },
-    ai?: GoogleGenAI,
 ): Promise<Array<{ title: string; date?: string; summary?: string }>> {
     const ctx = Object.entries(pageTexts)
         .map(([u, t]) => `--- ${u} ---\n${t.slice(0, 8000)}`)
@@ -395,14 +392,12 @@ export async function extractAnnouncements(
 
     try {
         void client;
-        const parsed = ai
-            ? await aiStructured<{ announcements?: Array<Record<string, unknown>> }>(ai, prompt, ANNOUNCEMENTS_SCHEMA, systemInstruction, 'return_announcements')
-            : await llmStructured<{ announcements?: Array<Record<string, unknown>> }>({
-                prompt,
-                schema: ANNOUNCEMENTS_SCHEMA,
-                system: systemInstruction,
-                label: 'announcements'
-              });
+        const parsed = await llmStructured<{ announcements?: Array<Record<string, unknown>> }>({
+            prompt,
+            schema: ANNOUNCEMENTS_SCHEMA,
+            system: systemInstruction,
+            label: 'announcements'
+        });
         if (!Array.isArray(parsed.announcements)) return [];
         return parsed.announcements
             .slice(0, 8)
@@ -644,7 +639,7 @@ export async function runBrandAnalysis(
                 const html = await loadPageHtml(annUrl, undefined, browserRenderer);
                 if (html) annTexts[annUrl] = extractVisibleText(html);
             }
-            const announcements = await extractAnnouncements(annTexts, client, client as GoogleGenAI);
+            const announcements = await extractAnnouncements(annTexts, client);
             if (announcements.length) {
                 profile.announcements = announcements.map((a) => ({ ...a, url: Object.keys(annTexts)[0] }));
             }

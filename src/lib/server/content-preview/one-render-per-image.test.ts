@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe('un render per immagine', () => {
   it('paga UN render, non due candidati piu due ritentativi', async () => {
-    const out = await images.renderBrandImage(null as never, 'un banco di lavoro in noce', {
+    const out = await images.renderBrandImage('un banco di lavoro in noce', {
       visualStyle: 'warm editorial'
     });
 
@@ -66,7 +66,7 @@ describe('un render per immagine', () => {
       .mockResolvedValueOnce({ dataUrl: undefined })
       .mockResolvedValueOnce(RENDERED);
 
-    const out = await images.renderBrandImage(null as never, 'x', {});
+    const out = await images.renderBrandImage('x', {});
 
     expect(out).toBeTruthy();
     expect(renderOnKie).toHaveBeenCalledTimes(2);

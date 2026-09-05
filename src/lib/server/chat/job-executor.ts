@@ -70,7 +70,6 @@ export async function executeChatToolJob(
     if (locked) return locked;
   }
 
-  const { genaiClient } = await import('$lib/server/brand-context');
 
   switch (toolName) {
     case 'generate_strategy': {
@@ -118,7 +117,6 @@ export async function executeChatToolJob(
     case 'discover_competitors': {
       const { discoverCompetitors, resolveCompetitorHandles, scrapeCompetitors, benchmarkCompetitors } = await import('$lib/server/research');
       const { scrapeForOnboarding, getBrandScrapeTargets } = await import('$lib/server/scrapecreators');
-      const ai = genaiClient();
 
       const { data: kit } = await supabase.from('brand_kit').select('*').eq('brand_id', brandId).maybeSingle();
       const { data: brand } = await supabase.from('brands').select('name, website, target_platforms').eq('id', brandId).maybeSingle();
@@ -128,11 +126,11 @@ export async function executeChatToolJob(
       const targets = await getBrandScrapeTargets(supabase, brandId);
       const brandScrape = targets.length ? await scrapeForOnboarding(targets).catch(() => ({ posts: [], errors: [] })) : { posts: [], errors: [] };
 
-      const discovered = await discoverCompetitors(ai, profile).catch(() => ({ competitors: [], citations: [] }));
+      const discovered = await discoverCompetitors(profile).catch(() => ({ competitors: [], citations: [] }));
       const competitors = discovered.competitors ?? [];
       if (!competitors.length) return { error: 'No competitors found' };
 
-      const handleMap = await resolveCompetitorHandles(ai, competitors, platforms).catch(() => new Map());
+      const handleMap = await resolveCompetitorHandles(competitors, platforms).catch(() => new Map());
       await cancel.assertActive();
       const competitorPosts = await scrapeCompetitors(handleMap);
       const benchmark = benchmarkCompetitors(brandScrape.posts, competitorPosts);
@@ -149,7 +147,7 @@ export async function executeChatToolJob(
       const { writeResearchToMemory } = await import('$lib/server/brand-memory');
       const { synthesizeStrategyReport } = await import('$lib/server/research');
       try {
-        const qual = await synthesizeStrategyReport(ai, profile, benchmark, '', platforms).catch(() => null);
+        const qual = await synthesizeStrategyReport(profile, benchmark, '', platforms).catch(() => null);
         if (qual) await writeResearchToMemory(supabase, brandId, qual);
       } catch { /* best-effort */ }
 

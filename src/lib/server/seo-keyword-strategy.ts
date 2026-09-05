@@ -4,7 +4,7 @@
 // DataForSEO volumes/difficulty so opportunity scores are honest.
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { genaiClient, groundedText, structured } from './research';
+import { groundedText, structured } from './research';
 import { fetchKeywordOverview, fetchKeywordSuggestions, type KeywordMetrics } from './dataforseo';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,9 +145,7 @@ async function generateStrategy(admin: SupabaseClient, brand: AnyRec): Promise<K
     }
   } catch (error) { swallow('load gsc summary', error); }
 
-  const ai = genaiClient();
   const grounded = await groundedText(
-    ai,
     `Research SEO keyword opportunities for this brand.
 
 BRAND: ${brand.name} — ${kit?.about ?? ''}
@@ -165,7 +163,6 @@ Using real, current web information: which search keywords have real demand for 
   );
 
   const strategy = await structured<KeywordStrategy>(
-    ai,
     `Normalise this SEO research into structured data: an overall focusSummary (one paragraph), 10-18 target keywords (each with search intent, opportunity level, a one-line rationale, and a concrete action to take), and 3-6 competitor gaps to exploit. Use the brand's own content language for keywords where relevant.\n\nRESEARCH:\n${grounded.text}`,
     STRATEGY_SCHEMA
   );

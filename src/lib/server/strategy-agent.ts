@@ -1,5 +1,4 @@
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
-import type { GoogleGenAI } from '@google/genai';
 import type { LanguageModel } from 'ai';
 import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
 import { generateText, tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
@@ -10,7 +9,6 @@ import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harne
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
-import { genaiClient } from '$lib/server/brand-context';
 import { computeCostUsd, logAiCall, setBrandPlanContext, withBrandContext } from '$lib/server/ai-log';
 import { persistAgentRun } from '$lib/server/agent-runs';
 import { getCreditsUsage, type Brand } from '$lib/server/credits';
@@ -321,7 +319,6 @@ const PLAN_SYSTEM =
   'You are a senior social-media strategist at an agency, writing the editorial plan a client signs off on. Be specific, honest and grounded in the data provided.';
 
 async function draftEditorialVariants(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   agentBrief: string,
   opts: ProposePlanOpts & { n?: number; lenses?: string[]; withChanges?: boolean; brandId?: string }
@@ -344,9 +341,8 @@ ${opts.outputLanguage ? `Write user-facing prose in ${opts.outputLanguage}.` : '
 Return JSON.`;
 
   return parallelVariants<AnyRec>(
-    ai,
     (i) =>
-      aiStructured<AnyRec>(ai, makePrompt(lenses[i % lenses.length]), schema, PLAN_SYSTEM, 'return_editorial_plan', {
+      aiStructured<AnyRec>(makePrompt(lenses[i % lenses.length]), schema, PLAN_SYSTEM, 'return_editorial_plan', {
         temperature: CREATIVE_TEMPERATURE,
         model: opts.model,
         brandId: opts.brandId,
@@ -358,7 +354,7 @@ Return JSON.`;
       const prompt = `Pick the best editorial plan.\n${summaries}\nReturn JSON: { "winner": <1-based index> }`;
       const selSchema = { type: 'object' as const, properties: { winner: { type: 'number' as const } }, required: ['winner'] };
       try {
-        const result = await aiStructured<{ winner?: number }>(ai, prompt, selSchema, PLAN_SYSTEM, 'pick_best', {
+        const result = await aiStructured<{ winner?: number }>(prompt, selSchema, PLAN_SYSTEM, 'pick_best', {
           brandId: opts.brandId,
           ...PIN_GATEWAY
         });
@@ -477,7 +473,6 @@ export async function runStrategyAgent(opts: StrategyAgentOpts): Promise<Strateg
 }
 
 async function runStrategyAgentInner(opts: StrategyAgentOpts): Promise<StrategyAgentResult> {
-  const ai = genaiClient();
   const basePlan = opts.currentPlan ?? emptyPlanStub(opts.constraints.allowedCadences);
   const feasibilityCtx = await loadFeasibilityContext(
     opts.supabase,
@@ -694,7 +689,7 @@ async function runStrategyAgentInner(opts: StrategyAgentOpts): Promise<StrategyA
         if (!gate.ok) return { error: gate.error };
         if (budget.usdRemaining <= 0) return { error: 'USD budget exhausted for this run' };
         // Full chain, Google grounding FIRST, with DeepSeek/Exa/Tavily as fallbacks.
-        const { text, citations: cits } = await groundedText(genaiClient(), query, undefined, { brandId: opts.brandId });
+        const { text, citations: cits } = await groundedText(query, undefined, { brandId: opts.brandId });
         citations.push(...cits);
         budget.usdSpent += ESTIMATED_SEARCH_USD;
         budget.usdRemaining = Math.max(0, budget.usdRemaining - ESTIMATED_SEARCH_USD);
@@ -713,7 +708,7 @@ async function runStrategyAgentInner(opts: StrategyAgentOpts): Promise<StrategyA
         const gate = consumeDraftBudget(budget);
         if (!gate.ok) return { error: gate.error };
         if (budget.usdRemaining < ESTIMATED_DRAFT_USD) return { error: 'USD budget too low for draft_variants' };
-        const raw = await draftEditorialVariants(ai, opts.profile, brief, {
+        const raw = await draftEditorialVariants(opts.profile, brief, {
           ...planOpts,
           n,
           lenses

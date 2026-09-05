@@ -1,4 +1,3 @@
-import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { mondayOf } from '$lib/server/editorial-plan';
@@ -376,7 +375,6 @@ const FUNNEL_SPEC_SCHEMA = {
 };
 
 async function proposeFunnelSpec(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   opts: Omit<ProposeGtmOpts, 'horizon'>
 ): Promise<FunnelSpec | null> {
@@ -390,7 +388,7 @@ ${opts.objective ? `Business objective (user-stated — derive the final metric/
 ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
-    const raw = await aiStructured<AnyRec>(ai, prompt, FUNNEL_SPEC_SCHEMA, GTM_SYSTEM, 'return_funnel_spec', { ...PIN_GATEWAY });
+    const raw = await aiStructured<AnyRec>(prompt, FUNNEL_SPEC_SCHEMA, GTM_SYSTEM, 'return_funnel_spec', { ...PIN_GATEWAY });
     return clampFunnelSpec({
       final: { metric: raw?.final_metric, value: raw?.final_value },
       rates: {
@@ -468,7 +466,6 @@ const VARIANTS = 3;
 
 // Generate a single GTM variant (one LLM call). Used in parallel by proposeGtmDual.
 async function generateGtmVariant(
-  ai: GoogleGenAI,
   profile: BrandProfile,
   opts: GtmDualOpts & { horizon: Horizon },
   existingPlan?: GtmPlan,
@@ -497,7 +494,7 @@ ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 
-  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
+  const raw = await aiStructured<AnyRec>(prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
   const plan = normalizeGtm(raw, opts.horizon);
   if (plan.phases.length === 0) {
     console.error(`[GTM] generateGtmVariant: 0 phases for ${opts.horizon}. Raw:`, JSON.stringify(raw).slice(0, 1000));
@@ -508,7 +505,6 @@ Return JSON.`;
 
 // Pick the best plan from N variants using an LLM comparison call.
 async function selectBestGtm(
-  ai: GoogleGenAI,
   variants: GtmPlan[],
   profile: BrandProfile,
   horizon: Horizon,
@@ -544,7 +540,7 @@ Return JSON.`;
 
   try {
     console.log(`[GTM] selecting best ${horizonLabel} from ${variants.length} variants…`);
-    const raw = await aiStructured<{ winner?: number }>(ai, prompt, schema, GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
+    const raw = await aiStructured<{ winner?: number }>(prompt, schema, GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
     const idx = Math.max(0, Math.min(variants.length - 1, (raw?.winner ?? 1) - 1));
     console.log(`[GTM] selected variant ${idx + 1} as best ${horizonLabel}`);
     return variants[idx];
@@ -554,11 +550,11 @@ Return JSON.`;
   }
 }
 
-export async function proposeGtm(ai: GoogleGenAI, profile: BrandProfile, opts: ProposeGtmOpts): Promise<GtmPlan> {
+export async function proposeGtm(profile: BrandProfile, opts: ProposeGtmOpts): Promise<GtmPlan> {
   const bounds = phaseBounds(opts.horizon);
   // Settle the funnel spec first (caller override wins, clamped; else LLM proposes, clamped;
   // failure → null → no funnel). Same one-way flow as proposeGtmDual.
-  const funnel = clampFunnelSpec(opts.funnelSpec as AnyRec) ?? (await proposeFunnelSpec(ai, profile, opts));
+  const funnel = clampFunnelSpec(opts.funnelSpec as AnyRec) ?? (await proposeFunnelSpec(profile, opts));
   const prompt = `Design this brand's GO-TO-MARKET roadmap over a ${opts.horizon === '90d' ? '90-day' : opts.horizon === '6m' ? '6-month' : opts.horizon === '1y' ? '1-year' : '2-year'} horizon (${horizonWeeks(opts.horizon)} weeks) — the phased growth plan a serious agency would present. The client approves it; every phase then steers content production.
 
 ${profileBlock(profile)}
@@ -572,7 +568,7 @@ ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
 
-  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
+  const raw = await aiStructured<AnyRec>(prompt, gtmSchema(), GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
   const plan = normalizeGtm(raw, opts.horizon);
   // Code owns the numbers: stamp deterministic funnel goals over whatever the model wrote.
   plan.phases = stampFunnelGoals(plan.phases, funnel);
@@ -580,18 +576,18 @@ Return JSON.`;
   return plan;
 }
 
-export async function proposeGtmDual(ai: GoogleGenAI, profile: BrandProfile, opts: GtmDualOpts): Promise<GtmPlan> {
-  return proposeGtmDualInner(ai, profile, opts);
+export async function proposeGtmDual(profile: BrandProfile, opts: GtmDualOpts): Promise<GtmPlan> {
+  return proposeGtmDualInner(profile, opts);
 }
 
-async function proposeGtmDualInner(ai: GoogleGenAI, profile: BrandProfile, opts: GtmDualOpts): Promise<GtmPlan> {
+async function proposeGtmDualInner(profile: BrandProfile, opts: GtmDualOpts): Promise<GtmPlan> {
   console.log(`[GTM] proposeGtmDual: generating ${VARIANTS} 90d variants in parallel…`);
   const t0 = Date.now();
 
   // Phase 0: settle the FUNNEL SPEC before any variant runs, so every variant reasons around the
   // SAME computed numbers. Caller-provided spec wins (clamped); else the LLM proposes starting
   // values (clamped); on failure → null → no funnel layer (pre-funnel behaviour).
-  const funnel = clampFunnelSpec(opts.funnelSpec as AnyRec) ?? (await proposeFunnelSpec(ai, profile, opts));
+  const funnel = clampFunnelSpec(opts.funnelSpec as AnyRec) ?? (await proposeFunnelSpec(profile, opts));
   if (funnel) console.log(`[GTM] funnel spec: ${funnel.final.value} ${funnel.final.metric} (rates ${JSON.stringify(funnel.rates)})`);
 
   // Phase 1: generate N 90-day variants in parallel, each with its own positioning lens so the
@@ -600,7 +596,7 @@ async function proposeGtmDualInner(ai: GoogleGenAI, profile: BrandProfile, opts:
   const variants90dResults = await Promise.allSettled(
     Array.from({ length: VARIANTS }, (_, i) => {
       console.log(`[GTM]   90d variant ${i + 1}/${VARIANTS} started`);
-      return generateGtmVariant(ai, profile, { ...opts, horizon: '90d' }, undefined, VARIANT_LENSES[i % VARIANT_LENSES.length], funnel).then((v) => {
+      return generateGtmVariant(profile, { ...opts, horizon: '90d' }, undefined, VARIANT_LENSES[i % VARIANT_LENSES.length], funnel).then((v) => {
         console.log(`[GTM]   90d variant ${i + 1}/${VARIANTS} done — ${v.phases.length} phases: ${v.phases.map((p) => p.name).join(', ')}`);
         return v;
       });
@@ -611,7 +607,7 @@ async function proposeGtmDualInner(ai: GoogleGenAI, profile: BrandProfile, opts:
   if (failed90d.length) console.warn(`[GTM] ${failed90d.length}/${VARIANTS} 90d variants failed`);
   if (variants90d.length === 0) throw new Error('All 90d GTM variants failed');
   console.log(`[GTM] 90d variants done in ${Date.now() - t0}ms, selecting best from ${variants90d.length}…`);
-  const best90d = await selectBestGtm(ai, variants90d, profile, '90d', opts.outputLanguage);
+  const best90d = await selectBestGtm(variants90d, profile, '90d', opts.outputLanguage);
   console.log(`[GTM] best 90d selected: ${best90d.objective}`);
 
   // Phase 2: generate N 6-month variants in parallel, each extending the chosen 90-day plan.
@@ -620,7 +616,7 @@ async function proposeGtmDualInner(ai: GoogleGenAI, profile: BrandProfile, opts:
   const variants6mResults = await Promise.allSettled(
     Array.from({ length: VARIANTS }, (_, i) => {
       console.log(`[GTM]   6m variant ${i + 1}/${VARIANTS} started`);
-      return generateGtmVariant(ai, profile, { ...opts, horizon: '6m' }, best90d, undefined, funnel).then((v) => {
+      return generateGtmVariant(profile, { ...opts, horizon: '6m' }, best90d, undefined, funnel).then((v) => {
         console.log(`[GTM]   6m variant ${i + 1}/${VARIANTS} done — ${v.phases.length} phases: ${v.phases.map((p) => p.name).join(', ')}`);
         return v;
       });
@@ -631,7 +627,7 @@ async function proposeGtmDualInner(ai: GoogleGenAI, profile: BrandProfile, opts:
   if (failed6m.length) console.warn(`[GTM] ${failed6m.length}/${VARIANTS} 6m variants failed`);
   if (variants6m.length === 0) throw new Error('All 6m GTM variants failed');
   console.log(`[GTM] 6m variants done in ${Date.now() - t1}ms, selecting best from ${variants6m.length}…`);
-  const best6m = await selectBestGtm(ai, variants6m, profile, '6m', opts.outputLanguage);
+  const best6m = await selectBestGtm(variants6m, profile, '6m', opts.outputLanguage);
   console.log(`[GTM] best 6m selected: ${best6m.objective}`);
   console.log(`[GTM] proposeGtmDual total: ${Date.now() - t0}ms`);
 
@@ -676,18 +672,16 @@ export function gtmForPrompt(plan: GtmPlan): string {
 // Dual-horizon redirect with parallel variants: generate N revised 90-day plans in parallel,
 // pick the best, then generate N revised 6-month plans extending it, pick the best.
 export async function redirectGtmDual(
-  ai: GoogleGenAI,
   current: GtmPlan,
   feedback: string,
   phaseIndex: number | null,
   profile: BrandProfile,
   opts: GtmDualOpts
 ): Promise<GtmPlan> {
-  return redirectGtmDualInner(ai, current, feedback, phaseIndex, profile, opts);
+  return redirectGtmDualInner(current, feedback, phaseIndex, profile, opts);
 }
 
 async function redirectGtmDualInner(
-  ai: GoogleGenAI,
   current: GtmPlan,
   feedback: string,
   phaseIndex: number | null,
@@ -726,11 +720,11 @@ Return the FULL revised plan, plus:
 ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
-      const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
+      const raw = await aiStructured<AnyRec>(prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
       return normalizeGtm(raw, '90d');
     })
   );
-  const best90d = await selectBestGtm(ai, variants90d, profile, '90d', opts.outputLanguage);
+  const best90d = await selectBestGtm(variants90d, profile, '90d', opts.outputLanguage);
   const reply90d = (variants90d[0] as AnyRec)?.reply ?? '';
 
   // Generate N revised 6-month variants in parallel, each extending the chosen 90-day plan.
@@ -756,11 +750,11 @@ Return the FULL revised 6-month plan, plus:
 ${HONESTY_LINE}
 ${languageLine(opts.outputLanguage)}
 Return JSON.`;
-      const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
+      const raw = await aiStructured<AnyRec>(prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { temperature: CREATIVE_TEMPERATURE, ...PIN_GATEWAY });
       return normalizeGtm(raw, '6m');
     })
   );
-  const best6m = await selectBestGtm(ai, variants6m, profile, '6m', opts.outputLanguage);
+  const best6m = await selectBestGtm(variants6m, profile, '6m', opts.outputLanguage);
   const reply6m = (variants6m[0] as AnyRec)?.reply ?? '';
   const reply = reply6m || reply90d;
   const changes = [
@@ -811,7 +805,6 @@ const REVIEW_SCHEMA = {
 };
 
 export async function reviewPhase(
-  ai: GoogleGenAI,
   plan: GtmPlan,
   phaseIndex: number,
   performanceDigest: string,
@@ -832,7 +825,7 @@ ${HONESTY_LINE}
 ${languageLine(outputLanguage)}
 Return JSON.`;
 
-  const raw = await aiStructured<AnyRec>(ai, prompt, REVIEW_SCHEMA, GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
+  const raw = await aiStructured<AnyRec>(prompt, REVIEW_SCHEMA, GTM_SYSTEM, 'return_result', { ...PIN_GATEWAY });
   const verdict = raw?.verdict === 'adjust' ? 'adjust' : 'on_track';
   const revised = verdict === 'adjust' ? normalizeGtm({ objective: plan.objective, phases: raw?.phases }, plan.horizon) : null;
   // A course correction keeps the funnel spec; the numeric goals are re-stamped in code.

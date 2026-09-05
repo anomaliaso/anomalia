@@ -111,8 +111,7 @@ async function extractJson<T>(
   opts: { label: string; brandId: string }
 ): Promise<T | null> {
   try {
-    const { genaiClient } = await import('$lib/server/brand-context');
-    return await structured<T>(genaiClient(), prompt, schema, system, {
+    return await structured<T>(prompt, schema, system, {
       label: opts.label,
       brandId: opts.brandId,
       context: 'knowledge'
