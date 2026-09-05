@@ -100,6 +100,34 @@ git merge-base --is-ancestor <merge-commit> origin/dev && echo LANDED || echo NE
 ```
 Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: vanno riportate a mano sul branch di destinazione (cherry-pick del merge commit, che essendo squash ha un solo genitore), e la risoluzione dei conflitti è il prezzo di averlo scoperto tardi.
 
+### Un difetto e la sua correzione nello stesso ramo sono una trappola armata
+La #372 aveva cinque commit, e il terzo annullava una regressione introdotta dal secondo: una
+dichiarazione di contenuto AI spenta senza volerlo (`content_type` che perde il prefisso
+`uploaded`, e `publish.ts` che da quel prefisso ricava se dichiarare). Il merge è stato fatto **al
+secondo commit**. Risultato: su `dev` è finito il difetto senza la correzione, e chi lo aveva
+scritto lo dava per consegnato perché sul SUO ramo era a posto.
+
+Non è un errore di verifica del merge — quello è il sintomo, ed è coperto dalla lezione qui sopra.
+La causa è la **forma della consegna**: una PR non è un'unità atomica, e chi la scrive non decide
+dove viene tagliata. Cinque commit sono cinque stati possibili del ramo base, e se il commit N
+introduce un difetto che il commit N+2 ripara, due di quei tagli lasciano il prodotto **peggio di
+non aver mergiato niente**. La trappola resta armata finché qualcuno non preme merge nel punto
+sbagliato, e nessuna review la vede: il diff completo della PR è corretto.
+
+Segnale: nel ramo esiste un commit il cui messaggio dice «fix», «undo», «revert» o «restore» di
+qualcosa che un commit precedente **dello stesso ramo** ha fatto.
+
+Mossa: **nessun commit lascia il ramo in uno stato peggiore del precedente.** Se una tua correzione
+annulla un tuo difetto introdotto prima nello stesso ramo, i due si fondono con `rebase -i` *prima*
+della review, così non esiste taglio che possa separarli. È la regola di Kent Beck che questo repo
+già ha — riordino separato dal cambio di comportamento — applicata al ramo invece che al singolo
+commit. Il controllo, prima di chiedere la review:
+```bash
+git log --oneline <base>..HEAD    # ogni prefisso di questa lista è uno stato che può finire in produzione
+```
+Questa lezione è più forte delle altre due che l'hanno accompagnata, perché quelle dipendono da
+qualcuno che si ricordi di controllare; questa toglie la possibilità che il taglio sia dannoso.
+
 ## Test: distinguere il tuo difetto dal rumore
 
 ### CI rossa con zero test falliti è una promessa non attesa, non un test tuo
