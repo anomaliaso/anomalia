@@ -305,16 +305,13 @@ export const GENERATE_MEDIA = {
   tool: 'generate_media',
   title: 'Generate media into the library',
   description:
-    'PREFER generate_image or generate_video: they say what they do, and refining or motion ' +
-    'control has its own tool. This one stays and keeps working, forwarding to those two. ' +
-    'To pick the model, read get_media_models and pass model — for this call only. ' +
-    'Generate a new image or video into the brand media library, then pass the id it returns as ' +
-    'media_ids on create_post. THIS SPENDS CREDITS: every image is a paid render and every video ' +
-    'is a paid clip, so ask for what you need and no more. It creates nothing in the calendar — ' +
-    'generate alternatives, look at them with list_media, and attach only the one you keep. ' +
-    'Images come back ready, up to ' + MAX_MEDIA_ALTERNATIVES + ' per call. A video takes minutes: ' +
-    'it comes back as a job_id with status rendering, and check_media_job says when it landed — ' +
-    'do not call this again for the same clip while one is still rendering.',
+    'To make a picture or a clip — the older door, kept working. Prefer generate_image or ' +
+    'generate_video: they name what they do, and changing a picture or animating one has its own ' +
+    'tool. kind picks image (the default) or video, and everything here forwards to those two. ' +
+    'It spends credits. It creates nothing in the calendar and publishes nothing; pass the id ' +
+    'you keep to create_post as media_ids. Images come back ready, up to ' +
+    MAX_MEDIA_ALTERNATIVES + ' per call; a clip takes minutes and returns a job_id, and ' +
+    'check_media_job says when it landed — calling this again for the same clip bills a second one.',
   method: 'POST',
   pathUnderBrand: '/media/generate',
   input: z
@@ -469,8 +466,12 @@ export const MAKE_VIDEO = {
   tool: 'make_video',
   title: 'Animate post to video',
   description:
-    'Animate the cover into a video clip (also retries a video that fell back to a photo). id ' +
-    'accepts a short prefix.',
+    'To turn a post you already have into a video: this animates that post’s cover image and ' +
+    'attaches the clip back to the same post (it also retries a video that fell back to a ' +
+    'photo). It needs an existing post. To animate a photo on its own, or make any clip that is ' +
+    'not going on a post, use generate_video — that one needs no post at all. It spends credits: ' +
+    'one clip. It does not publish, and the post keeps the status it had. id accepts a short ' +
+    'prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/video',
   resource: 'post',
@@ -611,14 +612,15 @@ export const REFINE_IMAGE = {
   tool: 'refine_image',
   title: 'Refine an image',
   description:
-    'Change an image that is already in the brand library — "make the background warmer", ' +
-    '"remove the cup on the left" — and file the result as a NEW asset. The original is left ' +
-    'untouched, so a refinement never destroys what it started from. BILLS A RENDER PER IMAGE ' +
-    '(about 8 credits each). base_media_id comes from list_media and must belong to this brand. ' +
-    'Say ' +
-    'what should CHANGE, not what the whole picture should be: the source is the subject, the ' +
-    'instruction is the edit. Refining has its own model — get_media_models, slot ' +
-    'imageRefineModel — and model here applies to this call only. base_media_id takes a short prefix, like post ids do.',
+    'To change a photo you already have — "make it red", "warmer background", "remove the cup on ' +
+    'the left" — instead of drawing a new one. base_media_id is any image in this brand’s ' +
+    'library; list_media finds it, and a short prefix works. Say what should CHANGE, not what ' +
+    'the whole picture should be. The result is filed as a NEW asset, so a wrong edit costs one ' +
+    'render and never your original. Do NOT reach for generate_image to alter something: that ' +
+    'draws a different picture from scratch. It spends credits, and the answer says how many ' +
+    'renders were billed. It creates nothing in the calendar and publishes nothing; pass the id ' +
+    'it returns to create_post as media_ids when you want a post. Changing has its own models — ' +
+    'get_media_models, slot imageRefineModel — and model here applies to this call only.',
   method: 'POST',
   pathUnderBrand: '/media/images/refine',
   input: z
@@ -659,15 +661,16 @@ export const GENERATE_VIDEO = {
   tool: 'generate_video',
   title: 'Generate a video',
   description:
-    'Film a NEW clip into the brand media library — from a prompt alone, or from an image you ' +
-    'already have. TO ANIMATE A LIBRARY IMAGE, pass its id as base_media_id: that is how "animate ' +
-    'this photo" works, and it needs no post. It creates nothing in the calendar; when the clip ' +
-    'lands, pass its media_id to create_post as media_ids. THIS SPENDS CREDITS, and the model ' +
-    'moves the bill by more than an order of magnitude — a light clip is around 12 credits and a ' +
-    'heavy one around 210, so read get_media_models (slot videoModel from a prompt, ' +
-    'videoImageModel when animating an image) and pass model for this call only. A clip takes ' +
-    'minutes: this returns a job_id with status rendering, and check_media_job says when it ' +
-    'landed. Do not call this again for the same clip while one is still rendering.',
+    'To make a video: animate a photo you already have, or film a clip from a prompt alone. ' +
+    '"Animate this photo", "a 5 second video of this image" — that is base_media_id pointing at ' +
+    'a library image plus a prompt for the movement, and it needs NO post. It spends credits, ' +
+    'and the model moves that bill by more than an order of magnitude, so read get_media_models ' +
+    '(slot videoModel from a prompt, videoImageModel when animating an image) and pass model for ' +
+    'this call only. A clip takes minutes: this returns a job_id with status rendering, and ' +
+    'check_media_job says when it landed — calling this again for the same clip bills a second ' +
+    'one. It creates nothing in the calendar and publishes nothing; when the clip lands, pass ' +
+    'its media_id to create_post as media_ids. To animate the cover of a post you already have, ' +
+    'make_video does that in one step.',
   method: 'POST',
   pathUnderBrand: '/media/videos',
   input: z

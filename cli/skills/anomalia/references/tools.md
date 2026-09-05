@@ -180,7 +180,7 @@ the model returning nothing.
 
 `generate_image` draws a NEW image into the library from a prompt. Required: `slug`, `prompt`;
 optional `count` (1-4 alternatives, **each one billed**), `aspect_ratio`, `model`, `title`. It
-bills a render per image — roughly 8 credits each — and creates nothing in the calendar, so ask
+bills a render per image and creates nothing in the calendar, so ask
 for two or three, look at them with `list_media`, and pass only the id you keep to `create_post`.
 The response carries two facts worth reading. `model` is the model that **actually** drew it,
 after the brand's choice and the platform default — read it rather than assuming your request won,

@@ -104,13 +104,13 @@ without them that slide drifts out of the series.
 
 **Animate an image you already have** → `generate_video` with its `base_media_id`. That is how
 "make a 5s clip of this photo" works, and it needs **no post**: the clip lands in the library and
-`create_post` takes its id as `media_ids`. `make_video` still exists but only attaches a clip to an
-existing post — reach for it when you already have the post, not to get a video.
+`create_post` takes its id as `media_ids`. `make_video` animates the cover of a post you
+already have and attaches the clip back to it — reach for it when you already have the post, not
+to get a video.
 
 **Film from nothing** → `generate_video` with a prompt and no `base_media_id`. A clip takes minutes,
 so it returns a `job_id`; `check_media_job` says when it landed. The model moves this bill by more
-than an order of magnitude — roughly 12 credits for a light clip against 210 for a heavy one — so
-read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
+than an order of magnitude, so read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
 spending.
 
 **CHANGE an image you already have** → `refine_image` with its `base_media_id` and an instruction
