@@ -160,6 +160,54 @@ describe('routing del lavoro strutturato', () => {
   });
 });
 
+/**
+ * La manopola dei giudici arrivava fino a QUI e finiva nel nulla: `aiStructured` la destrutturava
+ * in `_thinkingLevel` e non la passava a nessuno. Un operatore che abbassava
+ * GEMINI_JUDGE_THINKING_LEVEL vedeva la stessa spesa e lo stesso ragionamento di prima, senza un
+ * errore da nessuna parte.
+ */
+describe('lo sforzo di ragionamento chiesto da un giudice', () => {
+  const SCHEMA = { type: 'object' as const, properties: { plan: { type: 'string' } }, required: ['plan'] };
+
+  beforeEach(() => {
+    for (const k of Object.keys(env)) delete env[k];
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('arriva al gateway invece di fermarsi negli opts', async () => {
+    const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', {
+      brandId: 'b',
+      ...PIN_GATEWAY,
+      reasoningEffort: 'low'
+    });
+    expect(M.llmStructured.mock.calls[0][0]).toMatchObject({ reasoningEffort: 'low' });
+  });
+
+  it('senza richiesta il gateway decide da sé: nessuno sforzo inventato qui', async () => {
+    const { aiStructured, PIN_GATEWAY } = await import('./ai-text');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await aiStructured<any>({} as any, 'prompt', SCHEMA, undefined, 'return_plan', { brandId: 'b', ...PIN_GATEWAY });
+    expect(M.llmStructured.mock.calls[0][0].reasoningEffort).toBeUndefined();
+  });
+
+  it('judgeReasoningEffort legge la variabile a ogni chiamata, e ripiega su high', async () => {
+    const { judgeReasoningEffort } = await import('./ai-text');
+    expect(judgeReasoningEffort()).toBe('high');
+    env.GEMINI_JUDGE_THINKING_LEVEL = 'low';
+    expect(judgeReasoningEffort()).toBe('low');
+    env.GEMINI_JUDGE_THINKING_LEVEL = 'MEDIUM';
+    expect(judgeReasoningEffort()).toBe('medium');
+    expect(judgeReasoningEffort('low')).toBe('low');
+    delete env.GEMINI_JUDGE_THINKING_LEVEL;
+    for (const junk of ['1024', 'off', 'max', '', undefined, null]) {
+      expect(judgeReasoningEffort(junk)).toBe('high');
+    }
+  });
+});
+
 describe('satisfiesSchema (guardia del ripiego kie → gateway)', () => {
   const brandProfile = {
     type: 'object',

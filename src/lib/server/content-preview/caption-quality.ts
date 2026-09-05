@@ -8,9 +8,8 @@ import { designWallDigestSection } from '$lib/server/wall-digest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
-import { judgeThinkingLevel } from '$lib/server/gemini';
 import { structured } from '$lib/server/research';
-import { aiStructured } from '$lib/server/ai-text';
+import { aiStructured, judgeReasoningEffort } from '$lib/server/ai-text';
 import { PROOF_DISCIPLINE_RULE } from '$lib/server/proof-discipline';
 import { COPY_PANEL_MAX_ROUNDS, COPY_PANEL_SCHEMA, bandOfScore, bestOf, normalizeVerdict, panelSummary, stripJudgeScaffolding, toIterate, toReplace, type PanelVerdict } from '$lib/server/copy-panel';
 import { PLATFORM_CHAR_LIMITS, ensureShortNetworkCuts } from '$lib/platform-limits';
@@ -497,7 +496,7 @@ Keep good captions out of "fixes". A rewrite keeps the post's angle and platform
       label: 'reviewCaptions',
       // Chiamata di verdetto, non prosa da leggere: lasciata libera ragionava 9x l'output che
       // produceva, e il thinking si paga a tariffa output.
-      thinkingLevel: judgeThinkingLevel()
+      reasoningEffort: judgeReasoningEffort()
     });
     const fixes: AnyRec[] = Array.isArray(parsed.fixes) ? parsed.fixes : [];
     for (const fix of fixes) {
@@ -638,7 +637,7 @@ Restituisci JSON.`;
 
       const parsed: AnyRec = await structured(ai, prompt, COPY_PANEL_SCHEMA, undefined, {
         label: `copyPanel:r${round}`,
-        thinkingLevel: judgeThinkingLevel()
+        reasoningEffort: judgeReasoningEffort()
       });
       const verdicts = (Array.isArray(parsed.verdicts) ? parsed.verdicts : [])
         .map(normalizeVerdict)

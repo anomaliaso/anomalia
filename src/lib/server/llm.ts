@@ -193,13 +193,30 @@ function userContent(
  * Su questo modello il reasoning non si può nemmeno spegnere: `{enabled:false}` risponde 400,
  * «Reasoning is mandatory for this endpoint».
  */
-export const LLM_REASONING_EFFORT = (() => {
-  const raw = env.LLM_REASONING_EFFORT?.trim().toLowerCase();
-  return raw === 'low' || raw === 'medium' || raw === 'high' ? raw : 'high';
-})();
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 
-/** Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT. */
-const reasoningOptions = () => ({ reasoning: { effort: LLM_REASONING_EFFORT } });
+const EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high'];
+
+/**
+ * Un valore qualunque letto come effort. Fuori vocabolario ripiega invece di 400-are il lavoro:
+ * qui arrivano anche i vecchi budget numerici, che per il gateway sono spazzatura.
+ */
+export function reasoningEffort(raw: unknown, fallback: ReasoningEffort = 'high'): ReasoningEffort {
+  const v = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return (EFFORTS as string[]).includes(v) ? (v as ReasoningEffort) : fallback;
+}
+
+export const LLM_REASONING_EFFORT: ReasoningEffort = reasoningEffort(env.LLM_REASONING_EFFORT);
+
+/**
+ * Il corpo extra che ogni chiamata porta con sé, mai vuoto: v. LLM_REASONING_EFFORT.
+ *
+ * Il chiamante può chiedere il SUO sforzo — un giudice che rilegge una didascalia non deve pensare
+ * quanto un pianificatore. Se non chiede niente decide il default, che resta dichiarato.
+ */
+const reasoningOptions = (asked?: ReasoningEffort) => ({
+  reasoning: { effort: asked ?? LLM_REASONING_EFFORT }
+});
 
 /**
  * Quanto si aspetta una risposta dal centralino prima di considerarla persa.
@@ -227,6 +244,7 @@ export async function llmStructured<T>(opts: {
 	images?: LlmMediaPart[];
 	file?: LlmMediaPart;
 	temperature?: number;
+	reasoningEffort?: ReasoningEffort;
 	label?: string;
 }): Promise<T> {
 	const modelId = opts.model ?? llmDefaultModel();
@@ -239,7 +257,7 @@ export async function llmStructured<T>(opts: {
 			system: opts.system,
 			temperature: opts.temperature,
 			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-			providerOptions: { openai: reasoningOptions() },
+			providerOptions: { openai: reasoningOptions(opts.reasoningEffort) },
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }]
 		});
 		logAiCall({
@@ -321,6 +339,7 @@ export async function llmText(opts: {
 	file?: LlmMediaPart;
 	/** Google Search nativo su un Gemini via OpenRouter (`plugins: web, engine: native`). */
 	webSearch?: boolean;
+	reasoningEffort?: ReasoningEffort;
 	label?: string;
 }): Promise<{ text: string; citations: Array<{ uri: string; title: string }> }> {
 	const modelId = opts.model ?? (opts.webSearch ? llmGeminiSearchModel() : llmDefaultModel());
@@ -346,7 +365,7 @@ export async function llmText(opts: {
 			system: opts.system,
 			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
-			providerOptions: { openai: reasoningOptions() }
+			providerOptions: { openai: reasoningOptions(opts.reasoningEffort) }
 		});
 		logAiCall({
 			label,

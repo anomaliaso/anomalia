@@ -25,7 +25,7 @@ import {
   type UgcScript
 } from '$lib/server/ugc';
 import { UGC_ORGANIC_MAX_DURATION, UGC_AD_DURATION } from '$lib/server/video';
-import { judgeThinkingLevel } from '$lib/server/gemini';
+import { judgeReasoningEffort } from '$lib/server/ai-text';
 
 export type UgcScriptSeed = {
   format?: string;
@@ -168,7 +168,7 @@ Return JSON.`;
 
     const parsed = await structured(ai, prompt, SCRIPT_REVIEW_SCHEMA, undefined, {
       label: 'reviewUgcScripts',
-      thinkingLevel: judgeThinkingLevel()
+      reasoningEffort: judgeReasoningEffort()
     });
     const fixes: Array<Record<string, unknown>> = Array.isArray((parsed as { fixes?: unknown }).fixes)
       ? ((parsed as { fixes: Array<Record<string, unknown>> }).fixes)
