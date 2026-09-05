@@ -11,6 +11,7 @@
  * package.
  */
 import { swallow } from '$lib/server/swallow';
+import { sanitizeThemeColor } from '$lib/brand-fields';
 import type { GoogleGenAI } from '@google/genai';
 import { browserlessContent, isBrowserlessConfigured } from './browserless';
 import { aiStructured } from '$lib/server/ai-text';
@@ -161,9 +162,9 @@ const brandProfileSchema = {
         category: { type: 'string' as const, description: 'Business category (e.g. "AI Application Development")' },
         site_type: {
             type: 'string' as const,
-            enum: ['ecommerce', 'saas', 'portfolio', 'local_service', 'creator', 'generic'],
+            enum: ['ecommerce', 'saas', 'portfolio', 'local_service', 'creator', 'media', 'mobile_app', 'service', 'generic'],
             description:
-                'The business archetype of this site. ecommerce = sells physical/digital products with a cart; saas = software/tech product with pricing/signup/docs; portfolio = freelancer/creative/agency showcasing work & case-studies; local_service = a physical local business (restaurant, gym, salon, clinic, hotel); creator = personal brand / media / publisher monetising audience; generic = none of these clearly. Use the DETECTED ARCHETYPE hint as a strong prior but decide from the actual content.',
+                'The business archetype of this site. ecommerce = sells physical/digital products with a cart; saas = software/tech product with pricing/signup/docs; portfolio = freelancer/creative/agency showcasing work & case-studies; local_service = a physical local business (restaurant, gym, salon, clinic, hotel); creator = personal brand monetising an audience; media = publisher/newsroom whose product is the content itself; mobile_app = a phone app as the product; service = a service business that is not tied to one place; generic = none of these clearly. Use the DETECTED ARCHETYPE hint as a strong prior but decide from the actual content.',
         },
         content_pillars: {
             type: 'array' as const,
@@ -590,7 +591,7 @@ export async function runBrandAnalysis(
     if (metadata.faviconUrl) profile.favicon_url = metadata.faviconUrl;
     if (metadata.logos.length > 0) profile.logos = metadata.logos;
     if (metadata.fonts.length > 0) profile.fonts = metadata.fonts;
-    if (metadata.themeColor) profile.theme_color = metadata.themeColor;
+    if (metadata.themeColor) profile.theme_color = sanitizeThemeColor(metadata.themeColor) ?? undefined;
 
     // Immagini del sito: OG image + immagini reali raccolte dalla pagina + foto prodotti e-commerce
     const siteImages: string[] = [];

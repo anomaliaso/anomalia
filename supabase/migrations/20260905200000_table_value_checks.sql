@@ -6,25 +6,77 @@
 -- zero vincoli: un colore poteva essere una frase, e in produzione uno lo è diventato
 -- (`#00502DKEY_PAD_OR_HEX_MATCH_1_#00502D`, un segnaposto di regex finito dentro brand_colors).
 --
--- Ogni vincolo qui sotto è stato contato in produzione PRIMA di essere scritto: tutti hanno ZERO
--- righe che li violano. I vincoli con violazioni (products.kind, brand_kit.site_type,
--- brand_kit.theme_color, brand_kit.source_url, posts.content_type) NON sono qui: aspettano una
--- decisione sui dati o una correzione nel codice che li scrive, ed è nel changelog interno.
+-- Ogni vincolo qui sotto è stato contato in produzione PRIMA di essere scritto: dopo la
+-- correzione dei dati in testa al file, tutti hanno ZERO righe che li violano.
+--
+-- Cinque colonne hanno richiesto una decisione. Quattro sono entrate: `posts.content_type` dopo
+-- aver corretto i tre percorsi che ci scrivevano un formato, `brand_kit.theme_color` dopo averlo
+-- sanificato in ingresso, `brand_kit.site_type` allargato ai 9 valori legittimi, e
+-- `brand_kit.source_url` dopo aver spostato gli handle dove vivono. `products.kind` resta LIBERO:
+-- ci scrive l'import Shopify, e vincolarlo romperebbe ogni sincronizzazione di catalogo.
 --
 -- Non ci sono tetti di piano né vocabolari di prodotto che cambiano col listino: quelli restano
 -- nel codice. `brand_news_sources.lang` è vincolato nella FORMA (due lettere o 'auto'), non
--- nell'elenco delle 12 lingue del menu — l'elenco cambia, la forma no.
+-- nell'elenco delle 12 lingue del menu — l'elenco cambia, la forma no, e in produzione c'è già
+-- un `tr` che il menu non offre.
 --
 -- Nessuna tabella supera le 1.800 righe: `add constraint` blocca per millisecondi e `not valid`
 -- non serve.
 
+-- ── Prima dei vincoli: il dato giusto nel campo sbagliato ──────────────────────────────────────
+--
+-- Nove righe di `brand_kit.source_url` non sono URL, e le stesse nove sono anche in
+-- `brands.website`. Due NON sono spazzatura: `biohappy` e `Mariopuggelli1939` sono handle veri,
+-- scritti dove si chiedeva un sito. Vanno spostati fra gli handle del brand, non annullati — è la
+-- stessa regola che `splitWebsiteOrHandle` applica adesso in ingresso.
+--
+-- La regola, identica al codice: la chiocciola davanti, oppure una parola senza punti e senza
+-- schema, è un handle; con uno spazio dentro (`no celo`) non è né un sito né un handle e si butta.
+-- I 21 `brands.website` che sono domini nudi (`anomalia.so`, a cui manca solo `https://`) NON si
+-- toccano: sono dati buoni e vogliono una decisione loro.
+
+-- `brand_social_handles` è unica su (brand_id, platform), non sullo username: un brand che ha già
+-- dichiarato il suo Instagram tiene quello, che è il più affidabile dei due. Senza `on conflict`
+-- questa insert alzerebbe un 23505 e farebbe abortire l'intera migration.
+insert into public.brand_social_handles (brand_id, platform, username)
+select distinct k.brand_id, 'instagram', ltrim(btrim(k.source_url), '@')
+from public.brand_kit k
+where k.source_url is not null
+  and btrim(k.source_url) !~ '^https?://'
+  and btrim(k.source_url) !~ '\s'
+  and (btrim(k.source_url) like '@%' or btrim(k.source_url) !~ '\.')
+  and ltrim(btrim(k.source_url), '@') <> ''
+on conflict (brand_id, platform) do nothing;
+
+-- Un dominio nudo non si butta, gli manca solo lo schema — è la regola di `normalizeWebsite`.
+-- Oggi nessuna delle nove ha questa forma, ma la migration viene applicata dopo, e nel frattempo
+-- una riga nuova può arrivare: annullarla sarebbe perdere un dato buono.
+update public.brand_kit
+  set source_url = case
+    when btrim(source_url) ~ '\.' and btrim(source_url) !~ '\s' then 'https://' || btrim(source_url)
+    else null
+  end
+  where source_url is not null and source_url !~ '^https?://';
+
+update public.brands set website = null
+  where website is not null
+    and website !~ '^https?://'
+    and (btrim(website) = '' or btrim(website) ~ '\s' or btrim(website) !~ '\.');
+
 -- ── posts (518 righe) ──────────────────────────────────────────────────────────────────────────
 -- `platform`, `platforms` e `format` restano liberi: i percorsi planner/onboarding ci scrivono
 -- output del modello non normalizzato, e un CHECK lì fermerebbe l'autopilot di notte.
+-- `uploaded_video` entra nel vocabolario perché `upload-media` lo scrive ed è legittimo; `image`
+-- e `carousel` no: erano formati finiti in una colonna di tipi, e il codice è stato corretto.
 
 alter table public.posts
   add constraint posts_status_check
     check (status in ('pending_user', 'approved', 'scheduled', 'published', 'failed')),
+  add constraint posts_content_type_check
+    check (content_type in (
+      'generated_image', 'generated_video', 'generated_graphic',
+      'uploaded_image', 'uploaded_video', 'text', 'link'
+    )),
   add constraint posts_source_check
     check (source in ('plan', 'manual', 'radar', 'guest_preview')),
   add constraint posts_video_render_status_check
@@ -57,7 +109,10 @@ alter table public.posts
     );
 
 -- ── products (1.799 righe) ─────────────────────────────────────────────────────────────────────
--- `kind` non è qui: 247 righe fuori vocabolario e l'import Shopify ce ne scrive di nuove.
+-- `kind` NON ha un vocabolario, per decisione: l'import Shopify ci scrive il `product_type` del
+-- merchant (`18k gold`), e vincolarlo farebbe fallire ogni sincronizzazione di catalogo. Le 247
+-- righe fuori dai quattro valori attesi non sono dati rotti, sono i nomi di categoria di un
+-- gioielliere. Resta il tetto di lunghezza.
 
 alter table public.products
   add constraint products_title_check
@@ -71,15 +126,28 @@ alter table public.products
       length(description) <= 50000
       and length(pricing) <= 200
       and length(external_id) <= 200
+      and length(kind) <= 200
     );
 
 -- ── brand_kit (74 righe, era 21 colonne e zero vincoli) ────────────────────────────────────────
--- `theme_color` non è qui: `extractThemeColor` copia il `<meta theme-color>` del sito senza
--- validarlo, e un sito che ci scrive `red` verrebbe rifiutato in onboarding.
+-- `theme_color` si può vincolare adesso perché `brand-analysis` lo fa passare da
+-- `sanitizeThemeColor`: il `<meta theme-color>` del sito ammette `red`, che è HTML valido e non è
+-- un colore che sappiamo usare. Stessa notazione della palette.
+-- `site_type` sale da 6 a 9: `media`, `mobile_app` e `service` erano valori legittimi che
+-- mancavano dall'elenco, non dati rotti.
 
 alter table public.brand_kit
   add constraint brand_kit_favicon_url_check
     check (favicon_url ~ '^(https?://|data:)'),
+  add constraint brand_kit_source_url_check
+    check (source_url ~ '^https?://'),
+  add constraint brand_kit_theme_color_check
+    check (theme_color ~ '^#[0-9a-fA-F]{3,8}$'),
+  add constraint brand_kit_site_type_check
+    check (site_type in (
+      'ecommerce', 'saas', 'portfolio', 'local_service', 'creator',
+      'media', 'mobile_app', 'service', 'generic'
+    )),
   add constraint brand_kit_json_shape
     check (
       jsonb_typeof(brand_colors) = 'array'
@@ -98,8 +166,6 @@ alter table public.brand_kit
       and length(target_audience) <= 5000
       and length(visual_style) <= 50000
       and length(ai_context) <= 200000
-      and length(site_type) <= 60
-      and length(theme_color) <= 40
     );
 
 -- ── brand_articles (161 righe) ─────────────────────────────────────────────────────────────────
@@ -155,15 +221,19 @@ alter table public.people
     check (length(role) <= 200 and length(description) <= 20000);
 
 -- ── competitors (202 righe) ────────────────────────────────────────────────────────────────────
--- `handles` non è vincolato: tre writer ci mettono un array, `chat/job-executor.ts` un oggetto.
--- Prima si sceglie una forma nel codice, poi la si vincola qui.
+-- `handles` è un array di `{platform, username, profileUrl}`, e non è una preferenza: ENTRAMBI i
+-- lettori (`pickHandles`, `normalizeHandles`) tornano vuoto su qualunque cosa non sia un array,
+-- quindi l'oggetto che `chat/job-executor.ts` scriveva era invisibile a tutto il prodotto.
+-- Corretto lì, vincolato qui. È anche la forma di `brand_social_handles`, che è dove vivono
+-- gli handle del brand.
 
 alter table public.competitors
   add constraint competitors_website_check
     check (website ~ '^https?://'),
   add constraint competitors_json_shape
     check (
-      jsonb_typeof(top_posts) = 'array'
+      jsonb_typeof(handles) = 'array'
+      and jsonb_typeof(top_posts) = 'array'
       and jsonb_typeof(top_ads) = 'array'
       and jsonb_typeof(benchmark) = 'object'
     ),

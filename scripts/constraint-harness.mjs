@@ -44,6 +44,7 @@ const newsSource = (columns, values) => `insert into public.brand_news_sources (
 
 const CASES = [
   { what: 'posts.status fuori vocabolario', sql: post('status', `'nope'`), code: CHECK_VIOLATION },
+  { what: 'posts.content_type con un formato al posto di un tipo', sql: post('content_type', `'carousel'`), code: CHECK_VIOLATION },
   { what: 'posts.source fuori vocabolario', sql: post('source', `'nope'`), code: CHECK_VIOLATION },
   { what: 'posts.video_render_status fuori vocabolario', sql: post('video_render_status', `'nope'`), code: CHECK_VIOLATION },
   { what: 'posts.video_resolution fuori vocabolario', sql: post('video_resolution', `'4k'`), code: CHECK_VIOLATION },
@@ -59,9 +60,13 @@ const CASES = [
   { what: 'products.title oltre il tetto', sql: `insert into public.products (brand_id, title) values ($1, repeat('x', 501))`, code: CHECK_VIOLATION },
   { what: 'products.url non http', sql: product('url', `'nope'`), code: CHECK_VIOLATION },
   { what: 'products.images non array', sql: product('images', `'{}'::jsonb`), code: CHECK_VIOLATION },
+  { what: 'products.kind oltre il tetto', sql: product('kind', `repeat('x', 201)`), code: CHECK_VIOLATION },
   { what: 'products.description oltre il tetto', sql: product('description', `repeat('x', 50001)`), code: CHECK_VIOLATION },
 
   { what: 'brand_kit.favicon_url non http ne data', sql: kit('favicon_url', `'nope'`), code: CHECK_VIOLATION },
+  { what: 'brand_kit.source_url e un handle, non un sito', sql: kit('source_url', `'Mariopuggelli1939'`), code: CHECK_VIOLATION },
+  { what: 'brand_kit.theme_color e un colore CSS, non hex', sql: kit('theme_color', `'red'`), code: CHECK_VIOLATION },
+  { what: 'brand_kit.site_type fuori vocabolario', sql: kit('site_type', `'nope'`), code: CHECK_VIOLATION },
   { what: 'brand_kit.brand_colors non array', sql: kit('brand_colors', `'{}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'brand_kit.logos non array', sql: kit('logos', `'{}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'brand_kit.fonts non array', sql: kit('fonts', `'{}'::jsonb`), code: CHECK_VIOLATION },
@@ -105,6 +110,7 @@ const CASES = [
   { what: 'people.role oltre il tetto', sql: person('role', `repeat('x', 201)`), code: CHECK_VIOLATION },
 
   { what: 'competitors.website non http', sql: competitor('website', `'nope'`), code: CHECK_VIOLATION },
+  { what: 'competitors.handles oggetto invece che array', sql: competitor('handles', `'{"instagram":"acme"}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'competitors.top_posts non array', sql: competitor('top_posts', `'{}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'competitors.top_ads non array', sql: competitor('top_ads', `'{}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'competitors.benchmark non oggetto', sql: competitor('benchmark', `'[]'::jsonb`), code: CHECK_VIOLATION },

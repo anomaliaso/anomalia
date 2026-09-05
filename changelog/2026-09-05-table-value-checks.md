@@ -32,35 +32,68 @@ quelli con violazioni non ci sono, e sotto c'è perché.
 Nessuna tabella supera le 1.800 righe: `add constraint` blocca per millisecondi, `not valid` +
 `validate constraint` sarebbe cerimonia senza guadagno.
 
-## Quello che non è entrato, e non per dimenticanza
+## Le cinque decisioni, e cosa è successo a ognuna
 
-**`products.kind` — 247 righe fuori vocabolario.** Il vocabolario è `product | service | project |
-feature`; in produzione ci sono anche `18k gold`, `18k gold / 9K GOLD`, `9kt gold`, `14k gold`.
-Tutte e 247 sono di un brand solo, `pragat-jewels`, e la causa è una riga sola ripetuta in tre
-posti: `kind: p.productType ?? 'product'`, dove `productType` è il `product_type` di Shopify —
-testo libero del merchant. Non basta correggere le righe: finché l'import scrive lì, il vincolo
-farebbe fallire ogni sincronizzazione del catalogo.
+Cinque colonne avevano violazioni o un percorso di codice che il vincolo avrebbe rotto. Quattro
+sono entrate dopo aver corretto la causa; una resta libera per scelta.
 
-**`posts.content_type` — zero righe da correggere, ma tre percorsi da sistemare.** `SHAPES` in
-`post-from-asset.ts` scrive `image` e `carousel`, che non sono content type ma **format** — la
-description del tool stesso lo dice a lettere («NOT carousel/reel/story»). E `upload-media`
-scrive `uploaded_video`, che è legittimo e semplicemente manca da `POST_CONTENT_TYPES`. Il vincolo
-diventa sicuro quando quei tre valori sono a posto, non prima.
+**`products.kind` resta senza vocabolario.** Le 247 righe fuori dai quattro valori attesi
+(`18k gold`, `9kt gold`, …) sono tutte di `pragat-jewels` e non sono dati rotti: sono i nomi di
+categoria di un gioielliere, che l'import Shopify copia dal `product_type` del merchant. Un CHECK
+lì avrebbe fatto fallire ogni sincronizzazione di catalogo per proteggere niente. Resta il tetto
+di lunghezza.
 
-**`brand_kit.theme_color` — zero violazioni, ma per fortuna.** `extractThemeColor` copia il
-contenuto del `<meta name="theme-color">` del sito senza validarlo. Oggi i 13 valori sono tutti
-`#RRGGBB`; un sito che scrive `red` — che è HTML valido — farebbe fallire l'onboarding. Prima si
-sanifica all'ingresso, poi si vincola.
+**`posts.content_type` è entrato, dopo tre correzioni.** `SHAPES` in `post-from-asset.ts`
+scriveva `image` e `carousel`: sono FORMATI, non tipi, e la description del tool lo dice in
+maiuscolo. Ora scrivono `uploaded_image`, che è quello che sono — asset caricati dall'utente.
+`uploaded_video`, che `upload-media` scrive da sempre, era invece legittimo e semplicemente
+mancava da `POST_CONTENT_TYPES`: aggiunto. E `PostAssetShape.contentType` non è più `string` ma
+`PostContentType`, così il compilatore tiene il vocabolario da solo.
 
-**`brand_kit.site_type` (3 righe), `brand_kit.source_url` (9 righe).** Il primo ha `media`,
-`mobile_app`, `service` fuori dai 6 archetipi. Il secondo ha cinque stringhe vuote e tre cose che
-non sono URL: `no celo`, `Mariopuggelli1939`, `biohappy` — utenti che hanno scritto un handle
-Instagram dove si chiedeva un sito. Sono pochi e sono dati di clienti veri: si decide, non si
-decide per loro.
+**`brand_kit.theme_color` è entrato, dopo la sanificazione in ingresso.** `extractThemeColor`
+copia il `<meta name="theme-color">` verbatim, e quel meta ammette qualunque colore CSS: `red` è
+HTML valido. I 13 valori in produzione erano tutti `#RRGGBB` per fortuna, non per costruzione.
+Ora passano da `sanitizeThemeColor`, accanto a `sanitizeBrandColors` e con la stessa regex.
 
-**`competitors.handles`.** Non è un problema di dati ma di forma: tre writer ci mettono un array
-di `{platform, username}`, `chat/job-executor.ts` ci mette un oggetto `{platform: username}`.
-Prima si sceglie una forma nel codice, poi la si vincola.
+**`brand_kit.site_type` è entrato allargato.** `media`, `mobile_app` e `service` non erano dati
+rotti: erano valori legittimi che mancavano dall'elenco. Il tipo sale da 6 a 9, e con lui l'enum
+dello schema JSON che il modello riceve — perché è da lì che arrivano.
+
+**`competitors.handles` è entrato come array, e non era una preferenza.** Tre scrittori ci
+mettevano un array di `{platform, username}`, `chat/job-executor.ts` un oggetto
+`{platform: username}`. La cosa che decide non è il conteggio: **entrambi** i lettori
+(`pickHandles`, `normalizeHandles`) tornano vuoto su qualunque cosa non sia un array. L'oggetto
+era invisibile a tutto il prodotto — il job "ri-cerca i concorrenti" scriveva handle che nessuna
+schermata poteva mostrare. Corretto lo scrittore, vincolata la forma. È anche la forma di
+`brand_social_handles`, e un oggetto non reggerebbe due account sulla stessa piattaforma.
+
+## `Mariopuggelli1939` non era spazzatura: era nel campo sbagliato
+
+Delle nove righe di `brand_kit.source_url` che non erano URL, due erano handle veri —
+`biohappy` e `Mariopuggelli1939` — scritti da qualcuno nel campo dove si chiedeva un sito. Le
+stesse nove stanno anche in `brands.website`, perché è la stessa cosa copiata due volte.
+Annullarle sarebbe stato buttare un dato giusto perché stava nel posto sbagliato.
+
+Quindi la regola è **in ingresso**, in `splitWebsiteOrHandle` accanto alle altre regole dei campi
+del Brand Studio: la chiocciola davanti, oppure una parola senza punti e senza schema, non può
+essere un dominio ed è un handle; va fra gli handle del brand. Uno spazio dentro (`no celo`) non
+è né l'uno né l'altro e si butta, invece di inventarci un profilo. Un dominio nudo prende lo
+schema, non il cestino.
+
+Nell'onboarding il punto è uno solo — `scrapeTargetsFrom(data)` — e legge entrambi i campi, così
+nessuna delle quattro chiamate può dimenticarsene.
+
+**Due trappole trovate provando, non leggendo.** `brand_social_handles` è unica su
+`(brand_id, platform)`, non sullo username: la guardia che avevo scritto controllava la colonna
+sbagliata, e su un brand con un Instagram già dichiarato la insert avrebbe alzato un 23505
+facendo **abortire l'intera migration**. Ora è `on conflict (brand_id, platform) do nothing`, e
+l'handle dichiarato vince su quello dedotto — stessa regola nel codice, dove il campo apposito
+batte il campo sito. La seconda: annullare tutto ciò che non è `^https?://` avrebbe buttato un
+dominio nudo. Oggi nessuna delle nove ha quella forma, ma la migration si applica dopo, e nel
+frattempo una riga nuova arriva.
+
+I 21 `brands.website` che sono domini nudi (`anomalia.so`) NON si toccano qui: sono dati buoni e
+vogliono una decisione loro.
 
 ## Due cose che di proposito restano nel codice
 
@@ -80,9 +113,16 @@ l'autopilot di notte. `format` prende solo un tetto di lunghezza.
 
 Un vincolo senza un test che prova a violarlo è una speranza — e la suite qui mocka Supabase, dove
 un insert finto accetta qualunque stringa (è la lezione già pagata su `brand_media.source`).
-`scripts/constraint-harness.mjs` scrive **davvero**: 61 insert malformati contro un Postgres vero,
+`scripts/constraint-harness.mjs` scrive **davvero**: 67 insert malformati contro un Postgres vero,
 ognuno passa solo se torna il 23514 atteso, tutto dentro una transazione chiusa da un `rollback`.
+I casi nuovi usano i valori che i difetti producevano per davvero — `content_type: 'carousel'`,
+`theme_color: 'red'`, `handles: {"instagram":"acme"}` — non valori inventati.
 
-Prima della migration: **0/61**. Il database accettava ogni singolo valore rotto. Dopo:
-**61/61**. `DATABASE_URL` che non punta a localhost fa uscire lo script con 2 prima di connettersi:
+Prima della migration: **0/67**. Il database accettava ogni singolo valore rotto. Dopo:
+**67/67**. `DATABASE_URL` che non punta a localhost fa uscire lo script con 2 prima di connettersi:
 questo harness scrive, e scrive solo in locale.
+
+La correzione dei dati è stata provata a parte, con ogni forma su un brand pulito e un `rollback`
+in fondo: `Mariopuggelli1939` e `@ciccio` diventano handle, `no celo` e la stringa vuota vanno a
+nullo, `anomalia.so` prende lo schema, `https://ok.com` non si muove, e un Instagram già
+dichiarato sopravvive.

@@ -76,7 +76,16 @@ export interface HTMLMetadata {
 
 // The site's business archetype — drives how offerings, spokesperson and content pillars are
 // interpreted. 'ecommerce' is detected from platform/cart signals; the rest from content.
-export type SiteType = 'ecommerce' | 'saas' | 'portfolio' | 'local_service' | 'creator' | 'generic';
+export type SiteType =
+    | 'ecommerce'
+    | 'saas'
+    | 'portfolio'
+    | 'local_service'
+    | 'creator'
+    | 'media'
+    | 'mobile_app'
+    | 'service'
+    | 'generic';
 
 
 export type ProgressCallback = (step: string, message: string) => void;

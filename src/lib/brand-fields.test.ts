@@ -3,7 +3,9 @@ import {
   isKnownTimezone,
   normalizeHashtags,
   normalizeWebsite,
-  sanitizeBrandColors
+  sanitizeBrandColors,
+  sanitizeThemeColor,
+  splitWebsiteOrHandle
 } from './brand-fields';
 
 /**
@@ -77,5 +79,39 @@ describe('il fuso orario del brand', () => {
     expect(isKnownTimezone('CET+1')).toBe(false);
     expect(isKnownTimezone('')).toBe(false);
     expect(isKnownTimezone('   ')).toBe(false);
+  });
+});
+
+describe('sanitizeThemeColor', () => {
+  it('tiene la notazione hex e butta i colori CSS che il meta ammette', () => {
+    expect(sanitizeThemeColor('#7c5cff')).toBe('#7c5cff');
+    expect(sanitizeThemeColor(' #abc ')).toBe('#abc');
+    expect(sanitizeThemeColor('red')).toBeNull();
+    expect(sanitizeThemeColor('rgb(0,0,0)')).toBeNull();
+    expect(sanitizeThemeColor(null)).toBeNull();
+  });
+});
+
+describe('splitWebsiteOrHandle', () => {
+  it('un dominio resta un sito, con lo schema davanti', () => {
+    expect(splitWebsiteOrHandle('anomalia.so')).toEqual({ website: 'https://anomalia.so', handle: null });
+    expect(splitWebsiteOrHandle('https://anomalia.so')).toEqual({ website: 'https://anomalia.so', handle: null });
+  });
+
+  it('la chiocciola e la parola senza punti sono handle, non siti', () => {
+    expect(splitWebsiteOrHandle('@biohappy')).toEqual({
+      website: null,
+      handle: { platform: 'instagram', username: 'biohappy' }
+    });
+    expect(splitWebsiteOrHandle('Mariopuggelli1939')).toEqual({
+      website: null,
+      handle: { platform: 'instagram', username: 'Mariopuggelli1939' }
+    });
+  });
+
+  it('quello che non è né un dominio né un handle non diventa un profilo inventato', () => {
+    expect(splitWebsiteOrHandle('no celo')).toEqual({ website: null, handle: null });
+    expect(splitWebsiteOrHandle('   ')).toEqual({ website: null, handle: null });
+    expect(splitWebsiteOrHandle('@')).toEqual({ website: null, handle: null });
   });
 });
