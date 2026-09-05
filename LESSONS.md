@@ -266,6 +266,21 @@ Il frontmatter di una skill non si riscrive: `parseSkillFrontmatter` esiste già
 ### Config senza consumatori non si scrive
 Una colonna `skills` su `custom_agents` era la mossa ovvia per "skill per custom agent". Ma i custom agent girano sul motore classico, fuori dal percorso kit: nessuno l'avrebbe mai letta. Il criterio: questa separazione dà un beneficio reale **adesso**? Se la risposta è "quando i custom agent saliranno sul kit", la mossa è un commento in LESSONS, non una migrazione.
 
+### Il catalogo di OpenRouter NON elenca le superfici separate: `/models` vuoto non vuol dire «non esiste»
+Cercando i modelli video in `GET /api/v1/models` si ottiene **zero**, e la conclusione naturale —
+«OpenRouter non fa video» — è falsa: vivono su `GET /api/v1/videos/models`, e sono 28. Stessa cosa
+il giorno stesso col TTS: `google/gemini-3.1-flash-tts-preview` non compare filtrando `/models` per
+modalità audio, ma funziona. Due volte in un giorno, due agenti diversi, la stessa conclusione
+sbagliata. Segnale: stai per scrivere «il provider X non supporta Y» basandoti su un catalogo
+vuoto. Mossa: **chiama l'endpoint e leggi l'errore** — un id inesistente risponde `Model ... does
+not exist`, mentre un id vero su una superficie sbagliata nomina la superficie giusta. Un rifiuto
+alla validazione costa zero e batte qualunque lettura di catalogo.
+
+**E il prezzo ha lo stesso vizio**: sui 28 modelli video `pricing` è **nullo per tutti**, e il
+listino vero sta in `pricing_skus`. Guardare il campo che ci si aspetta, trovarlo vuoto e concludere
+«non è prezzato» porta a inventare una tariffa a mano — che è esattamente ciò che `RATES` sta
+venendo smantellato per evitare.
+
 ### Il fallback è parte del contratto
 `skillsForAgent(unknown)` restituisce le skill di scrittura, non `[]`: un agente non noto non deve girare a mani vuote per una stringa sbagliata. Ogni selezione per-chiave decide esplicitamente cosa succede fuori mappa.
 
