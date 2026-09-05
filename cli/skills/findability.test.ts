@@ -84,6 +84,11 @@ const HAND_WRITTEN_TARIFF = /\b\d+\s*credits?\b/i;
  * L'eccezione è dichiarata e si verifica da sola: il test pretende che la tariffa sia ANCORA lì.
  * Quando quel branch atterra il test diventa rosso e chiede di cancellare questa riga, invece di
  * lasciare un'esenzione che sopravvive al motivo che l'aveva giustificata.
+ *
+ * Quel branch è la PR #360. Chi dei due merga per SECONDO trova questo test rosso, e la mossa è
+ * una sola: cancellare la riga e il test che la sorveglia, poi aggiungere la sua richiesta alla
+ * tabella qui sopra — `{ tool: 'generate_image', question: 'generate an image of a cat', words:
+ * ['image', 'cat', 'draw'] }`. Le tre parole sono già su entrambe le superfici da quel lato.
  */
 const TARIFF_OWNED_ELSEWHERE = ['generate_image'];
 
