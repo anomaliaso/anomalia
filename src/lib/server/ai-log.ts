@@ -18,6 +18,8 @@ type BrandLogContext = {
   kieCredits?: number;
   /** Costo fatturato dal gateway in questo scope, sommato: la fattura vera del turno. */
   llmCostUsd?: number;
+  /** Le fatture gia` ritirate e scritte in `ai_calls`, per chi deve DIRE quanto e` costato. */
+  billedUsd?: number;
 };
 
 const brandStorage = new AsyncLocalStorage<BrandLogContext>();
@@ -103,7 +105,17 @@ export function takeLlmCost(): number | undefined {
   const cost = ctx?.llmCostUsd;
   if (!ctx || cost == null) return undefined;
   ctx.llmCostUsd = undefined;
+  ctx.billedUsd = (ctx.billedUsd ?? 0) + cost;
   return cost;
+}
+
+/**
+ * Quanto il gateway ha fatturato in questo scope, gia` finito nelle righe di `ai_calls`. Serve a
+ * una rotta che deve dire quanto e` costata: e` lo stesso numero della riga, non un listino
+ * riscritto accanto. `undefined` significa che nessuna fattura e` arrivata — non zero.
+ */
+export function billedUsdInScope(): number | undefined {
+  return brandStorage.getStore()?.billedUsd;
 }
 
 /** $5 = 1000 crediti kie. */

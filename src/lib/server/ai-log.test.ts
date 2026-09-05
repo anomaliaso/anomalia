@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeCostUsd, extractSdkUsage, noteLlmCost, takeLlmCost, withBrandContext } from './ai-log';
+import { billedUsdInScope, computeCostUsd, extractSdkUsage, noteLlmCost, takeLlmCost, withBrandContext } from './ai-log';
 import { GEMINI_FLASH, NANO_BANANA_PRO } from './gemini';
 
 const GO = 'go';
@@ -338,5 +338,34 @@ describe('fatture del gateway nello scope', () => {
   it('fuori da uno scope non esplode e non ricorda nulla', () => {
     noteLlmCost(5);
     expect(takeLlmCost()).toBeUndefined();
+  });
+
+  it('quello che e` stato ritirato resta leggibile: e` il numero scritto nella riga', async () => {
+    await withBrandContext('brand-1', async () => {
+      expect(billedUsdInScope()).toBeUndefined();
+
+      noteLlmCost(0.004);
+      expect(takeLlmCost()).toBeCloseTo(0.004, 10);
+
+      expect(billedUsdInScope()).toBeCloseTo(0.004, 10);
+    });
+  });
+
+  it('somma le fatture di piu` chiamate nello stesso scope', async () => {
+    await withBrandContext('brand-1', async () => {
+      noteLlmCost(0.001);
+      takeLlmCost();
+      noteLlmCost(0.002);
+      takeLlmCost();
+
+      expect(billedUsdInScope()).toBeCloseTo(0.003, 10);
+    });
+  });
+
+  it('senza fattura del gateway non inventa uno zero: resta sconosciuto', async () => {
+    await withBrandContext('brand-1', async () => {
+      takeLlmCost();
+      expect(billedUsdInScope()).toBeUndefined();
+    });
   });
 });

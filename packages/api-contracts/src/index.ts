@@ -3,6 +3,7 @@ import { ADS_ACTION, ADS_REMIX } from './ads';
 import { GET_APPEARANCE, SET_APPEARANCE } from './appearance';
 import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
+import { GENERATE_CAPTIONS } from './captions';
 import {
   DELETE_ARTICLE,
   GENERATE_ARTICLE,
@@ -184,6 +185,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   DISCARD_PLAN,
   EDIT_POST,
   GENERATE_ARTICLE,
+  GENERATE_CAPTIONS,
   GENERATE_CAROUSEL,
   GENERATE_IMAGE,
   GENERATE_VIDEO,
@@ -302,6 +304,7 @@ export {
   CHECK_CONTENT,
   CHECK_MEDIA_JOB,
   CREATE_POST,
+  GENERATE_CAPTIONS,
   GENERATE_CAROUSEL,
   GENERATE_IMAGE,
   GENERATE_VIDEO,
