@@ -100,6 +100,47 @@ git merge-base --is-ancestor <merge-commit> origin/dev && echo LANDED || echo NE
 ```
 Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: vanno riportate a mano sul branch di destinazione (cherry-pick del merge commit, che essendo squash ha un solo genitore), e la risoluzione dei conflitti è il prezzo di averlo scoperto tardi.
 
+### Un difetto e la sua correzione nello stesso ramo sono una trappola armata
+La #372 aveva cinque commit, e il terzo annullava una regressione introdotta dal secondo: una
+dichiarazione di contenuto AI spenta senza volerlo (`content_type` che perde il prefisso
+`uploaded`, e `publish.ts` che da quel prefisso ricava se dichiarare). Il merge è stato fatto **al
+secondo commit**. Risultato: su `dev` è finito il difetto senza la correzione, e chi lo aveva
+scritto lo dava per consegnato perché sul SUO ramo era a posto.
+
+Non è un errore di verifica del merge — quello è il sintomo, ed è coperto dalla lezione qui sopra.
+La causa è la **forma della consegna**: una PR non è un'unità atomica, e chi la scrive non decide
+dove viene tagliata. Cinque commit sono cinque stati possibili del ramo base, e se il commit N
+introduce un difetto che il commit N+2 ripara, due di quei tagli lasciano il prodotto **peggio di
+non aver mergiato niente**. La trappola resta armata finché qualcuno non preme merge nel punto
+sbagliato, e nessuna review la vede: il diff completo della PR è corretto.
+
+Segnale: nel ramo esiste un commit il cui messaggio dice «fix», «undo», «revert» o «restore» di
+qualcosa che un commit precedente **dello stesso ramo** ha fatto.
+
+Mossa: **nessun commit lascia il ramo in uno stato peggiore del precedente.** Se una tua correzione
+annulla un tuo difetto introdotto prima nello stesso ramo, i due si fondono con `rebase -i` *prima*
+della review, così non esiste taglio che possa separarli. È la regola di Kent Beck che questo repo
+già ha — riordino separato dal cambio di comportamento — applicata al ramo invece che al singolo
+commit. Il controllo, prima di chiedere la review:
+```bash
+git log --oneline <base>..HEAD              # ogni prefisso è uno stato che può finire in produzione
+git show --format= --name-only <commit>     # quali commit toccano il file che porta il rischio
+```
+**La domanda giusta è sulla STRUTTURA, non sul contenuto**: *quali commit toccano il file
+rischioso*, non *quale stringa ci compare*. Se quel file è toccato da un commit solo, la trappola è
+impossibile per costruzione — ogni prefisso lo contiene — e non serve leggere una riga. Se è
+toccato da due e il secondo ripara il primo, è armata comunque, qualunque cosa dica il grep.
+
+**E il controllo si sceglie perché non oscilla, non perché è breve.** Verificando proprio questa
+cosa, `grep` su un `git cat-file` in un `for` ha dato a due persone tre risposte diverse alla stessa
+domanda (`5, 2, 0, 0`, poi zero ovunque, poi righe di diff al posto del contenuto). `--name-only`
+non oscilla: risponde con l'elenco dei file, che è un fatto del commit e non del modo in cui lo
+interroghi. Un controllo che devi rifare per credergli non è un controllo — e qui la lezione sul
+non fidarsi del proprio ramo stava per essere depositata sulla base di un loop mai testato.
+
+Questa lezione è più forte delle altre due che l'hanno accompagnata, perché quelle dipendono da
+qualcuno che si ricordi di controllare; questa toglie la possibilità che il taglio sia dannoso.
+
 ## Test: distinguere il tuo difetto dal rumore
 
 ### CI rossa con zero test falliti è una promessa non attesa, non un test tuo
@@ -737,6 +778,67 @@ dove non lo è: resta non fatale, smette di essere muto.
 23514, non rigetta. Un `.then(() => {}, () => {})` o un `.catch(() => {})` su una insert non vede il
 vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
 risolto.
+
+## Il vocabolario di una colonna non si decide senza sapere CHI la legge
+
+**Segnale.** Una correzione ovvia: un valore fuori dall'enum, sostituito con quello «giusto»
+guardando la costante. Nessun test rosso, il vincolo passa, la PR sembra più pulita di prima.
+
+**Cosa succede.** `posts.content_type` sembrava nomenclatura, e `post-from-asset.ts` ci scriveva
+`image` e `carousel` — che sono FORMATI, non tipi. Sostituirli con `uploaded_image` era corretto
+guardando `POST_CONTENT_TYPES` e sbagliato guardando `publish.ts:380`, che fa
+`aiGeneratedMedia: !content_type.startsWith('uploaded')`: quel prefisso **è** la dichiarazione di
+contenuto AI al momento della pubblicazione. Prima di quella modifica tutte e tre le forme
+dichiaravano; dopo, immagini e caroselli presi dalla libreria smettevano di dichiarare. Un enum
+allineato e una conformità spenta, nello stesso commit, senza un solo test rosso — perché nessun
+test lega il prefisso di una stringa a ciò che viene dichiarato a un social.
+
+**La mossa.** Prima di cambiare un valore in una colonna, `grep` di chi la **legge**, non solo di
+chi la scrive — e in particolare di chi ne legge un *pezzo* (`startsWith`, `includes`, uno `split`),
+perché quello non compare cercando il valore intero. Se un lettore ne ricava una decisione di
+conformità, di pagamento o di pubblicazione, il valore non è nomenclatura: è un contratto, e la
+riga accanto va letta prima di toccarlo. Il default in caso di dubbio lo dice già il commento
+accanto a quella riga: sovra-dichiarare non è un rischio, sotto-dichiarare sì.
+
+**Il corollario sul metodo.** A trovarlo non è stato un vincolo né la suite: è stato un altro
+agente che leggeva la riga accanto per un lavoro diverso. E non e' «due persone attente»: ognuno
+ha preso il difetto dell'ALTRO, mai il proprio. Chi scrive la modifica la rilegge da autore, e la
+riga accanto la vede solo chi non ha una posta in gioco su quella modifica.
+
+## Un `onConflict` sbagliato ha due facce: una non scrive, l'altra cancella
+
+**Segnale.** Due segnali opposti, stessa causa. O una funzione riporta di aver salvato N righe e la
+tabella non le ha — nessun log, nessuna eccezione, risultato positivo al chiamante. Oppure la
+scrittura riesce e una riga che c'era prima non c'è più.
+
+**Cosa succede.** `onConflict: 'brand_id,name'` esige un indice UNIQUE su quella coppia. Se non
+c'è, Postgres risponde **42P10** (*no unique or exclusion constraint matching the ON CONFLICT
+specification*) e `supabase-js` **risolve** con `{ error }` — non rigetta. Una chiamata che non
+destruttura `error` non se ne accorge: su `competitors` esisteva solo `competitors_brand_idx`, che
+è un indice normale, e il job «ri-cerca i concorrenti» riportava i concorrenti trovati scrivendo
+zero righe. Non è un caso raro: `create index` e `create unique index` si leggono uguali di
+sfuggita, e l'`onConflict` viene scritto guardando le colonne, non gli indici.
+
+**L'altra faccia, che è la peggiore.** Se l'indice unico c'è ma è su una coppia DIVERSA da quella
+che hai in testa, non c'è nessun errore: l'upsert riesce e **sovrascrive**. `brand_social_handles`
+è unica su `(brand_id, platform)` — un handle per rete, non uno per nome — quindi scrivere un
+secondo handle Instagram per lo stesso brand non ne aggiunge uno: cancella quello che c'era. È
+stata una quasi-vittima in questa stessa PR, in due punti: la migration che spostava gli handle dal
+campo sito (guardia scritta su `username`, cioè sulla colonna sbagliata: sarebbe morta con un 23505
+abortendo TUTTA la migration) e il codice che li raccoglie in onboarding, che avrebbe silenziosamente
+rimpiazzato un handle dichiarato dall'utente con uno dedotto da un campo compilato male. Il primo
+caso fa rumore, il secondo no.
+
+**La mossa per questa faccia.** Prima di un `onConflict`, leggi la coppia unica REALE e chiediti
+cosa significa come regola di prodotto: `(brand_id, platform)` non è un dettaglio di indice, dice
+«un brand ha un solo account per rete». Se la tua scrittura può produrre due righe che collidono su
+quella coppia, stai scegliendo quale delle due sopravvive — quindi scegli esplicitamente
+(`do nothing` per tenere l'esistente, `do update` per sostituirlo) invece di scoprirlo dopo.
+
+**La mossa, per entrambe.** Ogni `onConflict` va verificato contro `pg_indexes` della tabella, non
+contro l'intenzione: `select indexdef from pg_indexes where tablename = '<t>'` e cercare `UNIQUE`. È una
+riga di SQL contro un difetto che non lascia tracce. E l'errore va **letto**: `const { error } =
+await supabase.from(...).upsert(...)`, sempre — vale per il 42P10 come per il 23514.
 
 ## Un `catch` muto su un percorso di ricavi nasconde il difetto finché non lo cerchi a mano
 

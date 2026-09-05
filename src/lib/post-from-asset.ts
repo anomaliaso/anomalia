@@ -6,6 +6,12 @@
  * `media_origin` devono muoversi INSIEME. Un post con un mp4 in `media_url` ma `format: 'image'`
  * e' un reel che l'editor apre come una foto e che l'utente scopre rotto in pubblicazione, senza
  * un errore da nessuna parte. Scriverli in tre punti diversi e' esattamente come e' successo.
+ *
+ * Il prefisso di `contentType` NON e' un'etichetta: `publish.ts` ne ricava
+ * `aiGeneratedMedia: !content_type.startsWith('uploaded')`, cioe' la dichiarazione di contenuto AI
+ * al momento della pubblicazione. Un asset preso dalla libreria puo' essere AI o caricato
+ * dall'utente — la libreria lo sa (`brand_media.source`), questa tabella no — quindi qui si
+ * dichiara SEMPRE, che e' il verso prudente: sotto-dichiarare e' il rischio, sovra-dichiarare no.
  */
 import type { PostContentType } from './contracts/post-tools';
 
@@ -24,9 +30,9 @@ export type PostAssetShape = {
 };
 
 const SHAPES: Record<PostAssetType, PostAssetShape> = {
-	image: { mediaKind: 'image', multiple: false, contentType: 'uploaded_image', format: 'image', mediaOrigin: 'user_uploaded' },
+	image: { mediaKind: 'image', multiple: false, contentType: 'generated_image', format: 'image', mediaOrigin: 'user_uploaded' },
 	video: { mediaKind: 'video', multiple: false, contentType: 'generated_video', format: 'video', mediaOrigin: 'video' },
-	carousel: { mediaKind: 'image', multiple: true, contentType: 'uploaded_image', format: 'carousel', mediaOrigin: 'user_uploaded' }
+	carousel: { mediaKind: 'image', multiple: true, contentType: 'generated_image', format: 'carousel', mediaOrigin: 'user_uploaded' }
 };
 
 export function postAssetShape(type: unknown): PostAssetShape | undefined {
