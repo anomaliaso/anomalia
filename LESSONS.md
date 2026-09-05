@@ -1161,3 +1161,72 @@ rifiuto, così un percorso nuovo che si dimentica di marchiarsi resta chiuso inv
 
 Quattro occorrenze trovate solo perché qualcuno è andato a cercarle: la quinta arriverà, e allora
 il costo di questa lezione è già stato pagato.
+## Il fatto che ti passa un altro agente è un'affermazione, non una prova
+
+**Segnale.** Stai scrivendo una descrizione — o un commento, o un test — su un fatto che non hai
+letto tu, ma che ti è arrivato da chi sta lavorando su quel codice. Sembra la fonte migliore
+possibile: è l'unica persona che lo sta toccando.
+
+**Cosa succede.** In una sessione con quattro agenti sullo stesso contratto, un fatto è girato
+tre volte e si è rivelato falso alla terza. «Il renderer video non ha un canale per lo stile
+visivo»: su quella base ho scritto *«The brand's look does not reach a clip filmed from a prompt
+alone»*, che sarebbe finita in `tools/list`. `RenderVideoOpts.visualStyle` esiste
+(`src/lib/server/video.ts:331`) ed entra nel prompt sul ramo text-to-video (`video.ts:481`). Il
+fatto vero era un altro e più stretto: `startVideo` non lo passava sul percorso MCP mentre il
+percorso dei post sì — un difetto di comportamento, non un'assenza di progetto.
+
+Una descrizione falsa è peggio di una descrizione vaga: quella vaga fa cercare altrove, quella
+falsa fa smettere di cercare. Ed è esattamente il difetto che questo lavoro esisteva per chiudere.
+
+**Come nasce, che è la parte utile.** Chi me l'ha passato non se l'è inventato: aveva letto
+`startVideo`, aveva visto che non passa `visualStyle`, e ne ha concluso che il canale non esiste.
+**Ha letto il chiamante e ha concluso sul chiamato.** Quello che sapeva davvero era «`startVideo`
+non lo passa» — verificato, vero, e già di per sé il difetto — ma è arrivato a me nella forma più
+larga e più falsa. Un'assenza in un chiamante non è un'assenza nel chiamato: dice solo che
+quel percorso non la usa.
+
+**Mossa.** Il fatto si verifica dove è DEFINITO, non dove è usato, prima di scriverci sopra una
+frase — anche quando arriva da chi ha le mani in quel file: `grep` del campo, lettura del ramo, e
+il commento accanto alla definizione. In quel caso diceva già tutto («Solo nel prompt di ripiego
+TEXT-TO-VIDEO: con una cover allegata lo stile è già nei pixel», `video.ts:330`), e avrebbe
+prodotto una frase MIGLIORE di quella che mi era stata data, non solo una vera. Costa un minuto e
+vale quanto la frase che stai per spedire a ogni agente che userà il prodotto.
+
+**Corollario.** Vale in entrambe le direzioni: un fatto che passi tu a un altro agente va marcato
+per quello che è. «Verificato in `file:riga`» e «me l'hanno detto» non sono la stessa cosa, e chi
+riceve non può distinguerle se non gliele distingui tu.
+
+**È la stessa forma a tre distanze diverse, e le abbiamo commesse in tre in una sessione sola.**
+Un agente ha letto un chiamante e ha concluso sul chiamato. Io ho classificato ventidue letture
+come «esprimibili con `query`» leggendone le descrizioni invece delle rotte — due erano sbagliate,
+e una avrebbe fatto uscire dalla memoria del brand le note private di un altro agente. Il terzo ha
+messo una frase dove era comodo, in `references/tools.md`, e il test l'ha dichiarata verde: il test
+leggeva quel file concatenato a `SKILL.md`, mentre la regola che pretendeva di far rispettare era
+«la superficie che si legge PER PRIMA instrada la domanda». Tre volte lo stesso movimento: il
+controllo che ci trovavamo davanti ha detto sì, e abbiamo smesso di guardare.
+
+**La domanda che le prende tutte e tre, e costa una riga:** *di che cosa è prova questo verde?*
+«Il chiamante non lo passa» non è una prova sul chiamato. «La descrizione dice una tabella» non è
+una prova sulla rotta. «`findability` è verde» non è una prova sulla superficie sempre caricata, se
+il test ne legge due concatenate. Va fatta **una volta sola, prima di citare il verde** — non è un
+protocollo, è la ragione per cui verrà davvero eseguita.
+
+Tre errori uguali fatti da tre persone diverse nello stesso giorno non sono tre sbagli: sono la
+forma di un controllo che non guarda dove crede di guardare.
+
+**Due meccanismi, e non coprono lo stesso terreno.** La domanda sopra scala a UNO: prende il caso
+in cui la prova ce l'hai già davanti e non l'hai guardata — «`findability` è verde» con il test che
+legge due file concatenati si smonta da soli, in dieci secondi, senza nessun altro sveglio. È la
+metà che sopravvive quando lavori da solo, ed è la ragione per cui vale scriverla.
+
+Quello che la domanda NON prende è la cosa che non hai motivo di guardare. `get_memory` sembrava
+una lettura di tabella: nessun verde da interrogare, nessun sospetto da inseguire, e chi stava per
+toglierlo non aveva ragione di aprire `brand-memory.ts` — dove ci sono i due filtri che gli
+avrebbero fatto uscire dalla memoria del brand le note private di un altro agente. Lì serve
+qualcun altro, con un contesto diverso, che legga la stessa affermazione.
+
+**E la pratica che l'ha fatto succedere ha un costo, o non è replicabile.** Ha funzionato perché
+chi stava per rimuovere ha detto QUALI TRE tool, prima di toccarli: «rimuovo qualche tool di
+lettura» non avrebbe dato niente da controllare. Quel messaggio si scrive quando il codice non
+esiste ancora — cioè quando viene peggio, e la tentazione è scriverlo dopo, a risposta nota.
+Scritto dopo non serve a niente: è un resoconto, e un resoconto non si può contraddire in tempo.
