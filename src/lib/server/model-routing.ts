@@ -190,7 +190,16 @@ const SLOT_DEFAULT: Record<Slot, Route> = {
   // decisione esplicita, non un effetto dell'uniformita'. La famiglia qui e` la LINEA DI DEFAULT,
   // non il modello del render — quello lo scelgono le preferenze del brand (`videoModelForRole`) e
   // `videoModel(job)`. Del video slot il trasporto legge l'ENDPOINT.
-  video: r('grok-imagine', 'kie')
+  // Il video su OpenRouter COSTA DI PIU`, ed e` l'unico slot dove il verso e` questo: 6x misurati
+  // su Grok Imagine ($0,80 contro $0,132 per 10s a 480p). Si paga per la disponibilita`, perche' su
+  // kie il video non arriva — 12,5% di fallimenti su Seedance, 26,8% su Grok, con medie di 248s e
+  // 49s. Chi legge dopo dara` per scontato che ci si sia spostati per risparmiare: non e` cosi`.
+  //
+  // La famiglia qui e` la LINEA DI DEFAULT, non il modello del render: quello lo scelgono le
+  // preferenze del brand (`videoModelForRole`) e `videoModel(job)`. Il trasporto legge l'ENDPOINT.
+  // `HOME` resta kie ed e` la RISERVA — le due tabelle non devono coincidere, o il ripiego finisce
+  // sulla cosa che non funziona.
+  video: r('grok-imagine', 'openrouter')
 };
 
 function r(family: ModelFamily, endpoint: Endpoint): Route {
