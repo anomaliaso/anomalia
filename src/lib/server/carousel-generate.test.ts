@@ -10,7 +10,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const aiStructured = vi.fn();
 
-vi.mock('$lib/server/xiaomi', () => ({ aiStructured: (...a: unknown[]) => aiStructured(...a) }));
+vi.mock('$lib/server/ai-text', () => ({ aiStructured: (...a: unknown[]) => aiStructured(...a) }));
 vi.mock('$lib/server/brand-context', () => ({ genaiClient: () => ({}) }));
 
 import {
