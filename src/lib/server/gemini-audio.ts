@@ -38,8 +38,27 @@ import {
 	planCuts,
 	sliceToWav,
 	type DroppedCut,
-	type Gap
+	type Gap,
+	type PcmFormat
 } from '$lib/server/voiceover-cut';
+
+/**
+ * Il formato che il tagliatore sa usare, in UN posto solo perché la regola è una sola. Il taglio a
+ * valle assume L16 24 kHz mono e lo assume in SILENZIO: un 48 kHz stereo non fallisce, produce
+ * pezzi lunghi la metà e una voce al doppio della velocità.
+ */
+function assertCuttable(model: string, format: PcmFormat): void {
+	if (
+		format.sampleRate === TTS_PCM.sampleRate &&
+		format.channels === TTS_PCM.channels &&
+		format.bitsPerSample === TTS_PCM.bitsPerSample
+	) {
+		return;
+	}
+	throw new Error(
+		`${model} returned ${format.sampleRate} Hz ${format.channels}-channel ${format.bitsPerSample}-bit audio; the cutter needs ${TTS_PCM.sampleRate} Hz mono ${TTS_PCM.bitsPerSample}-bit.`
+	);
+}
 
 /** Il modello TTS. Sovrascrivibile senza deploy — vedi l'intestazione. */
 export function ttsModel(): string {
@@ -209,18 +228,8 @@ export async function generateVoiceOver(opts: {
 			});
 			if (!spoken) throw new Error('kie returned no audio.');
 			credits = spoken.credits;
-			// Il taglio a valle assume L16 24 kHz mono e lo assume in SILENZIO: un WAV a 48 kHz
-			// stereo non fallisce, produce pezzi lunghi la metà e una voce al doppio della velocità.
 			const decoded = pcmFromWav(spoken.wav);
-			if (
-				decoded.sampleRate !== TTS_PCM.sampleRate ||
-				decoded.channels !== TTS_PCM.channels ||
-				decoded.bitsPerSample !== TTS_PCM.bitsPerSample
-			) {
-				throw new Error(
-					`${model} returned ${decoded.sampleRate} Hz ${decoded.channels}-channel ${decoded.bitsPerSample}-bit audio; the cutter needs ${TTS_PCM.sampleRate} Hz mono ${TTS_PCM.bitsPerSample}-bit.`
-				);
-			}
+			assertCuttable(model, decoded);
 			samples = decoded.samples;
 			// Il WAV di kie è già valido e il suo URL vive 24h: si carica subito.
 			fullUrl = await uploadAudio(opts.supabase, opts.brandId, spoken.wav, 'full');
