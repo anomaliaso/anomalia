@@ -74,6 +74,11 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
     tool: 'query',
     question: 'how many posts went out last month',
     words: ['table', 'count', 'read']
+  },
+  {
+    tool: 'query',
+    question: 'what does this brand sell',
+    words: ['sell', 'products']
   }
 ];
 

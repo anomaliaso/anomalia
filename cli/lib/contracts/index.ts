@@ -68,8 +68,7 @@ import {
   GET_STUDIO,
   GET_VOICE,
   GET_WEEKLY_PLAN,
-  LIST_ARTICLES,
-  LIST_PRODUCTS
+  LIST_ARTICLES
 } from './reads';
 import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
 import {
@@ -235,7 +234,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   LIST_IDEAS,
   LIST_MEDIA,
   LIST_POSTS,
-  LIST_PRODUCTS,
   LIST_SHARES,
   LIST_SOCIAL_ACCOUNTS,
   LIST_WEB_AUDITS,
@@ -374,8 +372,7 @@ export {
   GET_STUDIO,
   GET_VOICE,
   GET_WEEKLY_PLAN,
-  LIST_ARTICLES,
-  LIST_PRODUCTS
+  LIST_ARTICLES
 };
 export { STUDIO_DOCUMENT_MODES } from './reads';
 export type { StudioDocumentMode } from './reads';

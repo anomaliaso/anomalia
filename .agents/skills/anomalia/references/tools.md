@@ -21,7 +21,6 @@ All tools take a brand `slug` when brand-scoped. Ids accept short unambiguous pr
 | `get_calendar` | `anomalia calendar <slug> [--month YYYY-MM]` |
 | `get_gtm` | `anomalia gtm <slug>` |
 | `get_voice` / `update_voice` | `anomalia voice <slug>` |
-| `list_products` | (studio / products views) |
 | `list_posts` | `anomalia content <slug> [--status …]` |
 | `approve_posts` | `anomalia approve <slug> --all` |
 | `get_post` | `anomalia post <slug> <id>` |

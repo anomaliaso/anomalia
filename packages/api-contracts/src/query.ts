@@ -32,7 +32,11 @@ export const QUERY_DATABASE = {
     'attempt. Omit `table` to list every table you can name. Ask for a table with no `columns` to get ' +
     'real rows with every column: the keys of a row ARE the schema. One table per call — no joins, no ' +
     'embeds; read two tables and match the ids yourself. Reach for it when the answer needs a table ' +
-    'nothing else exposes, a count, or a join you do by hand. Costs nothing.',
+    'nothing else exposes, a count, or a join you do by hand. ' +
+    'IT IS ALSO THE READ FOR QUESTIONS THAT HAVE NO TOOL OF THEIR OWN. What this brand SELLS — its ' +
+    'catalogue of products, offers and services — is the `products` table: one row per offer, with ' +
+    '`title`, `kind`, `pricing`, `url`, `featured` and the `images` it carries. ' +
+    'Costs nothing.',
   method: 'POST',
   pathUnderBrand: '/query',
   input: z

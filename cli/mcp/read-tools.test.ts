@@ -83,12 +83,6 @@ const MIGRATED_READS = [
     properties: { slug: SLUG_PROPERTY },
     required: ['slug'],
   },
-  {
-    name: 'list_products',
-    title: 'List products',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
 ] as const;
 
 type Tool = {
