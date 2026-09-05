@@ -207,13 +207,6 @@ async function settle(
 }
 
 /**
- * Attach the finished clip to its post, replacing the cover that stood in for it.
- *
- * Returns whether it worked, and the caller only settles the render `done` once it has: a render
- * marked done whose post never got the url is a clip that exists, is paid for, and is reachable by
- * nothing — and no query in this module looks at `done` rows again.
- */
-/**
  * Il clip che nessun post reclama va nella LIBRERIA del brand, o resta un file pagato che nessun
  * tool sa raggiungere: `create_post` accetta `media_ids`, e questo è l'id che glielo procura.
  * `source_ref` porta l'id del lavoro, così `check_media_job` ritrova l'asset senza una colonna in
@@ -223,7 +216,7 @@ async function applyToLibrary(
 	admin: SupabaseClient,
 	row: VideoRenderRow,
 	url: string
-): Promise<boolean> {
+): Promise<string | null> {
 	const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
 	const saved = await saveRenderedVideoToLibrary(admin, {
 		brandId: row.brand_id,
@@ -233,12 +226,8 @@ async function applyToLibrary(
 		durationSeconds: row.duration_seconds ?? undefined,
 		sourceRef: row.id
 	});
-	if ('error' in saved) {
-		console.error(`[video-render] clip ${url} not registered in the library:`, saved.error);
-		return false;
-	}
 
-	return true;
+	return 'error' in saved ? saved.error : null;
 }
 
 /**
@@ -265,12 +254,17 @@ async function chargeMonthlyVideo(admin: SupabaseClient, row: VideoRenderRow): P
 	}
 }
 
+/**
+ * Null vuol dire che il clip è atterrato; una stringa è il motivo per cui non lo è, e finisce sulla
+ * colonna `error` della riga — quella che `check_media_job` mostra verbatim a un agente esterno. Un
+ * boolean la sostituiva con una frase su un post che un lavoro di libreria non ha mai avuto.
+ */
 async function applyToPost(
 	admin: SupabaseClient,
 	row: VideoRenderRow,
 	url: string,
 	thumbnailUrl?: string
-): Promise<boolean> {
+): Promise<string | null> {
 	if (!row.post_id) return applyToLibrary(admin, row, url);
 	// `.select('id')` so a zero-row match is visible: an UPDATE that hits nothing reports no error,
 	// so without this an orphaned render — post insert rolled back, post since deleted — would be
@@ -292,16 +286,13 @@ async function applyToPost(
 		.eq('id', row.post_id)
 		.select('id');
 	if (error) {
-		console.error(`[video-render] could not attach clip to post ${row.post_id}:`, error.message);
-		return false;
+		return `the clip is stored but post ${row.post_id} could not be updated: ${error.message}`;
 	}
 	if (!touched?.length) {
-		// Nothing to attach to and nothing to retry — the clip is stored, but its post is gone.
-		console.error(`[video-render] post ${row.post_id} no longer exists; clip ${url} is orphaned`);
-		return false;
+		return `the clip is stored but post ${row.post_id} no longer exists`;
 	}
 
-	return true;
+	return null;
 }
 
 /**
@@ -468,8 +459,9 @@ export async function reconcileVideoRenders(
 			// Post first, settle second. Settling `done` before the post has the url strands a paid
 			// clip nowhere: nothing re-reads a done row. If the post write fails the row goes back
 			// to the queue, where the attempt cap eventually stops it.
-			const attached = await applyToPost(admin, raw, outcome.url, outcome.thumbnailUrl);
-			if (!attached) {
+			const notLanded = await applyToPost(admin, raw, outcome.url, outcome.thumbnailUrl);
+			if (notLanded) {
+				console.error(`[video-render] clip did not land id=${raw.id}:`, notLanded);
 				await admin
 					.from('video_renders')
 					.update({
@@ -477,7 +469,7 @@ export async function reconcileVideoRenders(
 						claimed_at: null,
 						attempts: raw.attempts + 1,
 						media_url: outcome.url,
-						error: 'clip stored but the post could not be updated'
+						error: notLanded.slice(0, 2000)
 					})
 					.eq('id', raw.id)
 					.then(undefined, () => {});
@@ -485,7 +477,14 @@ export async function reconcileVideoRenders(
 			}
 			await chargeMonthlyVideo(admin, raw);
 			await settle(admin, raw, { status: 'done', media_url: outcome.url });
-			await notifyThread(admin, raw, "the clip is ready and attached to the post", origin);
+			await notifyThread(
+				admin,
+				raw,
+				raw.post_id
+					? 'the clip is ready and attached to the post'
+					: 'the clip is ready and filed in the media library',
+				origin
+			);
 			done += 1;
 		} catch (e) {
 			// Unknown failure: give the row back rather than burying it. The age check above is what
