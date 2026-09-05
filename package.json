@@ -34,7 +34,8 @@
     "oss:export": "node scripts/export-oss.mjs",
     "test:durability": "npm run eval:durability",
     "postinstall": "patch-package",
-    "eval:durability": "vite-node --config scripts/vite-node.config.ts scripts/eval/durability.ts"
+    "eval:durability": "vite-node --config scripts/vite-node.config.ts scripts/eval/durability.ts",
+    "test:constraints": "node scripts/constraint-harness.mjs"
   },
   "devDependencies": {
     "@internationalized/date": "^3.12.0",
