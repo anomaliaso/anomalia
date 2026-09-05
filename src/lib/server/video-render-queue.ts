@@ -116,9 +116,14 @@ export async function submitAndTrackVideoRender(opts: {
 	threadId?: string | null;
 	imagePrompt: string;
 	render: RenderVideoOpts;
+	/** Il motivo di un rifiuto del fornitore, se ne arriva uno: passa dritto a chi ha chiamato. */
+	onSubmitError?: (reason: string) => void;
 }): Promise<SubmittedVideoRender | null> {
 	const { submitVideoRender } = await import('$lib/server/video');
-	const submitted = await submitVideoRender(opts.imagePrompt, opts.render).catch((e) => {
+	const submitted = await submitVideoRender(opts.imagePrompt, {
+		...opts.render,
+		onSubmitError: opts.onSubmitError
+	}).catch((e) => {
 		// CreditsExhaustedError must reach the caller — it is a message for the user, not a failure
 		// to swallow into a silent photo fallback.
 		if (e instanceof Error && e.name === 'CreditsExhaustedError') throw e;

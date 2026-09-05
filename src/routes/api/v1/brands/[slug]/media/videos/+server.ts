@@ -32,12 +32,24 @@ export const POST: RequestHandler = async ({ request, params }) => {
   });
 
   if (!result.ok) {
+    // Il MOTIVO del fornitore risale fino a qui: un `render_failed` nudo dice che e' fallito e
+    // nasconde l'unica cosa che serviva per decidere se riprovare.
     return json(
-      { error: result.error, ...('allowed' in result ? { allowed: result.allowed } : {}) },
+      {
+        error: result.error,
+        ...('allowed' in result ? { allowed: result.allowed } : {}),
+        ...('reason' in result && result.reason ? { reason: result.reason } : {})
+      },
       { status: statusForFailure(GENERATE_VIDEO, result.error) }
     );
   }
 
   // Un clip non torna mai pronto: la coda lo finisce e check_media_job dice quando e' atterrato.
-  return json({ ok: true, status: 'rendering', job_id: result.jobId, model: result.model });
+  return json({
+    ok: true,
+    status: 'rendering',
+    job_id: result.jobId,
+    model: result.model,
+    duration_seconds: result.durationSeconds
+  });
 };

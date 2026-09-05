@@ -646,7 +646,11 @@ const VideoJobResult = z.object({
   ok: z.literal(true),
   status: z.literal('rendering'),
   job_id: z.string(),
-  model: z.string().nullable().describe('The model that is filming it; null when the platform default chose')
+  model: z.string().nullable().describe('The model that is filming it; null when the platform default chose'),
+  duration_seconds: z
+    .number()
+    .nullable()
+    .describe('The seconds ACTUALLY submitted. A clip is billed per second, so read this rather than assuming your request was taken.')
 });
 
 export const GENERATE_VIDEO = {
@@ -674,7 +678,17 @@ export const GENERATE_VIDEO = {
         .describe(
           'A library IMAGE to animate, from list_media — an id or an unambiguous prefix. Omit to film from the prompt alone.'
         ),
-      duration: z.coerce.number().int().min(1).max(30).optional().describe('Seconds, e.g. 5'),
+      duration: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(30)
+        .optional()
+        .describe(
+          'Seconds. Each model accepts its own window and most will not go below 10 — a duration ' +
+            'outside it is refused as duration_out_of_range naming the nearest it accepts, rather ' +
+            'than quietly rounded up, because a clip is billed per second.'
+        ),
       aspect_ratio: z.enum(['1:1', '9:16', '16:9']).optional(),
       model: modelField('videoModel, or videoImageModel when base_media_id is set'),
       title: z.string().optional().describe('The name the clip carries in the library')
@@ -687,6 +701,7 @@ export const GENERATE_VIDEO = {
     { error: 'video_budget_exhausted', status: 400 },
     { error: 'source_not_found', status: 404 },
     { error: 'source_not_an_image', status: 400 },
+    { error: 'duration_out_of_range', status: 400 },
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }
   ],
