@@ -72,6 +72,12 @@ describe('la descrizione di generate_image', () => {
    * Il look del brand NON raggiunge questo strumento: `runImageJob` passa solo
    * `{model, refineModel, baseImage, aspectRatio}`. Una descrizione che lascia credere il
    * contrario promette quello che il codice non fa.
+   *
+   * SE QUESTO TEST DIVENTA ROSSO, NON CANCELLARLO. Il rosso è il segnale che il cablaggio del
+   * contesto visivo è arrivato — `visual_style`, il playbook, `brandLook`, il logo dentro `opts`
+   * — cioè che il giro è completo, non che la regola è caduta. Riscrivi l'asserzione sulla verità
+   * nuova (con lo slug il look arriva, senza slug no) e lasciala qui a sorvegliare quella. Un
+   * test cancellato nel commit che lo fa fallire porta via anche la domanda che faceva.
    */
   it('nega esplicitamente che uno slug compri lo stile del brand', () => {
     expect(text).toMatch(/nothing about a brand.s look reaches the model/);
