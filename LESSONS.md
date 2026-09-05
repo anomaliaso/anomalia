@@ -760,13 +760,15 @@ riga accanto va letta prima di toccarlo. Il default in caso di dubbio lo dice gi
 accanto a quella riga: sovra-dichiarare non è un rischio, sotto-dichiarare sì.
 
 **Il corollario sul metodo.** A trovarlo non è stato un vincolo né la suite: è stato un altro
-agente che leggeva la riga accanto per un lavoro diverso. Due letture indipendenti dello stesso
-codice hanno preso due difetti (questo e il 42P10 qui sotto) che nessuna delle due suite vedeva.
+agente che leggeva la riga accanto per un lavoro diverso. E non e' «due persone attente»: ognuno
+ha preso il difetto dell'ALTRO, mai il proprio. Chi scrive la modifica la rilegge da autore, e la
+riga accanto la vede solo chi non ha una posta in gioco su quella modifica.
 
-## Un `upsert` con `onConflict` senza indice unico non scrive, e non lo dice
+## Un `onConflict` sbagliato ha due facce: una non scrive, l'altra cancella
 
-**Segnale.** Una funzione riporta di aver salvato N righe e la tabella non le ha. Nessun log,
-nessuna eccezione, il chiamante riceve un risultato positivo.
+**Segnale.** Due segnali opposti, stessa causa. O una funzione riporta di aver salvato N righe e la
+tabella non le ha — nessun log, nessuna eccezione, risultato positivo al chiamante. Oppure la
+scrittura riesce e una riga che c'era prima non c'è più.
 
 **Cosa succede.** `onConflict: 'brand_id,name'` esige un indice UNIQUE su quella coppia. Se non
 c'è, Postgres risponde **42P10** (*no unique or exclusion constraint matching the ON CONFLICT
@@ -776,8 +778,24 @@ destruttura `error` non se ne accorge: su `competitors` esisteva solo `competito
 zero righe. Non è un caso raro: `create index` e `create unique index` si leggono uguali di
 sfuggita, e l'`onConflict` viene scritto guardando le colonne, non gli indici.
 
-**La mossa.** Ogni `onConflict` va verificato contro `pg_indexes` della tabella, non contro
-l'intenzione: `select indexdef from pg_indexes where tablename = '<t>'` e cercare `UNIQUE`. È una
+**L'altra faccia, che è la peggiore.** Se l'indice unico c'è ma è su una coppia DIVERSA da quella
+che hai in testa, non c'è nessun errore: l'upsert riesce e **sovrascrive**. `brand_social_handles`
+è unica su `(brand_id, platform)` — un handle per rete, non uno per nome — quindi scrivere un
+secondo handle Instagram per lo stesso brand non ne aggiunge uno: cancella quello che c'era. È
+stata una quasi-vittima in questa stessa PR, in due punti: la migration che spostava gli handle dal
+campo sito (guardia scritta su `username`, cioè sulla colonna sbagliata: sarebbe morta con un 23505
+abortendo TUTTA la migration) e il codice che li raccoglie in onboarding, che avrebbe silenziosamente
+rimpiazzato un handle dichiarato dall'utente con uno dedotto da un campo compilato male. Il primo
+caso fa rumore, il secondo no.
+
+**La mossa per questa faccia.** Prima di un `onConflict`, leggi la coppia unica REALE e chiediti
+cosa significa come regola di prodotto: `(brand_id, platform)` non è un dettaglio di indice, dice
+«un brand ha un solo account per rete». Se la tua scrittura può produrre due righe che collidono su
+quella coppia, stai scegliendo quale delle due sopravvive — quindi scegli esplicitamente
+(`do nothing` per tenere l'esistente, `do update` per sostituirlo) invece di scoprirlo dopo.
+
+**La mossa, per entrambe.** Ogni `onConflict` va verificato contro `pg_indexes` della tabella, non
+contro l'intenzione: `select indexdef from pg_indexes where tablename = '<t>'` e cercare `UNIQUE`. È una
 riga di SQL contro un difetto che non lascia tracce. E l'errore va **letto**: `const { error } =
 await supabase.from(...).upsert(...)`, sempre — vale per il 42P10 come per il 23514.
 
