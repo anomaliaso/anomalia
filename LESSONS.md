@@ -1055,3 +1055,57 @@ che esplode non è quello che l'ha piazzata.
 **La regola dietro**: dove il codice lancia una promessa che nessuno attende, un mock parziale non
 degrada — abbatte tutto il processo. O il mock risponde a qualunque cosa (Proxy), o quel percorso
 va atteso e asserito.
+
+## `set role` non è `auth.role()`: una security-definer interrogata da psql risponde zero
+
+Verificando che `sum_org_ai_cost_usd` contasse finalmente una riga senza brand, la funzione ha
+risposto **0** mentre la stessa somma scritta a mano sulla tabella rispondeva `0.033646`. Sembrava
+esattamente il difetto che stavo chiudendo — la migration non applicata, o il `left join` che non
+teneva.
+
+Non era né l'una né l'altro. La funzione porta una guardia:
+
+```sql
+and ( auth.role() = 'service_role' or p_org_id in (select public.auth_org_ids()) )
+```
+
+`auth.role()` legge il **claim del JWT** (`request.jwt.claims`), non il ruolo Postgres. Da psql
+quel claim non c'è, quindi la guardia è falsa per ogni riga, il `where` non ne seleziona nessuna e
+`coalesce(sum(...), 0)` restituisce uno zero perfettamente legittimo. `set role service_role` non
+cambia niente: è l'altro concetto di ruolo.
+
+**Segnale**: una funzione `security definer` sotto RLS risponde `0` o zero righe da psql, mentre la
+query equivalente scritta a mano risponde. Nessun errore, nessun permesso negato — solo un vuoto
+che si legge come un difetto della funzione.
+
+**Mossa**: mettere il claim prima di chiamarla, nella stessa sessione.
+
+```sql
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select public.sum_org_ai_cost_usd(...);
+```
+
+**La regola dietro**: una funzione che decide chi può vedere cosa va interrogata con l'identità che
+avrà in produzione. Interrogarla senza è come chiamarla da un utente anonimo e concludere che la
+tabella è vuota — e la conclusione sbagliata qui è la peggiore possibile, perché «somma zero» è
+proprio la forma del difetto che si sta cercando.
+
+## Un test rosso può importare `bun`, non `bun:test` — e vitest non ha un alias per quello
+
+In un worktree pulito la suite chiude con `Test Files 2 failed | 664 passed` e **`Tests 7387
+passed`, zero test falliti**: i due file non falliscono, non si caricano proprio. Uno è
+`hooks.server.test.ts` (manca `.env`, già qui sopra). L'altro è `cli/mcp/vercel-config.test.ts`:
+
+```
+Failed to load url bun (resolved id: bun) in cli/mcp/vercel-config.test.ts
+```
+
+`vite.config.ts` aliasa `bun:test` → `vitest`, che è ciò che fa girare i test della CLI sotto
+vitest. Ma quel file importa anche `import { $ } from 'bun'` — il **runtime**, non il framework di
+test — e per quello non c'è alias possibile: è l'eseguibile bun.
+
+**Segnale**: `Test Files N failed` con `Tests M passed` e **zero** `×`. I file non hanno test
+rossi, hanno un import che non risolve. Cerca `Failed to load url`, non `FAIL`.
+
+**Mossa**: `bun test cli/` per quei file (lì passano), e prima di attribuirsi il rosso,
+`git log -1 <file>` — se non l'hai toccato tu, riproducilo sul checkout principale.
