@@ -17,7 +17,7 @@ import { route } from '$lib/server/model-routing';
 import { signPaths } from '$lib/server/people';
 import { svgToPng } from '$lib/server/brand-analysis';
 import { normalizeContentFormat } from '$lib/content-formats';
-import { firstLogoUrl } from '$lib/server/blog-site';
+import { firstLogoUrl } from '$lib/brand-fields';
 import { designWallDigestSection } from '$lib/server/wall-digest';
 
 

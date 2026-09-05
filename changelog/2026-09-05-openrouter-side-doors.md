@@ -146,6 +146,22 @@ Dopo questa pulizia il cruscotto continuerà a mostrare righe `gemini` e `xiaomi
 e **non vorrà dire che la pulizia è fallita**. È il tipo di osservazione che fa
 revertire un lavoro giusto.
 
+## Il ciclo che la cancellazione ha fatto cadere
+
+Tolto `genWithRetry` (zero chiamanti), il server ha smesso di partire: `circular dependency` su
+moduli non toccati. Il ciclo era già lì — `images → blog-site → referrals → crediti → scheduler →
+director → content-preview → images` — e restava in piedi solo grazie all'ORDINE in cui i moduli
+si inizializzavano, che l'import alla riga 2 di `images.ts` teneva fermo.
+
+Tagliato dove il pezzo condiviso non ha dipendenze: `firstLogoUrl`, cinque righe pure che leggono
+il primo logo di un array, viveva dentro il blog pubblico intero (Marked, client admin, referral)
+ed era importata da lì dal renderer delle immagini. Ora sta in `$lib/brand-fields.ts`, il foglio
+senza import fatto per esattamente questo. Sta in LESSONS.md, perché la classe di guasto conta più
+del caso: **un ciclo che regge per ordine di inizializzazione è già rotto, e non te l'ha detto.**
+
+Da notare quale controllo l'ha preso: `npm run dev` sulla rotta vera. I 7.289 test erano verdi e
+`svelte-check` muto.
+
 ## Quello che non è stato fatto
 
 Il parametro `ai` di `renderPostImage` / `renderBrandImage` / `renderCarouselSlide`

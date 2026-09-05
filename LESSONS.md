@@ -978,3 +978,42 @@ Supported values are: 'pcm16'` conteneva già la risposta, e chi si è fermato a
 cercato. Un'assenza va dichiarata con l'endpoint interrogato accanto, o è un'opinione travestita
 da fatto — e finisce in `MISSING`, dove la testata promette «fatti misurati, non ipotesi di
 listino».
+
+## Un ciclo di import tenuto in piedi dall'ordine cade quando togli un import morto
+
+Cancellato `genWithRetry` — zero chiamanti — e con lui l'`import` che stava alla **riga 2** di
+`content-preview/images.ts`. Il server ha smesso di partire: `500` su ogni rotta, e nei log
+`[vite] The dependency module is not yet fully initialized due to circular dependency`.
+
+Il ciclo non l'avevo creato io. Era già lì, e si chiudeva così:
+
+```
+referrals → credits → scheduler → director → content-preview → caption-quality
+    ↑                                                                │
+    └───────────────── blog-site ◄─── images ◄───────────────────────┘
+```
+
+`images.ts` importava `blog-site.ts` per **una funzione pura di cinque righe** (`firstLogoUrl`,
+che legge il primo logo da un array), e `blog-site.ts` è il blog pubblico intero: Marked, client
+admin, referral. Finché la riga 2 tirava dentro `plan-pipeline` per primo, i moduli si
+inizializzavano in un ordine in cui il cerchio si chiudeva dopo che i pezzi che servivano erano
+già pronti. Togliere quell'import ha cambiato l'ordine, e basta.
+
+**Segnale**: una cancellazione di codice morto — un import inutilizzato, una funzione senza
+chiamanti — fa comparire `circular dependency` su moduli che non hai toccato. Il file nell'errore
+(qui `referrals.ts`) non è il colpevole: è solo dove il cerchio si è chiuso per primo.
+
+**Mossa**: non rimettere l'import morto, e non spostare la cancellazione. Trova il ciclo leggendo
+in ordine i `Error when evaluating SSR module` nel log — sono la catena, dall'ultimo al primo — e
+**taglialo dove il pezzo condiviso non ha dipendenze**: `firstLogoUrl` è finita in
+`$lib/brand-fields.ts`, che è un foglio (zero import) fatto apposta per le funzioni pure sui campi
+del brand. Un modulo pesante importato per un helper puro è sempre l'anello da tagliare.
+
+**E la lezione più larga**: un ciclo che regge solo grazie all'ordine di inizializzazione è già
+rotto, semplicemente non te l'ha ancora detto. Vale la pena scoprirlo togliendo un import morto in
+un pomeriggio, invece che aggiungendo una riga a un file qualunque un venerdì.
+
+**Il controllo che l'ha preso, e quello che non l'avrebbe preso**: `npm run dev` sulla rotta vera.
+I 7.289 test unitari erano verdi, `svelte-check` non aveva niente da dire, e il build non era
+ancora stato provato. Un ciclo di inizializzazione si vede solo eseguendo — è precisamente il
+motivo per cui il cancello del browser non è sostituibile con una suite verde.
