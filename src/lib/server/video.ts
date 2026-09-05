@@ -18,6 +18,7 @@ import {
   VIDEO_MODEL_CHOICES as SHARED_VIDEO_MODEL_CHOICES,
   isKnownVideoModelId,
   isSeedance25Model,
+  clampVideoPrompt,
   videoModelCaps,
   videoModelForRole,
   videoModelSpec,
@@ -25,6 +26,16 @@ import {
   type VideoRole
 } from '$lib/video-models';
 import { nearestAspectRatio } from '$lib/aspect-ratio';
+import { route } from '$lib/server/model-routing';
+import {
+  checkOpenrouterVideo,
+  openrouterVideoHeaders,
+  openrouterVideoModel,
+  renderOpenrouterVideo,
+  submitOpenrouterVideo,
+  tagOpenrouterJob,
+  untagOpenrouterJob
+} from '$lib/server/openrouter-video';
 
 // Generazione video vera, via kie. È il percorso a PAGAMENTO: la preview gratuita di onboarding
 // non passa mai di qui, quindi un utente free non incorre nel costo video.
@@ -63,12 +74,7 @@ export function clampVideoResolution(value: unknown): string {
 // What an approved clip gets upscaled to. kie's upscale accepts 720p | 1080p.
 export const UPSCALE_RESOLUTION = env.KIE_VIDEO_UPSCALE_RESOLUTION || '720p';
 
-/** Truncate a video prompt to the model's provider ceiling. Keeps the head, where the scene and
- *  the clean-frame rule live, and drops only the tail that already exceeded the model. */
-export function clampVideoPrompt(prompt: string, model: string): string {
-  const limit = videoModelCaps(model).maxPromptChars;
-  return prompt.length > limit ? prompt.slice(0, limit).trim() : prompt;
-}
+export { clampVideoPrompt } from '$lib/video-models';
 
 export type { VideoModelFamily, VideoModelCaps } from '$lib/video-models';
 export { videoModelCaps } from '$lib/video-models';
@@ -678,7 +684,32 @@ export function buildJobInput(
   };
 }
 
+/**
+ * CHI serve questo render. L'unico posto che lo decide, e l'unico che può dire di no a OpenRouter.
+ *
+ * Il registro sceglie l'endpoint; qui si aggiungono i due motivi per cui quella scelta non si può
+ * onorare per QUESTO render. Entrambi sono rumorosi di proposito: un ripiego silenzioso su kie
+ * mentre la variabile dice openrouter è esattamente il guasto che `SERVED_BY` esiste per impedire,
+ * e non lascerebbe traccia da nessuna parte.
+ */
+function videoEndpoint(model: string, opts: { hasRefs?: boolean } = {}): 'kie' | 'openrouter' {
+  if (route('video').endpoint !== 'openrouter') return 'kie';
+
+  if (!openrouterVideoModel(model)) {
+    console.warn(`[video] AI_ROUTE_VIDEO chiede openrouter ma ${model} non è nel suo catalogo video: ripiego su kie.`);
+    return 'kie';
+  }
+  // I `reference_*` di Seedance non esistono sulla superficie video di OpenRouter: mandarli lì
+  // significherebbe girare la clip SENZA i riferimenti, con un 200 e nessun errore.
+  if (opts.hasRefs) {
+    console.warn('[video] i riferimenti non passano da openrouter: questo render resta su kie.');
+    return 'kie';
+  }
+  return 'openrouter';
+}
+
 async function runVideoJob(
+  endpoint: 'kie' | 'openrouter',
   model: string,
   prompt: string,
   durationSeconds: number,
@@ -693,7 +724,15 @@ async function runVideoJob(
     referenceImageUrls?: string[];
     abortSignal?: AbortSignal;
   } = {}
-): Promise<VideoJobResult | undefined> {
+): Promise<(VideoJobResult & { costUsd?: number }) | undefined> {
+  if (endpoint === 'openrouter') {
+    const out = await renderOpenrouterVideo(
+      { model, prompt, durationSeconds, resolution, aspectRatio, imageUrl: opts.imageUrl, lastFrameUrl: opts.lastFrameUrl },
+      { signal: opts.abortSignal, context: 'inline' }
+    );
+    // Come su kie: una scadenza non riapre niente. Il job resta del fornitore col suo id.
+    return out.status === 'done' ? { url: out.url, taskId: tagOpenrouterJob(out.jobId), costUsd: out.costUsd } : undefined;
+  }
   const taskId = await createKieTask(
     model,
     buildJobInput(model, {
@@ -725,9 +764,9 @@ async function persistMp4(
   supabase: SupabaseClient,
   userId: string,
   srcUrl: string,
-  opts: { captions?: boolean; fontName?: string; tighten?: boolean } = {}
+  opts: { captions?: boolean; fontName?: string; tighten?: boolean; headers?: Record<string, string> } = {}
 ): Promise<string | undefined> {
-  const dl = await fetch(srcUrl);
+  const dl = await fetch(srcUrl, opts.headers ? { headers: opts.headers } : undefined);
   if (!dl.ok) return undefined;
   let bytes: Buffer = Buffer.from(await dl.arrayBuffer());
   // Il vuoto in testa e in coda si taglia PRIMA dei sottotitoli, o il timing non corrisponde al
@@ -900,8 +939,11 @@ async function runPreparedRender(
   const { model, prompt, durationSeconds, aspectRatio, resolution, cover, script, lastFrame } = p;
   const { referenceVideoUrls, referenceAudioUrls, referenceImageUrls } = p;
   const t0 = Date.now();
+  const endpoint = videoEndpoint(model, {
+    hasRefs: referenceVideoUrls.length > 0 || referenceAudioUrls.length > 0 || referenceImageUrls.length > 0
+  });
   try {
-    const job = await runVideoJob(model, prompt, durationSeconds, aspectRatio, resolution, {
+    const job = await runVideoJob(endpoint, model, prompt, durationSeconds, aspectRatio, resolution, {
       imageUrl: cover,
       hasScript: !!script,
       lastFrameUrl: lastFrame,
@@ -913,22 +955,29 @@ async function runPreparedRender(
     // L'addebito ESATTO di kie: un job fallito o scaduto kie non lo fattura, quindi non lo
     // fatturiamo al brand. Il brandId arriva dallo scope, quindi il costo cade in ai_calls e da lì
     // nella quota.
-    logAiCall({
-      label: 'video.render',
-      provider: 'kie',
-      model,
-      prompt,
-      ms: Date.now() - t0,
-      ok: !!job,
-      error: job ? undefined : 'no video returned',
-      ...(job?.credits != null
-        ? { providerCredits: job.credits, flatCostUsd: Math.round(job.credits * KIE_CREDIT_USD * 1e6) / 1e6 }
-        : {}),
-      context: `${durationSeconds}s ${resolution}`
-    });
+    // Su openrouter la riga in `ai_calls` l'ha gia' scritta il trasporto, che e' l'unico a
+    // conoscere il `jobId` e il costo fatturato — anche quando il job e' SCADUTO e qui non arriva.
+    if (endpoint === 'kie') {
+      logAiCall({
+        label: 'video.render',
+        provider: 'kie',
+        model,
+        prompt,
+        ms: Date.now() - t0,
+        ok: !!job,
+        error: job ? undefined : 'no video returned',
+        ...(job?.credits != null
+          ? { providerCredits: job.credits, flatCostUsd: Math.round(job.credits * KIE_CREDIT_USD * 1e6) / 1e6 }
+          : {}),
+        context: `${durationSeconds}s ${resolution}`
+      });
+    }
     if (!job) return undefined;
 
-    const url = await persistMp4(supabase, userId, job.url, p.persistOpts);
+    const url = await persistMp4(supabase, userId, job.url, {
+      ...p.persistOpts,
+      ...(endpoint === 'openrouter' ? { headers: openrouterVideoHeaders() } : {})
+    });
     if (!url) return undefined;
     // taskId e risoluzione tornano indietro perché sono ciò che rende possibile l'upscale
     // all'approvazione senza rigenerare la clip. `thumbnailUrl` è la COVER: senza restituirla il
@@ -1108,8 +1157,42 @@ export async function submitVideoRender(
   // so the caller ships the cover. Without this a blip unwinds into the caller's outer catch and
   // takes the whole post with it — including the cover image already generated and paid for.
   // CreditsExhaustedError is re-thrown: that is a message for the user, not a render failure.
+  const endpoint = videoEndpoint(p.model, {
+    hasRefs:
+      p.referenceVideoUrls.length > 0 || p.referenceAudioUrls.length > 0 || p.referenceImageUrls.length > 0
+  });
+
   let taskId: string | undefined;
   try {
+    if (endpoint === 'openrouter') {
+      // Si INVIA e basta: il poll lo fara' il riconciliatore, sullo stesso id, quante volte serve.
+      const out = await submitOpenrouterVideo(
+        {
+          model: p.model,
+          prompt: p.prompt,
+          durationSeconds: p.durationSeconds,
+          resolution: p.resolution,
+          aspectRatio: p.aspectRatio,
+          imageUrl: p.cover,
+          lastFrameUrl: p.lastFrame
+        },
+        opts.abortSignal
+      );
+      if (!out.jobId) {
+        console.error(`[video] submit openrouter rifiutato: ${out.error}`);
+        return undefined;
+      }
+      return {
+        taskId: tagOpenrouterJob(out.jobId),
+        model: p.model,
+        prompt: p.prompt,
+        durationSeconds: p.durationSeconds,
+        resolution: p.resolution,
+        coverUrl: p.cover,
+        persistOpts: p.persistOpts,
+        submittedAt: Date.now()
+      };
+    }
     taskId = await createKieTask(
       p.model,
       buildJobInput(p.model, {
@@ -1162,6 +1245,11 @@ export async function finishVideoRender(
   userId: string,
   submitted: SubmittedVideoRender
 ): Promise<VideoRenderOutcome> {
+  // CHI interrogare lo dice la RIGA, non `AI_ROUTE_VIDEO` di adesso: una clip consegnata prima di
+  // un deploy che sposta la variabile deve restare recuperabile da chi l'ha presa in carico.
+  const openrouterJobId = untagOpenrouterJob(submitted.taskId);
+  if (openrouterJobId) return finishOpenrouterRender(supabase, userId, submitted, openrouterJobId);
+
   if (!env.KIE_API_KEY) throw new Error('KIE_API_KEY not configured');
 
   const res = await fetch(
@@ -1222,6 +1310,51 @@ export async function finishVideoRender(
   };
 }
 
+/**
+ * L'altra meta' di `finishVideoRender`, per i job che vivono su OpenRouter.
+ *
+ * Una interrogazione sola, mai un ciclo: `pending` vuol dire "richiedi al giro dopo", e nessun
+ * secondo invio parte da qui — il job e' gia' del fornitore, e riaprirlo lo pagherebbe due volte.
+ */
+async function finishOpenrouterRender(
+  supabase: SupabaseClient,
+  userId: string,
+  submitted: SubmittedVideoRender,
+  jobId: string
+): Promise<VideoRenderOutcome> {
+  const outcome = await checkOpenrouterVideo(jobId);
+  if (outcome.status === 'pending') return { status: 'pending' };
+  if (outcome.status === 'failed') return { status: 'failed', error: outcome.error };
+  if (outcome.status === 'timeout') return { status: 'pending' };
+
+  // Si RIOSPITA prima e si fattura dopo: il download puo' fallire, e chi ci richiama e' un cron.
+  const url = await persistMp4(supabase, userId, outcome.url, {
+    ...submitted.persistOpts,
+    headers: openrouterVideoHeaders()
+  });
+  if (!url) return { status: 'failed', error: 'clip rendered but could not be stored' };
+
+  logAiCall({
+    label: 'video.render',
+    provider: 'openrouter',
+    model: openrouterVideoModel(submitted.model) ?? submitted.model,
+    prompt: submitted.prompt,
+    ms: Math.max(0, Date.now() - submitted.submittedAt),
+    ok: true,
+    // Ignoto non e' zero: se OpenRouter non riporta il costo, la riga lo dice invece di inventarlo.
+    ...(outcome.costUsd != null ? { flatCostUsd: outcome.costUsd } : {}),
+    context: `${submitted.durationSeconds}s ${submitted.resolution} (async) · job ${jobId}`
+  });
+
+  return {
+    status: 'done',
+    url,
+    durationSeconds: submitted.durationSeconds,
+    resolution: submitted.resolution,
+    thumbnailUrl: submitted.coverUrl
+  };
+}
+
 // Re-render an ALREADY GENERATED clip at a higher resolution, without paying to generate it again.
 // kie's upscale takes the original job's task_id (never a URL), which is exactly why renderVideo
 // hands the id back and the post row keeps it.
@@ -1242,6 +1375,10 @@ export async function upscaleVideo(
   resolution: string = UPSCALE_RESOLUTION
 ): Promise<{ url: string; resolution: string } | undefined> {
   if (!env.KIE_API_KEY || !taskId) return undefined;
+
+  // L'upscale di kie prende un task_id DI KIE. Un id di OpenRouter qui otterrebbe un 404 dopo un
+  // giro di rete, e nel caso peggiore l'id di qualcun altro.
+  if (untagOpenrouterJob(taskId)) return undefined;
 
   // Upscale is a Grok-Imagine endpoint that takes a Grok task_id. Seedance (and unknown) drafts
   // have no matching upscale path — skip rather than burn a round-trip that will fail.
