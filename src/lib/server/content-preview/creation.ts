@@ -589,9 +589,9 @@ export async function generateStandaloneImage(opts: {
 //   3. the short URL written back onto post.link_url AND swapped into the caption (the writer
 //      wove the raw URL in verbatim) — the short link is what actually ships, so it's the only
 //      version a reader can click and therefore the only one we can count.
-// CALLER RULE (the persist sites are in scheduler.ts / onboarding-generate.ts, out of scope
-// here): call this ONLY for posts whose persisted row will have source = 'plan' — the scheduler
-// autopilot persist and the onboarding persist. NEVER for Radar (source = 'radar'): Radar links
+// CALLER RULE (the only persist site is scheduler.ts, out of scope here): call this ONLY for
+// posts whose persisted row will have source = 'plan' — the scheduler
+// autopilot persist. NEVER for Radar (source = 'radar'): Radar links
 // point at news source_urls (not the brand's own pages) and Radar already appends its own utm_
 // tags. Also skip any link_url that already contains a utm_ parameter — a Reddit link_post
 // (media:'link') with a real external target, or a user-edited URL, must never be rewritten

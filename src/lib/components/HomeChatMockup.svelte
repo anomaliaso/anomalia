@@ -29,9 +29,9 @@
   // tool-call vere e uno slug di brand. Qui serve solo il disegno — e una pagina marketing non
   // deve dipendere da file che la chat sta ancora cambiando. Volti e colori invece sono quelli
   // veri (BUILTIN_AGENT_AVATARS), perché quelli sì sono client-safe e non devono mentire. Le due
-  // card di connessione ricalcano la forma vera: ChatConnectCard.svelte (logo + nome + pillola
-  // ghost + motivo rientrato) e la riga `.open-tab-card` di ChatColumn.svelte (riga quieta
-  // centrata, motivo sopra e azione in accent sotto).
+  // card di connessione ricalcavano ChatConnectCard.svelte (logo + nome + pillola ghost + motivo
+  // rientrato) e la riga `.open-tab-card` di ChatColumn.svelte: nessuno dei due esiste più, quindi
+  // questo disegno non ricalca più niente — è un mockup e basta.
   import { _ } from 'svelte-i18n';
   import { siGoogledrive } from 'simple-icons';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';

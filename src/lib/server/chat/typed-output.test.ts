@@ -31,7 +31,7 @@ import { z } from 'zod';
  * Quindi `Output` aggiungerebbe una cosa sola: uno slot leggibile a macchina al posto di una regex
  * sulla prosa (production-claim.ts ammette che «la lista non finisce mai»). E quella cosa, in questo
  * repo, ha già la sua forma compatibile con lo streaming e col ciclo: un tool `finish` con schema
- * zod, come `submit_review` in video-review-agent.ts o `finish` in image-agent.ts — l'input di una
+ * zod, come `finish` in image-agent.ts — l'input di una
  * chiamata a strumento È validato dallo schema, È un passo, e il suo risultato è terreno solido che
  * le guardie leggono già.
  *

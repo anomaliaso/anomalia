@@ -4,8 +4,9 @@
  *
  * PERCHÉ NESSUNA CHIAMATA VISION QUI. Ogni item del wall è GIÀ stato guardato da un modello,
  * una volta, quando è entrato: il design judge ha guardato il poster (design_note, design_tags,
- * punteggi per asse — design-judge.ts) e il reviewer video ha guardato il clip (hook_type,
- * hook_at_s, reveal, cta, dead_seconds, summary — market-video-analysis.ts). Il distillatore
+ * punteggi per asse — design-judge.ts) e il reviewer video aveva guardato il clip (hook_type,
+ * hook_at_s, reveal, cta, dead_seconds, summary), fino a quando è stato tolto il 29/8/2026 —
+ * quei campi si leggono ancora dalle righe già scritte, ma nessuno ne scrive di nuove. Il distillatore
  * rilegge QUEL testo e lo sintetizza: due chiamate Gemini solo-testo a settimana in totale,
  * zero pixel. È lo stesso pattern di motion-references.ts (studia una volta con vision → cache
  * di uno spec testuale → la generazione legge lo spec gratis), applicato un livello più su.

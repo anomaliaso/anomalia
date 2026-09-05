@@ -130,7 +130,7 @@ const ENV_SECRETS: string[] = Object.entries(env)
 /**
  * L1b — i valori coniati a runtime, PER BRAND e non per closure: la VM è del brand
  * (`anomalia-<brandId>-<mode>`), e orchestratore e delegati la condividono. È la sostituzione
- * minima del registro di turno: nessuna firma da cambiare in `withSandboxTools` / `runSubagent`.
+ * minima del registro di turno: nessuna firma da cambiare in `withSandboxTools` / `runSubagentRun`.
  *
  * ponytail: Map di processo, non uno store. Il tetto è dichiarato — un'altra istanza di Function
  * non la vede — ed è esattamente il motivo per cui L2..L5 e `hasLiveCredential` esistono comunque.
