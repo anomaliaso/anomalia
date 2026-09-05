@@ -25,7 +25,10 @@ const UUID = 'b4583d8d-6774-4bc9-a09f-693ee0fef464';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  maybeSingle.mockResolvedValue({ data: { storage_path: 'brand/x.jpg' }, error: null });
+  maybeSingle.mockResolvedValue({
+    data: { storage_path: 'brand/x.jpg', link_revoked_at: null },
+    error: null
+  });
 });
 
 describe('/a/[id]', () => {
@@ -67,6 +70,20 @@ describe('/a/[id]', () => {
     const res = await call(CODE);
 
     expect(res.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  // The code is the only credential and it never expires, so revocation is the only way to take a
+  // handed-out link back — from a departed member, from the wrong group chat, from a leaked output.
+  it('404s a revoked link without signing anything', async () => {
+    maybeSingle.mockResolvedValue({
+      data: { storage_path: 'brand/x.jpg', link_revoked_at: '2026-09-04T10:00:00Z' },
+      error: null
+    });
+
+    const res = await call(CODE);
+
+    expect(res.status).toBe(404);
+    expect(createSignedUrl).not.toHaveBeenCalled();
   });
 
   it('404s when signing fails, rather than redirecting to nothing', async () => {

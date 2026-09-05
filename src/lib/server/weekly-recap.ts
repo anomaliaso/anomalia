@@ -407,6 +407,22 @@ async function gatherRecapData(
 
 // ─── AI generation ─────────────────────────────────────────────────────────
 
+// The formats we are willing to re-serve from our own public bucket, and the name we give each one.
+// The remote server's header decides nothing beyond which row it selects: forwarding it is how an
+// `image/svg+xml` ended up on a public URL of ours, and how a `;charset=` parameter ended up in a
+// stored content type. One table, so the next format is a row and not a fourth ternary.
+const HOSTED_IMAGE_TYPES: Record<string, { ext: string; contentType: string }> = {
+  'image/png': { ext: 'png', contentType: 'image/png' },
+  'image/webp': { ext: 'webp', contentType: 'image/webp' },
+  'image/jpeg': { ext: 'jpg', contentType: 'image/jpeg' },
+  'image/jpg': { ext: 'jpg', contentType: 'image/jpeg' },
+  'image/gif': { ext: 'gif', contentType: 'image/gif' }
+};
+
+export function hostedImageType(header: string): { ext: string; contentType: string } | null {
+  return HOSTED_IMAGE_TYPES[header.split(';')[0].trim().toLowerCase()] ?? null;
+}
+
 // Fetch an image from a URL and host it on Supabase Storage for email embedding.
 // Tries OG image first, then falls back to the first large image on the page.
 async function fetchAndHostOgImage(supabase: SupabaseClient, url: string): Promise<string | null> {
@@ -427,15 +443,14 @@ async function fetchAndHostOgImage(supabase: SupabaseClient, url: string): Promi
     const absoluteUrl = new URL(imgUrl, url).href;
     const imgRes = await fetch(absoluteUrl, { signal: AbortSignal.timeout(8000) });
     if (!imgRes.ok) return null;
-    const contentType = imgRes.headers.get('content-type') ?? 'image/jpeg';
-    if (!contentType.startsWith('image/')) return null;
+    const hosted = hostedImageType(imgRes.headers.get('content-type') ?? '');
+    if (!hosted) return null;
     const buf = await imgRes.arrayBuffer();
     if (buf.byteLength > 2_000_000) return null;
 
-    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-    const path = `trends/${crypto.randomUUID()}.${ext}`;
+    const path = `trends/${crypto.randomUUID()}.${hosted.ext}`;
     const { error } = await supabase.storage.from('email-assets').upload(path, Buffer.from(buf), {
-      contentType,
+      contentType: hosted.contentType,
       upsert: false
     });
     if (error) return null;
