@@ -17,12 +17,24 @@
  * hex. Il tetto conta quanto il formato — senza, un agente ci infila quaranta colori e la
  * direzione visiva smette di dire qualcosa.
  */
+const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+
 export function sanitizeBrandColors(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   return input
     .map((c) => String(c).trim())
-    .filter((c) => /^#[0-9a-fA-F]{3,8}$/.test(c))
+    .filter((c) => HEX_COLOR.test(c))
     .slice(0, 8);
+}
+
+/**
+ * Il colore del tema arriva dal `<meta name="theme-color">` del sito analizzato, e quel meta
+ * ammette qualunque colore CSS: `red` è HTML valido e non è un colore che sappiamo usare.
+ * Stessa notazione della palette, perché finiscono negli stessi posti.
+ */
+export function sanitizeThemeColor(input: unknown): string | null {
+  const v = String(input ?? '').trim();
+  return HEX_COLOR.test(v) ? v : null;
 }
 
 /** Un sito digitato a mano diventa un URL cliccabile; vuoto resta null. */
@@ -30,6 +42,35 @@ export function normalizeWebsite(raw: string): string | null {
   const v = String(raw ?? '').trim();
   if (!v) return null;
   return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+/**
+ * Nel campo "sito" la gente scrive il proprio handle. `Mariopuggelli1939` e `biohappy` sono in
+ * produzione dentro `brands.website` e `brand_kit.source_url`: non sono spazzatura, sono un dato
+ * giusto nel campo sbagliato, e `https://Mariopuggelli1939` non è un indirizzo che apre niente.
+ *
+ * Due forme sole, quelle che non possono essere un dominio: la chiocciola davanti, oppure una
+ * parola senza punti e senza schema. Il resto è un sito. Uno spazio dentro non è né l'uno né
+ * l'altro (`no celo`), e si butta invece di inventarci un profilo.
+ */
+const HANDLE_DEFAULT_PLATFORM = 'instagram';
+
+export type WebsiteOrHandle = {
+  website: string | null;
+  handle: { platform: string; username: string } | null;
+};
+
+export function splitWebsiteOrHandle(raw: string): WebsiteOrHandle {
+  const v = String(raw ?? '').trim();
+  if (!v) return { website: null, handle: null };
+
+  const looksLikeHandle = v.startsWith('@') || (!/^https?:\/\//i.test(v) && !v.includes('.'));
+  if (!looksLikeHandle) return { website: normalizeWebsite(v), handle: null };
+
+  const username = v.replace(/^@+/, '').replace(/\/+$/, '').trim();
+  if (!username || /\s/.test(username)) return { website: null, handle: null };
+
+  return { website: null, handle: { platform: HANDLE_DEFAULT_PLATFORM, username } };
 }
 
 /**

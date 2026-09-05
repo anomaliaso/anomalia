@@ -141,10 +141,8 @@ export async function executeChatToolJob(
       for (const c of competitors) {
         await cancel.assertActive();
         const handles = handleMap.get(c.name) ?? [];
-        const handlesObj: AnyRec = {};
-        for (const h of handles) handlesObj[h.platform] = h.username ?? h.profileUrl;
         await supabase.from('competitors').upsert({
-          brand_id: brandId, name: c.name, website: c.website, kind: c.kind, rationale: c.rationale, handles: handlesObj, source: 'ai'
+          brand_id: brandId, name: c.name, website: c.website, kind: c.kind, rationale: c.rationale, handles, source: 'ai'
         }, { onConflict: 'brand_id,name' });
       }
 

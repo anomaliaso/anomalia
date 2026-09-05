@@ -7,6 +7,8 @@
  * e' un reel che l'editor apre come una foto e che l'utente scopre rotto in pubblicazione, senza
  * un errore da nessuna parte. Scriverli in tre punti diversi e' esattamente come e' successo.
  */
+import type { PostContentType } from './contracts/post-tools';
+
 export const POST_ASSET_TYPES = ['image', 'video', 'carousel'] as const;
 export type PostAssetType = (typeof POST_ASSET_TYPES)[number];
 
@@ -15,16 +17,16 @@ export type PostAssetShape = {
 	mediaKind: 'image' | 'video';
 	/** Quanti asset servono: il carosello e' l'unico che ne vuole piu' di uno. */
 	multiple: boolean;
-	contentType: string;
+	contentType: PostContentType;
 	format: string;
 	/** Cosa il post ricordera' di se stesso — `read_posts` lo rilegge per sapere come modificarlo. */
 	mediaOrigin: string;
 };
 
 const SHAPES: Record<PostAssetType, PostAssetShape> = {
-	image: { mediaKind: 'image', multiple: false, contentType: 'image', format: 'image', mediaOrigin: 'user_uploaded' },
+	image: { mediaKind: 'image', multiple: false, contentType: 'uploaded_image', format: 'image', mediaOrigin: 'user_uploaded' },
 	video: { mediaKind: 'video', multiple: false, contentType: 'generated_video', format: 'video', mediaOrigin: 'video' },
-	carousel: { mediaKind: 'image', multiple: true, contentType: 'carousel', format: 'carousel', mediaOrigin: 'user_uploaded' }
+	carousel: { mediaKind: 'image', multiple: true, contentType: 'uploaded_image', format: 'carousel', mediaOrigin: 'user_uploaded' }
 };
 
 export function postAssetShape(type: unknown): PostAssetShape | undefined {
