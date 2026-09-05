@@ -121,7 +121,8 @@ to get a video.
 **Film from nothing** → `generate_video` with a prompt and no `base_media_id`. A clip takes minutes,
 so it returns a `job_id`; `check_media_job` says when it landed. The model moves this bill by more
 than an order of magnitude, so read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
-spending.
+spending. With a slug the clip follows this brand's visual direction, so you do not have to
+describe it — and there is no switch for it here.
 
 **CHANGE an image you already have** → `refine_image` with its `base_media_id` and an instruction
 ("make it red", "warmer background"). It starts from that asset, so the result is that picture
