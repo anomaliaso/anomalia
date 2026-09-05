@@ -323,7 +323,9 @@ export const GENERATE_MEDIA = {
     'It spends credits. It creates nothing in the calendar and publishes nothing; pass the id ' +
     'you keep to create_post as media_ids. Images come back ready, up to ' +
     MAX_MEDIA_ALTERNATIVES + ' per call; a clip takes minutes and returns a job_id, and ' +
-    'check_media_job says when it landed — calling this again for the same clip bills a second one.',
+    'check_media_job says when it landed — calling this again for the same clip bills a second one.' +
+    "With a slug, this brand's look is applied, and it cannot be switched off from this door: " +
+    'generate_image takes brand_style for that.',
   method: 'POST',
   pathUnderBrand: '/media/generate',
   input: z
@@ -599,32 +601,97 @@ const ImageResult = z.object({
 
 const MODEL_FAILURE = { error: 'model_not_for_slot', status: 400 } as const;
 
+const BRAND_STYLE_FAILURE = { error: 'brand_style_needs_a_brand', status: 400 } as const;
+
+const BrandStyleField = z
+  .enum(['apply', 'ignore'])
+  .optional()
+  .describe(
+    "Whether this brand's own look — its colours, its fonts, its visual direction — is applied. " +
+      'Leave it out and it is, which with a slug is almost always what you want. Send `ignore` ' +
+      'when the picture must take nothing from the brand: a plain UI screenshot, an illustration ' +
+      'about somebody else, a neutral background — places where brand colours and fonts spoil ' +
+      'the result. Without a slug there is no brand to apply or ignore, and sending this is ' +
+      'refused as brand_style_needs_a_brand: pass a slug, or drop brand_style.'
+  );
+
+/**
+ * Un disegno chiesto senza brand non entra in nessuna libreria, quindi non ha un id da mostrare:
+ * `null` è il fatto, e dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con
+ * `list_media`. Non è la stessa forma di `refine_image` o `generate_media`, che un brand ce
+ * l'hanno sempre e un id lo restituiscono sempre — allargare anche il loro schema significherebbe
+ * togliere una promessa che quei due mantengono.
+ */
+const DrawnMediaSchema = GeneratedMediaSchema.extend({
+  id: z
+    .string()
+    .nullable()
+    .describe(
+      'The library asset id — null when the image was drawn without a brand, and then it is in no ' +
+        'library: create_post will not take it and list_media will not find it.'
+    ),
+  storage_path: z
+    .string()
+    .nullable()
+    .describe('Where the file lives. Present on a brand-free drawing, whose url is a signed link that expires.')
+});
+
+const DrawnImageResult = z.object({
+  ok: z.literal(true),
+  media: z.array(DrawnMediaSchema),
+  model: ImageResult.shape.model,
+  renders: ImageResult.shape.renders,
+  organization: z
+    .object({ id: z.string(), name: z.string().nullable() })
+    .nullable()
+    .describe(
+      'Whose credits paid, named — set when no brand was given, null when one was (the brand names its own payer).'
+    ),
+  cost_usd: z
+    .number()
+    .nullable()
+    .describe('What this call actually cost, read from the invoice. null when no invoice came back — never 0.')
+});
+
 export const GENERATE_IMAGE = {
   tool: 'generate_image',
   title: 'Generate an image',
   description:
-    'Draw a NEW image into the brand media library from a prompt, then pass the id it returns as ' +
-    'media_ids on create_post. Call get_media_models first if you want to choose the model — ' +
-    'pass it as model, for this call only, instead of set_media_model, which changes the brand ' +
-    'default from now on. BILLS A RENDER PER IMAGE (about 8 credits each, and the model moves ' +
-    'that). It creates nothing in the calendar, so ask for two or three alternatives, look at ' +
-    'them with list_media, and attach only the one you keep. To change an image that already ' +
-    'exists use refine_image: correcting one drawing is cheaper than redrawing until it is right.',
+    'To draw a picture from a description — "an image of a cat", a product shot, a background ' +
+    "for a slide. With a slug, this brand's own look is applied by default — its colours, its " +
+    'fonts and the visual direction it has settled on — so you do not have to describe them; ' +
+    'brand_style: ignore leaves them out. Without a slug there is no brand and none of that ' +
+    'reaches the model, so name the style you want in the prompt. ' +
+    'WITHOUT slug this is a one-off drawing — no brand, ' +
+    'nothing filed anywhere, id comes back null and there is nothing to hand to create_post. ' +
+    "WITH slug the image lands in that brand's library and its id is what create_post takes as " +
+    'media_ids: use it when the picture belongs to a brand, or is going to become a post. Do ' +
+    'NOT call list_brands to decide where to draw — if nobody named a brand there is no brand, ' +
+    "and guessing one spends a real organisation's credits and litters a real library. It " +
+    'spends credits: one render per image, renders in the answer says how many were billed and ' +
+    'cost_usd what they actually cost. It creates nothing in the calendar and publishes nothing, ' +
+    'so ask for two or three with count, look at them, keep one. To CHANGE a picture that ' +
+    'already exists use refine_image — correcting one drawing beats redrawing until it is ' +
+    'right. To pick the model read get_media_models and pass model, for this call only; ' +
+    'set_media_model is the one that changes the brand from now on.',
   method: 'POST',
   pathUnderBrand: '/media/images',
+  pathWithoutBrand: '/images',
   input: z
     .object({
       prompt: z.string().min(1).describe('What the image should show'),
       count: AlternativesField,
       aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
       model: modelField('imageModel'),
+      brand_style: BrandStyleField,
       title: z.string().optional().describe('The name the asset carries in the library')
     })
     .strict(),
-  output: ImageResult,
+  output: DrawnImageResult,
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
+    BRAND_STYLE_FAILURE,
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }
   ],
@@ -643,7 +710,7 @@ export const REFINE_IMAGE = {
     'draws a different picture from scratch. It spends credits, and the answer says how many ' +
     'renders were billed. It creates nothing in the calendar and publishes nothing; pass the id ' +
     'it returns to create_post as media_ids when you want a post. Changing has its own models — ' +
-    'get_media_models, slot imageRefineModel — and model here applies to this call only.',
+    'get_media_models, slot imageRefineModel — and model here applies to this call only. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out.',
   method: 'POST',
   pathUnderBrand: '/media/images/refine',
   input: z
@@ -655,6 +722,7 @@ export const REFINE_IMAGE = {
       instruction: z.string().min(1).describe('What should change about it'),
       count: AlternativesField,
       model: modelField('imageRefineModel'),
+      brand_style: BrandStyleField,
       title: z.string().optional().describe('The name the new asset carries in the library')
     })
     .strict(),
@@ -748,7 +816,9 @@ export const GENERATE_CAROUSEL = {
     'CHANGE ONE SLIDE use ' +
     'refine_image on that slide id, and put the continuity_tokens this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
-    'light or the recurring motif without them takes that slide out of the set.',
+    'light or the recurring motif without them takes that slide out of the set. ' +
+    "With a slug, this brand's look is applied to every slide, and there is no way to switch it " +
+    "off here: a series that is not the brand's is not a series.",
   method: 'POST',
   pathUnderBrand: '/media/carousel',
   input: z

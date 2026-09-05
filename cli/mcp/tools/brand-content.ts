@@ -11,6 +11,16 @@ import { resolvePostId, resolveResourceId, withAuth } from '../util.ts';
 
 const slug = z.string().min(1).describe('Brand URL slug');
 
+/**
+ * Il registro dichiara una strada che non passa da un brand: qui diventa un `slug` che si può
+ * omettere, e il campo lo dice da sé. Senza quella frase l'opzionale non si vede — un modello
+ * riempie comunque un parametro che nessuno gli ha detto quando lasciare vuoto, e sceglie un
+ * brand a caso, i cui crediti sono di qualcun altro.
+ */
+const optionalSlug = slug
+  .optional()
+  .describe('Brand URL slug. Optional here: omit it to run without a brand — the tool description says what changes.');
+
 const resourceId = (resource: BrandResource) =>
   z.string().min(1).describe(`${BRAND_RESOURCES[resource]} id or unambiguous prefix`);
 
@@ -24,7 +34,7 @@ function registerDeclaredEndpoints(server: McpServer) {
         description: endpoint.description,
         inputSchema: byPrefix
           ? endpoint.input.extend({ slug, id: resourceId(endpoint.resource) })
-          : endpoint.input.extend({ slug }),
+          : endpoint.input.extend({ slug: endpoint.pathWithoutBrand ? optionalSlug : slug }),
         annotations: {
           readOnlyHint: endpoint.method === 'GET',
           destructiveHint: endpoint.destructive,
@@ -34,7 +44,7 @@ function registerDeclaredEndpoints(server: McpServer) {
       async ({ slug: brandSlug, ...input }) =>
         withAuth(async (token) => {
           if (endpoint.resource === undefined) {
-            return callEndpoint(endpoint, token, brandSlug as string, input);
+            return callEndpoint(endpoint, token, (brandSlug as string | undefined) ?? null, input);
           }
 
           const { id, ...payload } = input as { id: string } & Record<string, unknown>;

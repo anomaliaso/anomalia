@@ -29,6 +29,10 @@ import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
  * i changelog citano cifre perché quelle cifre SONO l'argomento di una decisione presa.
  */
 const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly string[] }> = [
+  // La domanda che ha aperto tutto questo: «puoi generare la img di un gatto?», e l'agente ha
+  // risposto di non avere lo strumento. Le parole stanno nella prima riga della descrizione e in
+  // apertura di entrambe le superfici della skill, perche' e' li' che un modello scorre.
+  { tool: 'generate_image', question: 'generate an image of a cat', words: ['image', 'cat', 'draw'] },
   { tool: 'refine_image', question: 'make this photo red', words: ['change', 'photo', 'red'] },
   {
     tool: 'generate_video',
@@ -74,23 +78,6 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
 ];
 
 const HAND_WRITTEN_TARIFF = /\b\d+\s*credits?\b/i;
-
-/**
- * L'unica tariffa ancora scritta a mano, e perché non la tolgo qui: la descrizione di
- * `generate_image` viaggia insieme al lavoro che rende `slug` opzionale, su un altro branch —
- * un parametro opzionale che la descrizione non spiega viene riempito lo stesso. Riscriverla in
- * due posti sarebbe un conflitto garantito.
- *
- * L'eccezione è dichiarata e si verifica da sola: il test pretende che la tariffa sia ANCORA lì.
- * Quando quel branch atterra il test diventa rosso e chiede di cancellare questa riga, invece di
- * lasciare un'esenzione che sopravvive al motivo che l'aveva giustificata.
- *
- * Quel branch è la PR #360. Chi dei due merga per SECONDO trova questo test rosso, e la mossa è
- * una sola: cancellare la riga e il test che la sorveglia, poi aggiungere la sua richiesta alla
- * tabella qui sopra — `{ tool: 'generate_image', question: 'generate an image of a cat', words:
- * ['image', 'cat', 'draw'] }`. Le tre parole sono già su entrambe le superfici da quel lato.
- */
-const TARIFF_OWNED_ELSEWHERE = ['generate_image'];
 
 const SKILL_DIR = fileURLToPath(new URL('./anomalia/', import.meta.url));
 const skillProse = [
@@ -168,17 +155,10 @@ describe('una descrizione si legge cercando il proprio problema', () => {
 
   test('nessuna descrizione scrive una tariffa a mano: il prezzo lo misura la risposta', () => {
     for (const endpoint of BRAND_ENDPOINTS) {
-      if (TARIFF_OWNED_ELSEWHERE.includes(endpoint.tool)) continue;
-
       expect(HAND_WRITTEN_TARIFF.test(endpoint.description), endpoint.tool).toBe(false);
     }
   });
 
-  test('l’unica esenzione è ancora vera, o va cancellata invece che ereditata', () => {
-    for (const tool of TARIFF_OWNED_ELSEWHERE) {
-      expect(HAND_WRITTEN_TARIFF.test(describing(tool)), `${tool}: togli la riga`).toBe(true);
-    }
-  });
 
   /**
    * Il rovescio della regola sulle tariffe: se il prezzo non si scrive, la SPESA va dichiarata,
@@ -188,7 +168,6 @@ describe('una descrizione si legge cercando il proprio problema', () => {
    */
   test('ogni tool che puo` restare senza crediti dice che spende', () => {
     for (const endpoint of BRAND_ENDPOINTS) {
-      if (TARIFF_OWNED_ELSEWHERE.includes(endpoint.tool)) continue;
       if (!endpoint.failures.some((f) => f.error === 'credits_exhausted')) continue;
 
       expect(endpoint.description, endpoint.tool).toMatch(/spends? credits/i);

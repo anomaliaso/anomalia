@@ -61,7 +61,13 @@ beforeEach(() => {
     error: null
   } as never);
   vi.mocked(gateAiAction).mockResolvedValue(undefined as never);
-  generateBrandImages.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite', renders: 1 });
+  generateBrandImages.mockResolvedValue({
+    ok: true,
+    media: [DRAWN],
+    model: 'nano-banana-2-lite',
+    renders: 1,
+    costUsd: 0.0336
+  });
   refineBrandImage.mockResolvedValue({ ok: true, media: [DRAWN], model: 'nano-banana-2-pro', renders: 1 });
 });
 
@@ -70,7 +76,15 @@ describe('POST /media/images — generate_image', () => {
     const { res, body } = await generate({ prompt: 'un banco di lavoro in noce' });
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, media: [DRAWN], model: 'nano-banana-2-lite', renders: 1 });
+    expect(body).toEqual({
+      ok: true,
+      media: [DRAWN],
+      model: 'nano-banana-2-lite',
+      renders: 1,
+      // Il brand nomina da sé chi paga: `organization` serve sulla strada senza brand.
+      organization: null,
+      cost_usd: 0.0336
+    });
   });
 
   it('un brand senza crediti non disegna', async () => {
@@ -127,6 +141,15 @@ describe('POST /media/images — generate_image', () => {
     );
   });
 
+  it('brand_style arriva al motore invece di fermarsi al parse', async () => {
+    await generate({ prompt: 'uno screenshot di UI', brand_style: 'ignore' });
+
+    expect(generateBrandImages).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ brandStyle: 'ignore' })
+    );
+  });
+
   it('genera per il brand risolto dallo slug, mai per un id che arriva dal corpo', async () => {
     const { res } = await generate({ prompt: 'x', brand_id: 'brand-di-qualcun-altro' });
 
@@ -156,6 +179,19 @@ describe('POST /media/images/refine — refine_image', () => {
     expect(refineBrandImage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ baseMediaId: 'media-0', prompt: 'sfondo più caldo' })
+    );
+  });
+
+  it('anche rifinendo, brand_style arriva al motore', async () => {
+    await call(REFINE as Handler, 'images/refine', {
+      base_media_id: 'media-0',
+      instruction: 'più caldo',
+      brand_style: 'ignore'
+    });
+
+    expect(refineBrandImage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ brandStyle: 'ignore' })
     );
   });
 

@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
-import { getBrandContext } from '$lib/server/ai-log';
+import { getBrandContext, getOrgContext } from '$lib/server/ai-log';
 import { NANO_BANANA_2_LITE } from '$lib/server/gemini';
 import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
@@ -235,11 +235,16 @@ export async function renderPostImage(
 ): Promise<string | undefined> {
   // Le immagini sono ~66% della spesa AI, quindi la quota si applica QUI, al chokepoint: un loop
   // in un flusso qualunque si ferma alla quota invece di bruciare per giorni. L'import dinamico
-  // evita il ciclo di moduli crediti↔scheduler↔qui. Senza brand context non c'è gate.
+  // evita il ciclo di moduli crediti↔scheduler↔qui.
+  //
+  // Chi paga ha DUE forme, e leggerne una sola lasciava il punto più caro del prodotto senza
+  // controllo appena il brand smetteva di essere obbligatorio. Nessuna delle due — un flusso
+  // pre-brand come l'analisi del sito in onboarding — resta senza cancello com'era.
   const gateBrand = getBrandContext();
-  if (gateBrand) {
-    const { gateCredits } = await import('$lib/server/credits');
-    await gateCredits(gateBrand);
+  const gateOrg = getOrgContext();
+  if (gateBrand || gateOrg) {
+    const { gateCredits, gateOrgCredits } = await import('$lib/server/credits');
+    await (gateBrand ? gateCredits(gateBrand) : gateOrgCredits(gateOrg as string));
   }
   const req = buildImageRequest(imagePrompt, opts);
   const imageModel = req.model;
@@ -642,6 +647,47 @@ export async function loadMoodRefs(urls: string[] | undefined): Promise<ImagePar
   if (!urls?.length) return undefined;
   const parts = (await Promise.all(urls.slice(0, MOOD_REF_IMAGES).map(fetchImagePart))).filter(Boolean) as ImagePart[];
   return parts.length ? parts : undefined;
+}
+
+export type BrandVisualContext = Pick<
+  RenderImageOpts,
+  'visualStyle' | 'visualPlaybook' | 'brandLook' | 'logoImage' | 'moodImages'
+>;
+
+export async function loadBrandVisualContext(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<BrandVisualContext> {
+  const { data: kit } = await supabase
+    .from('brand_kit')
+    .select('visual_style, ai_context, brand_colors, fonts, logos')
+    .eq('brand_id', brandId)
+    .maybeSingle();
+
+  const fonts = (Array.isArray(kit?.fonts) ? (kit.fonts as AnyRec[]) : [])
+    .map((f) => f?.name)
+    .filter(Boolean) as string[];
+
+  const [logoImage, moodImages] = await Promise.all([
+    loadBrandLogoImagePart(kit?.logos).catch((error) => {
+      swallow('load brand logo part', error);
+      return null;
+    }),
+    loadBrandMoodImageUrls(supabase, brandId)
+      .then(loadMoodRefs)
+      .catch((error) => {
+        swallow('load mood image urls', error);
+        return undefined;
+      })
+  ]);
+
+  return {
+    visualStyle: (kit?.visual_style as string | null) || undefined,
+    visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
+    brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fonts) || undefined,
+    logoImage: logoImage ?? undefined,
+    moodImages
+  };
 }
 
 // Larghezza fissa a 1080, altezza calcolata.
