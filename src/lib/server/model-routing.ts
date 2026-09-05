@@ -26,8 +26,23 @@
  */
 import { env } from '$env/dynamic/private';
 
-/** La famiglia di modelli: cosa scrive/disegna, indipendentemente da chi la serve. */
-export type ModelFamily = 'gemini' | 'grok' | 'gpt' | 'nano-banana' | 'gemini-tts';
+/**
+ * La famiglia di modelli: cosa scrive/disegna/gira, indipendentemente da chi la serve.
+ *
+ * Una famiglia per (fornitore, modalità), mai una sola per fornitore: `gemini` e `gemini-tts` sono
+ * già due, e `grok` (testo) e `grok-imagine` (video) restano due per la stessa ragione. Collassarle
+ * renderebbe `SERVED_BY` una bugia — collegare il trasporto video di Grok aprirebbe in silenzio la
+ * rotta del suo testo verso un endpoint che quel testo non serve.
+ */
+export type ModelFamily =
+  | 'gemini'
+  | 'grok'
+  | 'gpt'
+  | 'nano-banana'
+  | 'gemini-tts'
+  | 'grok-imagine'
+  | 'seedance'
+  | 'kling';
 
 /** L'endpoint: chi serve la famiglia e chi ci manda il conto. */
 export type Endpoint = 'kie' | 'openrouter';
@@ -104,7 +119,10 @@ const HOME: Record<ModelFamily, Endpoint> = {
   'gemini-tts': 'kie',
   'nano-banana': 'kie',
   grok: 'kie',
-  gpt: 'kie'
+  gpt: 'kie',
+  'grok-imagine': 'kie',
+  seedance: 'kie',
+  kling: 'kie'
 };
 
 /**
@@ -122,7 +140,10 @@ const SERVED_BY: Record<ModelFamily, Endpoint[]> = {
   'gemini-tts': ['kie'],
   'nano-banana': ['kie', 'openrouter'],
   grok: ['kie'],
-  gpt: ['kie']
+  gpt: ['kie'],
+  'grok-imagine': ['kie', 'openrouter'],
+  seedance: ['kie', 'openrouter'],
+  kling: ['kie', 'openrouter']
 };
 
 /** Quale riga di `ai_calls.provider` scrive ogni endpoint. */
@@ -148,7 +169,7 @@ export type Route = { family: ModelFamily; endpoint: Endpoint; provider: LogProv
  * La chat NON è uno slot, di proposito: misurata inutilizzabile su kie (~80s al primo token), e
  * `chat/model.ts` non deve avere un interruttore da sbagliare.
  */
-export type Slot = 'text' | 'image' | 'tts';
+export type Slot = 'text' | 'image' | 'tts' | 'video';
 
 const SLOT_DEFAULT: Record<Slot, Route> = {
   // Il testo su OpenRouter: `structuredGemini` e `groundedGemini` ci passavano gia` da `llm.ts`,
@@ -157,7 +178,12 @@ const SLOT_DEFAULT: Record<Slot, Route> = {
   // Non il prezzo: kie fallisce il 3,5% dei render con un p95 di 142,9s contro i 3,4s di OpenRouter.
   image: r('nano-banana', 'openrouter'),
   // La voce resta su kie perche' OpenRouter NON fa sintesi vocale — misurato, sta in MISSING.
-  tts: r('gemini-tts', 'kie')
+  tts: r('gemini-tts', 'kie'),
+  // Il video resta dov'è, e OpenRouter costa 6× kie su Grok Imagine (misurato): spostarlo e` una
+  // decisione esplicita, non un effetto dell'uniformita'. La famiglia qui e` la LINEA DI DEFAULT,
+  // non il modello del render — quello lo scelgono le preferenze del brand (`videoModelForRole`) e
+  // `videoModel(job)`. Del video slot il trasporto legge l'ENDPOINT.
+  video: r('grok-imagine', 'kie')
 };
 
 function r(family: ModelFamily, endpoint: Endpoint): Route {
@@ -202,6 +228,10 @@ function legacyRoute(slot: Slot): Route | null {
     case 'image':
     case 'tts':
       return null;
+    // Il video non ha mai avuto una variabile di TRASPORTO: `KIE_VIDEO_MODEL_*` sceglieva l'id del
+    // modello, e continua a farlo in `videoModel(job)`.
+    case 'video':
+      return null;
   }
 }
 
@@ -231,7 +261,8 @@ function warnRetiredLegacy(): void {
 const SLOT_ENV: Record<Slot, string> = {
   text: 'AI_ROUTE_TEXT',
   image: 'AI_ROUTE_IMAGE',
-  tts: 'AI_ROUTE_TTS'
+  tts: 'AI_ROUTE_TTS',
+  video: 'AI_ROUTE_VIDEO'
 };
 
 /**
@@ -291,9 +322,8 @@ export function requireCapabilities(slot: Slot, caps: Capability[]): Route {
   return chosen;
 }
 
-// Il video non ha due assi: Seedance e Grok Imagine sono ENTRAMBI modelli di kie, quindi la scelta
-// è solo l'id del modello. Le variabili hanno la stessa forma degli altri slot solo per
-// vocabolario, non perché il meccanismo sia lo stesso.
+// L'id del modello per ciascun mestiere video. È l'asse della FAMIGLIA sceso al modello singolo:
+// `AI_ROUTE_VIDEO` dice chi serve il render, queste variabili dicono quale modello gira.
 
 export type VideoJob = 'i2v' | 't2v' | 'upscale';
 
