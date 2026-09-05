@@ -1107,5 +1107,10 @@ test — e per quello non c'è alias possibile: è l'eseguibile bun.
 **Segnale**: `Test Files N failed` con `Tests M passed` e **zero** `×`. I file non hanno test
 rossi, hanno un import che non risolve. Cerca `Failed to load url`, non `FAIL`.
 
-**Mossa**: `bun test cli/` per quei file (lì passano), e prima di attribuirsi il rosso,
-`git log -1 <file>` — se non l'hai toccato tu, riproducilo sul checkout principale.
+**Mossa**: prima di attribuirsi il rosso, `git log -1 <file>` — se non l'hai toccato tu,
+riproducilo sul checkout principale. E poi **aggiustalo**, perché blocca la CI di tutti: in questo
+caso `$` serviva a una riga sola (`git ls-files`), e `execFileSync` da `node:child_process` la fa
+girare sotto entrambi i runner.
+
+**La regola dietro**: un file di test che vive sotto due runner può usare solo ciò che entrambi
+hanno. `bun:test` ha un alias; il **runtime** `bun` no, e non può averlo — è un eseguibile.

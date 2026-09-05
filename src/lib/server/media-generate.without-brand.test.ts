@@ -78,7 +78,7 @@ beforeEach(() => {
   renderPostImage.mockResolvedValue(PNG_DATA_URL);
   storeBrandMediaBytes.mockResolvedValue({});
   insertBrandMedia.mockResolvedValue({ row: { id: 'media-new', kind: 'image', short_code: 'K7BX2MQ4' } });
-  signKnowledgePaths.mockResolvedValue(new Map([['user-1/media/x.png', SIGNED]]));
+  signKnowledgePaths.mockImplementation(async (_c: unknown, paths: string[]) => new Map(paths.map((p) => [p, SIGNED])));
 });
 
 describe('disegnare senza un brand', () => {
@@ -117,10 +117,6 @@ describe('disegnare senza un brand', () => {
   });
 
   it('torna un link firmato e il percorso, perché non c è un id con cui ritrovarlo', async () => {
-    signKnowledgePaths.mockImplementation(async (_c: unknown, paths: string[]) =>
-      new Map(paths.map((p) => [p, SIGNED]))
-    );
-
     const out = await generateImagesWithoutBrand(supabaseThatHasNoBrands(), job);
 
     expect(out.ok && out.media[0].url).toBe(SIGNED);
@@ -146,6 +142,18 @@ describe('disegnare senza un brand', () => {
     const out = await generateImagesWithoutBrand(supabaseThatHasNoBrands(), job);
 
     expect(out.ok && out.costUsd).toBeNull();
+  });
+
+  /**
+   * Senza id, la firma è l'UNICO modo di raggiungere il file: se non arriva, chi legge `ok` si
+   * ritrova un render pagato e niente da aprire. Un successo vuoto è peggio di un errore.
+   */
+  it('una firma che non arriva è un fallimento, non una url nulla', async () => {
+    signKnowledgePaths.mockResolvedValue(new Map());
+
+    const out = await generateImagesWithoutBrand(supabaseThatHasNoBrands(), job);
+
+    expect(out).toEqual({ ok: false, error: 'store_failed' });
   });
 
   it('un render che non torna niente è un fallimento, non un successo vuoto', async () => {
