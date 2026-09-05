@@ -433,6 +433,71 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
  * Un clip verso la LIBRERIA, senza post. Con `baseMediaId` e' «anima questa foto»: la strada che
  * mancava, e per cui l'agente esterno rispondeva che serviva prima una bozza.
  */
+/**
+ * Un carosello: N slide che si leggono come una serie. Si pianifica una volta (i gettoni di
+ * continuita' nascono li'), poi si rende una slide per prompt riusando lo stesso motore delle
+ * immagini singole — un render per slide, e il conto lo dice.
+ */
+export async function generateBrandCarousel(
+  supabase: SupabaseClient,
+  opts: {
+    brandId: string;
+    userId: string;
+    brief: string;
+    slides?: number;
+    aspectRatio?: AspectRatio;
+    model?: string;
+    title?: string;
+  }
+): Promise<
+  | { ok: true; media: GeneratedMedia[]; continuityTokens: string[]; model: string | null; renders: number }
+  | { ok: false; error: 'plan_failed' | 'render_failed' | 'store_failed' }
+  | { ok: false; error: 'model_not_for_slot'; allowed: string[] }
+> {
+  const { withBrandContext } = await import('$lib/server/ai-log');
+  const { planCarousel, clampSlideCount } = await import('$lib/server/carousel-generate');
+
+  return withBrandContext(opts.brandId, async () => {
+    const slides = clampSlideCount(opts.slides);
+    const plan = await planCarousel(supabase, {
+      brandId: opts.brandId,
+      brief: opts.brief,
+      slides
+    });
+    if ('error' in plan) return { ok: false, error: 'plan_failed' };
+
+    const media: GeneratedMedia[] = [];
+    let renders = 0;
+    let model: string | null = null;
+
+    for (const [index, prompt] of plan.slidePrompts.entries()) {
+      const out = await runImageJob(supabase, {
+        brandId: opts.brandId,
+        userId: opts.userId,
+        prompt,
+        aspectRatio: opts.aspectRatio,
+        model: opts.model,
+        title: opts.title ? `${opts.title} ${index + 1}` : undefined
+      });
+      // Un modello rifiutato lo e' per tutte le slide: fermarsi alla prima evita di pagarne altre.
+      if (!out.ok && out.error === 'model_not_for_slot') return out;
+      if (!out.ok) break;
+
+      renders += out.renders;
+      model = out.model;
+      media.push(...out.media);
+    }
+
+    // Una serie sotto il minimo non e' un carosello piu' corto: e' un carosello mancato, e dirlo
+    // riuscito lascerebbe il chiamante a comporre un post con meno slide di quante ne ha pagate.
+    if (media.length < plan.slidePrompts.length) {
+      return { ok: false, error: media.length ? 'store_failed' : 'render_failed' };
+    }
+
+    return { ok: true, media, continuityTokens: plan.continuityTokens, model, renders };
+  });
+}
+
 export async function generateBrandVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult> {
   const { withBrandContext } = await import('$lib/server/ai-log');
 

@@ -709,3 +709,45 @@ export const GENERATE_VIDEO = {
   ],
   destructive: false
 } satisfies BrandEndpoint;
+
+export const GENERATE_CAROUSEL = {
+  tool: 'generate_carousel',
+  title: 'Generate a carousel',
+  description:
+    'Draw a SERIES of images that read as one object, not N unrelated pictures, and file them in ' +
+    'the brand media library. Slide 1 is the cover and must work at thumbnail size; every later ' +
+    'slide advances the angle one concrete step and carries exactly one idea. BILLS A RENDER PER ' +
+    'SLIDE, so a 5-slide carousel is five renders — ask for the count you mean. It creates nothing ' +
+    'in the calendar: pass the ids to create_post as media_ids, in order. TO CHANGE ONE SLIDE use ' +
+    'refine_image on that slide id, and put the continuity_tokens this returns back into your ' +
+    'instruction — they are what holds the series together, and an edit that touches palette, ' +
+    'light or the recurring motif without them takes that slide out of the set.',
+  method: 'POST',
+  pathUnderBrand: '/media/carousel',
+  input: z
+    .object({
+      brief: z.string().min(1).describe('What the carousel should say, as a whole'),
+      slides: z.coerce.number().int().min(3).max(8).optional().describe('How many slides. Each one bills a render.'),
+      aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
+      model: modelField('imageModel'),
+      title: z.string().optional().describe('The name the slides carry in the library')
+    })
+    .strict(),
+  output: z.object({
+    ok: z.literal(true),
+    media: z.array(GeneratedMediaSchema).describe('The slides, in order — slide 1 first'),
+    continuity_tokens: z
+      .array(z.string())
+      .describe('The literal tokens repeated in every slide. Put them back into a refine_image instruction or that slide leaves the series.'),
+    model: z.string().nullable(),
+    renders: z.number().describe('How many renders were BILLED — one per slide attempted')
+  }),
+  failures: [
+    { error: 'credits_exhausted', status: 402 },
+    MODEL_FAILURE,
+    { error: 'plan_failed', status: 502 },
+    { error: 'render_failed', status: 502 },
+    { error: 'store_failed', status: 502 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
