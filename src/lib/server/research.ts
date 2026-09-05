@@ -5,10 +5,9 @@ import { fetchPage } from '$lib/server/brand-analysis';
 import { scrapeForOnboarding, type ScrapeTarget, type ScrapedPost } from '$lib/server/scrapecreators';
 import { aiStructured, aiText, parallelVariants } from '$lib/server/ai-text';
 import { requireBrandContext } from '$lib/server/ai-log';
-import { type GeminiThinkingLevel } from '$lib/server/gemini';
 import { exaConfigured, exaGroundedAnswer } from '$lib/server/exa';
 import { tavilyConfigured, tavilyGroundedAnswer } from '$lib/server/tavily';
-import { llmGeminiSearchModel, llmImagesFromInline, llmStructured, llmText } from '$lib/server/llm';
+import { llmGeminiSearchModel, llmImagesFromInline, llmStructured, llmText, type ReasoningEffort } from '$lib/server/llm';
 
 // Deep-research module for onboarding: discover competitors (web-grounded), resolve their social
 // handles, scrape + benchmark their posts, and synthesise a strategy report that both the user
@@ -108,7 +107,7 @@ export async function structuredGemini<T>(
     label?: string;
     images?: Array<{ inlineData: { mimeType: string; data: string } }>;
     temperature?: number;
-    thinkingLevel?: GeminiThinkingLevel;
+    reasoningEffort?: ReasoningEffort;
     brandId?: string;
     userId?: string;
     threadId?: string;
@@ -116,7 +115,7 @@ export async function structuredGemini<T>(
   }
 ): Promise<T> {
   requireBrandContext(opts);
-  const { label = 'structured', images, temperature } = opts ?? {};
+  const { label = 'structured', images, temperature, reasoningEffort } = opts ?? {};
   try {
     return await llmStructured<T>({
       prompt,
@@ -124,6 +123,7 @@ export async function structuredGemini<T>(
       system: systemInstruction,
       images: llmImagesFromInline(images),
       temperature,
+      reasoningEffort,
       label
     });
   } catch {
@@ -147,8 +147,7 @@ export async function structured<T>(
     model?: string;
     provider?: 'gateway' | 'kie';
     noFallback?: boolean;
-    /** How hard Gemini reasons on judge-style calls — see structuredGemini. */
-    thinkingLevel?: GeminiThinkingLevel;
+    reasoningEffort?: ReasoningEffort;
     brandId?: string;
     userId?: string;
     threadId?: string;

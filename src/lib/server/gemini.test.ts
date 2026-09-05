@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-const { GEMINI_FLASH, geminiFlash, isGeminiFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare, geminiThinkingLevel, judgeThinkingLevel } = await import('./gemini');
+const { GEMINI_FLASH, geminiFlash, isGeminiFlashId, NANO_BANANA_PRO, isNanoBananaProId, geminiVisualCreditShare } = await import('./gemini');
 
 describe('GEMINI_FLASH', () => {
   it('is a Gemini Flash model id — the default when the env var is unset', () => {
@@ -74,38 +74,5 @@ describe('geminiFlash', () => {
       env.GEMINI_FLASH = v;
       expect(geminiFlash()).toBe(GEMINI_FLASH);
     }
-  });
-});
-
-describe('thinking level', () => {
-  beforeEach(() => {
-    for (const k of Object.keys(env)) delete env[k];
-  });
-
-  it('sends every judge in at high, the level Gemini 3.x speaks', () => {
-    expect(judgeThinkingLevel()).toBe('high');
-  });
-
-  it('takes an env override, per call — no deploy to undo a regression', () => {
-    env.GEMINI_JUDGE_THINKING_LEVEL = 'low';
-    expect(judgeThinkingLevel()).toBe('low');
-    env.GEMINI_JUDGE_THINKING_LEVEL = 'MEDIUM';
-    expect(judgeThinkingLevel()).toBe('medium');
-  });
-
-  it('lets one call site override the shared level (prepublish)', () => {
-    env.GEMINI_JUDGE_THINKING_LEVEL = 'high';
-    expect(judgeThinkingLevel('low')).toBe('low');
-  });
-
-  // A junk value must not 400 a whole review job, and the retired numeric knobs are junk now.
-  it('falls back to high on anything that is not a level', () => {
-    for (const junk of ['1024', '0', 'off', 'max', '', undefined, null]) {
-      expect(geminiThinkingLevel(junk)).toBe('high');
-    }
-  });
-
-  it('il livello resta minuscolo: e` la forma che il centralino manda sul filo', () => {
-    expect(judgeThinkingLevel('high')).toBe('high');
   });
 });
