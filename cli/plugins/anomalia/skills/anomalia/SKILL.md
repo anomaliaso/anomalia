@@ -100,7 +100,9 @@ still has its image the day the original link dies.
 **Draw a new image** → `generate_image` with a prompt — "an image of a cat", a product shot, a
 background. `slug` is OPTIONAL: leave it out for a one-off drawing (no brand, filed nowhere, `id`
 comes back `null`, and a signed `url` that expires), pass it when the picture belongs to a brand
-or is going to become a post. Do NOT call `list_brands` to decide where to draw: if nobody named
+or is going to become a post. With a slug the brand's own look — colours, fonts, visual direction —
+is applied by default; `brand_style: ignore` leaves it out when the picture must take nothing from
+the brand. Do NOT call `list_brands` to decide where to draw: if nobody named
 a brand there is no brand, and guessing one spends a real organisation's credits. It bills a
 render per image and creates nothing in the calendar, so ask for two or three with `count`, look
 at them, keep one.

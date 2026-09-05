@@ -153,6 +153,15 @@ describe('POST /api/v1/images — disegnare senza nominare un brand', () => {
     expect(generateImagesWithoutBrand).not.toHaveBeenCalled();
   });
 
+  it('brand_style senza un brand è rifiutato dicendo la mossa, non ignorato', async () => {
+    const { res, body } = await generate({ prompt: 'un gatto', brand_style: 'apply' });
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('brand_style_needs_a_brand');
+    expect(body.reason).toMatch(/pass a slug, or drop brand_style/);
+    expect(generateImagesWithoutBrand).not.toHaveBeenCalled();
+  });
+
   it('un modello che non sa fare questo mestiere è rifiutato con l elenco di quelli buoni', async () => {
     generateImagesWithoutBrand.mockResolvedValue({
       ok: false,

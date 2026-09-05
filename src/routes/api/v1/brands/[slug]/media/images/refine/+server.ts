@@ -30,6 +30,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     baseMediaId: parsed.data.base_media_id,
     count: parsed.data.count,
     model: parsed.data.model,
+    brandStyle: parsed.data.brand_style,
     title: parsed.data.title
   });
 

@@ -69,18 +69,16 @@ describe('la descrizione di generate_image', () => {
   });
 
   /**
-   * Il look del brand NON raggiunge questo strumento: `runImageJob` passa solo
-   * `{model, refineModel, baseImage, aspectRatio}`. Una descrizione che lascia credere il
-   * contrario promette quello che il codice non fa.
-   *
-   * SE QUESTO TEST DIVENTA ROSSO, NON CANCELLARLO. Il rosso è il segnale che il cablaggio del
-   * contesto visivo è arrivato — `visual_style`, il playbook, `brandLook`, il logo dentro `opts`
-   * — cioè che il giro è completo, non che la regola è caduta. Riscrivi l'asserzione sulla verità
-   * nuova (con lo slug il look arriva, senza slug no) e lasciala qui a sorvegliare quella. Un
-   * test cancellato nel commit che lo fa fallire porta via anche la domanda che faceva.
+   * Prima il look del brand non raggiungeva questo strumento nemmeno con lo slug, e la
+   * descrizione lo diceva. Ora `runImageJob` legge `loadBrandVisualContext`, quindi la promessa
+   * si e' capovolta: con lo slug si applica, senza non c'e' un brand da cui prenderlo, e
+   * `brand_style: ignore` lo spegne. Le tre cose stanno insieme perche' e' la coppia
+   * slug/parametro a decidere, non una sola delle due.
    */
-  it('nega esplicitamente che uno slug compri lo stile del brand', () => {
-    expect(text).toMatch(/nothing about a brand.s look reaches the model/);
+  it('dice che con lo slug lo stile del brand si applica, e senza no', () => {
+    expect(text).toMatch(/this brand.s own look is applied by default/);
+    expect(text).toMatch(/Without a slug there is no brand and none of that reaches the model/);
+    expect(text).toMatch(/brand_style: ignore leaves them out/);
   });
 
   it('tiene la freccia al passo successivo per chi il brand ce l ha', () => {

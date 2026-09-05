@@ -599,6 +599,20 @@ const ImageResult = z.object({
 
 const MODEL_FAILURE = { error: 'model_not_for_slot', status: 400 } as const;
 
+const BRAND_STYLE_FAILURE = { error: 'brand_style_needs_a_brand', status: 400 } as const;
+
+const BrandStyleField = z
+  .enum(['apply', 'ignore'])
+  .optional()
+  .describe(
+    "Whether this brand's own look — its colours, its fonts, its visual direction — is applied. " +
+      'Leave it out and it is, which with a slug is almost always what you want. Send `ignore` ' +
+      'when the picture must take nothing from the brand: a plain UI screenshot, an illustration ' +
+      'about somebody else, a neutral background — places where brand colours and fonts spoil ' +
+      'the result. Without a slug there is no brand to apply or ignore, and sending this is ' +
+      'refused as brand_style_needs_a_brand: pass a slug, or drop brand_style.'
+  );
+
 /**
  * Un disegno chiesto senza brand non entra in nessuna libreria, quindi non ha un id da mostrare:
  * `null` è il fatto, e dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con
@@ -642,8 +656,11 @@ export const GENERATE_IMAGE = {
   title: 'Generate an image',
   description:
     'To draw a picture from a description — "an image of a cat", a product shot, a background ' +
-    "for a slide. The prompt is the whole instruction: nothing about a brand's look reaches " +
-    'the model, so name the style you want. WITHOUT slug this is a one-off drawing — no brand, ' +
+    "for a slide. With a slug, this brand's own look is applied by default — its colours, its " +
+    'fonts and the visual direction it has settled on — so you do not have to describe them; ' +
+    'brand_style: ignore leaves them out. Without a slug there is no brand and none of that ' +
+    'reaches the model, so name the style you want in the prompt. ' +
+    'WITHOUT slug this is a one-off drawing — no brand, ' +
     'nothing filed anywhere, id comes back null and there is nothing to hand to create_post. ' +
     "WITH slug the image lands in that brand's library and its id is what create_post takes as " +
     'media_ids: use it when the picture belongs to a brand, or is going to become a post. Do ' +
@@ -664,6 +681,7 @@ export const GENERATE_IMAGE = {
       count: AlternativesField,
       aspect_ratio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
       model: modelField('imageModel'),
+      brand_style: BrandStyleField,
       title: z.string().optional().describe('The name the asset carries in the library')
     })
     .strict(),
@@ -671,6 +689,7 @@ export const GENERATE_IMAGE = {
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
+    BRAND_STYLE_FAILURE,
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }
   ],
@@ -689,7 +708,7 @@ export const REFINE_IMAGE = {
     'draws a different picture from scratch. It spends credits, and the answer says how many ' +
     'renders were billed. It creates nothing in the calendar and publishes nothing; pass the id ' +
     'it returns to create_post as media_ids when you want a post. Changing has its own models — ' +
-    'get_media_models, slot imageRefineModel — and model here applies to this call only.',
+    'get_media_models, slot imageRefineModel — and model here applies to this call only. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out.',
   method: 'POST',
   pathUnderBrand: '/media/images/refine',
   input: z
@@ -701,6 +720,7 @@ export const REFINE_IMAGE = {
       instruction: z.string().min(1).describe('What should change about it'),
       count: AlternativesField,
       model: modelField('imageRefineModel'),
+      brand_style: BrandStyleField,
       title: z.string().optional().describe('The name the new asset carries in the library')
     })
     .strict(),

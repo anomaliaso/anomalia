@@ -141,6 +141,15 @@ describe('POST /media/images — generate_image', () => {
     );
   });
 
+  it('brand_style arriva al motore invece di fermarsi al parse', async () => {
+    await generate({ prompt: 'uno screenshot di UI', brand_style: 'ignore' });
+
+    expect(generateBrandImages).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ brandStyle: 'ignore' })
+    );
+  });
+
   it('genera per il brand risolto dallo slug, mai per un id che arriva dal corpo', async () => {
     const { res } = await generate({ prompt: 'x', brand_id: 'brand-di-qualcun-altro' });
 
@@ -170,6 +179,19 @@ describe('POST /media/images/refine — refine_image', () => {
     expect(refineBrandImage).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ baseMediaId: 'media-0', prompt: 'sfondo più caldo' })
+    );
+  });
+
+  it('anche rifinendo, brand_style arriva al motore', async () => {
+    await call(REFINE as Handler, 'images/refine', {
+      base_media_id: 'media-0',
+      instruction: 'più caldo',
+      brand_style: 'ignore'
+    });
+
+    expect(refineBrandImage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ brandStyle: 'ignore' })
     );
   });
 
