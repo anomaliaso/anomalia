@@ -73,3 +73,22 @@ se ne accorgerebbe. È sotto `src/routes/app/`, fuori dai file che posso modific
 Nella stessa categoria, e nello stesso stato: `src/lib/server/chat/query-tool.ts` elenca ancora
 `motion_craft_scores` fra i nomi di tabella interrogabili — è un elenco, non un lettore, ma nomina
 una tabella orfana, ed è sotto `src/lib/server/chat/`.
+
+
+## E la bugia con più lettori di tutte: `CLAUDE.md`
+
+Segnalata da chi stava aggiornando la skill, e me l'ero persa. La lista di endpoint in `CLAUDE.md`
+annunciava ancora due rotte che non esistono:
+
+```
+# Video review: POST /api/v1/brands/:slug/videos/review  { url | post_id, standard: organic|ads }
+# Auto-score worker: GET/POST /api/v1/videos/review/work (cron */5)
+```
+
+`src/routes/api/v1/brands/[slug]/videos/` non esiste, e sotto `src/routes/api/v1/videos/` c'è solo
+`render`. È lo stesso difetto dei commenti — un testo che promette una capacità sparita — ma con il
+pubblico più ampio: **ogni agente di questo repo carica `CLAUDE.md` all'avvio della sessione**,
+quindi era la riga con più probabilità di essere creduta.
+
+Tolte. E già che il file era aperto, **verificate tutte le altre rotte che annuncia**: esistono
+tutte. La marcescenza era confinata a queste due, non è un problema del file.
