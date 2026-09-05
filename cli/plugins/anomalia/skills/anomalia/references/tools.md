@@ -178,15 +178,31 @@ one post per platform, so a sequence is for pasting by hand, not for `create_pos
 `credits_exhausted` (402) means the pool is empty and nothing was written; `no_captions` (502) is
 the model returning nothing.
 
-`generate_image` draws a NEW image into the library from a prompt. Required: `slug`, `prompt`;
-optional `count` (1-4 alternatives, **each one billed**), `aspect_ratio`, `model`, `title`. It
-bills a render per image — roughly 8 credits each — and creates nothing in the calendar, so ask
-for two or three, look at them with `list_media`, and pass only the id you keep to `create_post`.
-The response carries two facts worth reading. `model` is the model that **actually** drew it,
-after the brand's choice and the platform default — read it rather than assuming your request won,
-because an environment override can still outrank it. `renders` is how many renders were **billed**,
-which can exceed the images you got back: a render that succeeds and is then discarded downstream
-is paid for all the same, so trust `renders` over your own count when reconciling spend.
+`generate_image` draws a picture from a description — "an image of a cat", a product shot, a
+background for a slide. Required: `prompt`. Optional: `slug`, `count` (1-4 alternatives, **each
+one billed**), `aspect_ratio`, `model`, `title`. The prompt is the whole instruction: nothing
+about a brand's look reaches the model, so name the style you want.
+
+**`slug` is optional, and which way you call it is the only choice to make.** WITHOUT it this is a
+one-off drawing: no brand, nothing filed anywhere, `id` comes back `null` and there is nothing to
+hand to `create_post` — you get a `storage_path` and a signed `url` that expires in two hours, so
+save what you want to keep. WITH it the image lands in that brand's library, `list_media` finds it
+again, and its `id` is what `create_post` takes as `media_ids`: that is the path for anything that
+belongs to a brand or is going to become a post.
+
+**Do NOT call `list_brands` to decide where to draw.** If nobody named a brand there is no brand.
+Guessing one spends a real organisation's credits and litters a real library — call it without
+`slug` instead. Without `slug` the credits come from your organisation, and the response names it
+in `organization` so the bill is never anonymous.
+
+It creates nothing in the calendar and publishes nothing, so ask for two or three, look at them,
+keep one. The response carries three facts worth reading. `model` is the model that **actually**
+drew it, after the brand's choice and the platform default — read it rather than assuming your
+request won, because an environment override can still outrank it. `renders` is how many renders
+were **billed**, which can exceed the images you got back: a render that succeeds and is then
+discarded downstream is paid for all the same, so trust `renders` over your own count when
+reconciling spend. `cost_usd` is what those renders actually cost, read off the invoice — `null`
+when no invoice came back, never `0`.
 
 **One prompt, one render, no safety net.** Nothing inspects the image after the model draws it:
 there is no quality control, no critic that rejects a bad frame, no retry you did not ask for.

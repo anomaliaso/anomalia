@@ -94,8 +94,13 @@ as `media_ids`. That is also how you post to Instagram or TikTok, which never ac
 it returns to `create_post` as `media_ids`. The file is copied into the brand library, so the post
 still has its image the day the original link dies.
 
-**Draw a new image** → `generate_image` with a prompt. It bills a render per image and creates
-nothing in the calendar, so ask for two or three with `count`, look at them, keep one.
+**Draw a new image** → `generate_image` with a prompt — "an image of a cat", a product shot, a
+background. `slug` is OPTIONAL: leave it out for a one-off drawing (no brand, filed nowhere, `id`
+comes back `null`, and a signed `url` that expires), pass it when the picture belongs to a brand
+or is going to become a post. Do NOT call `list_brands` to decide where to draw: if nobody named
+a brand there is no brand, and guessing one spends a real organisation's credits. It bills a
+render per image and creates nothing in the calendar, so ask for two or three with `count`, look
+at them, keep one.
 
 **Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
 returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
