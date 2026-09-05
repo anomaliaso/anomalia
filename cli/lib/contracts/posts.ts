@@ -371,7 +371,9 @@ export const CHECK_MEDIA_JOB = {
   description:
     'Where the videos generate_media started have got to, newest first. status is rendering while ' +
     'the clip is being made, done once it is in the library — and then media_id is the id ' +
-    'create_post accepts as media_ids. failed says why. Calls no model and spends no credits.',
+    'create_post accepts as media_ids. failed says why. not_in_library means the clip was ' +
+    'rendered and paid for but never filed, so there is no media_id and a second render buys ' +
+    'a second copy. Calls no model and spends no credits.',
   method: 'GET',
   pathUnderBrand: '/media/generate',
   input: z

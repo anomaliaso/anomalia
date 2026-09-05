@@ -462,5 +462,10 @@ export async function listMediaJobs(
     ((assets ?? []) as Array<{ id: string; source_ref: string }>).map((a) => [a.source_ref, a.id])
   );
 
-  return rows.map((r) => ({ ...r, media_id: byJob.get(r.id) ?? null }));
+  return rows.map((r) => {
+    const mediaId = byJob.get(r.id) ?? null;
+    if (r.status !== 'done' || mediaId) return { ...r, media_id: mediaId };
+
+    return { ...r, media_id: null, status: CLIP_NOT_IN_LIBRARY, error: NOTHING_CLAIMED_IT };
+  });
 }
