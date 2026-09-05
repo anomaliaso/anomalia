@@ -457,10 +457,40 @@ da una lista lunga a un enum illeggibile.
 | `upscale_video` | progettato, non scritto. Tool suo e non parametro, perché l'ingrandimento di kie prende il `task_id` del lavoro originale e non tocca la libreria, mentre quello di OpenRouter prende un URL: **non sono la stessa capacità con due trasporti** |
 | `upscale_image` | **nessun modello lo fa su OpenRouter** — verificati tutti e 50. Chiedere a un modello di generazione di «rifare l'immagine più grande» è una rigenerazione, non un ingrandimento: torna un'immagine *diversa* a risoluzione maggiore |
 
-I tool per **modificare** un carosello non ci sono di proposito, e la ragione è nel piano sopra: se
-`generate_carousel` restituisce N id di media, l'array è dell'agente. Riordinare è l'ordine degli
-argomenti a `create_post`, togliere è ometterne uno, cambiare una slide è `refine_image` sul suo id,
-aggiungerne una è `generate_image` con i `continuity_tokens` che il carosello ha restituito.
+I tool per **modificare** un carosello non ci sono di proposito: `generate_carousel` vive sotto
+`/media/carousel` e restituisce la sequenza intera — N id di media più i `continuity_tokens` — senza
+creare nessun post. Quindi l'array è dell'agente: riordinare è l'ordine degli argomenti a
+`create_post`, togliere è ometterne uno, cambiare una slide è `refine_image` sul suo id, aggiungerne
+una è `generate_image` con quei gettoni nell'istruzione.
 
-`regenerate_slide` e `reorder_slides` esistono perché **un post possiede le sue slide** e l'agente
-non può toccarle direttamente. Senza post quel vincolo non c'è.
+`regenerate_slide` e `reorder_slides` sono i vecchi, e restano perché **un post possiede le sue
+slide**: lì l'agente non può toccarle direttamente. Senza post quel vincolo non c'è.
+
+---
+
+## Unificare i generatori in un tool solo: si può, ma il conto non torna
+
+La proposta: un `generate_media` con un `kind`, più un `get_generate_media_params` che dica quali
+parametri servono per ciascun tipo, e una convalida su quello che arriva.
+
+**La seconda metà non serve, ed è la parte interessante.** `tools/list` **porta già lo schema JSON
+completo di ogni tool** — è il protocollo a farlo, e ogni client lo riceve prima di chiamare
+qualunque cosa. Un tool che descrive i parametri di un altro tool riscrive, peggio e a pagamento,
+qualcosa che arriva gratis.
+
+E se i parametri cambiano per tipo, zod lo esprime **dentro un unico schema** con una unione
+discriminata: `kind: 'image'` chiede una cosa, `kind: 'video'` un'altra, e il client vede entrambe
+le forme senza un secondo giro. **La convalida viene dalla stessa unione**, quindi arriva gratis
+anche quella.
+
+**La prima metà si può fare e secondo me non conviene**, per la ragione che questo documento apre:
+tre agenti in un giorno si sono arresi davanti a una capacità presente perché **non ne hanno trovato
+il nome**. `generate_media(kind: 'refine')` è meno trovabile di `refine_image`, non più. Il costo si
+sposta dalla lunghezza della lista alla leggibilità di un enum, e l'enum è il posto peggiore in cui
+metterlo, perché un modello lo legge dopo aver già deciso quale tool aprire.
+
+Un caso però è netto: **`generate_media` oggi è un doppione.** La sua stessa descrizione dice
+*«PREFER `generate_image` or `generate_video` … this one stays and keeps working, forwarding to
+those two»*. Non aggiunge nessuna capacità, e mette due nomi davanti a chi cerca «genera
+un'immagine». Nessun cliente lo chiama — la superficie MCP remota ha ripreso a dispiegarsi solo
+oggi. **Quello si toglie**, e porta 127 a 126 togliendo un'ambiguità invece di una capacità.
