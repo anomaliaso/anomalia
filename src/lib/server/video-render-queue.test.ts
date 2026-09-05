@@ -387,6 +387,70 @@ describe('reconcileVideoRenders', () => {
 
 		expect(saveRenderedVideoToLibrary).not.toHaveBeenCalled();
 	});
+
+	// L'invariante che `check_media_job` promette: `done` vuol dire «il media è in libreria». Un
+	// lavoro chiuso done che nessun asset reclama arriva a un agente esterno come
+	// { status: 'done', media_id: null } — una contraddizione su cui non c'è niente da fare, e il
+	// clip è già pagato. Detta come proprietà su tutte le righe, non come percorso felice.
+	it('nessun lavoro chiuso done resta senza un asset che lo reclama', async () => {
+		finishVideoRender.mockResolvedValue({
+			status: 'done',
+			url: 'https://cdn/clip.mp4',
+			durationSeconds: 12,
+			resolution: '720p'
+		});
+		const { tables, client } = makeDb({
+			video_renders: [
+				renderRow({ id: 'render-lib', post_id: null }),
+				renderRow({ id: 'render-lib-ko', post_id: null }),
+				renderRow({ id: 'render-post', post_id: 'post-1' })
+			],
+			posts: [{ id: 'post-1' }],
+			brand_media: []
+		});
+		saveRenderedVideoToLibrary.mockImplementation(async (_admin: unknown, opts: Row) => {
+			if (opts.sourceRef === 'render-lib-ko') return { error: 'could not read the rendered clip (403)' };
+			tables.brand_media.push({
+				id: `media-${opts.sourceRef}`,
+				brand_id: opts.brandId,
+				source_ref: opts.sourceRef
+			});
+			return { mediaId: `media-${opts.sourceRef}` };
+		});
+
+		await reconcile(client);
+
+		// La stessa coppia con cui listMediaJobs risolve l'asset: brand_id filtrato, source_ref in.
+		const claimed = new Set(tables.brand_media.map((m) => `${m.brand_id}:${m.source_ref}`));
+		const stranded = tables.video_renders
+			.filter((r) => r.status === 'done' && r.post_id === null)
+			.filter((r) => !claimed.has(`${r.brand_id}:${r.id}`))
+			.map((r) => r.id);
+
+		expect(stranded).toEqual([]);
+	});
+
+	// Il motivo vero arriva già da saveRenderedVideoToLibrary e veniva buttato via al ritorno: la
+	// riga ereditava «il post non si è potuto aggiornare» su un lavoro che un post non ce l'ha, ed
+	// è la colonna `error` che check_media_job mostra verbatim a un agente esterno.
+	it('registra perche il deposito in libreria e fallito, non un post che non esiste', async () => {
+		finishVideoRender.mockResolvedValue({
+			status: 'done',
+			url: 'https://cdn/clip.mp4',
+			durationSeconds: 12,
+			resolution: '720p'
+		});
+		saveRenderedVideoToLibrary.mockResolvedValue({ error: 'could not read the rendered clip (403)' });
+		const { tables, client } = makeDb({ video_renders: [renderRow({ post_id: null })] });
+
+		expect(await reconcile(client)).toMatchObject({ done: 0 });
+
+		expect(tables.video_renders[0].status).toBe('rendering');
+		expect(tables.video_renders[0].attempts).toBe(1);
+		expect(tables.video_renders[0].error).toBe('could not read the rendered clip (403)');
+		// Un clip che non è atterrato non consuma l'allocazione mensile del brand.
+		expect(addUsage).not.toHaveBeenCalled();
+	});
 });
 
 describe('enqueueVideoRender', () => {
