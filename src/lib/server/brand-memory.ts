@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { updateBrandRow, deleteBrandRow, type RowFailure } from './brand-rows';
 import { structured } from './research';
 import { withBrandContext } from './ai-log';
 import { defaultSkillsFor } from './default-skills';
@@ -527,9 +528,14 @@ export async function promoteMemoryToProject(
 // ── Delete / archive ───────────────────────────────────────────────────────────
 
 // brandId is required, not optional: these run under the service-role client on the CLI path, where
-// an id alone would reach any brand's memory.
-export async function deleteMemory(supabase: SupabaseClient, brandId: string, entryId: string): Promise<void> {
-  await supabase.from('brand_memory').delete().eq('id', entryId).eq('brand_id', brandId);
+// an id alone would reach any brand's memory. E chi non tocca niente lo dice: zero righe non e' un
+// errore per PostgREST, quindi senza il conteggio l'endpoint risponde `ok` sulla riga di un altro.
+export async function deleteMemory(
+  supabase: SupabaseClient,
+  brandId: string,
+  entryId: string
+): Promise<RowFailure | null> {
+  return deleteBrandRow(supabase, 'brand_memory', brandId, entryId);
 }
 
 export async function updateMemoryEntry(
@@ -537,10 +543,11 @@ export async function updateMemoryEntry(
   brandId: string,
   entryId: string,
   patch: Partial<Pick<MemoryEntry, 'value' | 'category' | 'confidence' | 'pinned' | 'importance'>>
-): Promise<void> {
-  await supabase.from('brand_memory')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', entryId).eq('brand_id', brandId);
+): Promise<RowFailure | null> {
+  return updateBrandRow(supabase, 'brand_memory', brandId, entryId, {
+    ...patch,
+    updated_at: new Date().toISOString()
+  });
 }
 
 // ── Conflict detection ─────────────────────────────────────────────────────────

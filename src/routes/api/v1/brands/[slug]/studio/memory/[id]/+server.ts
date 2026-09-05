@@ -18,7 +18,8 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
   }
 
   const { updateMemoryEntry } = await import('$lib/server/brand-memory');
-  await updateMemoryEntry(supabase, brand.id, params.id, parsed.data);
+  const failure = await updateMemoryEntry(supabase, brand.id, params.id, parsed.data);
+  if (failure) return json({ error: failure.error }, { status: failure.status });
 
   return json({ ok: true });
 };
@@ -52,7 +53,8 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
   if (writeDenied) return writeDenied;
 
   const { deleteMemory } = await import('$lib/server/brand-memory');
-  await deleteMemory(supabase, brand.id, params.id);
+  const failure = await deleteMemory(supabase, brand.id, params.id);
+  if (failure) return json({ error: failure.error }, { status: failure.status });
 
   return json({ ok: true });
 };
