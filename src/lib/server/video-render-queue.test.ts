@@ -10,9 +10,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 type Row = Record<string, any>;
 
 const finishVideoRender = vi.fn();
+const videoTaskProvider = vi.fn((_taskId: string): string => 'kie');
 
 vi.mock('$lib/server/video', () => ({
-	finishVideoRender: (...args: unknown[]) => finishVideoRender(...args)
+	finishVideoRender: (...args: unknown[]) => finishVideoRender(...args),
+	videoTaskProvider: (taskId: string) => videoTaskProvider(taskId)
 }));
 vi.mock('$lib/server/ai-log', () => ({
 	withBrandContext: <T>(_brandId: string, fn: () => T) => fn()
@@ -113,6 +115,8 @@ async function reconcile(client: unknown) {
 
 beforeEach(() => {
 	finishVideoRender.mockReset();
+	videoTaskProvider.mockReset();
+	videoTaskProvider.mockReturnValue('kie');
 	saveRenderedVideoToLibrary.mockReset();
 	saveRenderedVideoToLibrary.mockResolvedValue({ mediaId: 'media-1' });
 	addUsage.mockReset();
@@ -230,6 +234,28 @@ describe('reconcileVideoRenders', () => {
 		expect(finishVideoRender).not.toHaveBeenCalled();
 		expect(tables.video_renders[0].status).toBe('expired');
 		expect(tables.posts[0].video_render_status).toBe('failed');
+	});
+
+	// `error` is what check_media_job hands verbatim to whoever asks why the clip never came. A
+	// fixed 'kie' on an openrouter job sends them to read a dashboard that never had the task.
+	it('blames the provider that actually held the task, not a fixed one', async () => {
+		const { VIDEO_RENDER_MAX_AGE_MS } = await import('./video-render-queue');
+		videoTaskProvider.mockReturnValue('openrouter');
+		const { tables, client } = makeDb({
+			video_renders: [
+				renderRow({
+					task_id: 'openrouter:job-9',
+					submitted_at: new Date(Date.now() - VIDEO_RENDER_MAX_AGE_MS - 60_000).toISOString()
+				})
+			],
+			posts: [{ id: 'post-1' }]
+		});
+
+		expect(await reconcile(client)).toMatchObject({ expired: 1 });
+
+		expect(videoTaskProvider).toHaveBeenCalledWith('openrouter:job-9');
+		expect(String(tables.video_renders[0].error)).toContain('openrouter');
+		expect(String(tables.video_renders[0].error)).not.toContain('kie');
 	});
 
 	it('recovers a claim whose holder died mid-finish', async () => {

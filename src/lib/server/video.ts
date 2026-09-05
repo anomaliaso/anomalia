@@ -1234,6 +1234,10 @@ export type VideoRenderOutcome =
   | { status: 'done'; url: string; durationSeconds: number; resolution: string; thumbnailUrl?: string }
   | { status: 'failed'; error: string };
 
+export function videoTaskProvider(taskId: string): 'openrouter' | 'kie' {
+  return untagOpenrouterJob(taskId) ? 'openrouter' : 'kie';
+}
+
 /**
  * Check a submitted render once, and finish it if kie is done.
  *

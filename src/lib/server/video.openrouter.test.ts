@@ -109,6 +109,14 @@ describe('il cablaggio del video verso OpenRouter', () => {
     });
   });
 
+  it('chi ha tenuto il lavoro si legge dall’id, non dalla variabile di adesso', async () => {
+    M.env.AI_ROUTE_VIDEO = 'grok-imagine@kie';
+    const { videoTaskProvider } = await import('./video');
+
+    expect(videoTaskProvider('openrouter:or-job-1')).toBe('openrouter');
+    expect(videoTaskProvider('kie-task-1')).toBe('kie');
+  });
+
   it('la clip si scarica con la chiave: senza, OpenRouter risponde 401', async () => {
     M.env.AI_ROUTE_VIDEO = 'grok-imagine@kie';
     const f = stubFetch({
