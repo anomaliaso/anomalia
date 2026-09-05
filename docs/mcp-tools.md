@@ -433,26 +433,113 @@ risposta è **`anomalia login` da terminale, una volta**: MCP stdio e CLI escono
 pacchetto e condividono lo stesso `session.json`. È un passo in più per qualcuno, non una strada
 chiusa.
 
-### 3. Il CRUD: 15 tool in 6
+### 3. Le scritture: il piano di aggregazione è ritirato
 
-Sei entità hanno più di un verbo, e il repo **ha già fatto questa mossa tre volte** — `ads_action`,
-`geo_action`, `seo_action` raggruppano per dominio con un parametro `action`:
+Questa sezione proponeva di collassare il CRUD in sei `*_action` e le impostazioni in due o tre.
+**Aperti i 72 handler di scrittura, nessuna famiglia supera la prova.** Il piano non viene
+rimandato: viene ritirato, e qui sotto c'è il perché, così che chi lo rilegge fra sei mesi trovi la
+contraddizione risolta invece che rimossa.
 
+**Il documento si contraddiceva.** Poche righe più sotto, in «La regola che dice cosa NON
+raggruppare», enuncia il costo — *«un agente che cerca "aggiungi un concorrente" trova
+`add_competitor` all'istante; con `competitor_action(op: 'add')` deve leggere l'enum»* — e tre
+righe dopo propone di pagarlo: *«le sei famiglie CRUD diventano `*_action`»*. È la ragione per cui
+il piano è stato scritto e mai eseguito.
+
+#### Primo argomento: collassare distrugge `destructiveHint`, e questo non è opinabile
+
+L'annotazione è **per tool** — `destructiveHint: endpoint.destructive` in
+`cli/mcp/tools/brand-content.ts` — e il protocollo non ha modo di dire «distruttivo solo quando
+`action = delete`». Quindi un `*_action` che mette un verbo che distrugge accanto a otto che non
+distruggono si marca distruttivo **per intero**.
+
+Non è teoria: è `ads_action` oggi. Un client che avvisa sui tool distruttivi avvisa anche su `sync`
+e su `propose`, che non toccano niente. Da lì la gente impara a cliccare via l'avviso, ed è così
+che si perde un presidio senza che nessuno lo cancelli.
+
+Questo argomento vale per **ogni** `*_action` proposto, non dipende da come è scritta una
+descrizione, e non si può discutere: viene dal protocollo e dal nostro codice.
+
+#### Secondo argomento: un modello legge l'enum DOPO aver scelto il tool
+
+Un modello sceglie dal **nome**. Il valore di un parametro lo legge solo dopo aver aperto il tool,
+cioè dopo aver già deciso. Un `action` non lo guida: lo mette davanti a una scelta già fatta. È la
+stessa meccanica misurata su `generate_media` in fondo a questo documento — tre sessioni reali in
+un giorno, capacità presente, nome non trovato.
+
+Dove i fratelli condividono già il prefisso nel nome (`set_*`), collassare non toglie un enum:
+toglie **i nomi**, che sono l'unica cosa che oggi funziona.
+
+#### Il verdetto, famiglia per famiglia
+
+| famiglia | tool | collassare? |
+|---|---|---|
+| Piano editoriale | `propose_plan` `revise_plan` `save_plan` `approve_plan` `discard_plan` | **peggio, due volte.** `approve_plan` sostituisce il piano attivo, `discard_plan` butta la proposta e «non torna indietro»: due distruzioni permanenti **diverse** dietro un enum |
+| Settimana | `plan_week` `replan_week` `save_week_seeds` `save_brief` | peggio. Due spendono crediti e due no — il segnale di costo vive nel nome |
+| Post, contenuto | `create_post` `edit_post` `reschedule_post` `render_post` | peggio. Fondere `reschedule_post` in `edit_post` non costa un enum (è un campo in più) ma cancella un nome buono |
+| Post, ciclo di vita | `approve_post` `approve_posts` `reject_post` `publish_post` | peggio. `approve_post(all: true)` è un booleano il cui valore sbagliato pubblica tutta la coda |
+| Articoli | `generate_article` `update_article` `optimize_article` `publish_article` `unpublish_article` `delete_article` | peggio. Tre verbi permanenti; sono i nomi migliori del repo |
+| Studio CRUD | 11 tool fra competitor, person, product, document | peggio — ed è qui che il documento si contraddiceva |
+| Identità del brand | `update_brand_kit` `update_voice` `set_colors` `set_appearance` | peggio. Una trappola vera c'è, ma si ripara con una descrizione |
+| Impostazioni | 6 × `set_*` | peggio. I nomi **sono già** il discriminante, e sono buoni |
+| blog_term · radar_source · share | coppie add/remove | peggio. Ogni coppia è una creazione più una distruzione |
+| seo · geo · ads | i tre `*_action` che esistono già | qui sta la misura che manca — sotto |
+
+#### Cosa si fa invece: descrizioni, e una tipizzazione
+
+Tre interventi, tutti piccoli, tutti fatti nello stesso lavoro che ha ritirato questo piano.
+
+1. **`ads_action`: `action` era `z.string().min(1)`** mentre lo `switch` della rotta accetta dieci
+   verbi e risponde `unknown_action` a tutto il resto. Una stringa libera davanti a un elenco
+   chiuso fa scoprire l'elenco sbagliando, e uno dei dieci **cancella una campagna vera**. Ora è un
+   `enum`. La descrizione ne elencava nove e ometteva `approve`, che è quello che **lancia**, cioè
+   quello che spende i soldi del brand: ora li nomina tutti e dieci e dice quale spende.
+   **Non è stato né collassato né spezzato** — spezzarlo è un cambiamento rotto, e non è oggi.
+2. **`set_appearance` non aveva un campo colore** e nemmeno un rimando: chi cerca «cambia i colori
+   del brand» apre il tool che si chiama «appearance» e non trova niente. Adesso la descrizione
+   dice che la palette è `set_colors`.
+3. **`edit_post` ha due parole per «quando»**: prende `slot` (il giorno di calendario) e non
+   `scheduled_for` (l'istante in cui il post esce), che cambia solo con `reschedule_post`. Senza il
+   rimando un agente sposta il giorno credendo di aver spostato l'ora. È la stessa forma del
+   difetto del refine che rigenerava da zero: la capacità c'è, il nome non porta lì.
+
+#### La misura che deciderebbe davvero, e perché oggi non si può fare
+
+I tre `*_action` che esistono già — `seo_action`, `geo_action`, `ads_action` — sono l'esperimento
+naturale: se l'enum non danneggiasse la scelta, si vedrebbe qui. La domanda è **quante chiamate
+arrivano a un `*_action` con un `action` valido al primo colpo, contro quante arrivano a un tool
+con un nome proprio**, e quante tornano `unknown_action`.
+
+**Oggi la risposta è: non si può misurare, e il numero è zero.** `ai_calls` registra la chiamata al
+modello, non il tool MCP che l'ha originata, e le sue `label` (`seoAgent`, `ads_campaign_draft`)
+sono condivise fra superfici diverse. `mcp_logs` ha la colonna giusta — `tool_name`, scritta da
+`cli/mcp/observability.ts` — ma **nessun chiamante la valorizza**: in tutto `cli/mcp/` non c'è un
+solo punto che passi `toolName`, quindi la colonna è sempre `null`.
+
+Quindi il prerequisito è una riga sola: passare `toolName` dove il tool viene eseguito. Fatto
+quello, la domanda si risponde così:
+
+```sql
+-- quota di chiamate riuscite al primo colpo, per tool, sugli ultimi 30 giorni
+select tool_name,
+       count(*)                                          as calls,
+       count(*) filter (where status_code >= 400)         as refused,
+       round(100.0 * count(*) filter (where status_code >= 400) / count(*), 1) as refused_pct
+from mcp_logs
+where tool_name is not null
+  and created_at > now() - interval '30 days'
+group by tool_name
+order by calls desc;
 ```
-competitor     add · update · delete      →  competitor_action
-person         add · update · delete      →  person_action
-product        create · update · delete   →  product_action
-blog_term      add · remove               →  blog_term_action
-radar_source   add · remove               →  radar_source_action
-article        update · delete            →  article_action
-```
 
-### 4. Le impostazioni: 10 tool in 2-3
-
-`set_appearance` · `set_automation` · `set_bio` · `set_blog_settings` · `set_brand_settings` ·
-`set_colors` · `set_media_model` · `set_radar_platform` · `update_brand_kit` · `update_voice`
-
-Sono tutte «cambia un'impostazione del brand». Il taglio naturale è per sezione, non per campo.
+**Cosa distingue un successo da un fallimento.** L'ipotesi da battere è che l'enum non costi
+niente. Se i tre `*_action` mostrano una quota di rifiuti **paragonabile** ai tool con nome proprio
+(entro qualche punto), l'argomento della trovabilità è più debole di come è scritto qui e il piano
+di aggregazione si può riaprire — restando fermo il primo argomento, quello del `destructiveHint`,
+che nessuna misura può ribaltare. Se invece i `*_action` rifiutano sensibilmente di più, o se
+`unknown_action` compare con regolarità, la conclusione è confermata con un numero invece che con
+un ragionamento. Serve traffico: sotto qualche centinaio di chiamate per tool il confronto non dice
+niente, e va aspettato invece che forzato.
 
 ### Il conto
 
@@ -461,12 +548,17 @@ Sono tutte «cambia un'impostazione del brand». Il taglio naturale è per sezio
 | prima di questo lavoro | **126** |
 | −4 letture che `query` diceva già | 122 |
 | −3 tool di autenticazione (`login`, `logout`, `whoami`) | **119** |
-| −9 se il CRUD va da 15 a 6 | 110 |
-| −7/8 se le impostazioni vanno da 10 a 2/3 | **~102** |
 
-La riga «−22 letture in `query`» che stava qui era una stima mai verificata: aperti i 44 handler,
-le letture che `query` copriva davvero erano quattro. Le altre righe restano stime finché qualcuno
-non apre gli handler delle scritture allo stesso modo.
+E finisce lì, salvo `generate_media` — l'unica cancellazione a cui questo documento si impegnava
+già, in corso su un altro ramo.
+
+Le due righe che stavano qui — «−9 se il CRUD va da 15 a 6», «−7/8 se le impostazioni vanno da 10 a
+2/3» — erano stime scritte prima di aprire gli handler, come lo era «−22 letture in
+`query`»: aperti i 44 handler di lettura, quelle davvero coperte erano quattro; aperti i 72 di
+scrittura, le famiglie da collassare sono zero.
+
+**Il numero non è il bersaglio.** I sette tolti non servivano o mentivano. I 119 che restano sono
+capacità, e una capacità nascosta in un enum resta nella lista: cambia solo che nessuno la trova.
 
 Non arriveremo mai a 1 come PostHog, e non dobbiamo: **metà del nostro prodotto sono azioni che
 costano soldi o pubblicano qualcosa.** Un `execute_action("publish", …)` sarebbe peggio, non meglio.
@@ -486,8 +578,14 @@ che cerca «aggiungi un concorrente» trova `add_competitor` all'istante; con
 e un tool che cancella non deve nascondersi in un enum accanto a due che non cancellano: è il modo
 di farlo chiamare per sbaglio. Vale identico per quello che spende crediti.
 
-Quindi le sei famiglie CRUD diventano `*_action` **per creare e aggiornare**, e le 13 operazioni
-distruttive restano con il proprio nome, dove si vedono.
+**Qui il documento si contraddiceva**, e la contraddizione è risolta in §3 invece che tolta: dopo
+aver enunciato quel costo, tre righe più sotto proponeva di pagarlo — *«le sei famiglie CRUD
+diventano `*_action` per creare e aggiornare»*. Non lo diventano. La regola qui sopra è giusta e
+resta; la proposta che la violava è ritirata.
+
+Resta anche la sua metà buona: **le operazioni distruttive tengono il proprio nome, dove si
+vedono.** Non perché sia elegante, ma perché `destructiveHint` è per tool e non per valore di enum
+— l'argomento meccanico in cima a §3.
 
 E `ads_action` — l'unico esempio che abbiamo — è **già stato segnalato come mal fatto**: `action` è
 una stringa libera invece di un enum, e non dichiara `credits_exhausted` pur avendo un `propose` che

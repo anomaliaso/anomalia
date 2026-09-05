@@ -58,4 +58,13 @@ describe('il look del brand come contratto', () => {
     expect(SET_APPEARANCE.description).toContain('query({ table: "brand_kit"');
     expect(SET_APPEARANCE.description).toContain('og-image');
   });
+
+  /**
+   * Il tool si chiama «appearance» e non ha un campo colore: chi cerca «cambia i colori del brand»
+   * apre questo e non trova niente. Il rimando è l'unica cosa che lo salva dal giro a vuoto.
+   */
+  it('manda a set_colors, che è dove la palette vive davvero', () => {
+    expect(SET_APPEARANCE.description).toContain('set_colors');
+    expect(Object.keys(SET_APPEARANCE.input.shape)).not.toContain('colors');
+  });
 });
