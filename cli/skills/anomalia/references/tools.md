@@ -54,6 +54,7 @@ with `error`, `message` and often `fix` inside, so you can read why and change m
 | `create_post` | (MCP only) |
 | `list_media` | (MCP only) |
 | `check_content` | (MCP only) |
+| `generate_captions` | (MCP only) |
 | `import_media_url` | (MCP only) |
 | `generate_media` | (MCP only) |
 | `generate_image` | (MCP only) |
@@ -152,6 +153,25 @@ that bills a second one. Refusals: `credits_exhausted` (402) means the brand's p
 nothing was drawn; `video_budget_exhausted` (400) means the monthly video allowance is used up,
 counting the clips still rendering; `render_failed` (502) is the model returning nothing, and
 nothing is stored; `store_failed` (502) means it was drawn but could not be filed.
+
+`generate_captions` writes captions and nothing else — text, no image, no video, and **no post**:
+it creates nothing in the calendar, so the caption you keep still has to go to `create_post` as
+`caption` (or inside `platform_captions`) to exist anywhere. Required: `slug`, `topic`; optional
+`platforms` and `format`. **This spends credits** — one model turn per call.
+
+Called with `topic` alone it writes for every platform at once, each caption composed for the
+platform it is going to and already inside that platform's character limit, rather than one text
+trimmed nine different ways. Name `platforms` and you get only those, written to their own limits
+with no further shortening — asking for X alone costs one caption, not nine with eight thrown
+away. Every entry comes back with `parts`, the platform's `limit`, and `publishable`.
+
+`format` defaults to `single`: one post per platform, guaranteed to fit. `format: "thread"` lets
+X and Threads run as long as the idea needs and returns `parts` as a numbered sequence — each
+part whole words only, never a URL or a mention cut in two, with the `1/4` counted inside the
+limit. Such a sequence comes back with `publishable: false`, and it means it: publishing sends
+one post per platform, so a sequence is for pasting by hand, not for `create_post`. Refusals:
+`credits_exhausted` (402) means the pool is empty and nothing was written; `no_captions` (502) is
+the model returning nothing.
 
 `generate_image` draws a NEW image into the library from a prompt. Required: `slug`, `prompt`;
 optional `count` (1-4 alternatives, **each one billed**), `aspect_ratio`, `model`, `title`. It
