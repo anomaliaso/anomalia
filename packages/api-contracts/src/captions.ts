@@ -30,7 +30,8 @@ export const GENERATE_CAPTIONS = {
     'platforms to get only those, each written to its own limit with no extra shortening. ' +
     'format "thread" lets X and Threads come back as a numbered sequence of posts rather than ' +
     'one — good to paste by hand, but create_post publishes a single post per platform, so a ' +
-    'sequence is not publishable from here. Uses the brand voice. Costs credits.',
+    'sequence is not publishable from here. It writes in the brand\'s voice. It spends credits, ' +
+    'and cost_usd in the answer says what the model actually cost.',
   method: 'POST',
   pathUnderBrand: '/captions/generate',
   input: z

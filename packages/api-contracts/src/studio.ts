@@ -90,7 +90,9 @@ export const UPDATE_PRODUCT = {
 export const DELETE_PRODUCT = {
   tool: 'delete_product',
   title: 'Delete product',
-  description: 'Remove one offer from the brand catalog. It does not come back.',
+  description:
+    'Remove one offer from this brand\'s catalogue, so posts stop being written about it. It ' +
+    'does not come back.',
   method: 'DELETE',
   pathUnderBrand: '/products/:id',
   resource: 'product',
@@ -103,7 +105,9 @@ export const DELETE_PRODUCT = {
 export const DELETE_PERSON = {
   tool: 'delete_person',
   title: 'Delete person',
-  description: 'Delete a studio person by UUID.',
+  description:
+    'Remove a real person from this brand, so no generator can use their face any more. It ' +
+    'does not come back. Their photos go with them.',
   method: 'DELETE',
   pathUnderBrand: '/studio/people/:id',
   resource: 'person',
@@ -116,7 +120,9 @@ export const DELETE_PERSON = {
 export const DELETE_DOCUMENT = {
   tool: 'delete_document',
   title: 'Delete studio document',
-  description: 'Delete a knowledge document by UUID.',
+  description:
+    'Delete one uploaded document, so the AI stops writing from it. It does not come back, ' +
+    'and search_knowledge stops returning its passages.',
   method: 'DELETE',
   pathUnderBrand: '/studio/documents/:id',
   resource: 'document',
@@ -129,7 +135,9 @@ export const DELETE_DOCUMENT = {
 export const DELETE_COMPETITOR = {
   tool: 'delete_competitor',
   title: 'Delete competitor',
-  description: 'Delete a competitor by UUID.',
+  description:
+    'Remove one company from this brand\'s competitor list. It does not come back. Nothing ' +
+    'already written about it is deleted.',
   method: 'DELETE',
   pathUnderBrand: '/studio/competitors/:id',
   resource: 'competitor',
@@ -159,9 +167,9 @@ export const UPDATE_PERSON = {
   tool: 'update_person',
   title: 'Update person',
   description:
-    'Correct the name, role, description or attributes of a person already in the studio. It ' +
-    'cannot attest consent, change a real person into an AI persona, or touch their photos: ' +
-    'those stay with the operator. Calls no model and spends no credits.',
+    'Correct the name, role, description or attributes of a person already registered on this ' +
+    'brand. It cannot attest consent, turn a real person into an invented one, or touch their ' +
+    'photos — those stay with the person who owns the brand. No model, no credits.',
   method: 'PUT',
   pathUnderBrand: '/people/:id',
   resource: 'person',
@@ -188,8 +196,9 @@ export const UPDATE_COMPETITOR = {
   tool: 'update_competitor',
   title: 'Update competitor',
   description:
-    'Correct a competitor already in the studio: a wrong website, a rationale that no longer ' +
-    'holds, direct versus indirect. Calls no model and spends no credits.',
+    'Correct a company already on this brand\'s competitor list: a wrong website, a reason ' +
+    'that no longer holds, direct versus indirect. Only the fields you send change. No model, ' +
+    'no credits.',
   method: 'PUT',
   pathUnderBrand: '/studio/competitors/:id',
   resource: 'competitor',
@@ -247,7 +256,10 @@ export const SET_BIO = {
 export const UPDATE_BRAND_KIT = {
   tool: 'update_brand_kit',
   title: 'Update brand kit',
-  description: 'Update brand kit fields (about, category, audience, style, language).',
+  description:
+    'Change what this brand IS: what it does, its category, who it speaks to, its style, its ' +
+    'language. These are the facts every generated post is written from, so a wrong one is ' +
+    'wrong everywhere. Only the fields you send change. No model, no credits.',
   method: 'PUT',
   pathUnderBrand: '/studio/kit',
   input: z
@@ -268,7 +280,9 @@ export const UPDATE_VOICE = {
   tool: 'update_voice',
   title: 'Update voice',
   description:
-    'Patch brand voice fields (mood, tone, register, avoid list, platform instructions).',
+    'Change how this brand sounds: mood, tone, register, the words it must avoid, and the ' +
+    'instructions that differ per platform. Only the fields you send change. get_voice reads ' +
+    'it back. No model, no credits.',
   method: 'POST',
   pathUnderBrand: '/voice/update',
   input: z
@@ -291,7 +305,10 @@ export const UPDATE_VOICE = {
 export const ADD_COMPETITOR = {
   tool: 'add_competitor',
   title: 'Add competitor',
-  description: 'Add a competitor to the studio.',
+  description:
+    'Add a company this brand competes with, so research and posts can take it into account. ' +
+    'update_competitor corrects one already there; research_competitors finds them for you ' +
+    'and spends credits. No model, no credits.',
   method: 'POST',
   pathUnderBrand: '/studio/competitors',
   input: z
@@ -318,7 +335,9 @@ export const ADD_COMPETITOR = {
 export const RESEARCH_COMPETITORS = {
   tool: 'research_competitors',
   title: 'Research competitors',
-  description: 'Run AI competitor research and add findings to the studio.',
+  description:
+    'Find out who this brand competes with and file what comes back, without being told the ' +
+    'names. It spends credits. add_competitor adds one you already know, for free.',
   method: 'POST',
   pathUnderBrand: '/studio/competitors/research',
   input: z.object({}).strict(),
@@ -331,7 +350,10 @@ export const RESEARCH_COMPETITORS = {
 export const SYNC_HISTORY = {
   tool: 'sync_history',
   title: 'Sync social history',
-  description: 'Sync historical social posts into the studio.',
+  description:
+    'Import this brand\'s past social posts so the AI can imitate how it already writes. It ' +
+    'reads the connected accounts — list_social_accounts says which of them still work, and a ' +
+    'brand with none imports nothing.',
   method: 'POST',
   pathUnderBrand: '/studio/history/sync',
   input: z.object({}).strict(),
@@ -348,7 +370,11 @@ export const SYNC_HISTORY = {
 export const ADD_NOTE = {
   tool: 'add_note',
   title: 'Add knowledge note',
-  description: 'Add a knowledge document / note to the studio.',
+  description:
+    'Save something this brand knows — a note, a policy, a transcript, a document — so the AI ' +
+    'writes from it instead of guessing. It is indexed for search: search_knowledge is how it ' +
+    'comes back, and get_knowledge_status says when it is ready to be found. No model, no ' +
+    'credits.',
   method: 'POST',
   pathUnderBrand: '/studio/documents',
   input: z.object({ text: z.string().min(1), title: z.string().optional() }).strict(),
@@ -364,8 +390,9 @@ export const SET_COLORS = {
   tool: 'set_colors',
   title: 'Set brand colors',
   description:
-    'Set brand colors as hex values, e.g. ["#7c5cff","#ffffff"]. Three or six digits, up to 8 ' +
-    'colours; the list replaces the whole palette.',
+    'Set the colours every graphic for this brand is drawn with, as hex values: ' +
+    '["#7c5cff","#ffffff"]. Three or six digits, up to 8 colours. The list REPLACES the whole ' +
+    'palette, so send all the colours you want, not just the new one. No model, no credits.',
   method: 'PUT',
   pathUnderBrand: '/studio/colors',
   // Stessa forma che la rotta salva: un `#aabbccdd` che passa di qui e prende un 400 di là
@@ -392,8 +419,10 @@ export const ADD_PERSON = {
   tool: 'add_person',
   title: 'Add person',
   description:
-    'Add a real person to the brand studio. Their face stays withheld from every generator ' +
-    'until consent is attested, so `consent` must be true and only the user can state it.',
+    'Register a real person who may appear in this brand\'s images and videos. Their face is ' +
+    'withheld from every generator until consent is attested, so `consent` must be true and ' +
+    'only the person\'s own operator can state it — never assume it on someone\'s behalf. No ' +
+    'model, no credits.',
   method: 'POST',
   pathUnderBrand: '/studio/people',
   input: z

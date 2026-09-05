@@ -10,7 +10,10 @@ export function registerStudioTools(server: McpServer) {
     'generate_person',
     {
       title: 'Generate AI person',
-      description: 'Generate an AI persona for the brand (may bill image generation).',
+      description:
+        'Invent a face for this brand — a made-up spokesperson who can appear in its images and ' +
+        'videos, with a name, a role and a look. It spends credits: the face is drawn. For a REAL ' +
+        'person, use add_person instead, which needs their consent and costs nothing.',
       inputSchema: z.object({
         slug,
         name: z.string().min(1),

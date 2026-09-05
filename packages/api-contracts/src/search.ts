@@ -5,7 +5,11 @@ export const SEO_ACTION = {
   tool: 'seo_action',
   title: 'SEO action',
   description:
-    'Run SEO actions: run (tech audit), plan, more (append initiatives), asset, article. For asset/article pass initiativeId.',
+    'Do something about the brand\'s search ranking: `run` audits the website\'s technical ' +
+    'health, `plan` drafts the improvements worth making, `more` appends further ones (say ' +
+    'what you want in `guidance`), and `asset` or `article` writes one of them out — those ' +
+    'two need the `initiativeId` they belong to. Every action here spends credits. get_seo ' +
+    'reads the last result for free.',
   method: 'POST',
   pathUnderBrand: '/seo',
   input: z
@@ -32,7 +36,12 @@ export const SEO_ACTION = {
 export const GEO_ACTION = {
   tool: 'geo_action',
   title: 'GEO action',
-  description: 'Run GEO citation audit or generate fix artifacts.',
+  description:
+    'Do something about whether AI assistants name this brand when someone asks: `audit` puts ' +
+    'questions to ChatGPT, Perplexity and Google\'s AI and records what came back, `fix` ' +
+    'writes the pages and blocks that would get it cited. Both spend credits. get_geo reads ' +
+    'the last result for free, and list_audit_citations shows the questions and answers ' +
+    'behind the number.',
   method: 'POST',
   pathUnderBrand: '/geo',
   input: z.object({ action: z.enum(['audit', 'fix']) }).strict(),
@@ -49,7 +58,10 @@ export const GEO_ACTION = {
 export const REFRESH_KEYWORDS = {
   tool: 'refresh_keywords',
   title: 'Refresh keywords',
-  description: 'Regenerate keyword research for the brand.',
+  description:
+    'Redo the keyword research from scratch: which search terms this brand should write for, ' +
+    'how hard each one is, and what to do about it. It spends credits and replaces the ' +
+    'current set. get_keywords reads what is there now, for free.',
   method: 'POST',
   pathUnderBrand: '/keywords',
   input: z.object({}).strict(),

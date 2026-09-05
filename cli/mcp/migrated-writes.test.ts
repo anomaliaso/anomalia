@@ -15,7 +15,6 @@ const MIGRATED_WRITES = [
   {
     name: 'propose_plan',
     title: 'Propose editorial plan',
-    description: 'Generate the first / a new editorial plan proposal.',
     properties: { slug: SLUG },
     required: ['slug'],
     annotations: NOT_DESTRUCTIVE,
@@ -23,7 +22,6 @@ const MIGRATED_WRITES = [
   {
     name: 'revise_plan',
     title: 'Revise editorial plan',
-    description: 'Request a revision of the proposed plan with feedback.',
     properties: { slug: SLUG, feedback: { type: 'string', minLength: 1 } },
     required: ['slug', 'feedback'],
     annotations: NOT_DESTRUCTIVE,
@@ -31,7 +29,6 @@ const MIGRATED_WRITES = [
   {
     name: 'approve_plan',
     title: 'Approve editorial plan',
-    description: 'Approve the proposed editorial plan.',
     properties: { slug: SLUG },
     required: ['slug'],
     annotations: DESTRUCTIVE,
@@ -39,7 +36,6 @@ const MIGRATED_WRITES = [
   {
     name: 'discard_plan',
     title: 'Discard editorial plan',
-    description: 'Discard the proposed editorial plan.',
     properties: { slug: SLUG },
     required: ['slug'],
     annotations: DESTRUCTIVE,
@@ -47,7 +43,6 @@ const MIGRATED_WRITES = [
   {
     name: 'refresh_keywords',
     title: 'Refresh keywords',
-    description: 'Regenerate keyword research for the brand.',
     properties: { slug: SLUG },
     required: ['slug'],
     annotations: NOT_DESTRUCTIVE,
@@ -55,8 +50,6 @@ const MIGRATED_WRITES = [
   {
     name: 'seo_action',
     title: 'SEO action',
-    description:
-      'Run SEO actions: run (tech audit), plan, more (append initiatives), asset, article. For asset/article pass initiativeId.',
     properties: {
       slug: SLUG,
       action: { type: 'string', enum: ['run', 'plan', 'more', 'asset', 'article'] },
@@ -69,7 +62,6 @@ const MIGRATED_WRITES = [
   {
     name: 'geo_action',
     title: 'GEO action',
-    description: 'Run GEO citation audit or generate fix artifacts.',
     properties: { slug: SLUG, action: { type: 'string', enum: ['audit', 'fix'] } },
     required: ['slug', 'action'],
     annotations: NOT_DESTRUCTIVE,
@@ -77,7 +69,6 @@ const MIGRATED_WRITES = [
   {
     name: 'update_brand_kit',
     title: 'Update brand kit',
-    description: 'Update brand kit fields (about, category, audience, style, language).',
     properties: {
       slug: SLUG,
       about: { type: 'string' },
@@ -92,8 +83,6 @@ const MIGRATED_WRITES = [
   {
     name: 'update_voice',
     title: 'Update voice',
-    description:
-      'Patch brand voice fields (mood, tone, register, avoid list, platform instructions).',
     properties: {
       slug: SLUG,
       mood: { type: 'string' },
@@ -115,7 +104,6 @@ const MIGRATED_WRITES = [
   {
     name: 'add_competitor',
     title: 'Add competitor',
-    description: 'Add a competitor to the studio.',
     properties: {
       slug: SLUG,
       name: { type: 'string', minLength: 1 },
@@ -128,7 +116,6 @@ const MIGRATED_WRITES = [
   {
     name: 'research_competitors',
     title: 'Research competitors',
-    description: 'Run AI competitor research and add findings to the studio.',
     properties: { slug: SLUG },
     required: ['slug'],
     annotations: OPEN_WORLD,
@@ -136,7 +123,6 @@ const MIGRATED_WRITES = [
   {
     name: 'sync_history',
     title: 'Sync social history',
-    description: 'Sync historical social posts into the studio.',
     properties: { slug: SLUG },
     required: ['slug'],
     annotations: OPEN_WORLD,
@@ -183,14 +169,18 @@ const find = (all: Tool[], name: string): Tool => {
 };
 
 describe('le scritture migrate sul registry', () => {
-  test('restano identiche dall’esterno: titolo, descrizione, campi, obbligatori', async () => {
+  // La descrizione NON si confronta qui, e la copia in questo file non esiste piu`: sarebbe la
+  // stessa prosa scritta in due posti, che diverge alla prima riscrittura. Il confronto vero e`
+  // automatico e sta piu` sotto — `ogni endpoint del registry esiste in tools/list come lo
+  // dichiara` legge la descrizione DAL registry, quindi non puo` invecchiare. Qui resta la forma:
+  // titolo, campi, obbligatori, annotazioni, cioe` cio` che si rompe in silenzio.
+  test('restano identiche dall’esterno: titolo, campi, obbligatori', async () => {
     const all = await tools();
 
     for (const expected of MIGRATED_WRITES) {
       const tool = find(all, expected.name);
 
       expect(tool.title, expected.name).toBe(expected.title);
-      expect(tool.description, expected.name).toBe(expected.description);
       expect(tool.inputSchema?.properties, expected.name).toEqual(expected.properties);
       // `required` è un insieme in JSON Schema: il registry lo emette con slug in coda, la
       // versione a mano lo emetteva in testa. Ordinati, o il test fallisce su una differenza

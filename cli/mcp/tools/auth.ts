@@ -15,7 +15,10 @@ export function registerAuthTools(server: McpServer) {
     {
       title: 'Login',
       description:
-        'Sign in to Anomalia via browser OAuth. Opens the login page, waits for consent, and stores a refreshable session in ~/.config/anomalia/session.json (same file as the CLI). No static API tokens.',
+        'Sign in, so every other Anomalia tool works. It opens the login page in a browser, waits ' +
+        'for the person to agree, and keeps the session in ~/.config/anomalia/session.json — the ' +
+        'same file the command line uses, so signing in once covers both. There are no API keys ' +
+        'to paste. Call whoami to see who is already signed in.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -69,7 +72,9 @@ export function registerAuthTools(server: McpServer) {
     'logout',
     {
       title: 'Logout',
-      description: 'Clear the local Anomalia OAuth session (CLI + MCP share the same session file).',
+      description:
+        'Sign out, so the next call has no account behind it. Use it to switch to a different ' +
+        'person. It only clears the local session file — it deletes nothing in Anomalia.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
@@ -83,7 +88,9 @@ export function registerAuthTools(server: McpServer) {
     'whoami',
     {
       title: 'Who am I',
-      description: 'Show the currently authenticated Anomalia user, if any.',
+      description:
+        'Who is signed in right now, if anyone. Check it before doing anything on a brand, so you ' +
+        'are not acting as the wrong person. Nothing signed in means login first.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
@@ -120,7 +127,11 @@ export function registerAuthTools(server: McpServer) {
     'list_brands',
     {
       title: 'List brands',
-      description: 'List all Anomalia brands for the signed-in user (slug, plan, pending posts, autopilot).',
+      description:
+        'Which brands this person can work on, and the slug each one is called by — every other ' +
+        'tool needs that slug. Each row says the plan it is on, how many posts wait for approval, ' +
+        'and whether its recurring jobs are running. Start here when you do not know the slug. ' +
+        'Reads only — no model, no credits.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },

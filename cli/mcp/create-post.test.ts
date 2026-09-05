@@ -156,7 +156,7 @@ describe('i tool di brand derivati dal registry', () => {
     expect(Object.keys(kit.inputSchema?.properties ?? {}).sort()).toEqual(['format', 'goal', 'platforms', 'slug']);
     expect((kit.inputSchema?.required ?? []).sort()).toEqual(['format', 'goal', 'platforms', 'slug']);
     expect(kit.annotations?.readOnlyHint).toBe(true);
-    expect(kit.description ?? '').toContain('no model call, no credits');
+    expect(kit.description ?? '').toMatch(/no model, no credits/i);
   });
 
   test('nessun tool è registrato due volte dopo la migrazione', async () => {
@@ -210,7 +210,7 @@ describe('i tool sul singolo post', () => {
     expect((render.inputSchema?.required ?? []).sort()).toEqual(['id', 'slug']);
     expect(render.annotations?.readOnlyHint).toBe(false);
     expect(render.annotations?.destructiveHint).toBe(false);
-    expect(render.description ?? '').toContain('Bills a render');
+    expect(render.description ?? '').toMatch(/spends credits/i);
   });
 
   test('un prefisso diventa l id intero prima che la rotta REST lo veda', async () => {
