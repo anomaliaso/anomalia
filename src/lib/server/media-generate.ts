@@ -20,7 +20,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertBrandMedia, storeBrandMediaBytes, probeImageDimensions } from '$lib/server/brand-media';
-import { signKnowledgePaths } from '$lib/server/media-archive';
+import { mediaUrl } from '$lib/media-url';
 import { markImage, DIGITAL_SOURCE_TYPE } from '$lib/server/content-credentials';
 import type { AspectRatio } from '$lib/server/content-preview';
 
@@ -30,7 +30,7 @@ export type GeneratedMedia = {
   mime: string | null;
   width: number | null;
   height: number | null;
-  signed_url: string | null;
+  url: string | null;
 };
 
 export type GenerateMediaOpts = {
@@ -136,15 +136,13 @@ async function depositImage(
   });
   if (!row) return null;
 
-  const signed = await signKnowledgePaths(supabase, [storagePath]).catch(() => new Map<string, string>());
-
   return {
     id: row.id,
     kind: row.kind,
     mime: decoded.mime,
     width,
     height,
-    signed_url: signed.get(storagePath) ?? null
+    url: mediaUrl(row.short_code)
   };
 }
 

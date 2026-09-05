@@ -4,6 +4,7 @@ import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/ser
 import { listBrandMedia } from '$lib/server/brand-media';
 import { importBrandMediaFromUrl } from '$lib/server/media-import';
 import { IMPORT_MEDIA_URL, LIST_MEDIA, statusForFailure } from '@anomalia/api-contracts';
+import { mediaUrl } from '$lib/media-url';
 
 export const GET: RequestHandler = async ({ request, params, url }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -28,7 +29,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
       title: m.title,
       description: m.description,
       tags: m.tags,
-      signed_url: m.signed_url,
+      url: mediaUrl(m.short_code),
       created_at: m.created_at
     }))
   });
