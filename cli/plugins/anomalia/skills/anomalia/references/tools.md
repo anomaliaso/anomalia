@@ -14,6 +14,28 @@ nothing brings it back.
 | `whoami` | (session file / brands imply identity) |
 | `list_brands` | `anomalia brands` |
 
+## Database
+
+| MCP | CLI |
+|-----|-----|
+| `query` | (MCP only) |
+
+`query` reads ANY table in the database directly, **as you**: the request runs with your own
+session, so Postgres RLS returns exactly the rows you would see in the app and nothing more. It
+is READ ONLY by construction — you name a table, columns and filters, it issues one PostgREST
+read, and a write has nowhere to go. No SQL string, no joins, no function calls. It calls no
+model and costs nothing.
+
+Optional `table` (omit it and you get the list of every table you can name), `columns` (omit them
+and you get real rows with every column — the keys of a row ARE the schema), `where` (filters
+ANDed together, each `column` / `op` / `value`, where `op` is one of `eq`, `neq`, `gt`, `gte`,
+`lt`, `lte`, `like`, `ilike`, `is`, `in`, `cs`, `cd`), `order` and `limit` (20 by default, 100 at
+most). One table per call: read two and match the ids yourself.
+
+Reach for it when the answer needs a count, a join you do by hand, or a table nothing else
+exposes — that is one call instead of three that approximate it. A refusal comes back as `200`
+with `error`, `message` and often `fix` inside, so you can read why and change move.
+
 ## Brand & posts
 
 | MCP | CLI |
@@ -140,6 +162,11 @@ because an environment override can still outrank it. `renders` is how many rend
 which can exceed the images you got back: a render that succeeds and is then discarded downstream
 is paid for all the same, so trust `renders` over your own count when reconciling spend.
 
+**One prompt, one render, no safety net.** Nothing inspects the image after the model draws it:
+there is no quality control, no critic that rejects a bad frame, no retry you did not ask for.
+What comes back is what was billed, however crooked. Judging it is YOUR job — open the
+`signed_url`, look, and if it is wrong send it to `refine_image` rather than prompting again.
+
 `refine_image` changes an image that is already in the library and files the result as a **new**
 asset — the original is never overwritten, so a refinement cannot destroy what it started from.
 Required: `slug`, `media_id` (from `list_media`, and it must belong to this brand — anything else
@@ -200,7 +227,8 @@ It answers with `ok`, `errors`, `warnings`, `scores` and `versions`:
   length, readability, hashtags, emoji. Fix the low value with the highest weight first.
 - **versions** pins the ruleset and the scorer: two verdicts compare only when they match.
 
-It never looks at pixels — judging an image or a video is a separate, explicitly paid action.
+It reads the copy and nothing else. **No tool here judges an image or a video** — Anomalia stopped
+scoring them, and there is no paid action that will. Looking at the render is on you.
 
 ## Client links
 
@@ -579,6 +607,7 @@ writes it.
 | `get_article` / `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
+| `ads_remix` | (MCP only) |
 | `get_market_field` | (MCP only) |
 | `diagnose_radar` | (MCP only) |
 | `list_ideas` | (MCP only) |
@@ -616,6 +645,15 @@ given and received plus the open give/receive opportunities, and `unlocked` tell
 the network is usable — it needs Starter or above **and** the brand's opt-in, so `planAllowed`
 and `enabled` say which of the two is missing. All three are reads: no model, no credits, no
 writes.
+
+`ads_remix` is the opposite: it **spends credits**. It harvests the competitor and trending ads
+already collected for the brand, looks at them with vision, and returns ranked remix briefs in the
+brand's voice — `rank`, `strategy`, `keep`, `change`, `hook`, `headline`, `body`, `cta`,
+`productName`, `visualPrompt`. It takes `slug` and nothing else, and it **replaces** the briefs
+that were there, so run it when you mean to redo them. Refusals: `no_competitor_ads` (400, nothing
+harvested yet — there is nothing to remix), `no_remix_briefs` (400, the pass produced none),
+`ads_not_on_plan` (403) and `credits_exhausted` (402). Launching an ad is still `ads_action`; this
+only writes the briefs.
 
 `list_web_audits` is the index of every audit, newest first — `id`, `at`, `tech_score`,
 `share_of_voice`, `citability_score`, `binding_constraint`, and how many citations and findings
