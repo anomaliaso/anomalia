@@ -53,10 +53,8 @@ export async function groundedText(
   //
   //     exa ~$0.005  ·  tavily ~$0.008
   //
-  // DeepSeek stava in mezzo ai due, ed era il più economico. È uscito perché qui non fa il motore
-  // di ricerca: fa GENERARE la risposta a un modello DeepSeek, cioè è un fornitore di testo, e il
-  // testo passa tutto dal gateway. Resta dov'è misurato e non genera niente per noi: `geo.ts` lo
-  // interroga come motore di risposta di cui contiamo le citazioni (`citation-probe.ts`).
+  // Qui NON si misura chi ha risposto, quindi la catena può scegliere per prezzo. Dove il nome del
+  // motore è il punto — l'audit GEO — non si passa di qui: `geo.ts` ha un ramo per motore.
   const question = systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt;
 
   const webProviders: Array<[string, () => Promise<{ text: string; citations: Citation[] }>]> = [];
@@ -75,9 +73,11 @@ export async function groundedText(
 /**
  * Risposta web-grounded da un GEMINI sul centralino (plugin OpenRouter `web` + `engine: native`).
  *
- * Serve ai chiamanti che vogliono UN motore nominato, non il più economico: l'audit GEO misura
- * "il brand è citato nelle risposte di Gemini", quindi passarlo da groundedText etichettava una
- * risposta DeepSeek come Gemini. Bing usa llmText SENZA questo plugin: le fonti sono già gli URL Bing.
+ * Serve ai chiamanti che vogliono UN motore nominato, non il più economico: passare per
+ * groundedText etichetterebbe col nome chiesto la risposta di chiunque abbia risposto per primo.
+ *
+ * SENZA CHIAMANTI da quando l'audit GEO ha una tabella sua (`ANSWER_ENGINES` in `geo.ts`), che
+ * fissa un id di modello per motore invece di ereditare il picker della chat.
  */
 export async function groundedGemini(
   _ai: GoogleGenAI,
@@ -89,7 +89,7 @@ export async function groundedGemini(
   return llmText({
     prompt,
     system: systemInstruction,
-    webSearch: true,
+    webSearch: 'native',
     model: llmGeminiSearchModel(),
     label: 'grounded'
   });

@@ -71,10 +71,12 @@ describe('le superfici sul centralino (non lo SDK Google)', () => {
     const llm = readFileSync(join(HERE, 'llm.ts'), 'utf8');
     expect(chat).not.toContain('googleSearch');
     expect(chat).not.toContain('webSearch');
-    expect(research).toContain('webSearch: true');
+    expect(research).toContain("webSearch: 'native'");
     expect(research).toContain('llmGeminiSearchModel');
     expect(research).not.toContain('tools: [{ googleSearch');
-    expect(geo).toContain('groundedGemini');
+    // La GEO non eredita più il modello dal picker: ogni motore ha il suo id in ANSWER_ENGINES.
+    expect(geo).toContain('ANSWER_ENGINES');
+    expect(geo).toContain("search: 'native'");
     expect(llm).toContain("engine: 'native'");
   });
 });

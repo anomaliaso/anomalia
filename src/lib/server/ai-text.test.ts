@@ -75,11 +75,7 @@ const M = vi.hoisted(() => ({
   llmText: vi.fn(),
   llmImagesFromInline: vi.fn(() => undefined),
   structuredKie: vi.fn(),
-  textKie: vi.fn(),
-  // Nessuno importa più deepseek.ts dal router. Il mock sta qui perché se qualcuno lo
-  // re-importasse, questi contatori lo direbbero invece di lasciarlo passare in silenzio.
-  deepseekAlive: vi.fn(() => true),
-  noteDeepseekFailure: vi.fn()
+  textKie: vi.fn()
 }));
 const env = M.env;
 vi.mock('$env/dynamic/private', () => ({ env: M.env }));
@@ -90,11 +86,6 @@ vi.mock('$lib/server/llm', async () => ({
   llmImagesFromInline: M.llmImagesFromInline
 }));
 vi.mock('$lib/server/kie', () => ({ structuredKie: M.structuredKie, textKie: M.textKie }));
-vi.mock('$lib/server/deepseek', () => ({
-  DEEPSEEK_MODEL: 'deepseek-v4-flash',
-  deepseekAlive: M.deepseekAlive,
-  noteDeepseekFailure: M.noteDeepseekFailure
-}));
 vi.mock('$lib/server/ai-log', () => ({
   logAiCall: vi.fn(),
   requireBrandContext: () => 'brand-1'
@@ -151,12 +142,6 @@ describe('routing del lavoro strutturato', () => {
     expect(src).not.toContain('api.xiaomimimo.com');
     expect(src).not.toContain('structuredXiaomi');
     expect(src).not.toContain('textXiaomi');
-  });
-
-  it('non tocca DeepSeek: né la chiave, né una chiamata', async () => {
-    await callBackgroundWork({ DEEPSEEK_API_KEY: 'chiave-viva' });
-    expect(M.deepseekAlive).not.toHaveBeenCalled();
-    expect(M.llmStructured).toHaveBeenCalledTimes(1);
   });
 });
 

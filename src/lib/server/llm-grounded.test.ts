@@ -54,7 +54,7 @@ describe('grounding sul centralino', () => {
   it('una risposta con annotations produce citazioni, non un array vuoto', async () => {
     vi.stubGlobal('fetch', reply(ANNOTATED));
     const { llmText } = await import('./llm');
-    const res = await llmText({ prompt: 'chi ha vinto?', webSearch: true });
+    const res = await llmText({ prompt: 'chi ha vinto?', webSearch: 'native' });
     expect(res.text).toContain('19 luglio');
     expect(res.citations).toEqual([
       { uri: 'https://example.org/finale', title: 'La finale' },
@@ -66,7 +66,7 @@ describe('grounding sul centralino', () => {
     const f = reply(ANNOTATED);
     vi.stubGlobal('fetch', f);
     const { llmText } = await import('./llm');
-    await llmText({ prompt: 'x', webSearch: true });
+    await llmText({ prompt: 'x', webSearch: 'native' });
     const body = sentBody(f);
     expect(body.plugins).toEqual([{ id: 'web', engine: 'native' }]);
     // Corpo Chat Completions, non Responses: `messages`, non `input`.
@@ -77,14 +77,14 @@ describe('grounding sul centralino', () => {
   it('il costo viene da usage.cost del gateway', async () => {
     vi.stubGlobal('fetch', reply(ANNOTATED));
     const { llmText } = await import('./llm');
-    await llmText({ prompt: 'x', webSearch: true });
+    await llmText({ prompt: 'x', webSearch: 'native' });
     expect(M.logged[0]).toMatchObject({ provider: 'llm', ok: true, flatCostUsd: 0.03 });
   });
 
   it('una risposta senza annotations non inventa citazioni, e lo dice nei log', async () => {
     vi.stubGlobal('fetch', reply({ choices: [{ message: { content: 'niente fonti' } }], usage: {} }));
     const { llmText } = await import('./llm');
-    const res = await llmText({ prompt: 'x', webSearch: true });
+    const res = await llmText({ prompt: 'x', webSearch: 'native' });
     expect(res.citations).toEqual([]);
     expect(res.text).toBe('niente fonti');
   });

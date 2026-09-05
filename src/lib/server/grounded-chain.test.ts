@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Ordine della catena di grounding in groundedText(): Exa, poi Tavily. Né Google né DeepSeek sono
-// nella catena. Google è uscito per il prezzo (~$0.07 a risposta contro $0.005-0.008) e qui nessuno
-// misura CHI ha risposto — quando conta il motore si chiama groundedGemini. DeepSeek è uscito per
-// un motivo diverso e più importante: lì la risposta la GENERA un modello DeepSeek, e ogni parola
-// che il prodotto scrive passa dal gateway. Resta come sonda di citazioni in geo.ts, dove è il
-// soggetto della misura e non il suo autore. Ogni provider è mockato: si controlla
-// l'instradamento, non i provider.
+// Ordine della catena di grounding in groundedText(): Exa, poi Tavily. Google non è nella catena:
+// è uscito per il prezzo (~$0.07 a risposta contro $0.005-0.008), e qui nessuno misura CHI ha
+// risposto — quando conta il motore, la misura è l'audit GEO e ogni motore ha il suo ramo.
+// Ogni provider è mockato: si controlla l'instradamento, non i provider.
 
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
@@ -29,13 +26,6 @@ vi.mock('$lib/server/tavily', () => ({
   tavilyGroundedAnswer: async () => {
     calls.push('tavily');
     return answers.tavily;
-  }
-}));
-vi.mock('$lib/server/citation-probe', () => ({
-  deepseekSearchConfigured: () => true,
-  deepseekGroundedAnswer: async () => {
-    calls.push('deepseek');
-    return answers.deepseek;
   }
 }));
 vi.mock('$lib/server/ai-log', () => ({
@@ -79,12 +69,6 @@ describe('groundedText provider order', () => {
     const res = await groundedText(googleSpy(), 'question');
     expect(res.text).toBe('tavily answer');
     expect(calls).toEqual(['exa', 'tavily']);
-  });
-
-  it('non chiama DeepSeek: qui si genera, e generare passa dal gateway', async () => {
-    answers.tavily = { text: 'tavily answer', citations: [] };
-    await groundedText(googleSpy(), 'question');
-    expect(calls).not.toContain('deepseek');
   });
 
   it('returns empty — never a Google call — when every provider is silent', async () => {
