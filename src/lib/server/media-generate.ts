@@ -20,18 +20,27 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertBrandMedia, storeBrandMediaBytes, probeImageDimensions } from '$lib/server/brand-media';
+import { signKnowledgePaths } from '$lib/server/media-archive';
 import { mediaUrl } from '$lib/media-url';
 import { safeProviderReason } from '$lib/server/provider-reason';
 import { markImage, DIGITAL_SOURCE_TYPE } from '$lib/server/content-credentials';
 import type { AspectRatio } from '$lib/server/content-preview';
 
 export type GeneratedMedia = {
-  id: string;
+  /**
+   * `null` quando il disegno non è entrato in nessuna libreria: senza brand non c'è una riga in
+   * `brand_media` da nominare — e non è una svista. Le policy di quella tabella dicono
+   * `brand_id in (select auth_brand_ids())`, e `NULL in (…)` vale NULL, non true: una riga senza
+   * brand sarebbe invisibile a tutti, non visibile a tutti.
+   */
+  id: string | null;
   kind: string;
   mime: string | null;
   width: number | null;
   height: number | null;
   url: string | null;
+  /** Dov'è il file. Presente solo sul disegno senza brand, la cui `url` è una firma che scade. */
+  storage_path?: string;
 };
 
 export type GenerateMediaOpts = {
@@ -138,7 +147,8 @@ type StoredDrawing = {
 
 /**
  * I byte nel bucket privato, e nient'altro: né una riga, né un id. Il primo segmento del percorso
- * è ciò che le policy dello storage guardano, quindi è sempre lo user.
+ * è ciò che le policy dello storage guardano, quindi è sempre lo user — con o senza un brand
+ * sotto, il file resta suo.
  */
 async function storeDrawing(
   supabase: SupabaseClient,
@@ -169,7 +179,7 @@ async function storeDrawing(
  */
 async function depositImage(
   supabase: SupabaseClient,
-  opts: Pick<GenerateMediaOpts, 'brandId' | 'userId' | 'prompt' | 'title'>,
+  opts: { brandId: string; userId: string; prompt: string; title?: string },
   dataUrl: string
 ): Promise<GeneratedMedia | null> {
   const drawn = await storeDrawing(supabase, `${opts.userId}/${opts.brandId}/media`, dataUrl);
@@ -200,13 +210,41 @@ async function depositImage(
 }
 
 /**
+ * Il disegno chiesto senza un brand si CONSEGNA, non si archivia. Nessuna riga in `brand_media`:
+ * le sue policy dicono `brand_id in (select auth_brand_ids())`, e `NULL in (…)` vale NULL, non
+ * true — una riga senza brand sarebbe invisibile a tutti e nemmeno inseribile. Quindi torna quello
+ * che c'è davvero: il percorso, e una firma che scade.
+ */
+async function handOverImage(
+  supabase: SupabaseClient,
+  opts: { userId: string },
+  dataUrl: string
+): Promise<GeneratedMedia | null> {
+  const drawn = await storeDrawing(supabase, `${opts.userId}/media`, dataUrl);
+  if (!drawn) return null;
+
+  const signed = await signKnowledgePaths(supabase, [drawn.storagePath]);
+
+  return {
+    id: null,
+    kind: 'image',
+    mime: drawn.mime,
+    width: drawn.width,
+    height: drawn.height,
+    url: signed.get(drawn.storagePath) ?? null,
+    storage_path: drawn.storagePath
+  };
+}
+
+/**
  * UNA SOLA funzione per disegnare e per modificare, perché il motore è lo stesso: `baseImage` è
  * l'unico segnale che `buildImageRequest` guarda per distinguere una modifica da un disegno nuovo.
  * I tool esposti restano due — generare e rifinire sono due operazioni diverse per chi chiama, e
  * vogliono argomenti diversi — ma qui sotto sarebbero due copie della stessa cosa.
  */
 export type ImageJob = {
-  brandId: string;
+  /** `null` = disegno estemporaneo: nessun brand da leggere, nessuna libreria in cui archiviare. */
+  brandId: string | null;
   userId: string;
   /** Cosa mostrare, oppure — con `baseMediaId` — cosa cambiare. */
   prompt: string;
@@ -220,9 +258,33 @@ export type ImageJob = {
 };
 
 export type ImageJobResult =
-  | { ok: true; media: GeneratedMedia[]; model: string | null; renders: number }
+  | {
+      ok: true;
+      media: GeneratedMedia[];
+      model: string | null;
+      renders: number;
+      /**
+       * Quanto è stato FATTURATO per questi render, letto dalle righe di `ai_calls` mentre lo
+       * scope è ancora aperto. `null` quando nessuna fattura è arrivata — mai `0`, che sarebbe di
+       * nuovo un numero comodo al posto di un fatto.
+       */
+      costUsd: number | null;
+    }
   | { ok: false; error: 'render_failed' | 'store_failed' | 'source_not_found' }
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
+
+async function brandContentPrefs(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<Record<string, unknown>> {
+  const { data } = await supabase
+    .from('brands')
+    .select('content_prefs')
+    .eq('id', brandId)
+    .maybeSingle();
+
+  return (data?.content_prefs ?? {}) as Record<string, unknown>;
+}
 
 async function runImageJob(
   supabase: SupabaseClient,
@@ -249,17 +311,15 @@ async function runImageJob(
     return { ok: false, error: 'model_not_for_slot', allowed: slotChoices(slot).map((c) => c.id) };
   }
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('content_prefs')
-    .eq('id', job.brandId)
-    .maybeSingle();
-  const prefs = (brand?.content_prefs ?? {}) as Record<string, unknown>;
+  // Senza brand non c'è niente da leggere: valgono i default del prodotto. Andarci lo stesso
+  // sarebbe l'ancora rimasta attaccata — un `.eq('id', null)` che non trova nulla e intanto
+  // racconta che questo percorso un brand ce l'ha ancora.
+  const prefs = job.brandId ? await brandContentPrefs(supabase, job.brandId) : {};
 
   // `loadLibraryMediaParts` filtra per brand_id: l'id di un altro inquilino non risolve nulla, e
   // il confine resta nella query invece che in un controllo che qualcuno dimenticherà.
   let baseImage: { inlineData: { mimeType: string; data: string } } | undefined;
-  if (job.baseMediaId) {
+  if (job.baseMediaId && job.brandId) {
     const source = await resolveLibraryId(supabase, job.brandId, job.baseMediaId);
     if (!source) return { ok: false, error: 'source_not_found' };
 
@@ -289,31 +349,50 @@ async function runImageJob(
     const dataUrl = await renderPostImage(null as never, job.prompt, opts).catch(() => undefined);
     if (!dataUrl) break;
 
-    const deposited = await depositImage(supabase, job, dataUrl);
-    if (!deposited) return { ok: false, error: 'store_failed' };
+    const filed = job.brandId
+      ? await depositImage(supabase, { ...job, brandId: job.brandId }, dataUrl)
+      : await handOverImage(supabase, job, dataUrl);
+    if (!filed) return { ok: false, error: 'store_failed' };
 
-    media.push(deposited);
+    media.push(filed);
   }
 
   // Nessuna alternativa prodotta è un fallimento, non un successo vuoto: chi legge `ok` deve poter
   // credere che qualcosa esista.
   if (!media.length) return { ok: false, error: 'render_failed' };
 
-  return { ok: true, media, model: chosen, renders };
+  // Si legge QUI, dentro lo scope: la fattura vive lì e fuori non esiste più.
+  const { billedUsdInScope } = await import('$lib/server/ai-log');
+
+  return { ok: true, media, model: chosen, renders, costUsd: billedUsdInScope() ?? null };
 }
 
 export async function generateBrandImages(
   supabase: SupabaseClient,
-  job: Omit<ImageJob, 'baseMediaId'>
+  job: Omit<ImageJob, 'baseMediaId'> & { brandId: string }
 ): Promise<ImageJobResult> {
   const { withBrandContext } = await import('$lib/server/ai-log');
 
   return withBrandContext(job.brandId, () => runImageJob(supabase, job));
 }
 
+/**
+ * Il disegno estemporaneo: nessuno slug, nessun brand, niente da scegliere. Paga
+ * l'organizzazione, che lo scope nomina — senza, la riga in `ai_calls` non atterrerebbe da nessuna
+ * parte e il cancello dei crediti sopra passerebbe per sempre.
+ */
+export async function generateImagesWithoutBrand(
+  supabase: SupabaseClient,
+  job: Omit<ImageJob, 'baseMediaId' | 'brandId' | 'title'> & { orgId: string }
+): Promise<ImageJobResult> {
+  const { withOrgContext } = await import('$lib/server/ai-log');
+
+  return withOrgContext(job.orgId, () => runImageJob(supabase, { ...job, brandId: null }));
+}
+
 export async function refineBrandImage(
   supabase: SupabaseClient,
-  job: ImageJob & { baseMediaId: string }
+  job: ImageJob & { brandId: string; baseMediaId: string }
 ): Promise<ImageJobResult> {
   const { withBrandContext } = await import('$lib/server/ai-log');
 

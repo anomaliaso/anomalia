@@ -40,5 +40,14 @@ export const POST: RequestHandler = async ({ request, params }) => {
     );
   }
 
-  return json({ ok: true, media: result.media, model: result.model, renders: result.renders });
+  // `organization` resta null di proposito: qui a pagare è il brand, che il chiamante ha nominato
+  // lui. Il campo serve sulla strada senza brand, dove l'organizzazione l'abbiamo scelta noi.
+  return json({
+    ok: true,
+    media: result.media,
+    model: result.model,
+    renders: result.renders,
+    organization: null,
+    cost_usd: result.costUsd
+  });
 };
