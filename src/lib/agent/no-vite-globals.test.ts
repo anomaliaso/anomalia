@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,19 +32,17 @@ function tsFiles(dir: string): string[] {
 }
 
 describe('niente globali di Vite nel codice che il worker impacchetta', () => {
+	const watched = WATCHED.flatMap((base) => tsFiles(join(ROOT, base)));
+
+	it('ha trovato i file da controllare (il test non passa vuoto per errore)', () => {
+		expect(watched.length).toBeGreaterThan(100);
+	});
+
 	it('nessun `import.meta.env` sotto lib/agent e lib/server', () => {
-		const guilty: string[] = [];
-		for (const base of WATCHED) {
-			const dir = join(ROOT, base);
-			try {
-				if (!statSync(dir).isDirectory()) continue;
-			} catch {
-				continue;
-			}
-			for (const file of tsFiles(dir)) {
-				if (/import\.meta\.env/.test(readFileSync(file, 'utf8'))) guilty.push(file.slice(ROOT.length));
-			}
-		}
+		const guilty = watched
+			.filter((file) => /import\.meta\.env/.test(readFileSync(file, 'utf8')))
+			.map((file) => file.slice(ROOT.length));
+
 		expect(guilty, 'usa process.env: il worker gira fuori da Vite').toEqual([]);
 	});
 });

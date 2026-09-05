@@ -22,8 +22,8 @@
  *
  * Il movimento. Un fotogramma fermo non mostra una coda morta, un'interpolazione lineare, una
  * transizione che legge come un taglio secco, il ritmo. Quelle le vede l'aritmetica sul sorgente
- * — `findLinearMotion`, `findStaticTails`, `detectWowMechanisms` — che gira sullo stesso TSX e
- * quindi può girare nello stesso momento. Le due metà viaggiano insieme nella stessa risposta:
+ * — `findLinearMotion` e `findStaticTails`, gli unici due che questo file importa — che gira sullo
+ * stesso TSX e quindi può girare nello stesso momento. Le due metà viaggiano insieme nella stessa risposta:
  * le immagini per la composizione, i numeri per il movimento. Chi scrive che lo storyboard copre
  * anche il movimento si sta raccontando una storia.
  *

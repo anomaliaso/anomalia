@@ -1,7 +1,7 @@
 /**
  * Ciò che si può sostituire senza toccare il resto: il runtime non sa quale provider parla,
- * l'executor non sa dove gira la shell. Ogni implementazione ha un `*-emulator.ts` accanto, e i
- * test girano su quello.
+ * l'executor non sa dove gira la shell. Gli emulatori su cui girano i test stanno in
+ * `packages/agent-adapters/src/*-emulator.ts`, non accanto a questo file.
  *
  * ponytail: solo le interfacce che hanno un'implementazione oggi — una senza è peso, non
  * architettura.

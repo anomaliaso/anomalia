@@ -490,10 +490,9 @@ export const HANDOFFS: Record<AgentId, AgentId[]> = {
 /**
  * Il paragrafo «squadra + confini» per `agentId`.
  *
- * `canMessage: false` per le superfici che NON montano `message_agent` — i consulti one-shot, non
- * più il kit, che da `plugins/team.ts` ce l'ha: la consapevolezza della squadra resta, la promessa
- * di scrivergli no. Un agente che nomina un tool che non ha è il difetto che questo repo ha già
- * spedito una volta.
+ * `canMessage: false` per le superfici che NON montano `message_agent` — i consulti one-shot: la
+ * consapevolezza della squadra resta, la promessa di scrivergli no. Un agente che nomina un tool
+ * che non ha è il difetto che questo repo ha già spedito una volta.
  */
 export function teamBlock(agentId: AgentId, opts: { canMessage?: boolean } = {}): string {
   const roster = AGENT_IDS.filter((id) => id !== agentId)

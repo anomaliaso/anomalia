@@ -57,8 +57,8 @@ export function isProdHost(hostname: string | null | undefined): boolean {
   return !!h && !NON_PROD_HOST.test(h);
 }
 
-/** Guard 1 — l'ambiente. Un solo posto a cui chiedere "qui si traccia?": lo usano anche il root
- * +layout.server.ts e meta-capi.ts, così client e server rispondono uguale. */
+/** Guard 1 — l'ambiente. Un solo posto a cui chiedere "qui si traccia?": lo usa anche il root
+ * +layout.server.ts, così client e server rispondono uguale. */
 export function trackingAllowed(hostname: string | null | undefined): boolean {
   return !dev && isProdHost(hostname);
 }
@@ -144,9 +144,9 @@ export function loadMetaPixel() {
 }
 
 /**
- * Fire a Meta Pixel conversion event (e.g. CompleteRegistration) from the browser. Works even when
- * the server Conversions API token is down, so it's the resilient half of the signal. Pass the same
- * `eventID` as the matching server-side metaCapiEvent so Meta dedups the two into one conversion.
+ * Fire a Meta Pixel conversion event (e.g. CompleteRegistration) from the browser. There is no
+ * server-side Conversions API half in this repo, so `eventID` buys nothing today — it is there for
+ * the day one exists and the two need deduping into one conversion.
  * No-ops on the server or before the pixel has loaded.
  */
 export function metaPixelTrack(event: string, params?: Record<string, unknown>, eventID?: string) {

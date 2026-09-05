@@ -60,11 +60,10 @@ export const MAX_VIDEO_RENDERS_PER_TURN = 2;
 /**
  * Render finiti per VIDEO per GIORNO — il tetto vero, contato dal registro e non da una closure.
  *
- * "Per turno" era una bugia strutturale: ogni slice di continuazione e ogni turno di patch della QC
- * (`qc.ts` apre turni interi) azzerava il contatore, quindi una sessione normale rendeva 3+ MP4
- * dello stesso video. E il tetto non può essere 2/giorno, perché la QC ha BISOGNO di un re-render
- * dopo una patch (confronta anteprima e sorgente). Quattro copre bozza + due giri di QC + una
- * correzione chiesta dall'utente; oltre, è un loop.
+ * "Per turno" era una bugia strutturale: ogni slice di continuazione azzerava il contatore, quindi
+ * una sessione normale rendeva 3+ MP4 dello stesso video. E il tetto non può essere 2/giorno,
+ * perché un re-render dopo una patch è normale — si confronta l'anteprima col sorgente. Quattro
+ * copre bozza + due giri di correzione + una chiesta dall'utente; oltre, è un loop.
  */
 export const MAX_VIDEO_RENDERS_PER_DAY = 4;
 
