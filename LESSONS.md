@@ -123,13 +123,20 @@ della review, così non esiste taglio che possa separarli. È la regola di Kent 
 già ha — riordino separato dal cambio di comportamento — applicata al ramo invece che al singolo
 commit. Il controllo, prima di chiedere la review:
 ```bash
-git log --oneline <base>..HEAD              # ogni prefisso è uno stato che può finire in produzione
-git show --format= --name-only <commit>     # quali commit toccano il file che porta il rischio
+git log --oneline <base>..HEAD                    # ogni prefisso è uno stato che può finire in produzione
+git log --oneline <base>..HEAD -- <file-rischioso>   # quanti commit lo toccano: uno solo = sicuro per costruzione
 ```
 **La domanda giusta è sulla STRUTTURA, non sul contenuto**: *quali commit toccano il file
-rischioso*, non *quale stringa ci compare*. Se quel file è toccato da un commit solo, la trappola è
+rischioso*, non *quale stringa ci compare*. Il secondo comando risponde in una riga, senza loop e
+senza pipe da cui possa uscire qualcosa di diverso a ogni giro. Se quel file è toccato da un commit solo, la trappola è
 impossibile per costruzione — ogni prefisso lo contiene — e non serve leggere una riga. Se è
 toccato da due e il secondo ripara il primo, è armata comunque, qualunque cosa dica il grep.
+
+**E la stessa cura vale per come si SCRIVE il risultato.** «Solo il primo di quattro commit tocca
+quel file» invecchia al quinto commit e obbliga a riverificare; «un solo commit tocca quel file»
+resta vero finché nessuno lo tocca una seconda volta — che è esattamente la condizione di pericolo.
+Un'affermazione che nomina un conteggio va rifatta a ogni push, una che nomina la proprietà si
+difende da sola.
 
 **E il controllo si sceglie perché non oscilla, non perché è breve.** Verificando proprio questa
 cosa, `grep` su un `git cat-file` in un `for` ha dato a due persone tre risposte diverse alla stessa
@@ -779,7 +786,7 @@ dove non lo è: resta non fatale, smette di essere muto.
 vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
 risolto.
 
-## Il vocabolario di una colonna non si decide senza sapere CHI la legge
+## Il vocabolario di una colonna si deriva dal CODICE, non dalle righe che ci sono
 
 **Segnale.** Una correzione ovvia: un valore fuori dall'enum, sostituito con quello «giusto»
 guardando la costante. Nessun test rosso, il vincolo passa, la PR sembra più pulita di prima.
@@ -799,6 +806,25 @@ perché quello non compare cercando il valore intero. Se un lettore ne ricava un
 conformità, di pagamento o di pubblicazione, il valore non è nomenclatura: è un contratto, e la
 riga accanto va letta prima di toccarlo. Il default in caso di dubbio lo dice già il commento
 accanto a quella riga: sovra-dichiarare non è un rischio, sotto-dichiarare sì.
+
+**E l'altra metà della stessa regola: nemmeno chi la SCRIVE.** Lo stesso giorno, nella stessa PR,
+il vincolo `posts.source in ('plan','manual','radar','guest_preview')` è stato costruito contando
+le righe di produzione — zero violazioni, elenco confermato. Ma due percorsi vivi scrivono
+`cross_post` (il clone cross-post) e `founder` (la consegna video dall'admin): sono rari e non
+avevano ancora prodotto righe. Il vincolo sarebbe morto con un 23514 alla prima esecuzione di uno
+dei due, cioè avrebbe rotto quello che il codice scrive oggi.
+
+**Un vocabolario convalidato contro i dati esistenti non è convalidato contro il codice.** Le righe
+dicono soltanto se la migration passa adesso; non dicono se il vincolo è giusto. L'elenco si deriva
+dai punti di SCRITTURA — e qui lo strumento c'è già: la sezione C di `scripts/schema-drift-check.mjs`
+confronta ogni literal del codice con le liste `CHECK` dei file di migration e stampa file e riga.
+
+**E conta QUANDO la lanci: prima di decidere, non prima di aprire la PR.** Non è una sfumatura.
+Lanciata prima di scegliere il vocabolario, ti dice qual è la lista ammessa: è un input. Lanciata
+quando la lista l'hai già scelta, ti dice solo se per caso avevi ragione — e a quel punto la leggi
+da autore, cioè cercando conferma. Qui è stata lanciata dopo il merge, ed è esattamente per questo
+che il difetto è passato: lo strumento aveva la risposta dal primo minuto, io sono arrivato con una
+tesi da difendere. Il momento in cui guardi decide se stai leggendo o se ti stai dando ragione.
 
 **Il corollario sul metodo.** A trovarlo non è stato un vincolo né la suite: è stato un altro
 agente che leggeva la riga accanto per un lavoro diverso. E non e' «due persone attente»: ognuno
