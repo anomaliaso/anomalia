@@ -424,6 +424,11 @@ export type MediaJob = {
 
 const JOBS_PAGE = 20;
 
+export const CLIP_NOT_IN_LIBRARY = 'not_in_library';
+const NOTHING_CLAIMED_IT =
+  'the clip rendered and is stored, but it never reached the library, so there is no media_id to ' +
+  'use — generating it again would pay for a second copy';
+
 /**
  * I lavori di questo brand, e SOLO di questo brand: l'id arriva da `loadBrandForUser`, mai dal
  * chiamante, quindi un job_id indovinato di un altro brand non trova niente.
@@ -457,5 +462,10 @@ export async function listMediaJobs(
     ((assets ?? []) as Array<{ id: string; source_ref: string }>).map((a) => [a.source_ref, a.id])
   );
 
-  return rows.map((r) => ({ ...r, media_id: byJob.get(r.id) ?? null }));
+  return rows.map((r) => {
+    const mediaId = byJob.get(r.id) ?? null;
+    if (r.status !== 'done' || mediaId) return { ...r, media_id: mediaId };
+
+    return { ...r, media_id: null, status: CLIP_NOT_IN_LIBRARY, error: NOTHING_CLAIMED_IT };
+  });
 }
