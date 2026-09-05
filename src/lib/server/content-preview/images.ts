@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
-import { getBrandContext } from '$lib/server/ai-log';
+import { getBrandContext, getOrgContext } from '$lib/server/ai-log';
 import { NANO_BANANA_2_LITE } from '$lib/server/gemini';
 import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
@@ -235,11 +235,16 @@ export async function renderPostImage(
 ): Promise<string | undefined> {
   // Le immagini sono ~66% della spesa AI, quindi la quota si applica QUI, al chokepoint: un loop
   // in un flusso qualunque si ferma alla quota invece di bruciare per giorni. L'import dinamico
-  // evita il ciclo di moduli crediti↔scheduler↔qui. Senza brand context non c'è gate.
+  // evita il ciclo di moduli crediti↔scheduler↔qui.
+  //
+  // Chi paga ha DUE forme, e leggerne una sola lasciava il punto più caro del prodotto senza
+  // controllo appena il brand smetteva di essere obbligatorio. Nessuna delle due — un flusso
+  // pre-brand come l'analisi del sito in onboarding — resta senza cancello com'era.
   const gateBrand = getBrandContext();
-  if (gateBrand) {
-    const { gateCredits } = await import('$lib/server/credits');
-    await gateCredits(gateBrand);
+  const gateOrg = getOrgContext();
+  if (gateBrand || gateOrg) {
+    const { gateCredits, gateOrgCredits } = await import('$lib/server/credits');
+    await (gateBrand ? gateCredits(gateBrand) : gateOrgCredits(gateOrg as string));
   }
   const req = buildImageRequest(imagePrompt, opts);
   const imageModel = req.model;
