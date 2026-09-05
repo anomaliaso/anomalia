@@ -13,6 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
 	finishVideoRender,
+	videoTaskProvider,
 	type RenderVideoOpts,
 	type SubmittedVideoRender,
 	type VideoPersistOpts
@@ -254,12 +255,7 @@ async function chargeMonthlyVideo(admin: SupabaseClient, row: VideoRenderRow): P
 	}
 }
 
-/**
- * Null vuol dire che il clip è atterrato; una stringa è il motivo per cui non lo è, e finisce sulla
- * colonna `error` della riga — quella che `check_media_job` mostra verbatim a un agente esterno. Un
- * boolean la sostituiva con una frase su un post che un lavoro di libreria non ha mai avuto.
- */
-async function applyToPost(
+async function landClip(
 	admin: SupabaseClient,
 	row: VideoRenderRow,
 	url: string,
@@ -394,7 +390,7 @@ export async function reconcileVideoRenders(
 		if (age > VIDEO_RENDER_MAX_AGE_MS || exhausted) {
 			const why = exhausted
 				? `gave up after ${raw.attempts} attempts (${raw.error ?? 'repeated failures'})`
-				: 'kie never resolved this task';
+				: `${videoTaskProvider(raw.task_id)} never resolved this task`;
 			await settle(admin, raw, { status: 'expired', error: why });
 			if (raw.post_id) {
 				await admin
@@ -459,7 +455,7 @@ export async function reconcileVideoRenders(
 			// Post first, settle second. Settling `done` before the post has the url strands a paid
 			// clip nowhere: nothing re-reads a done row. If the post write fails the row goes back
 			// to the queue, where the attempt cap eventually stops it.
-			const notLanded = await applyToPost(admin, raw, outcome.url, outcome.thumbnailUrl);
+			const notLanded = await landClip(admin, raw, outcome.url, outcome.thumbnailUrl);
 			if (notLanded) {
 				console.error(`[video-render] clip did not land id=${raw.id}:`, notLanded);
 				await admin
