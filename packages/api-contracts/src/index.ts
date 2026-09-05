@@ -433,7 +433,8 @@ export {
   MEMORY_ENTRIES_MAX,
   MEMORY_USED_MAX,
   RECORD_MEMORY_USED,
-  SAVE_MEMORY
+  SAVE_MEMORY,
+  UPDATE_MEMORY_ENTRY
 } from './memory';
 export type { AgentMemoryCategory } from './memory';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';

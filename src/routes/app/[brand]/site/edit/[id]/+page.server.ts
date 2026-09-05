@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { readUploadImage } from '$lib/server/raster-image';
+import { updateBrandRow } from '$lib/server/brand-rows';
 
 // AI cover generation runs the image model → give it headroom.
 // Tetto condiviso, non budget: il lavoro vero di questa rotta sta in ~120s. Su Vercel ogni
@@ -64,13 +65,12 @@ export const actions: Actions = {
     const tagIds = fd.getAll('tag_ids').map((t) => String(t)).filter(Boolean);
     if (!title) return fail(400, { error: 'title_required' });
     const admin = createAdminClient();
-    const { error: err } = await admin.from('brand_articles').update({
+    const failure = await updateBrandRow(admin, 'brand_articles', brand.id, params.id, {
       title, body_md: bodyMd, meta_title: metaTitle || null, meta_description: metaDescription || null,
       category_id: categoryId, author_id: authorId,
       updated_at: new Date().toISOString()
-    }).eq('id', params.id).eq('brand_id', brand.id);
-    if (err) return fail(500, { error: err.message });
-    // Sync tags: delete existing, insert new
+    });
+    if (failure) return fail(failure.status, { error: failure.error });
     await admin.from('brand_article_tags').delete().eq('article_id', params.id);
     if (tagIds.length) {
       await admin.from('brand_article_tags').insert(tagIds.map((tid) => ({ article_id: params.id, tag_id: tid })));

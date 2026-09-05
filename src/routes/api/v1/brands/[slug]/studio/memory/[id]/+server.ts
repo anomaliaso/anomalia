@@ -1,10 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
-
-// PATCH: update a memory entry (value, category, confidence)
-// POST: promote session → project (body: { action: 'promote' })
-// DELETE: delete a memory entry
+import { UPDATE_MEMORY_ENTRY } from '@anomalia/api-contracts';
 
 export const PATCH: RequestHandler = async ({ request, params }) => {
   const { supabase, error, apiKey } = await authenticate(request);
@@ -15,9 +12,13 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
   const writeDenied = checkApiKeyWriteAccess(apiKey);
   if (writeDenied) return writeDenied;
 
-  const body = await request.json();
+  const parsed = UPDATE_MEMORY_ENTRY.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
+  }
+
   const { updateMemoryEntry } = await import('$lib/server/brand-memory');
-  await updateMemoryEntry(supabase, brand.id, params.id, body);
+  await updateMemoryEntry(supabase, brand.id, params.id, parsed.data);
 
   return json({ ok: true });
 };
