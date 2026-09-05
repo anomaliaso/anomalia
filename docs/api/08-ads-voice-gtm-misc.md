@@ -1,6 +1,7 @@
 # API — 08 · Ads, voice, GTM e gestione
 
-Ads (campagne + remix), voice framework, piano GTM, rubriche, prodotti, API key.
+Ads (campagne + remix), voice framework, piano GTM, rubriche, prodotti, API key, banco
+idee, field watch e diagnosi del Radar.
 Errori comuni di auth: vedi [01-overview](01-overview.md).
 
 ## `GET /api/v1/brands/:slug/ads`
@@ -108,6 +109,7 @@ Esegue un'azione sulle campagne ads, selezionata dal campo `action` del body.
 |---|---|---|---|
 | `action` | string | Sì | `propose` \| `approve` \| `reject` \| `duplicate` \| `delete` \| `pause` \| `resume` \| `toggle` \| `sync` \| `create` |
 | `campaignId` | string | per `approve`/`reject`/`duplicate`/`delete`/`pause`/`resume`/`toggle` | ID campagna (`ad_campaigns.id`) |
+| `extra` | object | No | Gli altri campi dell'azione, se preferisci raggrupparli invece di metterli in cima al corpo |
 | `budgetAmount` | number | No | `approve`: budget giornaliero proposto; `create`: budget |
 | `goal` | string | No | `approve`: `engagement` \| `traffic` \| `awareness` \| `video_views`; `create`: default `traffic` |
 | `adId` | string | No | Solo `toggle`: se presente agisce sulla singola creativa |
@@ -586,7 +588,7 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/products" -H "Authorization
 
 ## `POST /api/v1/brands/:slug/products`
 
-Ri-sincronizza l'intero catalogo dal sito e-commerce del brand (Shopify / WooCommerce): elimina i prodotti esistenti e reinserisce quelli rilevati.
+Ri-sincronizza l'intero catalogo dal sito e-commerce del brand (Shopify / WooCommerce): elimina i prodotti esistenti e reinserisce quelli rilevati. Per aggiungere **una** offerta senza cancellare le altre c'è [`POST /studio/products`](04-studio.md).
 
 **Body**: nessuno
 
@@ -616,7 +618,7 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/products" \
 
 ## `PUT /api/v1/brands/:slug/products/:id`
 
-Aggiorna i campi di un singolo prodotto.
+Aggiorna i campi di un singolo prodotto. Solo i campi presenti nel body cambiano: le altre colonne restano identiche. Un campo non dichiarato viene **rifiutato**, non ignorato. Tool MCP: `update_product`.
 
 **Body**
 
@@ -624,7 +626,8 @@ Aggiorna i campi di un singolo prodotto.
 |---|---|---|---|
 | `title` | string | No | Nuovo titolo |
 | `description` | string | No | Nuova descrizione |
-| `pricing` | string | No | Nuovo prezzo |
+| `pricing` | string | No | Nuovo prezzo (testo libero) |
+| `url` | string | No | Dove sta l'offerta |
 | `featured` | boolean | No | Evidenziato sì/no |
 
 **Response** `200`:
@@ -637,7 +640,9 @@ Aggiorna i campi di un singolo prodotto.
 
 | Status | Body |
 |---|---|
-| `400` | `{"error":"No fields to update"}` |
+| `400` | `{"error":"invalid_input","details":[…]}` — campo sconosciuto o tipo sbagliato |
+| `400` | `{"error":"no_fields"}` — nessun campo da cambiare |
+| `404` | `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand: la risposta è la stessa |
 | `500` | `{"error":"<messaggio Supabase>"}` |
 
 **Esempio**:
@@ -652,7 +657,7 @@ curl -s -X PUT "https://anomalia.so/api/v1/brands/mio-brand/products/PRODUCT_ID"
 
 ## `DELETE /api/v1/brands/:slug/products/:id`
 
-Elimina un prodotto del brand.
+Elimina un prodotto del brand. Tool MCP: `delete_product`.
 
 **Response** `200`:
 
@@ -660,7 +665,12 @@ Elimina un prodotto del brand.
 { "ok": true }
 ```
 
-**Errori specifici**: `500` `{"error":"<messaggio Supabase>"}`
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `404` | `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand |
+| `500` | `{"error":"<messaggio Supabase>"}` |
 
 **Esempio**:
 
@@ -780,6 +790,8 @@ curl -s -X DELETE "https://anomalia.so/api/v1/brands/mio-brand/api-keys/KEY_ID" 
 
 ## `GET /api/v1/brands/:slug/ideas`
 
+Tool MCP: `list_ideas`.
+
 Il banco delle idee dirompenti del brand — quello che gli agenti salvano mentre lavorano
 (`save_disruptive_idea`). Nessuna chiamata AI: lettura pura.
 
@@ -850,4 +862,151 @@ Richiede una key con scope `write`.
 curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/ideas" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"title":"La maglia che brucia","idea":"Brucia una maglia low-cost, marchio mai inquadrato","device":"destroy_the_alternative","who_it_annoys":"Chi vende fast fashion"}'
+```
+
+---
+
+## `GET /api/v1/brands/:slug/market/field`
+
+Tool MCP: `get_market_field`.
+
+Cosa si muove nel **campo** del brand: i topic osservati, il playbook distillato da quello che
+gira, e i post catalogati con il loro teardown — perché quel post ha girato, e cosa se ne può
+portare via. Lettura pura: nessuna chiamata AI, nessun credito. La passata che riempie queste
+tabelle è il `POST` sotto, di norma fatto dal cron.
+
+**Query**
+
+| Param | Default | Note |
+|---|---|---|
+| `limit` | `20` | quanti post del campo, max 50 |
+
+**Response** `200`:
+
+```json
+{
+  "topics": { "queries": ["crm per agenzie"], "hashtags": ["#agencylife"] },
+  "playbook": {
+    "summary": "Il campo apre con un costo e chiude con un invito a dissentire",
+    "hooks": [{ "pattern": "numero + categoria", "example": "3 cose che le agenzie sbagliano" }],
+    "tones": ["esperto seccato"],
+    "fieldRagebait": 4,
+    "moves": [{ "move": "chiama la categoria per nome", "why": "…", "howToAdapt": "…", "ragebait": 3 }],
+    "avoid": ["callout con nome"],
+    "postsSeen": 42,
+    "updatedAt": "2026-09-01T08:00:00Z"
+  },
+  "updatedAt": "2026-09-01T08:00:00Z",
+  "posts": [
+    {
+      "id": "…",
+      "platform": "threads",
+      "url": "https://www.threads.net/@tizio/post/…",
+      "account_key": "threads:tizio",
+      "content": "…",
+      "media_type": "text",
+      "engagement": 1820,
+      "published_at": "2026-08-30T18:00:00Z",
+      "query": "crm per agenzie",
+      "relevance": 0.72,
+      "discoveredAt": "2026-08-31T04:00:00Z",
+      "teardown": {
+        "market_post_id": "…",
+        "tone_of_voice": "amico che ti avverte",
+        "communication": "prima persona, frasi corte",
+        "format": "lista numerata",
+        "hook_type": "promessa di un errore da evitare",
+        "spread_strategy": ["chiama in causa una categoria per nome"],
+        "ragebait": 4,
+        "ragebait_levers": ["hot take contro il consenso"],
+        "why_it_spread": "dice ad alta voce una cosa che tutti pensano",
+        "transferable": ["aprire con il costo reale"],
+        "avoid": null
+      }
+    }
+  ]
+}
+```
+
+Un campo mai osservato risponde `200` con `topics`, `playbook` e `updatedAt` a `null` e `posts`
+vuoto: è uno stato, non un errore. `teardown` è `null` finché il post non è stato smontato.
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/market/field?limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/radar/diagnose`
+
+Tool MCP: `diagnose_radar`.
+
+L'autodiagnosi delle fonti Radar: **interroga ogni sorgente configurata dal vivo** e dice, per
+ognuna, quanti item sono tornati o perché è stata saltata — spenta, esclusa dal piano, piattaforma
+disattivata in Settings, o endpoint in errore. È la risposta a «perché il Radar non trova niente».
+
+Nessuna chiamata AI, nessun credito, nessuna scrittura, niente in coda. Ma esce di casa: fa una
+richiesta di rete per fonte, quindi può metterci secondi (`maxDuration` 300). Le ricerche
+dinamiche per keyword non vengono sondate qui — costano un credito di scraping ciascuna e sono
+già registrate per scansione in `radar_searches`.
+
+**Query params**: nessuno
+
+**Response** `200`:
+
+```json
+{
+  "enabled": true,
+  "plan": "pro",
+  "proLeads": true,
+  "scrapecreatorsConfigured": true,
+  "platforms": { "reddit": true, "threads": true, "x": false },
+  "engagePlatforms": ["reddit", "threads", "x", "linkedin"],
+  "sources": [
+    {
+      "kind": "rss",
+      "value": "https://esempio.it/feed",
+      "active": true,
+      "allowedByPlan": true,
+      "enabled": true,
+      "platform": null,
+      "items": 12,
+      "windowHours": 48,
+      "sample": [{ "title": "…", "url": "https://esempio.it/articolo" }]
+    },
+    {
+      "kind": "reddit",
+      "value": "r/agency",
+      "active": false,
+      "allowedByPlan": true,
+      "enabled": true,
+      "platform": "reddit",
+      "items": 0,
+      "skipped": "source is off"
+    },
+    {
+      "kind": "rss",
+      "value": "https://rotto.it/feed",
+      "active": true,
+      "allowedByPlan": true,
+      "enabled": true,
+      "platform": null,
+      "items": 0,
+      "error": "HTTP 503"
+    }
+  ],
+  "note": "Dynamic keyword searches are reported per scan in radar_searches, not probed here."
+}
+```
+
+Una fonte porta sempre `items`; `skipped` ed `error` si escludono a vicenda e spiegano lo zero.
+
+**Esempio**:
+
+```bash
+curl -s "https://anomalia.so/api/v1/brands/mio-brand/radar/diagnose" \
+  -H "Authorization: Bearer $TOKEN"
 ```

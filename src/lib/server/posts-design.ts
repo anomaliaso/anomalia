@@ -434,10 +434,3 @@ export async function loadPostsDesignDetail(
   return detail;
 }
 
-/** Test seam / cold start between requests on the same warm lambda. */
-export function resetPostsDesignCache(): void {
-  indexCache.at = 0;
-  indexCache.entries = [];
-  detailCache.clear();
-  lastRequestAt = 0;
-}

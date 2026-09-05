@@ -13,7 +13,7 @@
    * non parte affatto (guardia dentro `AgentAvatar`) e resta la composizione, ferma e composta.
    */
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
-  import type { ThreadAgentAvatar } from '$lib/stores/chat';
+  import type { ThreadAgentAvatar } from '$lib/agent-avatars';
 
   let {
     agents,

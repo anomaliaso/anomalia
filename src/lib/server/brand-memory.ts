@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from '@google/genai';
 import { structured } from './research';
 import { withBrandContext } from './ai-log';
 import { defaultSkillsFor } from './default-skills';
@@ -9,7 +8,16 @@ type AnyRec = Record<string, any>;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type MemoryCategory = 'voice' | 'constraint' | 'fact' | 'preference' | 'insight' | 'skill';
+/** L'elenco chiuso, uguale al CHECK di `brand_memory.category` (0178). Un test lo tiene allineato al contratto. */
+export const MEMORY_CATEGORY_VALUES = [
+  'voice',
+  'constraint',
+  'fact',
+  'preference',
+  'insight',
+  'skill'
+] as const;
+export type MemoryCategory = (typeof MEMORY_CATEGORY_VALUES)[number];
 export type MemorySource = 'chat' | 'research' | 'onboarding' | 'user' | 'analysis';
 export type MemoryLayer = 'session' | 'project' | 'global';
 
@@ -95,11 +103,6 @@ export type MemoryGraphEdge = {
   targetId: string;
   weight: number;
   reason: 'category' | 'tokens';
-};
-
-export type MemoryGraph = {
-  nodes: MemoryEntry[];
-  edges: MemoryGraphEdge[];
 };
 
 export type MemoryWriteOpts = {
@@ -864,6 +867,15 @@ async function runDreamInner(
     .eq('brand_id', brandId)
     .order('updated_at', { ascending: true });
 
+  // UN'ASSENZA TOTALE DI DATI NON È UN DATO. Il decadimento sull'inutilizzo presume che qualcuno
+  // stia segnalando l'uso — dentro lo fa il turno che inietta, fuori lo fa un modello con una
+  // scrittura esplicita. Se in questo brand nessuna riga è MAI stata segnalata, l'ipotesi giusta
+  // non è «non le usa nessuno» ma «nessuno sta segnalando», e far scendere la confidence sotto il
+  // pavimento di iniezione toglierebbe dai prompt righe che stavano funzionando: un guasto
+  // silenzioso e distruttivo, visibile solo quando il danno è già nei dati.
+  // Una scadenza esplicita resta valida comunque — l'ha decisa chi ha scritto la riga.
+  const usageIsReported = (entries ?? []).some((entry) => !!(entry as MemoryEntry).last_used_at);
+
   if (entries?.length) {
     for (const entry of entries as MemoryEntry[]) {
       if (writes >= DREAM_MAX_WRITES_PER_BRAND) {
@@ -878,7 +890,7 @@ async function runDreamInner(
           : new Date(entry.created_at);
       const daysSince = (now.getTime() - lastTouch.getTime()) / 86400000;
 
-      if (!entry.pinned && daysSince > 30 && entry.confidence > 0.3) {
+      if (!entry.pinned && usageIsReported && daysSince > 30 && entry.confidence > 0.3) {
         const decay = Math.max(0.3, entry.confidence - 0.1);
         if (!dryRun) {
           await supabase
@@ -1117,91 +1129,6 @@ async function nodeExists(
 }
 
 // ── Migration helper: seed from existing ai_context ────────────────────────────
-
-/**
- * One-time migration: parse the existing brand_kit.ai_context blob and seed
- * the brand_memory table with initial entries. Called during the transition period.
- */
-export async function seedFromAiContext(
-  supabase: SupabaseClient,
-  brandId: string,
-  ai: GoogleGenAI
-): Promise<number> {
-  const { data: kit } = await supabase
-    .from('brand_kit')
-    .select('ai_context')
-    .eq('brand_id', brandId)
-    .maybeSingle();
-
-  const context = kit?.ai_context as string;
-  if (!context || context.length < 50) return 0;
-
-  // Check if already seeded
-  const { count } = await supabase
-    .from('brand_memory')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId);
-
-  if (count && count > 0) return 0;
-
-  const prompt = `You are a memory extraction system. Parse this brand context brief and extract structured memory entries.
-
-BRAND CONTEXT:
-${context.slice(0, 3000)}
-
-Extract facts as a JSON array. Each item:
-- key: short snake_case identifier
-- value: one-sentence fact
-- category: "voice" | "constraint" | "fact" | "preference" | "insight"
-- confidence: 0.8 (moderate — these are from a synthesized brief, not direct user input)
-
-Rules:
-- Extract 5-15 entries maximum
-- Focus on actionable facts (voice, constraints, audience, differentiators)
-- Skip generic filler
-- Return JSON array only`;
-
-  try {
-    const raw = await structured<unknown>(ai, prompt, {
-          type: 'array' as const,
-          items: {
-            type: 'object' as const,
-            properties: {
-              key: { type: 'string' as const },
-              value: { type: 'string' as const },
-              category: { type: 'string' as const, enum: ['voice', 'constraint', 'fact', 'preference', 'insight'] as const },
-              confidence: { type: 'number' as const }
-            },
-            required: ['key', 'value', 'category', 'confidence']
-          }
-    }, undefined, { label: 'memoryExtract' });
-
-    const extracted = (Array.isArray(raw) ? raw : []) as Array<{
-      key: string;
-      value: string;
-      category: MemoryCategory;
-      confidence: number;
-    }>;
-
-    let count = 0;
-    for (const item of extracted) {
-      if (!item.key || !item.value) continue;
-      await writeMemory(supabase, brandId, {
-        key: item.key,
-        value: item.value,
-        category: item.category,
-        confidence: item.confidence ?? 0.8,
-        source: 'onboarding',
-        layer: 'project'
-      });
-      count++;
-    }
-
-    return count;
-  } catch {
-    return 0;
-  }
-}
 
 // ── Research integration: persist strategy findings to memory ──────────────────
 

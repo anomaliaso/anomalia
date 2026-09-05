@@ -81,7 +81,7 @@ const REVIEW_ROLES: SubagentRole[] = ['verify'];
 
 /**
  * Il tetto ai rifiuti di `finish` per review mancante — e senza di lui la guardia butta il lavoro
- * invece di proteggerlo. `onRun` conta solo le run partite DAVVERO, e `runSubagent` esce prima
+ * invece di proteggerlo. `onRun` conta solo le run partite DAVVERO, e `runSubagentRun` esce prima
  * quando il tempo è finito: l'agente veniva rifiutato, delegava a vuoto, richiamava `finish`, e
  * bruciava gli step senza consegnare (due video vuoti in produzione). Dopo due rifiuti si passa, e
  * il risultato di `finish` lo dichiara.

@@ -66,18 +66,6 @@ export function workbenchTabLabel(
   return seg ? seg.charAt(0).toUpperCase() + seg.slice(1) : t('app.shell.tabHome');
 }
 
-export function isWorkbenchPath(pathname: string, brandBase: string): boolean {
-  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
-  if (!pathname.startsWith(base)) return false;
-  if (pathname.includes('/chat/')) return false;
-  if (pathname.includes('/success')) return false;
-  if (pathname.includes('/activate')) return false;
-  if (pathname.includes('/proposal')) return false;
-  if (pathname.includes('/image-generator')) return false;
-  if (pathname.includes('/settings')) return false;
-  return true;
-}
-
 export type WorkbenchPageHub =
   | 'strategy'
   | 'publish'
@@ -206,13 +194,12 @@ export function workbenchPageHref(
   return `/app/${brandSlug}/${segment}`;
 }
 
-// Nav "La squadra" (flag FEATURE_NAV_TEAM): da 20+ voci di primo livello a 5 sezioni. Questa è la
-// struttura PURA (path + chiavi i18n), così workbench-paths.test.ts cammina l'albero e garantisce
-// che OGNI destinazione della nav legacy (HUB_TABS) resti raggiungibile: cambia la gerarchia, non
-// l'inventario. Flag OFF = HUB_TABS qui sopra, byte-identico.
+// La nav del brand: la STRUTTURA pura (path + chiavi i18n), così workbench-paths.test.ts cammina
+// l'albero e garantisce che OGNI destinazione dell'inventario (HUB_TABS qui sopra) resti
+// raggiungibile — cambia la gerarchia, non l'inventario.
 
 export type NavTeamItem = {
-  /** Path sotto /app/{slug} (con lo slash iniziale, come HUB_TABS). */
+  /** Path sotto /app/{slug} (con lo slash iniziale, come HUB_TABS). Vuoto = la home del brand. */
   path: string;
   labelKey: string;
   /** Altri path che tengono attiva la voce (rotte sorelle/legacy che atterrano qui). */
@@ -223,40 +210,48 @@ export type NavTeamItem = {
 };
 
 /**
- * SPAZI — le destinazioni di prima classe. Calendario assorbe le approvazioni (/approvals e
- * /content fanno già 308 su /calendar, la coda è il filtro ?status=). Libreria punta ai media; la
- * knowledge resta una pagina sotto Strumenti.
+ * SPAZI — le cinque destinazioni del mockup, in quell'ordine. Calendario assorbe le approvazioni
+ * (/approvals e /content fanno già 308 su /calendar, la coda è il filtro ?status=); la knowledge e
+ * il blog restano pagine sotto Strumenti.
  */
 export const NAV_TEAM_SPACES: NavTeamItem[] = [
-  // Panoramica (/workbench): l'unica vista che RIASSUME le altre. È lettura, non lavoro, quindi
-  // apre la lista invece di stare fra le destinazioni dove si produce. L'etichetta è
-  // `app.home.workbench.title`, la STESSA della pillola in topbar e del titolo della modal.
-  { path: '/workbench', labelKey: 'app.home.workbench.title' },
+  // La home del brand. `/workbench` non è più una voce sua: era la Panoramica, cioè la vista che
+  // RIASSUME le altre — ed è esattamente ciò che la home fa. Oggi `/app/<slug>` ci rimanda, quindi
+  // sta fra gli `also` o la voce si spegnerebbe appena atterrati.
+  { path: '', labelKey: 'app.nav2.home', also: ['/workbench'] },
+  { path: '/media', labelKey: 'app.nav2.materials', also: ['/designer'] },
+  { path: '/strategy', labelKey: 'app.hub.strategy.label', also: ['/gtm', '/plan'] },
   {
     path: '/calendar',
     labelKey: 'app.hub.publish.calendar',
     badge: 'content',
-    // Strategia e piano vivono nel chrome del calendario (stessa regola della nav legacy).
-    also: ['/content', '/approvals', '/strategy', '/gtm', '/plan', '/publish']
+    also: ['/content', '/approvals', '/publish']
   },
-  { path: '/media', labelKey: 'app.nav2.library', also: ['/designer'] },
-  // Il blog (/site) è la destinazione linkata anche oggi; /web è la landing del hub e
-  // oggi NON è linkata direttamente — resta solo nello stato attivo, come ora.
-  { path: '/site', labelKey: 'app.nav2.site', also: ['/web'] }
+  // News Radar sale fra gli Spazi: e' l'unica delle pagine-strumento che si guarda tutti i
+  // giorni, ed e' la sola voce che la sidebar tiene fuori dalle cinque del mockup.
+  { path: '/radar', labelKey: 'app.nav2.newsRadar' },
+  { path: '/analytics', labelKey: 'app.nav2.results' }
 ];
 
 /**
- * STRUMENTI — il gruppo richiudibile con tutte le pagine-strumento della nav legacy. L'ordine è per
- * frequenza d'uso. Niente resta orfano: il test confronta questo elenco (più gli SPAZI) con ogni
- * href di HUB_TABS.
- * I banchi del Designer non sono qui: la sezione è fuori dalla nav e non deve tornare col flag.
+ * FUORI DALLA SIDEBAR — le destinazioni che esistono, hanno un'etichetta e si aprono da ⌘K (che
+ * dopo la rimozione della modal elenca ogni pagina del brand su disco) e dai link degli agenti,
+ * ma NON hanno una riga propria nella barra laterale. Il gruppo «Strumenti» che le raccoglieva è
+ * stato tolto: la sidebar sono le sei voci del mockup più l'ingranaggio.
+ *
+ * L'elenco resta perché è ancora l'inventario: `goTargetLabelKey` ci prende le etichette delle
+ * scorciatoie `g <lettera>`, e il test lo confronta con HUB_TABS — una pagina nuova che non
+ * finisce né qui né fra gli Spazi fa fallire la suite, invece di sparire in silenzio.
+ * I banchi del Designer non sono qui: la sezione è fuori dalla nav da prima.
  */
-export const NAV_TEAM_TOOLS: NavTeamItem[] = [
-  { path: '/radar', labelKey: 'app.hub.automations.radar' },
+export const NAV_OFF_SIDEBAR: NavTeamItem[] = [
   { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
-  { path: '/analytics', labelKey: 'app.hub.publish.analytics' },
-  { path: '/seo', labelKey: 'app.hub.web.seo' },
-  { path: '/geo', labelKey: 'app.hub.web.geo' },
+  { path: '/site', labelKey: 'app.nav2.site' },
+  // SEO e GEO sono una voce sola: la ricerca e la citabilità dai modelli sono la stessa domanda
+  // ("ci trovano?") fatta a due motori. `/geo`, `/seo-geo` e `/citations` restano rotte vere —
+  // si aprono da qui dentro e da ⌘K, che elenca ogni pagina del brand — ma non hanno una riga
+  // propria in sidebar. `/web` è la landing del hub e non è mai stata linkata direttamente.
+  { path: '/seo', labelKey: 'app.nav2.seoGeo', also: ['/web', '/seo-geo', '/geo', '/citations'] },
   { path: '/keywords', labelKey: 'app.hub.web.keywords' },
   { path: '/backlinks', labelKey: 'app.hub.web.backlinks' },
   { path: '/competitors', labelKey: 'app.hub.publish.competitors' },
@@ -270,98 +265,3 @@ export const NAV_TEAM_TOOLS: NavTeamItem[] = [
   { path: '/ads/google', labelKey: 'app.hub.ads.google', adsOnly: true },
   { path: '/ads/library', labelKey: 'app.hub.ads.library', adsOnly: true }
 ];
-
-// Le pagine del brand non sono una destinazione su desktop: si aprono nella stessa modal delle
-// impostazioni (stato del client, URL fermo, corpo che ospita la +page.svelte vera). Il default è
-// `modal`; ogni eccezione qui sotto ha una ragione TECNICA, non di gusto.
-
-/** Rotte che restano PAGINA PIENA, col perché. Il criterio è uno solo: la modal non può ospitarle
- * senza rompere qualcosa di verificabile. */
-export const BRAND_PAGE_ROUTES = [
-  '.', // la home del brand è la superficie SOTTO la modal: non può ospitare sé stessa
-  'activate', // checkout Stripe: esce dal sito
-  'success', // ritorno dal pagamento, con la sua chrome
-  'proposal', // superficie standalone, già esclusa dalla shell del brand
-  'chat/[thread]', // la chat È la superficie da cui si apre la modal (e rotta dinamica)
-  'posts/[id]/analytics', // i dettagli post hanno chrome dedicata fuori dalla shell
-  'posts/[id]/boost', //   (isPostDash nel +layout) e sono rotte dinamiche
-  'posts/[id]/campaign',
-  'posts/[id]/chat',
-  'posts/[id]/details',
-  'posts/[id]/edit',
-  'posts/[id]/preview',
-  'plans/[id]', // rotta dinamica senza href statico
-  'ads/[channel]/new', // rotta dinamica senza href statico
-  'site/edit/[id]', // editor articolo a tutta larghezza (isArticleEdit) + dinamica
-  'media-generator', // canvas full-bleed col composer pinnato (isMediaWorkbench)
-  'motion-video', //   idem
-  'ugc-creator', //   idem
-  'agent-lab' // banco di prova SOLO dev (404 in prod): mai nel rail, non ha senso nella modal
-] as const;
-
-/** Rotte del brand ospitate nella modal. */
-export const BRAND_MODAL_ROUTES = [
-  'agents',
-  'analytics',
-  'approvals',
-  'automations',
-  'backlinks',
-  'brand',
-  'calendar',
-  'campaigns',
-  'competitors',
-  'content',
-  'design-lab',
-  'designer',
-  'editorial',
-  'geo',
-  'gtm',
-  'ideas',
-  'keywords',
-  'knowledge',
-  'knowledge/memory/new',
-  'knowledge/new',
-  'leads',
-  'manual-posting',
-  'media',
-  'plan',
-  'publish',
-  'radar',
-  'rubrics',
-  'seo',
-  'site',
-  'site/new',
-  'strategy',
-  'studio',
-  'studio/brand',
-  'studio/competitors',
-  'studio/hashtags',
-  'studio/knowledge',
-  'studio/people',
-  'studio/platforms',
-  'studio/products',
-  'studio/voice-examples',
-  'voice',
-  'web',
-  // La metà bassa della vecchia Panoramica, ora pagina sua: la home è solo chat.
-  'workbench',
-  'ads/google',
-  'ads/library',
-  'ads/social'
-] as const;
-
-const MODAL_SET: ReadonlySet<string> = new Set(BRAND_MODAL_ROUTES);
-
-/**
- * Il suffisso di rotta (relativo a `/app/<slug>/`) se quel path si apre nella modal, altrimenti
- * null. Le impostazioni hanno la loro classificazione in `components/settings/platforms.ts`.
- */
-export function brandModalTarget(pathname: string, brandBase: string): string | null {
-  const base = brandBase.endsWith('/') ? brandBase.slice(0, -1) : brandBase;
-  const p = pathname.replace(/\/$/, '');
-  if (p === base) return null; // la home è la superficie, non un contenuto da ospitare
-  if (!p.startsWith(`${base}/`)) return null;
-  const rest = p.slice(base.length + 1);
-  if (!rest || rest.startsWith('settings')) return null; // i settings hanno il loro percorso
-  return MODAL_SET.has(rest) ? rest : null;
-}

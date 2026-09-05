@@ -21,6 +21,9 @@ export const AGENT_AVATAR_FACES = [
 
 export type AgentAvatarFace = (typeof AGENT_AVATAR_FACES)[number];
 
+/** Un agente con un volto da disegnare: la pila di avatar e il carosello lo mostrano. */
+export type ThreadAgentAvatar = { id: string; name: string; face: string; color: string };
+
 export const DEFAULT_AGENT_AVATAR_FACE: AgentAvatarFace = 'wide';
 export const DEFAULT_AGENT_AVATAR_COLOR = '#111111';
 
@@ -363,19 +366,6 @@ export const CHAT_FACE_BY_PHASE: Record<ChatFacePhase, AgentAvatarFace> = {
   writing: 'smile',
   error: 'sad'
 };
-
-/**
- * A riposo la faccia è quella DELL'AGENTE, non una neutra uguale per tutti: con `idle` fisso a
- * 'wide', Motion e Analyst si presentavano con la faccia di Anomalia finché non partiva un turno.
- * Le altre fasi restano condivise: cambia il tono del turno, non chi lo sta facendo.
- */
-export function chatFaceForPhase(
-  phase: ChatFacePhase,
-  resting?: AgentAvatarFace | string | null
-): AgentAvatarFace {
-  if (phase === 'idle' && resting) return normalizeAvatarFace(resting, CHAT_FACE_BY_PHASE.idle);
-  return CHAT_FACE_BY_PHASE[phase] ?? CHAT_FACE_BY_PHASE.idle;
-}
 
 /**
  * Loop suonato accanto a "thinking"/"generating" mentre un turno gira. Movimenti piccoli — due

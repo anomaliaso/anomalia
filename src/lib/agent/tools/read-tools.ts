@@ -64,13 +64,16 @@ export function readTools(ctx: ChatToolCtx) {
         const { canConnectSocials, hasSocialPublishing, hasWebHub, isPaidPlan } = await import('$lib/plans');
         const { PLAN_LABELS } = await import('$lib/server/plans');
         const { isPlanGoEnabled } = await import('$lib/server/feature-flags');
+        const { orgBillingForBrand } = await import('$lib/server/org-billing');
         const { data: b } = await supabase
           .from('brands')
-          .select('plan, status, activated_at, stripe_customer_id, stripe_subscription_id, timezone')
+          .select('plan, status, activated_at, timezone')
           .eq('id', brandId)
           .maybeSingle();
         if (!b) return { error: 'Brand not found' };
-        const plan = (b.plan as string | null) ?? null;
+        // The subscription lives on the org: a brand of a paying org is paid, whatever its own row says.
+        const billing = await orgBillingForBrand(supabase, { id: brandId });
+        const plan = billing?.plan ?? ((b.plan as string | null) ?? null);
         const status = (b.status as string) || 'trial';
         const paid = isPaidPlan(plan);
         const webHub = hasWebHub(plan);
@@ -93,8 +96,8 @@ export function readTools(ctx: ChatToolCtx) {
           plan,
           plan_label: plan ? (PLAN_LABELS[plan] ?? plan) : null,
           activated_at: b.activated_at ?? null,
-          stripe_customer_linked: !!b.stripe_customer_id,
-          stripe_subscription_linked: !!b.stripe_subscription_id,
+          stripe_customer_linked: !!billing?.customerId,
+          stripe_subscription_linked: !!billing?.subscriptionId,
           can_connect_socials: canConnectSocials(plan, status),
           has_social_publishing: hasSocialPublishing(plan),
           web_hub_unlocked: webHub,

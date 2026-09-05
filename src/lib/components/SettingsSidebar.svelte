@@ -11,16 +11,13 @@
     ArrowLeft,
     ChevronDown,
     CircleUserRound,
-    Activity,
     CreditCard,
     Fingerprint,
     FolderOpen,
     Globe,
-    Hash,
     KeyRound,
     Languages,
     Link2,
-    Mic,
     Moon,
     BookOpen,
     Newspaper,
@@ -28,19 +25,14 @@
     Palette,
     Paintbrush,
     Plug,
-    Share2,
     SlidersHorizontal,
     Sun,
     Trash2,
     UserRound,
     Users,
-    Zap,
-    Clock,
     Megaphone,
-    MessageSquare,
     Radar,
     Gift,
-    Send,
     LogIn,
   } from '@lucide/svelte';
   import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
@@ -73,7 +65,6 @@
   /** Global FEATURE_ADS kill switch, from app/[brand]/+layout.server.ts. */
   const adsOn = $derived(!!$page.data.flags?.ads);
   /** FEATURE_CONNECTORS kill switch (defaults on), from app/[brand]/+layout.server.ts. */
-  const connectorsOn = $derived($page.data.flags?.connectors !== false);
   const brandPlan = $derived(($page.data.brand?.plan as string | null | undefined) ?? null);
   const brandSlug = $derived(($page.data.brand?.slug as string | undefined) ?? '');
   const customDomainHref = $derived(
@@ -118,24 +109,6 @@
       href: `${settingsBase}/brand`,
       label: $_('app.studio.tabs.brand'),
       icon: Palette,
-    },
-    {
-      id: 'platforms',
-      href: `${settingsBase}/platforms`,
-      label: $_('app.studio.tabs.platforms'),
-      icon: Share2,
-    },
-    {
-      id: 'hashtags',
-      href: `${settingsBase}/hashtags`,
-      label: $_('app.studio.tabs.hashtags'),
-      icon: Hash,
-    },
-    {
-      id: 'voice-examples',
-      href: `${settingsBase}/voice-examples`,
-      label: $_('app.studio.tabs.voiceExamples'),
-      icon: Mic,
     },
     {
       id: 'products',
@@ -253,39 +226,11 @@
           label: $_('app.settings.connectedAccounts'),
           icon: Link2,
         },
-        ...(connectorsOn
-          ? [
-              {
-                id: 'connectors',
-                href: `${settingsBase}/connectors`,
-                label: $_('app.settings.connectors.nav'),
-                icon: Plug,
-              },
-            ]
-          : []),
-        {
-          id: 'autopilot',
-          href: `${settingsBase}/autopilot`,
-          label: $_('app.settings.autopilot'),
-          icon: Zap,
-        },
         {
           id: 'radar',
           href: `${settingsBase}/radar`,
           label: $_('app.settings.radar.nav'),
           icon: Radar,
-        },
-        {
-          id: 'publishing',
-          href: `${settingsBase}/publishing`,
-          label: $_('app.settings.publishing.title'),
-          icon: Send,
-        },
-        {
-          id: 'timezone',
-          href: `${settingsBase}/timezone`,
-          label: $_('app.settings.postingTimezone'),
-          icon: Clock,
         },
       ],
     },
@@ -298,12 +243,6 @@
           href: `${settingsBase}/language`,
           label: $_('app.settings.language'),
           icon: Languages,
-        },
-        {
-          id: 'chat',
-          href: `${settingsBase}/chat`,
-          label: $_('app.settings.chat.title'),
-          icon: MessageSquare,
         },
         {
           id: 'api-keys',
@@ -340,12 +279,6 @@
           href: `${settingsBase}/billing`,
           label: $_('app.settings.billing.title'),
           icon: CreditCard,
-        },
-        {
-          id: 'usage',
-          href: `${settingsBase}/usage`,
-          label: $_('app.settings.usage.title'),
-          icon: Activity,
         },
         {
           id: 'referrals',

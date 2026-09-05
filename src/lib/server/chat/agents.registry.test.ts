@@ -476,8 +476,7 @@ describe('la squadra si descrive da sé', () => {
 	});
 
 	/**
-	 * L'ONESTÀ DEL BLOCCO: `message_agent` è nominato solo dove è montato. Il kit
-	 * (`agent/bridge/live.ts`) non lo monta e passa `canMessage: false` — il difetto delle craft
+	 * L'ONESTÀ DEL BLOCCO: `message_agent` è nominato solo dove è montato — il difetto delle craft
 	 * specs motion (un prompt che impone un tool assente) non si ripete qui.
 	 */
 	it('senza message_agent, non lo promette', () => {

@@ -4,15 +4,13 @@ import { withBrandContext } from '$lib/server/ai-log';
 import { aiActCopyGuardrail } from '$lib/ai-act';
 import { platformPlaybook, houseVoiceFor, type ContentPrefs } from '$lib/server/content-preview';
 import { publishApprovedPost, type ApprovablePost } from '$lib/server/publish';
-import { wallClockToUtc } from '$lib/server/schedule';
-import { publishLibraryImageAsPostMedia } from '$lib/server/brand-media';
+import { earliestScheduleMs, wallClockToUtc, zonedClock } from '$lib/server/schedule';
+import { findBrandMediaByIds, publishLibraryMediaAsPostMedia } from '$lib/server/brand-media';
 import { EDITOR_POST_COLS } from '$lib/server/post-editing';
 import {
   PLATFORM_CHAR_LIMITS,
   assemblePlatformCaptions,
-  captionViolations,
-  VISUAL_REQUIRED_PLATFORMS,
-  VIDEO_ONLY_PLATFORMS,
+  publishBlockers,
   youtubeTitleFrom
 } from '$lib/platform-limits';
 import {
@@ -24,11 +22,36 @@ import {
 export { clampGeneratedCaptions, normalizePlatforms };
 export type { GeneratedCaptions };
 
-const MIN_LEAD_MS = 2 * 60 * 1000;
 const MAX_MEDIA = 8;
 const DOW_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export type ManualPostMode = 'now' | 'schedule' | 'draft';
+export type ManualPostMode = 'now' | 'schedule' | 'draft' | 'propose';
+
+export type ManualPostOutcome = 'pending_user' | 'scheduled' | 'published';
+
+export type PostAuthorship = 'manual' | 'external';
+
+type DateSource = (input: CreateManualPostInput, tz: string) => string | null;
+
+const NO_DATE: DateSource = () => null;
+
+const FROM_WALL_CLOCK: DateSource = (input, tz) => {
+  const date = String(input.date ?? '').trim();
+  const time = String(input.time ?? '').trim();
+  return date && time ? wallClockToUtc(date, time, tz) : null;
+};
+
+const FROM_INSTANT: DateSource = (input) => input.scheduledFor ?? null;
+
+const MODE_BEHAVIOUR: Record<
+  ManualPostMode,
+  { dateFrom: DateSource; dateRequired: boolean; outcome: ManualPostOutcome }
+> = {
+  now: { dateFrom: NO_DATE, dateRequired: false, outcome: 'published' },
+  schedule: { dateFrom: FROM_WALL_CLOCK, dateRequired: true, outcome: 'scheduled' },
+  draft: { dateFrom: NO_DATE, dateRequired: false, outcome: 'pending_user' },
+  propose: { dateFrom: FROM_INSTANT, dateRequired: false, outcome: 'pending_user' }
+};
 
 export type GenerateCaptionsInput = {
   platforms: string[];
@@ -141,21 +164,29 @@ export type CreateManualPostInput = {
   mode: ManualPostMode;
   date?: string;
   time?: string;
+  scheduledFor?: string;
+  source?: PostAuthorship;
 };
 
 export type CreateManualPostResult =
-  | { ok: true; id: string; status: string; noAccount?: boolean }
+  | { ok: true; id: string; status: string; slot: string | null; noAccount?: boolean }
   | { ok: false; error: string };
 
-function slotFromDate(date: string, time: string): string {
+function slotAt(iso: string, tz: string): string {
+  const { date, time } = zonedClock(tz, new Date(iso));
   const [y, m, d] = date.split('-').map(Number);
   const dow = DOW_EN[new Date(Date.UTC(y, m - 1, d)).getUTCDay()] ?? 'Mon';
   return `${dow} ${time}`;
 }
 
-function earliestMs(): number {
-  return Math.floor(Date.now() / 60000) * 60000 + MIN_LEAD_MS;
-}
+export type MediaFailure = 'media_not_found' | 'media_unavailable';
+
+type ResolvedMedia =
+  | { ok: true; urls: string[]; video: boolean }
+  | { ok: false; error: MediaFailure };
+
+const NOT_THIS_CALLERS_MEDIA: ResolvedMedia = { ok: false, error: 'media_not_found' };
+const MEDIA_PIPELINE_BROKEN: ResolvedMedia = { ok: false, error: 'media_unavailable' };
 
 async function resolveMediaUrls(
   supabase: SupabaseClient,
@@ -163,25 +194,40 @@ async function resolveMediaUrls(
   brandId: string,
   paths: string[],
   libraryIds: string[]
-): Promise<{ urls: string[]; video: boolean }> {
+): Promise<ResolvedMedia> {
   const urls: string[] = [];
   let video = false;
+
   for (const raw of paths.slice(0, MAX_MEDIA)) {
     const path = String(raw ?? '');
-    if (!path.startsWith(`${userId}/uploads/`)) continue;
+    if (!path.startsWith(`${userId}/uploads/`)) return NOT_THIS_CALLERS_MEDIA;
     const publicUrl = supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
-    if (publicUrl) urls.push(publicUrl);
+    if (!publicUrl) return NOT_THIS_CALLERS_MEDIA;
+    urls.push(publicUrl);
     if (/\.(mp4|webm|mov)(\?|$)/i.test(path)) video = true;
   }
-  for (const id of libraryIds.slice(0, MAX_MEDIA - urls.length)) {
-    const copied = await publishLibraryImageAsPostMedia(supabase, {
+
+  const wanted = libraryIds.slice(0, MAX_MEDIA - urls.length).map(String);
+  if (!wanted.length) return { ok: true, urls: urls.slice(0, MAX_MEDIA), video };
+
+  const owned = new Map(
+    (await findBrandMediaByIds(supabase, brandId, wanted)).map((row) => [row.id, row])
+  );
+  for (const id of wanted) {
+    const media = owned.get(id);
+    if (!media) return NOT_THIS_CALLERS_MEDIA;
+    const copied = await publishLibraryMediaAsPostMedia(supabase, {
       brandId,
       userId,
-      mediaId: String(id)
+      mediaId: id,
+      kind: media.kind
     });
-    if ('publicUrl' in copied && copied.publicUrl) urls.push(copied.publicUrl);
+    if (!('publicUrl' in copied) || !copied.publicUrl) return MEDIA_PIPELINE_BROKEN;
+    urls.push(copied.publicUrl);
+    if (media.kind === 'video') video = true;
   }
-  return { urls: urls.slice(0, MAX_MEDIA), video };
+
+  return { ok: true, urls: urls.slice(0, MAX_MEDIA), video };
 }
 
 export async function createManualPost(opts: {
@@ -197,26 +243,19 @@ export async function createManualPost(opts: {
   const caption = String(opts.input.caption ?? '').trim();
   if (!caption) return { ok: false, error: 'need_caption' };
 
-  const { urls, video: pathVideo } = await resolveMediaUrls(
+  const media = await resolveMediaUrls(
     opts.supabase,
     opts.userId,
     opts.brandId,
     opts.input.mediaPaths ?? [],
     opts.input.libraryIds ?? []
   );
+  if (!media.ok) return { ok: false, error: media.error };
+  const { urls, video: pathVideo } = media;
   const isVideo = opts.input.isVideo === true || pathVideo;
   const hasMedia = urls.length > 0;
-  const needsVisual = platforms.some((p) => VISUAL_REQUIRED_PLATFORMS.has(p));
-  if (needsVisual && !hasMedia) return { ok: false, error: 'need_media' };
-  const needsVideo = platforms.some((p) => VIDEO_ONLY_PLATFORMS.has(p));
-  if (needsVideo && !isVideo) return { ok: false, error: 'need_video' };
 
   const assembled = assemblePlatformCaptions(caption, opts.input.platformCaptions ?? {}, platforms);
-  const violations = captionViolations(assembled.caption, platforms, assembled.platform_captions);
-  if (violations.length) {
-    return { ok: false, error: 'over_limit' };
-  }
-
   const reddit = platforms.includes('reddit');
   const youtube = platforms.includes('youtube');
   const title = reddit
@@ -224,7 +263,17 @@ export async function createManualPost(opts: {
     : youtube
       ? youtubeTitleFrom(assembled.caption, opts.input.title)
       : '';
-  if (reddit && !title) return { ok: false, error: 'reddit_title' };
+
+  const blockers = publishBlockers({
+    platforms,
+    caption: assembled.caption,
+    platformCaptions: assembled.platform_captions,
+    hasMedia,
+    hasVideo: isVideo,
+    title
+  });
+  if (blockers.length) return { ok: false, error: blockers[0].code };
+
   const subreddit = reddit
     ? String(opts.input.subreddit ?? '')
         .trim()
@@ -237,18 +286,12 @@ export async function createManualPost(opts: {
   const contentType = !hasMedia ? (linkUrl ? 'link' : 'text') : isVideo ? 'uploaded_video' : 'uploaded_image';
   const format = !hasMedia ? (linkUrl ? 'link_post' : 'text_post') : isVideo ? 'reel' : carousel ? 'carousel' : 'post';
 
-  const mode = opts.input.mode;
-  let scheduledFor: string | null = null;
-  let slot: string | null = null;
-  if (mode === 'schedule') {
-    const date = String(opts.input.date ?? '').trim();
-    const time = String(opts.input.time ?? '').trim();
-    if (!date || !time) return { ok: false, error: 'too_soon' };
-    const iso = wallClockToUtc(date, time, opts.timezone);
-    if (new Date(iso).getTime() < earliestMs()) return { ok: false, error: 'too_soon' };
-    scheduledFor = iso;
-    slot = slotFromDate(date, time);
-  }
+  const behaviour = MODE_BEHAVIOUR[opts.input.mode];
+  const when = behaviour.dateFrom(opts.input, opts.timezone);
+  if (!when && behaviour.dateRequired) return { ok: false, error: 'too_soon' };
+  if (when && new Date(when).getTime() < earliestScheduleMs()) return { ok: false, error: 'too_soon' };
+  const scheduledFor = when;
+  const slot = when ? slotAt(when, opts.timezone) : null;
 
   const row = {
     brand_id: opts.brandId,
@@ -260,7 +303,7 @@ export async function createManualPost(opts: {
     media_urls: carousel ? urls : null,
     content_type: contentType,
     format,
-    source: 'manual',
+    source: opts.input.source ?? 'manual',
     title: title || null,
     subreddit,
     link_url: linkUrl,
@@ -272,20 +315,21 @@ export async function createManualPost(opts: {
   const { data: inserted, error: insErr } = await opts.supabase.from('posts').insert(row).select('id').single();
   if (insErr || !inserted) return { ok: false, error: insErr?.message ?? 'insert_failed' };
 
-  if (mode === 'draft') {
-    return { ok: true, id: inserted.id, status: 'pending_user' };
+  if (behaviour.outcome === 'pending_user') {
+    return { ok: true, id: inserted.id, status: 'pending_user', slot };
   }
 
   const { data: post } = await opts.supabase.from('posts').select(EDITOR_POST_COLS).eq('id', inserted.id).maybeSingle();
-  if (!post) return { ok: true, id: inserted.id, status: 'pending_user' };
+  if (!post) return { ok: true, id: inserted.id, status: 'pending_user', slot };
 
   const res = await publishApprovedPost(opts.supabase, post as ApprovablePost, opts.timezone, {
-    now: mode === 'now'
+    now: behaviour.outcome === 'published'
   });
   return {
     ok: true,
     id: inserted.id,
-    status: mode === 'now' ? 'published' : 'scheduled',
+    status: behaviour.outcome,
+    slot,
     noAccount: res.noAccount
   };
 }

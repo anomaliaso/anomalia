@@ -1,23 +1,22 @@
 // Resolve the LanguageModel for brand chat — every hub agent, peer consults and compaction.
 //
-// Un tubo solo: ogni tier (Fast/Auto/Pro/custom) attraversa il centralino `llm`
-// (`llmModelForPicker`); il tier resta l'etichetta UI/log, la famiglia sceglie solo il thinking.
+// Un tubo solo: ogni scelta attraversa il centralino `llm` (`llmModelForPicker`); il tier resta
+// l'etichetta UI/log, la famiglia sceglie solo il thinking. `null` = nessuna scelta: decide il
+// default del catalogo (`chat_model_catalog.is_default`).
 // Scala thinking comune + mappe native: `src/lib/models/catalog.ts`.
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
 import { env } from '$env/dynamic/private';
 import { isGoogleGeminiModel, llmConfigured, llmDefaultModel, llmLanguageModel, llmModelForPicker } from '$lib/server/llm';
 import type { LanguageModel } from 'ai';
-import { DEFAULT_CHAT_TIER, isChatTier, type ChatTier } from '$lib/chat-tiers';
-import { DEFAULT_REASONING, coerceReasoning, type ChatReasoning } from '$lib/chat-reasoning';
-import { familyForTier, type ModelFamilyId } from '$lib/models/catalog';
-import { modelPolicyForAgent } from '$lib/agent/specs';
+import { isChatTier, type ChatTier } from '$lib/chat-tiers';
+import { coerceReasoning, defaultReasoningFor, type ChatReasoning } from '$lib/chat-reasoning';
 import { turnModelFamily } from '$lib/chat-model-policy';
 
 export type ChatModelResolved = {
   model: LanguageModel;
   provider: 'deepseek' | 'kie' | 'xiaomi' | 'gemini' | 'openrouter' | 'opencode' | 'llm';
   modelId: string;
-  tier: ChatTier;
+  tier: ChatTier | null;
   /** Effort actually requested — logged so a slow turn can be explained after the fact. */
   reasoning: ChatReasoning;
   /** Extra streamText/generateText options (thinking config, etc.). */
@@ -52,8 +51,8 @@ export function compactionModel(): ChatModelResolved | null {
  * Modello di default sul centralino.
  */
 export function geminiFast(
-  reasoning: ChatReasoning = DEFAULT_REASONING.fast,
-  tier: ChatTier = 'fast'
+  reasoning: ChatReasoning = defaultReasoningFor(null),
+  tier: ChatTier | null = null
 ): ChatModelResolved {
   const modelId = llmDefaultModel();
   return withOutputCeiling({
@@ -80,10 +79,24 @@ export function modelSeesImages(m: ChatModelResolved): boolean {
   return false;
 }
 
-// AUTO → PRO. In Auto il modello lo sceglie l'app, e «produci un video/carosello/UGC» non è una
-// domanda: è un incarico, dove la differenza fra i due modelli si vede nel risultato. Classificatore
-// DETERMINISTICO (regex it/en, zero chiamate modello). Solo Auto scala: un tier scelto a mano
-// dall'utente è una scelta, non un default da correggere.
+/**
+ * True quando il messaggio è una richiesta di produzione (post/immagini/video/motion/UGC e simili).
+ *
+ * Ha UN solo consumatore, `forcedFirstStepTools`, e su un "sì" quel consumatore OBBLIGA il modello
+ * a chiamare un tool al primo step. Quindi la domanda vera non è «parla di produzione?» ma
+ * «possiamo costringerlo a produrre?».
+ *
+ * Ed è per questo che la negazione conta. «Non fare alcun post» ha le stesse parole di «fai un
+ * post», e senza guardarla l'agente generava un'immagine mentre l'utente gli diceva di non farne
+ * nessuna — non ignorando l'istruzione, ma perché gliela facevamo ignorare noi.
+ *
+ * I due errori non costano uguale, ed è questo che decide la regola: non forzare quando avremmo
+ * potuto lascia il modello libero di chiamare il tool lo stesso; forzare quando l'utente ha detto
+ * di no scavalca un'istruzione esplicita. Nel dubbio non si forza — quindi basta una negazione in
+ * qualunque punto del messaggio, senza provare a capire su cosa cade.
+ *
+ * Classificatore DETERMINISTICO (regex it/en, zero chiamate modello).
+ */
 const HEAVY_VERB_RE =
   /\b(gener(a|are|ami|ate)|generate|crea(re|mi|te)?|create|produc(i|e|urre|iamo)|produce|realizza(re|mi)?|renderizza(re)?|fa(i|mmi)|make|build|prepara(re|mi)?|design|disegna(re|mi)?|scriv(i|ere|imi)|write|lancia(re)?|launch)\b/i;
 const HEAVY_NOUN_RE =
@@ -91,53 +104,37 @@ const HEAVY_NOUN_RE =
 /** Termini che da soli dicono già "produzione pesante" — non servono verbi attorno. */
 const HEAVY_ALONE_RE = /\b(motion|ugc|trailer|render|storyboard|carousel(s)?|carosell[oi])\b/i;
 
-/** True quando il messaggio è una richiesta di produzione (post/immagini/video/motion/UGC e simili). */
+const NEGATION_RE =
+  /\b(non|senza|evita(re|ndo)?|niente|nessun[aeio]?|mai|no(n)?\s+voglio|don'?t|do\s+not|without|avoid(ing)?|never|no\s+need)\b/i;
+
 export function isHeavyProductionAsk(text: string | null | undefined): boolean {
   if (!text) return false;
   const t = text.slice(0, 4000);
+  if (NEGATION_RE.test(t)) return false;
   if (HEAVY_ALONE_RE.test(t)) return true;
   return HEAVY_VERB_RE.test(t) && HEAVY_NOUN_RE.test(t);
 }
 
 /**
- * Resolve Fast/Auto/Pro/custom for this turn.
+ * Il modello di questo turno.
  *
- * @param opts.agentId — specialista (motion, content, …). Su tier Auto decide la famiglia
- *   del thinking. Su Fast/Pro/custom l'utente ha scelto: l'agente non conta.
- * @param opts.userText — su Auto, richiesta di produzione pesante scala a Pro.
+ * Una sola scaletta, e nessun preset dentro: la scelta esplicita del turno, altrimenti quella
+ * salvata sul thread o sull'agente custom, altrimenti il default globale del catalogo. Chi non
+ * sceglie non "cade su Auto": prende la riga che l'operatore ha marcato in Supabase.
  */
 export function resolveChatModel(
   rawTier?: unknown,
   rawReasoning?: unknown,
-  opts: { userText?: string; agentId?: string | null; model?: unknown } = {}
+  opts: { agentId?: string | null; model?: unknown } = {}
 ): ChatModelResolved {
-  const envDefault = (env.CHAT_TIER ?? 'fast').toLowerCase();
-  let tier: ChatTier = isChatTier(rawTier)
-    ? rawTier
-    : isChatTier(envDefault)
-      ? envDefault
-      : DEFAULT_CHAT_TIER;
-
-  // Policy agente: solo Auto la legge. Fast/Pro restano la scelta esplicita dell'utente.
-  // La preferenza salvata (thread o agente custom, 0225) sta allo stesso posto e vince sullo spec.
   const saved = turnModelFamily(opts.model);
-  const policy = modelPolicyForAgent(opts.agentId);
-  const agentFamily: ModelFamilyId | null =
-    tier === 'auto' ? (saved?.family ?? policy.family) : null;
+  const tier: ChatTier | null = isChatTier(rawTier) ? rawTier : (saved?.model ?? null);
 
-  // Una famiglia scelta a mano è una scelta, non un default da correggere: niente scalata.
-  // Il centralino ha sempre un modello "pro" secondo della lista: il Pro è il secondo modello
-  // della lista del picker, un brand solo-gateway scala comunque su un incarico pesante.
-  if (tier === 'auto' && !saved && isHeavyProductionAsk(opts.userText)) tier = 'pro';
-
-  const familyId = familyForTier(tier, agentFamily).id;
   const reasoningRaw =
     rawReasoning === undefined || rawReasoning === null || rawReasoning === ''
-      ? tier === 'auto'
-        ? (saved?.thinking ?? policy.thinking)
-        : undefined
+      ? saved?.thinking
       : rawReasoning;
-  const reasoning: ChatReasoning = coerceReasoning(reasoningRaw, tier, agentFamily);
+  const reasoning: ChatReasoning = coerceReasoning(reasoningRaw, tier);
 
   const modelId = llmModelForPicker(tier);
   const resolved: ChatModelResolved = {

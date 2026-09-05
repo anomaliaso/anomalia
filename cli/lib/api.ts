@@ -4,6 +4,12 @@
  */
 
 import { appUrl } from './config.ts';
+import {
+  pathFor,
+  type BrandEndpoint,
+  type ResourceEndpoint,
+  type ResourcelessEndpoint,
+} from './contracts/index.ts';
 
 async function request<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   // Resolved per call, not at import time: loadEnv() sets PUBLIC_APP_URL after the module
@@ -34,6 +40,41 @@ function post<T>(path: string, token: string, body?: unknown): Promise<T> {
     method: 'POST',
     body: body ? JSON.stringify(body) : undefined,
   });
+}
+
+export function callEndpoint<T>(
+  endpoint: ResourcelessEndpoint,
+  token: string,
+  slug: string,
+  input?: Record<string, unknown>,
+): Promise<T>;
+export function callEndpoint<T>(
+  endpoint: ResourceEndpoint,
+  token: string,
+  slug: string,
+  input: Record<string, unknown>,
+  id: string,
+): Promise<T>;
+export function callEndpoint<T>(
+  endpoint: BrandEndpoint,
+  token: string,
+  slug: string,
+  input: Record<string, unknown> = {},
+  id?: string,
+): Promise<T> {
+  const path =
+    endpoint.resource === undefined ? pathFor(endpoint, slug) : pathFor(endpoint, slug, id ?? '');
+  if (endpoint.method === 'DELETE') return request<T>(path, token, { method: 'DELETE' });
+  if (endpoint.method !== 'GET') {
+    return request<T>(path, token, { method: endpoint.method, body: JSON.stringify(input) });
+  }
+
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined && value !== null) query.set(key, String(value));
+  }
+  const qs = query.toString();
+  return get<T>(qs ? `${path}?${qs}` : path, token);
 }
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -135,7 +176,7 @@ export type AnalyticsData = {
 export type StudioData = {
   kit: Record<string, unknown> | null;
   products: { id: string; title: string; pricing: string | null; images: unknown; featured: boolean | null }[];
-  documents: { id: string; kind: string; title: string; content_text: string | null }[];
+  documents: { id: string; kind: string; title: string; status: string; chunkCount: number; textBytes: number }[];
   history: { id: string; platform: string; content: string | null; metrics: Record<string, number> }[];
   people: { id: string; name: string; role: string | null; kind: string; description: string | null; consent: boolean; imageCount: number }[];
   competitors: { id: string; name: string; website: string | null; kind: string; rationale: string | null; source: string }[];
@@ -278,9 +319,6 @@ export const api = {
   addCompetitor: (t: string, slug: string, data: { name: string; website?: string; kind?: string; rationale?: string }) =>
     post<{ ok: boolean; competitor: { id: string; name: string; website: string | null; kind: string; source: string } }>(`/api/v1/brands/${slug}/studio/competitors`, t, data),
 
-  updateCompetitor: (t: string, slug: string, compId: string, data: { name?: string; website?: string; kind?: string; rationale?: string }) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/studio/competitors/${compId}`, t, { method: 'PUT', body: JSON.stringify(data) }),
-
   deleteCompetitor: (t: string, slug: string, compId: string) =>
     request<{ ok: boolean }>(`/api/v1/brands/${slug}/studio/competitors/${compId}`, t, { method: 'DELETE' }),
 
@@ -390,19 +428,6 @@ export const api = {
   updateVoice: (t: string, slug: string, data: { mood?: string; tone?: string; register?: number; emotion?: string; character?: string; syntax?: string; platform_instructions?: Record<string, string>; avoid?: string[] }) =>
     post<{ ok: boolean }>(`/api/v1/brands/${slug}/voice/update`, t, data),
 
-  // ── Product editing ───────────────────────────────────────────────────
-
-  updateProduct: (t: string, slug: string, productId: string, data: { title?: string; description?: string; pricing?: string; featured?: boolean }) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/products/${productId}`, t, { method: 'PUT', body: JSON.stringify(data) }),
-
-  deleteProduct: (t: string, slug: string, productId: string) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/products/${productId}`, t, { method: 'DELETE' }),
-
-  // ── Person editing ────────────────────────────────────────────────────
-
-  updatePerson: (t: string, slug: string, personId: string, data: { name?: string; role?: string; description?: string; attributes?: unknown }) =>
-    request<{ ok: boolean }>(`/api/v1/brands/${slug}/people/${personId}`, t, { method: 'PUT', body: JSON.stringify(data) }),
-
   // ── SEO ───────────────────────────────────────────────────────────────
 
   getSeo: (t: string, slug: string) => get<SeoData>(`/api/v1/brands/${slug}/seo`, t),
@@ -471,24 +496,4 @@ export const api = {
       copiedCampaignId?: string;
     }>(`/api/v1/brands/${slug}/ads`, t, body),
 
-  // ── Chat ──────────────────────────────────────────────────────────────
-
-  chat: async (t: string, slug: string, message: string): Promise<string> => {
-    const res = await fetch(`${appUrl()}/app/${slug}/chat`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: message }] }),
-    });
-    if (!res.ok) throw new Error(`Chat error: ${res.status}`);
-    // Read streaming response
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let result = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      result += decoder.decode(value, { stream: true });
-    }
-    return result;
-  },
 };

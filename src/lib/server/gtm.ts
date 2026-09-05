@@ -1,11 +1,9 @@
 import type { GoogleGenAI } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { structured, benchmarkDigest, type Benchmark } from '$lib/server/research';
+import { benchmarkDigest, type Benchmark } from '$lib/server/research';
 import { mondayOf } from '$lib/server/editorial-plan';
 import type { PastWinner } from '$lib/server/content-preview';
-import { aiStructured, XIAOMI_MODEL, AI_PROVIDER, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GEMINI } from '$lib/server/xiaomi';
-import { geminiFlash } from '$lib/server/gemini';
-import { env } from '$env/dynamic/private';
+import { aiStructured, VARIANT_LENSES, CREATIVE_TEMPERATURE, PIN_GEMINI } from '$lib/server/xiaomi';
 import { clampFunnelSpec, funnelBrief, stampFunnelGoals, ratesLabel, DEFAULT_RATES, type FunnelSpec } from '$lib/server/funnel';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -582,31 +580,6 @@ Return JSON.`;
   return plan;
 }
 
-// Dual-horizon generation with parallel variants: generate N 90-day plans in parallel,
-// pick the best, then generate N 6-month plans extending it in parallel, pick the best.
-// This ensures 90d and 6m are coherent (6m extends 90d) and each horizon is the best of N.
-export async function draftGtmDualWithBrief(
-  ai: GoogleGenAI,
-  profile: BrandProfile,
-  opts: GtmDualOpts,
-  brief: string
-): Promise<GtmPlan> {
-  return proposeGtmDualInner(ai, profile, { ...opts, agentBrief: brief });
-}
-
-/** Revise GTM from agent brief + client feedback (legacy pipeline, agent draft tool). */
-export async function draftGtmRedirectWithBrief(
-  ai: GoogleGenAI,
-  current: GtmPlan,
-  feedback: string,
-  phaseIndex: number | null,
-  profile: BrandProfile,
-  opts: GtmDualOpts,
-  agentBrief: string
-): Promise<GtmPlan> {
-  return redirectGtmDualInner(ai, current, feedback, phaseIndex, profile, { ...opts, agentBrief });
-}
-
 export async function proposeGtmDual(ai: GoogleGenAI, profile: BrandProfile, opts: GtmDualOpts): Promise<GtmPlan> {
   return proposeGtmDualInner(ai, profile, opts);
 }
@@ -698,43 +671,6 @@ export function gtmForPrompt(plan: GtmPlan): string {
     null,
     1
   );
-}
-
-// Conversational redirect: the user says what to change (optionally about one phase); Anomalia
-// recalculates the WHOLE plan coherently (removing a platform redistributes its weight
-// sensibly), explains what it changed, and asks for confirmation.
-export async function redirectGtm(
-  ai: GoogleGenAI,
-  current: GtmPlan,
-  feedback: string,
-  phaseIndex: number | null,
-  profile: BrandProfile,
-  opts: ProposeGtmOpts
-): Promise<GtmPlan> {
-  const prompt = `The client wants to redirect their GTM roadmap. Recalculate it keeping the thread coherent: change what the request targets, keep everything else, and propagate consequences sensibly (e.g. removing a platform redistributes its weight to where the data says it performs; cautious targets scale down across phases). Phases already completed (end date in the past) must NOT change.
-
-${profileBlock(profile)}
-${evidenceBlock(opts)}
-
-CURRENT PLAN:
-${gtmForPrompt(current)}
-
-CLIENT REQUEST${phaseIndex != null ? ` (about phase ${phaseIndex + 1})` : ''}:
-${feedback.trim()}
-
-Return the FULL revised plan (same horizon, phases covering it), plus:
-- "reply": your short, motivated answer to the client — what you changed and why, citing the data where relevant, ending with a confirmation question (e.g. "Ok. Ritiro Threads dalla fase Trazione e sposto il suo 15% su TikTok, che nei tuoi dati rende di più. Confermi?").
-- "changes_summary": short bullets of what changed.
-${HONESTY_LINE}
-${languageLine(opts.outputLanguage)}
-Return JSON.`;
-
-  const raw = await aiStructured<AnyRec>(ai, prompt, gtmSchema(true), GTM_SYSTEM, 'return_result', { ...PIN_GEMINI });
-  const revised = normalizeGtm(raw, current.horizon);
-  // A redirect keeps the plan's funnel spec: numeric goals re-stamped in code (no-op when null).
-  revised.phases = stampFunnelGoals(revised.phases, current.funnel);
-  revised.funnel = current.funnel ?? null;
-  return revised;
 }
 
 // Dual-horizon redirect with parallel variants: generate N revised 90-day plans in parallel,

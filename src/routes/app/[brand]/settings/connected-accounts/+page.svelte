@@ -1,7 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
-  import { pageQuery } from '$lib/page-query';
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { PLATFORMS, ICONS } from '$lib/components/settings/platforms';
@@ -12,7 +11,7 @@
   const base = $derived(`/app/${brand.slug}`);
   const canConnectSocials = $derived(brandCanConnect(brand.plan, brand.status));
   const atLimit = $derived(canConnectSocials && data.used >= data.limit);
-  const q = pageQuery();
+  const q = (key: string) => $page.url.searchParams.get(key);
   const limitError = $derived(q('error') === 'limit');
   const connected = $derived(data.accounts.filter((a) => a.status === 'active'));
 

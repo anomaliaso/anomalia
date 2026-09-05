@@ -1,11 +1,10 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import type { HomeOverview } from '$lib/server/hub-overview';
-  import { openChatComposer } from '$lib/stores/chat';
-  import { closePageModal } from '$lib/components/PageModal.svelte';
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
   import GrowthReadiness from '$lib/components/GrowthReadiness.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
+  import { homeTodos } from '$lib/home-todos';
 
   type Extras = {
     pendingCount?: number;
@@ -24,32 +23,14 @@
     extras = null,
     overview,
     launchedAt = null,
-    onboardingCompleted = true
   }: {
     brandSlug: string;
     extras?: Extras | null;
     overview: HomeOverview;
     launchedAt?: string | null;
-    onboardingCompleted?: boolean;
   } = $props();
 
-  const showContinueBanner = $derived(!onboardingCompleted);
   const base = $derived(`/app/${brandSlug}`);
-
-  /** Setup continues in chat — the assistant owns the remaining onboarding steps. */
-  function continueSetupInChat() {
-    openChatComposer({
-      brandSlug,
-      prefill: $_('app.home.continueOnboarding.chatPrefill')
-    });
-    // Il workbench vive nella modal: il composer sta sotto il backdrop, quindi prima si
-    // chiude, poi si scorre. Fuori dalla modal `closePageModal` è un no-op.
-    closePageModal();
-    if (typeof document === 'undefined') return;
-    document
-      .querySelector('.overview-composer')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 
   // Merge deferred extras into setup flags when they arrive.
   const setup = $derived({
@@ -149,116 +130,22 @@
     }
   );
 
-  const reviewTotal = $derived(pendingPostCount + pendingBlogCount);
-  const controlOk = $derived(reviewTotal === 0);
-
-  type ReviewItem = {
-    key: string;
-    kind: 'social' | 'blog';
-    id: string;
-    href: string;
-    title: string;
-    meta: string;
-    media: string | null;
-    placeholder: string;
-  };
-
-  const REVIEW_PREVIEW = 5;
-  const REVIEW_PAGE_SIZE = 5;
-
-  const reviewItems = $derived.by((): ReviewItem[] => {
-    const social: ReviewItem[] = pendingPosts.map((post) => ({
-      key: `social-${post.id}`,
-      kind: 'social',
-      id: post.id,
-      href: `${base}/calendar?status=pending_user`,
-      title: captionPreview(post.caption, 90) || '—',
-      meta: post.platform ?? 'social',
-      media: post.media_url,
-      placeholder: (post.platform ?? '?').slice(0, 2).toUpperCase()
-    }));
-    const blogs: ReviewItem[] = pendingBlogs.map((art) => ({
-      key: `blog-${art.id}`,
-      kind: 'blog',
-      id: art.id,
-      href: `${base}/site/edit/${art.id}`,
-      title: captionPreview(art.title, 90) || '—',
-      meta: art.status,
-      media: art.cover_url,
-      placeholder: 'B'
-    }));
-    return [...social, ...blogs];
-  });
-
-  const loadedReviewCount = $derived(reviewItems.length);
-  const reviewTruncated = $derived(reviewTotal > loadedReviewCount);
-
-  let reviewExpanded = $state(false);
-  let reviewPage = $state(0);
-
-  const reviewPageCount = $derived(
-    Math.max(1, Math.ceil(loadedReviewCount / REVIEW_PAGE_SIZE))
-  );
-  const visibleReviewItems = $derived.by(() => {
-    if (!reviewExpanded) return reviewItems.slice(0, REVIEW_PREVIEW);
-    const start = reviewPage * REVIEW_PAGE_SIZE;
-    return reviewItems.slice(start, start + REVIEW_PAGE_SIZE);
-  });
-  const canExpandReview = $derived(loadedReviewCount > REVIEW_PREVIEW || reviewTruncated);
-
-  $effect(() => {
-    if (reviewPage > reviewPageCount - 1) reviewPage = Math.max(0, reviewPageCount - 1);
-  });
-
-  function expandReview() {
-    reviewExpanded = true;
-    reviewPage = 0;
-  }
-  function collapseReview() {
-    reviewExpanded = false;
-    reviewPage = 0;
-  }
-
-  function gradeToScore(grade: string | null): number | null {
-    if (!grade) return null;
-    const g = grade.trim().toUpperCase();
-    const map: Record<string, number> = {
-      'A+': 97,
-      A: 92,
-      'A-': 88,
-      'B+': 84,
-      B: 78,
-      'B-': 72,
-      'C+': 68,
-      C: 62,
-      'C-': 55,
-      D: 45,
-      F: 25
-    };
-    return map[g] ?? null;
-  }
-
-  const seoGauge = $derived(
-    overview.web.techScore != null
-      ? Math.max(0, Math.min(100, overview.web.techScore))
-      : (gradeToScore(overview.web.seoGrade) ?? 0)
-  );
-  const seoGaugeLabel = $derived(
-    overview.web.techScore != null
-      ? String(Math.round(overview.web.techScore))
-      : (overview.web.seoGrade ?? '—')
-  );
-  const geoGauge = $derived(
-    overview.web.citationsTotal > 0
-      ? Math.round((overview.web.citationsMentioned / overview.web.citationsTotal) * 100)
-      : (overview.web.shareOfVoice ?? 0)
-  );
-  const geoGaugeLabel = $derived(
-    overview.web.citationsTotal > 0
-      ? `${overview.web.citationsMentioned}/${overview.web.citationsTotal}`
-      : overview.web.shareOfVoice != null
-        ? `${overview.web.shareOfVoice}%`
-        : '—'
+  // Le cose da fare in cima: la SELEZIONE e l'ORDINE stanno in `$lib/home-todos`, puro e sotto
+  // test; qui si aggiunge solo ciò che quel modulo non può sapere — l'href col brand e la
+  // traduzione. Ha preso il posto di tre gauge (setup, SEO, GEO) e di una coda paginata dei
+  // singoli post: i primi erano ornamento, la seconda diceva la stessa cosa della riga
+  // «N da approvare» con un clic in più e una paginazione da mantenere.
+  const todos = $derived(
+    homeTodos({
+      queue: { pending: pendingPostCount },
+      blog: { pending: pendingBlogCount },
+      automations: {
+        radarEnabled: auto.radarEnabled,
+        radarReview: auto.radarReview,
+        leadsPending: auto.leadsPending
+      },
+      setup: { socialAccounts: setup.socialAccounts }
+    })
   );
 
   const socialPipeMax = $derived(
@@ -320,21 +207,6 @@
       : 0
   );
 
-  function askAiAboutBlogs() {
-    openChatComposer({
-      brandSlug,
-      agent: 'web',
-      prefill: $_('app.home.overview.blogsAiPrompt', { values: { n: pendingBlogCount } })
-    });
-  }
-  function askAiAboutPosts() {
-    openChatComposer({
-      brandSlug,
-      agent: 'publish',
-      prefill: $_('app.home.overview.postsAiPrompt', { values: { n: pendingPostCount } })
-    });
-  }
-
   function formatWhen(iso: string) {
     try {
       return new Date(iso).toLocaleString(undefined, {
@@ -351,16 +223,6 @@
 </script>
 
 <div class="home-wb">
-  {#if showContinueBanner}
-    <button type="button" class="ob-banner" onclick={continueSetupInChat}>
-      <div class="ob-banner-copy">
-        <span class="ob-banner-kicker">{$_('app.home.continueOnboarding.kicker')}</span>
-        <strong class="ob-banner-title">{$_('app.home.continueOnboarding.title')}</strong>
-        <span class="ob-banner-msg">{$_('app.home.continueOnboarding.msg')}</span>
-      </div>
-      <span class="ob-banner-cta">{$_('app.home.continueOnboarding.cta')}</span>
-    </button>
-  {/if}
 
   {#if showSetup}
     <section class="setup-box">
@@ -416,162 +278,36 @@
     <GrowthReadiness checks={overview.growth.checks} compact={overview.growth.ready} />
   {/if}
 
-  <!-- Command center: status + gauges -->
-  <section class="control-hero" class:ok={controlOk}>
-    <div class="control-copy">
-      <span class="ov-kicker">{$_('app.home.overview.sectionAttention')}</span>
-      <h2 class="control-title">
-        {#if controlOk}
-          {$_('app.home.overview.controlOk')}
-        {:else}
-          {$_('app.home.overview.controlNeedsReview', { values: { n: reviewTotal } })}
-        {/if}
-      </h2>
-      <p class="control-desc">
-        {#if controlOk}
-          {$_('app.home.overview.controlOkDesc')}
-        {:else}
-          {$_('app.home.overview.controlNeedsDesc')}
-        {/if}
-      </p>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge">
-        <div class="gauge-ring" style={`--v:${Math.round(setupPct)}`} aria-hidden="true">
-          <span><AnimatedNum value={Math.round(setupPct)} format={(n) => String(Math.round(n))} /></span>
-        </div>
-        <span class="gauge-label">{$_('app.home.overview.setupGauge')}</span>
-      </div>
-      <a class="gauge" href={`${base}/seo`}>
-        <div class="gauge-ring" style={`--v:${Math.round(seoGauge)}`} aria-hidden="true">
-          <span>
-            {#if overview.web.techScore != null}
-              <AnimatedNum value={Math.round(overview.web.techScore)} format={(n) => String(Math.round(n))} />
-            {:else}
-              {seoGaugeLabel}
-            {/if}
-          </span>
-        </div>
-        <span class="gauge-label">{$_('app.home.overview.seoGauge')}</span>
-      </a>
-      <a class="gauge" href={`${base}/geo`}>
-        <div class="gauge-ring" style={`--v:${Math.round(geoGauge)}`} aria-hidden="true">
-          <span>
-            {#if overview.web.citationsTotal > 0}
-              <AnimatedNum value={overview.web.citationsMentioned} format={(n) => String(Math.round(n))} />/{overview.web.citationsTotal}
-            {:else if overview.web.shareOfVoice != null}
-              <AnimatedNum value={overview.web.shareOfVoice} format={(n) => String(Math.round(n))} suffix="%" />
-            {:else}
-              {geoGaugeLabel}
-            {/if}
-          </span>
-        </div>
-        <span class="gauge-label">{$_('app.home.overview.geoGauge')}</span>
-      </a>
+  <!-- IL BLOCCO DEL MOCKUP: ciò che richiede attenzione sta in cima, con quante sono. Il resto
+       della pagina scende sotto, invariato. -->
+  <section class="todo" aria-labelledby="todo-title">
+    <div class="todo-head">
+      <h2 id="todo-title">{$_('app.home.todo.title')}</h2>
+      {#if todos.length > 0}
+        <p class="todo-count">{$_('app.home.todo.count', { values: { n: todos.length } })}</p>
+      {/if}
     </div>
 
-    {#if reviewTotal > 0}
-      <div class="review-queue">
-        <div class="review-queue-head">
-          <div class="review-queue-copy">
-            <span class="review-queue-title">{$_('app.home.overview.toReview')}</span>
-            <span class="review-queue-meta">
-              {#if pendingPostCount > 0}
-                {$_('app.home.overview.postsToAccept', { values: { n: pendingPostCount } })}
-              {/if}
-              {#if pendingPostCount > 0 && pendingBlogCount > 0}
-                <span aria-hidden="true"> · </span>
-              {/if}
-              {#if pendingBlogCount > 0}
-                {$_('app.home.overview.blogsToAccept', { values: { n: pendingBlogCount } })}
-              {/if}
-            </span>
-          </div>
-          <div class="ov-panel-actions">
-            {#if pendingPostCount > 0}
-              <button type="button" class="ov-ai" onclick={askAiAboutPosts}
-                >{$_('app.home.overview.postsAiCta')}</button
-              >
-            {/if}
-            {#if pendingBlogCount > 0}
-              <button type="button" class="ov-ai ov-ai-strong" onclick={askAiAboutBlogs}
-                >{$_('app.home.overview.blogsAiCta')}</button
-              >
-            {/if}
-          </div>
-        </div>
-
-        <ul class="review-list">
-          {#each visibleReviewItems as item (item.key)}
-            <li>
-              <a href={item.href}>
-                <span class="up-thumb">
-                  {#if item.media}
-                    <img src={item.media} alt="" loading="lazy" />
-                  {:else}
-                    <span class="up-ph">{item.placeholder}</span>
-                  {/if}
-                </span>
-                <span class="up-body">
-                  <span class="up-meta">
-                    <span class="ov-kind"
-                      >{item.kind === 'social'
-                        ? $_('app.home.overview.kindSocial')
-                        : $_('app.home.overview.kindBlog')}</span
-                    >
-                    {item.meta}
-                  </span>
-                  <span class="up-title">{item.title}</span>
-                </span>
-              </a>
-            </li>
-          {/each}
-        </ul>
-
-        <div class="review-queue-foot">
-          {#if !reviewExpanded && canExpandReview}
-            <button type="button" class="ov-link review-toggle" onclick={expandReview}>
-              {$_('app.home.overview.showAllReview', { values: { n: reviewTotal } })} →
-            </button>
-          {:else if reviewExpanded}
-            <div class="review-pager">
-              <button
-                type="button"
-                class="ov-ai"
-                disabled={reviewPage <= 0}
-                onclick={() => (reviewPage = Math.max(0, reviewPage - 1))}
-              >
-                {$_('app.home.overview.prev')}
-              </button>
-              <span class="review-page-label"
-                >{$_('app.home.overview.pageOf', {
-                  values: { page: reviewPage + 1, pages: reviewPageCount }
-                })}</span
-              >
-              <button
-                type="button"
-                class="ov-ai"
-                disabled={reviewPage >= reviewPageCount - 1}
-                onclick={() => (reviewPage = Math.min(reviewPageCount - 1, reviewPage + 1))}
-              >
-                {$_('app.home.overview.next')}
-              </button>
-            </div>
-            <button type="button" class="ov-link review-toggle" onclick={collapseReview}>
-              {$_('app.home.overview.showLessReview')}
-            </button>
-            {#if reviewTruncated}
-              <a class="ov-link" href={`${base}/calendar?status=pending_user`}
-                >{$_('app.home.overview.seeAll')} →</a
-              >
-            {/if}
-          {/if}
-        </div>
-      </div>
+    {#if todos.length === 0}
+      <!-- Uno stato vuoto che dice PERCHÉ è vuoto e cosa lo riempirà, invece di una riga muta. -->
+      <p class="todo-empty">{$_('app.home.todo.empty')}</p>
+    {:else}
+      <ul class="todo-list">
+        {#each todos as todo (todo.key)}
+          <li>
+            <a href={`${base}${todo.path}`}>
+              <span class="todo-body">
+                <span class="todo-what">{$_(todo.labelKey, { values: { n: todo.count } })}</span>
+                <span class="todo-where">{$_(todo.hintKey)}</span>
+              </span>
+              <span class="todo-cta">{$_('app.home.overview.review')}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </section>
 
-  <!-- Pipeline -->
   <section class="ov-section">
     <div class="ov-section-head">
       <div class="ov-section-copy">
@@ -902,6 +638,82 @@
 </div>
 
 <style>
+  /* IL BLOCCO DELLE COSE DA FARE. Niente cornici, niente riempimenti: la gerarchia la fanno
+     spaziatura, dimensione e peso — che è la regola del mockup, dove l'unico bordo è quello
+     della riga che chiede qualcosa. */
+  .todo {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .todo-head h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .todo-count {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .todo-empty {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 62ch;
+  }
+  .todo-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .todo-list a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 16px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--paper);
+    text-decoration: none;
+    transition: border-color 140ms ease;
+  }
+  .todo-list a:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  }
+  .todo-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .todo-what {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .todo-where {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+  .todo-cta {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
   /* Registering the angle is what makes the rotating border possible at all: an unregistered
      custom property has no type, so CSS jumps it 0deg→360deg instead of interpolating and the
      gradient never moves. Where @property is unsupported the border simply sits still — the
@@ -923,182 +735,6 @@
     min-width: 0;
     width: 100%;
     overflow-x: clip;
-  }
-
-  .ob-banner {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin: 0 0 20px;
-    padding: 16px 18px;
-    width: 100%;
-    text-align: left;
-    font: inherit;
-    cursor: pointer;
-    border-radius: 16px;
-    /* Border is drawn by the rotating conic gradient below, not by a static border, so the
-       element keeps the same box size whether the animation runs or not. */
-    border: 1px solid transparent;
-    background:
-      linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--accent) 12%, var(--paper)) 0%,
-        var(--paper) 55%
-      )
-      padding-box,
-      conic-gradient(
-        from var(--ob-angle),
-        color-mix(in srgb, var(--accent) 70%, transparent),
-        color-mix(in srgb, var(--accent) 10%, var(--line)) 25%,
-        color-mix(in srgb, var(--accent) 70%, transparent) 50%,
-        color-mix(in srgb, var(--accent) 10%, var(--line)) 75%,
-        color-mix(in srgb, var(--accent) 70%, transparent)
-      )
-      border-box;
-    color: var(--ink);
-    position: relative;
-    animation:
-      ob-spin 4s linear infinite,
-      ob-glow 2.6s ease-in-out infinite;
-  }
-  /* Glow as a pulsing box-shadow rather than a blurred pseudo-element behind the card: a
-     `z-index:-1` layer would sit behind the PAGE background too (the banner creates no stacking
-     context of its own), so on some themes it would simply be invisible. */
-  @keyframes ob-spin {
-    to {
-      --ob-angle: 360deg;
-    }
-  }
-  @keyframes ob-glow {
-    0%,
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 18px 2px color-mix(in srgb, var(--accent) 35%, transparent);
-    }
-  }
-  /* An animated border on a permanently visible banner is exactly the motion that triggers
-     vestibular discomfort — freeze it, but keep the accent border so it still reads as urgent. */
-  @media (prefers-reduced-motion: reduce) {
-    .ob-banner {
-      animation: none;
-      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-      box-shadow: 0 0 14px 1px color-mix(in srgb, var(--accent) 22%, transparent);
-    }
-  }
-  .ob-banner-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
-  }
-  .ob-banner-kicker {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  .ob-banner-title {
-    font-size: 15px;
-    font-weight: 650;
-  }
-  .ob-banner-msg {
-    font-size: 13px;
-    color: var(--ink-soft);
-  }
-  /* Material-style state layers: the button keeps ONE background (the accent) and the interaction
-     is expressed by a translucent white overlay on top of it — 8% hovered, 12% pressed — plus an
-     elevation change. Tinting the accent itself would drift the brand colour; a layer does not.
-     The overlay lives in a pseudo-element so it can't affect the label's contrast. */
-  .ob-banner-cta {
-    flex-shrink: 0;
-    position: relative;
-    overflow: hidden;
-    padding: 10px 14px;
-    border-radius: 999px;
-    /* Same rotating-border trick as the banner, at pill scale: the accent fill is the padding-box
-       layer, the travelling highlight is the border-box layer. */
-    border: 1px solid transparent;
-    background:
-      linear-gradient(var(--accent), var(--accent)) padding-box,
-      conic-gradient(
-          from var(--cta-angle),
-          rgba(255, 255, 255, 0.45),
-          rgba(255, 255, 255, 0.06) 25%,
-          rgba(255, 255, 255, 0.45) 50%,
-          rgba(255, 255, 255, 0.06) 75%,
-          rgba(255, 255, 255, 0.45)
-        )
-        border-box;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    /* Glow rides on filter, NOT box-shadow — box-shadow is already carrying the Material
-       elevation states, and one property cannot animate on two schedules. */
-    filter: drop-shadow(0 0 0 transparent);
-    animation:
-      cta-spin 3s linear infinite,
-      cta-glow 2.6s ease-in-out infinite;
-    transition:
-      box-shadow 140ms cubic-bezier(0.2, 0, 0, 1),
-      transform 90ms cubic-bezier(0.2, 0, 0, 1);
-  }
-  @keyframes cta-spin {
-    to {
-      --cta-angle: 360deg;
-    }
-  }
-  @keyframes cta-glow {
-    0%,
-    100% {
-      filter: drop-shadow(0 0 1px color-mix(in srgb, var(--accent) 14%, transparent));
-    }
-    50% {
-      filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 32%, transparent));
-    }
-  }
-  .ob-banner-cta::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: #fff;
-    opacity: 0;
-    transition: opacity 140ms cubic-bezier(0.2, 0, 0, 1);
-    pointer-events: none;
-  }
-  /* Hover lives on the banner, not the span: the whole banner is the control, so the pointer is
-     rarely exactly over the pill — reacting only to the pill would feel broken. */
-  .ob-banner:hover .ob-banner-cta {
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.24);
-  }
-  .ob-banner:hover .ob-banner-cta::after {
-    opacity: 0.08;
-  }
-  .ob-banner:active .ob-banner-cta {
-    /* Pressed sits LOWER than resting — Material drops elevation on press, it does not raise it. */
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
-    transform: scale(0.97);
-  }
-  .ob-banner:active .ob-banner-cta::after {
-    opacity: 0.12;
-  }
-  .ob-banner:focus-visible .ob-banner-cta::after {
-    opacity: 0.1;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ob-banner-cta {
-      transition: none;
-      animation: none;
-      /* Keep a static glow so the button still stands out without moving. */
-      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 20%, transparent));
-    }
-    .ob-banner:active .ob-banner-cta {
-      transform: none;
-    }
   }
 
   .setup-box {
@@ -1235,204 +871,6 @@
     font-weight: 650;
     color: var(--accent);
     text-decoration: none;
-  }
-
-  /* ── Control hero ─────────────────────────────────────────── */
-  .control-hero {
-    display: grid;
-    gap: 18px;
-    margin: 0 0 64px;
-    padding: 18px 18px 16px;
-    border-radius: 18px;
-    border: 1px solid var(--line);
-    min-width: 0;
-    max-width: 100%;
-    overflow-x: clip;
-    background:
-      radial-gradient(
-        120% 80% at 100% 0%,
-        color-mix(in srgb, var(--accent) 10%, transparent) 0%,
-        transparent 55%
-      ),
-      var(--paper);
-  }
-  .control-hero.ok {
-    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-  }
-  .control-copy {
-    min-width: 0;
-  }
-  .control-title {
-    margin: 4px 0 6px;
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1.2;
-    overflow-wrap: anywhere;
-  }
-  .control-desc {
-    margin: 0;
-    font-size: 13.5px;
-    color: var(--ink-soft);
-    max-width: 42ch;
-  }
-  .gauge-row {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .gauge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 8px;
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--paper-2) 70%, var(--paper));
-    border: 1px solid transparent;
-    text-decoration: none;
-    color: inherit;
-  }
-  a.gauge:hover {
-    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-  }
-  .gauge-ring {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: conic-gradient(var(--accent) calc(var(--v) * 1%), color-mix(in srgb, var(--ink) 8%, transparent) 0);
-    transition: background 0.6s ease;
-  }
-  .gauge-ring span {
-    width: 54px;
-    height: 54px;
-    border-radius: 50%;
-    background: var(--paper);
-    display: grid;
-    place-items: center;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--ink);
-  }
-  .gauge-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink-soft);
-    text-align: center;
-  }
-
-  .review-queue {
-    margin-top: 4px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .review-queue-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .review-queue-copy {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1 1 12rem;
-  }
-  .review-queue-title {
-    font-size: 14px;
-    font-weight: 650;
-    letter-spacing: -0.02em;
-  }
-  .review-queue-meta {
-    font-size: 12.5px;
-    color: var(--ink-soft);
-    overflow-wrap: anywhere;
-  }
-  .review-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--paper-2) 55%, var(--paper));
-    overflow: hidden;
-    min-width: 0;
-    max-width: 100%;
-    width: 100%;
-  }
-  .review-list li {
-    min-width: 0;
-  }
-  .review-list li + li {
-    border-top: 1px solid var(--line);
-  }
-  .review-list a {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    text-decoration: none;
-    color: inherit;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-  .review-list a:hover {
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
-  }
-  .review-list .up-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .review-queue-foot {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .review-pager {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .review-pager .ov-ai:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .review-page-label {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--ink-soft);
-    min-width: 4.5ch;
-    text-align: center;
-  }
-  button.review-toggle {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    cursor: pointer;
-    font: inherit;
   }
 
   /* ── Pipeline ─────────────────────────────────────────────── */
@@ -1607,23 +1045,6 @@
     flex-wrap: wrap;
     min-width: 0;
     max-width: 100%;
-  }
-  .ov-ai {
-    appearance: none;
-    border: 1px solid var(--line);
-    background: var(--paper);
-    color: var(--ink);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 6px 10px;
-    border-radius: 999px;
-    cursor: pointer;
-    max-width: 100%;
-    white-space: nowrap;
-  }
-  .ov-ai:hover {
-    border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
   }
   .ov-ai-strong {
     background: color-mix(in srgb, var(--accent) 12%, var(--paper));
@@ -1901,44 +1322,17 @@
     .mini-bar span,
     .likes-bars span,
     .setup-bar span,
-    .gauge-ring,
     .mini-ring {
       transition: none;
     }
   }
 
   @container workbench (max-width: 640px) {
-    .gauge-row {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
-    }
-    .gauge-ring {
-      width: 58px;
-      height: 58px;
-    }
-    .gauge-ring span {
-      width: 44px;
-      height: 44px;
-      font-size: 12px;
-    }
     .pipe-grid {
       grid-template-columns: 1fr;
     }
     .perf-layout {
       grid-template-columns: 1fr;
-    }
-    .control-hero {
-      padding: 14px 12px 12px;
-    }
-    .control-title {
-      font-size: 1.2rem;
-    }
-    .review-queue-head {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .review-queue-copy {
-      flex: 1 1 auto;
     }
     .ov-panel-actions {
       width: 100%;
@@ -1948,10 +1342,6 @@
       text-align: center;
       white-space: normal;
     }
-    .review-list a {
-      padding: 10px;
-      gap: 8px;
-    }
     .up-title {
       white-space: normal;
       display: -webkit-box;
@@ -1959,34 +1349,8 @@
       -webkit-box-orient: vertical;
       text-overflow: ellipsis;
     }
-    .review-queue-foot {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .review-pager {
-      justify-content: space-between;
-      width: 100%;
-    }
   }
 
   @container workbench (max-width: 420px) {
-    .gauge-row {
-      gap: 4px;
-    }
-    .gauge {
-      padding: 10px 4px;
-    }
-    .gauge-ring {
-      width: 52px;
-      height: 52px;
-    }
-    .gauge-ring span {
-      width: 40px;
-      height: 40px;
-      font-size: 11px;
-    }
-    .gauge-label {
-      font-size: 11px;
-    }
   }
 </style>

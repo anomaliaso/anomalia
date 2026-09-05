@@ -1,5 +1,5 @@
 import type { Rubric } from '$lib/server/rubrics';
-import type { EditorialPlan, PlanWeek } from '$lib/server/editorial-plan';
+import type { EditorialPlan } from '$lib/server/editorial-plan';
 import { weekMixForSpan } from '$lib/server/editorial-plan';
 import type { PostSeed } from '$lib/server/content-preview';
 import { normalizeBeats } from '$lib/server/content-preview/seed-model';
@@ -231,10 +231,6 @@ export function checkRubricsAndBatchFeasibility(
   }
 
   return violations;
-}
-
-export function weekMixFromPlan(plan: EditorialPlan | null, weekIndex: number): PlanWeek['content_mix'] {
-  return plan?.weeks?.[weekIndex]?.content_mix ?? [];
 }
 
 export async function loadBatchFeasibilityContext(

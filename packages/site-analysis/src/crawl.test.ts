@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Le funzioni che scaricano risolvono l'indirizzo prima di aprire il socket. Qui non si prova il
+// resolver: si prova cosa fa il crawler con la risposta, quindi la risposta e' fissa e pubblica e
+// la suite resta la stessa con o senza rete. Il rifiuto su indirizzo privato sta in crawl-ssrf.
+vi.mock('node:dns/promises', () => ({
+    lookup: async () => [{ address: '93.184.216.34', family: 4 }]
+}));
+
 import { blockPageReason, classifyArchetype, discoverAnnouncementPages, discoverInternalPages, extractLogos, extractSocialHandles, harvestPageImages, isUrlSafe, loadPageHtml, matchTeamPhotos, resolveEntryUrl, svgToPng, type BrowserRenderer, type EntryProbe } from './crawl';
 
 const linksHtml = (hrefs: string[]) =>

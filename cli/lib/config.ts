@@ -31,21 +31,6 @@ export function appUrl(): string {
 
 const isLocal = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(url);
 
-/**
- * Identificativo dell'authorization server annunciato ai client MCP in `authorization_servers`
- * (RFC 9728, `/.well-known/oauth-protected-resource`). È **www**, come PRODUCTION_URL.
- *
- * Qui c'era l'apex, in coppia con `issuerFor()` di 021-app. Il vincolo RFC 8414 è reale — il
- * client prende questa stringa, ci attacca `/.well-known/oauth-authorization-server`, e pretende
- * che l'`issuer` nel JSON sia identico — ma l'apex non serve quel JSON: `https://anomalia.so`
- * 308-redirecta a www a livello di dominio Vercel. Un client che non segue i redirect in
- * discovery (Smithery) muore prima di vedere i metadata:
- *   {"code":"oauth/auth_server_discovery_http_error", "status":308}
- *
- * www è l'unico host che risponde 200, quindi l'identificatore è www da entrambe le parti.
- * Resta decoupled da appUrl() perché un PUBLIC_APP_URL di dev deve comunque vincere: in locale
- * l'OAuth punta al dev server.
- */
 export function authServerUrl(): string {
   const app = appUrl();
   return isLocal(app) ? app : PRODUCTION_URL;

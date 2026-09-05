@@ -15,7 +15,7 @@ import {
   unwrapGraphicSource
 } from '$lib/design/graphic-source';
 import { createGraphicSourceEditTools, compactGraphicPersist } from '$lib/server/chat/graphic-source-edit';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import { noteRead, requireFreshRead } from '$lib/server/chat/read-guards';
 import type { RenderedGraphic } from '$lib/server/design-render';
 
@@ -119,7 +119,7 @@ async function loadProductImages(supabase: SupabaseClient, brandId: string, prod
 // both call these, so an edit behaves identically wherever it comes from.
 
 const POST_STATE_COLS =
-  'id, platform, platforms, caption, title, first_comment, link_url, subreddit, image_prompt, image_prompts, media_url, media_urls, content_type, format, product_name, status, video_thumbnail_url, youtube_thumbnail_url, updated_at';
+  'id, platform, platforms, caption, platform_captions, title, first_comment, link_url, subreddit, image_prompt, image_prompts, media_url, media_urls, content_type, format, product_name, status, scheduled_for, slot, video_thumbnail_url, youtube_thumbnail_url, updated_at';
 
 async function readRow(t: EditorTarget): Promise<AnyRec | null> {
   const { data } = await t.supabase
@@ -198,6 +198,9 @@ export async function readPostState(t: EditorTarget) {
     platform: row.platform,
     platforms: row.platforms,
     caption: row.caption,
+    platform_captions: row.platform_captions ?? null,
+    scheduled_for: row.scheduled_for ?? null,
+    slot: row.slot ?? null,
     title: row.title,
     first_comment: row.first_comment,
     link_url: row.link_url,
@@ -702,11 +705,16 @@ export async function persistRenderedGraphic(
 
   await reschedIfNeeded(t.supabase, t.brandId, t.postId, t.tz);
 
+  const { attachRenderForReview, routeCarriesMedia } = await import('$lib/server/graphic-review');
+
   return {
     success: true,
     media_origin: 'typographic_graphic',
     media_url: url,
     post_id: t.postId,
+    // Il render torna a chi l'ha chiesto: e' l'unico modo di accorgersi di ciò che il gate non
+    // misura — testo fuori tela, blocchi sovrapposti, righe che collidono.
+    ...attachRenderForReview(out.png, routeCarriesMedia()),
     font: out.font,
     size: `${out.width}×${out.height}`,
     width: out.width,
@@ -758,6 +766,8 @@ export async function applyPostGraphicSource(
   let out: RenderedGraphic;
   try {
     out = await renderGraphicSource(source, {
+      brandId: t.brandId,
+      userId: t.userId,
       brandColors: t.ctx.brandColors,
       typography: { display: t.ctx.typography.display, body: t.ctx.typography.body },
       format: args.format === 'jpeg' ? 'jpeg' : 'png'
@@ -812,6 +822,289 @@ export async function loadGraphicEditorSystemSuffix(
  *
  * Writes to a carousel slot when `slide_index` is given, otherwise replaces the post's single cover.
  */
+type GraphicImg = { url: string; label?: string | null };
+
+type GraphicRefArgs = {
+  media_ids?: string[];
+  people_ids?: string[];
+  talent_ids?: string[];
+  image_urls?: string[];
+  generate_prompt?: string;
+};
+
+/**
+ * LE IMMAGINI CHE IL COMPOSITORE PUÒ USARE, raccolte una volta sola.
+ *
+ * Allegati del turno, url passati a mano, libreria media, persone e talent firmati, le foto del
+ * prodotto quando c'è un prodotto, e infine il marchio ufficiale del brand kit — che va per primo
+ * nel catalogo (`ref:0`) perché il compositore piazzi il lockup vero invece di disegnarne uno.
+ *
+ * Sta qui, e non dentro il percorso del post, perché una grafica senza post ha bisogno esattamente
+ * dello stesso catalogo: le uniche cose che cambiano sono il prodotto e la piattaforma, che un
+ * asset a sé non ha.
+ */
+export async function graphicImageCatalog(
+  t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; refUrls?: string[] },
+  args: GraphicRefArgs,
+  from: { productName?: string | null; platform?: string | null } = {}
+): Promise<{ catalog: GraphicImg[]; generatedUrl?: string }> {
+  const { withBrandKitLogos } = await import('$lib/server/design-compose');
+  const { isUrlSafe } = await import('$lib/server/brand-analysis');
+  const { resolvePeopleVisualRefs, resolveTalentVisualRefs, pushVisualRefs } = await import(
+    '$lib/server/design-visual-refs'
+  );
+
+  const available: GraphicImg[] = [];
+  const pushImg = (url: string, label?: string | null) => {
+    if (!url || available.some((a) => a.url === url)) return;
+    if (url.startsWith('data:image/') || (url.startsWith('http') && isUrlSafe(url))) {
+      available.push({ url, label: label ?? null });
+    }
+  };
+
+  for (const u of t.refUrls ?? []) pushImg(u, 'attachment');
+  for (const u of args.image_urls ?? []) pushImg(u);
+
+  if (args.media_ids?.length) {
+    const { resolveBrandImageIds } = await import('$lib/server/brand-media');
+    const urls = await resolveBrandImageIds(t.supabase, t.brandId, args.media_ids);
+    for (const u of urls) pushImg(u, 'media library');
+  }
+
+  pushVisualRefs(available, await resolvePeopleVisualRefs(t.supabase, t.brandId, args.people_ids));
+  pushVisualRefs(available, await resolveTalentVisualRefs(t.supabase, args.talent_ids));
+
+  if (from.productName) {
+    const productUrls = await loadProductImages(t.supabase, t.brandId, from.productName);
+    for (const u of productUrls.slice(0, 4)) pushImg(u, `product:${from.productName}`);
+  }
+
+  let generatedUrl: string | undefined;
+  if (args.generate_prompt?.trim()) {
+    const { generateStandaloneImage } = await import('$lib/server/content-preview');
+    const gen = await generateStandaloneImage({
+      supabase: t.supabase,
+      userId: t.userId,
+      brandId: t.brandId,
+      prompt: args.generate_prompt.trim(),
+      platform: from.platform ?? undefined,
+      mediaIds: args.media_ids,
+      referenceUrls: available.map((a) => a.url).slice(0, 4)
+    });
+    if (gen.imageUrl) {
+      generatedUrl = gen.imageUrl;
+      pushImg(gen.imageUrl, 'ai generated');
+    }
+  }
+
+  // Il marchio ufficiale per primo: ref:0 è il logo del brand.
+  const catalog = withBrandKitLogos(available, { logos: t.ctx.logos, favicon_url: t.ctx.faviconUrl });
+  return { catalog, ...(generatedUrl ? { generatedUrl } : {}) };
+}
+
+/**
+ * UNA GRAFICA CHE NON APPARTIENE A NESSUN POST.
+ *
+ * `design_graphic` chiedeva un `post_id` obbligatorio, quindi «fammi una grafica ma niente post»
+ * non era esprimibile: l'unico strumento capace di produrre un'immagine senza toccare un post era
+ * `generate_image`, che però fa una FOTO. L'agente non stava disobbedendo — dava l'unica cosa che
+ * poteva, e non era quella chiesta.
+ *
+ * L'asset nasce nella libreria media come qualunque altra immagine generata, e la versione della
+ * grafica viaggia con lui (`kind: 'media_item'`, che il magazzino conosceva già): resta SORGENTE,
+ * quindi «accorcia il titolo» è una revisione e non una ricomposizione. Da lì `create_post_from_asset`
+ * lo trasforma in un post quando — e se — l'utente lo chiede.
+ */
+/**
+ * DOVE FINISCE UNA GRAFICA CHE NON HA UN POST: nella libreria, come asset, con la sua versione.
+ *
+ * Il gemello di `persistRenderedGraphic`, che invece scrive sulla riga del post. Sta qui accanto a
+ * lui apposta: sono le DUE destinazioni possibili di un render, e tenerle vicine è ciò che impedisce
+ * a una delle due di dimenticare un pezzo — la versione, per esempio, senza la quale l'immagine
+ * esiste ma non è più modificabile.
+ */
+async function persistStandaloneGraphic(
+  t: { supabase: SupabaseClient; brandId: string; userId: string },
+  out: RenderedGraphic,
+  opts: { mediaId?: string | null; brief: string }
+): Promise<{ url: string; mediaId: string | null; tileWarning?: string } | { error: string }> {
+  const { uploadPostImage } = await import('$lib/server/content-preview');
+  const { saveGraphicVersion } = await import('$lib/server/design-store');
+
+  const url = await uploadPostImage(
+    t.supabase,
+    t.userId,
+    `data:image/png;base64,${out.png.toString('base64')}`
+  );
+  if (!url) return { error: 'Upload failed' };
+
+  // La revisione resta sulla STESSA tessera, o la cronologia si spezza in una pila di tentativi.
+  let mediaId = opts.mediaId ?? null;
+  let tileWarning: string | undefined;
+  if (mediaId) {
+    const { updateMediaGeneratorItemUrl } = await import('$lib/server/media-generator/persist');
+    const upd = await updateMediaGeneratorItemUrl(t.supabase, {
+      brandId: t.brandId,
+      itemId: mediaId,
+      url,
+      prompt: opts.brief
+    });
+    if (!upd.ok) {
+      tileWarning = `The revised graphic is saved (image_url below) but the library tile still shows the old one: ${upd.error}.`;
+    }
+  } else {
+    const { insertMediaGeneratorItem } = await import('$lib/server/media-generator/persist');
+    const saved = await insertMediaGeneratorItem(t.supabase, {
+      brandId: t.brandId,
+      userId: t.userId,
+      kind: 'image',
+      url,
+      prompt: opts.brief,
+      aspect: out.aspect
+    });
+    if ('row' in saved) mediaId = saved.row.id;
+  }
+
+  // Senza tessera l'immagine esiste ma non è più modificabile: va detto, non taciuto.
+  if (mediaId) {
+    await saveGraphicVersion(t.supabase, {
+      brandId: t.brandId,
+      userId: t.userId,
+      target: { kind: 'media_item', id: mediaId },
+      spec: out.spec,
+      source: out.source,
+      mediaUrl: url,
+      brief: opts.brief
+    });
+  }
+  return { url, mediaId, ...(tileWarning ? { tileWarning } : {}) };
+}
+
+/**
+ * Scrivi un SORGENTE su una grafica standalone: renderizza, salva, versiona.
+ *
+ * È il gemello di `applyPostGraphicSource`, e senza di lui `replace_source` / `write_source` non
+ * potevano toccare una grafica che non appartiene a un post — la si poteva rifare a parole e non
+ * correggere una parola. Una feature a metà.
+ */
+export async function applyStandaloneGraphicSource(
+  t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; mediaId: string },
+  args: { source: string; brief?: string | null }
+) {
+  const source = unwrapGraphicSource(args.source);
+  if (!source) return { error: 'Empty source' };
+  if (source.length > GRAPHIC_SOURCE_MAX_CHARS) {
+    return { error: `Source exceeds ${GRAPHIC_SOURCE_MAX_CHARS} characters` };
+  }
+
+  const { renderGraphicSource } = await import('$lib/server/design-render');
+  let out: RenderedGraphic;
+  try {
+    out = await renderGraphicSource(source, {
+      brandId: t.brandId,
+      userId: t.userId,
+      brandColors: t.ctx.brandColors,
+      typography: { display: t.ctx.typography.display, body: t.ctx.typography.body }
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Render failed' };
+  }
+
+  const stored = await persistStandaloneGraphic(t, out, {
+    mediaId: t.mediaId,
+    brief: args.brief ?? 'source editor'
+  });
+  if ('error' in stored) return stored;
+
+  const { latestGraphic } = await import('$lib/server/design-store');
+  const current = await latestGraphic(t.supabase, { kind: 'media_item', id: t.mediaId });
+  const { attachRenderForReview, routeCarriesMedia } = await import('$lib/server/graphic-review');
+  return {
+    success: true as const,
+    media_origin: 'typographic_graphic' as const,
+    media_url: stored.url,
+    media_id: stored.mediaId,
+    version: current?.version,
+    graphic_source: out.source,
+    // `media` è ciò che la chat rende: senza, la grafica esisteva e l'utente non la vedeva.
+    media: [{ url: stored.url, caption: args.brief ?? 'graphic' }],
+    ...attachRenderForReview(out.png, routeCarriesMedia()),
+    ...(stored.tileWarning ? { warning: stored.tileWarning } : {})
+  };
+}
+
+export async function designStandaloneGraphic(
+  t: { supabase: SupabaseClient; brandId: string; userId: string; ctx: EditorContext; refUrls?: string[] },
+  args: GraphicRefArgs & { brief: string; media_id?: string }
+) {
+  const { composeAndRenderGraphic } = await import('$lib/server/design-compose');
+  const { latestGraphic, versionSource, saveGraphicVersion } = await import('$lib/server/design-store');
+  const { uploadPostImage } = await import('$lib/server/content-preview');
+
+  const { catalog, generatedUrl } = await graphicImageCatalog(t, args);
+
+  // Un `media_id` che porta già una grafica è una REVISIONE: si riparte dal suo sorgente, così
+  // quello che l'utente non ha nominato sopravvive.
+  const previous = args.media_id
+    ? await latestGraphic(t.supabase, { kind: 'media_item', id: args.media_id })
+    : null;
+
+  let composed: Awaited<ReturnType<typeof composeAndRenderGraphic>>;
+  try {
+    composed = await composeAndRenderGraphic(args.brief, {
+      language: t.ctx.language,
+      instructions: t.ctx.typography.instructions,
+      brandId: t.brandId,
+      userId: t.userId,
+      availableImages: catalog,
+      previousSource: previous ? versionSource(previous) : null,
+      context: null,
+      render: {
+        brandColors: t.ctx.brandColors,
+        typography: { display: t.ctx.typography.display, body: t.ctx.typography.body },
+        availableImages: catalog
+      }
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'The graphic could not be composed.' };
+  }
+
+  const stored = await persistStandaloneGraphic(t, composed.rendered, {
+    mediaId: args.media_id ?? null,
+    brief: args.brief
+  });
+  if ('error' in stored) return stored;
+  const { url, mediaId, tileWarning } = stored;
+  const out = composed.rendered;
+
+  if (args.media_ids?.length && !args.generate_prompt?.trim()) {
+    const { recordBrandMediaUse } = await import('$lib/server/brand-media');
+    await recordBrandMediaUse(t.supabase, t.brandId, args.media_ids);
+  }
+
+  const { attachRenderForReview, routeCarriesMedia } = await import('$lib/server/graphic-review');
+  return {
+    ok: true,
+    image_url: url,
+    // La chat rende un media SOLO da `media: [{url}]`: senza questa riga la grafica veniva
+    // composta, salvata, e l'utente non la vedeva — «nessuna immagine in chat, nulla».
+    media: [{ url, caption: args.brief.slice(0, 140) }],
+    ...attachRenderForReview(out.png, routeCarriesMedia()),
+    media_id: mediaId,
+    editable: !!mediaId,
+    post_created: false,
+    aspect: out.aspect,
+    available_images: catalog.length,
+    brand_logo_in_catalog: catalog.some((a) => a.label === 'brand logo'),
+    generated_image_url: generatedUrl,
+    edited: !!previous,
+    ...(mediaId ? {} : { warning: 'Saved as an image but not as an editable graphic: no library tile was created.' }),
+    ...(tileWarning ? { warning: tileWarning } : {}),
+    ...(composed.issues.length ? { design_warnings: composed.issues.map((i) => i.detail) } : {}),
+    ...(composed.repaired ? { repaired_after_gate: true } : {})
+  };
+}
+
 export async function designPostGraphic(
   t: EditorTarget,
   args: {
@@ -840,64 +1133,12 @@ export async function designPostGraphic(
   const blocked = designGraphicVideoBlock(row, args.convert_from_video === true);
   if (blocked) return blocked;
 
-  const { composeAndRenderGraphic, withBrandKitLogos } = await import('$lib/server/design-compose');
+  const { composeAndRenderGraphic } = await import('$lib/server/design-compose');
   const { latestGraphic, versionSource } = await import('$lib/server/design-store');
-  const { isUrlSafe } = await import('$lib/server/brand-analysis');
-  const {
-    resolvePeopleVisualRefs,
-    resolveTalentVisualRefs,
-    pushVisualRefs
-  } = await import('$lib/server/design-visual-refs');
 
-  type Img = { url: string; label?: string | null };
-  const available: Img[] = [];
-  const pushImg = (url: string, label?: string | null) => {
-    if (!url || available.some((a) => a.url === url)) return;
-    if (url.startsWith('data:image/') || (url.startsWith('http') && isUrlSafe(url))) {
-      available.push({ url, label: label ?? null });
-    }
-  };
-
-  for (const u of t.refUrls ?? []) pushImg(u, 'attachment');
-  for (const u of args.image_urls ?? []) pushImg(u);
-
-  if (args.media_ids?.length) {
-    const { resolveBrandImageIds } = await import('$lib/server/brand-media');
-    const urls = await resolveBrandImageIds(t.supabase, t.brandId, args.media_ids);
-    for (const u of urls) pushImg(u, 'media library');
-  }
-
-  pushVisualRefs(available, await resolvePeopleVisualRefs(t.supabase, t.brandId, args.people_ids));
-  pushVisualRefs(available, await resolveTalentVisualRefs(t.supabase, args.talent_ids));
-
-  // Product images tied to the post, if any — useful refs for a product-in-graphic composition.
-  if (row.product_name) {
-    const productUrls = await loadProductImages(t.supabase, t.brandId, row.product_name);
-    for (const u of productUrls.slice(0, 4)) pushImg(u, `product:${row.product_name}`);
-  }
-
-  let generatedUrl: string | undefined;
-  if (args.generate_prompt?.trim()) {
-    const { generateStandaloneImage } = await import('$lib/server/content-preview');
-    const gen = await generateStandaloneImage({
-      supabase: t.supabase,
-      userId: t.userId,
-      brandId: t.brandId,
-      prompt: args.generate_prompt.trim(),
-      platform: row.platform ?? undefined,
-      mediaIds: args.media_ids,
-      referenceUrls: available.map((a) => a.url).slice(0, 4)
-    });
-    if (gen.imageUrl) {
-      generatedUrl = gen.imageUrl;
-      pushImg(gen.imageUrl, 'ai generated');
-    }
-  }
-
-  // Official brand kit marks first (ref:0 = brand logo) so the composer can place the real lockup.
-  const catalog = withBrandKitLogos(available, {
-    logos: t.ctx.logos,
-    favicon_url: t.ctx.faviconUrl
+  const { catalog, generatedUrl } = await graphicImageCatalog(t, args, {
+    productName: row.product_name,
+    platform: row.platform
   });
 
   const target = { kind: 'post' as const, id: t.postId, slideIndex: args.slide_index ?? null };

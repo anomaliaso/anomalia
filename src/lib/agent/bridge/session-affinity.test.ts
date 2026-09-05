@@ -70,6 +70,10 @@ describe('harnessSessionSettings', () => {
 	it('startHarnessTurn passa le impostazioni al setup del provider', () => {
 		const src = readFileSync('src/lib/agent/bridge/adapters.ts', 'utf8');
 		expect(src).toContain('harnessSessionSettings(opts.sessionKey)');
-		expect(src).toMatch(/setup\.harness\([^)]*sessionAffinity\)/s);
+		// Le impostazioni che arrivano al setup ora portano anche le credenziali (`customEnv`), ma
+		// l'affinità di sessione deve restare dentro: è l'header che tiene il thread sulla stessa
+		// sessione, e sparirebbe in silenzio.
+		expect(src).toMatch(/\.\.\.sessionAffinity/);
+		expect(src).toMatch(/setup\.harness\([^)]*piSettings\)/s);
 	});
 });

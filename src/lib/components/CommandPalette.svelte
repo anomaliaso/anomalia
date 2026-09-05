@@ -2,41 +2,19 @@
   /**
    * LA RICERCA GLOBALE (⌘K) — un campo solo per tutto il prodotto.
    *
-   * Prima l'unica ricerca era quella dei thread in sidebar: un filtro su una lista già a schermo.
-   * Questa la ingloba e ci aggiunge le pagine, le impostazioni, gli agenti e i messaggi, senza
-   * inventare cataloghi: OGNI gruppo legge la fonte che il prodotto già usa —
-   *   pagine       → `navGroups` (la nav vera) ∪ BRAND_MODAL_ROUTES (workbench-paths.ts)
-   *   impostazioni → SETTINGS_MODAL_GROUPS (components/settings/platforms.ts)
-   *   agenti       → TEAM_SPECIALIST_IDS + /chat/agents (gli stessi del picker del composer)
-   *   thread       → lo store $chatThreads, già in memoria: zero query
-   *   messaggi     → /chat/search, l'UNICA parte che va sul server (con debounce)
+   * Ora copre le pagine e le impostazioni, senza inventare cataloghi: OGNI gruppo legge la
+   * fonte che il prodotto già usa —
+   *   pagine       → `navGroups` (la nav vera) ∪ le rotte sotto /app/[brand] che stanno su disco
+   *   impostazioni → SETTINGS_GROUPS (components/settings/platforms.ts)
    * Una lista scritta a mano qui invecchierebbe al primo rename di una rotta.
-   *
-   * Aprire una pagina significa `openPageModal(href)`: overlay, URL fermo, come ogni altro link
-   * del prodotto. Se la modal non può occuparsene (mobile, rotta full-page) si naviga davvero —
-   * mai un risultato morto.
    */
   import { onMount, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { _ } from 'svelte-i18n';
   import Search from '@lucide/svelte/icons/search';
   import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
-  import { openPageModal } from '$lib/components/PageModal.svelte';
-  import AgentAvatar from '$lib/components/AgentAvatar.svelte';
-  import { BRAND_MODAL_ROUTES, workbenchTabLabel } from '$lib/workbench-paths';
-  import { SETTINGS_MODAL_GROUPS } from '$lib/components/settings/platforms';
-  import { TEAM_SPECIALIST_IDS } from '$lib/agent-owners';
-  import {
-    BUILTIN_AGENT_AVATARS,
-    DEFAULT_CHAT_AGENT_AVATAR,
-    fallbackAvatarColor,
-    fallbackAvatarFace,
-    normalizeAvatarColor,
-    normalizeAvatarFace,
-    type AgentAvatarFace
-  } from '$lib/agent-avatars';
-  import { threadIdentity } from '$lib/thread-identity';
-  import { chatThreadId, chatThreads, openChatComposer } from '$lib/stores/chat';
+  import { workbenchTabLabel } from '$lib/workbench-paths';
+  import { SETTINGS_GROUPS } from '$lib/components/settings/platforms';
   import {
     GO_TARGETS,
     SECTION_LETTERS,
@@ -58,7 +36,7 @@
     /** `/app/<slug>` del brand corrente. */
     base: string;
     brandSlug: string;
-    /** La nav vera della sidebar (la stessa che riceve PageModal), non una copia. */
+    /** La nav vera della sidebar, non una copia. */
     navGroups?: {
       label?: string;
       /** La SEZIONE stessa: dove porta il clic sulla riga di gruppo (landing del hub). */
@@ -69,14 +47,34 @@
     }[];
   } = $props();
 
-  type Group = 'action' | 'page' | 'settings' | 'agent' | 'thread' | 'message';
+  /**
+   * Le rotte del brand che stanno su disco, lette a build time da Vite. Sostituisce l'elenco
+   * scritto a mano che c'era prima: un registro di 46 stringhe da tenere allineato al
+   * filesystem si stacca in silenzio, e qui non ha niente da decidere.
+   * Fuori: le dinamiche (nessun href statico), le impostazioni (hanno il loro gruppo) e le tre
+   * superfici di pagamento, che non sono una destinazione da cercare.
+   */
+  const NOT_A_DESTINATION = ['activate', 'success', 'proposal'];
+  const BRAND_PREFIX = '/src/routes/app/[brand]/';
+  const BRAND_ROUTES = Object.keys(import.meta.glob('/src/routes/app/**/+page.svelte'))
+    .filter((file) => file.startsWith(BRAND_PREFIX))
+    .map((file) => file.slice(BRAND_PREFIX.length, -'/+page.svelte'.length))
+    .filter(
+      (route) =>
+        route &&
+        !route.includes('[') &&
+        !route.startsWith('settings/') &&
+        !NOT_A_DESTINATION.includes(route)
+    )
+    .sort();
+
+  type Group = 'action' | 'page' | 'settings';
   type Item = {
     id: string;
     group: Group;
     label: string;
-    /** Riga secondaria: il gruppo di nav, l'anteprima del thread, il pezzo di messaggio. */
+    /** Riga secondaria: il gruppo di nav. */
     hint?: string;
-    avatar?: { face: AgentAvatarFace; color: string };
     run: () => void;
   };
 
@@ -89,77 +87,15 @@
   const open = $derived($paletteOpen);
 
   // ── Apertura di una destinazione ────────────────────────────────────────────────────────────
-  /** Una pagina del brand: overlay se la modal può ospitarla, altrimenti navigazione vera. */
   function openPage(href: string) {
     close();
-    if (!openPageModal(href)) void goto(href);
+    void goto(href);
   }
-  /** Una sezione di impostazioni: `openPageModal` accetta la sezione abbreviata. */
   function openSettings(section: string) {
-    close();
-    if (!openPageModal(section)) void goto(`${base}/settings/${section}`);
+    openPage(`${base}/settings/${section}`);
   }
-  function openThread(threadId: string) {
-    close();
-    chatThreadId.set(threadId);
-    void goto(`${base}/chat/${threadId}`, { noScroll: true, keepFocus: true });
-  }
-
-  // ── Agenti ──────────────────────────────────────────────────────────────────────────────────
-  type CustomAgent = { id: string; name: string; face: string; color: string };
-  let customAgents = $state<CustomAgent[]>([]);
-  // Gli stessi agenti del picker del composer, dallo stesso endpoint. Una volta sola per brand:
-  // la palette non è una pagina, non ha senso rifare la fetch a ogni apertura.
-  $effect(() => {
-    const slug = brandSlug;
-    if (!slug) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch(`/app/${slug}/chat/agents`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        customAgents = (data.agents ?? []) as CustomAgent[];
-      } catch {
-        /* restano i sei builtin */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  });
-
-  /**
-   * Parlare con un agente = il suo DIARIO se esiste (`surface='team'`, il thread persistente che
-   * team-ignition già scrive), altrimenti il composer vuoto con quell'agente selezionato. Stessa
-   * regola di `jobThreadHref`: mai creare un thread dal client.
-   */
-  function openAgent(agentId: string | null, customId: string | null) {
-    const t = $chatThreads.find((th) =>
-      customId
-        ? th.custom_agent_id === customId
-        : (th as { surface?: string | null }).surface === 'team' && th.agent === agentId
-    );
-    close();
-    if (t) {
-      chatThreadId.set(t.id);
-      void goto(`${base}/chat/${t.id}`, { noScroll: true, keepFocus: true });
-      return;
-    }
-    openChatComposer({ brandSlug, agent: agentId ?? undefined });
-  }
-
   // ── Le sorgenti, tutte derivate da ciò che esiste già ────────────────────────────────────────
   const actionItems = $derived.by<Item[]>(() => [
-    {
-      id: 'a:new-chat',
-      group: 'action',
-      label: $_('chat.newChat'),
-      run: () => {
-        close();
-        openChatComposer({ brandSlug });
-      }
-    },
     {
       id: 'a:workbench',
       group: 'action',
@@ -216,10 +152,9 @@
         });
       }
     }
-    // Solo le rotte che la nav conosce e quelle che si aprono in overlay. Le pagine a schermo
-    // pieno NON si cercano: se una sezione esce dalla nav le sue pagine escono anche da qui —
-    // è voluto, la palette non è un archivio di tutto ciò che esiste su disco.
-    for (const route of BRAND_MODAL_ROUTES) {
+    // Poi tutte le altre rotte del brand che stanno su disco. Nessun elenco da tenere allineato:
+    // una pagina nuova si cerca il giorno che esiste, una cancellata sparisce da sola.
+    for (const route of BRAND_ROUTES) {
       const href = `${base}/${route}`;
       if (seen.has(href)) continue;
       const label = workbenchTabLabel(href, base, $_);
@@ -238,7 +173,7 @@
   });
 
   const settingsItems = $derived.by<Item[]>(() =>
-    SETTINGS_MODAL_GROUPS.flatMap((g) =>
+    SETTINGS_GROUPS.flatMap((g) =>
       g.items.map((i) => ({
         id: `s:${i.section}`,
         group: 'settings' as const,
@@ -248,95 +183,6 @@
       }))
     )
   );
-
-  const agentItems = $derived.by<Item[]>(() => {
-    const builtin = TEAM_SPECIALIST_IDS.map((id) => {
-      const av = BUILTIN_AGENT_AVATARS[id] ?? DEFAULT_CHAT_AGENT_AVATAR;
-      const label = $_(`chat.agents.${id}.label`);
-      const desc = $_(`chat.agents.${id}.desc`);
-      return {
-        id: `g:${id}`,
-        group: 'agent' as const,
-        label: typeof label === 'string' ? label : id,
-        hint: typeof desc === 'string' ? desc : undefined,
-        avatar: av,
-        run: () => openAgent(id, null)
-      };
-    });
-    const custom = customAgents.map((a) => ({
-      id: `g:custom:${a.id}`,
-      group: 'agent' as const,
-      label: a.name,
-      hint: $_('chat.agents.custom'),
-      avatar: {
-        face: normalizeAvatarFace(a.face || fallbackAvatarFace(a.id)),
-        color: normalizeAvatarColor(a.color, fallbackAvatarColor(a.id))
-      },
-      run: () => openAgent(null, a.id)
-    }));
-    return [...builtin, ...custom];
-  });
-
-  const threadItems = $derived.by<Item[]>(() =>
-    $chatThreads.map((t) => {
-      const who = threadIdentity(t, (k) => $_(k));
-      return {
-        id: `t:${t.id}`,
-        group: 'thread' as const,
-        label: who.name,
-        hint: t.preview || t.title || undefined,
-        avatar: { face: who.face, color: who.color },
-        run: () => openThread(t.id)
-      };
-    })
-  );
-
-  // ── Messaggi: l'unico gruppo che va sul server ───────────────────────────────────────────────
-  type MessageHit = { id: string; thread_id: string; snippet: string };
-  let messageHits = $state<MessageHit[]>([]);
-  let messageQuery = $state('');
-  $effect(() => {
-    const q = query.trim();
-    const slug = brandSlug;
-    if (!open || q.length < 2 || !slug) {
-      messageHits = [];
-      return;
-    }
-    let cancelled = false;
-    // 220ms: sotto si batte una lettera e parte una query per ognuna; sopra si sente il ritardo.
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/app/${slug}/chat/search?q=${encodeURIComponent(q)}`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        messageHits = (data.messages ?? []) as MessageHit[];
-        messageQuery = q;
-      } catch {
-        // La ricerca messaggi degrada in silenzio: il resto della palette funziona lo stesso.
-        if (!cancelled) messageHits = [];
-      }
-    }, 220);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  });
-
-  const messageItems = $derived.by<Item[]>(() => {
-    if (messageQuery !== query.trim()) return [];
-    return messageHits.map((m) => {
-      const t = $chatThreads.find((th) => th.id === m.thread_id);
-      const who = t ? threadIdentity(t, (k) => $_(k)) : null;
-      return {
-        id: `m:${m.id}`,
-        group: 'message' as const,
-        label: m.snippet,
-        hint: who?.name,
-        avatar: who ? { face: who.face, color: who.color } : undefined,
-        run: () => openThread(m.thread_id)
-      };
-    });
-  });
 
   // ── Filtro ──────────────────────────────────────────────────────────────────────────────────
   /** 3 = inizia con, 2 = inizio di parola, 1 = contiene, 0 = no. Basta a ordinare bene. */
@@ -362,24 +208,18 @@
   const GROUP_LABEL: Record<Group, string> = {
     action: 'app.shell.cmdGroupActions',
     page: 'app.shell.cmdGroupPages',
-    settings: 'app.shell.cmdGroupSettings',
-    agent: 'app.shell.cmdGroupAgents',
-    thread: 'app.shell.cmdGroupThreads',
-    message: 'app.shell.cmdGroupMessages'
+    settings: 'app.shell.cmdGroupSettings'
   };
 
   /** I risultati raggruppati, nell'ordine in cui si mostrano. */
   const groups = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const out: { group: Group; items: Item[] }[] = [
-      // A campo vuoto la palette non è una lista di tutto: sono le azioni e le chat recenti,
+      // A campo vuoto la palette non è una lista di tutto: sono le azioni,
       // cioè quello che si fa davvero aprendola per sbaglio.
       { group: 'action', items: filter(actionItems, q, q ? 4 : 5) },
       { group: 'page', items: q ? filter(pageItems, q, 6) : [] },
-      { group: 'settings', items: q ? filter(settingsItems, q, 5) : [] },
-      { group: 'agent', items: q ? filter(agentItems, q, 5) : [] },
-      { group: 'thread', items: filter(threadItems, q, q ? 6 : 5) },
-      { group: 'message', items: messageItems }
+      { group: 'settings', items: q ? filter(settingsItems, q, 5) : [] }
     ];
     return out.filter((g) => g.items.length > 0);
   });
@@ -406,7 +246,6 @@
     mode = next;
     query = '';
     cursor = 0;
-    messageHits = [];
     paletteOpen.set(true);
   }
 
@@ -451,25 +290,14 @@
       openPalette('help');
       return;
     }
-    if (id === 'newChat') {
-      close();
-      openChatComposer({ brandSlug });
+    if (id === 'settings') {
+      openPage(`${base}/settings`);
       return;
-    }
-    if (id === 'focusPrompt') {
-      // ponytail: il selettore della textarea del composer. È l'unica del prodotto con questa
-      // classe; se un giorno ce ne fossero due, si aggiunge un `data-` e si cambia qui.
-      const box = document.querySelector<HTMLTextAreaElement>('textarea.ch-input');
-      if (box) {
-        box.focus();
-        box.setSelectionRange(box.value.length, box.value.length);
-      }
     }
   }
 
   function onKeydown(e: KeyboardEvent) {
-    // Esc: lo gestisce l'overlay più in alto. Se la palette è aperta è lei, e PageModal si tiene
-    // fuori guardando `paletteOpen` — senza quella guardia Esc chiuderebbe entrambe insieme.
+    // Esc: lo gestisce l'overlay più in alto. Se la palette è aperta è lei.
     if (e.key === 'Escape') {
       clearPending();
       if (open) {
@@ -492,15 +320,12 @@
       return;
     }
     if (m.type !== 'run') return;
-    // ⌘, resta di PageModal (stesso comportamento di sempre: apre o chiude le impostazioni):
-    // il registro dice CHE COS'È quel tasto, non chi lo esegue.
-    if (m.id === 'settings') return;
     e.preventDefault();
     runShortcut(m.id);
   }
 
-  // La palette è stato del client come la modal: una navigazione vera (una CTA che porta altrove)
-  // la deve trovare chiusa, non appesa sopra la pagina nuova.
+  // La palette è stato del client: una navigazione vera (una CTA che porta altrove) la deve
+  // trovare chiusa, non appesa sopra la pagina nuova.
   onMount(() => () => {
     clearPending();
     paletteOpen.set(false);
@@ -651,11 +476,6 @@
                     onclick={() => item.run()}
                     onmousemove={() => (cursor = idx)}
                   >
-                    {#if item.avatar}
-                      <span class="cp-avatar" aria-hidden="true">
-                        <AgentAvatar face={item.avatar.face} color={item.avatar.color} size={20} />
-                      </span>
-                    {/if}
                     <span class="cp-text">
                       <span class="cp-label">{item.label}</span>
                       {#if item.hint}<span class="cp-hint">{item.hint}</span>{/if}

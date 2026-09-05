@@ -518,9 +518,19 @@ describe('buildImageRequest (image model tier)', () => {
     expect(buildImageRequest('p', { baseImage: img }).model).toBe(LITE);
   });
 
-  it('drops to the half-price tier with no reproduction refs — mood and logo do not count', () => {
-    expect(buildImageRequest('p', {}).model).toBe(BLOG_IMAGE_MODEL);
-    expect(buildImageRequest('p', { moodImages: [img], logoImage: img }).model).toBe(BLOG_IMAGE_MODEL);
+  // Il nome vecchio di questo test diceva "half-price tier" e asseriva BLOG_IMAGE_MODEL, che e' il
+  // modello PIENO: la convinzione era rovesciata, e intanto la maggioranza delle immagini — un
+  // prompt e nessun riferimento — pagava $0,06 a chiamata. Ora Lite vale anche qui.
+  it('senza riferimenti da riprodurre disegna con Lite — mood e logo non contano', () => {
+    expect(buildImageRequest('p', {}).model).toBe(LITE);
+    expect(buildImageRequest('p', { moodImages: [img], logoImage: img }).model).toBe(LITE);
+  });
+
+  it('il blog resta sul modello pieno, perche' + "'" + ' lo chiede esplicitamente', () => {
+    // La batch API del blog vuole quel modello e lo passa a mano: cambiare il default non lo
+    // tocca, ed e' esattamente cio' che questo cambio NON doveva spostare.
+    expect(BLOG_IMAGE_MODEL).not.toBe(LITE);
+    expect(buildImageRequest('p', { model: BLOG_IMAGE_MODEL }).model).toBe(BLOG_IMAGE_MODEL);
   });
 
   it('a base image is an EDIT, and the brand can edit with another model', () => {

@@ -1,7 +1,11 @@
 import { swallow } from '$lib/server/swallow';
 import { maxOutputTokensFor } from '$lib/server/ai-output-limits';
 import { tool, stepCountIs, hasToolCall, type StopCondition } from 'ai';
-import { harnessGenerateText } from '$lib/server/harness';
+import { generateText } from 'ai';
+import { createHarnessSession } from '$lib/server/harness/session';
+import { persistHarnessSession } from '$lib/server/harness/persist';
+import { wrapTools } from '$lib/server/harness/pipeline';
+import { applyStewardPrepareStep, createSessionSteward } from '$lib/server/harness/steward';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
@@ -787,9 +791,10 @@ ${digest.slice(0, 6000)}`;
   let loopError: string | undefined;
 
   try {
-    await withAgentFallback('analyticsReviewAgent', (chosen, markDirty) => {
+    await withAgentFallback('analyticsReviewAgent', async (chosen, markDirty) => {
       loopModel = chosen;
-      return harnessGenerateText({
+
+      const session = createHarnessSession({
         brandId,
         userId: opts.userId,
         agent: 'analytics_review',
@@ -797,13 +802,24 @@ ${digest.slice(0, 6000)}`;
         model: loopModel.modelId,
         provider: loopModel.provider,
         surface: 'batch'
-      }, {
+      });
+      const prompt =
+        'Review this brand\'s analytics and adapt strategy, editorial plan, and upcoming content where the evidence is clear. Prefer proposals for GTM/editorial; edit pending/scheduled posts and draft articles directly when useful. Finish with notes.';
+      session.captureRequest({ system: baseSystem, prompt });
+
+      const steward = createSessionSteward(session, Object.keys(tools));
+      const watchedTools = wrapTools(session, tools, {
+        before: [...(steward.pipeline().before ?? []), () => { markDirty(); }]
+      });
+
+      try {
+        const result = await generateText({
         model: loopModel.model,
         maxOutputTokens: maxOutputTokensFor(loopModel.provider),
         system: baseSystem,
-        prompt:
-          'Review this brand\'s analytics and adapt strategy, editorial plan, and upcoming content where the evidence is clear. Prefer proposals for GTM/editorial; edit pending/scheduled posts and draft articles directly when useful. Finish with notes.',
-        tools,
+        prompt,
+        allowSystemInMessages: true,
+        tools: watchedTools,
         stopWhen: [
           hasToolCall('finish'),
           stepCountIs(MAX_ANALYTICS_REVIEW_STEPS),
@@ -813,9 +829,13 @@ ${digest.slice(0, 6000)}`;
         temperature: 0.35,
         prepareStep: () => {
           const remainingSec = Math.max(0, Math.round((deadlineMs - (Date.now() - t0)) / 1000));
-          return { system: appendBudgetToSystem(baseSystem, budget, remainingSec) };
+          const step = { system: appendBudgetToSystem(baseSystem, budget, remainingSec) };
+          const patched = applyStewardPrepareStep(session, steward, step, baseSystem) ?? {};
+          session.capturePrepareStep(patched);
+          return patched;
         },
         onStepFinish: ({ usage, toolCalls, text }) => {
+          session.recordStep({ usage, toolCalls, text });
           addStrategyStepCost(budget, usage, loopModel);
           stallFingerprints.push(
             stepFingerprint(
@@ -831,7 +851,17 @@ ${digest.slice(0, 6000)}`;
             );
           }
         }
-      }, { before: [() => { markDirty(); }] });
+        });
+        session.recordAssistantText(result.text);
+        session.recordUsage(result.totalUsage ?? result.usage);
+        session.finish('finished');
+        return result;
+      } catch (e) {
+        session.finish('failed', e);
+        throw e;
+      } finally {
+        persistHarnessSession(session);
+      }
     });
   } catch (e) {
     loopOk = false;

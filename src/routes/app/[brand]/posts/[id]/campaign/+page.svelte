@@ -14,9 +14,6 @@
     })
   );
 
-  const chatHref = $derived(
-    `/app/${brand.slug}/posts/${post.id}/chat`
-  );
 </script>
 
 <section class="panel">
@@ -36,12 +33,7 @@
     <p class="prompt">{prompt}</p>
   </div>
 
-  {#if data.flags?.studio}
-    <a class="cta" href={chatHref}>{$_('app.post.campaign.openChat')}</a>
-  {:else}
-    <p class="off">{$_('app.post.chat.studioOff')}</p>
-    <a class="cta ghost" href={`/app/${brand.slug}/posts/${post.id}/edit`}>{$_('app.post.chat.goEdit')}</a>
-  {/if}
+  <a class="cta ghost" href={`/app/${brand.slug}/posts/${post.id}/edit`}>{$_('app.post.campaign.goEdit')}</a>
 </section>
 
 <style>
@@ -72,5 +64,4 @@
   .cta.ghost {
     background: var(--paper); color: var(--ink); border: 1px solid var(--line);
   }
-  .off { margin: 16px 0 0; font-size: 13.5px; color: var(--ink-soft); }
 </style>

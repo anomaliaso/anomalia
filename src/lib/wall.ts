@@ -47,7 +47,6 @@ export type DesignAxis = (typeof DESIGN_AXES)[number];
 
 /** The platforms either page will show a filter chip for. */
 export const WALL_PLATFORMS = ['instagram', 'tiktok', 'x', 'threads', 'linkedin', 'reddit'] as const;
-export type WallPlatform = (typeof WALL_PLATFORMS)[number];
 
 /**
  * What a page is allowed to know about a post.

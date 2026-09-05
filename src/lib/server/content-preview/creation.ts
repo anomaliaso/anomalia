@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { houseVoiceFor, loadCaptionKnowledge } from './caption-quality';
 import { brandLines, client } from './plan-pipeline';
-import { type AspectRatio, type QcVerdict, aspectRatioFor, brandVisualDirective, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderCarouselSlide, renderWithQC, uploadPostImage } from './images';
+import { type AspectRatio, type QcVerdict, aspectRatioFor, brandVisualDirective, extractVisualPlaybook, loadBrandLogoImagePart, loadBrandMoodImageUrls, loadMoodRefs, renderBrandImage, renderCarouselSlide, uploadPostImage } from './images';
 import { imageModelFor, imageRefineModelFor } from '$lib/image-models';
 import { type AnyRec, type BrandProfile, CAROUSEL_MIN_SLIDES, CAROUSEL_PLATFORMS, type ContentPrefs, type ImagePart, type PreviewPost, carouselMaxSlides, guidanceFor, platformKey } from './seed-model';
 import { aiActCopyGuardrail } from '$lib/ai-act';
@@ -265,7 +265,8 @@ Return JSON.`;
     // on the first prompt (never ship half a series).
     if (slidePrompts.length >= 2) {
       const coverPrompt = slidePrompts[0];
-      const { dataUrl, qc } = await renderWithQC(ai, coverPrompt, renderOpts, critiqueOpts, highStakes);
+      const dataUrl = await renderBrandImage(ai, coverPrompt, renderOpts);
+  const qc = undefined;
       if (dataUrl) {
         const cover = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
         if (cover) {
@@ -291,7 +292,8 @@ Return JSON.`;
     }
     // Under-delivered slides → single image on whatever prompt we have.
     const only = slidePrompts[0] || `Photorealistic, scroll-stopping social photo: ${opts.brief}`;
-    const { dataUrl, qc } = await renderWithQC(ai, only, renderOpts, critiqueOpts, highStakes);
+    const dataUrl = await renderBrandImage(ai, only, renderOpts);
+  const qc = undefined;
     const imageUrl = dataUrl ? await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio) : undefined;
     await stampCompositeLibrary(!!imageUrl);
     return withKnowledge({ caption, imagePrompt: only, imageUrl, qc });
@@ -330,15 +332,8 @@ Return JSON.`;
     ? (await import('$lib/server/ugc')).buildUgcFramePrompt({ hook: opts.hook })
     : imagePrompt;
 
-  const { dataUrl, qc } = await renderWithQC(
-    ai,
-    coverPromptFinal,
-    renderOpts,
-    critiqueOpts,
-    // Same policy as the batch renderer: user-uploaded subject references make fidelity the
-    // whole point → best-of-N candidates; a pure text brief renders once.
-    highStakes
-  );
+  const dataUrl = await renderBrandImage(ai, coverPromptFinal, renderOpts);
+  const qc = undefined;
   let imageUrl: string | undefined;
   if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
   await stampCompositeLibrary(!!imageUrl);
@@ -348,7 +343,7 @@ Return JSON.`;
 // ── On-demand carousel (chat tool) ──────────────────────────────────────────
 // One-shot carousel from a brief: LLM writes the caption + N coherent slide prompts, then we
 // render slide 1 (cover) at full quality and slides 2..N anchored to it — the exact rendering path
-// the batch generator uses (renderWithQC + renderCarouselSlide), just for a single post. Returns
+// the batch generator uses (renderPostImage + renderCarouselSlide), just for a single post. Returns
 // the ordered slide URLs; a series that ends with < 2 usable slides returns imageUrls:[] so the
 // caller can fall back to a single image.
 const CAROUSEL_SINGLE_SCHEMA = {
@@ -428,7 +423,8 @@ Return JSON.`;
   };
 
   // Slide 1 (cover) at full quality, then slides 2..N in parallel anchored to it.
-  const { dataUrl, qc } = await renderWithQC(ai, slidePrompts[0], renderOpts, { visualStyle: renderOpts.visualStyle }, false);
+  const dataUrl = await renderBrandImage(ai, slidePrompts[0], renderOpts);
+  const qc = undefined;
   if (!dataUrl) return { caption, imagePrompts: slidePrompts, imageUrls: [], qc };
   const cover = await uploadPostImage(opts.supabase, opts.userId, dataUrl, renderOpts.aspectRatio);
   if (!cover) return { caption, imagePrompts: slidePrompts, imageUrls: [], qc };
@@ -509,35 +505,6 @@ export async function generateStandaloneImage(opts: {
     ? `${opts.prompt}\n\nEdit the attached BASE photo in place — keep the scene, subject and composition; apply only what this prompt asks (e.g. place the official brand logo). Do not replace the photo with a blank canvas.`
     : opts.prompt;
 
-  if ((await import('$lib/server/image-agent')).isImageAgentEnabled()) {
-    const { runImageAgent } = await import('$lib/server/image-agent');
-    const moodUrls = await loadBrandMoodImageUrls(opts.supabase, opts.brandId).catch((error) => { swallow('load mood image urls', error); return []; });
-    const agent = await runImageAgent({
-      supabase: opts.supabase,
-      userId: opts.userId,
-      brandId: opts.brandId,
-      brief: editBrief,
-      platform: opts.platform ?? null,
-      aspectRatio: opts.aspectRatio,
-      baseImageUrl: baseUrl ?? null,
-      // Base is already baseImageUrl — don't also pin it as a library ref (would double-attach).
-      pinnedLibraryMediaIds: baseUrl ? undefined : opts.mediaIds,
-      userRefUrls: extraUrls,
-      moodImageUrls: moodUrls,
-      visualStyle: (kit?.visual_style as string | undefined) || undefined,
-      visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
-      brandLook: brandLook || undefined,
-      logoImage,
-      deadlineMs: 280_000
-    });
-    return doneStandalone({
-      imageUrl: agent.imageUrl,
-      notes: agent.notes,
-      costUsd: agent.costUsd,
-      credits: agent.credits
-    });
-  }
-
   // Load mood images as style anchors
   const moodUrls = await loadBrandMoodImageUrls(opts.supabase, opts.brandId).catch((error) => { swallow('load mood image urls', error); return []; });
   const [moodImages, baseImage, extraParts] = await Promise.all([
@@ -568,13 +535,8 @@ export async function generateStandaloneImage(opts: {
     aspectRatio
   };
 
-  const { dataUrl, qc } = await renderWithQC(
-    ai,
-    editBrief,
-    renderOpts,
-    { referenceImages: renderOpts.referenceImages, visualStyle: renderOpts.visualStyle },
-    !!baseImage || !!extraParts.length
-  );
+  const dataUrl = await renderBrandImage(ai, editBrief, renderOpts);
+  const qc = undefined;
 
   let imageUrl: string | undefined;
   if (dataUrl) imageUrl = await uploadPostImage(opts.supabase, opts.userId, dataUrl, aspectRatio);
@@ -589,9 +551,9 @@ export async function generateStandaloneImage(opts: {
 //   3. the short URL written back onto post.link_url AND swapped into the caption (the writer
 //      wove the raw URL in verbatim) — the short link is what actually ships, so it's the only
 //      version a reader can click and therefore the only one we can count.
-// CALLER RULE (the persist sites are in scheduler.ts / onboarding-generate.ts, out of scope
-// here): call this ONLY for posts whose persisted row will have source = 'plan' — the scheduler
-// autopilot persist and the onboarding persist. NEVER for Radar (source = 'radar'): Radar links
+// CALLER RULE (the only persist site is scheduler.ts, out of scope here): call this ONLY for
+// posts whose persisted row will have source = 'plan' — the scheduler
+// autopilot persist. NEVER for Radar (source = 'radar'): Radar links
 // point at news source_urls (not the brand's own pages) and Radar already appends its own utm_
 // tags. Also skip any link_url that already contains a utm_ parameter — a Reddit link_post
 // (media:'link') with a real external target, or a user-edited URL, must never be rewritten

@@ -25,9 +25,6 @@ export const ICONS: Record<string, { path: string; hex: string }> = {
 
 export const SETTINGS_SECTIONS = [
   'brand',
-  'platforms',
-  'hashtags',
-  'voice-examples',
   'products',
   'people',
   'library',
@@ -36,10 +33,8 @@ export const SETTINGS_SECTIONS = [
   'connectors',
   'ads',
   'ads-accounts',
-  'autopilot',
   'radar',
   'video',
-  'timezone',
   'blog-appearance',
   'blog-authors',
   'blog-categories',
@@ -47,30 +42,21 @@ export const SETTINGS_SECTIONS = [
   'blog-integrations',
   'search-console',
   'language',
-  'chat',
   'api-keys',
   'team',
   'profile',
   'appearance',
   'billing',
-  'usage',
   'referrals',
   'danger'
 ] as const;
 
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
-
 /** Former Studio / Identity sections now under Settings → Brand. */
 export const SETTINGS_BRAND_SECTIONS = [
   'brand',
-  'platforms',
-  'hashtags',
-  'voice-examples',
   'products',
   'people'
 ] as const;
-
-export type SettingsBrandSection = (typeof SETTINGS_BRAND_SECTIONS)[number];
 
 /** Blog settings under Settings → Blog. */
 export const SETTINGS_BLOG_SECTIONS = [
@@ -82,111 +68,23 @@ export const SETTINGS_BLOG_SECTIONS = [
   'search-console'
 ] as const;
 
-export type SettingsBlogSection = (typeof SETTINGS_BLOG_SECTIONS)[number];
-
 /** Ads settings under Settings → Ads. */
 export const SETTINGS_ADS_SECTIONS = ['ads-accounts', 'ads'] as const;
 
-export type SettingsAdsSection = (typeof SETTINGS_ADS_SECTIONS)[number];
-
-
-// ─── Modal Impostazioni ────────────────────────────────────────────────────────────────
-// Il meccanismo (shallow routing che ospita la +page.svelte VERA) è agnostico al peso
-// della pagina: il default è quindi "tutto in modal". Restano fuori solo le rotte con
-// un motivo TECNICO dimostrabile, elencate in SETTINGS_FULL_PAGE_SECTIONS.
-// Il perimetro è e resta /app/<slug>/settings/** — nessun'altra area del prodotto.
-
 /**
- * Rotte settings che NON possono vivere nel modal, col motivo tecnico:
- * - facebook / linkedin: pagine intermedie OAuth. Il +layout di settings le esclude
- *   già dalla propria shell (`isOauthFlow`) e navigano fuori dal sito.
- * - usage/sessions/[id]: rotta dinamica di drill-down, non una sezione di nav —
- *   non ha un href statico da mettere nel rail, si raggiunge da dentro `usage`.
- * (Anche settings/connect/* è OAuth, ma non ha +page.svelte: non è mai un target.)
- */
-export const SETTINGS_FULL_PAGE_SECTIONS = [
-  'facebook',
-  'linkedin',
-  'usage/sessions/[id]'
-] as const;
-
-export type SettingsFullPageSection = (typeof SETTINGS_FULL_PAGE_SECTIONS)[number];
-
-/** Tutte le sezioni ospitabili nel modal. */
-export const SETTINGS_MODAL_SECTIONS = [
-  'brand',
-  'platforms',
-  'hashtags',
-  'voice-examples',
-  'products',
-  'people',
-  'library',
-  'demo-account',
-  'blog-appearance',
-  'blog-authors',
-  'blog-categories',
-  'blog-domain',
-  'blog-integrations',
-  'search-console',
-  'ads/accounts',
-  'ads',
-  'connected-accounts',
-  'connectors',
-  'autopilot',
-  'radar',
-  'video',
-  'publishing',
-  'timezone',
-  'language',
-  'chat',
-  'api-keys',
-  'team',
-  'profile',
-  'appearance',
-  'billing',
-  'usage',
-  'referrals',
-  'danger'
-] as const;
-
-export type SettingsModalSection = (typeof SETTINGS_MODAL_SECTIONS)[number];
-
-/** La sezione su cui si apre il modal (stessa scelta del redirect di /settings). */
-export const SETTINGS_MODAL_DEFAULT: SettingsModalSection = 'connected-accounts';
-
-/**
- * Sezioni che vogliono la taglia larga del modal: griglie, anteprime, tabelle e
- * grafici che a 880px si strizzano. Non è un'esclusione, è una misura.
- */
-export const SETTINGS_MODAL_WIDE = [
-  'brand',
-  'platforms',
-  'products',
-  'people',
-  'voice-examples',
-  'library',
-  'blog-appearance',
-  'ads/accounts',
-  'ads',
-  'video',
-  'usage',
-  'radar'
-] as const;
-
-/**
- * Il rail del modal: STESSO ordine e stessi raggruppamenti della SettingsSidebar vera
- * (src/lib/components/SettingsSidebar.svelte) — chi apre il modal ritrova la mappa che
- * già conosce. Le chiavi i18n sono quelle già esistenti: nessun doppione.
+ * La mappa delle impostazioni: STESSO ordine e stessi raggruppamenti della SettingsSidebar
+ * vera (src/lib/components/SettingsSidebar.svelte). La leggono il rail del drawer mobile e
+ * la palette ⌘K: una lista sola, o le tre divergono al primo cambio.
  * `flag` nasconde la voce quando la feature è spenta, esattamente come nella sidebar.
  */
 export type SettingsNavEntry = {
-  /** Sezione modal, oppure rotta full-page (allora la voce mostra ↗ e naviga davvero). */
+  /** Sezione sotto /app/<slug>/settings/. */
   section: string;
   labelKey: string;
-  flag?: 'ads' | 'connectors';
+  flag?: 'ads';
 };
 
-export const SETTINGS_MODAL_GROUPS: readonly {
+export const SETTINGS_GROUPS: readonly {
   labelKey: string;
   items: readonly SettingsNavEntry[];
 }[] = [
@@ -194,9 +92,6 @@ export const SETTINGS_MODAL_GROUPS: readonly {
     labelKey: 'app.nav.sectionBrand',
     items: [
       { section: 'brand', labelKey: 'app.studio.tabs.brand' },
-      { section: 'platforms', labelKey: 'app.studio.tabs.platforms' },
-      { section: 'hashtags', labelKey: 'app.studio.tabs.hashtags' },
-      { section: 'voice-examples', labelKey: 'app.studio.tabs.voiceExamples' },
       { section: 'products', labelKey: 'app.hub.overview.brand.products' },
       { section: 'people', labelKey: 'app.studio.tabs.people' },
       { section: 'library', labelKey: 'app.hub.web.library' },
@@ -225,19 +120,14 @@ export const SETTINGS_MODAL_GROUPS: readonly {
     labelKey: 'app.nav.sectionPublishing',
     items: [
       { section: 'connected-accounts', labelKey: 'app.settings.connectedAccounts' },
-      { section: 'connectors', labelKey: 'app.settings.connectors.nav', flag: 'connectors' },
-      { section: 'autopilot', labelKey: 'app.settings.autopilot' },
       { section: 'radar', labelKey: 'app.settings.radar.nav' },
-      { section: 'video', labelKey: 'app.settings.video.title' },
-      { section: 'publishing', labelKey: 'app.settings.publishing.title' },
-      { section: 'timezone', labelKey: 'app.settings.postingTimezone' }
+      { section: 'video', labelKey: 'app.settings.video.title' }
     ]
   },
   {
     labelKey: 'app.nav.workspace',
     items: [
       { section: 'language', labelKey: 'app.settings.language' },
-      { section: 'chat', labelKey: 'app.settings.chat.title' },
       { section: 'api-keys', labelKey: 'app.settings.apiKeys.title' },
       { section: 'team', labelKey: 'app.settings.team.title' }
     ]
@@ -248,7 +138,6 @@ export const SETTINGS_MODAL_GROUPS: readonly {
       { section: 'profile', labelKey: 'app.settings.profile.title' },
       { section: 'appearance', labelKey: 'app.settings.appearance.title' },
       { section: 'billing', labelKey: 'app.settings.billing.title' },
-      { section: 'usage', labelKey: 'app.settings.usage.title' },
       { section: 'referrals', labelKey: 'app.settings.referrals.title' },
       { section: 'danger', labelKey: 'app.settings.del.title' }
     ]

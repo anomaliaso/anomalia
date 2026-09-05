@@ -273,8 +273,9 @@ program
 
 program
   .command('ads <slug>')
-  .description('Ads via Zernio: list, propose boosts, approve spend, create standalone')
+  .description('Ads via Zernio: list, propose boosts, remix competitor ads, approve spend')
   .option('--propose', 'Crea proposte di boost dai post organici migliori')
+  .option('--remix', 'Remix competitor/trending ads → brief creativi in brand voice')
   .option('--approve <id>', 'Approva e lancia una campagna proposta (spende budget)')
   .option('--reject <id>', 'Rifiuta una proposta')
   .option('--duplicate <id>', 'Duplica una campagna live (copia in pausa, poi approva)')
@@ -311,16 +312,6 @@ program
   .action(async () => {
     const { cmdUpdate } = await import('./commands/update.ts');
     await cmdUpdate();
-  });
-
-program
-  .command('ai <slug>')
-  .description('Chatta con l\'AI di Anomalia — tutto ciò che fa il chatbot web, da CLI')
-  .option('--message <text>', 'Messaggio da inviare all\'AI')
-  .option('--pipe', 'Output raw (per agenti AI)')
-  .action(async (slug: string, opts: { message?: string; pipe?: boolean }) => {
-    const { cmdAi } = await import('./commands/ai.ts');
-    await cmdAi(slug, opts);
   });
 
 program.parse();

@@ -120,9 +120,10 @@ export async function claimRun(
 		p_lease_until: new Date(now.getTime() + ttlMs).toISOString()
 	});
 	if (error) throw new Error(`run: presa fallita — ${error.message}`);
-	if (!data) return null;
-	const run = (Array.isArray(data) ? data[0] : data) as RunRow | undefined;
-	if (!run) return null;
+	const run = (Array.isArray(data) ? data[0] : data) as RunRow | null | undefined;
+	// La RPC è `returns public.agent_kit_runs`: l'UPDATE che non prende righe torna una riga
+	// composita di soli NULL, non `null`. È l'`id` a dire se la presa è riuscita.
+	if (!run?.id) return null;
 	return { run, fence: run.lease_fence ?? 0 };
 }
 

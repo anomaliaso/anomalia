@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { handleMcpFetch } from './http-app.ts';
+import { routeMcpHttp } from './http-router.ts';
+import { authServerUrl } from '../lib/config.ts';
 
 describe('mcp HTTP transport', () => {
   test('health endpoint', async () => {
@@ -17,8 +19,16 @@ describe('mcp HTTP transport', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.resource).toContain('/mcp');
-    expect(Array.isArray(body.authorization_servers)).toBe(true);
-    expect(body.authorization_servers.length).toBeGreaterThan(0);
+    expect(body.authorization_servers).toEqual([authServerUrl()]);
+  });
+
+  test('the vercel route advertises the same authorization server', async () => {
+    const res = await routeMcpHttp(
+      new Request('https://mcp.anomalia.so/.well-known/oauth-protected-resource'),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.authorization_servers).toEqual([authServerUrl()]);
   });
 
   test('initialize + tools/list over streamable HTTP (JSON)', async () => {

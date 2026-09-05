@@ -1,0 +1,130 @@
+import { z } from 'zod';
+import type { BrandEndpoint } from './index';
+
+export const MEMORY_ENTRIES_DEFAULT = 50;
+export const MEMORY_ENTRIES_MAX = 200;
+
+/** Quante voci si possono segnalare come usate in una volta. Un turno ne usa una manciata. */
+export const MEMORY_USED_MAX = 50;
+
+/** Lo stesso elenco chiuso di `MemoryCategory` in `$lib/server/brand-memory` — un test li allinea. */
+export const MEMORY_CATEGORIES = [
+  'voice',
+  'constraint',
+  'fact',
+  'preference',
+  'insight',
+  'skill'
+] as const;
+
+/**
+ * QUELLO CHE UN AGENTE PUÒ SCRIVERE, e la riga che manca è la regola: `voice` e `constraint`
+ * governano tutto ciò che sta a valle — un modello che riscrive la voce è un cambio di marca in
+ * una chiamata. Restano all'operatore, dalla sua pagina.
+ */
+export const AGENT_MEMORY_CATEGORIES = ['fact', 'preference', 'insight', 'skill'] as const;
+
+export type AgentMemoryCategory = (typeof AGENT_MEMORY_CATEGORIES)[number];
+
+const MemoryEntry = z.object({
+  id: z.string(),
+  key: z.string(),
+  value: z.string(),
+  category: z.enum(MEMORY_CATEGORIES),
+  source: z.string(),
+  confidence: z.number(),
+  timesUsed: z.number(),
+  lastUsedAt: z.string().nullable(),
+  pinned: z.boolean(),
+  createdAt: z.string()
+});
+
+export const GET_MEMORY = {
+  tool: 'get_memory',
+  title: 'Brand memory',
+  description:
+    "What this brand already knows, so you do not rebuild it every conversation: its voice, the constraints it works under, the facts it has confirmed, the preferences it has stated, and what previous work learned. " +
+    'Read it before asking the operator something the brand has already answered. ' +
+    `\`category\` narrows (${MEMORY_CATEGORIES.join(', ')}); \`limit\` is ${MEMORY_ENTRIES_DEFAULT} by default and ${MEMORY_ENTRIES_MAX} at most. ` +
+    'Chat-session notes and other agents\' working notes are never returned — only what belongs to the brand. ' +
+    'Reading changes nothing and counts nothing: when an entry actually shaped what you produced, say so with `record_memory_used`, or the entry decays as if it had never helped.',
+  method: 'GET',
+  pathUnderBrand: '/memory',
+  input: z
+    .object({
+      category: z.enum(MEMORY_CATEGORIES).optional().describe('Restrict to one kind of knowledge'),
+      limit: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(MEMORY_ENTRIES_MAX)
+        .optional()
+        .describe(`How many entries, ${MEMORY_ENTRIES_DEFAULT} by default, ${MEMORY_ENTRIES_MAX} at most`)
+    })
+    .strict(),
+  output: z.object({
+    entries: z.array(MemoryEntry),
+    count: z.number()
+  }),
+  failures: [{ error: 'unknown_category', status: 400 }],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const SAVE_MEMORY = {
+  tool: 'save_memory',
+  title: 'Save to brand memory',
+  description:
+    'Record something you learned about this brand so the next conversation starts from it. ' +
+    `Writable categories: ${AGENT_MEMORY_CATEGORIES.join(', ')}. \`voice\` and \`constraint\` are NOT writable here — they govern everything downstream and only the operator sets them. ` +
+    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: you take it to the operator, you do not win by arriving last. Sending the same value again reinforces it. ' +
+    'Entries land as brand knowledge, never scoped to a chat, and arrive with the confidence of something a model inferred rather than something a person stated.',
+  method: 'POST',
+  pathUnderBrand: '/memory',
+  input: z
+    .object({
+      key: z.string().min(1).describe('Stable slug, e.g. "shipping_threshold" — reusing it reinforces'),
+      value: z.string().min(1).describe('The knowledge itself. For a skill: first line = when to use it, then the steps'),
+      category: z.enum(AGENT_MEMORY_CATEGORIES)
+    })
+    .strict(),
+  output: z.object({
+    ok: z.boolean(),
+    id: z.string(),
+    reinforced: z.boolean()
+  }),
+  failures: [
+    { error: 'category_not_writable', status: 403 },
+    { error: 'memory_conflict', status: 409 },
+    { error: 'skill_limit_reached', status: 409 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;
+
+export const RECORD_MEMORY_USED = {
+  tool: 'record_memory_used',
+  title: 'Report memory you used',
+  description:
+    'Say which memory entries actually shaped what you just produced. Call it after acting, with the ids from `get_memory` — a handful, not everything you read. ' +
+    'This is what keeps a working entry alive: entries that are never reported decay out of the prompts they were helping. ' +
+    `Ids that do not belong to this brand are ignored. At most ${MEMORY_USED_MAX} per call.`,
+  method: 'POST',
+  pathUnderBrand: '/memory/used',
+  input: z
+    .object({
+      ids: z
+        .array(z.string().min(1))
+        .min(1)
+        .max(MEMORY_USED_MAX)
+        .describe('Ids of the entries you actually used')
+    })
+    .strict(),
+  output: z.object({
+    ok: z.boolean(),
+    counted: z.number()
+  }),
+  failures: [
+    { error: 'ids_required', status: 400 },
+    { error: 'too_many_ids', status: 400 }
+  ],
+  destructive: false
+} satisfies BrandEndpoint;

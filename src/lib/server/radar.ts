@@ -109,6 +109,19 @@ export type RadarPrefs = {
   platforms?: Partial<Record<RadarPlatformKey, boolean>>;
 };
 
+/**
+ * La forma in cui una fonte viene SALVATA, che deve essere la stessa con cui viene cercata.
+ *
+ * Un subreddit si scrive «r/coffee» e si conserva «coffee»: normalizzarlo solo in aggiunta
+ * lascerebbe una rimozione per «r/coffee» senza corrispondenza, e la fonte resterebbe li' mentre
+ * la risposta dice che e' stata tolta. `(brand_id, kind, value)` e' la chiave unica: se le due
+ * strade non concordano sul valore, non concordano sulla riga.
+ */
+export function radarSourceValue(kind: string, value: unknown): string {
+  const v = String(value ?? '').trim();
+  return kind === 'subreddit' ? v.replace(/^r\//i, '').replace(/\/+$/, '') : v;
+}
+
 /** Map a brand_news_sources.kind onto its platform master toggle (rss has none — always custom). */
 export function sourceKindPlatform(kind: string): RadarPlatformKey | null {
   switch (kind) {

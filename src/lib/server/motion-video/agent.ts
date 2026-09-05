@@ -42,11 +42,11 @@ import { MOTION_ASSET_MINT_HINT } from '$lib/server/media-origin';
 import { mintStandaloneImage } from '$lib/server/mint-standalone-image';
 import { loadMediaLibraryPromptSection } from '$lib/server/brand-media';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import {
 	brandContextPromptSection,
 	createBrandContextTools
-} from '$lib/agent/tools/brand-context-tools';
+} from '$lib/server/brand-context-tools';
 import { disruptiveBriefSection } from '$lib/disruptive';
 import {
 	MOTION_EXPO_IN_OUT,
@@ -509,9 +509,10 @@ Need photo assets? Call read_media first. If a library image fits, use_library_i
 	// The wall needs nothing from the session but the brand's name — it is a public reference site,
 	// not brand data — so it is available on every turn, for every brand.
 	//
-	// What it looked at is recorded against the videos this turn touched. That link is the only way
-	// to answer the question the whole feature rests on — do referenced clips actually score better
-	// than unreferenced ones — and `qc.ts` writes the scores on the other side of it.
+	// What it looked at is recorded against the videos this turn touched. The other half of that
+	// question — do referenced clips actually score better than unreferenced ones — was the video
+	// judge, gone on 29/8/2026: nothing writes a score any more, so the link records what was
+	// studied and nobody reads it back.
 	const studiedReferences = new Set<string>();
 	/**
 	 * Gli studi con i loro frame e il loro contratto, per `prepareStep` (sonda 2026-08-21, vedi

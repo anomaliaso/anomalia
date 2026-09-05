@@ -2,8 +2,8 @@
  * Grade a harvested post AS DESIGN, and decide whether we are willing to publish it.
  *
  * WHY A SECOND SCORER. `content-quality.ts` scores TEXT with the rubric we grade our own captions
- * with, and `video-review.ts` watches a clip for hook, hold and CTA. Neither has ever looked at a
- * layout. "Which of these posts is beautiful" is a question about type, grid, colour and restraint,
+ * with. A second scorer used to watch a clip for hook, hold and CTA; it was removed on 2026-08-29
+ * when the model behind it stopped accepting video. Neither has ever looked at a layout. "Which of these posts is beautiful" is a question about type, grid, colour and restraint,
  * and none of it is recoverable from a caption or from a retention curve — so it gets its own
  * column, its own version and its own rubric rather than being folded into `quality_index`, where it
  * would silently change what every existing fit means.
@@ -24,12 +24,10 @@
  * keeps a design wall from filling up with competent snapshots.
  */
 import { env } from '$env/dynamic/private';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { llmConfigured, llmStructured } from '$lib/server/llm';
 import { SUPPORTED, type Locale } from '$lib/i18n/locale';
 // The vocabulary is shared with the pages that render it — see the header of `$lib/wall`.
 import { DESIGN_AXES, DESIGN_TAGS, type DesignAxis, type DesignTag } from '$lib/wall';
-import { WALL_BUCKET } from '$lib/server/wall-media';
 import type { HarvestError } from '$lib/server/market-harvest';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,8 +91,6 @@ export const MAX_JUDGEMENTS_PER_RUN = 40;
  */
 export const TRENDING_MIN_OUTPERFORMANCE_FOR_QUEUE = 1.6;
 export const TRENDING_WINDOW_DAYS_FOR_QUEUE = 30;
-/** Leave room under the worker's wall for the derivative builder that shares the tick. */
-export const JUDGE_TIME_BUDGET_MS = 150_000;
 /** Inline image ceiling. Posters are ~80KB; anything near this is not a poster. */
 const MAX_INLINE_BYTES = 4 * 1024 * 1024;
 
@@ -321,133 +317,6 @@ export type JudgeRunResult = {
   onWall: number;
   errors: HarvestError[];
 };
-
-type QueueRow = {
-  id: string;
-  platform: string;
-  account_key: string | null;
-  content: string | null;
-  poster_path: string;
-};
-
-/**
- * Score everything on the wall's doorstep: a public poster exists, no verdict under the current
- * rubric version, AND the row could actually end up on one of the two pages.
- *
- * THAT LAST CLAUSE WAS MISSING AND IT COST 1,534 CALLS FOR NOTHING. The queue started as "anything
- * with a poster", which is every post the harvest has ever archived — restaurant reels, nail salons,
- * dealership promos. Measured after a day: 1,534 general-harvest rows judged, 127 of them called
- * design, and ZERO clearing the bar. Best score in the whole set: 63. Meanwhile the curated design
- * accounts — 70 rows judged, 9 cards — were queued behind them, competing for the same 30 slots a
- * tick with several thousand rows that could not produce a card if they scored perfectly.
- *
- * So the queue asks the question the walls ask. A row is worth a judge call when it comes from a
- * design source (it exists to be graded), or when it already qualifies for the trending wall (where
- * the verdict is not the score but `publishable` — the safety gate, which trending needs just as
- * much). Anything else is not judged, because there is no page it could reach.
- *
- * Writes the verdict for EVERY row it judges, including the ones that will never be shown. A row
- * that was looked at and rejected must be distinguishable from one that was never looked at —
- * otherwise the queue re-pays for the same rejection every night.
- */
-export async function judgeWallQueue(
-  admin: SupabaseClient,
-  opts: { limit?: number; deadline?: number } = {}
-): Promise<JudgeRunResult> {
-  const limit = Math.min(opts.limit ?? MAX_JUDGEMENTS_PER_RUN, MAX_JUDGEMENTS_PER_RUN);
-  const errors: HarvestError[] = [];
-
-  // `.neq(...)` alone would drop the never-judged rows: in Postgres a comparison against NULL is
-  // NULL, not true, and those rows ARE the queue. Same trap `market-categorise.ts` documents.
-  // The trending wall's own window, restated here so the queue and the page agree on what "could
-  // appear" means. Importing it from `wall.ts` would be a cycle — that module already imports this
-  // one for the bar — so the two constants are asserted equal in the tests instead.
-  const since = new Date(Date.now() - TRENDING_WINDOW_DAYS_FOR_QUEUE * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data, error } = await admin
-    .from('market_posts')
-    .select('id, platform, account_key, content, poster_path')
-    .not('poster_path', 'is', null)
-    .or(`design_scorer_version.is.null,design_scorer_version.neq.${DESIGN_SCORER_VERSION}`)
-    // A design source, or already trending. `*` is PostgREST's wildcard inside `like`.
-    .or(`query.like.design:*,and(outperformance.gte.${TRENDING_MIN_OUTPERFORMANCE_FOR_QUEUE},published_at.gte.${since})`)
-    .order('discovered_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    return {
-      considered: 0,
-      judged: 0,
-      design: 0,
-      onWall: 0,
-      errors: [{ stage: 'design_judge', target: 'queue', message: error.message.slice(0, 300) }]
-    };
-  }
-
-  const rows = (data ?? []) as QueueRow[];
-  const min = minDesignScore();
-  let judged = 0;
-  let design = 0;
-  let onWall = 0;
-
-  for (const row of rows) {
-    if (opts.deadline && Date.now() > opts.deadline) break;
-
-    const { data: blob, error: dlErr } = await admin.storage.from(WALL_BUCKET).download(row.poster_path);
-    if (dlErr || !blob) {
-      errors.push({
-        stage: 'design_judge',
-        target: row.id,
-        message: `poster unreadable: ${dlErr?.message?.slice(0, 200) ?? 'missing'}`
-      });
-      continue;
-    }
-
-    let verdict: DesignVerdict | null;
-    try {
-      verdict = await judgeDesign(
-        { bytes: Buffer.from(await blob.arrayBuffer()), mime: 'image/webp' },
-        { caption: row.content, platform: row.platform, account: row.account_key }
-      );
-    } catch (e) {
-      errors.push({
-        stage: 'design_judge',
-        target: row.id,
-        message: (e instanceof Error ? e.message : String(e)).slice(0, 300)
-      });
-      continue;
-    }
-    if (!verdict) {
-      errors.push({ stage: 'design_judge', target: row.id, message: 'unparseable verdict' });
-      continue;
-    }
-
-    const { error: upErr } = await admin
-      .from('market_posts')
-      .update({
-        is_design: verdict.isDesign,
-        design_score: verdict.score,
-        design_scores: verdict.scores,
-        design_tags: verdict.tags,
-        design_note: verdict.note,
-        design_publishable: verdict.publishable,
-        design_block_reason: verdict.blockReason,
-        design_scored_at: new Date().toISOString(),
-        design_scorer_version: DESIGN_SCORER_VERSION
-      })
-      .eq('id', row.id);
-    if (upErr) {
-      errors.push({ stage: 'design_judge', target: row.id, message: upErr.message.slice(0, 200) });
-      continue;
-    }
-
-    judged++;
-    if (verdict.isDesign) design++;
-    if (meetsWallBar(verdict, min)) onWall++;
-  }
-
-  return { considered: rows.length, judged, design, onWall, errors };
-}
 
 /** The locales the note carries. Exported so a test fails when a new site locale is added here. */
 export const NOTE_LOCALES: readonly Locale[] = SUPPORTED;

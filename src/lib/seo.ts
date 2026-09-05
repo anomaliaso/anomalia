@@ -30,11 +30,9 @@ export const MARKETING_PATHS = [
   '/agosto',
   '/no-time',
   '/overwhelmed',
-  '/content-ideas',
   '/cant-afford',
   '/multiple-accounts',
   '/not-working',
-  '/ai-vs-human',
   '/autopilot',
   '/grow',
   '/ads',
@@ -44,14 +42,7 @@ export const MARKETING_PATHS = [
   '/autoposts',
   '/leads-finder',
   '/news-radar',
-  '/playbooks',
-  '/talents',
   '/agents',
-  '/styles',
-  // The two public walls (0199). Indexed like any other marketing page; the per-post detail
-  // pages are added to the sitemap from the database, since they are rows and not routes.
-  '/trending',
-  '/design',
   '/insights',
   '/cursor-mcp-motion-ads',
   '/compare',
@@ -65,13 +56,8 @@ export const MARKETING_PATHS = [
   '/engagement',
   '/roi',
   '/posting-schedule',
-  '/no-results',
-  '/scheduling',
   '/analytics',
-  '/content-calendar',
-  '/automation',
-  '/strategy',
-  '/caption-writer',
+  '/tools',
   '/tools/agent-team',
   '/tools/geo-audit',
   '/tools/keyword-research',
@@ -85,6 +71,7 @@ export const MARKETING_PATHS = [
   '/docs/getting-started',
   '/docs/credits',
   '/docs/cli',
+  '/docs/mcp',
   '/docs/api',
   '/docs/api/strategy',
   '/docs/api/analytics',
@@ -115,42 +102,6 @@ export const MARKETING_PATHS = [
   '/docs/team-invites'
 ] as const;
 
-/** Dynamic playbook pages — one per profession. */
-export const PLAYBOOK_SLUGS = [
-  'restaurant',
-  'cafe',
-  'bakery',
-  'pizzeria',
-  'ecommerce',
-  'fashion-brand',
-  'jewelry-store',
-  'pet-shop',
-  'dental-clinic',
-  'chiropractor',
-  'nutritionist',
-  'mental-health',
-  'hair-salon',
-  'nail-studio',
-  'spa',
-  'barbershop',
-  'gym',
-  'yoga-studio',
-  'personal-trainer',
-  'crossfit-box',
-  'law-firm',
-  'real-estate',
-  'accountant',
-  'cleaning-service',
-  'photographer',
-  'agency',
-  'freelancer',
-  'coach',
-  'hotel',
-  'auto-shop',
-  'plumber',
-  'electrician'
-] as const;
-
 /** Static files that should appear in the sitemap but aren't marketing HTML pages. */
 export const STATIC_SITEMAP_PATHS = [
   '/llms.txt',
@@ -159,24 +110,81 @@ export const STATIC_SITEMAP_PATHS = [
   '/usecases.md'
 ] as const;
 
-/** Pain / problem landings — linked from footer for crawl paths. */
-export const PAIN_PATHS = [
-  '/no-time',
-  '/overwhelmed',
-  '/burnout',
-  '/cant-afford',
-  '/not-working',
-  '/no-results',
-  '/consistency',
-  '/multiple-accounts'
-] as const;
-
 /** Localized path for any supported marketing locale. */
 export function localizedPath(path: string, lang: Locale): string {
   return localePath(path, lang);
 }
 
-/** @deprecated Prefer localizedPath(path, 'it') */
-export function itPath(path: string): string {
-  return localePath(path, 'it');
+/**
+ * Public pages that no longer exist, and the page that took their job.
+ *
+ * A deleted route is a 404, and a 404 on a URL Google already knows costs the whole domain, not
+ * just that page. So a page leaves the site in two moves that belong to the same commit: its row
+ * lands here, and its path leaves MARKETING_PATHS. `src/lib/seo.retired.test.ts` holds both.
+ *
+ * The destination is chosen, never defaulted to '/': a 301 onto an irrelevant page is worth
+ * almost as little as the 404 it replaced.
+ */
+export const RETIRED_PAGES: Record<string, string> = {
+  // Programmatic SEO pages that sell a product Anomalia no longer is, and that 90 days of two
+  // analytics systems agree nobody read: zero pageviews each. They were in the sitemap, though,
+  // so each one leaves behind a 301 to the live page that makes the same promise today.
+  '/ai-vs-human': '/cant-afford',
+  '/automation': '/autoposts',
+  '/caption-writer': '/autoposts',
+  '/content-calendar': '/posting-schedule',
+  '/content-ideas': '/autoposts',
+  '/no-results': '/not-working',
+  '/scheduling': '/posting-schedule',
+  '/strategy': '/usecases',
+  // The public walls and libraries (0199). The material they showed — post designs, the style
+  // library, the talent roster, the industry playbooks — is NOT going anywhere: it stays in the
+  // database and in the modules that read it, because its future is inside the product, handed
+  // to the customer's own agent over MCP, not on a page the world browses. Only the pages go.
+  '/design': '/autoposts',
+  '/trending': '/news-radar',
+  '/styles': '/autoposts',
+  '/talents': '/usecases',
+  '/playbooks': '/usecases',
+  // Free tools nobody ever opened and Google was never told about: zero pageviews in 90 days
+  // (PostHog and Vercel agree) and absent from MARKETING_PATHS since the day they were written.
+  // The index still lists the nine that are actually used.
+  '/tools/ai-visibility': '/tools/geo-audit',
+  '/tools/backlink-checker': '/tools',
+  '/tools/broken-links': '/tools/sitemap-analyzer',
+  '/tools/competitor-gap': '/tools/keyword-research',
+  '/tools/conversation-gap': '/tools',
+  '/tools/heading-audit': '/tools',
+  '/tools/keyword-difficulty': '/tools/keyword-research',
+  '/tools/long-tail': '/tools/keyword-research',
+  '/tools/meta-tags': '/tools',
+  '/tools/page-speed': '/tools',
+  '/tools/rank-checker': '/tools',
+  '/tools/redirect-checker': '/tools/sitemap-analyzer',
+  '/tools/robots-tester': '/tools/llms-txt-validator',
+  '/tools/schema-validator': '/tools',
+  '/tools/traffic-estimator': '/tools/keyword-research'
+};
+
+/**
+ * Retired roots whose children were database rows rather than routes: every `/design/<slug>`,
+ * `/playbooks/<slug>`, `/styles/<slug>` and `/talents/<slug>` that Google indexed needs the same
+ * 301 as its root, and there were hundreds of them.
+ */
+const RETIRED_PREFIXES = ['/design/', '/playbooks/', '/styles/', '/talents/'];
+
+/**
+ * The 301 destination for a retired page, in the locale the visitor arrived in, or `null` when the
+ * path is still live. The locale prefix is stripped before the lookup, so `/it/tools/meta-tags` and
+ * `/tools/meta-tags` read the same row and land on the Italian and the English destination.
+ */
+export function retiredPageTarget(pathname: string, lang: Locale): string | null {
+  const seg = pathname.split('/')[1];
+  const bare = SUPPORTED.includes(seg as Locale) ? pathname.slice(seg.length + 1) || '/' : pathname;
+  const path = bare.replace(/(.)\/$/, '$1');
+  const prefix = RETIRED_PREFIXES.find((r) => path.startsWith(r));
+  const dest = RETIRED_PAGES[prefix ? prefix.slice(0, -1) : path];
+
+  return dest ? localizedPath(dest, lang) : null;
 }
+

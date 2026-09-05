@@ -63,7 +63,6 @@ anomalia plan <slug> propose
 anomalia weekly-plan <slug> plan --week 0
 anomalia weekly-plan <slug> produce --week 0
 anomalia studio <slug> add-note --text "..."
-anomalia ai <slug> --message "..." --pipe
 ```
 
 ## Tips

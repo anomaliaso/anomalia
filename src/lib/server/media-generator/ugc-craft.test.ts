@@ -18,13 +18,17 @@ describe('ugcAgentModel — la resa UGC segue il centralino, non il flash cablat
 		}
 	});
 
-	it('la resa prende il tier PRO del centralino', () => {
+	/**
+	 * La resa segue il DEFAULT, non piu` il secondo id di LLM_MODELS: quel salto era la meccanica
+	 * del preset Pro, e sceglieva un modello per posizione in una lista separata da virgole.
+	 */
+	it('la resa prende il default del centralino', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
 		const m = ugcAgentModel();
 		expect(m.provider).toBe('llm');
-		expect(m.modelId).toBe('openai/gpt-5.6-sol');
+		expect(m.modelId).toBe('z-ai/glm-5.3-flash');
 	});
 
 	it('UGC_VIDEO_MODEL è la scappatoia esplicita e vince sul picker', () => {
@@ -42,8 +46,8 @@ describe('ugcAgentModel — la resa UGC segue il centralino, non il flash cablat
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
 		const viaShared = craftAgentModel({ envModel: env.UGC_VIDEO_MODEL });
-		expect(viaShared.modelId).toBe('openai/gpt-5.6-sol');
-		expect(motionAgentModel().modelId).toBe('openai/gpt-5.6-sol');
+		expect(viaShared.modelId).toBe('z-ai/glm-5.3-flash');
+		expect(motionAgentModel().modelId).toBe('z-ai/glm-5.3-flash');
 	});
 });
 

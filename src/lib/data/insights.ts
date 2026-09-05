@@ -53,7 +53,7 @@ export const INSIGHTS: InsightArticle[] = [
       en: 'A social post is not a paragraph. If the model never looks at the image, it is guessing.',
       it: 'Un post social non è un paragrafo. Se il modello non guarda l’immagine, sta indovinando.'
     },
-    relatedPaths: ['/autoposts', '/ai-vs-human', '/pricing'],
+    relatedPaths: ['/autoposts', '/cant-afford', '/pricing'],
     cover: {
       src: '/insights/gemini-37-glance.webp',
       alt: {
@@ -213,7 +213,7 @@ export const INSIGHTS: InsightArticle[] = [
       en: 'Schedulers wait for you to create. Agencies need briefs. An autopilot runs the whole loop — with you still in control.',
       it: 'Gli scheduler aspettano che tu crei. Le agenzie chiedono brief. Un autopilot gira l’intero ciclo — con te ancora al comando.'
     },
-    relatedPaths: ['/autoposts', '/playbooks', '/pricing'],
+    relatedPaths: ['/autoposts', '/usecases', '/pricing'],
     sections: {
       en: [
         {
@@ -464,7 +464,7 @@ export const INSIGHTS: InsightArticle[] = [
       en: 'It is not agency or AI forever. It is which bottleneck you are buying your way out of this quarter.',
       it: 'Non è agenzia o AI per sempre. È da quale collo di bottiglia ti stai liberando questo quarter.'
     },
-    relatedPaths: ['/pricing', '/ai-vs-human', '/cant-afford'],
+    relatedPaths: ['/pricing', '/autoposts', '/cant-afford'],
     sections: {
       en: [
         {

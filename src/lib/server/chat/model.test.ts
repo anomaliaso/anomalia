@@ -25,30 +25,37 @@ describe('resolveChatModel', () => {
     setLlmEnv();
   });
 
-  it('ogni tier risolve sul centralino: il provider è sempre \'llm\'', () => {
+  it('ogni scelta risolve sul centralino: il provider è sempre \'llm\'', () => {
     // La vecchia multi-route (kie Luna/Grok, DeepSeek, Gemini di ripiego) non esiste più: il tier
     // resta un'etichetta per UI/log, il tubo è uno.
-    for (const tier of ['auto', 'fast', 'pro', 'deepseek-pro', 'gpt-terra', 'gpt-sol'] as const) {
+    for (const tier of ['deepseek-pro', 'gpt-terra', 'gpt-sol'] as const) {
       const m = resolveChatModel(tier);
       expect(m.provider).toBe('llm');
       expect(m.tier).toBe(tier);
     }
   });
 
-  it('il picker mappa Fast/auto sul primo modello e Pro sull\'ultimo di LLM_MODELS', () => {
-    expect(resolveChatModel('fast').modelId).toBe(PICK_1);
-    expect(resolveChatModel('auto').modelId).toBe(PICK_1);
-    expect(resolveChatModel('gpt-terra').modelId).toBe(PICK_1);
-    // Solo 'pro' (e gli alias 'deepseek-pro' / 'gpt-sol') salgono al secondo id.
-    expect(resolveChatModel('pro').modelId).toBe(PICK_2);
-    expect(resolveChatModel('gpt-sol').modelId).toBe(PICK_2);
-    expect(resolveChatModel('deepseek-pro').modelId).toBe(PICK_2);
+  /**
+   * Auto, Fast e Pro non sono piu` tier: erano alias per LLM_DEFAULT_MODEL e per il SECONDO
+   * elemento di LLM_MODELS. Chi ne scrive uno adesso non sta scegliendo niente, e prende il
+   * default — non il secondo modello della lista, che era la scelta piu` sorprendente di tutte.
+   */
+  it('i preset spariti non sono piu\' una scelta: cadono sul default', () => {
+    for (const gone of ['auto', 'fast', 'pro']) {
+      const m = resolveChatModel(gone);
+      expect(m.tier).toBe(null);
+      expect(m.modelId).toBe(PICK_1);
+    }
   });
 
-  it('senza LLM_MODELS la lista è il solo default: Pro ricade lì invece di lanciare', () => {
-    delete env.LLM_MODELS;
-    expect(resolveChatModel('fast').modelId).toBe(PICK_1);
-    expect(resolveChatModel('pro').modelId).toBe(PICK_1);
+  it('un id del catalogo passa intatto', () => {
+    expect(resolveChatModel(PICK_2).modelId).toBe(PICK_2);
+    expect(resolveChatModel(PICK_2).tier).toBe(PICK_2);
+  });
+
+  it('nessuna scelta prende il default, non il primo della lista per caso', () => {
+    env.LLM_DEFAULT_MODEL = PICK_2;
+    expect(resolveChatModel(undefined).modelId).toBe(PICK_2);
   });
 
   it('chiavekie, DeepSeek, Xiaomi, Gemini e CHAT_* vecchi sono decorativi', () => {
@@ -61,24 +68,10 @@ describe('resolveChatModel', () => {
     env.GOOGLE_API_KEY = 'google-test';
     env.CHAT_FAST_PROVIDER = 'deepseek';
     env.KIE_MODEL = 'grok-4-5';
-    for (const tier of ['fast', 'auto', 'pro'] as const) {
-      const m = resolveChatModel(tier);
-      expect(m.provider).toBe('llm');
-      expect(m.modelId).toBe(tier === 'pro' ? PICK_2 : PICK_1);
-    }
-  });
-
-  it('CHAT_TIER decide quando il turno non dice il suo, una spazzatura torna su Auto', () => {
     env.CHAT_TIER = 'pro';
     const m = resolveChatModel(undefined);
-    expect(m.tier).toBe('pro');
-    expect(m.modelId).toBe(PICK_2);
-
-    env.CHAT_TIER = 'nonsense';
-    expect(resolveChatModel(undefined).tier).toBe('auto');
-
-    // Un tier in ingresso valido batte comunque la env.
-    expect(resolveChatModel('fast').tier).toBe('fast');
+    expect(m.provider).toBe('llm');
+    expect(m.modelId).toBe(PICK_1);
   });
 
   it('senza default configurato il resolver lancia llm_unconfigured, non indovina un modello', () => {
@@ -90,51 +83,47 @@ describe('resolveChatModel', () => {
   it('callOptions portano solo il tetto di output pieno del centralino', () => {
     // Senza tetto ogni OpenAI-compat applica il proprio default (spesso 4096) e la risposta lunga
     // si tronca in silenzio. Per provider 'llm' il limite conservativo dell'harness vale per tutti.
-    for (const tier of ['fast', 'auto', 'pro', 'gpt-terra', 'gpt-sol'] as const) {
-      expect(resolveChatModel(tier).callOptions).toEqual({ maxOutputTokens: HARNESS_MAX_OUTPUT_TOKENS });
+    for (const tier of [null, 'gpt-terra', 'gpt-sol'] as const) {
+      expect(resolveChatModel(tier ?? undefined).callOptions).toEqual({
+        maxOutputTokens: HARNESS_MAX_OUTPUT_TOKENS
+      });
     }
   });
 
-  it('Fast resta medium; Auto (generalista) sale a high per policy; Pro parla alto per famiglia', () => {
-    expect(resolveChatModel('fast').reasoning).toBe('medium');
-    expect(resolveChatModel('auto').reasoning).toBe('high'); // DEFAULT_AGENT_MODEL
-    expect(resolveChatModel('pro').reasoning).toBe('high'); // default della famiglia Grok
+  it('senza scelta il pensiero parte da medium sulla scala comune', () => {
+    expect(resolveChatModel(undefined).reasoning).toBe('medium');
+    expect(resolveChatModel(PICK_2).reasoning).toBe('medium');
   });
 
-  it('Auto (Luna) accetta low|medium|high; xhigh collassa su high; spazzatura sul pavimento della famiglia', () => {
-    expect(resolveChatModel('auto', 'high').reasoning).toBe('high');
-    // Alias legacy: xhigh → max → nearest sulla scala Luna = high.
-    expect(resolveChatModel('auto', 'xhigh').reasoning).toBe('high');
-    // Un valore non riconosciuto cade sul default della FAMIGLIA sotto il tier, non della policy.
-    expect(resolveChatModel('auto', 'nonsense').reasoning).toBe('medium');
-    // Fast si regola o sregola dal suo medium; 'off' e 'max' non esistono su Luna: pavimento e soffitto.
-    expect(resolveChatModel('fast', 'low').reasoning).toBe('low');
-    expect(resolveChatModel('fast', 'high').reasoning).toBe('high');
-    expect(resolveChatModel('fast', 'off').reasoning).toBe('low');
-    expect(resolveChatModel('fast', 'none').reasoning).toBe('low');
-    expect(resolveChatModel('fast', 'max').reasoning).toBe('high');
+  it('la scala comune accetta low|medium|high; xhigh collassa su high; spazzatura sul default', () => {
+    expect(resolveChatModel(undefined, 'high').reasoning).toBe('high');
+    // Alias legacy: xhigh → max → nearest sulla scala comune = high.
+    expect(resolveChatModel(undefined, 'xhigh').reasoning).toBe('high');
+    expect(resolveChatModel(undefined, 'nonsense').reasoning).toBe('medium');
+    expect(resolveChatModel(undefined, 'low').reasoning).toBe('low');
+    // 'off' e 'max' non esistono sulla scala comune: pavimento e soffitto.
+    expect(resolveChatModel(undefined, 'off').reasoning).toBe('low');
+    expect(resolveChatModel(undefined, 'none').reasoning).toBe('low');
+    expect(resolveChatModel(undefined, 'max').reasoning).toBe('high');
   });
 
   it('con immagini il turno NON scambia mai modello: il gateway è già multimodale per contratto', () => {
-    // Anche il pick "Pro" qui è un modello solo-testo (Claude), ma il provider 'llm' dichiara
-    // visione: il vecchio swap verso Gemini/solo-visione è morte e l'etichetta tier resta.
-    const m = resolveChatModel('pro', undefined, { vision: true });
+    // Anche un pick solo-testo (Claude) dichiara visione sul provider 'llm': il vecchio swap
+    // verso Gemini è morto e l'etichetta del modello resta quella scelta.
+    const m = resolveChatModel(PICK_2);
     expect(m.provider).toBe('llm');
     expect(m.modelId).toBe(PICK_2);
-    expect(m.tier).toBe('pro');
     expect(modelSeesImages(m)).toBe(true);
-    expect(modelSeesImages(resolveChatModel('fast', undefined, { vision: true }))).toBe(true);
+    expect(modelSeesImages(resolveChatModel(undefined))).toBe(true);
   });
 
   it('le clip passano solo su un pick google/gemini-*, e lo dice prima di partire', () => {
-    expect(modelSeesVideo(resolveChatModel('auto'))).toBe(true); // default Gemini sul gateway
-    expect(modelSeesVideo(resolveChatModel('pro'))).toBe(false); // Claude: no video
+    expect(modelSeesVideo(resolveChatModel(undefined))).toBe(true); // default Gemini sul gateway
+    expect(modelSeesVideo(resolveChatModel(PICK_2))).toBe(false); // Claude: no video
     // Un default non-Gemini chiude anche lì: niente turno finto sulla clip mai vista.
     env.LLM_DEFAULT_MODEL = 'openai/gpt-5-mini';
     env.LLM_MODELS = 'openai/gpt-5-mini,anthropic/claude-sonnet-4';
-    for (const tier of ['auto', 'fast', 'pro'] as const) {
-      expect(modelSeesVideo(resolveChatModel(tier))).toBe(false);
-    }
+    expect(modelSeesVideo(resolveChatModel(undefined))).toBe(false);
   });
 });
 
@@ -176,6 +165,37 @@ describe('le richieste di produzione pesanti riconosciute senza chiamate modello
     expect(isHeavyProductionAsk('render the motion trailer')).toBe(true);
   });
 
+  /**
+   * IL DIFETTO PAGATO, 2026-09-03. «Non fare alcun post» e l'agente generava un'immagine lo
+   * stesso. Non e` che ignorasse l'istruzione: gliela facevamo ignorare noi. Questo classificatore
+   * ha un solo consumatore, `forcedFirstStepTools`, che su un "si" OBBLIGA il modello a chiamare
+   * un tool al primo step — e le stesse parole ci sono in «crea un post» e in «non creare un
+   * post», perche' la negazione non veniva guardata.
+   *
+   * Il costo dei due errori non e` simmetrico, ed e` questo che decide la regola: non forzare
+   * quando avremmo potuto lascia il modello libero di chiamare il tool lo stesso; forzare quando
+   * l'utente ha detto di no scavalca un'istruzione esplicita. Nel dubbio non si forza.
+   */
+  it('una negazione toglie la forzatura, comunque sia scritta', () => {
+    expect(isHeavyProductionAsk('non fare alcun post')).toBe(false);
+    expect(isHeavyProductionAsk('non creare nessun post')).toBe(false);
+    expect(isHeavyProductionAsk('senza generare immagini')).toBe(false);
+    expect(isHeavyProductionAsk('non generare immagini, dimmi solo cosa faresti')).toBe(false);
+    expect(isHeavyProductionAsk("non voglio che tu crei un post, voglio solo un'analisi")).toBe(false);
+    expect(isHeavyProductionAsk('evita di creare post')).toBe(false);
+    expect(isHeavyProductionAsk('do not create any post')).toBe(false);
+    expect(isHeavyProductionAsk("don't generate images")).toBe(false);
+    expect(isHeavyProductionAsk('without creating a carousel')).toBe(false);
+    expect(isHeavyProductionAsk('avoid generating the video')).toBe(false);
+  });
+
+  /** Anche i termini che da soli valgono "produzione" si spengono davanti a un no. */
+  it('la negazione vale anche sui termini forti da soli', () => {
+    expect(isHeavyProductionAsk('serve un UGC per TikTok')).toBe(true);
+    expect(isHeavyProductionAsk('non fare nessun UGC')).toBe(false);
+    expect(isHeavyProductionAsk('niente carosello, solo il piano')).toBe(false);
+  });
+
   it('NON scala su domande e conversazione normale', () => {
     expect(isHeavyProductionAsk("com'è andata la settimana?")).toBe(false);
     expect(isHeavyProductionAsk('what does my plan include?')).toBe(false);
@@ -184,31 +204,16 @@ describe('le richieste di produzione pesanti riconosciute senza chiamate modello
     expect(isHeavyProductionAsk(undefined)).toBe(false);
   });
 
-  it('Auto + richiesta pesante → tier Pro, cioè il secondo modello della lista', () => {
-    const m = resolveChatModel('auto', undefined, { userText: 'crea un carosello per il lancio' });
-    expect(m.tier).toBe('pro');
-    expect(m.modelId).toBe(PICK_2);
-    expect(m.provider).toBe('llm');
-  });
-
-  it('la scalata non richiede alcuna chiave legacy: il solo centralino basta', () => {
-    // Già corretto: prima il gate era `kieConfigured()` e un brand senza KIE_API_KEY non
-    // scalava mai. Il Pro ora è semplicemente il secondo modello della lista del picker.
-    const m = resolveChatModel('auto', undefined, { userText: 'crea un carosello per il lancio' });
-    expect(m.tier).toBe('pro');
-    expect(m.modelId).toBe(PICK_2);
-  });
-
-  it('Auto + domanda normale resta Auto: primo modello, nessuna scalata', () => {
-    const m = resolveChatModel('auto', undefined, { userText: 'che piano ho attivo?' });
-    expect(m.tier).toBe('auto');
-    expect(m.modelId).toBe(PICK_1);
-  });
-
-  it('un tier ESPLICITO non scala mai: Fast resta Fast anche su una richiesta pesante', () => {
-    const m = resolveChatModel('fast', undefined, { userText: 'genera un video e tre post' });
-    expect(m.tier).toBe('fast');
-    expect(m.modelId).toBe(PICK_1);
+  /**
+   * Il classificatore NON sceglie piu` il modello: l'escalation Auto→Pro e` morta coi preset,
+   * e non c'e` piu` un "Pro" su cui scalare. Resta perche' l'harness lo usa per decidere quali
+   * strumenti mettere sul tavolo — un incarico di produzione e una domanda non chiedono gli
+   * stessi. Questo test e` la guardia contro il ritorno della scalata silenziosa.
+   */
+  it('una richiesta pesante non cambia piu\' il modello di nascosto', () => {
+    const heavy = resolveChatModel(undefined, undefined, {});
+    expect(heavy.modelId).toBe(PICK_1);
+    expect(heavy.tier).toBe(null);
   });
 });
 
@@ -218,10 +223,13 @@ describe('la preferenza salvata su thread e agente custom (0225)', () => {
     setLlmEnv();
   });
 
-  it('su Auto il pensiero salvato batte la policy dello spec, ma il modello resta quello del picker', () => {
-    // Lo spec motion chiederebbe Grok a high: la riga salvata vince sul THINKING, mentre il tubo
-    // resta quello che il tier risolve — la famiglia non sceglie più il modello.
-    const m = resolveChatModel('auto', undefined, {
+  /**
+   * La policy degli agenti di sistema e` stata eliminata con i preset: lo spec motion non impone
+   * piu` la sua famiglia. Resta la riga SALVATA — quella del thread o dell'agente custom — che
+   * governa il pensiero, mentre il modello resta quello risolto.
+   */
+  it('il pensiero salvato governa, e lo spec dell\'agente non ha piu\' voce', () => {
+    const m = resolveChatModel(undefined, undefined, {
       agentId: 'motion',
       model: { family: 'grok', thinking: 'low' }
     });
@@ -230,40 +238,38 @@ describe('la preferenza salvata su thread e agente custom (0225)', () => {
   });
 
   it('la famiglia salvata imposta il VOCABOLARIO: DeepSeek concede off dove Luna lo collassa', () => {
-    const off = resolveChatModel('auto', undefined, {
+    const off = resolveChatModel('deepseek-pro', undefined, {
       model: { family: 'deepseek-pro', thinking: 'off' }
     });
     expect(off.reasoning).toBe('off'); // DeepSeek ha l'off vero
 
-    // Con la stessa richiesta e nessuna famiglia la Luna mette il pavimento.
-    const luna = resolveChatModel('auto', undefined, { model: { family: 'luna', thinking: 'off' } });
-    expect(luna.reasoning).toBe('low');
+    // Senza scelta la scala comune mette il pavimento: non ha un off.
+    const common = resolveChatModel(undefined, undefined, { model: { family: 'luna', thinking: 'off' } });
+    expect(common.reasoning).toBe('low');
   });
 
-  it('una riga sporca non cambia nulla: policy di default, primo modello', () => {
-    const m = resolveChatModel('auto', undefined, { model: { family: 'pippo' } });
+  it('una riga sporca non cambia nulla: default, e pensiero di default', () => {
+    const m = resolveChatModel(undefined, undefined, { model: { family: 'pippo' } });
     expect(m.modelId).toBe(PICK_1);
-    expect(m.reasoning).toBe('high');
+    expect(m.reasoning).toBe('medium');
   });
 
-  it('un tier esplicito vince sulla riga salvata e passa per il picker: Pro → secondo modello', () => {
-    const m = resolveChatModel('pro', undefined, { model: { family: 'luna', thinking: 'low' } });
+  it('un id esplicito vince sulla riga salvata', () => {
+    const m = resolveChatModel(PICK_2, undefined, { model: { family: 'luna', thinking: 'low' } });
     expect(m.modelId).toBe(PICK_2);
-    // Il pensiero salvato conta solo su Auto: qui decide la famiglia Grok sotto Pro.
-    expect(m.reasoning).toBe('high');
   });
 
-  it('il giro completo: pick \'pro\' salvato sul thread torna come tier e riacquista il secondo modello', () => {
-    const row = policyForChoice('pro', 'high');
-    expect(choiceForPolicy(row)?.tier).toBe('pro');
+  it('il giro completo: un id salvato sul thread torna come tier e riacquista il suo modello', () => {
+    const row = policyForChoice(PICK_2, 'high');
+    expect(choiceForPolicy(row)?.tier).toBe(PICK_2);
     const m = resolveChatModel(choiceForPolicy(row)?.tier);
     expect(m.modelId).toBe(PICK_2);
     expect(m.provider).toBe('llm');
   });
 
-  it('salvare Auto produce null: il thread torna alla risoluzione di default', () => {
-    expect(policyForChoice('auto', 'high')).toBeNull();
-    expect(resolveChatModel('auto').modelId).toBe(PICK_1);
+  it('salvare "nessuna scelta" produce null: il thread torna al default', () => {
+    expect(policyForChoice(null, 'high')).toBeNull();
+    expect(resolveChatModel(undefined).modelId).toBe(PICK_1);
   });
 });
 
@@ -271,7 +277,7 @@ describe('la preferenza salvata su thread e agente custom (0225)', () => {
  * RE-TARGET DEL VECCHIO «il turno non è muto finché non ha finito» (eval 24/8). Quel silenzio era
  * la Responses di kie senza `reasoningSummary`, e il rimedio viveva nei callOptions di Terra/Sol/
  * Luna/Grok: tutto rimosso con il gateway. Oggi i pick Terra e Sol attraversano solo
- * llmModelForPicker ('gpt-sol' → secondo modello), e nessun turno porta callOptions speciali.
+ * llmModelForPicker, e nessun turno porta callOptions speciali.
  */
 describe('il turno non è muto finché non ha finito', () => {
   beforeEach(() => {
@@ -279,18 +285,22 @@ describe('il turno non è muto finché non ha finito', () => {
     setLlmEnv();
   });
 
-  it('Terra resta sul primo modello; Sol risolve come Pro, sul secondo', () => {
-    // Terra non è tra gli alias del picker: ricade sul default. Solo 'pro'/'deepseek-pro'/
-    // 'gpt-sol' salgono a LLM_MODELS[1].
-    expect(resolveChatModel('gpt-terra').modelId).toBe(PICK_1);
-    const sol = resolveChatModel('gpt-sol');
-    expect(sol.modelId).toBe(PICK_2);
-    expect(sol.provider).toBe('llm');
-    expect(sol.tier).toBe('gpt-sol');
+  /**
+   * Terra e Sol restano etichette valide (ci sono thread che le hanno salvate), ma nessuna delle
+   * due sale piu` al SECONDO id di LLM_MODELS: quel salto era la meccanica del preset Pro, e
+   * sceglieva un modello per posizione in una lista.
+   */
+  it('Terra e Sol restano etichette, e risolvono sul default', () => {
+    for (const tier of ['gpt-terra', 'gpt-sol'] as const) {
+      const m = resolveChatModel(tier);
+      expect(m.modelId).toBe(PICK_1);
+      expect(m.provider).toBe('llm');
+      expect(m.tier).toBe(tier);
+    }
   });
 
   it('nessun trucco per far parlare prima il modello: niente reasoningSummary né temperature', () => {
-    for (const tier of ['fast', 'auto', 'pro', 'gpt-terra', 'gpt-sol'] as const) {
+    for (const tier of [undefined, 'gpt-terra', 'gpt-sol'] as const) {
       const opts = resolveChatModel(tier).callOptions;
       expect(opts).toEqual({ maxOutputTokens: HARNESS_MAX_OUTPUT_TOKENS });
       expect('temperature' in opts).toBe(false);

@@ -13,6 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
 	finishVideoRender,
+	videoTaskProvider,
 	type RenderVideoOpts,
 	type SubmittedVideoRender,
 	type VideoPersistOpts
@@ -116,9 +117,14 @@ export async function submitAndTrackVideoRender(opts: {
 	threadId?: string | null;
 	imagePrompt: string;
 	render: RenderVideoOpts;
+	/** Il motivo di un rifiuto del fornitore, se ne arriva uno: passa dritto a chi ha chiamato. */
+	onSubmitError?: (reason: string) => void;
 }): Promise<SubmittedVideoRender | null> {
 	const { submitVideoRender } = await import('$lib/server/video');
-	const submitted = await submitVideoRender(opts.imagePrompt, opts.render).catch((e) => {
+	const submitted = await submitVideoRender(opts.imagePrompt, {
+		...opts.render,
+		onSubmitError: opts.onSubmitError
+	}).catch((e) => {
 		// CreditsExhaustedError must reach the caller — it is a message for the user, not a failure
 		// to swallow into a silent photo fallback.
 		if (e instanceof Error && e.name === 'CreditsExhaustedError') throw e;
@@ -207,19 +213,60 @@ async function settle(
 }
 
 /**
- * Attach the finished clip to its post, replacing the cover that stood in for it.
- *
- * Returns whether it worked, and the caller only settles the render `done` once it has: a render
- * marked done whose post never got the url is a clip that exists, is paid for, and is reachable by
- * nothing — and no query in this module looks at `done` rows again.
+ * Il clip che nessun post reclama va nella LIBRERIA del brand, o resta un file pagato che nessun
+ * tool sa raggiungere: `create_post` accetta `media_ids`, e questo è l'id che glielo procura.
+ * `source_ref` porta l'id del lavoro, così `check_media_job` ritrova l'asset senza una colonna in
+ * più su `video_renders`.
  */
-async function applyToPost(
+async function applyToLibrary(
+	admin: SupabaseClient,
+	row: VideoRenderRow,
+	url: string
+): Promise<string | null> {
+	const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
+	const saved = await saveRenderedVideoToLibrary(admin, {
+		brandId: row.brand_id,
+		userId: row.user_id,
+		url,
+		title: row.prompt?.trim().slice(0, 80) || 'Generated clip',
+		durationSeconds: row.duration_seconds ?? undefined,
+		sourceRef: row.id
+	});
+
+	return 'error' in saved ? saved.error : null;
+}
+
+/**
+ * L'allocazione mensile la consuma un clip che ATTERRA, ovunque atterri — su un post o in
+ * libreria. Contarla solo nel ramo del post apriva un arbitraggio: genero in libreria, attacco
+ * dopo, e il video non conta mai. Un video è un video.
+ *
+ * Addebitare all'invio invece — come facevano i chiamanti, perché era lì che un clip esisteva —
+ * lascerebbe che dieci render rifiutati si mangino il margine di un mese.
+ */
+async function chargeMonthlyVideo(admin: SupabaseClient, row: VideoRenderRow): Promise<void> {
+	try {
+		const { addUsage, monthKey } = await import('$lib/server/usage');
+		const { data: brand } = await admin
+			.from('brands')
+			.select('timezone')
+			.eq('id', row.brand_id)
+			.maybeSingle();
+		await addUsage(admin, row.brand_id, monthKey((brand?.timezone as string) ?? 'Europe/Rome'), {
+			videos: 1
+		});
+	} catch (e) {
+		console.error('[video-render] usage accounting failed:', e);
+	}
+}
+
+async function landClip(
 	admin: SupabaseClient,
 	row: VideoRenderRow,
 	url: string,
 	thumbnailUrl?: string
-): Promise<boolean> {
-	if (!row.post_id) return true;
+): Promise<string | null> {
+	if (!row.post_id) return applyToLibrary(admin, row, url);
 	// `.select('id')` so a zero-row match is visible: an UPDATE that hits nothing reports no error,
 	// so without this an orphaned render — post insert rolled back, post since deleted — would be
 	// billed, settled `done`, and reported to the user as attached to a post that does not exist.
@@ -240,33 +287,13 @@ async function applyToPost(
 		.eq('id', row.post_id)
 		.select('id');
 	if (error) {
-		console.error(`[video-render] could not attach clip to post ${row.post_id}:`, error.message);
-		return false;
+		return `the clip is stored but post ${row.post_id} could not be updated: ${error.message}`;
 	}
 	if (!touched?.length) {
-		// Nothing to attach to and nothing to retry — the clip is stored, but its post is gone.
-		console.error(`[video-render] post ${row.post_id} no longer exists; clip ${url} is orphaned`);
-		return false;
+		return `the clip is stored but post ${row.post_id} no longer exists`;
 	}
 
-	// Only a clip that actually landed consumes the brand's monthly video budget. Charging at
-	// submit time — as the callers used to, because that was when a clip existed — would let ten
-	// rejected renders eat a month's headroom.
-	try {
-		const { addUsage, monthKey } = await import('$lib/server/usage');
-		const { data: brand } = await admin
-			.from('brands')
-			.select('timezone')
-			.eq('id', row.brand_id)
-			.maybeSingle();
-		await addUsage(admin, row.brand_id, monthKey((brand?.timezone as string) ?? 'Europe/Rome'), {
-			videos: 1
-		});
-	} catch (e) {
-		console.error('[video-render] usage accounting failed:', e);
-	}
-
-	return true;
+	return null;
 }
 
 /**
@@ -368,7 +395,7 @@ export async function reconcileVideoRenders(
 		if (age > VIDEO_RENDER_MAX_AGE_MS || exhausted) {
 			const why = exhausted
 				? `gave up after ${raw.attempts} attempts (${raw.error ?? 'repeated failures'})`
-				: 'kie never resolved this task';
+				: `${videoTaskProvider(raw.task_id)} never resolved this task`;
 			await settle(admin, raw, { status: 'expired', error: why });
 			if (raw.post_id) {
 				await admin
@@ -433,8 +460,9 @@ export async function reconcileVideoRenders(
 			// Post first, settle second. Settling `done` before the post has the url strands a paid
 			// clip nowhere: nothing re-reads a done row. If the post write fails the row goes back
 			// to the queue, where the attempt cap eventually stops it.
-			const attached = await applyToPost(admin, raw, outcome.url, outcome.thumbnailUrl);
-			if (!attached) {
+			const notLanded = await landClip(admin, raw, outcome.url, outcome.thumbnailUrl);
+			if (notLanded) {
+				console.error(`[video-render] clip did not land id=${raw.id}:`, notLanded);
 				await admin
 					.from('video_renders')
 					.update({
@@ -442,14 +470,22 @@ export async function reconcileVideoRenders(
 						claimed_at: null,
 						attempts: raw.attempts + 1,
 						media_url: outcome.url,
-						error: 'clip stored but the post could not be updated'
+						error: notLanded.slice(0, 2000)
 					})
 					.eq('id', raw.id)
 					.then(undefined, () => {});
 				continue;
 			}
+			await chargeMonthlyVideo(admin, raw);
 			await settle(admin, raw, { status: 'done', media_url: outcome.url });
-			await notifyThread(admin, raw, "the clip is ready and attached to the post", origin);
+			await notifyThread(
+				admin,
+				raw,
+				raw.post_id
+					? 'the clip is ready and attached to the post'
+					: 'the clip is ready and filed in the media library',
+				origin
+			);
 			done += 1;
 		} catch (e) {
 			// Unknown failure: give the row back rather than burying it. The age check above is what

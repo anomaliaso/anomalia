@@ -82,7 +82,7 @@ anomalia content my-brand --status pending_user
 anomalia approve my-brand --all
 anomalia seo my-brand
 anomalia web my-brand generate --topic "..."
-anomalia ai my-brand --message "..." --pipe
+anomalia ads my-brand --remix
 ```
 
 Every command takes the brand slug as its first argument. `anomalia --help` lists them all;
@@ -95,7 +95,7 @@ prefixes error instead of guessing.
 | Planning | `plan`, `weekly-plan`, `calendar`, `gtm` |
 | Brand | `studio`, `voice`, `people`, `products` |
 | Web | `seo`, `geo`, `keywords`, `web` |
-| Ads | `ads` — campaigns, spend, boost proposals, duplicate/delete (`--sync`, `--propose`, `--create`, `--approve`, `--pause`, `--resume`, `--duplicate`, `--delete`, `--reject`, `--ad` per singola creatività) |
+| Ads | `ads` — campaigns, spend, boost proposals, remix, duplicate/delete (`--sync`, `--propose`, `--remix`, `--create`, `--approve`, `--pause`, `--resume`, `--duplicate`, `--delete`, `--reject`, `--ad` per singola creatività) |
 | Insight | `dashboard`, `status`, `analytics` |
 | AI | `ai --message "..."` — natural language, full read/write access |
 
@@ -247,7 +247,7 @@ and publishes `anomalia-cli` to npm when `NPM_TOKEN` is set. Details: [`docs/dis
 
 Copyright © 2026 Andrea Buttarelli.
 
-Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). You may use, modify
+Licensed under the [Apache License 2.0](LICENSE). You may use, modify
 and redistribute it, but derivative works must stay open source under the same license, must keep
 the copyright notice, and must state their changes — including when offered to users over a
 network.

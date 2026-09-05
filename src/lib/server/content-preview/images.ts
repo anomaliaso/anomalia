@@ -13,6 +13,7 @@ import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
 import { structured } from '$lib/server/research';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { generateImageOnKie } from '$lib/server/kie-jobs';
+import { generateImageOnOpenrouter } from '$lib/server/openrouter-image';
 import { route } from '$lib/server/model-routing';
 import { signPaths } from '$lib/server/people';
 import { svgToPng } from '$lib/server/brand-analysis';
@@ -157,9 +158,11 @@ export type RenderImageOpts = {
  */
 export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {}) {
   const aspectRatio = opts.aspectRatio ?? '1:1';
-  // Il default di render è Nano Banana 2 Lite, anche con riferimenti da riprodurre: decisione di
-  // prodotto presa nel 2026-08, Lite al posto di Pro su OGNI superficie. Un opts.model esplicito
-  // vince comunque — è la strada per riportare un call site su Pro senza deploy.
+  // Il default di render è Nano Banana 2 Lite OVUNQUE: decisione di prodotto del 2026-08, Lite al
+  // posto di Pro su ogni superficie. Il ramo senza riferimenti era rimasto indietro sul modello
+  // pieno, ed è dove cade la maggioranza delle immagini — un prompt e basta: misurate a $0,06 a
+  // chiamata. Un opts.model esplicito vince comunque, ed è la strada per riportare un call site
+  // sul modello pieno senza deploy; il blog lo fa già, passando BLOG_IMAGE_MODEL.
   const needsFidelity = !!(
     opts.personImages?.length ||
     opts.referenceImages?.length ||
@@ -173,7 +176,7 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   const imageModel =
     (opts.baseImage ? opts.refineModel : undefined) ??
     opts.model ??
-    (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || BLOG_IMAGE_MODEL);
+    (needsFidelity ? NANO_BANANA_2_LITE : env.IMAGE_MODEL_NO_REF || NANO_BANANA_2_LITE);
   // Con foto di persona, il testo sul genere non deve mai scavalcare le foto.
   const cleanPrompt = opts.personImages?.length ? scrubPersonAppearance(imagePrompt) : imagePrompt;
   const styleSuffix = opts.visualStyle ? `\n\nBRAND VISUAL STYLE to match: ${opts.visualStyle}` : '';
@@ -251,6 +254,17 @@ export async function renderPostImage(
   }
   const req = buildImageRequest(imagePrompt, opts);
   const imageModel = req.model;
+  // OpenRouter serve lo STESSO modello Google in una richiesta sincrona: 3,4s di media contro 25,0s
+  // su kie, e senza createTask/polling non esiste il task abbandonato-e-fatturato. Costa il 68% in
+  // più per render ($0,0336 contro ~$0,020), quindi è una scelta di latenza, non di risparmio.
+  // Nessun ritentativo qui: un fallimento sincrono torna già diagnosticato, e `generateImageOnOpenrouter`
+  // alza l'eccezione invece di restituire un successo vuoto.
+  if (route('image').endpoint === 'openrouter') {
+    return await generateImageOnOpenrouter(
+      { ...req, model: googleImageModel(req.model, NANO_BANANA_2_LITE) },
+      { context: `image:${imageModel}` }
+    );
+  }
   // Nano Banana gira su kie: stesso modello, −33%/−40% per immagine (misurato sui crediti
   // addebitati). È l'UNICO punto da cambiare perché ogni render del prodotto passa di qui.
   // `AI_ROUTE_IMAGE=nano-banana@google` riporta tutto su Google senza deploy.
@@ -259,13 +273,27 @@ export async function renderPostImage(
   if (route('image').endpoint === 'kie') {
     // Due tentativi, non tre: su kie il fallimento arriva già diagnosticato in pochi secondi, e
     // non serve l'insistenza che serve con la risposta vuota di Gemini.
+    //
+    // Il ritentativo vale su un RIFIUTO, che non ci è costato niente. Su una SCADENZA no: kie sta
+    // ancora renderizzando quel task e lo fatturerà comunque, quindi aprirne un secondo è chiedere
+    // lo stesso lavoro due volte — proprio quando il fornitore è in affanno — e pagarlo due volte.
+    // Si riprende lo stesso taskId.
+    let resumeTaskId: string | undefined;
     for (let attempt = 1; attempt <= 2; attempt++) {
       // L'URL di kie vive 24 ore: non deve sopravvivere alla funzione, men che meno finire in una
       // riga del database.
-      const viaKie = await generateImageOnKie(req, { context: `image:${imageModel}` });
-      if (viaKie) return viaKie;
+      const viaKie = await generateImageOnKie(req, {
+        context: `image:${imageModel}`,
+        resumeTaskId
+      });
+      if (viaKie.dataUrl) return viaKie.dataUrl;
+      resumeTaskId = viaKie.timedOutTaskId;
     }
-    throw new Error(`No image returned from kie (${imageModel}) after 2 attempts`);
+    throw new Error(
+      resumeTaskId
+        ? `kie task ${resumeTaskId} (${imageModel}) still unfinished — it is rendering and will be billed`
+        : `No image returned from kie (${imageModel}) after 2 attempts`
+    );
   }
   // Pixel Google: il client si costruisce QUI, non nei chiamanti (testo/QC non devono toccare Google).
   // Un modello che vive solo su kie non è un modello per Google: `googleImageModel` lo riporta a
@@ -294,221 +322,22 @@ export async function renderPostImage(
   throw new Error(`No image returned after ${MAX_IMAGE_ATTEMPTS} attempts (${lastInfo})`);
 }
 
-// Quality-control verdict for a generated image.
-type ImageCritique = { pass: boolean; score: number; issues: string[]; fixHint: string; brandStyleMatch?: boolean };
-
-const CRITIQUE_SCHEMA = {
-  type: 'object' as const,
-  properties: {
-    pass: { type: 'boolean' as const, description: 'true only if the image is publish-ready: attractive, faithful to the real product (and person, if any), AND free of the generic AI/stock look.' },
-    score: { type: 'integer' as const, description: 'Overall quality 1-10. 6 is the publish bar: below it the image is retried.' },
-    issues: { type: 'array' as const, items: { type: 'string' as const }, description: 'Concrete problems: wrong product colour/shape, single item shown when it should be a set, unnatural composition (e.g. product reflected oddly, person/animal pasted in unrealistically), wrong scale/crop, artifacts, generic AI/stock look.' },
-    fixHint: { type: 'string' as const, description: 'One concrete instruction to append to the image prompt on the retry to fix the biggest issue. Empty string if pass.' },
-    brandStyleMatch: { type: 'boolean' as const, description: 'true if the image faithfully matches the brand visual brief (palette, lighting, composition, mood)' }
-  },
-  required: ['pass', 'score', 'issues', 'fixHint']
-};
-
-// Sotto questo punteggio si ritenta anche se il critico ha promosso: "tecnicamente ok ma
-// mediocre" è esattamente l'output generico da uccidere.
-const MIN_QC_SCORE = 6;
-
-// Assicurazione a basso costo contro i fallimenti ricorrenti: prodotto sbagliato o slavato, un
-// pezzo solo al posto di un set, una persona incollata in un punto impossibile.
-async function critiqueImage(
-  ai: GoogleGenAI,
-  dataUrl: string,
-  opts: { imagePrompt: string; productName?: string; productKind?: string; personName?: string; personAttributes?: string; referenceImages?: ImagePart[]; personImages?: ImagePart[]; visualStyle?: string }
-): Promise<ImageCritique | null> {
-  try {
-    const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!m) return null;
-    const generated: ImagePart = { inlineData: { mimeType: m[1], data: m[2] } };
-
-    // I prodotti grandi vanno mostrati interi, mai come macro di un angolo.
-    const LARGE_KINDS = /monitor|desk|chair|keyboard|controller|light|stand/i;
-    const isLarge = LARGE_KINDS.test(opts.productKind ?? '') || LARGE_KINDS.test(opts.productName ?? '');
-
-    const checklist = [
-      `1. PRODUCT FIDELITY: does the generated product match the REAL product reference (shape, TRUE colours, materials, finish, branding)? It must NOT be desaturated to greyscale, recoloured, redesigned, or swapped for a similar object.`,
-      opts.productName ? `   The product is: "${opts.productName}"${opts.productKind ? ` (category: ${opts.productKind})` : ''}. If the reference shows a SET or multiple units, the image must show the set, not one isolated piece.` : '',
-      isLarge ? `   SCALE: this is a LARGE product — it MUST be shown WHOLE and recognisable in a believable environment. FAIL the image if it only shows a tiny macro fragment (one corner/edge) so the product isn't actually identifiable.` : '',
-      opts.personName ? `2. PERSON FIDELITY: "${opts.personName}" must look like the attached person REFERENCE photo(s) — same face, gender presentation, approximate age, hair. FAIL if the generated person clearly contradicts the references (e.g. wrong gender presentation vs the photos). Place them NATURALLY in the scene (not pasted into a reflection, not floating, not duplicated).` : '',
-      // Gli attributi testuali valgono SOLO senza foto: mai far scavalcare alle parole ciò che le
-      // foto mostrano.
-      opts.personName && opts.personAttributes && !opts.personImages?.length
-        ? `   IDENTITY (no photo refs): the person must clearly present as ${opts.personAttributes}. FAIL if gender presentation or approximate age contradicts this.`
-        : '',
-      `3. COMPOSITION: is it a believable, attractive product photo? Flag unnatural framing — e.g. the product reflected strangely, a person/animal appearing from nowhere, wrong scale (a macro crop of a large item), a repetitive "object on dark textured stone" stock backdrop, or obvious AI artifacts.`,
-      `4. APPEAL: would this stop the scroll and look premium/on-brand?`,
-      `5. GENERIC AI/STOCK LOOK: does it read as a generic AI render or interchangeable stock photo — over-saturated HDR glow, waxy skin, 3D-render sheen, sterile posing, garbled text, an image that could belong to any brand's feed? FAIL it if so: "technically correct but generic" is not publish-ready.`,
-      // Parole storpiate o inventate: è il fallimento classico del renderer, e un refuso in
-      // immagine è il difetto che l'owner nota per primo.
-      `6. ON-IMAGE TEXT: READ every piece of text in the image, letter by letter. FAIL if any word is garbled, misspelled, duplicated or invented. If the brief quotes an exact string (text in double quotes), that string must appear letter-perfect — and no other text may appear. If the brief asks for no text, any text is a FAIL.`,
-      opts.visualStyle ? `7. BRAND VISUAL STYLE: does the image match the brand's visual brief?\n   Brief:\n   ${opts.visualStyle}\n   Check: palette, lighting, composition, mood, graphic language. Flag any deviation that makes this image feel off-brand.` : ''
-    ].filter(Boolean).join('\n');
-
-    const promptText = `You are a strict art director doing QC on an AI-generated social post image. The FIRST attached image is the GENERATED image under review.${opts.referenceImages?.length ? ' The next image(s) are the REAL product reference.' : ''}${opts.personImages?.length ? ' The final image(s) are the reference for the person who should appear.' : ''}
-
-The image was generated from this brief:
-"${opts.imagePrompt}"
-
-Judge it on:
-${checklist}
-
-Be honest and strict — a misleading product shot is worse than no image. Return JSON.`;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const critiqueImages = [generated, ...(opts.referenceImages ?? []), ...(opts.personImages ?? [])];
-    const parsed: AnyRec = await structured(ai, promptText, CRITIQUE_SCHEMA, undefined, {
-      label: 'critiqueImage',
-      images: critiqueImages,
-      // Il QC gira sul tier vision di MiMo e non su Gemini: è un punteggio contro una rubrica già
-      // scritta nel prompt, e MiMo legge immagini a una frazione del prezzo. Gemini resta il
-      // fallback automatico, quindi il QC degrada a più caro, mai ad assente.
-      provider: 'xiaomi',
-      // Per quel fallback: lasciata libera era la chiamata peggiore del sistema (14x di thinking
-      // sull'output). La rubrica è nel prompt, c'è poco da ragionare.
-      thinkingLevel: judgeThinkingLevel()
-    });
-    const score = Number(parsed.score) || 0;
-    const brandMatch = parsed.brandStyleMatch as boolean | undefined;
-    return {
-      // Il pavimento fa ritentare anche "promosso ma mediocre", e uno scarto esplicito dallo stile
-      // del brand degrada il pass a false.
-      pass: parsed.pass === true && score >= MIN_QC_SCORE && brandMatch !== false,
-      score,
-      issues: Array.isArray(parsed.issues) ? parsed.issues.map(String) : [],
-      fixHint: String(parsed.fixHint ?? ''),
-      brandStyleMatch: brandMatch
-    };
-  } catch (e) {
-    // Best-effort: un critico che fallisce non blocca la pubblicazione.
-    console.error(`[critiqueImage] failed: ${e instanceof Error ? e.message : String(e)}`);
-    return null;
-  }
-}
-
-// Candidati paralleli sui post ad alto rischio (persona o prodotto reale in frame). La SELEZIONE
-// batte la correzione: un giudice che confronta è più affidabile di uno che valuta in isolamento.
-const HIGH_STAKES_CANDIDATES = 2;
-
 /**
- * Il tetto del giro critica → rigenerazione: due rigenerazioni oltre il primo render.
- *
- * Non scende oggi, e i numeri dicono perché non basta l'intuito: su 164 post con un voto, 45 hanno
- * riprovato e 36 sono arrivati a "passa" — il ritentativo serve nell'~80% dei casi in cui scatta.
- * Ma il giudice timbra 7 su 124 post su 164, e 31 dei 36 recuperi atterrano proprio su 7: un
- * anello guidato da un segnale che quasi non varia non converge, si ferma dove finisce il budget.
- * `attempts` e `capped` in `posts.qc` esistono per misurarlo prima di tagliare.
+ * Il verdetto del critico immagini NON esiste piu': niente candidati paralleli, niente ritentativi,
+ * un'immagine = un render. Il tipo resta perche' `posts.qc` e' una colonna viva che porta anche
+ * altro (`scene_deviation`, che scrive il produttore, non il critico) e i suoi lettori continuano a
+ * leggerla. Sul percorso immagine il campo ora e' sempre assente, che e' la verita': nessuno ha
+ * giudicato quel render.
  */
-export const MAX_QC_RETRIES = 2;
-
-// Ripesca il blocco "WHAT WORKS VISUALLY" da ai_context per il renderer. '' quando assente.
-export function extractVisualPlaybook(aiContext: unknown): string {
-  const m = String(aiContext ?? '').match(/WHAT WORKS VISUALLY[^\n]*\n[\s\S]*?(?=\n\n|$)/);
-  return m ? m[0].trim() : '';
-}
-
 export type QcVerdict = {
   score: number;
   pass: boolean;
   issues: string[];
   retried: boolean;
-  /** Quanti render sono stati prodotti in totale (candidati paralleli + ritentativi). */
   attempts: number;
-  /** true = il tetto è scattato e si è spedita l'immagine migliore comunque, non "era buona". */
   capped?: boolean;
   candidates?: number;
 };
-type CritiqueOpts = Omit<Parameters<typeof critiqueImage>[2], 'imagePrompt'>;
-
-// Render → QC → scelta. Alto rischio: N candidati in parallelo, si tiene il migliore (prima il
-// pass, poi il punteggio); gli altri un render solo. Se il migliore non passa, si ritenta con hint
-// correttivi CUMULATIVI, tenendo sempre l'immagine col punteggio più alto.
-export async function renderWithQC(
-  ai: GoogleGenAI,
-  imagePrompt: string,
-  renderOpts: Parameters<typeof renderPostImage>[2],
-  critiqueOpts: CritiqueOpts,
-  highStakes: boolean
-): Promise<{ dataUrl: string | undefined; qc?: QcVerdict }> {
-  // Alto rischio → N candidati in parallelo e il critico sceglie; altrimenti un render solo.
-  const wanted = highStakes ? HIGH_STAKES_CANDIDATES : 1;
-  const opts = { ...renderOpts, craftFloor: await designWallDigestSection() };
-  const settled = await Promise.allSettled(
-    Array.from({ length: wanted }, () => renderPostImage(ai, imagePrompt, opts))
-  );
-  const candidates = settled
-    .filter((r): r is PromiseFulfilledResult<string | undefined> => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .filter((v): v is string => !!v);
-  if (!candidates.length) {
-    const firstErr = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (firstErr) throw firstErr.reason;
-    return { dataUrl: undefined };
-  }
-  const nCandidates = candidates.length;
-
-  // Un critique null (QC non disponibile) sta sotto qualunque verdetto.
-  const critiques = await Promise.all(candidates.map((c) => critiqueImage(ai, c, { ...critiqueOpts, imagePrompt })));
-  let bestIdx = 0;
-  for (let i = 1; i < candidates.length; i++) {
-    const a = critiques[bestIdx];
-    const b = critiques[i];
-    if (!b) continue;
-    if (!a || (b.pass && !a.pass) || (b.pass === a.pass && b.score > a.score)) bestIdx = i;
-  }
-  const chosen = critiques[bestIdx];
-  // QC non disponibile sul candidato scelto → si spedisce (gate best-effort).
-  if (!chosen) return { dataUrl: candidates[bestIdx], qc: undefined };
-
-  // Il migliore non passa → hint correttivi CUMULATIVI, tenendo sempre l'immagine migliore.
-  let best: { dataUrl: string; critique: ImageCritique } = { dataUrl: candidates[bestIdx], critique: chosen };
-  let critique: ImageCritique | null = chosen;
-  const hints: string[] = [];
-  let retried = false;
-  let attempts = nCandidates;
-  let attempt = 0;
-  for (; attempt < MAX_QC_RETRIES && !best.critique.pass && critique?.fixHint; attempt++) {
-    hints.push(critique.fixHint);
-    const retryPrompt = `${imagePrompt}\n\nCORRECTIONS (previous attempt(s) failed QC — fix ALL of these):${hints.map((h) => `\n- ${h}`).join('')}`;
-    console.warn(`[renderWithQC] QC failed (${best.critique.score}/10, ${nCandidates} candidate(s))${critiqueOpts.productName ? ` for "${critiqueOpts.productName}"` : ''}: ${best.critique.issues.join('; ')} → retry ${attempt + 1}/${MAX_QC_RETRIES}`);
-    // Un ritentativo che non torna con un'immagine chiude il ciclo: resta il migliore finora.
-    const retry = await renderPostImage(ai, retryPrompt, opts).catch((error) => { swallow('render qc retry', error); return undefined; });
-    if (!retry) break;
-    attempts += 1;
-    retried = true;
-    const recheck = await critiqueImage(ai, retry, { ...critiqueOpts, imagePrompt: retryPrompt });
-    if (!recheck) {
-      // Ritentativo non giudicabile: lo si preferisce (ha affrontato i problemi noti) e si smette.
-      best = { dataUrl: retry, critique: { ...best.critique, pass: true } };
-      break;
-    }
-    if (recheck.pass || recheck.score >= best.critique.score) best = { dataUrl: retry, critique: recheck };
-    critique = recheck;
-  }
-  // Tetto scattato: si spedisce il meglio che c'è e lo si SCRIVE — un troncamento muto si legge
-  // come "è il meglio che sapeva fare", che è un'altra cosa.
-  const capped = attempt >= MAX_QC_RETRIES && !best.critique.pass;
-  if (capped) {
-    console.warn(
-      `[renderWithQC] QC cap reached after ${attempts} render(s) — shipping ${best.critique.score}/10 anyway: ${best.critique.issues.join('; ')}`
-    );
-  }
-  return {
-    dataUrl: best.dataUrl,
-    qc: {
-      score: best.critique.score,
-      pass: best.critique.pass,
-      issues: best.critique.issues,
-      retried,
-      attempts,
-      ...(capped ? { capped: true } : {}),
-      candidates: nCandidates
-    }
-  };
-}
 
 // Una slide di seguito (2..N), ancorata alla slide 1 finita come riferimento di stile, con un QC
 // LEGGERO (solo fedeltà prodotto, un ritentativo, niente best-of-N). Tenere leggeri i seguiti è ciò
@@ -519,6 +348,38 @@ export async function renderWithQC(
 export function carouselSeriesDirective(slideIndex: number, totalSlides: number): string {
   return `\n\nCAROUSEL SLIDE ${slideIndex + 1} of ${totalSlides} — this image is ONE SLIDE of a single carousel post. The FIRST attached style/mood reference is SLIDE 1 of the same carousel: match its medium, palette, lighting, styling and art direction EXACTLY so the whole set reads as one coherent series. Compose THIS slide's own subject as described above — never copy slide 1's composition or subject.`;
 }
+
+/**
+ * UN render, con il pavimento di esecuzione del design attaccato.
+ *
+ * Il pavimento lo iniettava `renderWithQC`, che non esiste piu': senza un posto suo sarebbe uscito
+ * dal percorso immagine insieme al critico, e nessuno se ne sarebbe accorto — non fallisce niente,
+ * le immagini diventano solo un po' peggiori. Sta qui, in una funzione sola, cosi' i cinque
+ * chiamanti non se lo ricopiano e non se lo dimenticano.
+ */
+export async function renderBrandImage(
+  ai: GoogleGenAI,
+  imagePrompt: string,
+  renderOpts: RenderImageOpts = {}
+): Promise<string | undefined> {
+  return renderPostImage(ai, imagePrompt, {
+    ...renderOpts,
+    craftFloor: renderOpts.craftFloor ?? (await designWallDigestSection())
+  });
+}
+
+/** Le direttive visive estratte dai post migliori del brand, per il renderer. */
+export function extractVisualPlaybook(aiContext: unknown): string {
+  const m = String(aiContext ?? '').match(/WHAT WORKS VISUALLY[^\n]*\n[\s\S]*?(?=\n\n|$)/);
+  return m ? m[0].trim() : '';
+}
+
+/** Cio' che i chiamanti passavano al critico e che ora serve solo a comporre il render. */
+type CritiqueOpts = {
+  referenceImages?: ImagePart[];
+  visualStyle?: string;
+  productName?: string;
+};
 
 export async function renderCarouselSlide(
   ai: GoogleGenAI,
@@ -535,14 +396,9 @@ export async function renderCarouselSlide(
   // La slide 1 precede i mood del brand, così domina l'ancoraggio estetico.
   const opts = { ...renderOpts, craftFloor: await designWallDigestSection(), moodImages: [...(slideOneAnchor ? [slideOneAnchor] : []), ...(renderOpts.moodImages ?? [])] };
   try {
-    let dataUrl = await renderPostImage(ai, slidePrompt + seriesDirective, opts);
-    if (dataUrl && critiqueOpts.referenceImages?.length) {
-      const verdict = await critiqueImage(ai, dataUrl, { ...critiqueOpts, imagePrompt: slidePrompt });
-      if (verdict && !verdict.pass && verdict.fixHint) {
-        const retry = await renderPostImage(ai, `${slidePrompt + seriesDirective}\n\nCORRECTION (previous attempt failed QC): ${verdict.fixHint}`, opts).catch((error) => { swallow('render slide qc retry', error); return undefined; });
-        if (retry) dataUrl = retry;
-      }
-    }
+    // Un render per slide. Il ritentativo su verdetto del critico e' sparito con il critico: una
+    // slide storta si corregge con refine_image guardandola, non ridisegnandola a scatola chiusa.
+    const dataUrl = await renderPostImage(ai, slidePrompt + seriesDirective, opts);
     return dataUrl ? await uploadPostImage(supabase, userId, dataUrl, opts.aspectRatio) : undefined;
   } catch (e) {
     console.error(`[renderCarouselSlide] slide ${slideIndex + 1}/${totalSlides} failed: ${e instanceof Error ? e.message : String(e)}`);

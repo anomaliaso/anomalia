@@ -8,6 +8,7 @@ import { localeLanguageName } from '$lib/i18n/locale';
 import { withBrandContext } from '$lib/server/ai-log';
 import { syncBrandPostHistoryFromSocials, type ScrapeSyncResult } from '$lib/server/scrapecreators';
 import { signKnowledgePaths, archiveImageToBucket } from '$lib/server/media-archive';
+import { safeFetchBytes, SafeFetchError, type SafeFetchReason } from '$lib/server/tool-guard';
 import { extractText, isSupportedDoc } from '$lib/server/documents';
 import { personConsentColumns, CONSENT_NOT_ATTESTED } from '$lib/server/people-consent';
 import {
@@ -73,8 +74,22 @@ async function withBrand<T>(supabase: any, slug: string | undefined, fn: (brand:
  * L'unica differenza col form è inevitabile: lì l'ingresso è un File e passa da `readUploadImage`
  * (che converte anche gli HEIC), qui è un URL, quindi c'è un fetch con guardia SSRF. Il tetto di
  * byte, il path e la riga sono gli stessi.
+ *
+ * L'URL lo sceglie un MODELLO (`set_brand_logo`), quindi è testo che un contenuto ostile può
+ * dettare: la guardia deve risolvere l'indirizzo, non leggere l'hostname, e deve ricontrollarlo
+ * su ogni redirect. `safeFetchBytes` fa entrambe le cose ed è l'unica copia di quel controllo.
  */
 const LOGO_MAX_BYTES = 4_000_000;
+const LOGO_TIMEOUT_MS = 15_000;
+
+// http resta ammesso: il logo di onboarding arriva dal sito del brand, e un sito ancora in chiaro
+// è comune abbastanza che rifiutarlo romperebbe l'onboarding per chiudere un buco che si chiude
+// comunque risolvendo l'indirizzo.
+const LOGO_ERROR_BY_REASON: Record<SafeFetchReason, string> = {
+  not_public: 'That image URL is not fetchable (blocked or not http/https).',
+  too_large: 'Too large — the logo must be under 4MB.',
+  fetch_failed: 'Could not download the image.'
+};
 
 export async function storeBrandLogoFromUrl(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,22 +98,20 @@ export async function storeBrandLogoFromUrl(
 ): Promise<{ url: string } | { error: string }> {
   const src = String(opts.imageUrl ?? '').trim();
   if (!src) return { error: 'No image URL' };
-  const { isUrlSafe } = await import('$lib/server/brand-analysis');
-  if (!isUrlSafe(src)) return { error: 'That image URL is not fetchable (blocked or not http/https).' };
 
-  let bytes: Buffer;
-  let mime: string;
+  let fetched;
   try {
-    const res = await fetch(src, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return { error: `Could not download the image (HTTP ${res.status}).` };
-    mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-    if (!mime.startsWith('image/')) return { error: 'That URL is not an image.' };
-    bytes = Buffer.from(await res.arrayBuffer());
-  } catch {
+    fetched = await safeFetchBytes(src, { maxBytes: LOGO_MAX_BYTES, timeoutMs: LOGO_TIMEOUT_MS });
+  } catch (e) {
+    if (e instanceof SafeFetchError) return { error: LOGO_ERROR_BY_REASON[e.reason] };
     return { error: 'Could not download the image.' };
   }
-  if (!bytes.length) return { error: 'The image is empty.' };
-  if (bytes.length > LOGO_MAX_BYTES) return { error: 'Too large — the logo must be under 4MB.' };
+
+  if (!fetched.ok) return { error: `Could not download the image (HTTP ${fetched.status}).` };
+  if (!fetched.mime.startsWith('image/')) return { error: 'That URL is not an image.' };
+  if (!fetched.bytes.length) return { error: 'The image is empty.' };
+
+  const { mime, bytes } = fetched;
 
   // Stessa mappa del form: tutto ciò che non è png/gif/webp finisce come jpg.
   const ext = mime === 'image/png' ? 'png' : mime === 'image/gif' ? 'gif' : mime === 'image/webp' ? 'webp' : 'jpg';
@@ -266,38 +279,25 @@ export const studioActions: Actions = {
     });
   },
 
-  // Which kie video model generates clips (Settings → Video). Duration options and the render
-  // clamp follow this model's caps. Empty = platform env default (Grok Imagine today).
   // Quale modello serve quale mestiere (Settings -> Images & video). Una sola azione per tutti e
   // sei gli slot: la regola che un modello deve saper fare il lavoro in cui viene salvato vale
   // ovunque, e scritta sei volte divergerebbe al primo cambio.
   updateMediaModel: async ({ request, params, locals: { supabase } }) => {
     return withBrand(supabase, params.brand, async (brand) => {
       const fd = await request.formData();
-      const { mediaModelSlot, slotAccepts } = await import('$lib/media-model-slots');
+      const { mediaModelSlot } = await import('$lib/media-model-slots');
       const slot = mediaModelSlot(fd.get('slot'));
       if (!slot) return fail(400, { error: 'Unknown model slot' });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prefs: Record<string, any> = { ...(brand.content_prefs ?? {}) };
-      const raw = String(fd.get('model') ?? '').trim();
-      if (!raw) delete prefs[slot.pref];
-      else if (!slotAccepts(slot, raw)) return fail(400, { error: 'Unknown model for this slot' });
-      else prefs[slot.pref] = raw;
-
-      // Re-clamp a stored length that the previous model allowed but this one does not (e.g. 30s
-      // on Seedance 2.5 -> Grok's 15s ceiling), so Settings never shows an unsavable value.
-      if (slot.pref === 'videoModel' && typeof prefs.videoDuration === 'number') {
-        const { isKnownVideoModel, clampVideoDuration, videoDurationOptions } = await import('$lib/server/video');
-        const model = isKnownVideoModel(prefs.videoModel) ? prefs.videoModel : null;
-        prefs.videoDuration = clampVideoDuration(prefs.videoDuration, model);
-        const allowed = videoDurationOptions(model);
-        if (!allowed.includes(prefs.videoDuration) && allowed.length) {
-          prefs.videoDuration = allowed.reduce((best, s) =>
-            Math.abs(s - prefs.videoDuration) < Math.abs(best - prefs.videoDuration) ? s : best
-          );
-        }
-      }
+      // La regola sta in `chooseMediaModel`, non qui: il browser e i tool dell'API la chiamano
+      // entrambi, e scritta due volte divergerebbe al primo modello nuovo.
+      const { chooseMediaModel } = await import('$lib/server/media-model-prefs');
+      const { prefs } = chooseMediaModel(
+        brand.content_prefs as Record<string, unknown> | null,
+        slot,
+        String(fd.get('model') ?? '').trim() || null
+      );
+      if (!prefs) return fail(400, { error: 'Unknown model for this slot' });
 
       const { error } = await supabase.from('brands').update({ content_prefs: prefs }).eq('id', brand.id);
       if (error) return fail(400, { error: error.message });

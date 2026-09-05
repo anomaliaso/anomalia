@@ -9,7 +9,7 @@
   //   l'ingombro è identico a quello di un `AgentAvatar` della stessa `size`, sempre,
   //   da 1 a 4+ membri: la riga non si muove mai.
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
-  import type { ThreadAgentAvatar } from '$lib/stores/chat';
+  import type { ThreadAgentAvatar } from '$lib/agent-avatars';
   import { hoverFaceFor } from '$lib/agent-avatars';
 
   let {

@@ -2,14 +2,17 @@ import {sequence} from '@sveltejs/kit/hooks';
 import { json, redirect, text } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { markRlsScoped } from '$lib/server/rls-client';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { Handle } from '@sveltejs/kit';
 import { pickLocale } from '$lib/i18n/locale';
+import { retiredPageTarget } from '$lib/seo';
 import { withBrandContext } from '$lib/server/ai-log';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { captureReferralCookie } from '$lib/server/referrals';
 import { isCsrfForbidden } from '$lib/server/csrf';
 import { marketingShellTarget } from '$lib/server/marketing-shell';
+import { catalogModelIds } from '$lib/server/chat-model-catalog';
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -64,8 +67,23 @@ const csrf: Handle = async ({ event, resolve }) => {
 };
 
 export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ event, resolve }) => {
+  // Il catalogo dei modelli, caldo PRIMA di ogni handler.
+  //
+  // `resolveChatModel` è sincrono e lo chiamano una dozzina di superfici: renderlo asincrono
+  // vorrebbe dire propagare un await fino a ogni `streamText`. Quindi legge una cache — e una
+  // cache fredda gli fa scegliere il default dell'env invece di quello che l'operatore ha marcato
+  // in Supabase. È già successo: turno partito su `google/gemini-3.8-flash` con la riga marcata su
+  // `z-ai/glm-5.3-flash`, senza un errore da nessuna parte. Il difetto più silenzioso possibile,
+  // perché il turno riesce — solo sul modello sbagliato.
+  //
+  // Qui la richiesta non è ancora entrata in nessun handler, e la cache dura 60s: una query al
+  // minuto per istanza, e nessun percorso può leggere un catalogo mai caricato.
+  await catalogModelIds().catch(() => []);
+
   // Per-request Supabase client bound to the request cookies (SSR auth).
-  event.locals.supabase = createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
+  // Marchiato come RLS-scoped: chiave anon, quindi Postgres valuta le policy dell'utente. È la
+  // dichiarazione su cui `query` decide di leggere — vedi $lib/server/rls-client.
+  event.locals.supabase = markRlsScoped(createServerClient(publicEnv.PUBLIC_SUPABASE_URL, publicEnv.PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => validSessionCookies(event.cookies.getAll()),
       setAll: (cookiesToSet: CookieToSet[]) => {
@@ -83,7 +101,7 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
         });
       }
     }
-  });
+  }));
 
   // getSession() is local (cookie → JWT). getUser() hits GoTrue — cache it across SPA
   // navigations on this isolate so every in-brand click is not a 300–800ms auth RTT.
@@ -141,6 +159,15 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
   // brand blogs stay clean; their Powered-by badge already links to anomalia.so/?ref=….
   if (!isBlogRoute) {
     captureReferralCookie(event.cookies, event.url.searchParams.get('ref'));
+  }
+
+  // Pagine pubbliche ritirate: 301 verso quella che ha preso il loro posto. Si guarda il
+  // pathname e non route.id perché la rotta non esiste più — è esattamente il 404 che stiamo
+  // evitando. Prima di marketingShellTarget: su self-host il 404 non è un problema di SEO, ma
+  // mandare una vecchia URL in /app perderebbe comunque la destinazione giusta.
+  const retiredDest = retiredPageTarget(event.url.pathname, event.locals.locale);
+  if (retiredDest) {
+    throw redirect(301, retiredDest + event.url.search);
   }
 
   // Self-host: HIDE_MARKETING=1 manda il pitch (homepage, pricing, /start, …) in /app.

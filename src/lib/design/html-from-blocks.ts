@@ -9,7 +9,7 @@ import {
 	type Palette
 } from './blocks';
 import { iconDataUri, resolveGraphicIcon } from './graphic-icons';
-import { escapeHtml, type GraphicSourceKind } from './graphic-source';
+import { escapeHtml } from './graphic-source';
 
 const RADIUS_PCT = { none: 0, sm: 1.2, md: 2.4, full: 50 } as const;
 const MARK_SIZE_PCT = { sm: 4.5, md: 6.5, lg: 9 } as const;
@@ -131,13 +131,6 @@ export function graphicToHtml(graphic: Graphic, opts: GraphicToHtmlOpts = {}): s
   ${body.join('\n  ')}
 </div>
 `;
-}
-
-export function graphicToSource(
-	graphic: Graphic,
-	opts: GraphicToHtmlOpts & { kind?: GraphicSourceKind } = {}
-): string {
-	return graphicToHtml(graphic, opts);
 }
 
 function blockHtml(

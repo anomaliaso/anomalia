@@ -5,7 +5,6 @@
   import { cn } from '$lib/utils.js';
   // Il menu utente è PORTALATO da bits-ui e si smonta alla selezione: per le voci che portano
   // ai settings si chiama l'API del modal invece di affidarsi al click dell'<a>.
-  import { onModalLinkClick } from '$lib/components/PageModal.svelte';
   import { locale, _ } from 'svelte-i18n';
   import { page } from '$app/stores';
   import { goto, invalidateAll, beforeNavigate } from '$app/navigation';
@@ -44,9 +43,6 @@
   import AgentAvatarStack from '$lib/components/AgentAvatarStack.svelte';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import { hoverFaceFor, restingFaceFor } from '$lib/agent-avatars';
-  import { threadIdentity } from '$lib/thread-identity';
-  import { chatOpen, chatThreadId, chatThreads, refreshThreads, deleteThread, renameThread, openChatComposer, unreadThreadIds, unreadCount } from '$lib/stores/chat';
-  import { busyThreadIds } from '$lib/stores/chat-session';
 
   import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
   import { materialPress } from '$lib/actions/material-press.js';
@@ -118,7 +114,6 @@
     forceOpenMobile = false,
     checklist = null as ChecklistProps | null,
     switcherBrands = [] as SwitcherBrand[],
-    teamFirst = false,
   }: {
     brandName?: string;
     brandWebsite?: string;
@@ -143,9 +138,6 @@
     forceOpenMobile?: boolean;
     checklist?: ChecklistProps | null;
     switcherBrands?: SwitcherBrand[];
-    /** Nav "La squadra" (FEATURE_NAV_TEAM): thread PRIMA dei gruppi, con le intestazioni di
-     *  sezione. false = ordine di oggi, byte-identico. */
-    teamFirst?: boolean;
   } = $props();
 
   const credits = $derived($creditsStore);
@@ -183,23 +175,6 @@
     'font-semibold data-[active=true]:bg-[color:var(--nav-on)] data-[active=true]:hover:bg-[color:var(--nav-on-hover)] active:bg-[var(--paper)]';
   /** Vertical spacing between sidebar nav rows. */
   const navMenuGapClass = $derived(mobile ? 'gap-1.5' : 'gap-2');
-  // Righe chat a due piani, stile lista messaggi: l'altezza la fa il contenuto, non il MenuButton.
-  // Il MenuButton forza OGNI svg discendente a 16px ([&_svg]:size-4): l'avatar va esentato con w/h
-  // auto (l'SVG torna ai propri width/height = size), o resta un francobollo.
-  const threadRowClass = $derived(
-    cn(
-      'h-auto! min-h-0! items-center! gap-2.5! rounded-xl! px-2!',
-      '[&_svg.agent-avatar]:w-auto! [&_svg.agent-avatar]:h-auto!',
-      // Utility e non regola di stile, stessa trappola di navOnClass: con Tailwind importato
-      // `important` un !important non-layered perde contro il layer utilities, e
-      // `data-[active=true]:bg-transparent` della base vinceva sempre.
-      'data-[active=true]:bg-[color:var(--thread-on)]',
-      // Hover sulla riga già aperta: un gradino più scuro. Variante impilata = specificità più
-      // alta di `hover:` da solo.
-      'data-[active=true]:hover:bg-[color:var(--thread-on-hover)]',
-      mobile ? 'px-2.5! py-2.5! touch-manipulation' : 'py-2!'
-    )
-  );
   const overviewHref = $derived(brandSlug ? `/app/${brandSlug}` : '');
   const activateHref = $derived(brandSlug ? `/app/${brandSlug}/activate` : '');
   const showUpgrade = $derived(!!brandSlug && !isPaidPlan(brandPlan));
@@ -272,121 +247,8 @@
     if (sidebar.isMobile && sidebar.openMobile && !forceOpenMobile) sidebar.setOpenMobile(false);
   });
 
-  // UN solo menu condiviso, tirato fuori dall'{#each} e portalato su <body>: una
-  // <DropdownMenu.Root> per thread montava N istanze pesanti a ogni re-render del Sheet mobile,
-  // ~1,5s di UI ferma.
-  type Thread = { id: string; title: string };
-  let menuAnchor = $state<{ thread: Thread; right: number; top: number } | null>(null);
-  let renamingId = $state<string | null>(null);
-  let renameValue = $state('');
-  let hoveredThreadId = $state<string | null>(null);
-  // Le sezioni sono voci dirette, non richiudibili: ogni pagina del brand si apre in una modal
-  // sopra la pagina viva (PageModal), quindi un clic sbagliato costa un Esc. Niente nemmeno il
-  // pannello dei figli sull'hover: era il terzo modo di arrivare alle stesse sottopagine.
-
-  // Il thread aperto si molla solo quando il brand cambia davvero: mollarlo al primo mount
-  // cancellerebbe un thread deep-linked prima che ChatColumn si allinei all'URL. La lista la
-  // azzera `refreshThreads`, che sa a quale brand appartiene quella che ha in memoria.
-  let threadsBrandSlug = $state<string | null>(null);
-  $effect(() => {
-    const slug = brandSlug || null;
-    if (threadsBrandSlug !== null && threadsBrandSlug !== slug) chatThreadId.set(null);
-    threadsBrandSlug = slug;
-    if (slug) refreshThreads(slug);
-  });
-
-  function openThread(threadId: string) {
-    chatThreadId.set(threadId);
-    if (sidebar.isMobile && sidebar.openMobile) {
-      sidebar.setOpenMobile(false);
-    }
-    void goto(`/app/${brandSlug}/chat/${threadId}`, { noScroll: true, keepFocus: true });
-  }
-
-  async function handleDeleteThread(e: Event, threadId: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!brandSlug) return;
-    menuAnchor = null;
-    await deleteThread(brandSlug, threadId);
-  }
-
-  function startRename(thread: { id: string; title: string }) {
-    renamingId = thread.id;
-    renameValue = thread.title;
-    menuAnchor = null;
-  }
-
-  async function confirmRename() {
-    if (renamingId && renameValue.trim() && brandSlug) {
-      await renameThread(brandSlug, renamingId, renameValue.trim());
-    }
-    renamingId = null;
-  }
-
-  function handleRenameKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      confirmRename();
-    } else if (e.key === 'Escape') {
-      renamingId = null;
-    }
-  }
-
-  function openThreadMenu(e: Event, thread: Thread) {
-    e.preventDefault();
-    e.stopPropagation();
-    const target = e.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    // Angolo alto-destro del menu sotto l'angolo basso-destro del bottone. Coordinate relative
-    // alla viewport, usate con position: fixed su un portal a <body>: esce dallo stacking
-    // context del Sheet su mobile.
-    menuAnchor = { thread, right: window.innerWidth - rect.right, top: rect.bottom + 4 };
-  }
-
-  function closeThreadMenu() {
-    menuAnchor = null;
-  }
-
-  // Portal action: sposta il menu condiviso su <body> così dipinge sopra il Sheet mobile
-  // qualunque transform/filter ci sia nella shell.
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.parentNode?.removeChild(node);
-      }
-    };
-  }
-
-  // Niente sezioni per data: il "quando" sta su ogni riga. L'identità (nome + volto) la risolve
-  // threadIdentity, la stessa del topbar. La ricerca sopra la lista apre la palette, non filtra.
-
-  const DAY_MS = 86400000;
-  /** L'orario a fasce: oggi → l'ora; ieri → "Ieri"; entro la settimana → il giorno; prima → la
-   * data. Tutto via Intl con la lingua dell'app, così non servono cataloghi di formati. */
-  function threadTimeLabel(iso: string | null | undefined): string {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    const loc = $locale ?? 'en';
-    const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    if (day >= startToday) return d.toLocaleTimeString(loc, { hour: 'numeric', minute: '2-digit' });
-    if (day >= startToday - DAY_MS) return $_('chat.groupYesterday');
-    if (day >= startToday - 6 * DAY_MS) return d.toLocaleDateString(loc, { weekday: 'long' });
-    return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
-  }
-
-  /** Righe già risolte (identità + volto). Il filtro è la palette, non più questa lista. */
-  const threadRows = $derived.by(() => {
-    const t = $_;
-    return $chatThreads.map((thread) => ({
-      thread,
-      who: threadIdentity(thread, (k) => t(k))
-    }));
-  });
+  // Le sezioni sono voci dirette, non richiudibili, e senza pannello dei figli sull'hover: era
+  // il terzo modo di arrivare alle stesse sottopagine.
 
   // La campanella: STESSA lista e stesso conteggio del pannello (li pubblica WarningCenter).
   // Il badge conta le NON VISTE: un totale che non cala mai non segnala niente. `seenWarningIds`
@@ -454,8 +316,6 @@
               <Badge variant="secondary" class={cn('ml-auto py-0 group-data-[collapsible=icon]:hidden', mobile ? 'text-[11px] px-1.5' : 'text-[10px] px-1.5')}>{item.pct}%</Badge>
             {/if}
             {#if item.badge}
-              <!-- Stesso colore del badge dei non letti (.chat-unread-badge): un conteggio in
-                   sidebar è un conteggio, da qualunque sezione arrivi. -->
               <Badge class={cn('ml-auto py-0 group-data-[collapsible=icon]:hidden', mobile ? 'text-[11px] px-1.5' : 'text-[10px] px-1.5')} style="background: var(--accent-solid, #7c5cff); color: #fff;">{item.badge}</Badge>
             {/if}
             {#if item.todo}
@@ -514,191 +374,6 @@
     </Sidebar.Group>
 {/snippet}
 
-{#snippet threadsSection(heading: boolean)}
-    <!-- Chat threads section -->
-    {#if brandSlug}
-      {#if mobile || sidebar.state !== 'collapsed'}
-        <!-- Niente riga di separazione: lo stacco lo fa lo spazio. Con la sidebar stretta la
-             lista dei thread non c'è, e il filetto disegnava un tratto sopra il nulla. -->
-        <Sidebar.Group class="mt-4 p-0">
-          {#if heading}
-            <!-- L'intestazione esiste solo nella nav nuova, dove la lista dei thread viene
-                 prima degli Spazi. -->
-            <div class="px-1.5 mb-0.5">
-              <span class={cn('font-medium text-muted-foreground/70 uppercase tracking-wider', mobile ? 'text-[10.5px]' : 'text-[9.5px]')}>{$_('app.nav2.team')}</span>
-            </div>
-          {/if}
-          <!-- La ricerca NON filtra questa lista: è l'ingresso a ⌘K, che cerca anche fra i thread.
-               È l'UNICO ingresso visibile — il pill che stava in topbar è stato tolto. -->
-          <button
-            type="button"
-            class="thread-search"
-            class:mobile
-            onclick={() => paletteOpen.set(true)}
-            aria-label={$_('app.shell.cmdTitle')}
-            aria-haspopup="dialog"
-          >
-            <Search class="size-4 shrink-0" strokeWidth={1.8} aria-hidden="true" />
-            <span class="thread-search-label">{$_('app.shell.cmdTitle')}</span>
-            {#if !mobile}
-              <kbd class="thread-search-kbd">⌘K</kbd>
-            {/if}
-          </button>
-          <!-- Una riga alta per thread: avatar, nome + orario, anteprima. Niente sezioni per data
-               e niente divisori — il "quando" sta sulla riga. -->
-          <Sidebar.Menu class="thread-list gap-0.5">
-            {#each threadRows as { thread, who } (thread.id)}
-              {@const threadHref = `/app/${brandSlug}/chat/${thread.id}`}
-              {@const threadPending = isNavPending(threadHref)}
-              {@const threadOn = threadPending || ($chatThreadId === thread.id && !pendingPath)}
-              {@const hovered = hoveredThreadId === thread.id}
-              {@const menuOpenHere = menuAnchor?.thread.id === thread.id}
-              <Sidebar.MenuItem
-                onmouseenter={() => hoveredThreadId = thread.id}
-                onmouseleave={() => hoveredThreadId = null}
-              >
-                <Sidebar.MenuButton
-                  isActive={threadOn}
-                  tooltipContent={who.name}
-                  size="sm"
-                  class={cn(
-                    threadRowClass,
-                    'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] active:bg-[var(--paper)]'
-                  )}
-                >
-                  {#snippet child({ props })}
-                    <a
-                      href={threadHref}
-                      {...props}
-                      onclick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openThread(thread.id);
-                      }}
-                    >
-                      {#if renamingId === thread.id}
-                        <input
-                          bind:value={renameValue}
-                          onkeydown={handleRenameKeydown}
-                          onblur={confirmRename}
-                          class={cn(
-                            'flex-1 bg-background border border-border rounded outline-none focus:border-primary min-w-0',
-                            'px-1.5 py-0.5 text-xs'
-                          )}
-                          autofocus
-                        />
-                        <button
-                          class="shrink-0 p-0.5 rounded hover:bg-black/[0.04] dark:hover:bg-white/[0.06] active:bg-[var(--paper)] text-primary touch-manipulation"
-                          onclick={(e) => { e.stopPropagation(); confirmRename(); }}
-                        >
-                          <Check class="size-3" />
-                        </button>
-                      {:else}
-                        <!-- Il "sta scrivendo" vive sull'avatar come pallino verde. -->
-                        <span
-                          class="avatar-holder"
-                          class:cluster={!!thread.agents && thread.agents.length > 1}
-                        >
-                        {#if thread.agents && thread.agents.length > 1}
-                          <!-- Più agenti: le facce stanno DENTRO il quadrato dell'avatar singolo
-                               (stessa `size` del ramo sotto), o nome e orario non starebbero allo
-                               stesso millimetro su ogni riga. -->
-                          <AgentAvatarStack
-                            agents={thread.agents}
-                            layout="cluster"
-                            size={mobile ? 38 : 34}
-                            {hovered}
-                          />
-                        {:else}
-                          <!-- Identità fissa (roster/custom) = il SUO volto; thread semplice =
-                               faccia derivata dall'id. Turno in corso = il loop di AgentAvatar,
-                               che con reduced-motion resta fermo (parla il pallino). -->
-                          <AgentAvatar
-                            face={who.fixed
-                              ? who.face
-                              : hovered
-                                ? hoverFaceFor(thread.id)
-                                : restingFaceFor(thread.id)}
-                            color={who.color}
-                            size={mobile ? 38 : 34}
-                            busy={$busyThreadIds.has(thread.id)}
-                            cycle={$busyThreadIds.has(thread.id)}
-                          />
-                        {/if}
-                        {#if $busyThreadIds.has(thread.id)}
-                          <span class="presence-dot" title={$_('chat.generating')} aria-hidden="true"></span>
-                        {/if}
-                        </span>
-                        <span class="thread-lines" class:mobile>
-                          <span class="thread-top">
-                            <span class="thread-name">{who.name}</span>
-                            <span class="thread-meta">
-                              <!-- Quanti messaggi da quando l'hai guardato: un numero e non un
-                                   pallino, perché "tre risposte" e "una" non si aprono con la
-                                   stessa fretta. Si spegne aprendo. -->
-                              {#if $unreadThreadIds.has(thread.id)}
-                                {@const n = unreadCount($unreadThreadIds, thread.id)}
-                                <span
-                                  class="chat-unread-badge"
-                                  class:mobile
-                                  role="img"
-                                  aria-label={$_('chat.unreadCount', { values: { count: n } })}
-                                  title={$_('chat.unreadCount', { values: { count: n } })}
-                                >{n > 9 ? '9+' : n}</span>
-                              {/if}
-                              {#if mobile}
-                                <span class="thread-time">{threadTimeLabel(thread.updated_at || thread.created_at)}</span>
-                                <button
-                                  class="rounded shrink-0 touch-manipulation p-1 -mr-0.5 active:bg-[var(--paper)]"
-                                  aria-haspopup="menu"
-                                  aria-expanded={menuOpenHere}
-                                  aria-label={$_('chat.threadActions')}
-                                  onclick={(e) => openThreadMenu(e, thread)}
-                                >
-                                  <MoreHorizontal class="size-3.5" />
-                                </button>
-                              {:else}
-                                <!-- L'orario NON esce mai dal flusso: sostituirlo col bottone ⋯
-                                     cambiava la larghezza della coda e la riga slittava all'hover.
-                                     Qui l'orario tiene la geometria e il bottone si sovrappone. -->
-                                <span class="relative inline-flex items-center shrink-0">
-                                  <span
-                                    class={cn('thread-time transition-opacity', (hovered || menuOpenHere) && 'opacity-0')}
-                                    aria-hidden={hovered || menuOpenHere}
-                                  >{threadTimeLabel(thread.updated_at || thread.created_at)}</span>
-                                  {#if hovered || menuOpenHere}
-                                    <button
-                                      class="absolute inset-y-0 right-0 my-auto h-fit rounded p-0.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
-                                      aria-haspopup="menu"
-                                      aria-expanded={menuOpenHere}
-                                      aria-label={$_('chat.threadActions')}
-                                      onclick={(e) => openThreadMenu(e, thread)}
-                                    >
-                                      <MoreHorizontal class="size-3" />
-                                    </button>
-                                  {/if}
-                                </span>
-                              {/if}
-                            </span>
-                          </span>
-                          <!-- Riga 2: l'anteprima dell'ultimo messaggio. Il titolo del thread
-                               (riassunto auto-generato) è solo il ripiego. -->
-                          {#if thread.preview || thread.title}
-                            <span class="thread-preview">{thread.preview || thread.title}</span>
-                          {/if}
-                        </span>
-                      {/if}
-                    </a>
-                  {/snippet}
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-            {/each}
-          </Sidebar.Menu>
-        </Sidebar.Group>
-      {/if}
-    {/if}
-{/snippet}
-
 {#snippet sidebarBody()}
   <!-- Il selettore del brand non sta più in cima: su 47 account, 45 hanno UN brand — la riga più
        preziosa della sidebar era spesa per un'azione che il 96% non fa mai. Dire SEMPRE su quale
@@ -711,17 +386,13 @@
          tiene la riga dentro, dove serve a incolonnare l'etichetta con la nav. -->
     <Sidebar.Header class="shell-top-header shell-top-divider justify-center gap-0 p-0">
       <Sidebar.Group class="w-full p-0 px-2.5 group-data-[collapsible=icon]:px-2">
-        <!-- La rotta è la home del brand, ma quella home è la chat: da lì non si guarda un
-             cruscotto, si mette al lavoro qualcuno — da cui l'etichetta "Assumi un agente".
-             Chiave i18n NUOVA (`app.nav.hireAgent`) e non `app.nav.homeOverview` riscritta:
-             quella resta il nome della PAGINA. -->
         <Sidebar.Menu class={navMenuGapClass}>
           <Sidebar.MenuItem>
             {@const overviewPending = isNavPending(overviewHref, true)}
             {@const overviewOn = overviewPending || (overviewActive && !pendingPath)}
             <Sidebar.MenuButton
               isActive={overviewOn}
-              tooltipContent={$_('app.nav.hireAgent')}
+              tooltipContent={$_('app.nav.homeOverview')}
               size={mobile ? 'default' : 'sm'}
               class={cn(
                 overviewOn ? navOnClass : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] active:bg-[var(--paper)]',
@@ -734,15 +405,13 @@
                   href={overviewHref}
                   {...props}
                   onclick={() => {
-                    // Overview = empty composer: don't create a thread until the first message.
-                    openChatComposer();
                     if (sidebar.isMobile && sidebar.openMobile) {
                       sidebar.setOpenMobile(false);
                     }
                   }}
                 >
                   <UserPlus class={iconClass} strokeWidth={1.7} />
-                  <span class={cn(labelClass, 'group-data-[collapsible=icon]:hidden')}>{$_('app.nav.hireAgent')}</span>
+                  <span class={cn(labelClass, 'group-data-[collapsible=icon]:hidden')}>{$_('app.nav.homeOverview')}</span>
                 </a>
               {/snippet}
             </Sidebar.MenuButton>
@@ -753,23 +422,10 @@
   {/if}
 
   <Sidebar.Content class="flex-1 gap-0 overflow-y-auto px-2.5 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2.5 group-data-[collapsible=icon]:overflow-visible">
-    <!-- La nav nuova (teamFirst) mette la lista dei thread prima degli Spazi; spenta, resta
-         l'ordine di oggi. Stessi snippet in entrambi i rami: il flag decide solo la gerarchia. -->
-    {#if teamFirst}
-      {@render threadsSection(true)}
-      {#if brandSlug}
-        <Sidebar.Separator class="mx-0 my-3" />
-      {/if}
-      {@render navGroupsSection()}
-    {:else}
-      {@render navGroupsSection()}
-      {@render threadsSection(false)}
-    {/if}
+    {@render navGroupsSection()}
   </Sidebar.Content>
 
   <Sidebar.Footer class="gap-2 border-t border-sidebar-border px-2.5 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2.5">
-    <!-- "Prossimi passi" tolto dalla sidebar: la squadra e l'onboarding in chat coprono la guida.
-         Il componente esiste ancora — se torna, torna come card in chat, non qui. -->
     {#if showUpgrade}
       <a
         href={activateHref}
@@ -894,7 +550,7 @@
         <!-- Identita': UNA riga cliccabile verso il profilo, non un blocco decorativo. -->
         <div class="um-section">
           <DropdownMenu.Item class="um-item p-0">
-            <a href={profileHref} class="um-link" onclick={(e) => onModalLinkClick(e, 'profile')}>
+            <a href={profileHref} class="um-link">
               <span class="um-avatar">
                 {#if userAvatarUrl}
                   <img src={userAvatarUrl} alt="" class="size-full object-cover" loading="lazy" />
@@ -932,7 +588,7 @@
 
           <!-- Azioni: voci normali, senza etichetta — le icone e i nomi si spiegano da soli. -->
           <DropdownMenu.Item class="um-item p-0">
-            <a href={settingsHref} class="um-link" onclick={onModalLinkClick}>
+            <a href={settingsHref} class="um-link">
               <Settings class="size-4" strokeWidth={1.7} />
               <span>{settingsLabel}</span>
             </a>
@@ -1042,52 +698,12 @@
       )}
       aria-label={settingsLabel}
       title={settingsLabel}
-      onclick={onModalLinkClick}
     >
       <Settings class={mobile ? 'size-4' : 'size-3.5'} strokeWidth={1.7} />
     </a>
     </div>
   </Sidebar.Footer>
 
-  {#if menuAnchor}
-    {@const anchor = menuAnchor}
-    <!-- UN'istanza sola qualunque sia il numero di thread, portalata su <body> per uscire dallo
-         stacking context del Sheet mobile. -->
-    <div use:portal>
-      <!-- transparent backdrop catches click-outside -->
-      <button
-        type="button"
-        class="fixed inset-0 z-[100] cursor-default bg-transparent"
-        onclick={closeThreadMenu}
-        aria-hidden="true"
-        tabindex="-1"
-      ></button>
-      <div
-        class="fixed z-[101] min-w-[120px] rounded-lg border border-border bg-popover py-1 text-popover-foreground shadow-lg"
-        style="right: {anchor.right}px; top: {anchor.top}px;"
-        role="menu"
-      >
-        <button
-          type="button"
-          class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-accent active:bg-accent touch-manipulation"
-          role="menuitem"
-          onclick={() => startRename(anchor.thread)}
-        >
-          <Pencil class="size-3.5" />
-          <span>{$_('chat.rename')}</span>
-        </button>
-        <button
-          type="button"
-          class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-destructive hover:bg-accent active:bg-accent touch-manipulation"
-          role="menuitem"
-          onclick={(e) => handleDeleteThread(e, anchor.thread.id)}
-        >
-          <Trash2 class="size-3.5" />
-          <span>{$_('chat.deleteThread')}</span>
-        </button>
-      </div>
-    </div>
-  {/if}
 {/snippet}
 
 {#if asMobileMap}
@@ -1100,15 +716,6 @@
     <Sidebar.Rail />
   </Sidebar.Root>
 {/if}
-
-<svelte:window
-  onkeydown={(e) => {
-    if (e.key === 'Escape' && menuAnchor) {
-      e.stopPropagation();
-      closeThreadMenu();
-    }
-  }}
-/>
 
 <style>
   .dashboard-mobile-map {
@@ -1154,85 +761,7 @@
     --nav-on-hover: color-mix(in srgb, var(--accent) 24%, transparent);
   }
 
-  /* Campo di ricerca: margini e imbottitura NON sono liberi, portano icona ed etichetta sugli
-     stessi binari verticali delle voci di nav (icona a 18px dal bordo, testo a 42px, misurati). */
-  .thread-search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 8px;
-    padding: 0 8px;
-    height: 30px;
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--ink) 5%, transparent);
-    color: var(--ink-faint);
-  }
-  .thread-search.mobile {
-    height: 38px;
-    border-radius: 11px;
-    /* Sul telefono le righe di nav hanno px-2.5: l'icona parte da 10, non da 8. */
-    padding: 0 10px;
-  }
-  .thread-search {
-    width: 100%;
-    border: 0;
-    cursor: pointer;
-    text-align: left;
-    font: inherit;
-  }
-  .thread-search:hover {
-    background: color-mix(in srgb, var(--ink) 9%, transparent);
-    color: var(--ink);
-  }
-  .thread-search-label {
-    flex: 1;
-    min-width: 0;
-    font-size: 12.5px;
-  }
-  .thread-search.mobile .thread-search-label {
-    font-size: 14px;
-  }
-  .thread-search-kbd {
-    flex-shrink: 0;
-    font-family: inherit;
-    font-size: 10.5px;
-    line-height: 1;
-    padding: 3px 4px;
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    color: var(--ink-faint);
-  }
 
-  /* Stessa pillola dei non letti sulle righe dei thread (.chat-unread-badge), così due numeri
-     nella stessa sidebar si somigliano. Qui è ancorata all'angolo dell'icona (`position:
-     absolute`): nulla intorno si sposta quando il numero passa da 9 a 10. */
-  .um-bell-count {
-    position: absolute;
-    top: -1px;
-    right: -1px;
-    min-width: 15px;
-    height: 15px;
-    padding: 0 4px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9.5px;
-    font-weight: 700;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    color: #fff;
-    background: var(--accent-solid, #7c5cff);
-    box-shadow: 0 0 0 2px var(--sidebar, var(--paper));
-    pointer-events: none;
-  }
-  /* Sul telefono il bottone è più grande: stessa pillola, un gradino più su — come
-     .chat-unread-badge.mobile. */
-  .um-bell-count.mobile {
-    min-width: 17px;
-    height: 17px;
-    font-size: 10.5px;
-  }
   .um-bell-count.sev-error {
     background: #ef4444;
   }
@@ -1242,130 +771,11 @@
   .um-bell-count.sev-suggestion {
     background: #6366f1;
   }
-  /* Riga selezionata: fondo pieno su tutta la riga (in una lista di conversazioni il selezionato
-     si legge dal fondo). I due valori vivono come token qui e li consumano le utility su
-     threadRowClass: una regola CSS di componente non vince sul layer utilities. */
-  :global(.thread-list) {
-    --thread-on: color-mix(in srgb, var(--ink) 12%, transparent);
-    --thread-on-hover: color-mix(in srgb, var(--ink) 17%, transparent);
-  }
-  /* Secondo segnale, indipendente dal colore: il nome della conversazione aperta è in peso pieno. */
-  :global(.thread-list [data-sidebar='menu-button'][data-active='true']) .thread-name {
-    font-weight: 700;
-  }
-  /* L'anello del pallino imita il fondo su cui poggia: sulla riga selezionata è il wash, non la
-     sidebar nuda, o il dot si ritaglia un buco chiaro. */
-  :global(.thread-list [data-sidebar='menu-button'][data-active='true']) .presence-dot {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 12%, var(--sidebar-bg, var(--paper-2, #f5f5f7)));
-  }
-  .thread-lines {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-  .thread-top {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
-  .thread-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ink);
-    line-height: 1.3;
-  }
-  .thread-lines.mobile .thread-name {
-    font-size: 14.5px;
-  }
-  .thread-meta {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex: 0 0 auto;
-    color: var(--ink-soft);
-  }
-  .thread-time {
-    font-size: 10.5px;
-    color: var(--ink-faint);
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
-  }
-  .thread-lines.mobile .thread-time {
-    font-size: 11.5px;
-  }
-  .thread-preview {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11.5px;
-    font-weight: 400;
-    color: var(--ink-soft);
-    line-height: 1.35;
-  }
-  .thread-lines.mobile .thread-preview {
-    font-size: 12.5px;
-  }
 
-  /* Larghezza minima fissa: '1' e '9+' occupano la stessa scatola, così la coda della riga
-     (orario + ⋯) non slitta quando il numero cambia. */
-  .chat-unread-badge {
-    flex: 0 0 auto;
-    min-width: 17px;
-    height: 16px;
-    padding: 0 4px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    /* --accent-solid: il bianco sull'accento pieno stava a 2,58:1, e qui il testo è 10px. */
-    background: var(--accent-solid, #7c5cff);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-  }
-  /* Sul telefono la riga è più alta e ci passa sopra un dito: stessa pillola, un gradino più su. */
-  .chat-unread-badge.mobile {
-    min-width: 19px;
-    height: 18px;
-    font-size: 11px;
-  }
   .avatar-holder {
     position: relative;
     display: inline-flex;
     flex: 0 0 auto;
-  }
-  /* ponytail: verde fisso stile presenza (WhatsApp/Discord), anello del colore della sidebar.
-     FERMO di proposito: un pallino che pulsa su dieci conversazioni è rumore, non segnale. */
-  .presence-dot {
-    position: absolute;
-    right: -1px;
-    bottom: -1px;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: #22c55e;
-    box-shadow: 0 0 0 2px var(--sidebar-bg, var(--paper-2, #f5f5f7));
-  }
-  /* Con più agenti l'angolo in basso a destra è una palla da 16px, non da 34: il pallino di
-     sempre le mangerebbe metà faccia. */
-  .avatar-holder.cluster .presence-dot {
-    right: -2px;
-    bottom: -2px;
-    width: 7px;
-    height: 7px;
-    box-shadow: 0 0 0 1.5px var(--sidebar-bg, var(--paper-2, #f5f5f7));
   }
 
   /* User account menu */

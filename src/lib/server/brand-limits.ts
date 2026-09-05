@@ -90,13 +90,3 @@ export async function onboardingGenerationsToday(supabase: SupabaseClient, userI
   return count ?? 0;
 }
 
-// Full gate: gather the daily count (skipped for exempt accounts) and decide.
-export async function checkOnboardingGate(
-  supabase: SupabaseClient,
-  userId: string,
-  opts: { email?: string | null; emailConfirmedAt?: string | null }
-): Promise<OnboardingGate> {
-  if (hasUnlimitedSlots(opts.email)) return { ok: true };
-  const generationsToday = await onboardingGenerationsToday(supabase, userId);
-  return onboardingGateDecision({ ...opts, generationsToday });
-}

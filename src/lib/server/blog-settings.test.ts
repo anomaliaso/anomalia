@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { customizationPatchFromFormData, parseBlogConfig } from './blog-settings';
+import { blogConfigPatch, customizationPatchFromFormData, parseBlogConfig } from './blog-settings';
 
 function fd(entries: Record<string, string>): FormData {
   const form = new FormData();
@@ -74,5 +74,92 @@ describe('parseBlogConfig', () => {
   it('defaults backlinkNetwork to on', () => {
     expect(parseBlogConfig({}, 'starter').backlinkNetwork).toBe(true);
     expect(parseBlogConfig({ backlinkNetwork: false }, 'starter').backlinkNetwork).toBe(false);
+  });
+});
+
+describe('blogConfigPatch — una regola per campo, due chiamanti', () => {
+  it('tocca solo i campi nominati', () => {
+    expect(blogConfigPatch({ title: 'Il blog' })).toEqual({ title: 'Il blog' });
+    expect(blogConfigPatch({})).toEqual({});
+  });
+
+  it('rifiuta un colore che non è un esadecimale, ripiegando sul default', () => {
+    expect(blogConfigPatch({ accent: 'rosso' }).accent).toBe('#111111');
+    expect(blogConfigPatch({ accent: '#7C5CFF' }).accent).toBe('#7C5CFF');
+  });
+
+  it('un font che il sito non sa rendere torna a sans', () => {
+    expect(blogConfigPatch({ font: 'comic-sans' }).font).toBe('sans');
+    expect(blogConfigPatch({ font: 'serif' }).font).toBe('serif');
+  });
+
+  it('riduce la cadenza al tetto del piano invece di rifiutarla', () => {
+    // Un salvataggio che fallisce per un numero troppo alto è peggio di uno che salva il massimo
+    // consentito: è la stessa scelta che il form fa già.
+    const go = blogConfigPatch({ articlesPerWeek: 999 }, 'go').articlesPerWeek as number;
+    const pro = blogConfigPatch({ articlesPerWeek: 999 }, 'pro').articlesPerWeek as number;
+    expect(go).toBeLessThan(pro);
+    expect(blogConfigPatch({ articlesPerWeek: null }, 'go').articlesPerWeek).toBeNull();
+  });
+
+  it('scarta una lingua che il blog non serve', () => {
+    expect(blogConfigPatch({ locales: ['it', 'klingon', 'it'] }).locales).toEqual(['it']);
+    expect(blogConfigPatch({ defaultLocale: 'klingon' }).defaultLocale).toBeNull();
+  });
+
+  it('le lingue in più non contengono quella di default, nemmeno quella già salvata', () => {
+    // La regola è incrociata: senza `current`, cambiare solo `locales` lascerebbe la lingua di
+    // default dentro l'elenco delle traduzioni, e il blog si tradurrebbe verso se stesso.
+    expect(blogConfigPatch({ defaultLocale: 'it', locales: ['it', 'en'] }).locales).toEqual(['en']);
+    expect(blogConfigPatch({ locales: ['it', 'en'] }, null, { defaultLocale: 'it' }).locales).toEqual(['en']);
+  });
+
+  it('tiene al massimo sei link di navigazione, e solo quelli completi', () => {
+    const links = blogConfigPatch({
+      navbarLinks: [
+        { label: 'Home', url: 'https://x.test' },
+        { label: '', url: 'https://y.test' },
+        { label: 'Solo etichetta', url: '' }
+      ]
+    }).navbarLinks as unknown[];
+    expect(links).toEqual([{ label: 'Home', url: 'https://x.test' }]);
+  });
+});
+
+describe('analytics del blog — un elenco chiuso, mai codice', () => {
+  it('tiene una coppia fornitore/id che quel fornitore emette davvero', () => {
+    expect(blogConfigPatch({ analytics: [{ provider: 'ga4', id: 'G-ABC1234567' }] })).toEqual({
+      analytics: [{ provider: 'ga4', id: 'G-ABC1234567' }]
+    });
+  });
+
+  /**
+   * Ultima linea prima che l'id finisca dentro uno snippet. Lo zod del contratto lo rifiuta gia',
+   * ma questa regola sta accanto al modello: se domani un altro chiamante scrive `blog_config`
+   * senza passare dal contratto, non porta uno script dentro una pagina pubblica.
+   */
+  it('scarta un id che non ha la forma del suo fornitore', () => {
+    expect(blogConfigPatch({ analytics: [{ provider: 'ga4', id: "G-X';alert(1);//" }] })).toEqual({ analytics: [] });
+    expect(blogConfigPatch({ analytics: [{ provider: 'hotjar', id: 'G-ABC123' }] })).toEqual({ analytics: [] });
+  });
+
+  it('scarta un fornitore che non conosciamo, invece di renderlo', () => {
+    expect(blogConfigPatch({ analytics: [{ provider: 'custom', id: '<script>x</script>' }] })).toEqual({
+      analytics: []
+    });
+  });
+
+  it('tiene un fornitore solo per tipo: due id dello stesso contano una volta', () => {
+    const patch = blogConfigPatch({
+      analytics: [
+        { provider: 'ga4', id: 'G-AAAAAAA' },
+        { provider: 'ga4', id: 'G-BBBBBBB' }
+      ]
+    });
+    expect(patch.analytics).toEqual([{ provider: 'ga4', id: 'G-AAAAAAA' }]);
+  });
+
+  it('una lista vuota toglie tutto: e’ cosi’ che si stacca un tracker rotto senza di noi', () => {
+    expect(blogConfigPatch({ analytics: [] })).toEqual({ analytics: [] });
   });
 });

@@ -63,11 +63,17 @@ Gli endpoint che spendono AI richiedono **piano a pagamento + crediti** e scope 
 | `POST /brands/:slug/geo` | Audit/fix GEO |
 | `POST /brands/:slug/keywords` | Rigenera keyword research |
 | `POST /brands/:slug/backlinks` | Rigenera opportunità backlink |
+| `POST /brands/:slug/market/field` | Passata field watch (scopri → smonta → distilla) |
 | `POST /brands/:slug/studio/competitors/research` | Ricerca competitor AI |
 | `POST /brands/:slug/studio/people` (kind `ai`) | Ritratti AI |
 | `POST /brands/:slug/ads/remix` | Remix brief da ad competitor |
 | `POST /brands/:slug/rubrics/propose` | Batch rubriche AI |
 | `POST /brands/:slug/web` (generate/optimize) | Articoli blog AI |
+
+**Non gated, di proposito**: `POST /brands/:slug/billing/portal` e
+`POST /brands/:slug/billing/checkout` ([10-billing](10-billing.md)) non chiamano `gateAiAction` e
+non guardano i crediti. Sarebbe circolare — chi ha finito i crediti è chi deve arrivare al
+checkout. Restano scope `write`: il link porta anche a un bottone di disdetta.
 
 ## Convenzioni di risposta
 
@@ -87,17 +93,16 @@ Gli endpoint che spendono AI richiedono **piano a pagamento + crediti** e scope 
 
 | Pagina | Area |
 |---|---|
-| [02 — Brand core](02-brands-core.md) | `brands`, detail, analytics, calendar, bio, publishing, tick |
+| [02 — Brand core](02-brands-core.md) | `brands`, detail, analytics, calendar, bio, publishing, tick, doctor, goals |
 | [03 — Posts](03-posts.md) | Lista, edit, approve, publish, reschedule, render, media, revoke |
 | [04 — Studio](04-studio.md) | Kit, colors, memory, people, documents, competitors, history sync |
 | [05 — Editorial plan](05-editorial-plan.md) | Propose, approve, discard, revise, update, save-brief, replan-week |
 | [06 — Weekly plan](06-weekly-plan.md) | Plan, produce, render, save |
 | [07 — Growth: SEO/GEO/web](07-growth-seo-geo.md) | SEO, GEO, keywords, backlinks, web, articles, GSC, ranks, library, video review |
-| [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | Ads, remix, voice, GTM, rubrics, products, api-keys |
+| [08 — Ads, voice, GTM e gestione](08-ads-voice-gtm-misc.md) | Ads, remix, voice, GTM, rubrics, products, api-keys, ideas, field watch, radar diagnose |
 
 ## Note
 
 - Gli endpoint **cron** (`/tick`, `/work`) protetti da `CRON_SECRET` non fanno parte della API pubblica
   e sono documentati nelle rispettive doc di feature.
-- `GET /api/v1/brands/:slug/strategy-lab` esiste ma è dev-only, senza auth — non documentato qui.
 - I comandi CLI che consumano questi endpoint sono in `cli/` (fonte unica di CLI, MCP e skill).

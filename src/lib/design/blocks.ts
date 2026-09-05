@@ -51,7 +51,6 @@ export const scale = (canvasW: number, pct: number) => Math.round((canvasW * pct
  */
 /** Built-in short aliases — full Lucide + Simple Icons catalogs are resolved at render time by name. */
 export const GraphicIconNameSchema = z.string().min(1).max(60);
-export type GraphicIconName = z.infer<typeof GraphicIconNameSchema>;
 
 /** Palette tokens — keep freeform hex out of the model's hands. */
 export const GraphicFillSchema = z.enum(['accent', 'ink', 'soft', 'hair', 'bg']);

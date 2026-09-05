@@ -48,6 +48,179 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/posts?status=pending_user" 
 
 ---
 
+## `POST /api/v1/brands/:slug/posts`
+
+Salva una copy già scritta come **un post `pending_user`**, pronto per la revisione.
+
+Non chiama nessun modello e **non consuma crediti**: niente `gateAiAction`. Non pubblica e non
+programma niente — `scheduled_for` è la data **proposta**, e resta un metadato del calendario
+finché il post non viene approvato. È `POST /posts/:id/approve` ad autorizzare la distribuzione.
+
+Senza media valgono solo le piattaforme che reggono il testo da solo: `facebook`, `linkedin`, `x`,
+`threads`, `bluesky`, `reddit`. Con `media_ids` si sbloccano anche `instagram` e `tiktok`, e
+`youtube` se il media è un video.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `platforms` | string[] | Sì | Almeno una. Le sconosciute vengono scartate → `no_platforms` |
+| `caption` | string | Sì | La copy, salvata così com'è |
+| `platform_captions` | object | No | Override per piattaforma, `{"x": "…"}` |
+| `scheduled_for` | string | No | Istante proposto, ISO. Senza offset è letto sul fuso del brand; con `Z` o `±hh:mm` è preso come scritto. Almeno 2 minuti nel futuro |
+| `media_ids` | string[] | No | Fino a 8 id **interi** dalla libreria del brand (`GET /media`): a differenza di un id di post, un id media non si risolve da un prefisso. Un id che non è di questo brand fa fallire la creazione: il post non nasce mai senza. Il nono id è rifiutato (`invalid_input`), non scartato |
+| `title` | string | No | Obbligatorio per Reddit (max 300 char) |
+| `subreddit` | string | No | Senza `r/` |
+| `link_url` | string | No | |
+
+**Response** `200`:
+
+```json
+{
+  "ok": true,
+  "id": "a1b2c3d4-…",
+  "status": "pending_user",
+  "scheduled_for": "2030-05-16T07:00:00.000Z",
+  "scheduled_for_local": "2030-05-16 09:00 (Europe/Rome)",
+  "slot": "Thu 09:00",
+  "review_url": "https://anomalia.so/app/mio-brand/posts/a1b2c3d4-…"
+}
+```
+
+Senza `scheduled_for`, i campi `scheduled_for`, `scheduled_for_local` e `slot` sono `null`: il
+post resta una bozza senza data, fuori dal calendario ma elencata da `GET /posts`.
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — body fuori schema |
+| `400` | `{"error":"no_platforms"}` — nessuna piattaforma riconosciuta |
+| `400` | `{"error":"need_caption"}` |
+| `400` | `{"error":"need_media"}` — piattaforma che non regge il solo testo |
+| `400` | `{"error":"need_video"}` |
+| `400` | `{"error":"over_limit"}` — copy oltre il limite della piattaforma |
+| `400` | `{"error":"reddit_title"}` |
+| `400` | `{"error":"invalid_scheduled_for","details":"…"}` — data illeggibile |
+| `400` | `{"error":"too_soon"}` — data passata o troppo vicina |
+| `400` | `{"error":"media_not_found"}` — un id media non è di questo brand (o non esiste: le due cose non si distinguono). Colpa di chi chiama: l'id va corretto |
+| `403` | `{"error":"API key is read-only"}` |
+| `502` | `{"error":"media_unavailable"}` — il media è di questo brand ma non siamo riusciti ad allegarlo. Guasto nostro: riprovare con altri id non serve |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "platforms": ["linkedin","x"],
+    "caption": "Tre cose che abbiamo imparato spedendo di venerdì.",
+    "scheduled_for": "2030-05-16T09:00"
+  }'
+```
+
+---
+
+## `POST /api/v1/brands/:slug/content/check`
+
+Fa girare su una copy che hai scritto tu **gli stessi controlli deterministici** che Anomalia fa
+sulla propria: requisiti di piattaforma, tenuta della caption, punteggio di qualità, calendario.
+
+Non chiama nessun modello, non consuma crediti e **non scrive niente**: è una POST solo perché
+porta un body. La stessa richiesta restituisce sempre lo stesso verdetto. Non guarda i pixel:
+giudicare un'immagine o un video è un'azione separata e a pagamento.
+
+**Una API key di sola lettura oggi non può chiamarlo** e riceve `403`. Non è una proprietà di
+questo endpoint: `resolveCaller` nega a una chiave `read` **ogni** richiesta che non sia `GET` o
+`HEAD`, perché finora ogni route che muta era una non-GET. `check_content` è il primo POST che
+calcola senza scrivere, quindi il primo controesempio a quella regola; cambiarla è una decisione
+a parte, con un raggio d'azione molto più ampio di questo endpoint.
+
+Un verdetto negativo è comunque un `200` con `ok: false` — è un referto, non un cancello.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `platforms` | string[] | Sì | Dove uscirebbe. Le sconosciute → `no_platforms` |
+| `caption` | string | Sì | La copy. Letta, punteggiata e restituita intatta |
+| `platform_captions` | object | No | Override per piattaforma: ognuna è controllata sulla copy che pubblicherebbe davvero |
+| `media_ids` | string[] | No | Fino a 8 id della libreria del brand. Un id che non è di questo brand è riportato |
+| `title` | string | No | Obbligatorio per Reddit |
+| `scheduled_for` | string | No | Istante proposto, ISO. Senza offset è letto sul fuso del brand |
+
+Sono i campi che portano una regola: `subreddit` e `link_url`, che `create_post` accetta, qui non
+hanno nessun controllo dietro e vengono rifiutati dallo schema invece di essere ignorati.
+
+**Response** `200`:
+
+```json
+{
+  "ok": false,
+  "errors": [
+    { "code": "over_limit", "field": "caption", "detail": "X: 812 characters, limit 280" }
+  ],
+  "warnings": [
+    { "code": "calendar_conflict", "field": "scheduled_for", "detail": "2030-05-16T07:00 is already taken by a1b2c3d4-…" }
+  ],
+  "scores": [
+    {
+      "platform": "linkedin",
+      "index": 62.4,
+      "checks": [
+        { "id": "hook_strength", "value": 0.4, "weight": 18, "note": "apre parlando del brand" }
+      ]
+    }
+  ],
+  "versions": { "rules": 1, "scorer": 3 }
+}
+```
+
+**Errori bloccanti** (dentro `errors`, ognuno col campo da riparare)
+
+| `code` | `field` | Quando |
+|---|---|---|
+| `no_platforms` | `platforms` | Nessuna piattaforma riconosciuta |
+| `caption_empty` | `caption` | Caption senza testo |
+| `caption_placeholder` | `caption` | Lorem ipsum, `TODO`, solo hashtag |
+| `caption_needs_proof` | `caption` | Resta un marcatore `[NEED: …]`. Si riempie con il fatto, non si cancella |
+| `need_media` | `media_ids` | `instagram` / `tiktok` / `youtube` senza asset |
+| `need_video` | `media_ids` | `youtube` con un asset che non è un video |
+| `over_limit` | `caption` | Copy oltre il limite di una piattaforma (dice quale e di quanto) |
+| `reddit_title` | `title` | Reddit senza titolo |
+| `media_not_found` | `media_ids` | Un id non è nella libreria di questo brand |
+| `invalid_scheduled_for` | `scheduled_for` | Data illeggibile |
+| `too_soon` | `scheduled_for` | Data passata o troppo vicina |
+
+**Avvisi** (dentro `warnings`, non bloccano): `calendar_conflict` — quel minuto è già occupato da
+un altro post vivo; `reach_chasing_hashtags` — `#fyp`, `#viral` e simili.
+
+**Punteggi**: uno per piattaforma richiesta, con l'indice 0–100 e i dodici check pesati dello
+scorer interno (hook, tell da AI, ripetizione rispetto ai post recenti del brand, concretezza,
+CTA, lunghezza, leggibilità, hashtag, emoji). `versions` fissa il ruleset e lo scorer: due
+verdetti sono confrontabili solo se coincidono.
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — body fuori schema |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/content/check" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "platforms": ["linkedin","x"],
+    "caption": "Tre cose che abbiamo imparato spedendo di venerdì."
+  }'
+```
+
+---
+
 ## `DELETE /api/v1/brands/:slug/posts`
 
 Elimina in blocco i post di uno status (default `pending_user`). Rifiuta `published`.
@@ -105,8 +278,11 @@ Aggiorna i campi editabili di un post senza re-render. Se il post è già progra
 **Response** `200`:
 
 ```json
-{ "ok": true }
+{ "ok": true, "patch": { "caption": "Nuovo caption", "platforms": ["instagram", "x"] } }
 ```
+
+`patch` è quello che la rotta ha scritto davvero, filtrato sui campi che sa applicare: un campo
+che non riconosce non ci finisce dentro. È una conferma, non l'eco della richiesta.
 
 **Errori specifici**
 
@@ -349,9 +525,85 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/posts/POST_ID/media" \
 
 ---
 
-## `POST /api/v1/brands/:slug/posts/:id/media`
+## `POST /api/v1/brands/:slug/posts/:id/media/regenerate`
 
-Azioni sul visual del post: `regenerate` (rifinisce/rimpiazza l'immagine), `slide` (re-render di una slide), `restructure` (riordina/rimuove slide, senza render né crediti), `video` (animazione in clip). Le azioni con render passano dal gate crediti e fatturano un render.
+Rifinisce o rimpiazza l'immagine di copertina. Passa dal gate crediti e fattura un render.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `instruction` | string | instruction o prompt | Istruzione di modifica |
+| `prompt` | string | instruction o prompt | Nuovo prompt completo |
+
+**Response** `200`: `{ "success": true, "rendered": true, "media_url": "https://…/media/….png", "notes": "…" }`
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media/slide`
+
+Re-render di una singola slide del carosello. Passa dal gate crediti e fattura un render.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `index` | number | Sì | Indice slide (0 = cover) |
+| `instruction` | string | No | Istruzione di modifica |
+| `prompt` | string | No | Nuovo prompt completo |
+
+**Response** `200`: `{ "success": true, "slide_index": 1, "rendered": true }`
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media/order`
+
+Riordina o rimuove le slide. Non rende niente: nessun render, nessun credito, nessun gate.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `order` | number[] | Sì | Nuovo ordine degli indici slide, es. `[0,2,1]` |
+
+**Response** `200`: `{ "success": true, "slide_count": 2 }`
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media/video`
+
+Anima la copertina in una clip. Passa dal gate crediti e fattura un render.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `duration` | number | No | Durata in secondi |
+| `script` | string | No | Script parlato |
+| `instruction` | string | No | Indicazioni sull'animazione |
+| `aspectRatio` | string | No | `9:16` \| `1:1` \| `16:9` \| `4:3` \| `3:4` \| `21:9` |
+
+**Response** `200`: `{ "success": true, "video_render_status": "rendering", "duration_seconds": 6, "videos_left": 4, "remake": false }`
+
+**Esempi**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts/POST_ID/media/regenerate" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{"instruction":"Rendi i colori più caldi"}'
+
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts/POST_ID/media/order" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-raw '{"order":[0,2,1]}'
+```
+
+---
+
+## `POST /api/v1/brands/:slug/posts/:id/media` (compatibilità)
+
+Questa rotta faceva quattro cose a seconda di `action`. Ora ognuna ha la sua, sopra: **usa quelle**. Questa resta e continua a funzionare — non fa altro che inoltrare all'azione corrispondente.
 
 **Body**
 
@@ -483,5 +735,118 @@ Note: i fallimenti per singolo post finiscono in `results`, non nello status HTT
 
 ```bash
 curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/posts/approve-all" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## `GET /api/v1/brands/:slug/creation-kit`
+
+Il **brief minimo** da leggere *prima* di scrivere un post: vincoli di piattaforma, fatti e voce
+del brand, la rubrica che calza, **un solo** template Anomalia scelto per questo obiettivo e
+formato, le riscritture del proprietario, cosa ha funzionato su questo brand e quali minuti del
+calendario sono già occupati.
+
+Non chiama nessun modello, non consuma crediti e non scrive niente: una API key di sola lettura
+può chiamarla. Gli asset stanno in `GET /media`; controllare una bozza è `POST /content/check`.
+
+**La selezione è la funzione.** Il kit non è la libreria: le sezioni senza contenuto sono
+**assenti** (mai presenti e vuote), e l'intera risposta è tagliata a `budget_bytes`. Un kit tipico
+pesa 3,8–5,4 KB.
+
+**Query**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `goal` | string (≤300) | Sì | Cosa deve fare questo post, in una riga. Sceglie il template e ordina prodotti ed esempi |
+| `platforms` | string | Sì | Separate da virgola: `instagram,linkedin`. Normalizzate e deduplicate |
+| `format` | enum | Sì | `single_image` \| `carousel` \| `text_post` \| `link_post` \| `video` |
+
+**Response** `200`:
+
+```json
+{
+  "job": { "goal": "launch the espresso grinder", "platforms": ["linkedin"], "format": "text_post" },
+  "versions": { "kit": 1 },
+  "size_bytes": 5378,
+  "budget_bytes": 8192,
+  "trimmed": [],
+  "constraints": {
+    "platforms": [{ "platform": "linkedin", "char_limit": 3000, "needs_media": false, "video_only": false }],
+    "avoid": ["eccellenza", "sinergia"]
+  },
+  "brand": {
+    "name": "Caffè Nero",
+    "language": "it",
+    "about": "Torrefazione artigianale a Trieste dal 1998…",
+    "audience": "Bar indipendenti e uffici…",
+    "products": [{ "id": "…", "title": "Espresso grinder Mk II", "pricing": "890 €" }],
+    "people": [{ "id": "…", "name": "Marta Rossi", "role": "Head roaster" }]
+  },
+  "voice": { "text": "BRAND PERSONALITY (authoritative — …)" },
+  "rubric": { "id": "…", "name": "Lettere dal lab", "format": "text_post", "art_direction": "foto in bianco e nero" },
+  "template": {
+    "id": "linkedin-post-templates/the-story-post",
+    "name": "The Story Post",
+    "group": "LinkedIn Post Templates",
+    "body": "[Hook: Unexpected outcome or lesson]…",
+    "hooks": { "id": "hook-formulas/story-hooks", "name": "Story Hooks", "body": "- \"Last week, …\"" },
+    "playbook": "PLATFORM PLAYBOOK (…): - linkedin — …"
+  },
+  "calendar": { "occupied": [{ "scheduled_for": "2026-09-05T07:00:00.000Z", "platforms": ["linkedin"], "campaign": "Grinder launch", "step": "announcement" }] },
+  "week": { "index": 0, "theme": "La settimana del grinder" },
+  "operator_edits": [{ "before": "Siamo entusiasti di annunciare…", "after": "Nuovo grinder. Macina 18g in 4 secondi." }],
+  "history": {
+    "post_count": 24,
+    "best_times": ["Sat 09:00"],
+    "top_formats": ["image"],
+    "top_hashtags": ["#caffe", "#tostatura"],
+    "cadence": "~8 posts/week",
+    "untested_hooks": ["contrast", "confession"],
+    "winners": [{ "id": "…", "platform": "linkedin", "opening": "Abbiamo rotto il grinder 23 volte." }]
+  }
+}
+```
+
+**Identificatori stabili.** Ogni pezzo selezionato è citabile: `template.id` e `template.hooks.id`
+(dal file di riferimento `post-templates.md`), `rubric.id`, `brand.products[].id`,
+`brand.people[].id`, `history.winners[].id`. `versions.kit` sale quando cambia la selezione o la
+forma della risposta: due kit si confrontano solo se hanno la stessa versione.
+
+**Come sceglie**
+
+| Sezione | Da dove viene | Come è selezionata |
+|---|---|---|
+| `constraints` | `platform-limits.ts` | Solo le piattaforme richieste |
+| `brand` | `brand_kit`, `products`, `people` | Prodotti ordinati per sovrapposizione lessicale col `goal`, massimo 5. Solo le persone che passano `likenessConsented` (reali con consenso attestato, più le persona AI, che non ritraggono nessuno) |
+| `voice` | `houseVoiceFor` | La personalità approvata quando c'è, altrimenti la house voice |
+| `rubric` | `rubrics` (approvate) | Solo quelle del `format` richiesto, poi la più vicina al `goal` |
+| `template` | `post-templates.md` | Il formato e la piattaforma scelgono il gruppo; quando il formato decide da solo (`carousel`, `video`) il blocco è fissato, altrimenti lo sceglie il `goal`. Più una famiglia di hook |
+| `calendar` | `posts` | Solo i minuti già occupati da qui in avanti, massimo 8 |
+| `week` | `editorial_plans` attivo | Solo la settimana corrente |
+| `operator_edits` | `content_prefs.captionEditPairs` | Le ultime 3 riscritture reali del proprietario |
+| `history` | `social_post_history` (`source='zernio'`) | Solo i post del brand, vincitori filtrati sulle piattaforme richieste |
+
+**Il budget.** Ogni campo ha un tetto in caratteri, quindi il kit sta nel budget *per
+costruzione*. Se dovesse comunque sforare, le sezioni cedono dalla meno autorevole alla più —
+`history`, `operator_edits`, `week`, `calendar`, `template`, `rubric`, `voice`, `brand` — e
+`trimmed` elenca cosa è caduto. `constraints` non cade mai. L'ordine è la precedenza dichiarata nel
+piano: i vincoli di piattaforma vincono su tutto, e i vincitori passati sono *evidenza*, non
+istruzioni.
+
+**Errori**
+
+| `error` | Status | Quando |
+|---|---|---|
+| `invalid_input` | 400 | Campo mancante, formato sconosciuto o campo non previsto (lo schema è `.strict()`) |
+| `no_platforms` | 400 | `platforms` non contiene nessuna piattaforma |
+
+**Esempio**:
+
+```bash
+curl -s -G "https://anomalia.so/api/v1/brands/mio-brand/creation-kit" \
+  --data-urlencode "goal=launch the espresso grinder" \
+  --data-urlencode "platforms=linkedin,instagram" \
+  --data-urlencode "format=text_post" \
   -H "Authorization: Bearer $TOKEN"
 ```

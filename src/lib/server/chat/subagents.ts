@@ -82,7 +82,7 @@ const READ_ONLY_EXTRA = new Set([
     // sorgente controllano la sintassi, non eseguono il codice) e non comincia per `read_`, quindi il
     // verificatore restava col TSX come testo e chiudeva «pass» senza modo di essere falso.
   'render_stills',
-  // Le letture del motore kit (bridge/live.ts): stessi nomi diversi dal hub di chat, stessa natura.
+  // Stessi nomi diversi dal hub di chat, stessa natura.
   'brand_ls',
   'brand_read',
   'brand_grep',
@@ -489,7 +489,7 @@ export async function runSubagentRun(
     const { data } = await supabase
       .from('brands')
       .select(
-        'id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id'
+        'id, org_id, name, slug, website, timezone, onboarding_state, setup_completed_at, plan, status, activated_at, stripe_customer_id, stripe_subscription_id, organizations(plan, stripe_customer_id, stripe_subscription_id)'
       )
       .eq('id', brandId)
       .maybeSingle();

@@ -1357,10 +1357,6 @@ const EU_COUNTRIES = new Set([
   'NL','PL','PT','RO','SK','SI','ES','SE'
 ]);
 
-export function isGoogleChannel(platform: string): boolean {
-  return toAdsPlatform(platform) === 'googleads';
-}
-
 export async function adsReadiness(
   supabase: SupabaseClient,
   brand: {

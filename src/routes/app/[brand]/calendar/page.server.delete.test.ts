@@ -23,7 +23,6 @@ vi.mock('$lib/server/email', () => ({
 }));
 vi.mock('$lib/server/video-requests', () => ({ founderVideoBudget: vi.fn(), listVideoRequests: vi.fn() }));
 vi.mock('$lib/server/supabase-admin', () => ({ createAdminClient: vi.fn() }));
-vi.mock('$lib/server/video-review-store', () => ({ loadVideoScoreBadges: vi.fn(), mediaUrlHash: vi.fn() }));
 vi.mock('$lib/server/page-cache', () => ({ cachedBrandPage: vi.fn() }));
 
 import { actions } from './+page.server';

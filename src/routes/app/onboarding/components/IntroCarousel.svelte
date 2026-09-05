@@ -25,7 +25,7 @@
   } from 'simple-icons';
   import AgentAvatar from '$lib/components/AgentAvatar.svelte';
   import AgentStack3D from '$lib/components/AgentStack3D.svelte';
-  import type { ThreadAgentAvatar } from '$lib/stores/chat';
+  import type { ThreadAgentAvatar } from '$lib/agent-avatars';
   import { agentMetaForBrand } from '$lib/agent-icons';
   import { BUILTIN_AGENT_AVATARS, DEFAULT_CHAT_AGENT_AVATAR } from '$lib/agent-avatars';
   import { pmeta, plabel, picon } from './platform-utils';

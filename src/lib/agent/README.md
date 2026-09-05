@@ -18,9 +18,8 @@ import esistente si è rotto, `$lib/agent/executor` funziona esattamente come pr
 | `@anomalia/agent-adapters` | sandbox (`vercel-sandbox.ts` + `sandbox-emulator.ts` — i test girano sull'emulatore, mai sulla rete), modo grafico (`graphical-bootstrap.ts`, Xvfb+Chromium), memoria markdown ≤ 32 KB sopra `brand_memory` (`memory-postgres.ts`), home filesystem del bot sopra il database (`brand-fs.ts`), checkpoint (`checkpoint-storage.ts`), il ciclo sopra `ai` v6 (`runtime/ai-runtime.ts`, swappabile: è un `AgentRuntime`), provider modelli kie/deepseek/gemini/xiaomi come `ModelAdapter` (`runtime/models.ts`) | agent-kit |
 | `@anomalia/agent-client` | `service.ts` (client HTTP verso `agent-lab/turn`), `store.svelte.ts` (lo store Svelte 5 con le rune, per la UI del lab) | agent-kit, agent-contracts |
 
-`src/lib/agent/plugins/` e `src/lib/agent/bridge/` **restano nell'app**, non sono pacchetti: sono
-il cablaggio di QUESTO repo verso `src/lib/server/*` (il "adapter" dell'app, non del kit).
-`bridge/adapters.ts` in particolare è l'UNICO punto che importa insieme un pacchetto e
+`src/lib/agent/bridge/` **resta nell'app**, non è un pacchetto: è il cablaggio di QUESTO repo
+verso `src/lib/server/*` (il "adapter" dell'app, non del kit). `bridge/adapters.ts` in particolare è l'UNICO punto che importa insieme un pacchetto e
 `$lib/server/*` — ogni adapter di `agent-adapters` che ha bisogno di qualcosa da $lib (creare i
 tool sui file, leggere/scrivere `brand_memory`, aprire la sandbox Vercel, risolvere il modello
 chat) lo chiede come **dep del costruttore**, mai come import diretto: un pacchetto non può
@@ -40,9 +39,8 @@ lo verifica ad ogni commit, file per file.
 3. **Ogni tetto è dichiarato.** Un risultato tagliato lo dice; un budget superato nomina il
    numero; un prompt oltre `SYSTEM_PROMPT_MAX_CHARS` esplode in test, non in produzione.
 
-## Il cablaggio verso la chat vera
+## Il ponte verso la chat non c'è più
 
-`bridge/live.ts` è il ponte verso `src/routes/app/[brand]/chat/+server.ts`, dietro il flag
-`AGENT_KIT` (vedi `shouldUseKit` in quel file) e uno specialista riconosciuto sul thread — non è
-più "non ancora cablato": il motore vecchio resta il default, il nuovo si attiva per riga quando
-il flag è acceso.
+`bridge/live.ts` era il motore a turni della chat, dietro il flag `AGENT_KIT`. La chat non esiste
+più e il ponte è stato cancellato con lei: di `bridge/` restano `adapters.ts` (che serve a motion
+video e UGC via `harnessSdkModel`), `verdict.ts` e `harness-reuse.ts`.

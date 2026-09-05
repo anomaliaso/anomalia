@@ -2,13 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_HOME,
   JOB_HOME,
   JOB_OWNERS,
   agentForTask,
-  jobThreadHref,
   looksLikeARole,
-  owningJobForPath,
   parseRoutineOwner,
   routineOwnerKey
 } from './agent-owners';
@@ -31,63 +28,6 @@ describe('agent-owners', () => {
     }
   });
 
-  it('ogni proprietario di pagina è un job del roster', () => {
-    // owningJobForPath può solo restituire chiavi del roster: un typo nella mappa
-    // produrrebbe un "Parla con" che punta a un agente inesistente.
-    const pages = [
-      'radar', 'leads', 'analytics', 'gtm', 'strategy', 'plan', 'calendar', 'content',
-      'approvals', 'publish', 'seo', 'seo-geo', 'keywords', 'backlinks', 'geo',
-      'citations', 'competitors'
-    ];
-    for (const seg of pages) {
-      const owner = owningJobForPath(`/app/acme/${seg}`, '/app/acme');
-      expect(owner, seg).not.toBeNull();
-      expect(ROSTER_JOB_KEYS, `${seg} → ${owner}`).toContain(owner);
-    }
-  });
-
-  it('la mappatura richiesta: pagina → agente proprietario', () => {
-    const base = '/app/acme';
-    expect(owningJobForPath(`${base}/radar`, base)).toBe('radar_recap');
-    expect(owningJobForPath(`${base}/leads`, base)).toBe('radar_recap');
-    expect(owningJobForPath(`${base}/analytics`, base)).toBe('analytics_review');
-    expect(owningJobForPath(`${base}/gtm`, base)).toBe('strategy_review');
-    expect(owningJobForPath(`${base}/plan`, base)).toBe('strategy_review');
-    expect(owningJobForPath(`${base}/seo`, base)).toBe('seo');
-    expect(owningJobForPath(`${base}/keywords`, base)).toBe('seo');
-    expect(owningJobForPath(`${base}/geo`, base)).toBe('geo');
-    expect(owningJobForPath(`${base}/competitors`, base)).toBe('market_refs');
-    // Le rotte senza proprietario chiaro non mostrano niente — chat inclusa (il topbar
-    // del thread ha già il toggle di AgentComputerPanel, nessuna collisione).
-    expect(owningJobForPath(`${base}/chat/abc`, base)).toBeNull();
-    expect(owningJobForPath(`${base}/settings`, base)).toBeNull();
-  });
-
-  it('jobThreadHref: prima il diario di squadra dell\'owner, poi il vecchio thread per-job, poi il composer', () => {
-    const threads = [
-      // Una normale chat dell'utente con l'analyst NON è il diario di squadra: senza surface non conta.
-      { id: 't0', agent: 'analyst' },
-      { id: 't1', agent: 'job:radar_recap' },
-      { id: 't2', agent: null },
-      { id: 't3', agent: 'analyst', surface: 'team' }
-    ];
-    expect(jobThreadHref(threads, 'acme', 'radar_recap')).toBe('/app/acme/chat/t3');
-    // Senza thread di squadra si ripiega sul vecchio thread per-job (pre-unificazione).
-    expect(jobThreadHref(threads.slice(0, 3), 'acme', 'radar_recap')).toBe('/app/acme/chat/t1');
-    expect(jobThreadHref(threads, 'acme', 'seo')).toBe('/app/acme');
-  });
-
-  it('la mappa vive SOLO qui: AgentComputerPanel la importa, non la ridefinisce', () => {
-    // Stessa tecnica di ui-tokens.test.ts: il sorgente come contratto. Se qualcuno
-    // reincolla una JOB_HOME inline nel pannello, questo test lo dice subito.
-    const src = readFileSync(
-      join(__dirname, 'components/AgentComputerPanel.svelte'),
-      'utf8'
-    );
-    expect(src).toContain("from '$lib/agent-owners'");
-    expect(src).not.toMatch(/const\s+(JOB_HOME|AGENT_HOME)\s*[:=]/);
-    expect(AGENT_HOME.motion).toBe('/motion-video');
-  });
 });
 
 /**
@@ -175,18 +115,4 @@ describe('agentForTask', () => {
     expect(agentForTask('post e seo')).toBeNull();
   });
 
-  it('la scheda in chat non usa il linguaggio dell’assunzione per una routine assegnata', () => {
-    // Il difetto è visivo prima che testuale: se la card continua a dire "assumi questo" con una
-    // faccia sorteggiata, l'utente vede un collega nuovo comunque.
-    const src = readFileSync(
-      join(__dirname, 'components/ChatAgentProposalCard.svelte'),
-      'utf8'
-    );
-    expect(src).toContain('parseRoutineOwner');
-    // Faccia e nome del proprietario, non un avatar tirato a sorte dal nome del compito.
-    expect(src).toContain('BUILTIN_AGENT_AVATARS');
-    for (const key of ['routineFor', 'confirmRoutine', 'createdRoutine', 'noteRoutine']) {
-      expect(src, key).toContain(key);
-    }
-  });
 });

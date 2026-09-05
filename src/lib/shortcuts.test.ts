@@ -11,7 +11,7 @@ import {
   seqLetter,
   type SeqTarget
 } from './shortcuts';
-import { NAV_TEAM_SPACES, NAV_TEAM_TOOLS } from './workbench-paths';
+import { NAV_TEAM_SPACES, NAV_OFF_SIDEBAR } from './workbench-paths';
 
 /** Un evento tastiera finto: bastano i campi che il registro guarda. */
 function ev(key: string, opts: Omit<Partial<KeyboardEvent>, 'target'> & { target?: unknown } = {}) {
@@ -80,8 +80,6 @@ describe('matchShortcut', () => {
   });
 
   it('i tasti singoli fuori dai campi di testo', () => {
-    expect(matchShortcut(ev('n'))).toEqual({ type: 'run', id: 'newChat' });
-    expect(matchShortcut(ev('/'))).toEqual({ type: 'run', id: 'focusPrompt' });
     expect(matchShortcut(ev('?', { shiftKey: true }))).toEqual({ type: 'run', id: 'help' });
   });
 
@@ -111,7 +109,7 @@ describe('matchShortcut', () => {
 
 describe('le destinazioni vengono dalla nav vera, non da una lista a mano', () => {
   it('ogni `g <lettera>` punta a una voce che esiste nella nav', () => {
-    const navPaths = new Set([...NAV_TEAM_SPACES, ...NAV_TEAM_TOOLS].map((i) => i.path));
+    const navPaths = new Set([...NAV_TEAM_SPACES, ...NAV_OFF_SIDEBAR].map((i) => i.path));
     for (const t of GO_TARGETS) {
       expect(navPaths.has(t.path), `${t.key} → ${t.path} non è nella nav`).toBe(true);
       expect(goTargetLabelKey(t.path)).toBeTruthy();
@@ -172,12 +170,13 @@ describe('la scheda di aiuto è generata dal registro', () => {
 
 describe('con la palette aperta i tasti sono suoi', () => {
   // Regressione vera, vista nel browser: il fuoco non era ancora nel campo e la `n` di
-  // "calendar" ha aperto una chat dietro l'overlay, navigando via dalla ricerca.
-  // La guardia sta nel componente (`if (open && m.id !== 'palette') return`); qui si fissa il
-  // contratto su cui poggia: fuori da un campo di testo quei tasti SONO comandi, quindi
-  // qualcuno deve fermarli, e il solo `isTypingTarget` non può farlo.
-  it('fuori da un campo di testo `n` è un comando — per questo serve la guardia', () => {
-    expect(matchShortcut(ev('n'))).toEqual({ type: 'run', id: 'newChat' });
+  // "calendar" apriva una chat dietro l'overlay, navigando via dalla ricerca. La `n` non è più
+  // una scorciatoia — la chat non c'è — ma la guardia serve ancora, perché il tasto singolo che
+  // resta fa lo stesso danno. La guardia sta nel componente
+  // (`if (open && m.id !== 'palette') return`); qui si fissa il contratto su cui poggia: fuori
+  // da un campo di testo quei tasti SONO comandi, e il solo `isTypingTarget` non basta.
+  it('fuori da un campo di testo `?` è un comando — per questo serve la guardia', () => {
+    expect(matchShortcut(ev('?', { shiftKey: true }))).toEqual({ type: 'run', id: 'help' });
   });
 
   it('⌘K resta l’unico che la palette lascia passare (per chiudersi)', () => {

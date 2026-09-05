@@ -4,25 +4,52 @@
  * poteva togliergli in silenzio il grounding, gli embedding o i fps di un video, e il guasto
  * arrivava come una risposta plausibile invece che come un errore.
  *
+ * Restano DUE trasporti: **openrouter serve, kie ripiega.** Google, Xiaomi e DeepSeek sono usciti —
+ * non per prezzo, ma perché su questo non ci si fonda: kie fallisce il 3,5% dei render con un p95
+ * di 142,9s contro i 3,4s di OpenRouter, e DeepSeek falliva il 41,3% di 5.122 chiamate. kie resta
+ * come RIPIEGO — un secondo trasporto vale più di zero — non perché sappia fare qualcosa che
+ * OpenRouter non sa: l'ultima cosa in quell'elenco era il TTS, e non era vera.
+ *
  * Due assi, che non si collassano mai in uno:
- *   · famiglia — QUALE modello scrive. È la garanzia di qualità: `PIN_GEMINI` in 28 call site vuol
- *     dire "questo lavoro lo fa Gemini", e non deve mai diventare un interruttore di trasporto.
- *   · endpoint — CHI lo serve e chi ci fattura. Gemini lo servono sia Google sia kie.
+ *   · famiglia — QUALE modello scrive. È la garanzia di qualità: `PIN_GEMINI` vuol dire "questo
+ *     lavoro lo fa Gemini", e non deve mai diventare un interruttore di trasporto.
+ *   · endpoint — CHI lo serve e chi ci fattura. Gemini lo servono sia openrouter sia kie.
  * `AI_ROUTE_TEXT=gemini@kie` = famiglia Gemini, servita da kie. Senza `@`, l'endpoint di casa.
  *
- * PREZZI: nessuno qui, di proposito — stanno in `RATES` dentro `ai-log.ts` e ci arrivano per
- * `ai_calls.model`. Il registro dice solo sotto quale `provider` va scritta la riga.
+ * Le tabelle sono allineate apposta: aggiungere o togliere un endpoint è UNA RIGA per tabella, e
+ * `SERVED_BY` dice quali coppie hanno davvero un trasporto scritto. Una coppia che non ce l'ha non
+ * è una rotta: si rifiuta rumorosamente invece di atterrare altrove facendo credere di essere stata
+ * rispettata. Vale anche per le vecchie variabili che nominano un endpoint rimosso (`RETIRED_LEGACY`).
+ *
+ * PREZZI: nessuno qui, di proposito. Il costo lo dice chi ce lo fattura — `usage.cost` su
+ * openrouter, `credits_consumed` su kie. Il registro dice solo sotto quale `provider` va scritta
+ * la riga di `ai_calls`.
  */
 import { env } from '$env/dynamic/private';
 
-/** La famiglia di modelli: cosa scrive/disegna, indipendentemente da chi la serve. */
-export type ModelFamily = 'gemini' | 'mimo' | 'grok' | 'gpt' | 'deepseek' | 'nano-banana' | 'gemini-tts';
+/**
+ * La famiglia di modelli: cosa scrive/disegna/gira, indipendentemente da chi la serve.
+ *
+ * Una famiglia per (fornitore, modalità), mai una sola per fornitore: `gemini` e `gemini-tts` sono
+ * già due, e `grok` (testo) e `grok-imagine` (video) restano due per la stessa ragione. Collassarle
+ * renderebbe `SERVED_BY` una bugia — collegare il trasporto video di Grok aprirebbe in silenzio la
+ * rotta del suo testo verso un endpoint che quel testo non serve.
+ */
+export type ModelFamily =
+  | 'gemini'
+  | 'grok'
+  | 'gpt'
+  | 'nano-banana'
+  | 'gemini-tts'
+  | 'grok-imagine'
+  | 'seedance'
+  | 'kling';
 
 /** L'endpoint: chi serve la famiglia e chi ci manda il conto. */
-export type Endpoint = 'google' | 'kie' | 'xiaomi' | 'deepseek';
+export type Endpoint = 'kie' | 'openrouter';
 
 /** Il valore che finisce in `ai_calls.provider`. Uno per endpoint, non uno per famiglia. */
-export type LogProvider = 'gemini' | 'kie' | 'xiaomi' | 'deepseek';
+export type LogProvider = 'kie' | 'openrouter';
 
 /** Fatti MISURATI, non ipotesi di listino: ogni assenza qui sotto è una regressione vista. */
 export type Capability =
@@ -51,11 +78,13 @@ export type Capability =
   /** `embedContent`. */
   | 'embeddings'
   /** Generazione musicale (Lyria). */
-  | 'music';
+  | 'music'
+  /** Sintesi vocale: testo → parlato, con una voce scelta. NON è "un modello audio". */
+  | 'tts';
 
 const ALL: Capability[] = [
   'structured', 'tools', 'image-in', 'video-in', 'audio-in', 'grounding', 'thinking-level',
-  'media-in-tool-result', 'video-fps', 'prompt-cache', 'fast-first-token', 'embeddings', 'music'
+  'media-in-tool-result', 'video-fps', 'prompt-cache', 'fast-first-token', 'embeddings', 'music', 'tts'
 ];
 
 /**
@@ -63,7 +92,12 @@ const ALL: Capability[] = [
  * parte capace di tutto e si scopre incapace un guasto alla volta.
  */
 const MISSING: Record<Endpoint, Partial<Record<Capability, string>>> = {
-  google: {},
+  // Vuoto, e ci è voluto sbagliare due volte per arrivarci: qui c'era scritto che OpenRouter non
+  // fa sintesi vocale. Era falso. `POST /audio/speech` con `google/gemini-3.1-flash-tts-preview`
+  // risponde 200 e `content-type: audio/pcm;rate=24000;channels=1` — la forma esatta che il
+  // tagliatore vuole. Cercarla su `chat/completions` (dove risponde solo `gpt-audio`, e solo in
+  // streaming) e cercarla su `/audio/speech` con id inventati sono due modi di non trovarla.
+  openrouter: {},
   kie: {
     grounding: 'kie non restituisce groundingMetadata: le citazioni tornano vuote',
     'media-in-tool-result': 'kie scarta i media dentro i risultati dei tool, in silenzio',
@@ -72,58 +106,62 @@ const MISSING: Record<Endpoint, Partial<Record<Capability, string>>> = {
     'fast-first-token': 'kie impiega ~80s al primo token in streaming',
     embeddings: 'kie non serve embedContent',
     music: 'kie non serve Lyria'
-  },
-  xiaomi: {
-    // `mimo-v2.5-pro` rifiuta le immagini: solo il tier base le accetta, per questo
-    // `structuredXiaomi` cambia modello da solo quando ne arrivano.
-    'video-in': 'MiMo non accetta video in ingresso',
-    'audio-in': 'MiMo non accetta audio in ingresso',
-    grounding: 'MiMo ha una sua web search, non il grounding Google con citazioni',
-    'thinking-level': 'MiMo non espone un livello di ragionamento',
-    'media-in-tool-result': 'MiMo non accetta media nei risultati dei tool',
-    'video-fps': 'MiMo non legge video',
-    embeddings: 'MiMo non serve embedding',
-    music: 'MiMo non genera musica'
-  },
-  deepseek: {
-    'image-in': 'la API DeepSeek rifiuta l\'input immagine',
-    'video-in': 'DeepSeek non legge video',
-    'audio-in': 'DeepSeek non legge audio',
-    grounding: 'DeepSeek fa web search a modello, non grounding Google con citazioni',
-    'media-in-tool-result': 'DeepSeek non accetta media nei risultati dei tool',
-    'video-fps': 'DeepSeek non legge video',
-    'thinking-level': 'DeepSeek prende un blocco thinking iniettato, non un livello',
-    embeddings: 'DeepSeek non è configurato per gli embedding qui',
-    music: 'DeepSeek non genera musica'
   }
 };
 
-/** L'endpoint di casa di ogni famiglia: quello che serve quando nessuno scrive `@`. */
+/**
+ * L'endpoint di casa di ogni famiglia: quello che serve quando nessuno scrive `@`, ed è anche il
+ * bersaglio del RIPIEGO quando la rotta scelta non è servibile.
+ *
+ * Per `nano-banana` è kie e NON openrouter, che pure è il default dello slot: sono due ruoli
+ * diversi. Il default dice dove va il traffico quando tutto funziona; questa riga dice dove va
+ * quando openrouter non è utilizzabile — e lì la risposta è kie, non Google. Farle coincidere
+ * mandava il ripiego su Google saltando kie del tutto, che è l'opposto di «kie resta il ripiego».
+ */
 const HOME: Record<ModelFamily, Endpoint> = {
-  gemini: 'google',
-  'gemini-tts': 'google',
-  'nano-banana': 'google',
-  mimo: 'xiaomi',
+  gemini: 'kie',
+  // Come `nano-banana` e `grok-imagine`: openrouter è il DEFAULT dello slot, kie è dove si ripiega.
+  'gemini-tts': 'kie',
+  'nano-banana': 'kie',
   grok: 'kie',
   gpt: 'kie',
-  deepseek: 'deepseek'
+  'grok-imagine': 'kie',
+  seedance: 'kie',
+  kling: 'kie'
+};
+
+/**
+ * Chi ha un TRASPORTO scritto per quella famiglia. Non è una capacità del provider: è codice che
+ * esiste o non esiste da noi. `gemini@openrouter` si analizza benissimo, ma `geminiTransport()`
+ * conosce solo kie e google — quella rotta atterrerebbe su Google IN SILENZIO, cioè si leggerebbe
+ * come rispettata senza esserlo, che è il guasto peggiore di tutti perché non lascia traccia.
+ *
+ * Sta qui e non in tre file perché una regola scritta in tre posti diverge al primo cambiamento.
+ * Il giorno che si collega un trasporto nuovo, si aggiunge un endpoint a una riga di questa tabella
+ * e basta.
+ */
+const SERVED_BY: Record<ModelFamily, Endpoint[]> = {
+  gemini: ['kie', 'openrouter'],
+  'gemini-tts': ['kie', 'openrouter'],
+  'nano-banana': ['kie', 'openrouter'],
+  grok: ['kie'],
+  gpt: ['kie'],
+  'grok-imagine': ['kie', 'openrouter'],
+  seedance: ['kie', 'openrouter'],
+  kling: ['kie', 'openrouter']
 };
 
 /** Quale riga di `ai_calls.provider` scrive ogni endpoint. */
 const LOG_PROVIDER: Record<Endpoint, LogProvider> = {
-  google: 'gemini',
-  kie: 'kie',
-  xiaomi: 'xiaomi',
-  deepseek: 'deepseek'
+  openrouter: 'openrouter',
+  kie: 'kie'
 };
 
 /** La chiave che ogni endpoint pretende. Senza, l'instradamento non ci prova nemmeno. */
 function endpointConfigured(endpoint: Endpoint): boolean {
   switch (endpoint) {
-    case 'google': return !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY);
     case 'kie': return !!env.KIE_API_KEY;
-    case 'xiaomi': return !!env.XIAOMI_MIMO_API_KEY;
-    case 'deepseek': return !!env.DEEPSEEK_API_KEY;
+    case 'openrouter': return !!(env.OPENROUTER_API_KEY || env.LLM_API_KEY);
   }
 }
 
@@ -136,17 +174,32 @@ export type Route = { family: ModelFamily; endpoint: Endpoint; provider: LogProv
  * La chat NON è uno slot, di proposito: misurata inutilizzabile su kie (~80s al primo token), e
  * `chat/model.ts` non deve avere un interruttore da sbagliare.
  */
-export type Slot = 'text' | 'image' | 'tts';
+export type Slot = 'text' | 'image' | 'tts' | 'video';
 
 const SLOT_DEFAULT: Record<Slot, Route> = {
-  // Il lavoro di sfondo resta su Gemini servito da Google, come oggi.
-  text: r('gemini', 'google'),
-  // Nano Banana Pro/2 girano su kie: stesso modello, −33% e −40% per immagine (misurato sui
-  // crediti addebitati). Senza chiave kie si torna su Google da soli.
-  image: r('nano-banana', 'kie'),
-  // La voce su kie COSTA DI PIÙ (~3× a parità di battuta): lo scopo è togliere una dipendenza
-  // dalla API di Google, non risparmiare. Chi legge dopo darà per scontato il contrario.
-  tts: r('gemini-tts', 'kie')
+  // Il testo su OpenRouter: `structuredGemini` e `groundedGemini` ci passavano gia` da `llm.ts`,
+  // e il carico su Google si era fermato da solo il 30 agosto. Qui il default dice la verita`.
+  text: r('gemini', 'openrouter'),
+  // Non il prezzo: kie fallisce il 3,5% dei render con un p95 di 142,9s contro i 3,4s di OpenRouter.
+  image: r('nano-banana', 'openrouter'),
+  // Stessa famiglia Gemini servita da openrouter: le voci sono le stesse (Kore, Puck, Charon,
+  // Aoede, Fenrir tutte accettate), quindi per il cliente non cambia nulla. Il costo nemmeno —
+  // stesso copione, kie 1,19 crediti = $0,00595 contro $0,005772. Cambia il ripiego, che ora c'e'.
+  tts: r('gemini-tts', 'openrouter'),
+  // Il video resta dov'è, e OpenRouter costa 6× kie su Grok Imagine (misurato): spostarlo e` una
+  // decisione esplicita, non un effetto dell'uniformita'. La famiglia qui e` la LINEA DI DEFAULT,
+  // non il modello del render — quello lo scelgono le preferenze del brand (`videoModelForRole`) e
+  // `videoModel(job)`. Del video slot il trasporto legge l'ENDPOINT.
+  // Il video su OpenRouter COSTA DI PIU`, ed e` l'unico slot dove il verso e` questo: 6x misurati
+  // su Grok Imagine ($0,80 contro $0,132 per 10s a 480p). Si paga per la disponibilita`, perche' su
+  // kie il video non arriva — 12,5% di fallimenti su Seedance, 26,8% su Grok, con medie di 248s e
+  // 49s. Chi legge dopo dara` per scontato che ci si sia spostati per risparmiare: non e` cosi`.
+  //
+  // La famiglia qui e` la LINEA DI DEFAULT, non il modello del render: quello lo scelgono le
+  // preferenze del brand (`videoModelForRole`) e `videoModel(job)`. Il trasporto legge l'ENDPOINT.
+  // `HOME` resta kie ed e` la RISERVA — le due tabelle non devono coincidere, o il ripiego finisce
+  // sulla cosa che non funziona.
+  video: r('grok-imagine', 'openrouter')
 };
 
 function r(family: ModelFamily, endpoint: Endpoint): Route {
@@ -183,41 +236,76 @@ export function parseRoute(raw: string | undefined | null): Route | null {
 function legacyRoute(slot: Slot): Route | null {
   switch (slot) {
     case 'text': {
-      // GTM_PROVIDER sceglieva la FAMIGLIA (gemini|xiaomi|kie) e GEMINI_TRANSPORT l'ENDPOINT della
-      // sola famiglia Gemini: erano già i due assi, scritti come se fossero scollegati.
-      const gtm = env.GTM_PROVIDER?.trim().toLowerCase();
-      if (gtm === 'xiaomi') return r('mimo', 'xiaomi');
-      if (gtm === 'kie') return r('grok', 'kie');
+      // GTM_PROVIDER=kie e GEMINI_TRANSPORT=kie restano onorate: kie e` ancora un endpoint.
+      if (env.GTM_PROVIDER?.trim().toLowerCase() === 'kie') return r('grok', 'kie');
       if (env.GEMINI_TRANSPORT?.trim().toLowerCase() === 'kie') return r('gemini', 'kie');
       return null;
     }
     case 'image':
-      return env.IMAGE_PROVIDER?.trim().toLowerCase() === 'gemini' ? r('nano-banana', 'google') : null;
     case 'tts':
-      return env.TTS_PROVIDER?.trim().toLowerCase() === 'gemini' ? r('gemini-tts', 'google') : null;
+      return null;
+    // Il video non ha mai avuto una variabile di TRASPORTO: `KIE_VIDEO_MODEL_*` sceglieva l'id del
+    // modello, e continua a farlo in `videoModel(job)`.
+    case 'video':
+      return null;
+  }
+}
+
+/**
+ * I valori delle vecchie variabili che nominavano un endpoint ORA RIMOSSO. Accettarne uno in
+ * silenzio manderebbe il traffico altrove lasciando credere che la rotta sia stata rispettata: e`
+ * lo stesso guasto di una coppia senza trasporto, e si tratta allo stesso modo — si avvisa e si
+ * ignora, e decide il default.
+ */
+const RETIRED_LEGACY: Array<[name: string, value: string]> = [
+  ['GTM_PROVIDER', 'xiaomi'],
+  ['GEMINI_TRANSPORT', 'google'],
+  ['IMAGE_PROVIDER', 'gemini'],
+  ['TTS_PROVIDER', 'gemini'],
+  ['AI_PROVIDER', 'xiaomi']
+];
+
+function warnRetiredLegacy(): void {
+  for (const [name, dead] of RETIRED_LEGACY) {
+    if (env[name]?.trim().toLowerCase() !== dead) continue;
+    console.warn(
+      `[AI] ${name}=${dead} nomina un endpoint rimosso: ignorata. Restano kie e openrouter, e si scelgono con AI_ROUTE_*.`
+    );
   }
 }
 
 const SLOT_ENV: Record<Slot, string> = {
   text: 'AI_ROUTE_TEXT',
   image: 'AI_ROUTE_IMAGE',
-  tts: 'AI_ROUTE_TTS'
+  tts: 'AI_ROUTE_TTS',
+  video: 'AI_ROUTE_VIDEO'
 };
 
 /**
  * Dove va questo lavoro, adesso. Letto A OGNI CHIAMATA come `GEMINI_FLASH`: cambiare una variabile
  * su Vercel deve bastare a spostare il traffico, senza deploy, mentre il guasto è in corso.
  *
- * Un endpoint senza chiave non è una rotta, è un 401 con più passaggi: si ripiega sull'endpoint di
- * casa della famiglia, e se manca anche quello su Google. Il ripiego è RUMOROSO.
+ * Due modi di non essere una rotta, e nessuno dei due atterra in silenzio: un endpoint senza chiave
+ * è un 401 con più passaggi, una coppia senza trasporto è peggio — la rotta si legge come rispettata
+ * e serve un altro provider. Si ripiega sull'endpoint di casa della famiglia, e se manca anche
+ * quello su Google. Il ripiego è RUMOROSO, e dice QUALE dei due motivi.
  */
+function unroutable(chosen: Route): string | null {
+  if (!SERVED_BY[chosen.family].includes(chosen.endpoint)) {
+    return `nessun trasporto ${chosen.family} verso ${chosen.endpoint}`;
+  }
+  return endpointConfigured(chosen.endpoint) ? null : 'la chiave manca';
+}
+
 export function route(slot: Slot): Route {
+  warnRetiredLegacy();
   const chosen = parseRoute(env[SLOT_ENV[slot]]) ?? legacyRoute(slot) ?? SLOT_DEFAULT[slot];
-  if (endpointConfigured(chosen.endpoint)) return chosen;
+  const why = unroutable(chosen);
+  if (!why) return chosen;
   const home = HOME[chosen.family];
-  const fallback = endpointConfigured(home) ? home : 'google';
+  const fallback = unroutable(r(chosen.family, home)) ? 'kie' : home;
   console.warn(
-    `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint} ma la chiave manca: ripiego su ${fallback}.`
+    `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint}: ${why}. Ripiego su ${fallback}.`
   );
   return r(chosen.family, fallback);
 }
@@ -250,9 +338,8 @@ export function requireCapabilities(slot: Slot, caps: Capability[]): Route {
   return chosen;
 }
 
-// Il video non ha due assi: Seedance e Grok Imagine sono ENTRAMBI modelli di kie, quindi la scelta
-// è solo l'id del modello. Le variabili hanno la stessa forma degli altri slot solo per
-// vocabolario, non perché il meccanismo sia lo stesso.
+// L'id del modello per ciascun mestiere video. È l'asse della FAMIGLIA sceso al modello singolo:
+// `AI_ROUTE_VIDEO` dice chi serve il render, queste variabili dicono quale modello gira.
 
 export type VideoJob = 'i2v' | 't2v' | 'upscale';
 

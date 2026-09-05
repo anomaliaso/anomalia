@@ -70,10 +70,10 @@ for artifact, digest in platform_digests:
         rf"\g<1>{digest}\2",
         text,
     )
-    # Keep version interpolation in URLs: .../download/v#{version}/artifact
+    # Keep version interpolation in URLs: .../download/cli-v#{version}/artifact
     text = re.sub(
-        rf'(releases/download/)v[^/]+(/{re.escape(artifact)}")',
-        rf"\g<1>v#{{version}}\2",
+        rf'(releases/download/)(?:cli-)?v[^/]+(/{re.escape(artifact)}")',
+        rf"\g<1>cli-v#{{version}}\2",
         text,
     )
 

@@ -34,7 +34,6 @@ export {
 
 export {
   BLOG_IMAGE_MODEL,
-  MAX_QC_RETRIES,
   aspectRatioFor,
   attachBrandMoodImages,
   brandVisualDirective,

@@ -8,8 +8,7 @@
  */
 import { env } from '$env/dynamic/private';
 import type { LanguageModel } from 'ai';
-import { harnessSdkModel } from '$lib/agent/bridge/adapters';
-import { llmDefaultModel, llmLanguageModel } from '$lib/server/llm';
+import { llmApiKey, llmDefaultModel, llmLanguageModel, llmModelForPicker } from '$lib/server/llm';
 
 export type CraftAgentModel = {
 	model: LanguageModel;
@@ -24,9 +23,22 @@ export function craftAgentModel(opts: {
 	const forced = opts.envModel?.trim();
 	if (forced) return { model: llmLanguageModel(forced), modelId: forced, provider: 'llm' };
 
-	const routed = harnessSdkModel('pro');
+	const routed = routedModel();
 	if (routed) return routed;
 
 	const id = llmDefaultModel();
+	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
+}
+
+/**
+ * Il modello che il centralino serve quando nessuno ha forzato niente.
+ *
+ * Cinque righe che stavano dentro `$lib/agent/bridge/adapters`, un file da 514 righe che tira
+ * dentro la chat e il sandbox: la resa di un motion e di una clip UGC — due cose che restano —
+ * dipendevano da lui per scegliere su cosa girare. Qui usano solo il centralino.
+ */
+function routedModel(): CraftAgentModel | null {
+	if (!llmApiKey()) return null;
+	const id = llmModelForPicker(null);
 	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }

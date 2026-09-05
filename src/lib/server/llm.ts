@@ -10,6 +10,7 @@ import { env } from '$env/dynamic/private';
 import { extractSdkUsage, logAiCall, noteLlmCost } from '$lib/server/ai-log';
 import { costFromJson, costFromStreamText, withUsageAccounting } from '$lib/server/llm-usage-cost';
 import { gatewayModel } from '$lib/server/openrouter-models';
+import { defaultChatModelId } from '$lib/server/chat-model-catalog';
 
 export const LLM_UNCONFIGURED = 'llm_unconfigured';
 export const LLM_VIDEO_UNCONFIGURED = 'llm_video_unconfigured';
@@ -77,14 +78,15 @@ export function llmModels(): string[] {
  * catalogo, e cadere sul default sarebbe scrivere un nome nel menu e chiamarne un altro. Gli id
  * ignoti al listino tornano al default invece di diventare una chiamata persa.
  *
- * Fast/auto = primo della lista (o default). Pro = secondo se c'è.
+ * Il default lo dice il catalogo (`chat_model_catalog.is_default`), non l'env: è la riga che
+ * l'operatore cambia da Supabase. `LLM_DEFAULT_MODEL` resta la rete per un'istanza appena
+ * installata, e per la cache ancora fredda.
  */
 export function llmModelForPicker(choice: string | null | undefined): string {
 	const models = llmModels();
 	const id = typeof choice === 'string' ? choice.trim() : '';
 	if (id && (models.includes(id) || gatewayModel(id)?.usable)) return id;
-	if ((id === 'pro' || id === 'deepseek-pro' || id === 'gpt-sol') && models[1]) return models[1];
-	return llmDefaultModel();
+	return defaultChatModelId() ?? llmDefaultModel();
 }
 
 let cached: ReturnType<typeof createOpenAI> | null = null;
@@ -264,6 +266,53 @@ export async function llmStructured<T>(opts: {
 	}
 }
 
+const WEB_PLUGIN = [{ id: 'web', engine: 'native' }];
+
+/**
+ * La chiamata con ricerca web, mandata A MANO invece che dall'AI SDK.
+ *
+ * `plugins` è un'estensione di OpenRouter, non un parametro OpenAI: passandola in
+ * `providerOptions.openai` l'SDK la SCARTAVA senza dire niente, e per giunta parla l'endpoint
+ * Responses (corpo `model, input, usage`). Risultato misurato in produzione: nessuna ricerca fatta,
+ * `annotations` assenti, zero citazioni — e `ok: true`. L'audit GEO, che esiste per rispondere
+ * «il brand è citato nelle risposte di Gemini?», stava misurando la MEMORIA del modello.
+ *
+ * Le citazioni si leggono da `annotations`, che è dove OpenRouter mette il grounding di Google:
+ * stesse fonti, altro nome. Il costo dal `usage.cost` del gateway, come ovunque.
+ */
+async function groundedCall(
+	modelId: string,
+	opts: { prompt: string; system?: string }
+): Promise<{ text: string; citations: Array<{ uri: string; title: string }> } & { cost?: number }> {
+	const messages = [
+		...(opts.system ? [{ role: 'system', content: opts.system }] : []),
+		{ role: 'user', content: opts.prompt }
+	];
+	const res = await fetch(`${llmBaseUrl()}/chat/completions`, {
+		method: 'POST',
+		headers: { authorization: `Bearer ${llmApiKey() ?? ''}`, 'content-type': 'application/json' },
+		body: JSON.stringify({ model: modelId, messages, plugins: WEB_PLUGIN, usage: { include: true } }),
+		signal: AbortSignal.timeout(LLM_TIMEOUT_MS)
+	});
+	const body = (await res.json()) as {
+		choices?: Array<{ message?: { content?: string; annotations?: Array<{ url_citation?: { url?: string; title?: string } }> } }>;
+		usage?: { cost?: number };
+		error?: { message?: string };
+	};
+	if (!res.ok || body.error) throw new Error(body.error?.message ?? `HTTP ${res.status}`);
+
+	const message = body.choices?.[0]?.message;
+	const citations: Array<{ uri: string; title: string }> = [];
+	const seen = new Set<string>();
+	for (const a of message?.annotations ?? []) {
+		const uri = a?.url_citation?.url;
+		if (!uri || seen.has(uri)) continue;
+		seen.add(uri);
+		citations.push({ uri, title: a.url_citation?.title || uri });
+	}
+	return { text: message?.content ?? '', citations, cost: body.usage?.cost };
+}
+
 export async function llmText(opts: {
 	prompt: string;
 	system?: string;
@@ -275,27 +324,30 @@ export async function llmText(opts: {
 	label?: string;
 }): Promise<{ text: string; citations: Array<{ uri: string; title: string }> }> {
 	const modelId = opts.model ?? (opts.webSearch ? llmGeminiSearchModel() : llmDefaultModel());
-	const extra = opts.webSearch ? { plugins: [{ id: 'web', engine: 'native' }] } : undefined;
 	const t0 = Date.now();
 	const label = opts.label ?? (opts.webSearch ? 'llm.grounded' : 'llm.text');
+
+	if (opts.webSearch) {
+		try {
+			const { text, citations, cost } = await groundedCall(modelId, opts);
+			logAiCall({ label, provider: 'llm', model: modelId, prompt: opts.prompt, ms: Date.now() - t0, ok: true, flatCostUsd: cost });
+			return { text, citations };
+		} catch (e) {
+			logAiCall({
+				label, provider: 'llm', model: modelId, prompt: opts.prompt, ms: Date.now() - t0, ok: false,
+				error: e instanceof Error ? e.message : 'grounded call failed'
+			});
+			return { text: '', citations: [] };
+		}
+	}
 	try {
 		const result = await generateText({
 			model: llmLanguageModel(modelId),
 			system: opts.system,
 			abortSignal: AbortSignal.timeout(LLM_TIMEOUT_MS),
 			messages: [{ role: 'user', content: userContent(opts.prompt, opts.images, opts.file) }],
-			providerOptions: { openai: { ...reasoningOptions(), ...(extra ?? {}) } }
+			providerOptions: { openai: reasoningOptions() }
 		});
-		const citations: Array<{ uri: string; title: string }> = [];
-		const seen = new Set<string>();
-		const sources = (result as { sources?: Array<{ url?: string; title?: string }> }).sources ?? [];
-		for (const s of sources) {
-			const uri = s?.url;
-			if (uri && !seen.has(uri)) {
-				seen.add(uri);
-				citations.push({ uri, title: s.title ?? uri });
-			}
-		}
 		logAiCall({
 			label,
 			provider: 'llm',
@@ -305,7 +357,7 @@ export async function llmText(opts: {
 			ok: true,
 			...extractSdkUsage(result.usage)
 		});
-		return { text: result.text ?? '', citations };
+		return { text: result.text ?? '', citations: [] };
 	} catch (e) {
 		logAiCall({
 			label,
@@ -434,4 +486,64 @@ export async function llmChatCompletions(opts: {
 		throw new Error(`${opts.model} answered ${res.status}. ${detail}`);
 	}
 	return res.json();
+}
+
+export const GEMINI_TTS = 'google/gemini-3.1-flash-tts-preview';
+
+export function llmTtsModel(): string {
+	return env.OPENROUTER_TTS_MODEL?.trim() || GEMINI_TTS;
+}
+
+/**
+ * Una voce, in una richiesta sola. `POST /audio/speech` risponde con PCM GREZZO: nessuna
+ * intestazione dentro i byte, quindi la frequenza e i canali li dice soltanto il `content-type`
+ * (`audio/pcm;rate=24000;channels=1`) e vanno riportati a chi chiama, che è l'unico a sapere quale
+ * formato sa usare. Darli per scontati è il guasto che non fallisce: un 48 kHz stereo letto come
+ * 24 kHz mono non lancia, dura il doppio e parla a metà velocità.
+ *
+ * Non è streaming, di proposito: la chat completions serve `openai/gpt-audio` e pretende
+ * `stream: true` con `format: "pcm16"`, cioè cambia fornitore, cambia la voce e va ricomposta a
+ * pezzi. Qui la famiglia resta Gemini, com'era su kie.
+ *
+ * `mp3` esiste come `response_format` sull'endpoint ma non per questo modello (400 esplicito), e
+ * il costo NON torna: nessuna intestazione lo porta, e `GET /generation?id=` è già stato misurato
+ * e scartato in `llm-usage-cost.ts` — il record compare nove secondi dopo.
+ */
+export async function llmSpeech(opts: {
+	model: string;
+	input: string;
+	voice: string;
+	timeoutMs: number;
+	abortSignal?: AbortSignal;
+}): Promise<{ pcm: Uint8Array; sampleRate: number; channels: number }> {
+	const key = llmApiKey();
+	if (!key) throw new Error('LLM_API_KEY is not configured');
+	const res = await fetch(`${llmBaseUrl()}/audio/speech`, {
+		method: 'POST',
+		headers: {
+			authorization: `Bearer ${key}`,
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({
+			model: opts.model,
+			input: opts.input,
+			voice: opts.voice,
+			response_format: 'pcm'
+		}),
+		signal: AbortSignal.any([
+			...(opts.abortSignal ? [opts.abortSignal] : []),
+			AbortSignal.timeout(opts.timeoutMs)
+		])
+	});
+	if (!res.ok) {
+		const detail = (await res.text().catch(() => '')).slice(0, 300);
+		throw new Error(`${opts.model} answered ${res.status}. ${detail}`);
+	}
+	const contentType = res.headers.get('content-type') ?? '';
+	const sampleRate = Number(/rate=(\d+)/.exec(contentType)?.[1]);
+	const channels = Number(/channels=(\d+)/.exec(contentType)?.[1]);
+	if (!Number.isFinite(sampleRate) || !Number.isFinite(channels)) {
+		throw new Error(`${opts.model} answered "${contentType}", which does not say what PCM this is.`);
+	}
+	return { pcm: new Uint8Array(await res.arrayBuffer()), sampleRate, channels };
 }

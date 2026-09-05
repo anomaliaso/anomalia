@@ -33,10 +33,6 @@ type ToolCap = {
 const PARSE_ONLY: ToolCap = { perIp: 30, globalPerDay: 5000, costPerRun: 0 };
 // Gemini call with web-search grounding — the most expensive thing a free tool can do.
 const AI_BACKED: ToolCap = { perIp: 3, globalPerDay: 200, costPerRun: 0.04 };
-// One or two DataForSEO Labs live tasks (~$0.013 each).
-const DFS_LABS: ToolCap = { perIp: 5, globalPerDay: 400, costPerRun: 0.03 };
-// DataForSEO Backlinks — priced well above Labs, and the classic free-tool abuse magnet.
-const DFS_BACKLINKS: ToolCap = { perIp: 2, globalPerDay: 60, costPerRun: 0.06 };
 
 const TOOL_CAPS: Record<string, ToolCap> = {
   // The pre-login guest preview (/start/preview): site analysis + one caption pass + one image,
@@ -44,10 +40,7 @@ const TOOL_CAPS: Record<string, ToolCap> = {
   // make, and no credit gate stands behind it (renderPostImage gates on a brand context a guest
   // does not have), so this cap IS the spending limit: 200 x $0.08 = ~$16/day worst case.
   'guest-preview': { perIp: 3, globalPerDay: 200, costPerRun: 0.08 },
-  // Existing tools (previously unguarded).
   'keyword-research': AI_BACKED,
-  // Site fetch + grounded AI discovery + DataForSEO overview (+ optional Reddit samples).
-  'conversation-gap': AI_BACKED,
   'geo-audit': AI_BACKED,
   // The agent-team tool is a CONVERSATION, so it is metered per MESSAGE, not per scan: a chat has
   // no natural end, and a per-conversation cap would be a free model with extra steps. Its own
@@ -56,25 +49,7 @@ const TOOL_CAPS: Record<string, ToolCap> = {
   'agent-team': { perIp: 15, globalPerDay: 600, costPerRun: 0.02 },
   'llms-txt-generator': AI_BACKED,
   'llms-txt-validator': PARSE_ONLY,
-  'sitemap-analyzer': PARSE_ONLY,
-  // Parse-only additions.
-  'meta-tags': PARSE_ONLY,
-  'schema-validator': PARSE_ONLY,
-  'robots-tester': PARSE_ONLY,
-  'redirect-checker': PARSE_ONLY,
-  'heading-audit': PARSE_ONLY,
-  'broken-links': PARSE_ONLY,
-  // PSI is free but quota-limited (25k/day). PARSE_ONLY's 5000/day global keeps us far under it
-  // even if every other quota consumer in the account fires at once.
-  'page-speed': PARSE_ONLY,
-  // Data-backed additions.
-  'keyword-difficulty': DFS_LABS,
-  'traffic-estimator': DFS_LABS,
-  'long-tail': DFS_LABS,
-  'competitor-gap': DFS_LABS,
-  'rank-checker': DFS_LABS,
-  'ai-visibility': DFS_LABS,
-  'backlink-checker': DFS_BACKLINKS
+  'sitemap-analyzer': PARSE_ONLY
 };
 
 // Hashed so we never store a raw IP. Salted with the service-role key (always set in prod) so
@@ -158,33 +133,188 @@ export function isPrivateAddress(ip: string): boolean {
     if (a >= 224) return true; // multicast / reserved
     return false;
   }
-  const v6 = ip.toLowerCase().replace(/^\[|\]$/g, '');
+  const v6 = ip.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0];
   if (v6 === '::1' || v6 === '::') return true;
   if (/^f[cd]/.test(v6)) return true; // unique-local
   if (/^fe[89ab]/.test(v6)) return true; // link-local
-  return false;
+
+  // An IPv6 address can carry an IPv4 one inside it, and the address finally dialled is that
+  // IPv4 one — so it has to face the IPv4 rules above. Reading only the prefix calls
+  // ::ffff:127.0.0.1 public and then opens a connection to loopback. `lookup` returns AAAA
+  // records verbatim, so this is a form a hostname can genuinely deliver.
+  const inner = embeddedIpv4(v6);
+  return inner ? isPrivateAddress(inner) : false;
+}
+
+/** The 8 hextets of an IPv6 address, `::` expanded. Null when it is not one. */
+function hextetsOf(v6: string): string[] | null {
+  const halves = v6.split('::');
+  if (halves.length > 2) return null;
+
+  const left = halves[0] ? halves[0].split(':') : [];
+  if (halves.length === 1) return left.length === 8 ? left : null;
+
+  const right = halves[1] ? halves[1].split(':') : [];
+  const gap = 8 - left.length - right.length;
+  if (gap < 0) return null;
+
+  return [...left, ...Array(gap).fill('0'), ...right];
+}
+
+function quadOf(high: string, low: string): string {
+  const h = parseInt(high, 16);
+  const l = parseInt(low, 16);
+  if (!Number.isFinite(h) || !Number.isFinite(l)) return '';
+  return `${(h >> 8) & 255}.${h & 255}.${(l >> 8) & 255}.${l & 255}`;
 }
 
 /**
- * Reject anything that isn't a public http(s) host. Throws with a user-safe message.
+ * The IPv4 address embedded in an IPv6 one, in every shape a resolver can hand back: mapped and
+ * compatible (`::ffff:127.0.0.1`, `::ffff:7f00:1`, `::127.0.0.1`), 6to4 (`2002:7f00:1::`) and
+ * NAT64 (`64:ff9b::7f00:1`).
+ */
+function embeddedIpv4(v6: string): string | null {
+  const dotted = v6.match(/(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/);
+  if (dotted) return dotted[1];
+
+  const parts = hextetsOf(v6);
+  if (!parts) return null;
+
+  const value = (hextet: string) => parseInt(hextet, 16);
+  const leadingZeros = parts.slice(0, 5).every((p) => value(p) === 0);
+
+  if (leadingZeros && (value(parts[5]) === 0xffff || value(parts[5]) === 0)) {
+    return quadOf(parts[6], parts[7]) || null;
+  }
+  if (value(parts[0]) === 0x64 && value(parts[1]) === 0xff9b) return quadOf(parts[6], parts[7]) || null;
+  if (value(parts[0]) === 0x2002) return quadOf(parts[1], parts[2]) || null;
+
+  return null;
+}
+
+/**
+ * Why a guarded fetch refused. The message stays what it always was — callers that match on it
+ * keep working — but a caller that has to MAP the refusal onto its own vocabulary reads the
+ * reason instead of the prose.
+ */
+export type SafeFetchReason = 'not_public' | 'too_large' | 'fetch_failed';
+
+export class SafeFetchError extends Error {
+  constructor(
+    readonly reason: SafeFetchReason,
+    message: string
+  ) {
+    super(message);
+    this.name = 'SafeFetchError';
+  }
+}
+
+/**
+ * How much latitude the scheme gets, per caller.
+ *
+ * It is an argument and not an `if` at the call site because the redirect chain has to obey it
+ * too: a caller that demands https and only checks the URL it was handed still ships the file in
+ * clear the moment a hop answers `302 Location: http://…`. Declared here, it applies to every hop.
+ */
+export type UrlScheme = 'https-only' | 'http-or-https';
+
+const SCHEMES_ALLOWED: Record<UrlScheme, readonly string[]> = {
+  'https-only': ['https:'],
+  'http-or-https': ['http:', 'https:']
+};
+
+const SCHEME_REFUSAL: Record<UrlScheme, string> = {
+  'https-only': 'Only https URLs are supported',
+  'http-or-https': 'Only http(s) URLs are supported'
+};
+
+/**
+ * Reject anything that isn't a public host on an allowed scheme. Throws with a user-safe message.
  *
  * Exported because /start/preview is the same shape of caller as the tools above — an
  * anonymous stranger's URL — and must not fall back to the hostname-pattern check.
  */
-export async function assertPublicUrl(url: URL): Promise<void> {
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Only http(s) URLs are supported');
+export async function assertPublicUrl(url: URL, scheme: UrlScheme = 'http-or-https'): Promise<void> {
+  if (!SCHEMES_ALLOWED[scheme].includes(url.protocol)) {
+    throw new SafeFetchError('not_public', SCHEME_REFUSAL[scheme]);
+  }
   const host = url.hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
-    throw new Error('That host is not reachable');
+    throw new SafeFetchError('not_public', 'That host is not reachable');
   }
   // A hostname can resolve to a private address even when it looks public (DNS rebinding), so
   // check the resolved addresses rather than the string.
   const addrs = await lookup(host, { all: true }).catch((error) => { swallow('resolve host addresses', error); return []; });
-  if (!addrs.length) throw new Error('Could not resolve that host');
-  if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error('That host is not reachable');
+  if (!addrs.length) throw new SafeFetchError('not_public', 'Could not resolve that host');
+  if (addrs.some((a) => isPrivateAddress(a.address))) {
+    throw new SafeFetchError('not_public', 'That host is not reachable');
+  }
 }
 
+/**
+ * The name the platform CDNs already know the archivers by. It predates the guard and is kept
+ * verbatim: a CDN that starts refusing an unfamiliar agent answers 403, and a 403 here is
+ * indistinguishable from the expired link this whole archive exists to beat.
+ */
+export const ARCHIVE_USER_AGENT = 'Mozilla/5.0 (compatible; AnomaliaArchive/1.0)';
+
 export type SafeFetchResult = { url: string; status: number; ok: boolean; headers: Headers; body: string };
+
+type HopOptions = {
+  timeoutMs?: number;
+  maxRedirects?: number;
+  method?: 'GET' | 'HEAD';
+  /** Checked on every hop, not just the first. Defaults to accepting http and https. */
+  scheme?: UrlScheme;
+  /**
+   * Platform CDNs answer differently depending on who is asking, and an archiver that suddenly
+   * changed its name would start collecting 403s that look exactly like expired links.
+   */
+  userAgent?: string;
+};
+
+/**
+ * Walk the redirect chain to the response that actually carries a body, gating every hop.
+ *
+ * The gate runs per hop and not once at the start, because that is the whole attack: a public
+ * URL is allowed to answer `302 Location: http://169.254.169.254/`, and a guard that trusted the
+ * first URL would follow it. The wall clock is shared across hops so a chain of slow redirects
+ * cannot outlive the budget one hop at a time.
+ */
+async function fetchFollowingGatedRedirects(
+  input: string,
+  opts: HopOptions
+): Promise<{ url: URL; res: Response }> {
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const maxRedirects = opts.maxRedirects ?? 4;
+  const scheme = opts.scheme ?? 'http-or-https';
+  const userAgent = opts.userAgent ?? `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})`;
+
+  let current = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
+  const deadline = Date.now() + timeoutMs;
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    await assertPublicUrl(current, scheme);
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new SafeFetchError('fetch_failed', 'Request timed out');
+
+    const res = await fetch(current, {
+      method: opts.method ?? 'GET',
+      headers: { 'User-Agent': userAgent, Accept: '*/*' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(remaining)
+    });
+
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      if (hop === maxRedirects) throw new SafeFetchError('fetch_failed', 'Too many redirects');
+      current = new URL(res.headers.get('location') as string, current);
+      continue;
+    }
+
+    return { url: current, res };
+  }
+  throw new SafeFetchError('fetch_failed', 'Too many redirects');
+}
 
 /**
  * Fetch a user-supplied URL with the guardrails a public endpoint needs: public hosts only
@@ -196,38 +326,63 @@ export async function safeFetchUrl(
   opts: { maxBytes?: number; timeoutMs?: number; maxRedirects?: number; method?: 'GET' | 'HEAD' } = {}
 ): Promise<SafeFetchResult> {
   const maxBytes = opts.maxBytes ?? 2_000_000;
-  const timeoutMs = opts.timeoutMs ?? 15_000;
-  const maxRedirects = opts.maxRedirects ?? 4;
+  const { url, res } = await fetchFollowingGatedRedirects(input, opts);
 
-  let current = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
-  const deadline = Date.now() + timeoutMs;
+  // Trust the declared length only to reject early; the read below is what actually enforces
+  // the budget (Content-Length is attacker-controlled and often absent).
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared && declared > maxBytes) throw new SafeFetchError('too_large', 'That page is too large to analyse');
 
-  for (let hop = 0; hop <= maxRedirects; hop++) {
-    await assertPublicUrl(current);
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error('Request timed out');
+  return { url: url.toString(), status: res.status, ok: res.ok, headers: res.headers, body: await readCapped(res, maxBytes) };
+}
 
-    const res = await fetch(current, {
-      method: opts.method ?? 'GET',
-      headers: { 'User-Agent': `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})`, Accept: '*/*' },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(remaining)
-    });
+export type SafeFetchBytesResult = { url: string; status: number; ok: boolean; mime: string; bytes: Buffer };
 
-    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-      if (hop === maxRedirects) throw new Error('Too many redirects');
-      current = new URL(res.headers.get('location') as string, current);
-      continue;
+/**
+ * The same guarded walk, for a body that is not text.
+ *
+ * It differs from safeFetchUrl in the one place that matters for a file: passing the ceiling
+ * TRUNCATES a page (a cut `<head>` still parses) and must REJECT a download (a cut JPEG is a
+ * corrupt asset stored as if it were whole).
+ */
+export async function safeFetchBytes(
+  input: string,
+  opts: { maxBytes: number; timeoutMs?: number; maxRedirects?: number; scheme?: UrlScheme; userAgent?: string }
+): Promise<SafeFetchBytesResult> {
+  const { url, res } = await fetchFollowingGatedRedirects(input, opts);
+
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared && declared > opts.maxBytes) throw new SafeFetchError('too_large', 'That file is too large');
+
+  const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+  return {
+    url: url.toString(),
+    status: res.status,
+    ok: res.ok,
+    mime,
+    bytes: await readAllOrReject(res, opts.maxBytes)
+  };
+}
+
+async function readAllOrReject(res: Response, maxBytes: number): Promise<Buffer> {
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new SafeFetchError('too_large', 'That file is too large');
     }
-
-    // Trust the declared length only to reject early; the read below is what actually enforces
-    // the budget (Content-Length is attacker-controlled and often absent).
-    const declared = Number(res.headers.get('content-length') ?? 0);
-    if (declared && declared > maxBytes) throw new Error('That page is too large to analyse');
-
-    return { url: current.toString(), status: res.status, ok: res.ok, headers: res.headers, body: await readCapped(res, maxBytes) };
+    chunks.push(Buffer.from(value));
   }
-  throw new Error('Too many redirects');
+  return Buffer.concat(chunks);
 }
 
 async function readCapped(res: Response, maxBytes: number): Promise<string> {
@@ -253,65 +408,3 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
   return new TextDecoder('utf-8', { fatal: false }).decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
 }
 
-/**
- * The whole body of a URL-in / report-out tool route: cap the caller, validate the URL, run the
- * analysis, and turn any failure into a clean 4xx. Every free tool follows this shape, so the
- * routes themselves stay down to the one line that is actually specific to them.
- */
-export async function runUrlTool<T>(
-  tool: string,
-  clientIp: string,
-  rawUrl: unknown,
-  analyse: (url: string) => Promise<T>
-): Promise<Response> {
-  const input = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-  if (!input) return json({ error: 'A website URL is required' }, { status: 400 });
-
-  const guard = await guardTool(tool, clientIp);
-  if (!guard.ok) return guard.response;
-
-  try {
-    return json({ success: true, result: await analyse(input) });
-  } catch (e) {
-    // safeFetchUrl throws user-safe messages ("That host is not reachable", "Request timed out");
-    // anything else is ours and shouldn't leak.
-    const msg = e instanceof Error ? e.message : '';
-    const known = /not reachable|too large|timed out|redirects|resolve|http\(s\)/i.test(msg);
-    if (!known) console.error(`[tool:${tool}]`, e);
-    return json({ error: known ? msg : 'Could not analyse that URL. Check it and try again.' }, { status: known ? 400 : 500 });
-  }
-}
-
-/** Follow the redirect chain, returning every hop. Used by the redirect-checker tool. */
-export async function traceRedirects(
-  input: string,
-  maxHops = 8
-): Promise<Array<{ url: string; status: number; location: string | null }>> {
-  let current = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
-  const hops: Array<{ url: string; status: number; location: string | null }> = [];
-  const seen = new Set<string>();
-
-  for (let i = 0; i < maxHops; i++) {
-    if (seen.has(current.toString())) {
-      hops.push({ url: current.toString(), status: 0, location: 'redirect loop' });
-      break;
-    }
-    seen.add(current.toString());
-    await assertPublicUrl(current);
-    const res = await fetch(current, {
-      method: 'GET',
-      headers: { 'User-Agent': `Anomalia-Tools/1.0 (+${env.CRAWLER_CONTACT_URL || 'https://anomalia.so'})` },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(10_000)
-    });
-    const location = res.headers.get('location');
-    hops.push({ url: current.toString(), status: res.status, location });
-    res.body?.cancel().catch(() => {});
-    if (res.status >= 300 && res.status < 400 && location) {
-      current = new URL(location, current);
-      continue;
-    }
-    break;
-  }
-  return hops;
-}

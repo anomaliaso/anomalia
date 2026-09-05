@@ -30,10 +30,6 @@ vi.mock('./system-prompt', () => ({
 	wrapTurnMessage: (_block: string, message: unknown) => message
 }));
 vi.mock('$lib/agent/tools/index', () => ({ createChatTools: () => ({}) }));
-vi.mock('$env/dynamic/private', async (importOriginal) => {
-	const original = (await importOriginal()) as { env: Record<string, string> };
-	return { ...original, env: { ...original.env, AGENT_KIT: 'off' } };
-});
 vi.mock('./subagents', async (orig) => {
 	const actual = await orig<typeof import('./subagents')>();
 	return {
@@ -97,17 +93,6 @@ vi.mock('./mid-turn-mailbox', () => ({
 vi.mock('$lib/server/hydrate-chat-documents', () => ({ hydrateChatDocuments: vi.fn(async () => []) }));
 vi.mock('$lib/server/web-push', () => ({ sendPushToUser: vi.fn(async () => undefined) }));
 vi.mock('./unread', () => ({ markThreadRead: vi.fn(async () => undefined) }));
-
-// Il confine del kit: con AGENT_KIT=on il turno deve arrivare QUI, non al modello classico.
-const kitTurnInputs: Array<Record<string, unknown>> = [];
-vi.mock('$lib/agent/bridge/live', () => ({
-	shouldUseKit: (e: { AGENT_KIT?: string }, agentId: string | null) =>
-		e.AGENT_KIT === 'on' && agentId ? { id: agentId } : null,
-	runKitTurn: vi.fn(async (input: Record<string, unknown>) => {
-		kitTurnInputs.push(input);
-		return new Response(null, { status: 200 });
-	})
-}));
 
 // Persistenza: legge/scrive il database finto qui sotto, così tool e runner vedono le stesse righe.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,92 +234,6 @@ describe('riprese: user_message è solo-per-il-modello, mai vuoto', () => {
 	});
 });
 
-describe('AGENT_KIT=on: il turno di risposta del DM gira sul kit', () => {
-	beforeEach(() => {
-		env.AGENT_KIT = 'on';
-	});
-
-	function dmThreadJob() {
-		return makeDb({
-			brands: [brandRow],
-			chat_threads: [
-				{
-					id: 'dm-1',
-					brand_id: 'brand-1',
-					user_id: 'user-1',
-					agent: null,
-					custom_agent_id: null,
-					title: 'Anomalia ⇄ Content Creator',
-					room_agents: { dm: ['anomalia', 'content'], names: { anomalia: 'Anomalia', content: 'Content Creator' } }
-				}
-			],
-			chat_messages: [
-				{
-					thread_id: 'dm-1',
-					role: 'user',
-					content: 'ciao',
-					name: 'anomalia',
-					superseded: false,
-					created_at: new Date().toISOString()
-				}
-			],
-			chat_jobs: [
-				{
-					id: 'job-bare',
-					brand_id: 'brand-1',
-					user_id: 'user-1',
-					thread_id: 'dm-1',
-					tool_name: 'chat_response',
-					status: 'pending',
-					created_at: new Date().toISOString(),
-					input_params: { user_message: 'ciao', locale: 'it', origin: '' }
-				}
-			]
-		});
-	}
-
-	it('il job va al bridge, non al runner classico: contenuto taggato e chi parla nel contesto', async () => {
-		db = dmThreadJob();
-
-		const res = await processNextQueuedChatJob(db.client as never, 'http://localhost:5173');
-		expect(res.processed).toBe(true);
-		expect(harnessCalls.length).toBe(0);
-		expect(kitTurnInputs).toHaveLength(1);
-
-		const kit = kitTurnInputs[0];
-		const messages = kit.messages as Array<{ role: string; content: unknown }>;
-		expect(String(messages[messages.length - 1].content)).toBe(
-			'[Message from Anomalia — a fellow AI agent of this brand, NOT the user]: ciao'
-		);
-		expect(kit.dm).toEqual({ speaker: 'content', meName: 'Content Creator', otherName: 'Anomalia' });
-		expect(db.tables.chat_jobs[0].status).toBe('done');
-	});
-
-	it('a turno finito arriva il push «reply is ready», come sul percorso classico', async () => {
-		db = dmThreadJob();
-
-		await processNextQueuedChatJob(db.client as never, 'http://localhost:5173');
-		expect(kitTurnInputs).toHaveLength(1);
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const pushes = (sendPushToUser as any).mock.calls as Array<
-			[unknown, string, { url?: string; body?: string }]
-		>;
-		expect(pushes).toHaveLength(1);
-		expect(pushes[0][2].url).toBe('/app/abd/chat/dm-1');
-		expect(pushes[0][2].body).toBe("L'AI ha finito di rispondere");
-	});
-
-	it('il messaggio dell\'utente non si risalva: il DM è già nel thread, firmato', async () => {
-		db = dmThreadJob();
-
-		await processNextQueuedChatJob(db.client as never, 'http://localhost:5173');
-		const userRows = db.tables.chat_messages.filter(
-			(m) => m.thread_id === 'dm-1' && m.role === 'user'
-		);
-		expect(userRows).toHaveLength(1);
-		expect(userRows[0].name).toBe('anomalia');
-	});
-});
 
 // ── Database finto: come queue-credits.test, più insert e contains (marker jsonb). ─────────────
 function makeDb(seed: Record<string, Row[]>) {
@@ -404,12 +303,8 @@ function makeDb(seed: Record<string, Row[]>) {
 const brandRow = { id: 'brand-1', name: 'brand-di-prova', slug: 'abd', plan: 'pro', status: 'active' };
 
 beforeEach(() => {
-	// Questo suite copre il motore classico in coda: il bridge kit (sessioni pi-live) non è mockato
-	// e il ramo kit del drain resterebbe appeso alla prima sessione.
-	env.AGENT_KIT = 'off';
 	harnessCalls.length = 0;
 	savedAssistant.length = 0;
-	kitTurnInputs.length = 0;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	(sendPushToUser as any).mockClear();
 });

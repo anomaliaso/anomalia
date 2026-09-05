@@ -260,6 +260,3 @@ function getKd(slug: string): number {
   return kdMap[slug] || 50;
 }
 
-export function getAllSlugs(): string[] {
-  return Object.keys(CATEGORY_MAP);
-}

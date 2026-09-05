@@ -20,11 +20,12 @@
  * check statico non esiste). Il test di questo file verifica la coppia skill↔gate su un caso
  * sbagliato: se il gate smette di bocciare, il test lo dice.
  *
- * IL CODICE NON STA QUI. Dal 22/8/2026 il ricettario intero è nel prompt dei due agenti che
- * scrivono TSX (`REMOTION_CRAFT_BLOCK` in chat/agents.ts): una skill che ne incollasse di nuovo
- * gli snippet sarebbe la seconda copia che diverge — il difetto che questo sistema esiste per
- * evitare. Le skill restano quello che il ricettario non è: la PROCEDURA e il nome del gate che
- * la rende vincolante. Il codice si cita per nome, e il nome sta nel prompt.
+ * IL CODICE NON STA QUI. Il ricettario intero arriva agli agenti che scrivono TSX come file
+ * (`how/MAKE-MOTION-VIDEO.md`, composto in agent-files.ts da `MOTION_CRAFT_SPECS` +
+ * `MOTION_TRANSITIONS_COOKBOOK_PROMPT`): una skill che ne incollasse di nuovo gli snippet sarebbe
+ * la seconda copia che diverge — il difetto che questo sistema esiste per evitare. Le skill
+ * restano quello che il ricettario non è: la PROCEDURA e il nome del gate che la rende
+ * vincolante. Il codice si cita per nome, e il nome sta nel file.
  */
 import {
 	MAX_LINE_CHARS,

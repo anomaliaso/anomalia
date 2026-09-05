@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
 
-const ROOT = join(import.meta.dir, '..', '..');
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const CANONICAL = join(ROOT, 'skills', 'anomalia');
 const PLUGIN = join(ROOT, 'plugins', 'anomalia', 'skills', 'anomalia');
 

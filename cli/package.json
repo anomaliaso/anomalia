@@ -2,7 +2,7 @@
   "name": "anomalia-cli",
   "version": "0.1.0",
   "description": "Command-line client for Anomalia — the social media AI autopilot.",
-  "license": "AGPL-3.0-or-later",
+  "license": "Apache-2.0",
   "author": "Andrea Buttarelli",
   "repository": {
     "type": "git",
@@ -34,6 +34,7 @@
     "build:all": "bun run scripts/build.ts --all",
     "build:npm": "bun run scripts/build-npm.ts",
     "vercel-build": "node scripts/build-vercel.mjs",
+    "sync:contracts": "bash scripts/sync-contracts.sh",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

@@ -38,10 +38,3 @@ export function selineSetUser(userId: string, fields: Record<string, unknown> = 
   } catch (error) { swallow('identify user in seline', error); }
 }
 
-/** Track a custom event attributed to a known userId. */
-export function selineTrack(userId: string, name: string, data?: Record<string, unknown>) {
-  if (!userId || !name) return;
-  try {
-    seline()?.track({ userId, name, data: data ?? null });
-  } catch (error) { swallow('track seline event', error); }
-}

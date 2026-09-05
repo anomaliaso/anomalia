@@ -84,8 +84,14 @@ export default defineConfig({
       'src/**/*.{test,spec}.{js,ts}',
       'packages/*/src/**/*.{test,spec}.{js,ts}',
       'packages/*.{test,spec}.{js,ts}',
-      'scripts/**/*.{test,spec}.{js,ts}'
+      'scripts/**/*.{test,spec}.{js,ts}',
+      'docker/**/*.{test,spec}.{js,mjs,ts}',
+      // I test della CLI sono scritti per `bun:test` e giravano solo se qualcuno lanciava
+      // `bun test` dentro `cli/` a mano: nessun runner li vedeva, CI compresa. L'alias li fa
+      // girare qui senza riscriverli — le due API coincidono su describe/test/it/expect.
+      'cli/**/*.{test,spec}.{js,ts}'
     ],
+    alias: { 'bun:test': 'vitest' },
     hookTimeout: 30_000
   }
 });

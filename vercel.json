@@ -152,10 +152,6 @@
       "schedule": "*/2 * * * *"
     },
     {
-      "path": "/api/v1/custom-agents/tick",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/v1/health/costs/tick",
       "schedule": "0 4 * * *"
     },
@@ -192,16 +188,16 @@
       "schedule": "*/10 * * * *"
     },
     {
-      "path": "/api/v1/billing/reconcile/tick",
-      "schedule": "0 3 * * *"
-    },
-    {
       "path": "/api/v1/memory/dream",
       "schedule": "30 4 * * *"
     },
     {
       "path": "/api/v1/agents/computers/sweep",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/v1/chat/models/sync",
+      "schedule": "0 4 * * *"
     }
   ]
 }

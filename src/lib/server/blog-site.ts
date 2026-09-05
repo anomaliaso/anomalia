@@ -3,7 +3,7 @@
 import { swallow } from '$lib/server/swallow';
 import { Marked } from 'marked';
 import { createAdminClient } from './supabase-admin';
-import { BLOG_LOCALE_LANGUAGE, resolveBlogLocales, type BlogLocale, type BlogLocaleConfig } from './blog-locales';
+import { BLOG_LOCALE_LANGUAGE, resolveBlogLocales, type BlogLocaleConfig } from './blog-locales';
 import { referralCodeForBrand } from './referrals';
 
 /**
@@ -15,11 +15,6 @@ import { referralCodeForBrand } from './referrals';
  * every pre-0129 article vanish the day locales shipped.
  */
 export type LocaleScope = { kind: 'default' } | { kind: 'translation'; language: string };
-
-export function scopeForLocale(locale: BlogLocale | null | undefined, defaultLocale: BlogLocale): LocaleScope {
-  if (!locale || locale === defaultLocale) return { kind: 'default' };
-  return { kind: 'translation', language: BLOG_LOCALE_LANGUAGE[locale] };
-}
 
 /**
  * PostgREST filter constraining a brand_articles query to one language version, as a single `.or()`
@@ -144,6 +139,24 @@ async function brandProfile(brandId: string): Promise<BlogBrand | null> {
     ),
     referralCode
   };
+}
+
+/**
+ * I tracker di terze parti del brand — e il motivo per cui NON stanno dentro `brandProfile`.
+ *
+ * Il blog esce da due porte: il dominio del brand (albero `_site`) e `/blog/<slug>`, che sta sulla
+ * NOSTRA origine, la stessa di `/app` e della sessione di chi e' loggato. Uno script di terze parti
+ * caricato li' — un container GA4 o GTM, che chi lo amministra puo' riempire di JavaScript quando
+ * vuole — girerebbe con i permessi di anomalia.so.
+ *
+ * Quindi non arrivano col profilo: si chiedono, e li chiede solo l'albero servito sul dominio del
+ * brand. Dimenticarsene significa non caricarli; il contrario non e' possibile.
+ */
+export async function siteAnalytics(brandId: string): Promise<{ provider: string; id: string }[]> {
+  const admin = createAdminClient();
+  const { data } = await admin.from('brands').select('blog_config').eq('id', brandId).maybeSingle();
+  const { blogAnalytics } = await import('$lib/server/blog-settings');
+  return blogAnalytics((data?.blog_config ?? {}) as Record<string, unknown>);
 }
 
 // Resolve which brand a hostname serves (custom domain). Any brand_sites row means it was connected.
@@ -330,16 +343,6 @@ export async function listArticlesByCategory(brandId: string, categorySlug: stri
 
 // --- Tags ---
 
-export async function listTags(brandId: string): Promise<BlogTag[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('blog_tags')
-    .select('id, name, slug')
-    .eq('brand_id', brandId)
-    .order('name', { ascending: true });
-  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, slug: r.slug }));
-}
-
 export async function listArticlesByTag(brandId: string, tagSlug: string, scope?: LocaleScope): Promise<{ tag: BlogTag | null; articles: BlogArticle[] }> {
   const admin = createAdminClient();
   const { data: tag } = await admin
@@ -372,18 +375,6 @@ export async function listArticlesByTag(brandId: string, tagSlug: string, scope?
 }
 
 // --- Authors ---
-
-export async function listAuthors(brandId: string): Promise<BlogAuthor[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from('blog_authors')
-    .select('id, name, slug, bio, avatar_url, role')
-    .eq('brand_id', brandId)
-    .order('name', { ascending: true });
-  return (data ?? []).map((r: any) => ({
-    id: r.id, name: r.name, slug: r.slug, bio: r.bio ?? null, avatarUrl: r.avatar_url ?? null, role: r.role ?? 'writer'
-  }));
-}
 
 export async function getAuthor(brandId: string, authorSlug: string): Promise<BlogAuthor | null> {
   const admin = createAdminClient();

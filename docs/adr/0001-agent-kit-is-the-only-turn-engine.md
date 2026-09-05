@@ -1,5 +1,11 @@
 # Agent Kit is the only turn engine
 
+> **Superseded (2026-09-04).** This ADR decided the Agent Kit would absorb every chat surface.
+> There are no chat surfaces left: the in-app chat was removed and Anomalia now works through
+> external agents over MCP. The Kit bridge (`agent/bridge/live.ts`, `agent/plugins/`) and the
+> `AGENT_KIT` flag are deleted; the `chat_jobs` queue survives as background execution for long
+> agent work, which is what it always was under a misleading name. Kept for the record.
+
 Context: two turn engines coexist. The Agent Kit bridge (persistent sessions, kit tools, memory)
 runs specialist team threads; a classic `chat_jobs`-based runner still executes private threads,
 rooms, custom agents and scheduled runs — selected at runtime by the `AGENT_KIT` env flag. Even

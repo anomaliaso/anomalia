@@ -20,7 +20,7 @@
  * nothing about whether a line will land.
  *
  * NO MIGRATION. The block lives inside `brand_kit.ai_context`, which every planner, blog, ad and
- * video prompt already reads. `guardrailsInstruction` makes the synthesiser produce it;
+ * video prompt already reads. `GUARDRAILS_INSTRUCTION` makes the synthesiser produce it;
  * `extractGuardrails` lifts it back out for the prompts that need it emphasised rather than buried
  * in 500 words of prose.
  *

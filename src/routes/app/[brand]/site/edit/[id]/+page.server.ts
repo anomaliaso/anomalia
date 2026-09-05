@@ -1,4 +1,3 @@
-import { swallow } from '$lib/server/swallow';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { createAdminClient } from '$lib/server/supabase-admin';
@@ -24,8 +23,6 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
     .select('id, slug, title, meta_title, meta_description, body_md, cover_image, status, version_seq, category_id, author_id')
     .eq('id', params.id).maybeSingle();
   if (!a) throw error(404, 'Article not found');
-  const { loadChatState } = await import('$lib/server/blog-chat');
-  const chat = await loadChatState(supabase, a.id, a.version_seq ?? 0).catch((error) => { swallow('load chat state', error); return ({ messages: [], canUndo: false, canRedo: false }); });
   const { data: brand } = await supabase.from('brands').select('website').eq('slug', params.brand).maybeSingle();
   const { scoreArticle } = await import('$lib/server/article-score');
   const score = scoreArticle({ bodyMd: a.body_md ?? '', metaTitle: a.meta_title, metaDescription: a.meta_description, status: a.status }, brand?.website);
@@ -46,7 +43,6 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, safeGet
       categoryId: a.category_id ?? null, authorId: a.author_id ?? null
     },
     score,
-    chat,
     categories: (catsRes.data ?? []).map((c: any) => ({ id: c.id, name: c.name, slug: c.slug })),
     allTags: (tagsRes.data ?? []).map((t: any) => ({ id: t.id, name: t.name, slug: t.slug })),
     authors: (authorsRes.data ?? []).map((a: any) => ({ id: a.id, name: a.name, slug: a.slug })),

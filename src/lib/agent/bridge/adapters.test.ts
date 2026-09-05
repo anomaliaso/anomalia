@@ -140,32 +140,37 @@ describe('resolveHarnessModelRef — la catena preferenza → tier → lista, tu
 		expect(resolveHarnessModelRef({ tier: 'vendor/mai-visto' })?.id).toBe('llm/z-ai/glm-5.3-flash');
 	});
 
-	it('una famiglia che il centralino non serve degrada sul tier, mai sul wireId nudo', () => {
+	it('una famiglia che il centralino non serve degrada sul default, mai sul wireId nudo', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
-		expect(resolveHarnessModelRef({ family: 'luna', tier: 'fast' })?.id).toBe('llm/z-ai/glm-5.3-flash');
-		expect(resolveHarnessModelRef({ family: 'luna', tier: 'pro' })?.id).toBe('llm/openai/gpt-5.6-sol');
+		expect(resolveHarnessModelRef({ family: 'luna' })?.id).toBe('llm/z-ai/glm-5.3-flash');
 	});
 
-	it('una famiglia che non esiste degrada sul tier del picker', () => {
-		env.LLM_API_KEY = 'k';
-		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
-		expect(resolveHarnessModelRef({ family: 'inesistente', tier: 'pro' })?.id).toBe('llm/openai/gpt-5.6-sol');
-	});
-
-	it('il tier mappa il picker del centralino: fast il default, pro il secondo della lista', () => {
+	it('una famiglia che non esiste degrada sul default', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
-		expect(resolveHarnessModelRef({ tier: 'fast' })?.id).toBe('llm/z-ai/glm-5.3-flash');
-		expect(resolveHarnessModelRef({ tier: 'pro' })?.id).toBe('llm/openai/gpt-5.6-sol');
+		expect(resolveHarnessModelRef({ family: 'inesistente' })?.id).toBe('llm/z-ai/glm-5.3-flash');
+	});
+
+	/**
+	 * Un preset in ingresso non sceglie piu` niente. Contava il SECONDO id di LLM_MODELS, che era
+	 * il modo piu` sorprendente possibile di scegliere un modello: per posizione in una lista.
+	 */
+	it('un preset sparito non sale piu\' al secondo id della lista', () => {
+		env.LLM_API_KEY = 'k';
+		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
+		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
+		for (const gone of ['auto', 'fast', 'pro']) {
+			expect(resolveHarnessModelRef({ tier: gone })?.id).toBe('llm/z-ai/glm-5.3-flash');
+		}
 	});
 
 	it('senza tier né famiglia: il primo della lista dichiarata', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_MODELS = 'stealth/ox-alpha, openai/gpt-5.6-luna';
-		const ref = resolveHarnessModelRef({ tier: 'auto' });
+		const ref = resolveHarnessModelRef({});
 		expect(ref?.id).toBe('llm/stealth/ox-alpha');
 	});
 
@@ -197,11 +202,10 @@ describe('harnessSdkModel — un modello dell’AI SDK sul centralino', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
-		const fast = harnessSdkModel('fast');
-		expect(fast?.provider).toBe('llm');
-		expect(fast?.modelId).toBe('z-ai/glm-5.3-flash');
-		expect(fast?.model).toBeTruthy();
-		expect(harnessSdkModel('pro')?.modelId).toBe('openai/gpt-5.6-sol');
+		const m = harnessSdkModel();
+		expect(m?.provider).toBe('llm');
+		expect(m?.modelId).toBe('z-ai/glm-5.3-flash');
+		expect(m?.model).toBeTruthy();
 	});
 
 	it('le env dei provider legacy non attivano più niente', () => {
@@ -263,12 +267,4 @@ describe('dropLiveHarnessSession — un turno morto non lascia in eredita` la su
 		await expect(dropLiveHarnessSession(undefined)).resolves.toBeUndefined();
 	});
 
-	it('il motore lo chiama quando il turno finisce male', () => {
-		const src = fs.readFileSync(new URL('./live.ts', import.meta.url), 'utf8');
-		expect(src).toContain('dropLiveHarnessSession');
-		// Sul percorso d'errore, non solo su quello felice.
-		const errAt = src.indexOf('Errore del turno: ${why');
-		const catchAt = src.lastIndexOf('} catch (error) {', errAt);
-		expect(src.slice(catchAt, errAt + 400)).toContain('dropLiveHarnessSession');
-	});
 });

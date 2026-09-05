@@ -114,6 +114,8 @@ export function registerAuthTools(server: McpServer) {
     },
   );
 
+  // Resta a mano, ed è l'unico: `GET /api/v1/brands` non ha un brand sotto cui stare, e il
+  // registry è scoped sul brand. Un secondo registro per un endpoint solo costa più di questo.
   server.registerTool(
     'list_brands',
     {

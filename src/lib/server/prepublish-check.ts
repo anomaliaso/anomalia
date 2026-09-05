@@ -131,7 +131,8 @@ function targetsOf(post: PrepublishPost): string[] {
   return (list ?? []).map((p) => String(p ?? '').toLowerCase()).filter(Boolean);
 }
 
-function isPlaceholderCaption(caption: string): boolean {
+/** Lorem ipsum, "TODO", a caption made of hashtags only: text that exists and says nothing. */
+export function isPlaceholderCaption(caption: string): boolean {
   const t = caption.replace(/\s+/g, ' ').trim();
   if (t.length < 2) return true;
   if (PLACEHOLDER_RE.test(t)) return true;

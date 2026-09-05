@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { DISPLAY, X_SOCKET } from '@anomalia/agent-adapters/graphical-bootstrap';
 import {
   BROWSE_SCRIPT,
   DENIED_SUBNETS,
@@ -189,18 +188,14 @@ describe('BROWSE_SCRIPT', () => {
   });
 
   /**
-   * Un delegato apriva Chromium in headless mentre l'utente guardava lo schermo della stessa VM:
-   * il desktop restava vuoto per tutta la ricerca. Se il display c'è, si naviga a vista.
+   * SEMPRE HEADLESS. Il desktop grafico non fa più parte del prodotto: non c'è uno schermo da
+   * riempire, e un lancio a vista su una VM senza display costava solo un tentativo fallito.
    */
-  it('naviga a vista quando lo schermo della VM è acceso', () => {
-    expect(BROWSE_SCRIPT).toContain(X_SOCKET);
-    expect(BROWSE_SCRIPT).toContain(`DISPLAY: '${DISPLAY}'`);
-    expect(BROWSE_SCRIPT).toContain('headless: false');
-  });
-
-  it('resta headless quando lo schermo non c’è, e ci torna se il lancio a vista fallisce', () => {
+  it('naviga sempre headless, senza display da cercare', () => {
     expect(BROWSE_SCRIPT).toContain('headless: true');
-    expect(BROWSE_SCRIPT).toMatch(/catch[\s\S]{0,200}headless: true/);
+    expect(BROWSE_SCRIPT).not.toContain('headless: false');
+    expect(BROWSE_SCRIPT).not.toContain('DISPLAY');
+    expect(BROWSE_SCRIPT).not.toContain('X11-unix');
   });
 });
 

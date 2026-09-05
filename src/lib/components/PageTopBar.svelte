@@ -7,9 +7,6 @@
   import { useSidebar } from '$lib/components/ui/sidebar/context.svelte.js';
   import { railDrawerOpen, railDrawerReady } from '$lib/stores/rail-drawer';
   import { pageMeta, pageTopActions } from '$lib/stores/page-meta';
-  import { chatThreads, openChatComposer } from '$lib/stores/chat';
-  import { jobThreadHref, owningJobForPath } from '$lib/agent-owners';
-  import { fallbackAvatarColor, fallbackAvatarFace } from '$lib/agent-avatars';
   import type { AppWarning } from '$lib/warnings';
   // La campanella si è spostata in fondo alla sidebar: qui `warnings` resta solo perché il
   // layout del brand la passa ancora (non è questo lavoro a toccarlo), e non serve più a nulla.
@@ -62,19 +59,6 @@
 
   const brandSlug = $derived($page.params.brand as string | undefined);
 
-  // "Parla con <agente>" (FEATURE_NAV_TEAM) — il percorso di ritorno: dalla pagina-strumento
-  // al thread dell'agente che la possiede. La mappa pagina→agente è UNA e sta in
-  // agent-owners.ts (la stessa che AgentComputerPanel usa al contrario per "Apri dove sta
-  // lavorando"): qui non si decide niente, si consulta. Sulle rotte senza proprietario
-  // (chat inclusa) il bottone non esiste — nessuna collisione con pageTopActions.
-  const ownerJob = $derived.by(() => {
-    if (!$page.data?.flags?.navTeam || !brandSlug) return null;
-    return owningJobForPath($page.url.pathname, `/app/${brandSlug}`);
-  });
-  const ownerHref = $derived(
-    ownerJob && brandSlug ? jobThreadHref($chatThreads, brandSlug, ownerJob) : null
-  );
-  const ownerName = $derived(ownerJob ? $_(`app.roster.job.${ownerJob}.name`) : '');
   const meta = $derived($pageMeta);
   const actions = $derived($pageTopActions);
   const hasMeta = $derived(!!meta.title);
@@ -200,21 +184,6 @@
         </div>
       </div>
       <div class="page-topbar-right">
-        {#if ownerJob && ownerHref}
-          <!-- Stessa derivazione volto/colore di threadIdentity per i thread job: la card,
-               la sidebar e questo bottone mostrano lo stesso personaggio. -->
-          <a
-            class="page-topbar-owner"
-            href={ownerHref}
-            title={$_('app.nav2.talkTo', { values: { name: ownerName } })}
-            aria-label={$_('app.nav2.talkTo', { values: { name: ownerName } })}
-          >
-            <AgentAvatar face={fallbackAvatarFace(ownerJob)} color={fallbackAvatarColor(ownerJob)} size={20} />
-            {#if !isMobile.current}
-              <span>{$_('app.nav2.talkTo', { values: { name: ownerName } })}</span>
-            {/if}
-          </a>
-        {/if}
         <PresenceStack peers={brandChannel.here} />
         {#if hasActions}
           {#if useActionsMenu}
@@ -253,11 +222,9 @@
         {/if}
         {#if brandSlug && showStatus}
           <!-- Lo Stato (coda di oggi, lead, avvisi, andamento) non è più sotto la chat:
-               si apre da qui. È un <a> vero, non un bottone: su desktop PageModal
-               intercetta il click e lo apre in overlay senza cambiare URL, su mobile
-               naviga alla pagina piena. Un link morto non esiste in nessuno dei due casi.
-               Ha l'etichetta accanto all'icona: un'icona sola non dice cosa apre. La parola è UNA — qui, nel titolo della modal e nel rail — perché
-               tutti e tre la prendono da `app.home.workbench.title`. -->
+               si apre da qui, ed è un <a> vero verso la sua pagina. Ha l'etichetta accanto
+               all'icona: un'icona sola non dice cosa apre. La parola è la stessa della voce
+               di sidebar perché entrambe la prendono da `app.home.workbench.title`. -->
           <a
             class="topbar-status"
             href={`/app/${brandSlug}/workbench`}
@@ -469,27 +436,6 @@
     gap: 8px;
     flex: 0 0 auto;
     max-width: 52%;
-  }
-  /* "Parla con <agente>" — pillola discreta, solo token (regge entrambi i temi). */
-  .page-topbar-owner {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 26px;
-    padding: 0 9px 0 5px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--paper);
-    color: var(--ink-soft);
-    font-size: 12px;
-    font-weight: 550;
-    text-decoration: none;
-    white-space: nowrap;
-    transition: color 0.15s var(--ease, ease), border-color 0.15s var(--ease, ease);
-  }
-  .page-topbar-owner:hover {
-    color: var(--ink);
-    border-color: var(--ink-faint);
   }
   .page-topbar-actions-btn {
     position: relative;

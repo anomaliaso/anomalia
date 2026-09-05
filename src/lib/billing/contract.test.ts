@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * IL TEST-GUARDIA: contract.ts deve restare importabile dal client (pagine/component che
- * costruiscono un upsell UI, non solo dal server). Legge il file come TESTO (come
- * src/routes/app/[brand]/agent-lab/shell.test.ts fa per una pagina) e fallisce se ci trova un
- * import server-only.
+ * costruiscono un upsell UI, non solo dal server). Legge il file come TESTO e fallisce se ci
+ * trova un import server-only.
  */
 const source = readFileSync(fileURLToPath(new URL('./contract.ts', import.meta.url)), 'utf-8');
 

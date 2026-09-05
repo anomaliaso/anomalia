@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { AUTOMATION_CADENCES, AUTOMATION_JOBS, AUTOMATION_STATES } from '@anomalia/api-contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 // jobPausedForBrand legge il piano e gli opt-out con il client admin, e registra il salto in
@@ -18,6 +19,7 @@ vi.mock('$lib/server/loop-ticks', () => ({
 
 import {
   brandRoster,
+  jobRunCounts,
   clearJobRosterCache,
   jobEnabledForBrand,
   jobPausedForBrand,
@@ -247,5 +249,82 @@ describe('rosterForPrompt — la squadra nel prompt viene dal registro, non da u
     const jobs = [...ROSTER_JOBS, { key: 'made_up_job', cadence: 'daily' } as unknown as RosterJob];
     const text = rosterForPrompt(jobs);
     expect(text).toContain('- made_up_job (daily): made_up_job'); // blurb assente → cade sul nome
+  });
+});
+
+describe('il roster che un agente puo comandare', () => {
+  it('e esattamente quello che il prodotto fa girare', () => {
+    // Il contratto non puo' importare `$lib`, quindi l'elenco vive anche li'. Un lavoro aggiunto
+    // qui e non di la' sarebbe accendibile dal browser e invisibile a `set_automation`; uno
+    // aggiunto solo di la' sarebbe un tool che accende qualcosa che non gira.
+    expect([...AUTOMATION_JOBS]).toEqual(ROSTER_JOBS.map((j) => j.key));
+  });
+
+  it('ogni cadenza e ogni stato che il roster produce e un valore che il contratto dichiara', () => {
+    for (const job of ROSTER_JOBS) {
+      expect(AUTOMATION_CADENCES, job.key).toContain(job.cadence);
+    }
+    expect([...AUTOMATION_STATES].sort()).toEqual(['failed', 'never', 'off', 'ok', 'skipped']);
+  });
+});
+
+describe('jobRunCounts — quante volte un lavoro ha davvero girato', () => {
+  function ticksAdmin(rows: { loop: string; outcome: string }[] | null, throws = false) {
+    const filters = { loop: [] as string[], outcome: [] as string[], since: '' };
+    const q: Record<string, unknown> = {};
+    Object.assign(q, {
+      select: () => q,
+      eq: () => q,
+      in: (col: string, vals: string[]) => {
+        if (col === 'outcome') filters.outcome = vals;
+        else filters.loop = vals;
+        return q;
+      },
+      gte: (_col: string, val: string) => {
+        filters.since = val;
+        return q;
+      },
+      limit: () => (throws ? Promise.reject(new Error('no table')) : Promise.resolve({ data: rows }))
+    });
+    return {
+      admin: { from: () => q } as unknown as SupabaseClient,
+      filters
+    };
+  }
+
+  it('conta un lavoro per volta, non tutti insieme', async () => {
+    const { admin } = ticksAdmin([
+      { loop: 'seo', outcome: 'ok' },
+      { loop: 'seo', outcome: 'failed' },
+      { loop: 'geo', outcome: 'ok' }
+    ]);
+    const counts = await jobRunCounts(admin, 'b1', '2026-08-05T00:00:00.000Z');
+    expect(counts.get('seo')).toBe(2);
+    expect(counts.get('geo')).toBe(1);
+  });
+
+  it('non conta un giro fermato da un gate: non ha speso niente', async () => {
+    // Contare gli `skipped` direbbe «questo lavoro ti costa» di un lavoro che non ha mai
+    // chiamato un modello — e la cifra servirebbe proprio a decidere se accenderlo.
+    const { admin, filters } = ticksAdmin([]);
+    await jobRunCounts(admin, 'b1', '2026-08-05T00:00:00.000Z');
+    expect(filters.outcome).toEqual(['ok', 'failed']);
+  });
+
+  it('guarda solo dentro la finestra che le viene chiesta', async () => {
+    const { admin, filters } = ticksAdmin([]);
+    await jobRunCounts(admin, 'b1', '2026-08-05T00:00:00.000Z');
+    expect(filters.since).toBe('2026-08-05T00:00:00.000Z');
+  });
+
+  it('un lavoro che non ha mai girato non compare, e vale zero', async () => {
+    const { admin } = ticksAdmin([{ loop: 'seo', outcome: 'ok' }]);
+    const counts = await jobRunCounts(admin, 'b1', '2026-08-05T00:00:00.000Z');
+    expect(counts.get('library') ?? 0).toBe(0);
+  });
+
+  it('la tabella assente non porta giù la lettura: zero conteggi, non un errore', async () => {
+    const { admin } = ticksAdmin(null, true);
+    await expect(jobRunCounts(admin, 'b1', '2026-08-05T00:00:00.000Z')).resolves.toEqual(new Map());
   });
 });

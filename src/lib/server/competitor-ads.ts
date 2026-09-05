@@ -272,7 +272,3 @@ export async function refreshCompetitorAds(
 	return { perCompetitor, trending };
 }
 
-export const COMPETITOR_ADS_LIMITS = {
-	MAX_ADS_PER_COMPETITOR,
-	MAX_TRENDING_ADS
-};

@@ -4,21 +4,22 @@
  * La lezione che ha generato questo file: le regole di craft scritte in prosa non cambiano il
  * comportamento del modello; quelle con il CODICE dentro sì (vedi `craft.ts`, che cita
  * `<TransitionSeries.Sequence durationInFrames={3*fps}>` ed è l'unica sezione che ha spostato
- * l'output). E una regola di prompt senza un controllo in QC viene saltata. Quindi il "wow" che
- * il proprietario chiede — scale dell'intera pagina, match-cut in cui una scena collassa in un
- * punto che diventa il puntino della "i" del titolo dopo — vive qui in tre forme che si tengono
- * a vicenda:
+ * l'output). Quindi il "wow" che il proprietario chiede — scale dell'intera pagina, match-cut in
+ * cui una scena collassa in un punto che diventa il puntino della "i" del titolo dopo — vive qui
+ * in due forme che si tengono a vicenda:
  *
  *  1. Snippet COMPLETI e COMPILANTI (il test li passa in `compileMotionSource`): l'agente copia
  *     e adatta, non re-inventa.
  *  2. La regola con un numero in `MOTION_CRAFT_SPECS` (craft.ts) che li nomina.
- *  3. `detectWowMechanisms` — l'euristica sul sorgente che `craft-review.ts` usa per rifiutare
- *     una composizione a 4+ beat senza nessun meccanismo wow.
  *
- * Ogni snippet porta un commento marcatore `// wow: NOME` sul meccanismo: la QC lo usa come
- * indizio (mai da solo — conta solo insieme alla forma di codice che gli sta dietro).
+ * Ogni snippet porta un commento marcatore `// wow: NOME` sul meccanismo.
  *
- * Puro, client-safe (niente $lib/server): lo leggono il prompt dell'agente e il giudice di craft.
+ * `detectWowMechanisms` era la terza forma: l'euristica che il giudice di craft leggeva per
+ * rifiutare una composizione a 4+ beat senza nessun meccanismo. Il giudice è stato tolto il
+ * 29/8/2026 e l'euristica è rimasta senza chiamanti di produzione — la esercitano solo i test.
+ * Niente rifiuta più una composizione su questa base.
+ *
+ * Puro, client-safe (niente $lib/server): lo legge il prompt dell'agente.
  */
 import {
 	MOTION_EXPO_IN_OUT,

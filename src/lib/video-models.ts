@@ -120,6 +120,16 @@ export type VideoModelSpec = VideoModelCaps & {
    */
   kieId?: Partial<Record<VideoRole, string>>;
   /**
+   * Lo stesso modello nel catalogo video di OpenRouter, che lo chiama in un altro modo: i punti al
+   * posto dei trattini, il fornitore davanti. Uno solo per riga — `frame_images` decide il verso, e
+   * i due id kie di Grok collassano in uno.
+   *
+   * Assente vuol dire che su OpenRouter quel modello NON C'È, e il trasporto non lo può servire. È
+   * il motivo per cui questa è una riga della tabella e non una regex: un id ricostruito a naso
+   * prende un 400 dopo un giro di rete, o peggio ne colpisce un altro.
+   */
+  openrouterId?: string;
+  /**
    * Come si chiama, nel payload kie, il campo che porta il video sorgente. Solo per `refine` e
    * `motion` — gli altri due ruoli non hanno un video in ingresso.
    */
@@ -146,6 +156,7 @@ const SPECS: VideoModelSpec[] = [
   {
     id: SEEDANCE_25_MODEL,
     label: 'Seedance 2.5',
+    openrouterId: 'bytedance/seedance-2.5',
     match: /^bytedance\/seedance-2-5\b/,
     roles: ['text', 'image'],
     endpoint: 'jobs',
@@ -161,6 +172,7 @@ const SPECS: VideoModelSpec[] = [
   {
     id: 'bytedance/seedance-2',
     label: 'Seedance 2',
+    openrouterId: 'bytedance/seedance-2.0',
     match: /^bytedance\/seedance-2\b/,
     roles: ['text', 'image'],
     endpoint: 'jobs',
@@ -176,6 +188,7 @@ const SPECS: VideoModelSpec[] = [
   {
     id: 'bytedance/seedance-2-fast',
     label: 'Seedance 2 Fast',
+    openrouterId: 'bytedance/seedance-2.0-fast',
     match: /^bytedance\/seedance-2-fast\b/,
     roles: ['text', 'image'],
     endpoint: 'jobs',
@@ -191,6 +204,7 @@ const SPECS: VideoModelSpec[] = [
   {
     id: 'bytedance/seedance-2-mini',
     label: 'Seedance 2 Mini',
+    openrouterId: 'bytedance/seedance-2.0-mini',
     match: /^bytedance\/seedance-2-mini\b/,
     roles: ['text', 'image'],
     endpoint: 'jobs',
@@ -206,6 +220,7 @@ const SPECS: VideoModelSpec[] = [
   {
     id: GROK_IMAGINE_VIDEO_MODEL,
     label: 'Grok Imagine',
+    openrouterId: 'x-ai/grok-imagine-video-1.5',
     match: /^grok-imagine-video-1-5/,
     roles: ['text', 'image'],
     endpoint: 'jobs',
@@ -222,6 +237,7 @@ const SPECS: VideoModelSpec[] = [
   {
     id: 'grok-imagine/image-to-video',
     label: 'Grok Imagine v1',
+    openrouterId: 'x-ai/grok-imagine-video',
     match: /^grok-imagine\//,
     roles: ['text', 'image'],
     endpoint: 'jobs',
@@ -241,6 +257,7 @@ const SPECS: VideoModelSpec[] = [
     // `kling-3.0/motion-control` e' un altro modello, che vuole ANCHE il video guida.
     id: KLING_3_VIDEO_MODEL,
     label: 'Kling 3.0',
+    openrouterId: 'kwaivgi/kling-v3.0-pro',
     match: /^kling-3\.0\//,
     roles: ['text', 'image', 'motion'],
     endpoint: 'jobs',
@@ -319,6 +336,15 @@ export type VideoModelChoiceId = (typeof VIDEO_MODEL_CHOICES)[number]['id'];
 export function isKnownVideoModelId(value: unknown): value is VideoModelChoiceId {
   const v = String(value ?? '').trim();
   return VIDEO_MODEL_CHOICES.some((c) => c.id === v);
+}
+
+/**
+ * Taglia un brief al tetto del modello che lo eseguirà. Tiene la testa, dove stanno la scena e la
+ * regola del frame pulito, e butta solo la coda che il modello avrebbe rifiutato comunque.
+ */
+export function clampVideoPrompt(prompt: string, model: string): string {
+  const limit = videoModelCaps(model).maxPromptChars;
+  return prompt.length > limit ? prompt.slice(0, limit).trim() : prompt;
 }
 
 /** Lo spec di un modello, da qualunque forma quell'id arrivi. */

@@ -1037,7 +1037,8 @@ export function createContentTools(ctx: ChatToolCtx) {
 
     design_graphic: tool({
       description: [
-        'Compose or REVISE a post\'s typographic graphic from HTML/CSS (or React TSX) source — words on a brand-coloured canvas, optionally with embedded photos.',
+        'Compose or REVISE a typographic graphic from HTML/CSS (or React TSX) source — words on a brand-coloured canvas, optionally with embedded photos.',
+        'WITHOUT post_id it is STANDALONE: composes the graphic, saves it in the Media library and returns image_url, creating NO post. That is the tool for "make me a graphic, but do not post anything" — do NOT fall back to generate_image, which mints a photo instead of a graphic. Pass media_id to revise a standalone graphic you already made. Turn it into a post later with create_post_from_asset.',
         'Use when read_posts shows media_origin typographic_graphic, or when the visual should CARRY WORDS (quote, stat, tip list, price, claim) with or without a photo inside.',
         'Pass media_ids / people_ids / talent_ids / image_urls so image blocks can embed those photos. MEDIA FIRST: read_media; if a library photo fits, pass media_ids or use_library_image then replace_source. generate_prompt mints one Nano Banana Pro still (credits) as background / in-stack — only when nothing uploaded fits. Prefer generate_image (N times) then replace_source <img src="https://...">, or pass those image_urls here.',
         'Brand kit logo/favicon are auto-included as AVAILABLE IMAGES ("brand logo") — ask for the official mark in the brief; never fake it with an icon or typed name.',
@@ -1045,10 +1046,11 @@ export function createContentTools(ctx: ChatToolCtx) {
         'NEVER use this on a VIDEO/reel to remove subtitles or rewrite a spoken script — that deletes the clip. Remake with create_post(content_type:"video") or the post-editor make_video tool. convert_from_video:true only if they explicitly asked to turn the reel into a still graphic.',
         'For other-brand visual refs: fetch_social_thumbs or read_market_references → image_urls.',
         'Do NOT use generate_image to REPLACE a typographic graphic. On a graphic, generate_image (with or without post_id) mints an asset and returns image_url without changing the post — then replace_source <img src>. Or pass image_urls / generate_prompt on this tool.',
-        'For a copy/color/spacing patch on an existing graphic, prefer grep_source → read_source → replace_source (pass post_id). write_source only to rebuild. Use this tool for a first composition or a high-level restyle.'
+        'For a copy/color/spacing patch on an existing graphic, prefer grep_source → read_source → replace_source — pass post_id for a post graphic, media_id for a standalone one. They work on BOTH: do not rebuild a whole graphic from a brief just to change a word, a colour or a padding. write_source only to rebuild. Use THIS tool for a first composition or a high-level restyle.'
       ].join('\n'),
       inputSchema: z.object({
-        post_id: z.string().describe('Post whose visual to compose or revise'),
+        post_id: z.string().optional().describe('Post whose visual to compose or revise. OMIT for a standalone graphic: composes the canvas, saves it in the Media library and returns image_url WITHOUT creating any post.'),
+        media_id: z.string().optional().describe('Standalone only: revise the graphic already on this library asset instead of composing a new one.'),
         brief: z
           .string()
           .describe('What the graphic should say — or, when one already exists, what to change. Include exact numbers/quotes/prices when they matter.'),
@@ -1079,6 +1081,7 @@ export function createContentTools(ctx: ChatToolCtx) {
       }),
       execute: async ({
         post_id,
+        media_id,
         brief,
         slide_index,
         media_ids,
@@ -1088,7 +1091,8 @@ export function createContentTools(ctx: ChatToolCtx) {
         generate_prompt,
         convert_from_video
       }: {
-        post_id: string;
+        post_id?: string;
+        media_id?: string;
         brief: string;
         slide_index?: number;
         media_ids?: string[];
@@ -1098,6 +1102,21 @@ export function createContentTools(ctx: ChatToolCtx) {
         generate_prompt?: string;
         convert_from_video?: boolean;
       }) => {
+        const { loadEditorContext, designPostGraphic, designStandaloneGraphic } = await import(
+          '$lib/agent/tools/post-editor-tools'
+        );
+        const ctx = await loadEditorContext(supabase, brandId);
+
+        // Senza post non si crea un post: si compone un asset e basta. È la richiesta «fammi una
+        // grafica, ma niente post», che prima non era esprimibile — e l'agente ripiegava su
+        // generate_image, cioè una foto al posto di una grafica.
+        if (!post_id) {
+          return designStandaloneGraphic(
+            { supabase, brandId, userId, ctx, refUrls: turnRefUrls },
+            { brief, media_id, media_ids, people_ids, talent_ids, image_urls, generate_prompt }
+          );
+        }
+
         const { data: post } = await supabase
           .from('posts')
           .select('id')
@@ -1105,8 +1124,6 @@ export function createContentTools(ctx: ChatToolCtx) {
           .eq('brand_id', brandId)
           .maybeSingle();
         if (!post) return { error: 'Post not found' };
-        const { loadEditorContext, designPostGraphic } = await import('$lib/agent/tools/post-editor-tools');
-        const ctx = await loadEditorContext(supabase, brandId);
         return compactGraphicPersist(
           await designPostGraphic(
             { supabase, brandId, postId: post_id, tz, userId, ctx, refUrls: turnRefUrls },

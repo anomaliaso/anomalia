@@ -1,5 +1,6 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { matchesCron, defaultManifest } from './sidecar.mjs';
 
 const at = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi);
@@ -53,9 +54,42 @@ test('invalid expressions throw', () => {
   assert.throws(() => matchesCron('5/2 * * * *', new Date()), SyntaxError);
 });
 
+const DIVERGENZE_MOTIVATE = [
+  {
+    path: '/api/v1/chat/models/sync',
+    solo: 'vercel',
+    perche: 'popola il catalogo modelli della chat hosted; la chat sta venendo smantellata e nessuno ha ancora deciso se al self-hosted serva'
+  }
+];
+
+test('i due pianificatori schedulano gli stessi cron, salvo le divergenze motivate', () => {
+  const crons = JSON.parse(readFileSync('vercel.json', 'utf8')).crons ?? [];
+  const soloSu = (piattaforma) =>
+    DIVERGENZE_MOTIVATE.filter((d) => d.solo === piattaforma).map((d) => d.path);
+
+  const vercelPaths = crons.map((job) => job.path);
+  const sidecarPaths = defaultManifest.map((job) => job.path);
+
+  assert.deepEqual(
+    sidecarPaths.filter((path) => !vercelPaths.includes(path)).sort(),
+    soloSu('sidecar').sort(),
+    'cron nel sidecar e non in vercel.json: spegnili anche qui, o dichiarali in DIVERGENZE_MOTIVATE'
+  );
+  assert.deepEqual(
+    vercelPaths.filter((path) => !sidecarPaths.includes(path)).sort(),
+    soloSu('vercel').sort(),
+    'cron in vercel.json e non nel sidecar: aggiungili qui, o dichiarali in DIVERGENZE_MOTIVATE'
+  );
+
+  const sidecarSchedule = Object.fromEntries(defaultManifest.map((job) => [job.path, job.schedule]));
+  for (const job of crons) {
+    if (soloSu('vercel').includes(job.path)) continue;
+    assert.equal(sidecarSchedule[job.path], job.schedule, `cadenza divergente per ${job.path}`);
+  }
+});
+
 test('embedded manifest mirrors vercel.json schedules on known dates', () => {
   const scheduleOf = Object.fromEntries(defaultManifest.map((job) => [job.path, job.schedule]));
-  assert.equal(defaultManifest.length, 43);
   assert.equal(scheduleOf['/api/v1/market-references/tick'], '30 10 * * 1');
   assert.equal(scheduleOf['/api/v1/backlinks/external/tick'], '0 */6 * * *');
   assert.equal(scheduleOf['/api/v1/radar/tick'], '0 8,12,16,20 * * *');

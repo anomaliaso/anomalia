@@ -2485,6 +2485,7 @@
       "product": "Producto",
       "problems": "Problemas que resolvemos",
       "company": "Empresa",
+      "developers": "Desarrolladores",
       "freeTools": "Herramientas gratis",
       "resources": "Recursos",
       "useCases": "Casos de uso",
@@ -2553,10 +2554,6 @@
         "title": "Social Media Feels Overwhelming? You're Not Alone — Anomalia",
         "description": "Gestionar las redes sociales es agotador. Anomalía te lo quita de encima: la IA crea, programa y publica contenido en todas las plataformas."
       },
-      "contentIdeas": {
-        "title": "Never Run Out of Social Media Content Ideas Again — Anomalia",
-        "description": "¿Mirando un calendario de contenido en blanco? Anomalía genera publicaciones e ideas de contenido de redes sociales nuevas y de marca para usted cada semana."
-      },
       "cantAfford": {
         "title": "Can't Afford a Social Media Manager? Try AI Instead — Anomalia",
         "description": "Un gestor de redes sociales cuesta más de 2.000 € al mes. Anomalía hace el mismo trabajo con IA por una fracción del precio. Empieza gratis."
@@ -2568,10 +2565,6 @@
       "notWorking": {
         "title": "Social Media Marketing Not Working? Here's Why — Anomalia",
         "description": "¿Publicar aleatoriamente sin estrategia? Anomalia crea un plan editorial basado en datos y publica de manera consistente en todas las plataformas."
-      },
-      "aiVsHuman": {
-        "title": "AI vs Human Social Media Manager: Which Is Better? — Anomalia",
-        "description": "¿Puede la IA reemplazar a un administrador de redes sociales? Anomalía crea, programa y publica contenido las 24 horas del día, los 7 días de la semana, por una fracción del costo."
       },
       "autopilot": {
         "title": "Pon tus redes sociales en piloto automático, sin que parezcan robóticas, Anomalía",
@@ -2597,33 +2590,9 @@
         "title": "Best Times to Post on Social Media — Anomalia Handles It — Anomalia",
         "description": "Deja de adivinar cuándo publicar. Anomalía programa tu contenido en los momentos óptimos para cada plataforma de forma automática."
       },
-      "noResults": {
-        "title": "Posting on Social Media But Getting No Results? — Anomalia",
-        "description": "Publicas regularmente pero nada cambia. Anomalia crea un plan de contenido basado en una estrategia que realmente hace crecer su negocio."
-      },
-      "scheduling": {
-        "title": "Social Media Scheduling Tool — Plan a Week in 2 Minutes — Anomalia",
-        "description": "Programe una semana completa de contenido de redes sociales en minutos. Anomalía planifica, crea y publica publicaciones automáticamente."
-      },
       "analytics": {
         "title": "Social Media Analytics — Know What Works, Fix What Doesn't — Anomalia",
         "description": "Realice un seguimiento del rendimiento de sus redes sociales en todas las plataformas. Anomalía muestra qué contenido funciona y crea más."
-      },
-      "contentCalendar": {
-        "title": "Calendario de contenido para redes sociales — Se completa automáticamente — Anomalía",
-        "description": "Nunca más vuelvas a mirar un calendario de contenido en blanco. Anomalía llena tu calendario editorial con publicaciones sobre la marca cada semana."
-      },
-      "automation": {
-        "title": "Social Media Automation — From Zero to Published — Anomalia",
-        "description": "Automatice todo su flujo de trabajo de redes sociales. Anomalía crea, programa y publica contenido en todas las plataformas."
-      },
-      "strategy": {
-        "title": "Estrategia de redes sociales: creada por IA, aprobada por usted: Anomalía",
-        "description": "Deja de publicar sin un plan. Anomalia crea una estrategia de redes sociales basada en datos y adaptada a su marca y mercado."
-      },
-      "captionWriter": {
-        "title": "AI Caption Writer — On-Brand Captions in Seconds — Anomalia",
-        "description": "Escribe subtítulos para las redes sociales que se parezcan a ti. La IA de Anomalia aprende tu voz y genera subtítulos para cada plataforma."
       }
     },
     "grow": {
@@ -3766,10 +3735,29 @@
       "backToTeam": "Volver al equipo",
       "spaces": "Espacios",
       "tools": "Herramientas",
+      "home": "Inicio",
+      "materials": "Materiales",
+      "results": "Resultados",
+      "newsRadar": "News Radar",
       "library": "Biblioteca",
-      "site": "Blog",
+      "site": "Auto blog",
+      "seoGeo": "SEO/GEO",
       "talkTo": "Habla con {name}",
       "agentOffer": "Aún no hay nada aquí — {name} puede encargarse. Abre el chat."
+    },
+    "mcpGuide": {
+      "title": "Conecta tu agente",
+      "subtitle": "Maneja esta marca desde Claude, Cursor o ChatGPT",
+      "hostTitle": "Cualquier host MCP — Claude, Cursor, ChatGPT",
+      "hostNote": "Pégalo en la configuración MCP del host. La primera vez pide iniciar sesión (OAuth); después cada llamada lleva tu token.",
+      "pluginTitle": "Claude Code — el plugin",
+      "pluginNote": "Incluye el mismo servidor remoto y la skill de Anomalia. En Codex: codex plugin marketplace add anomaliaso/anomalia",
+      "cliTitle": "Terminal, o un host que no puede enviar una cabecera Bearer",
+      "cliNote": "El login de la CLI escribe la sesión que lee el servidor local.",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "note": "El servidor remoto es {url} y necesita una cabecera Authorization: Bearer — un 401 sin ella es la respuesta correcta, no un fallo. Si tu host registra un callback OAuth con esquema propio y la conexión se rechaza, usa la CLI y el servidor local.",
+      "docs": "Configuración completa"
     },
     "strategySetup": {
       "title": "Configura tu flujo de anomalías",
@@ -4162,6 +4150,12 @@
           "seo": "Análisis SEO/GEO de tu sitio",
           "gsc": "Conecta Google Search Console"
         }
+      },
+      "todo": {
+        "title": "Por hacer",
+        "count": "{n, plural, one {# cosa necesita tu atención} other {# cosas necesitan tu atención}}",
+        "empty": "No hay nada esperando. Los borradores nuevos, las señales del radar y los leads aparecen aquí en cuanto llegan.",
+        "noSocial": "Aún no hay ninguna cuenta conectada"
       },
       "overview": {
         "title": "Resumen",
@@ -4730,6 +4724,7 @@
       "autoPublishTo": "Borradores para {platform}, publicados tras tu aprobación",
       "connectToChoose": "Connect an account above to choose which post automatically.",
       "postingTimezone": "Zona horaria de publicación",
+      "tzKeepsAbsolute": "Cambiar la zona NO mueve las publicaciones que ya tienen hora: salen en el mismo instante absoluto, así que cambia su hora local. Solo la programación nueva usa la zona nueva.",
       "scheduleTimes": "Horarios de programación",
       "scheduleTimesDesc": "Todos los horarios de publicación en Anomalía se muestran y programan en esta zona.",
       "save": "Guardar",
@@ -5769,7 +5764,16 @@
       "workspace": "Espacio de trabajo",
       "lightMode": "Modo claro",
       "darkMode": "Modo oscuro",
-      "language": "Idioma"
+      "language": "Idioma",
+      "billing": {
+        "poolTitle": "Bolsa de créditos compartida",
+        "poolDesc": "Una sola suscripción cubre todas las marcas de tu cuenta.",
+        "periodLabel": "Periodo {start} – {end}",
+        "breakdownTitle": "Consumo por marca",
+        "brandCol": "Marca",
+        "creditsCol": "Créditos usados",
+        "noBrands": "Crea una marca para empezar."
+      }
     },
     "radar": {
       "title": "Radar",
@@ -6999,7 +7003,6 @@
       "nav": {
         "preview": "Vista previa",
         "edit": "Editar",
-        "chat": "Chat",
         "details": "Detalles",
         "analytics": "Analytics",
         "campaign": "Campaña",
@@ -7014,10 +7017,6 @@
         "followers": "Empresa · 1.240 seguidores",
         "noMedia": "Sin media",
         "noCaption": "Sin caption"
-      },
-      "chat": {
-        "studioOff": "El chat del editor está disponible cuando Studio está activo en este workspace.",
-        "goEdit": "Editar post →"
       },
       "details": {
         "title": "Detalles del post",
@@ -7060,13 +7059,13 @@
       },
       "campaign": {
         "title": "Alternativas de media",
-        "body": "Genera creatividades alternativas de este post para una nueva campaña y afínalas en el chat.",
-        "openChat": "Abrir chat del editor →",
-        "step1": "Abre el chat del editor con el brief sugerido.",
+        "body": "Genera creatividades alternativas de este post para una nueva campaña y afínalas en el editor.",
+        "step1": "Copia el brief sugerido y pásaselo a tu agente.",
         "step2": "Pide 2–3 imágenes o slides alternativas (mismo mensaje, visual distinto).",
         "step3": "Elige la ganadora y boóstala o prográmala como nuevo post.",
         "suggestedPrompt": "Brief sugerido",
-        "chatPrompt": "Genera 3 versiones de media alternativas de este post de {platform} para una nueva campaña. Mantén la voz de marca. Caption actual: \"{caption}\". Varía composición y mood, no el producto."
+        "chatPrompt": "Genera 3 versiones de media alternativas de este post de {platform} para una nueva campaña. Mantén la voz de marca. Caption actual: \"{caption}\". Varía composición y mood, no el producto.",
+        "goEdit": "Editar post →"
       },
       "boost": {
         "title": "Impulsar como anuncio",
@@ -7288,8 +7287,6 @@
       "exportPng": "Exportar PNG",
       "exportJpg": "Exportar JPG"
     },
-    "chatHint": "Pide reescribir el pie de foto, cambiar la imagen o una diapositiva del carrusel. Puedes adjuntar referencias del ordenador, la biblioteca de marca o tus publicaciones.",
-    "chatHintGraphic": "Este still tiene código HTML/CSS editable. Pide analizarlo o cambiarlo, restilizar la gráfica o reescribir el pie de foto.",
     "regenerating": "Regenerando…",
     "featuredProduct": "Producto destacado",
     "caption": "Leyenda",
@@ -7389,7 +7386,6 @@
     "mobilePane": {
       "label": "Paneles del editor",
       "edit": "Editar",
-      "chat": "Chat",
       "preview": "Vista previa"
     }
   },
@@ -9368,6 +9364,9 @@
     "tier": {
       "label": "Modelo",
       "custom": "Personalizado",
+      "default": "Predeterminado",
+      "defaultHint": "El modelo con el que arranca este espacio",
+      "defaultNamed": "Predeterminado · {model}",
       "modelFamily": {
         "luna": "Luna",
         "grok": "Grok 4.6",
@@ -9376,15 +9375,9 @@
         "gpt-terra": "GPT 5.6 Terra",
         "gpt-sol": "GPT 5.6 Sol"
       },
-      "auto": "Auto",
-      "fast": "Fast",
-      "pro": "Pro",
       "deepseek-pro": "DeepSeek Pro",
       "gpt-terra": "GPT 5.6 Terra",
       "gpt-sol": "GPT 5.6 Sol",
-      "fastHint": "Tareas del día a día, respuestas rápidas",
-      "proHint": "Razonamiento más fuerte para problemas difíciles",
-      "autoHint": "El mejor modelo para la tarea · recomendado",
       "deepseek-proHint": "Nuevo V4 Pro · más potente que Fast",
       "gpt-terraHint": "GPT 5.6 Terra · equilibrado · lee imágenes",
       "gpt-solHint": "GPT 5.6 Sol · flagship · lee imágenes"

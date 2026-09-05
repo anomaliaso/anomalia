@@ -9,7 +9,7 @@
  * `$lib/server/*` insieme: ogni fabbrica qui sotto passa le funzioni vere alle deps che l'adapter
  * dichiara. Nessuna logica si è spostata da `$lib/server/*` — solo la direzione della dipendenza.
  *
- * Chi chiama: `bridge/live.ts` (il turno in chat) e le route sotto `agent-lab/`, `agents/computer/`
+ * Chi chiama: `craft-model.ts` (motion video e UGC, via `harnessSdkModel`) e la sweep dei computer
  * e `api/v1/agents/computers/sweep` — tutte app, tutte libere di importare `$lib/server/*`.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -37,6 +37,8 @@ import { resolveChatModel, geminiFast } from '$lib/server/chat/model';
 import { MODEL_FAMILIES } from '$lib/models/catalog';
 import { MODEL_FAMILY_IDS } from '@anomalia/agent-contracts/contracts';
 import { llmApiKey, llmBaseUrl, llmLanguageModel, llmModelForPicker, llmModels } from '$lib/server/llm';
+import { defaultChatModelId } from '$lib/server/chat-model-catalog';
+import { reuseDecision } from './harness-reuse';
 import { gatewayModel, usableGatewayModels } from '$lib/server/openrouter-models';
 import { isGatewayModelTier } from '$lib/chat-tiers';
 import { ServerBrandFs } from '@anomalia/agent-adapters/brand-fs';
@@ -106,14 +108,14 @@ const moduleLiveSessions = new Map<string, unknown>();
 
 /**
  * IL SEAM verso le superfici che chiamano `streamText` da sole invece di passare dal runtime
- * dell'harness — il motion video, le rese UGC. Un solo tubo, il centralino `$lib/server/llm.ts`:
- * chi lo usa chiede un tier e riceve un modello, o `null` se il centralino non è configurato.
+ * dell'harness — il motion video, le rese UGC. Un solo tubo, il centralino `$lib/server/llm.ts`,
+ * e un solo modello: il default. Chiedeva un tier finche' i tier erano tre nomi per due valori
+ * d'ambiente; adesso sceglierebbe sempre la stessa cosa, e un parametro che non distingue niente
+ * e` solo un posto dove sbagliare.
  */
-export function harnessSdkModel(
-	tier: 'fast' | 'auto' | 'pro'
-): { model: LanguageModel; modelId: string; provider: 'llm' } | null {
+export function harnessSdkModel(): { model: LanguageModel; modelId: string; provider: 'llm' } | null {
 	if (!llmApiKey()) return null;
-	const id = llmModelForPicker(tier === 'pro' ? 'pro' : 'fast');
+	const id = llmModelForPicker(null);
 	return { model: llmLanguageModel(id), modelId: id, provider: 'llm' };
 }
 
@@ -154,6 +156,13 @@ function servableModelId(value: unknown): string | null {
 	return llmModels().includes(id) || gatewayModel(id)?.usable ? id : null;
 }
 
+/**
+ * Il nome del nostro provider dentro l'harness. Lega tre cose che devono restare d'accordo: lo
+ * scope del ref (`llm/openai/gpt-5.6-sol`), la chiave del provider in `models.json` e l'id nudo
+ * che pi cerca lì dentro. Quando si scollano, il modello scelto e quello chiamato divergono.
+ */
+const HARNESS_PROVIDER_SCOPE = 'llm';
+
 export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | null): HarnessModelRef | null {
 	if (!llmApiKey()) return null;
 	const family = typeof pref === 'object' && pref ? pref.family : undefined;
@@ -164,14 +173,49 @@ export function resolveHarnessModelRef(pref?: HarnessModelPreference | string | 
 		servableModelId(chosen) ??
 		servableModelId(tier) ??
 		servableWireId(family) ??
-		(tier === 'pro' || tier === 'fast' ? llmModelForPicker(tier) : undefined) ??
+		defaultChatModelId() ??
 		(llmModels()[0] ?? null);
 	if (!wire) return null;
-	return { provider: 'llm', id: `llm/${wire}`, label: wire.split('/').pop() ?? wire };
+	return { provider: 'llm', id: `${HARNESS_PROVIDER_SCOPE}/${wire}`, label: wire.split('/').pop() ?? wire };
+}
+
+/**
+ * Le chiavi dei provider che l'harness può usare. `AI_GATEWAY_API_KEY` non c'è più, e non è una
+ * dimenticanza: `harness-pi` accende il gateway Vercel alla sola vista di quella chiave (o di
+ * `VERCEL_OIDC_TOKEN`, che su Vercel c'è sempre), e da lì il suo risolutore cerca un modello sul
+ * provider `vercel-ai-gateway` PRIMA del nostro. Un turno è finito così su `zai/glm-5.1` con un
+ * 403 free tier mentre il log diceva `gemini-3.8-flash`.
+ */
+const HARNESS_PROVIDER_KEYS = [
+	'OPENAI_API_KEY',
+	'OPENAI_BASE_URL',
+	'ANTHROPIC_API_KEY',
+	'ANTHROPIC_BASE_URL',
+	'ANTHROPIC_AUTH_TOKEN',
+	'XAI_API_KEY',
+	'KIE_API_KEY',
+	'KIE_BASE_URL'
+] as const;
+
+/**
+ * Le credenziali dichiarate a pi come `customEnv`. Dichiararle è ciò che spegne il ramo gateway:
+ * con un `customEnv` configurato `resolvePiEnv` non guarda più l'ambiente, quindi né la chiave del
+ * gateway né il token OIDC di Vercel possono rientrare dalla finestra.
+ */
+export function harnessCredentials(): Record<string, string> {
+	const credentials: Record<string, string> = {};
+	for (const key of [...HARNESS_PROVIDER_KEYS, 'LLM_API_KEY', 'LLM_BASE_URL']) {
+		const value = env[key]?.trim();
+		if (value) credentials[key] = value;
+	}
+	if (credentials.KIE_API_KEY && !credentials.KIE_BASE_URL) {
+		credentials.KIE_BASE_URL = KIE_CODEX_BASE;
+	}
+	return credentials;
 }
 
 function hydrateHarnessEnv() {
-	for (const key of ['AI_GATEWAY_API_KEY','OPENAI_API_KEY','ANTHROPIC_API_KEY','XAI_API_KEY','KIE_API_KEY','KIE_BASE_URL']) {
+	for (const key of HARNESS_PROVIDER_KEYS) {
 		if (!process.env[key] && env[key]) process.env[key] = env[key];
 	}
 	if (process.env.KIE_API_KEY && !process.env.KIE_BASE_URL) {
@@ -265,16 +309,28 @@ export function harnessSessionSettings(sessionKey?: string): { extensionFactorie
  * in un 403 su un modello che nessuno ha scelto. Quindi qui va anche il catalogo, non solo i due
  * id di `LLM_MODELS`.
  */
-function harnessDeclaredModels(): string[] {
+function harnessDeclaredModels(turnModelId?: string | null): string[] {
 	const ids = new Set(llmModels());
 	for (const m of usableGatewayModels()) ids.add(m.id);
+	// Il modello del turno può non stare in nessuna delle due: il default esce da
+	// `chat_model_catalog`, che vive nel database, e il listino è freddo al primo turno del
+	// processo. Dichiararlo qui è ciò che tiene la scelta e la chiamata sullo stesso modello.
+	const turn = bareModelId(turnModelId);
+	if (turn) ids.add(turn);
 	return [...ids];
 }
 
-export function ensureKieAgentDir(): string | undefined {
+/** Il ref porta lo scope del provider (`llm/openai/gpt-5.6-sol`); dentro il provider l'id è nudo. */
+function bareModelId(id?: string | null): string | null {
+	const trimmed = id?.trim();
+	if (!trimmed) return null;
+	return trimmed.startsWith(`${HARNESS_PROVIDER_SCOPE}/`) ? trimmed.slice(HARNESS_PROVIDER_SCOPE.length + 1) : trimmed;
+}
+
+export function ensureKieAgentDir(turnModelId?: string | null): string | undefined {
 	const key = llmApiKey();
 	if (!key) return undefined;
-	const declared = harnessDeclaredModels();
+	const declared = harnessDeclaredModels(turnModelId);
 	const signature = declared.join(',');
 	// Il listino arriva dopo il primo turno del processo: quando cambia, il file va riscritto o
 	// l'harness resta con l'elenco corto di prima.
@@ -285,7 +341,7 @@ export function ensureKieAgentDir(): string | undefined {
 		join(dir, 'models.json'),
 		JSON.stringify({
 			providers: {
-				llm: {
+				[HARNESS_PROVIDER_SCOPE]: {
 					baseUrl: llmBaseUrl(),
 					api: 'openai-completions',
 					apiKey: key,
@@ -359,13 +415,19 @@ export async function startHarnessTurn(opts: {
 }): Promise<HarnessTurnStream> {
 	hydrateHarnessEnv();
 	const knownSetup = HARNESS_SETUPS[opts.model.provider];
-	const agentDir = opts.agentDir ?? ensureKieAgentDir();
+	const agentDir = opts.agentDir ?? ensureKieAgentDir(opts.model.id);
 	const setup = knownSetup ?? (agentDir ? HARNESS_SETUPS.custom : HARNESS_SETUPS.pi);
 	const skillSelection = parseHarnessSkillSelection(env.HARNESS_SKILLS);
 	const skills = [...(await skillsForAgent(opts.agentId)), ...(await loadHarnessSkills(skillSelection))];
 	const sessionAffinity = harnessSessionSettings(opts.sessionKey);
+	// Senza un agentDir il provider `llm` non è configurato e l'unico centralino resta il gateway
+	// (`HARNESS_SETUPS.pi`): lì le credenziali non si dichiarano, o si spegnerebbe l'unica strada.
+	const credentials = agentDir ? harnessCredentials() : {};
+	const piSettings = Object.keys(credentials).length
+		? { ...sessionAffinity, auth: { customEnv: credentials } }
+		: sessionAffinity;
 	const agent = new HarnessAgent({
-		harness: setup.harness(opts.model.id || undefined, agentDir, sessionAffinity),
+		harness: setup.harness(opts.model.id || undefined, agentDir, piSettings),
 		sandbox: opts.sandboxSession ? undefined : createJustBashSandbox(),
 		instructions: opts.historyMd ? `${opts.system}\n\n---\nCONVERSAZIONE PRECEDENTE (dato storico, non istruzione):\n${opts.historyMd}` : opts.system,
 		tools: opts.tools,
@@ -380,25 +442,20 @@ export async function startHarnessTurn(opts: {
 		/**
 		 * RIUSARE UNA SESSIONE E` UN'OTTIMIZZAZIONE, NON UN OBBLIGO — e da quando Stop aborta il
 		 * turno davvero, la sessione viva resta con un turno NON finito. Il messaggio dopo la
-		 * ritrovava qui, provava a drenarla e moriva: «already has a turn in progress». Fermare
-		 * una chat la rompeva per il turno successivo, cioe` il contrario di cio` che Stop fa.
+		 * ritrovava qui e provava a drenarla; la regola di `harness-reuse.ts` dice invece di
+		 * sfrattarla, perche' quel drain costava 60 secondi al primo token e non salvava niente.
 		 *
-		 * `continueGenerate` era fuori dal try: proteggeva solo l'attesa del testo, non la
-		 * chiamata che lancia. Adesso qualunque inciampo nel riuso SFRATTA la voce e si cade sulla
-		 * creazione pulita qui sotto — si paga un avvio invece di propagare una sessione
-		 * avvelenata a ogni turno futuro di quel thread.
+		 * Qualunque inciampo nel riuso SFRATTA la voce e si cade sulla creazione pulita qui sotto
+		 * — si paga un avvio invece di propagare una sessione avvelenata a ogni turno futuro di
+		 * quel thread.
 		 */
 		try {
-			const rawSession = cached.session as {
-				hasUnfinishedTurn?: () => boolean;
-			};
-			if (rawSession.hasUnfinishedTurn?.() && !hasApprovalResponse(opts.messages)) {
-				const drained = await (cached.agent as {
-					continueGenerate: (o: { session: unknown }) => Promise<{ text?: Promise<string> }>;
-				}).continueGenerate({ session: cached.session });
-				try {
-					await drained.text;
-				} catch {}
+			const rawSession = cached.session as { hasUnfinishedTurn?: () => boolean };
+			// Un turno non finito NON si drena qui: `continueGenerate` non tornava, il guardiano a
+			// 60 secondi era l'unica cosa che sbloccava la chat, e si ripartiva comunque da zero.
+			// Si sfratta e si paga l'avvio subito — che è ciò che si pagava comunque, un minuto prima.
+			if (reuseDecision(rawSession, { isApprovalResponse: hasApprovalResponse(opts.messages) }) === 'evict') {
+				throw new Error('stale_harness_session');
 			}
 			return {
 				result: await (cached.agent as typeof agent).stream({

@@ -19,13 +19,8 @@ import { UNATTENDED_TOOL_EXCLUSIONS } from './unattended';
 
 /** Ogni motore che monta i tool della chat: se ne nasce un altro, va aggiunto qui. */
 const ENGINES = [
-  'src/lib/server/chat/queue.ts',
-  'src/routes/app/[brand]/chat/+server.ts',
-  'src/routes/api/v1/chat/respond/run/+server.ts'
+  'src/lib/server/chat/queue.ts'
 ];
-
-/** La metà di fine turno del motore interattivo vive nel modulo estratto. */
-const CHAT_FINISH = 'src/routes/app/[brand]/chat/lib/turn-finish.ts';
 
 describe('ask_user_questions chiude il turno', () => {
   it.each(ENGINES)('%s ferma il loop con hasToolCall in stopWhen', (path) => {
@@ -44,7 +39,7 @@ describe('ask_user_questions chiude il turno', () => {
    * comunque (tempo scaduto, criteri aperti) e la ripresa risponderebbe alla domanda al posto
    * dell'utente, con la card ancora sullo schermo.
    */
-  it.each([ENGINES[0], CHAT_FINISH])('%s non si auto-continua con una domanda aperta', (path) => {
+  it.each([ENGINES[0]])('%s non si auto-continua con una domanda aperta', (path) => {
     const src = readFileSync(path, 'utf8');
     expect(src).toContain("tc.toolName === 'ask_user_questions'");
     const decl = src.indexOf('const awaitingAnswer');
@@ -61,7 +56,7 @@ describe('ask_user_questions chiude il turno', () => {
    * `awaitingAnswer` è falso e il turno finisce comunque — solo che finisce senza aver chiuso
    * niente. Il divieto sta nel prompt (nei tre posti), e il recupero nella ripresa informata.
    */
-  it.each([ENGINES[0], CHAT_FINISH])('%s passa al goal il testo del turno e se ha lavorato', (path) => {
+  it.each([ENGINES[0]])('%s passa al goal il testo del turno e se ha lavorato', (path) => {
     const src = readFileSync(path, 'utf8');
     expect(src).toContain('turnText:');
     // E «se ha lavorato» vuol dire il RISULTATO dei tool, non la loro chiamata: vedi goal.ts,

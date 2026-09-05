@@ -21,7 +21,8 @@ playwright-report/
 test-results/
 
 # local seedboard / generated media packs (use Cloud Agent artifacts or storage)
-artifacts/
+# Anchored: unanchored it matched every nested artifacts/ too, and silently dropped a route.
+/artifacts/
 
 # supabase local
 supabase/.branches/
@@ -87,4 +88,8 @@ AGENT-CHAT-*.md
 /mcp.json
 /.mcp.json
 .mimocode/
+.codex/
 vite.config.ts.timestamp-*.mjs
+
+# Prove locali: immagini e file generati per verificare a mano, mai da committare.
+.probe/

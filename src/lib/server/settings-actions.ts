@@ -10,10 +10,12 @@ import { emailLocale } from '$lib/server/email-i18n';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { RequestEvent } from '@sveltejs/kit';
 import { isChatTier, isGatewayModelTier } from '$lib/chat-tiers';
+import { isKnownTimezone } from '$lib/brand-fields';
 import { invalidateBrandNav } from '$lib/server/nav-cache';
 import { readUploadImage } from '$lib/server/raster-image';
 import { createAdminClient } from '$lib/server/supabase-admin';
-import { setJobEnabled } from '$lib/server/job-roster';
+import { orgBillingForBrand } from '$lib/server/org-billing';
+import { billingLink } from '$lib/server/billing-links';
 
 const stripeApi = () => import('$lib/server/stripe');
 
@@ -43,27 +45,18 @@ export async function billingPortal({ request, params, url, locals: { supabase }
   const flowRaw = String(data.get('flow') ?? 'invoices');
   const flow = flowRaw === 'payment_method' || flowRaw === 'upgrade' ? flowRaw : undefined;
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('slug, stripe_customer_id, stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand) return fail(404, { billingError: 'Brand not found' });
-  if (!brand.stripe_customer_id) throw redirect(303, `/app/${brand.slug}/activate`);
-
-  let portalUrl: string;
-  try {
-    const { createBillingPortalSession } = await stripeApi();
-    portalUrl = await createBillingPortalSession({
-      customerId: brand.stripe_customer_id,
-      returnUrl: `${url.origin}/app/${brand.slug}/settings/billing`,
-      flow,
-      subscriptionId: brand.stripe_subscription_id
-    });
-  } catch (e) {
-    return fail(500, { billingError: e instanceof Error ? e.message : 'Could not open billing' });
+  const link = await billingLink(supabase, {
+    slug: params.brand!,
+    returnUrl: `${url.origin}/app/${params.brand}/settings/billing`,
+    flow
+  });
+  if (link.refusal === 'no_org_billing') return fail(404, { billingError: 'Brand not found' });
+  if (link.refusal === 'no_customer' || link.refusal === 'no_subscription') {
+    throw redirect(303, `/app/${params.brand}/activate`);
   }
-  throw redirect(303, portalUrl);
+  if (link.refusal) return fail(500, { billingError: link.message || 'Could not open billing' });
+
+  throw redirect(303, link.url);
 }
 
 export async function upgrade({ request, params, url, locals: { supabase } }: Ev) {
@@ -71,33 +64,24 @@ export async function upgrade({ request, params, url, locals: { supabase } }: Ev
   const data = await request.formData();
   const plan = String(data.get('plan') ?? '');
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('slug, plan, stripe_customer_id, stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand) return fail(404, { billingError: 'Brand not found' });
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!billing) return fail(404, { billingError: 'Brand not found' });
   // Same ladder as the settings modal / chat widget — Go included only while FEATURE_PLAN_GO is on.
-  if (!plansAbove(brand.plan).some((p) => p.key === plan)) {
+  if (!plansAbove(billing.plan).some((p) => p.key === plan)) {
     return fail(400, { billingError: 'Unknown plan' });
   }
-  if (!brand.stripe_customer_id || !brand.stripe_subscription_id) {
-    throw redirect(303, `/app/${brand.slug}/activate?plan=${encodeURIComponent(plan)}`);
-  }
 
-  let upgradeUrl: string;
-  try {
-    const { createUpgradePortalSession } = await stripeApi();
-    upgradeUrl = await createUpgradePortalSession({
-      customerId: brand.stripe_customer_id,
-      subscriptionId: brand.stripe_subscription_id,
-      plan,
-      returnUrl: `${url.origin}/app/${brand.slug}/settings/billing`
-    });
-  } catch (e) {
-    return fail(500, { billingError: e instanceof Error ? e.message : 'Could not start the upgrade' });
+  const link = await billingLink(supabase, {
+    slug: params.brand!,
+    returnUrl: `${url.origin}/app/${params.brand}/settings/billing`,
+    flow: 'upgrade'
+  });
+  if (link.refusal === 'no_customer' || link.refusal === 'no_subscription') {
+    throw redirect(303, `/app/${params.brand}/activate?plan=${encodeURIComponent(plan)}`);
   }
-  throw redirect(303, upgradeUrl);
+  if (link.refusal) return fail(500, { billingError: link.message || 'Could not start the upgrade' });
+
+  throw redirect(303, link.url);
 }
 
 export async function applyRetention({ params, locals: { supabase } }: Ev) {
@@ -105,16 +89,12 @@ export async function applyRetention({ params, locals: { supabase } }: Ev) {
   const coupon = env.STRIPE_RETENTION_COUPON;
   if (!coupon) return fail(400, { billingError: 'Retention offer is not configured.' });
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand?.stripe_subscription_id) return fail(400, { billingError: 'No active subscription.' });
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!billing?.subscriptionId) return fail(400, { billingError: 'No active subscription.' });
 
   try {
     const { applyRetentionCoupon } = await stripeApi();
-    await applyRetentionCoupon(brand.stripe_subscription_id, coupon);
+    await applyRetentionCoupon(billing.subscriptionId, coupon);
   } catch (e) {
     return fail(500, { billingError: e instanceof Error ? e.message : 'Could not apply the offer' });
   }
@@ -127,18 +107,14 @@ export async function cancelPlan({ request, params, locals: { supabase } }: Ev) 
   const reason = String(data.get('reason') ?? '');
   const comment = String(data.get('explanation') ?? '').trim();
 
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('plan, stripe_subscription_id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!isPaidPlan(brand?.plan)) return fail(400, { billingError: 'No paid plan to cancel.' });
-  if (!brand?.stripe_subscription_id) return fail(400, { billingError: 'No active subscription.' });
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (!isPaidPlan(billing?.plan)) return fail(400, { billingError: 'No paid plan to cancel.' });
+  if (!billing?.subscriptionId) return fail(400, { billingError: 'No active subscription.' });
 
   let endsAt: string | null = null;
   try {
     const { cancelSubscriptionAtPeriodEnd } = await stripeApi();
-    ({ endsAt } = await cancelSubscriptionAtPeriodEnd(brand.stripe_subscription_id, {
+    ({ endsAt } = await cancelSubscriptionAtPeriodEnd(billing.subscriptionId, {
       feedback: FEEDBACK[reason],
       comment
     }));
@@ -155,16 +131,19 @@ export async function deleteBrand({ request, params, locals: { supabase } }: Ev)
 
   const { data: brand } = await supabase
     .from('brands')
-    .select('id, name, slug, stripe_subscription_id')
+    .select('id, name, slug')
     .eq('slug', params.brand!)
     .maybeSingle();
   if (!brand) return fail(404, { deleteError: 'failed' });
   if (confirm !== brand.name) return fail(400, { deleteError: 'nameMismatch' });
 
-  if (brand.stripe_subscription_id) {
+  // The subscription belongs to the org and covers every brand under it, so deleting one of
+  // several leaves the others paid for: only the last brand out takes the subscription with it.
+  const billing = await orgBillingForBrand(supabase, { slug: params.brand! });
+  if (billing?.subscriptionId && billing.brandCount <= 1) {
     try {
       const { ensureSubscriptionCanceled } = await stripeApi();
-      await ensureSubscriptionCanceled(brand.stripe_subscription_id);
+      await ensureSubscriptionCanceled(billing.subscriptionId);
     } catch (e) {
       return fail(400, {
         deleteError: e instanceof Error && e.message === 'active_plan' ? 'activePlan' : 'failed'
@@ -190,10 +169,22 @@ export async function deleteBrand({ request, params, locals: { supabase } }: Ev)
   throw redirect(303, '/app');
 }
 
-/** Which model new chats start on for this brand ('auto' | 'fast' | 'pro' | custom). */
+/**
+ * Il modello su cui partono le chat nuove di questo brand. Vuoto = nessuna scelta: il brand
+ * segue il default globale del catalogo, e continuera` a seguirlo quando cambia.
+ */
 export async function setChatDefaultTier({ request, params, locals: { supabase } }: Ev) {
   const data = await request.formData();
   const tier = String(data.get('tier') ?? '').trim();
+  if (!tier) {
+    const { error } = await supabase
+      .from('brands')
+      .update({ chat_default_tier: null })
+      .eq('slug', params.brand!);
+    if (error) return { error: error.message };
+    invalidateBrandNav(params.brand!);
+    return { chatTierSaved: true };
+  }
   if (!isChatTier(tier)) return { error: 'Pick a model' };
   // Un id che ha la forma giusta ma che il gateway non serve sarebbe un default rotto per ogni
   // chat nuova del brand: qui si controlla che sia una scelta davvero offerta.
@@ -213,7 +204,7 @@ export async function setChatDefaultTier({ request, params, locals: { supabase }
 export async function setTimezone({ request, params, locals: { supabase } }: Ev) {
   const data = await request.formData();
   const tz = String(data.get('timezone') ?? '').trim();
-  if (!tz) return { error: 'Pick a timezone' };
+  if (!isKnownTimezone(tz)) return { error: 'Pick a timezone' };
   const { error } = await supabase.from('brands').update({ timezone: tz }).eq('slug', params.brand!);
   if (error) return { error: error.message };
   invalidateBrandNav(params.brand!);
@@ -290,38 +281,6 @@ export async function disconnect({ request, params, locals: { supabase } }: Ev) 
   await supabase.from('social_accounts').delete().eq('id', acc.id).eq('brand_id', brand.id);
   invalidateBrandNav(params.brand!);
   return { disconnected: true };
-}
-
-export async function setAutopilot({ request, params, locals: { supabase } }: Ev) {
-  const data = await request.formData();
-  const enabled = String(data.get('enabled') ?? '') === 'true';
-  // Il toggle scrive l'opt-out del roster (chiave 'autopilot'), non più il booleano
-  // `brands.autopilot_enabled` — ritirato: il producer è un agente della squadra come gli altri,
-  // e questo interruttore e quello sulla pagina /agents devono essere LO STESSO interruttore.
-  // La lettura del brand col client utente è l'autorizzazione (RLS); la scrittura passa
-  // dall'admin perché brand_job_optouts è solo service-role.
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('slug', params.brand!)
-    .maybeSingle();
-  if (!brand) return { autopilotError: 'Brand not found' };
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  const res = await setJobEnabled(createAdminClient(), {
-    brandId: brand.id,
-    jobKey: 'autopilot',
-    enabled,
-    userId: user?.id ?? null
-  });
-  if (!res.ok) return { autopilotError: 'Could not save the toggle — try again.' };
-  if (enabled) {
-    // Riaccendere azzera anche la serie di fallimenti: il watchdog riparte da zero.
-    await supabase.from('brands').update({ autopilot_failure_count: 0 }).eq('id', brand.id);
-  }
-  invalidateBrandNav(params.brand!);
-  return { autopilotSaved: true, autopilotEnabled: enabled };
 }
 
 export async function invite({ request, params, url, cookies, locals: { supabase } }: Ev) {

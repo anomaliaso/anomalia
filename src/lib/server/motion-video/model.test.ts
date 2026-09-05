@@ -17,17 +17,22 @@ describe('motionAgentModel — il motion segue il centralino, non Google cablato
 	});
 
 	/**
-	 * SCRIVERE UNA COMPOSIZIONE NON E` IL TIER VELOCE. Il 26/8 `glm-5.3-flash` ha girato 23
-	 * minuti su un brief e non ha scritto una riga di sorgente: 95% dell'output in ragionamento,
-	 * zero lavoro. La chat resta sul tier veloce; questo mestiere no.
+	 * SCRIVERE UNA COMPOSIZIONE NON E` UN LAVORO DA MODELLO VELOCE. Il 26/8 `glm-5.3-flash` ha
+	 * girato 23 minuti su un brief senza scrivere una riga di sorgente: 95% dell'output in
+	 * ragionamento, zero lavoro.
+	 *
+	 * Quella protezione era il preset Pro — il SECONDO id di LLM_MODELS — e con i preset se n'e`
+	 * andata: il motion segue il default come tutto il resto. La scappatoia esplicita
+	 * `MOTION_VIDEO_MODEL` e` l'unica cosa che rimane fra un default flash e quei 23 minuti, ed e`
+	 * il test qui sotto a tenerla in piedi.
 	 */
-	it('la composizione prende il tier PRO del centralino, non quello veloce', () => {
+	it('la composizione segue il default del centralino', () => {
 		env.LLM_API_KEY = 'k';
 		env.LLM_DEFAULT_MODEL = 'z-ai/glm-5.3-flash';
 		env.LLM_MODELS = 'z-ai/glm-5.3-flash,openai/gpt-5.6-sol';
 		const m = motionAgentModel();
 		expect(m.provider).toBe('llm');
-		expect(m.modelId).toBe('openai/gpt-5.6-sol');
+		expect(m.modelId).toBe('z-ai/glm-5.3-flash');
 	});
 
 	it('MOTION_VIDEO_MODEL resta la scappatoia esplicita e vince sul picker del centralino', () => {

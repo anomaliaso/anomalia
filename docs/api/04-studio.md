@@ -103,7 +103,7 @@ Imposta i colori del brand (max 8 hex), salvati in `brand_kit.brand_colors`.
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `colors` | string[] | sì | Array di 1–8 colori hex (`#rgb` o `#rrggbb`) |
+| `colors` | string[] | sì | Array di 1–8 colori hex (`#rgb` o `#rrggbb`); il `#` iniziale può mancare |
 
 **Response** `200`:
 
@@ -396,6 +396,47 @@ curl -s -X DELETE "https://anomalia.so/api/v1/brands/mio-brand/studio/people/ID"
 
 ---
 
+## `POST /api/v1/brands/:slug/studio/products`
+
+Aggiunge **una** offerta al catalogo. Deterministico: nessun modello, nessun credito. Non è la stessa cosa di [`POST /products`](08-ads-voice-gtm-misc.md), che risincronizza l'intero catalogo da Shopify o WooCommerce cancellando prima tutto — un prodotto scritto a mano non sopravvivrebbe. Tool MCP: `create_product`.
+
+**Body**
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `title` | string | sì | Come si chiama l'offerta |
+| `description` | string | no | Cos'è, con le parole del brand |
+| `pricing` | string | no | Testo libero come lo scrive il brand: `"18,50 €"`, `"Free"` |
+| `url` | string | no | Dove sta l'offerta |
+| `kind` | string | no | Categoria di catalogo (default `product`) |
+| `featured` | boolean | no | Se il planner può metterla in primo piano (default `true`) |
+
+I campi non passati non vengono scritti: restano i default del database.
+
+**Response** `200`:
+
+```json
+{ "ok": true, "product": { "id": "ID", "title": "Blend Milano", "kind": "product", "pricing": "18,50 €", "featured": true } }
+```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — titolo mancante o campo non dichiarato |
+| `500` | `{"error":"insert_failed","details":"<messaggio Supabase>"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/studio/products" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Blend Milano","pricing":"18,50 €","description":"Arabica lavata, tostatura chiara"}'
+```
+
+---
+
 ## `POST /api/v1/brands/:slug/studio/documents`
 
 Aggiunge un documento/conoscenza (`brand_documents`) e ricostruisce il contesto AI (best-effort).
@@ -405,7 +446,7 @@ Aggiunge un documento/conoscenza (`brand_documents`) e ricostruisce il contesto 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
 | `title` | string | no | Titolo (default `"Note"`) |
-| `content_text` | string | condizionale | Obbligatorio a meno che `kind` sia `document` |
+| `content_text` | string | condizionale | Obbligatorio a meno che `kind` sia `document`. Accettato anche come `text` |
 | `kind` | string | no | Default `note`; `document` permette testo vuoto |
 
 **Response** `200`:
@@ -492,15 +533,15 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/studio/competitors"
 
 ## `PUT /api/v1/brands/:slug/studio/competitors/:id`
 
-Aggiorna un competitor; solo i campi presenti nel body vengono modificati. `website` normalizzato con `https://`.
+Aggiorna un competitor; solo i campi presenti nel body vengono modificati, gli altri restano identici. `website` normalizzato con `https://`. Un campo non dichiarato viene **rifiutato**, non ignorato. Tool MCP: `update_competitor`.
 
-**Body** (tutti opzionali)
+**Body** (tutti opzionali, almeno uno)
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
 | `name` | string | no | Nuovo nome |
 | `website` | string | no | Nuovo sito |
-| `kind` | string | no | `direct` \| `indirect` |
+| `kind` | string | no | `direct` \| `indirect` — gli unici due che il CHECK del database accetta |
 | `rationale` | string | no | Nuovo rationale |
 
 **Response** `200`:
@@ -508,6 +549,14 @@ Aggiorna un competitor; solo i campi presenti nel body vengono modificati. `webs
 ```json
 { "ok": true }
 ```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` |
+| `400` | `{"error":"no_fields"}` |
+| `404` | `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand: la risposta è la stessa |
 
 **Esempio**:
 
@@ -529,6 +578,8 @@ Elimina un competitor.
 ```json
 { "ok": true }
 ```
+
+**Errori specifici**: `404` `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand.
 
 **Esempio**:
 
@@ -593,7 +644,9 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/studio/history/sync
 
 ## `PUT /api/v1/brands/:slug/people/:id`
 
-Aggiorna una persona (percorso top-level, non sotto `/studio`). Solo i campi presenti vengono modificati.
+Aggiorna una persona (percorso top-level, non sotto `/studio`). Solo i campi presenti vengono modificati, gli altri restano identici. Tool MCP: `update_person`.
+
+`consent`, `consent_source`, `kind` e `images` **non** sono modificabili qui e una richiesta che li nomina viene rifiutata: il consenso lo attesta una persona, non una modifica. Finché non è attestato, `resolvePeopleVisualRefs` nega quel volto a ogni generatore.
 
 **Body** (almeno uno obbligatorio)
 
@@ -602,7 +655,7 @@ Aggiorna una persona (percorso top-level, non sotto `/studio`). Solo i campi pre
 | `name` | string | no | Nuovo nome |
 | `role` | string | no | Nuovo ruolo |
 | `description` | string | no | Nuova descrizione |
-| `attributes` | object | no | Nuovi attributi (es. `{"gender":"female"}`) |
+| `attributes` | object | no | Nuovi attributi, valori stringa (es. `{"gender":"female"}`) |
 
 **Response** `200`:
 
@@ -614,7 +667,9 @@ Aggiorna una persona (percorso top-level, non sotto `/studio`). Solo i campi pre
 
 | Status | Body |
 |---|---|
-| `400` | `{"error":"No fields to update"}` |
+| `400` | `{"error":"invalid_input","details":[…]}` — campo non dichiarato o tipo sbagliato |
+| `400` | `{"error":"no_fields"}` |
+| `404` | `{"error":"not_found"}` — l'id non esiste **o** è di un altro brand: la risposta è la stessa |
 | `500` | `{"error":"<messaggio Supabase>"}` |
 
 **Esempio**:

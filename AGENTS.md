@@ -2,7 +2,7 @@
 
 ## CLI
 
-The `anomalia` CLI lives in this repo at **`cli/`** (AGPL-3.0, source of CLI + MCP server +
+The `anomalia` CLI lives in this repo at **`cli/`** (Apache-2.0, source of CLI + MCP server +
 agent skills + Claude/Codex plugins). It is a thin HTTP client — it never touches the database,
 it only calls the API in `src/routes/api/v1/`. CLI, endpoints and MCP tools change in the same
 PRs here; releases are `cli-v*` tags (workflow `cli-release.yml`).
@@ -32,6 +32,9 @@ anomalia web <slug>                                # Blog articles (drafts too)
 # Brand doctor: GET /api/v1/brands/:slug/doctor (per cycle, the first gate the brand fails and how to unlock it)
 # Agent Library: GET /api/v1/agent-templates (public catalogue behind /agents + Automations › Custom Agents)
 # Chat goals: GET /api/v1/brands/:slug/goals (history + summary of goal mode — met_first_pass, laps, stopped_by)
+# Web evidence: GET /api/v1/brands/:slug/web/{audits,audits/findings,audits/citations,fixes}
+#   (audit history, what one audit observed, the citation probes behind share of voice, and the
+#   generated fixes with their body — reads only, spend nothing)
 anomalia studio <slug> add-note --text "..."       # Add knowledge
 anomalia ai <slug> --message "..."                 # AI chat (full access)
 ```
@@ -201,21 +204,22 @@ The evaluation (`scripts/eval/`) is the only thing that verifies **the product w
 the real agents to work on a disposable trial brand, with real requests, and judges FACTS before
 tastes — does the artifact exist? is the number right? how many text blocks? what did it cost?
 
-**What exists today. Only these two commands are real:**
+**What exists today. Only this command is real:**
 
 ```bash
-npm run eval:ux           # the onboarding walk: a real browser, 6 deterministic gates + 4 judged criteria
 npm run eval:durability   # the work does not vanish: 3 scenarios against the real database and the real plpgsql
 npm run eval:durability -- --only=<scenario>
 ```
 
-`eval:ux` measures whether the product is *good*. `eval:durability` measures whether it *keeps
-what it produced* — a turn killed mid-work, the salvage when it gives up, and a taken-over run
-that must not deposit a second message. Those run against real SQL, which is the whole point:
-the two defects that slipped through in one session were a changed function signature and a
-reaper whose contract had moved under its own tests, and a fake client cannot see either.
+`eval:durability` measures whether the product *keeps what it produced* — a turn killed
+mid-work, the salvage when it gives up, and a taken-over run that must not deposit a second
+message. It runs against real SQL, which is the whole point: the two defects that slipped
+through in one session were a changed function signature and a reaper whose contract had moved
+under its own tests, and a fake client cannot see either.
 
-**What does NOT exist, so nobody writes it in a report as if it had run:** `npm run eval`, the
+**What does NOT exist, so nobody writes it in a report as if it had run:** `npm run eval`,
+`npm run eval:ux` — the onboarding walk was removed: it cost real money on every run and graded
+the in-app chat, which is not where the product is going — the
 `--all` / `--budget` / `--jobs` / `--compare` flags, cost read from `ai_calls`, `docs/EVAL_PLAN.md`,
 and the browser engine with a throttled network. The richer scenario catalogue described in the
 frozen `CHANGELOG.md` (`brand-nudo`, `conteggio-secco`, …) was designed and never merged. Reading

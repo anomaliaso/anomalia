@@ -3,4 +3,6 @@
   let { data, children } = $props();
 </script>
 
-<BlogShell brand={data.brand} categories={data.categories}>{@render children()}</BlogShell>
+<BlogShell brand={data.brand} categories={data.categories} analytics={data.analytics}
+  >{@render children()}</BlogShell
+>

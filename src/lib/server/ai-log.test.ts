@@ -9,6 +9,38 @@ const GO = 'go';
 // price list ($2/M in, $12/M thinking, $120/M image out → 1120 tok = $0.134/image ≤2K).
 describe('computeCostUsd', () => {
   /**
+   * `null` voleva dire DUE cose incompatibili: "esente, non addebitare" e "non siamo riusciti a
+   * prezzarla". `credits.ts` somma solo le righe non nulle, quindi il secondo significato non era
+   * prudente — era GRATIS, in silenzio. Misurato in produzione: 62 righe riuscite e 6.099.353
+   * token fatturati a nessuno in 30 giorni, il 53% negli ultimi 7.
+   *
+   * Dopo: `0` è l'esenzione (un fatto), `null` è solo il buco (un guasto interrogabile).
+   */
+  it('una chiamata riuscita senza prezzo non vale quanto una esente', () => {
+    const esente = computeCostUsd({ label: 'read_file', provider: 'internal', ms: 1, ok: true });
+    const ignoto = computeCostUsd({
+      label: 'chat', provider: 'llm', model: 'un/modello-che-nessuno-ha-prezzato',
+      ms: 1200, ok: true, inputTokens: 40_000, outputTokens: 8_000
+    });
+    expect(esente).toBe(0);
+    expect(ignoto).toBeNull();
+  });
+
+  it('l’esenzione non tocca i crediti: zero non sposta una somma', () => {
+    expect(computeCostUsd({ label: 'grep', provider: 'internal', ms: 1, ok: true })).toBe(0);
+    // Anche con dei token addosso: `internal` è un evento dell'agente, non una chiamata a un modello.
+    expect(
+      computeCostUsd({ label: 'db_query', provider: 'internal', ms: 1, ok: true, inputTokens: 900, outputTokens: 100 })
+    ).toBe(0);
+  });
+
+  it('una fallita resta null: `ok` la disambigua già, e forzarla a zero la farebbe contare', () => {
+    // Portare i fallimenti a 0 li renderebbe visibili al tetto orario della chat, che oggi
+    // scarta le righe nulle. `ok=false` dice già "non fatturata" senza aiuto.
+    expect(computeCostUsd({ label: 'chat', provider: 'kie', ms: 5, ok: false, flatCostUsd: 0.02 })).toBeNull();
+  });
+
+  /**
    * I turni openrouter arrivavano con `cost_usd` NULL — 25 chiamate in tre giorni, zero
    * addebitate — perche` nessuna tariffa portava il loro id. Spostarci il traffico principale
    * senza questo avrebbe smesso di misurare l'agente piu` caro del prodotto.

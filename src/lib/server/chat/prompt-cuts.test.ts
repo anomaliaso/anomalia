@@ -246,8 +246,7 @@ describe('il prompt non ricresce da solo', () => {
 
 /**
  * La regola che ha fermato amazon.in (27/8/2026): un messaggio inglese non deve poter diventare
- * una risposta italiana. Vale per OGNI mestiere — non solo per i turni del kit, dove
- * `live.test.ts` la copia già con il messaggio reale di quella sessione.
+ * una risposta italiana. Vale per OGNI mestiere.
  */
 describe('REPLY LANGUAGE nel prompt classico', () => {
   it('il blocco assoluta è in ogni prompt, e nessuna direttiva contraddice il messaggio dell\'utente', async () => {

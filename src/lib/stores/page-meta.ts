@@ -1,4 +1,4 @@
-import { writable, type Writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 import type { Snippet } from 'svelte';
 
 export type PageMeta = {
@@ -16,25 +16,6 @@ export type PageMeta = {
 };
 
 const empty: PageMeta = { title: null, subtitle: null, section: null, avatar: null, avatars: null };
-
-/** Meta di una pagina che non ha (ancora) dichiarato niente. */
-export const emptyPageMeta: PageMeta = empty;
-
-/**
- * Chi OSPITA una pagina fuori dal suo posto (PageModal: la `+page.svelte` vera montata
- * sopra una pagina viva) mette in contesto un raccoglitore con questa chiave. `PageHead`
- * lo preferisce ai writable globali qui sotto.
- *
- * Perché serve: `pageMeta`/`pageTopActions` sono UNO stato per tutta l'app. Una pagina
- * ospitata che ci scrivesse riscriverebbe il topbar della pagina SOTTO — e alla chiusura
- * lo lascerebbe vuoto, perché smontandosi chiama `clearPageMeta()` e nessuno ripristina
- * (l'effetto della pagina viva non si rilancia: le sue props non sono cambiate).
- * Un raccoglitore per albero risolve alla radice invece di annullare il danno dopo:
- * niente flicker, e l'intestazione della modal diventa il titolo VERO della pagina
- * invece di un'etichetta dedotta dal path.
- */
-export const PAGE_META_SINK = Symbol('page-meta-sink');
-export type PageMetaSink = Writable<{ meta: PageMeta; actions: Snippet | null }>;
 
 /** Hub page title/subtitle for the global sticky top bar. */
 export const pageMeta = writable<PageMeta>({ ...empty });

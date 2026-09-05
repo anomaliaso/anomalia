@@ -83,17 +83,6 @@ export async function loadGraphicFont(preferred?: string | null): Promise<{ font
   throw new Error('Could not load a font for the graphic renderer');
 }
 
-/** First usable family name out of brand_kit.fonts (`string[]` or `{name|family}[]`). */
-export function brandFontName(fonts: unknown): string | null {
-  if (!Array.isArray(fonts)) return null;
-  for (const f of fonts) {
-    if (typeof f === 'string' && f.trim()) return f.trim();
-    const name = (f as { name?: string; family?: string })?.name ?? (f as { family?: string })?.family;
-    if (typeof name === 'string' && name.trim()) return name.trim();
-  }
-  return null;
-}
-
 export type RenderedGraphic = {
   png: Buffer;
   /** Present when the caller asked for JPEG export. PNG is always produced (that's what we store). */
@@ -188,6 +177,9 @@ export async function renderGraphic(
     /** Catalog used to expand `ref:N` image srcs before fetch. */
     availableImages?: Array<{ url: string }> | null;
     format?: 'png' | 'jpeg';
+    /** La sandbox è PER BRAND e il tempo macchina si addebita: senza questi, niente browser. */
+    brandId?: string | null;
+    userId?: string | null;
   } = {}
 ): Promise<RenderedGraphic> {
   if (typeof input === 'string' || isSourceBag(input)) {
@@ -315,6 +307,9 @@ export async function renderGraphicSource(
     typography?: FontRoles;
     availableImages?: Array<{ url: string }> | null;
     format?: 'png' | 'jpeg';
+    /** La sandbox è PER BRAND e il tempo macchina si addebita: senza questi, niente browser. */
+    brandId?: string | null;
+    userId?: string | null;
   } = {}
 ): Promise<RenderedGraphic> {
   const durable = resolveSourceImageRefs(unwrapGraphicSource(raw), opts.availableImages);
@@ -330,12 +325,24 @@ export async function renderGraphicSource(
 
   const { tree, width, height } = await sourceToSatoriTree(inlined, kind);
 
-  const svg = await satori(tree as never, {
+  // Chromium PRIMA, quando l'operatore l'ha acceso: satori e' un sottoinsieme stretto di flexbox e
+  // il compositore chiede al modello «full HTML with <style>», quindi `grid`, `clamp()` e
+  // `text-wrap` — che un browser impagina — li' traboccano. Torna `undefined` se la via non c'e',
+  // e si scende su satori: un renderer assente non deve diventare un post senza immagine.
+  const { renderGraphicWithChromium } = await import('$lib/server/design-render-chromium');
+  const viaChromium = await renderGraphicWithChromium(inlined, {
     width,
     height,
-    fonts: packed.satoriFonts
+    brandId: opts.brandId,
+    userId: opts.userId
   });
-  const png = Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng());
+
+  // L'albero serve comunque: e' quello che il gate ispeziona. L'SVG no, quando Chromium ha reso.
+  const svg = viaChromium
+    ? ''
+    : await satori(tree as never, { width, height, fonts: packed.satoriFonts });
+  const png =
+    viaChromium?.png ?? Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng());
   const canvas = parseGraphicCanvasSize(durable);
   const spec = graphicHtmlMeta(canvas.aspect, kind);
 

@@ -11,10 +11,13 @@ export const PUT: RequestHandler = async ({ request, params }) => {
   const writeDenied = checkApiKeyWriteAccess(apiKey);
   if (writeDenied) return writeDenied;
 
-  const { colors } = await request.json();
-  if (!Array.isArray(colors) || colors.length > 8) {
+  const { colors: given } = await request.json();
+  if (!Array.isArray(given) || given.length > 8) {
     return json({ error: 'colors must be an array of max 8 hex strings' }, { status: 400 });
   }
+
+  // Il cancelletto è una convenzione di scrittura, non un dato: "7c5cff" è lo stesso colore.
+  const colors = given.map((c) => (typeof c === 'string' && !c.startsWith('#') ? `#${c}` : c));
 
   // Validate hex format
   for (const c of colors) {

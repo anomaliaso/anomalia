@@ -35,7 +35,6 @@ anomalia studio <slug> add-note --text "..."
 anomalia seo <slug>
 anomalia geo <slug>
 anomalia web <slug> generate --topic "..."
-anomalia ai <slug> --message "..." --pipe
 ```
 
 Full dump: repo root [`llms.txt`](https://github.com/anomaliaso/anomalia/blob/main/cli/llms.txt).

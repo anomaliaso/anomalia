@@ -9,7 +9,7 @@ import { createContentTools } from './create-content-tools';
 import { expressionMemoryTools } from './expression-memory-tools';
 import { createDataForSeoTools } from '$lib/server/dataforseo-tools';
 import { createQueryTool } from '$lib/server/chat/query-tool';
-import { createMediaLibraryTools } from '$lib/agent/tools/media-library-tools';
+import { createMediaLibraryTools } from '$lib/server/media-library-tools';
 import { createNotifyTools } from '$lib/agent/tools/notify-tools';
 import { createNotificationTools } from '$lib/agent/tools/notification-tools';
 import { createOnboardingTools } from '$lib/agent/tools/onboarding-tools';
@@ -18,7 +18,7 @@ import { createAgentTeamTools } from '$lib/agent/tools/agent-team-tools';
 import { createAgentDmTools } from '$lib/agent/tools/agent-dm-tools';
 import { createAgentSessionTools } from '$lib/agent/tools/agent-session-tools';
 import { createTeamActivityTools } from '$lib/agent/tools/team-activity-tools';
-import { createBrandContextTools } from '$lib/agent/tools/brand-context-tools';
+import { createBrandContextTools } from '$lib/server/brand-context-tools';
 import { createDisruptiveIdeaTools } from '$lib/server/disruptive-ideas';
 import { createArtifactTools } from '$lib/agent/tools/artifact-tools';
 import { createGoalTools } from '$lib/agent/tools/goal-tools';
@@ -163,19 +163,36 @@ export function createChatTools(
     // 300 — la guardia sul tempo rimasto veniva semplicemente saltata su questa superficie.
     ...createMotionOutputTools({ supabase, brandId, userId, fps: () => MOTION_FPS, remainingMs, locale }),
 
+    // Una grafica vive su un post o su un asset di libreria, e questi strumenti devono
+    // raggiungerle entrambe: nominare solo il post lasciava la grafica standalone con un sorgente
+    // che nessuno sapeva aprire — modificabile a parole, non a mano.
     ...createGraphicSourceEditTools(
-      async ({ post_id }) => {
-        if (!post_id) return { error: 'post_id required' };
+      async ({ post_id, media_id }) => {
+        if (!post_id && !media_id) return { error: 'Name the graphic: post_id (from read_posts) or media_id (from read_media).' };
+        if (post_id && media_id) return { error: 'Give post_id OR media_id, not both.' };
+        const { loadEditorContext } = await import('$lib/agent/tools/post-editor-tools');
+
+        if (media_id) {
+          const { data: item } = await supabase
+            .from('media_generator_items')
+            .select('id')
+            .eq('id', media_id)
+            .eq('brand_id', brandId)
+            .maybeSingle();
+          if (!item) return { error: 'Library asset not found' };
+          const ctx = await loadEditorContext(supabase, brandId);
+          return { supabase, brandId, userId, ctx, mediaId: media_id };
+        }
+
         const { data: post } = await supabase
           .from('posts')
           .select('id')
-          .eq('id', post_id)
+          .eq('id', post_id!)
           .eq('brand_id', brandId)
           .maybeSingle();
         if (!post) return { error: 'Post not found' };
-        const { loadEditorContext } = await import('$lib/agent/tools/post-editor-tools');
         const ctx = await loadEditorContext(supabase, brandId);
-        return { supabase, brandId, postId: post_id, tz, userId, ctx, refUrls: turnRefUrls };
+        return { supabase, brandId, postId: post_id!, tz, userId, ctx, refUrls: turnRefUrls };
       },
       { requirePostId: true }
     ),

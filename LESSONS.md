@@ -4,11 +4,55 @@ Lezioni imparate lavorando a questo repo: problemi veri, il segnale che li fa ri
 
 ## Ambiente e worktree
 
+### Una cache letta di sincrono sceglie il modello sbagliato senza dire niente
+Spostato il default della chat da `LLM_DEFAULT_MODEL` a una riga in Supabase, la riga marcata
+diceva `z-ai/glm-5.3-flash` e il turno e` girato su `google/gemini-3.8-flash` — l'env. Nessun
+errore, nessun log: `resolveChatModel` e` sincrono (lo chiamano una dozzina di superfici che poi
+fanno `streamText`), quindi legge una cache di modulo, e su quel percorso nessuno l'aveva
+scaldata. Segnale: la configurazione in database «non ha effetto», il turno riesce lo stesso, e
+`ai_calls` mostra il modello vecchio mentre la tabella mostra quello nuovo. Mossa: scaldare la
+cache al confine della richiesta (`hooks.server.ts`, prima di ogni handler), non nel primo
+chiamante che capita — e il test che vale e` quello che confronta la riga del database col
+modello finito in `ai_calls`, non quello che chiede alla cache cosa ha in pancia.
+
+**La regola dietro**: un valore che l'operatore cambia da fuori NON puo` vivere dietro una cache
+riempita da un chiamante di passaggio. O lo si legge dove si puo` aspettare, o lo si scalda in un
+punto per cui passano tutti. La terza via — «tanto qualcuno l'avra` letta» — e` il difetto piu`
+silenzioso che ci sia, perche' il prodotto continua a funzionare.
+
+### Lo Storage locale non salva immagini: «extended attributes disabled»
+Verificando una grafica dalla chat, ogni upload falliva e l'agente riferiva onestamente «Upload
+failed». Nel log del dev server: `[uploadPostImage] storage upload failed: The file system does not
+support extended attributes or has the feature disabled`. Non e` il codice: il container Storage
+del self-hosted, sul filesystem montato da Docker su macOS, non riesce a scrivere gli xattr.
+Segnale: OGNI upload fallisce allo stesso modo, anche su percorsi che non hai toccato — la prova
+decisiva e` chiedere una foto AI (percorso vecchio) e vedere lo stesso errore. Mossa: verifica la
+LOGICA con i test (il caricamento si mocka) e nel browser verifica quello che il difetto riguardava
+— quale tool viene scelto, quali righe nascono — senza pretendere che il file arrivi in Storage.
+
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 
+**E prima di credere a un rosso locale, guarda la CI.** Lo stesso `extractUserText`/
+`extractUserImages` è tornato il 4/9 su `dev`: quei simboli non erano codice nostro ma una patch
+`patch-package`, tolta perché non applicava più alla versione installata. In locale i test
+falliscono davvero; **sulla CI passano** (verificato nel log della run, non dedotto). Segnale: un
+rosso locale su file che nessuna PR ha toccato, mentre la CI è verde. Mossa: leggere il log della
+CI PRIMA di cancellare il test — il soggetto è vivo, è l'installazione locale a essere fuori
+posto, e cancellarlo butta via copertura che funziona.
+
 ### Il worktree nuovo ha bisogno anche del `.env`
 Dopo il `npm ci` la suite parte ma cade su 40+ test con `SUPABASE_SERVICE_ROLE_KEY not configured`: Vitest carica l'env dal `.env` del worktree, che non c'è. Segnale: errori di env mancante in un worktree fresco, deterministici, su file che passano nel checkout principale. Mossa: `cp ../anomalia/.env .` alla creazione del worktree, accanto al `npm ci`.
+
+### **Una regola di `.gitignore` senza `/` iniziale mangia una cartella di codice, in silenzio**
+Rotta nuova in `src/routes/api/v1/brands/[slug]/evidence/artifacts/`, 27 test verdi, `git add -A`,
+commit — e nel commit la cartella non c'era. La riga era `artifacts/`: senza `/` iniziale git la
+applica a **ogni** livello, non solo alla radice, e `git add -A` non protesta per un file ignorato.
+In produzione sarebbe stato un 404 su un endpoint che in locale passava tutti i test. Segnale: il
+conto in `git show --stat` non torna con i file che hai scritto, e `git status` non mostra niente.
+Mossa: dopo il commit, `git show --stat HEAD` e conta; se manca qualcosa,
+`git check-ignore -v <path>` dice quale riga l'ha presa. La riga si ancora (`/artifacts/`), non si
+aggira con `git add -f`: il `-f` vale per te oggi, l'ancora vale per tutti domani.
 
 ### **Il `.env` copiato può puntare al progetto hosted: il 404 sembrerà un bug di permessi**
 worktree con `.env` copiato ma `PUBLIC_SUPABASE_URL` sul progetto remoto: il login va, il brand locale esiste, ma `/app/<brand>` rende 404 "Brand not found" e la diagnosi scarta su RLS. In più una chiave segnaposto (`LLM_API_KEY` con dentro una frase italiana) passa i check di configurazione e muore 401 alla prima chiamata. Mossa: prima di sospettare RLS, `grep PUBLIC_SUPABASE_URL .env` (deve essere `http://localhost:8000`) e guarda gli `ai_calls`: le righe ok=false con 401 valgono più di ogni grep sul codice.
@@ -50,6 +94,32 @@ Se la pila si abbandona, le PR che ci stavano sopra non si chiudono da sole: van
 
 ## Test: distinguere il tuo difetto dal rumore
 
+### CI rossa con zero test falliti è una promessa non attesa, non un test tuo
+`Test Files 649 passed | Tests 7259 passed | Errors 1 error`, e il job esce comunque 1. Non
+cercare il test rosso: non esiste. Vitest conta come fallimento anche una `Unhandled Rejection`
+sollevata FUORI da un test — qui `supabase.rpc is not a function` da `credits.ts`, arrivata da un
+`loadDeferred` di `+layout.server.ts` che risolve dopo la fine del file che l'aveva avviata
+(`home-redirect.test.ts`), su uno stub senza `.rpc`. Il file, eseguito da solo, passa: la promessa
+fa in tempo a essere raccolta. Segnale: la riga `This error originated in "<file>"` seguita da
+`It doesn't mean the error was thrown inside the file itself`.
+
+**La mossa: cerca lo stesso messaggio su una run che NON contiene il tuo diff.** E qui sta la
+trappola, pagata per intero: `gh run list --branch dev` restituisce anche la run del merge del tuo
+stesso PR, che il tuo diff ce l'ha dentro. Preso quello per prova d'innocenza, hai scritto
+«riprodotto senza le mie modifiche» avendo misurato esattamente le tue. La prova buona si prende
+da un PR altrui e si verifica, non si assume:
+
+```
+gh run list --commit "$(gh pr view <altro-pr> --json headRefOid -q .headRefOid)" \
+  --workflow ci.yml --limit 1 --json databaseId -q '.[0].databaseId'
+gh run view <id> --log-failed | grep -c '<messaggio>'
+git merge-base --is-ancestor <tuo-primo-commit> <quella-sha>   # deve dire NO
+```
+
+L'ultima riga è quella che chiude la questione: se il tuo commit non è antenato di quella sha, il
+difetto è latente e non è tuo. E non fidarti del solo «dev è verde»: la run di dev può essere
+caduta prima, sugli e2e, senza mai arrivare alla suite unitaria.
+
 ### La suite completa fallisce da sola: confronta run-per-run con dev puro
 Sotto carico (worker paralleli) i test di timing e race cadono da soli: `redact` ≤ 200ms che ne impiega 404, JPEG ≤ 2MB, drain "executes exactly once". Lo stesso sottoinsieme, rilanciato isolato, passa. Prima di imputarsi un fallimento della suite completa: (1) rilancia il sottoinsieme isolato, (2) lancia la suite completa su **dev puro** nello stesso setup. Se dev fallisce uguale, il rumore non è tuo. Vero anche il rovescio: "tutta verde" sul tuo branch non dice niente se dev non lo è.
 
@@ -70,6 +140,12 @@ Dopo un merge da dev, un test della PR entra in timeout di 30s invece di fallire
 
 ### Le factory `vi.mock` invecchiano col merge, non col typecheck
 Il mock scritto nell'era della PR non dichiara gli export nuovi di dev (`createSubagentTools`, `MAX_CRITERION_CHARS`, `loadMemoryEntries`): l'errore `No "X" export is defined on the "Y" mock` esplode a runtime a metà test, mai in compilazione. Stesso segno per il fake supabase che manca di un metodo nuovo (`query.or is not a function`). Mossa: a ogni errore di quel tipo aggiungi l'export — o meglio `...actual` via `importOriginal` e override selettivi.
+
+### Il fake di una RPC che torna `null` dove il plpgsql torna una riga di NULL
+Una funzione `returns public.<tabella>` che non prende righe NON torna `null`: la riga composita esce tutta NULL e PostgREST la consegna come oggetto con ogni colonna a `null`. Un fake che risponde `{ data: null }` rende verde un client che controlla `if (!data)` e lascia passare in produzione un record fantasma — `agent_kit_claim_run` faceva girare turni interi con `run.id === null`: ogni scrittura filtrata per `id` toccava zero righe e la chiusura non depositava il messaggio, quindi il turno spariva dalla chat dopo aver speso il modello. Segnale: `run null` nei log, o «sfrattato prima della chiusura» su un run che nessuno ha sfrattato. Mossa: nel fake torna la riga di NULL, e nel client controlla la CHIAVE (`if (!row?.id)`), mai la sola presenza dell'oggetto.
+
+### Un id di modello non dichiarato non fallisce: scivola su un altro provider
+`harness-pi` considera il gateway Vercel configurato appena vede `AI_GATEWAY_API_KEY` **o** `VERCEL_OIDC_TOKEN` (che su Vercel c'è sempre), e da lì risolve il modello cercando prima un match sul provider `vercel-ai-gateway`. Se l'id che chiediamo non sta nel `models.json` del nostro provider, non arriva un errore che dice «modello sconosciuto»: arriva un 403 di un provider che non abbiamo scelto, su un modello che nessuno ha chiesto, mentre i nostri log stampano l'id che avevamo selezionato. Segnale: `originalModelId` nel `providerMetadata` diverso dal `Model:` del nostro log. Mossa: dichiarare le credenziali a pi come `customEnv` (con un customEnv configurato l'ambiente non viene più guardato) e mettere l'id del turno fra i modelli dichiarati, sempre — non basta la lista dell'env, perché il default esce dal database e il listino del gateway è freddo al primo turno del processo.
 
 ### Il test della PR può aspettare il vecchio contratto
 `toHaveBeenCalledWith` con 6 argomenti contro un executor passato a 7 (dev ha aggiunto la riga `job`): fallisce nel merge senza che nessuno abbia toccato il file. Mossa: nel riesame di un merge, fai girare PRIMA i test dei file in conflitto — sono gli unici che fanno da spec su entrambi i lati.
@@ -239,6 +315,24 @@ Mossa: nel `finally` si cancella l'ORGANIZZAZIONE per prima (il brand se ne va i
 l'utente. E il caso che perde davvero è la creazione fallita a METÀ — utente già creato, nessun
 fixture restituito, `destroyFixture(null)` che esce subito: la creazione ripulisce da sola prima
 di rilanciare.
+
+### Una `list()` piatta su un bucket non pulisce uno Storage che annida per brand
+Stessa pulizia, un piano più sotto. `deleteEvalUser` faceva `storage.from('media').list(userId)` e
+cancellava `${userId}/${nome}`: ma sotto `<userId>/` ci sono CARTELLE, quindi chiedeva di
+cancellare `<userId>/library` — che non è un oggetto — e Supabase rispondeva `200` con una lista
+vuota. Intanto `brand-knowledge/<userId>/<brandId>/media/` non veniva nemmeno aperto. Segnale: la
+pulizia "riesce" sempre e `storage.objects` continua a crescere; in produzione l'asset importato
+di un giro di eval era ancora lì. Mossa: attraversare RICORSIVO (in `list` una cartella torna con
+`id` nullo) su OGNI bucket — `listBuckets()`, non una lista di nomi scritta a mano che ricomincia
+a perdere al primo tipo di asset nuovo — sempre sotto `<userId>/`, che è il prefisso imposto dalle
+policy di Storage e non una convenzione. E il test che vede il difetto asserisce QUALI percorsi
+sono stati cancellati: «la pulizia è stata chiamata» passa anche quando non cancella niente.
+
+### Una pulizia best effort che fallisce in silenzio si accumula per mesi
+Il `.catch()` muto sulla pulizia dello Storage è la ragione per cui nessuno ha visto i file
+restare: best effort è giusto — un eval non deve fallire perché la pulizia è fallita — ma muto no.
+Segnale: nessun errore da nessuna parte e lo spazio che cresce. Mossa: `swallow('…')` invece di
+`catch(() => {})`, così l'errore finisce su stderr e su Sentry e la pulizia resta non bloccante.
 
 ### PostgREST tiene in CACHE lo schema: la migration applicata in locale non basta
 Applicate 0226/0227/0229 allo stack locale, la chat continuava a ricadere sul percorso vecchio e la
@@ -586,3 +680,301 @@ curl -s http://127.0.0.1:5200/login | grep -oE 'Anomalia|anomalia/leads' | head 
 
 Vite può comunque slittare di porta se trova occupato ("Port 5199 is in use, trying another
 one"): l'unica porta di cui fidarsi è quella stampata nel log, verificata con la riga sopra.
+
+## Un test che mocka il cancello di cui parla non dimostra niente
+
+**Segnale.** Un test di route asserisce un comportamento di autorizzazione — «una chiave di sola
+lettura passa», «un utente scaduto viene fermato» — e passa al primo colpo, senza essere mai stato
+rosso per la ragione giusta. In cima al file c'è `vi.mock('$lib/server/cli-auth', …)`.
+
+**Cosa succede.** Il verdetto che il test crede di misurare lo produce il mock, non il sistema.
+È capitato con `check_content`: la route non chiama `checkApiKeyWriteAccess` perché sarebbe
+ridondante, e il test concludeva che quindi una chiave di sola lettura arriva a calcolare. Falso:
+`resolveCaller` nega **ogni** non-GET a una chiave `read` prima che la route parta. Il test
+asseriva uno stato che la produzione non può produrre, quindi non poteva fallire mai — e intanto
+diceva al prossimo lettore l'opposto della verità, che è peggio di non dire niente.
+
+**La mossa.** Prima di asserire su un permesso, leggi dove il permesso viene deciso davvero, e
+chiediti se il mock lo sta scavalcando. Se lo scavalca, resta una sola asserzione onesta: dato il
+verdetto che l'upstream produce sul serio, la route lo rispetta e non lavora. Il resto — che
+l'upstream produca quel verdetto — è un test dell'upstream, e va scritto lì o non va scritto.
+
+## Un valore che il CHECK rifiuta è invisibile a una suite che mocka il database
+
+**Segnale.** Una funzione che deposita qualcosa in una tabella «riesce» in ogni test e in
+produzione la riga non c'è. Il codice scrive una stringa in una colonna con un `CHECK ... in (…)`,
+e quella stringa non è nella lista. Nei log non c'è niente, perché il fallimento è gestito
+best-effort: `{ error }` restituito al chiamante e mai stampato.
+
+**Cosa succede.** Il vincolo vive nel database, il valore vive nel codice, e la suite mocka
+Supabase: un insert finto accetta qualunque stringa, quindi il test è verde per costruzione. È
+capitato a `brand_media.source`: `saveRenderedVideoToLibrary` scriveva `'ai'` e il `save_to_library`
+della sandbox scriveva `'sandbox'`, nessuno dei due nel vincolo. Ogni video renderizzato veniva
+pagato, caricato su storage e poi rifiutato dalla libreria con 23514 — l'esatto vicolo cieco che
+quella funzione era stata scritta per chiudere. Il best-effort è la scelta giusta (non si fa fallire
+un render pagato per un INSERT) ma trasforma il difetto in lavoro pagato e buttato in silenzio.
+
+**La mossa.** L'insieme ammesso diventa **una costante esportata accanto al modello che governa la
+colonna**, il campo è tipato su quella costante, e tre asserzioni la tengono onesta: la costante
+confrontata con l'array dell'ultima migration che definisce il vincolo; una scansione del sorgente
+che pretende ogni literal scritto in quella colonna dentro la costante; un `@ts-expect-error` sul
+valore vecchio, che fa fallire `npm run check` il giorno in cui il tipo smette di mordere. Il test
+che vale non è «il mock ha accettato l'insert» — quello non può fallire — ma «il valore è
+nell'insieme che il database ammette», e va munito di un guardiano contro il passaggio a vuoto
+(`written.length > N`): una scansione che non trova più niente deve fallire, non passare. E il
+fallimento best-effort si fa sentire — `swallow()` dove `$lib` è già in casa, `console.error('[X] …')`
+dove non lo è: resta non fatale, smette di essere muto.
+
+**Il corollario che è costato due minuti in più.** `supabase-js` **risolve** con `{ error }` su un
+23514, non rigetta. Un `.then(() => {}, () => {})` o un `.catch(() => {})` su una insert non vede il
+vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
+risolto.
+
+## Un `catch` muto su un percorso di ricavi nasconde il difetto finché non lo cerchi a mano
+
+**Segnale.** Nessun errore, nessun allarme, tutto verde — e un limite che non limita niente. Qui:
+il gating crediti è stato spento in produzione per circa una settimana, l'AI girava senza quota
+per chiunque, e non esisteva **una sola riga di log** che lo dicesse. È emerso solo perché
+qualcuno è andato a leggere `billingProvider()` per un altro motivo.
+
+**Cosa succede.** Un fallback permissivo scritto per un caso legittimo (il fork self-hosted senza
+billing) copre anche il caso illegittimo (il provider a pagamento che non si carica in
+produzione), e i due sono indistinguibili da fuori: entrambi restituiscono lo stesso provider che
+concede tutto. Il `catch` senza log li appiattisce.
+
+**La mossa.** Su un percorso che decide se si può spendere o incassare, il fallback si riporta —
+`swallow()` (console + Sentry), una volta per processo se il chiamante è un hot path. E si
+distingue sempre **la scelta** dall'**incidente**: `BILLING_PROVIDER=open` impostato di proposito
+resta silenzioso, il fallback non voluto no. Un allarme che suona anche quando va tutto bene viene
+ignorato, e allora tanto valeva il silenzio.
+
+**Il test che lo tiene.** `src/lib/server/billing/fallback-report.test.ts`: il fallback riporta,
+la scelta esplicita no, e riporta una volta sola.
+
+## Una guardia che legge il nome dell'host, e segue i redirect, non è una guardia
+
+**Segnale.** Una funzione scarica un URL e la difesa è una lista di pattern di hostname
+(`isUrlSafe`, `!u.includes('localhost')`, una regex su `.local`), oppure il tetto di byte sta
+DOPO un `await res.arrayBuffer()`, oppure `fetch` è chiamata senza `redirect: 'manual'`. Tre
+sintomi diversi dello stesso difetto: ciò che viene controllato non è ciò che viene raggiunto.
+
+**Perché non regge.** Il nome è scelto da chi attacca e il DNS pure: `cdn-innocuo.example` può
+risolvere su `127.0.0.1` o su `169.254.169.254` e la stringa resta impeccabile. Il redirect è
+peggio, perché la destinazione non l'hai nemmeno vista: un URL pubblico risponde `302 Location:`
+e la guardia aveva già approvato l'unico URL che ha guardato. E un tetto applicato dopo aver
+bufferizzato è un tetto che si applica a memoria già consumata — 100MB entrati per rifiutarne 5.
+
+**Mossa.** Tre proprietà, e servono tutte e tre insieme:
+
+- **risolvi, poi controlla** l'indirizzo che torna dal resolver, non l'hostname;
+- **ricontrolla ogni hop** (`redirect: 'manual'` + ciclo tuo), schema compreso: un `302` da https
+  a http consegna il file a chiunque stia sul percorso;
+- **applica il tetto mentre il corpo arriva**, e per un file **rifiuta** invece di troncare — un
+  JPEG tagliato è un asset corrotto salvato come se fosse intero.
+
+In questo repo tutto ciò esiste già in `safeFetchBytes` (`tool-guard.ts`): **riusala, non
+riscriverla.** Due copie di una guardia SSRF sono due guardie che divergono, e la seconda diverge
+in silenzio. Se un chiamante ha bisogno di regole diverse (solo https, un tetto più alto, un altro
+User-Agent) quelle sono *parametri* della guardia — mai un `if` prima della chiamata, che il ciclo
+dei redirect non vedrebbe.
+
+**Dove guardare per prima.** Le funzioni il cui URL lo sceglie un MODELLO: lì l'input è già
+collegato a contenuto ostile, e il difetto smette di essere teorico.
+
+**E il test che lo prova non è quello dell'esito.** Bufferizzare-e-poi-misurare restituisce lo
+stesso rifiuto di fermarsi a metà: il test passa e non prova niente. Conta i pezzi che il lettore
+TIRA — prima ne chiedeva 400 su un tetto di venti.
+
+## Un fake che risponde alla domanda sbagliata nasconde il difetto che cercavi
+
+**Segnale.** Uno stub di `fetch` fatto a mano: `headers: { get: () => 'image/png' }`, più un
+`arrayBuffer()` e nessun corpo. Risponde `'image/png'` a `location` e a `content-length`, cioè
+racconta una risposta che nessun server manderebbe mai — e il giorno che il codice sotto comincia
+a leggere quegli header, o a leggere il corpo a stream, il test si rompe per il motivo sbagliato.
+
+**Mossa.** Negli stub di rete usa una `Response` vera: `new Response(bytes, { status, headers })`.
+Costa una riga in meno e non può mentire su un header che non hai previsto.
+
+**Corollario sulle fixture.** Un URL di prova come `https://cdn.example` smette di funzionare nel
+momento in cui la guardia RISOLVE l'host invece di leggerlo: il rifiuto arriva da `ENOTFOUND` e
+non dalla proprietà sotto esame. Usa un indirizzo scritto per esteso (`https://93.184.216.34`):
+`dns.lookup` lo restituisce senza interrogare nessuno, e resta pubblico.
+
+## Un timeout nella suite completa non è un difetto finché non lo riproduci da solo
+
+**Segnale.** `npm run test:unit` riporta `Hook timed out in 60000ms` o `Test timed out in
+30000ms` su file che non hai toccato, e la stessa suite era verde un'ora prima.
+
+**Cosa succede.** Il costo è il *transform* di Vite, non il test: con la cache fredda — o con
+altri lavori pesanti sulla stessa macchina — il grafo di `$lib/agent/tools/index` supera da solo
+il budget del `beforeAll`. Nella stessa sessione lo stesso file è passato in 53s e fallito a 60s
+solo perché in parallelo girava un'altra suite.
+
+**La mossa.** Prima di diagnosticare, isola: esegui il file DA SOLO, a macchina scarica. Se serve
+la prova che il difetto non è tuo, salva le modifiche in una patch
+(`git diff > /tmp/x.patch`, mai `git stash`), ripristina i sorgenti, riesegui: se fallisce anche
+senza le tue modifiche, è ambiente. Il timeout del `beforeAll` scritto nel file vince sul flag
+`--hookTimeout` della CLI, quindi per una diagnosi va alzato nel file e rimesso subito dopo.
+
+## Un IPv6 può portarsi dentro un IPv4, e il divieto va all'indirizzo dentro
+
+**Segnale.** Un classificatore di indirizzi privati che tratta l'IPv6 per come *comincia* —
+`::1`, `^f[cd]`, `^fe[89ab]` — e l'IPv4 con le sue regole, senza che i due si parlino. Provalo
+con `::ffff:127.0.0.1`: se risponde "pubblico", il buco c'è.
+
+**Cosa succede.** `::ffff:127.0.0.1` (mapped), `2002:7f00:1::` (6to4) e `64:ff9b::7f00:1` (NAT64)
+sono tutti modi di scrivere `127.0.0.1` dentro un IPv6, e l'indirizzo che viene chiamato davvero è
+quello dentro. `dns.lookup(host, { all: true })` restituisce i record **AAAA verbatim**, quindi la
+forma arriva alla guardia esattamente così: basta un AAAA su un nome pubblico. La forma con le
+parentesi è rifiutata solo perché `URL.hostname` le tiene e la risoluzione fallisce — un rifiuto
+per **effetto collaterale**, che sparisce il giorno che qualcuno normalizza l'hostname.
+
+**Mossa.** Estrai l'IPv4 incapsulato e rimandalo alle regole IPv4, invece di allungare la lista
+dei prefissi vietati: una lista si allunga a ogni forma nuova, e la forma nuova la scopri dopo che
+ti è passata davanti. Espandi il `::` e leggi gli hextet per posizione — `::ffff:7f00:1` e
+`0:0:0:0:0:ffff:7f00:1` sono lo stesso indirizzo e una regex sul prefisso ne vede uno solo.
+Un IPv4 pubblico incapsulato deve restare pubblico: la regola è quella dell'IPv4, non un divieto
+sul prefisso.
+
+**E il test giusto non è quello del classificatore.** Quello prova la funzione; la proprietà che
+conta è che `assertPublicUrl` rifiuti un host il cui **AAAA** è una di quelle forme — con
+`lookup` sostituito perché restituisca `family: 6`. È il test che resta vero anche se domani il
+rifiuto smettesse di arrivare dal ramo che lo produce oggi.
+
+**Corollario generale.** Quando un rifiuto arriva "per fortuna" da un ramo diverso da quello che
+dovrebbe produrlo (qui: «could not resolve» invece di «non è pubblico»), non è protezione: è una
+coincidenza con la data di scadenza. Fissala in un test che nomina la proprietà, non il
+meccanismo.
+## Il file che leggi non è sempre il file che è in produzione
+
+`https://mcp.anomalia.so/.well-known/oauth-protected-resource` annunciava
+`authorization_servers: ["https://anomalia.so"]` mentre `authServerUrl()` in `cli/lib/config.ts`
+— letto in questo repo, su `dev` e su `main` — restituisce `https://www.anomalia.so`. Nessuna
+delle due letture era sbagliata: il progetto Vercel che serve quel dominio (`anomalia-cli`) è
+agganciato al repo **pre-monorepo** `andreabuttarelli/anomalia-cli`, il cui `authServerUrl()`
+ritorna ancora l'apex, e la cui ultima deploy di produzione è di tre settimane prima
+dell'import nel monorepo. Il codice giusto non è mai arrivato in produzione perché nessuno
+deploya quel dominio da qui.
+
+Segnale: la produzione contraddice il codice che hai appena letto, e il `git log` del file
+mostra un solo commit — quello di import — senza traccia della modifica che stai cercando.
+Mossa: prima di diagnosticare, chiedi a Vercel **da quale repo e da quale commit** è servito
+quel dominio (`list_projects` → `link.repo`, `list_deployments` → `meta.githubCommitRepo`).
+Una funzione letta in locale non è una prova su cosa gira: il repo di origine è parte della
+domanda.
+
+**La regola dietro**: quando un dominio del prodotto non è servito dal repo in cui stai
+lavorando, il repo non può ripararlo — può solo smettere di regredire. Il test di contratto
+serve comunque, perché il giorno in cui il dominio torna a essere servito da qui il difetto
+non rientra; ma la riparazione è ripuntare il progetto, e va detta come tale invece di essere
+spacciata per un fix di codice.
+## Una colonna che la migration non ha mai creato si traveste da «brand non trovato»
+
+**Segnale.** Una lettura che «non può fallire» torna `null` per tutti — non per un tenant, non a
+intermittenza: per tutti — e la superficie sopra risponde con un errore di chi chiama (404, «Brand
+not found»). La suite è verde, perché il client Supabase è mockato e un mock non ha uno schema.
+
+**Cosa succede.** `orgBillingForBrand` seleziona `plan, stripe_customer_id, stripe_subscription_id`
+da `organizations`. In produzione quelle colonne non ci sono: la migration `20260903190000_org_billing_schema.sql`
+non è mai stata applicata, perché i deploy di questo repo non applicano migration. PostgREST
+risponde 400, `supabase-js` **risolve** con `{ data: null, error }`, la funzione ignora `error` e
+restituisce `null`, e il chiamante legge quel `null` come «questo brand non ha un'org». Il bottone
+del portale su `/app/billing` risponde 404 a chiunque, e sembra un problema di permessi.
+
+**La mossa.** Prima di diagnosticare il codice, `node scripts/schema-drift-check.mjs`: è in sola
+lettura, punta alla produzione senza paura, ed esce 1 con l'elenco delle colonne che il codice
+nomina e il database non ha. Va eseguito **dopo ogni migration scritta e prima di ogni PR che
+tocca il database** — non solo quando qualcosa è già rotto. Un `select` di colonne che potrebbero
+non esistere non è mai «non può fallire»: o si legge `error`, o il difetto arriva travestito da
+colpa di chi chiama.
+
+## Una rotta SvelteKit esiste perché esiste un file di pagina
+
+**Segnale.** Una pagina risponde `Not found` per tutti, e lo stack punta a `resolve()` dentro
+`@sveltejs/kit`, non a codice tuo:
+
+```
+Error: Not found: /app/anomalia
+    at resolve (node_modules/@sveltejs/kit/src/runtime/server/respond.js:711:13)
+```
+
+Nel `git log` recente c'è una PR che parlava d'altro — un cookie, un redirect, un ordine di
+esecuzione — e che, fra le altre cose, ha **cancellato** un `+page.server.ts`.
+
+**Cosa succede.** SvelteKit costruisce il manifest dai file. Senza né `+page.server.ts` né
+`+page.svelte` la rotta non esiste, e il 404 nasce prima che parta un solo `load` — layout
+compreso. Un rimando spostato «in cima al layout» non viene mai raggiunto: il guscio non entra
+nemmeno in scena. È capitato a `/app/[brand]`: la home del brand è rimasta irraggiungibile per
+tutti mentre i quattro test del rimando restavano verdi, perché provavano il `load` del layout e
+il 404 avviene prima di lui.
+
+**La mossa.** Svuotare una pagina del suo contenuto e lasciarci solo un `redirect` è legittimo;
+**cancellare il file no**, perché toglie la rotta. Quando una pagina diventa un rimando, il file
+resta e la ragione per cui resta si scrive dentro — è l'unica cosa che il prossimo lettore vede
+prima di ricancellarlo. E la proprietà si fissa in un test che legge la cartella dal disco
+(`readdirSync`, come gli altri 71 di questo repo), non nel `load`: quel test è l'unico che può
+fallire per la ragione giusta. Munirlo del negativo, o passa a vuoto — qui una cartella di solo
+endpoint (`credits/`, con un `+server.ts` e basta) che **non** deve risultare una pagina.
+
+**Il corollario, se due rimandi sembrano uno di troppo.** Le due strade del server non si
+comportano allo stesso modo, e la differenza decide chi vince: per una richiesta di pagina
+(`server/page/index.js`) i `load` partono in parallelo ma i risultati si consumano **in ordine di
+nodo**, quindi vince il layout; per la `__data.json` di una navigazione dal client
+(`server/data/index.js`) è un `Promise.all` che rilancia il `Redirect` appena arriva, quindi vince
+**il primo che rigetta**. Un rimando piazzato nella pagina chiude la risposta mentre il layout è
+ancora dentro le sue query, e il `cookies.set` del layout trova la risposta già generata. Prima di
+dichiarare ridondante una guardia, leggi quale delle due strade la esercita.
+
+## Una patch «scaduta» può esserlo solo sulla tua macchina
+
+**Segnale.** `patch-package` dice `Patch was made for version: X / Installed version: Y`, con Y più
+nuova. Sembra ovvio: la dipendenza è andata avanti, la patch è da buttare.
+
+**Cosa succede.** In questo repo ci sono due lockfile: `package-lock.json`, tracciato, che la CI usa
+con `npm ci`, e `bun.lock`, non tracciato, che vive sulla macchina di chi ha lanciato `bun install`.
+Divergono. Il primo pinnava `@ai-sdk/harness@1.0.87` — esattamente la versione della patch — mentre
+bun aveva risolto la 1.0.101. La patch era **viva per tutti tranne che lì**, e cancellarla ha fatto
+diventare rossa la CI e ha tolto due comportamenti veri: le scritture in blocco di `writeSkills`
+(6,9 secondi di attesa) e la conservazione delle parti immagine nell'adattatore pi, che senza patch
+**degrada in silenzio** invece di fallire.
+
+**Mossa.** Prima di dichiarare scaduta una patch, leggi la versione nel lockfile **tracciato**, non
+quella in `node_modules`. Se coincide con quella della patch, la patch è viva e il problema è
+l'install che hai davanti.
+
+**Corollario, e qui è il punto.** Tre errori nello stesso blocco sembravano tre conferme
+indipendenti: due dicevano «la patch non applica», il terzo «il pacchetto non c'è». Erano tre
+sintomi di **una causa sola** — l'albero di `node_modules` rotto — e nessuno dei tre parlava delle
+patch. Dopo un `npm install` pulito applicano tutte e tre. Più errori insieme invitano a
+concludere; guarda invece se hanno un antenato comune.
+
+## Il catalogo di un gateway non elenca le sue superfici separate
+
+Tre volte in un giorno abbiamo concluso «OpenRouter non lo fa» interrogando `GET /api/v1/models`,
+e tre volte era falso. I **video** non compaiono lì: stanno su `POST /api/v1/videos` con catalogo
+proprio su `GET /api/v1/videos/models`, 28 modelli. Il **text-to-speech** non compare lì:
+`google/gemini-3.1-flash-tts-preview` vive su `POST /api/v1/audio/speech` e risponde
+`audio/pcm; rate=24000; channels=1`, esattamente il formato che il nostro tagliatore pretende.
+
+Il costo delle tre volte: una famiglia di tool video rimandata come impossibile, un `MISSING` che
+dichiarava `tts` assente su openrouter mentre funzionava, e un'ora spesa a cercare un ripiego per
+un limite che non c'era.
+
+**Segnale**: un catalogo interrogato per modalità risponde «zero» per una capacità che il
+fornitore documenta o pubblicizza. Un `GET` su un endpoint che vuole `POST` risponde 404, che si
+legge identico a «non esiste».
+
+**Mossa**: chiama il modello sull'endpoint che credi sbagliato e **leggi l'errore per intero** —
+un gateway ben fatto ti dice dove sta la superficie giusta:
+
+> `google/gemini-3.1-flash-tts-preview is a text-to-speech model and cannot be used with the
+> chat/completions endpoint. Use the /api/v1/audio/speech endpoint instead.`
+
+Vale anche per il messaggio che rifiuta un parametro: `does not support 'wav' when stream=true.
+Supported values are: 'pcm16'` conteneva già la risposta, e chi si è fermato alla parola
+«rifiutato» ha concluso che la voce non si potesse spostare.
+
+**La regola dietro**: «l'ho cercato e non c'è» non è una misura finché non sai **dove** hai
+cercato. Un'assenza va dichiarata con l'endpoint interrogato accanto, o è un'opinione travestita
+da fatto — e finisce in `MISSING`, dove la testata promette «fatti misurati, non ipotesi di
+listino».

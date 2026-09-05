@@ -102,11 +102,15 @@ const ROSTER_JOB_BLURBS: Partial<Record<string, string>> = {
   library: 'Library curator — monthly refresh of the indexed site content.'
 };
 
+/** Cosa fa un lavoro, in inglese. Chiave senza blurb → il suo nome, cosi' un lavoro nuovo entra
+ * da solo sia nel prompt sia nel tool che lo elenca. */
+export function jobBlurb(key: string): string {
+  return ROSTER_JOB_BLURBS[key] ?? key;
+}
+
 /** UNA fonte (ROSTER_JOBS), mai una lista ricopiata dentro un prompt. Il parametro è per i test. */
 export function rosterForPrompt(jobs: readonly RosterJob[] = ROSTER_JOBS): string {
-  return jobs
-    .map((j) => `- ${j.key} (${j.cadence}): ${ROSTER_JOB_BLURBS[j.key] ?? j.key}`)
-    .join('\n');
+  return jobs.map((j) => `- ${j.key} (${j.cadence}): ${jobBlurb(j.key)}`).join('\n');
 }
 
 // Map in memoria + TTL corto: un tick scorre decine di brand e chiederebbe "questo lavoro è
@@ -348,6 +352,49 @@ export async function brandRoster(admin: SupabaseClient, brandId: string): Promi
       behind: enabled && (!servedAt || Date.now() - Date.parse(servedAt) > CADENCE_GRACE_MS[job.cadence])
     };
   });
+}
+
+/** Quanto indietro guarda `jobRunCounts`. Un mese copre anche il lavoro mensile, una volta. */
+export const RUN_WINDOW_DAYS = 30;
+
+/** Tetto della lettura: nove lavori per trenta giorni non ci arrivano, e un brand impazzito non
+ * trascina giù la pagina che lo sta guardando. */
+const RUN_ROWS_MAX = 1000;
+
+/**
+ * Quante volte ogni lavoro ha DAVVERO girato nella finestra.
+ *
+ * `skipped` non conta: un gate lo ha fermato prima di spendere, e contarlo direbbe "questo lavoro
+ * ti costa" di un lavoro che non ha mai chiamato un modello. `ok` e `failed` invece hanno provato,
+ * e un tentativo fallito può aver già speso.
+ *
+ * Non è il COSTO, ed è tutto ciò che il database sa dire: `ai_calls` non ha nessuna colonna che
+ * nomini il loop, e le label sono condivise fra lavori diversi (`director` sta sia in autopilot
+ * sia in radar_recap), quindi nessuna somma per lavoro sarebbe vera.
+ */
+export async function jobRunCounts(
+  admin: SupabaseClient,
+  brandId: string,
+  sinceIso: string
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  try {
+    const res = await admin
+      .from('loop_ticks')
+      .select('loop, outcome')
+      .eq('brand_id', brandId)
+      .in('loop', [...ROSTER_JOB_KEYS])
+      .in('outcome', ['ok', 'failed'])
+      .gte('created_at', sinceIso)
+      .limit(RUN_ROWS_MAX);
+    for (const row of (res?.data ?? []) as { loop: unknown }[]) {
+      const loop = String(row.loop);
+      counts.set(loop, (counts.get(loop) ?? 0) + 1);
+    }
+  } catch {
+    return counts;
+  }
+  return counts;
 }
 
 /**

@@ -83,7 +83,7 @@ Genera la strategia settimanale (tema + seed per post) per la settimana `week_in
 
 | Campo | Tipo | Obbligatorio | Descrizione |
 |---|---|---|---|
-| `week_index` | number (0-based) | Sì | Indice della settimana del piano editoriale attivo |
+| `week_index` | number (0-based) | Sì | Indice della settimana del piano editoriale attivo. Accettato anche come `week` |
 
 **Response** `200`:
 
@@ -133,6 +133,90 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/weekly-plan/plan" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"week_index":0}'
+```
+
+---
+
+## `POST /api/v1/brands/:slug/weekly-plan/seeds`
+
+Salva i seed di una settimana **scritti fuori da Anomalia**: nessuna chiamata al modello, nessun
+credito. Le righe finiscono dove le lascia `plan` — una bozza `content_plans` con
+`status: "draft"`, `source: "manual"`, `editorial_week = week_index` — quindi la pagina piano le
+mostra, sono modificabili e `produce` (a pagamento) resta il passo che le trasforma in post.
+
+Un brand tiene **una** bozza in revisione: se ce n'è già una, viene sostituita (`replaced: true`)
+invece di nasconderla dietro una seconda. I seed sono attaccati al piano editoriale attivo se
+c'è; senza piano attivo stanno in piedi da soli (`editorial_plan_id: null`).
+
+I seed passano dalla stessa normalizzazione dei seed generati: piattaforme in minuscolo, formati
+legacy mappati sull'enum, id di riga assegnato. Un seed senza `platform` viene **rifiutato**
+nominando la riga, non scartato in silenzio.
+
+**Body**:
+
+```json
+{
+  "week_index": 0,
+  "theme": "Il banco di lavoro",
+  "rationale": "La gente compra da chi vede lavorare",
+  "do_dont": "Niente superlativi",
+  "seeds": [
+    {
+      "platform": "instagram",
+      "platforms": ["instagram"],
+      "pillar": "dietro le quinte",
+      "format": "carousel",
+      "slide_count": 4,
+      "media": "image",
+      "day": "Tue",
+      "time": "09:00",
+      "angle": "Il primo switch che monti storto",
+      "subject": "…",
+      "setting": "…",
+      "props": "…",
+      "product": "Tastiera 65%",
+      "person": ""
+    }
+  ]
+}
+```
+
+Obbligatori: `week_index` (0–3), `theme`, `seeds` (1–30, ciascuno con `platform` e `angle`).
+Opzionali per seed: `platforms`, `pillar`, `format`, `media`, `slide_count`, `art_direction`,
+`sourced_from`, `day`, `time`, `subject`, `setting`, `props`, `product`, `person`, `title`,
+`subreddit`, `link_url`, e il copione video (`hook`, `hook_visual`, `hook_text`, `body`, `cta`,
+`ugc`).
+
+**Response** `200`:
+
+```json
+{
+  "ok": true,
+  "draft_id": "c3d4e5f6-a7b8-9012-cdef-1234567890ab",
+  "week_index": 0,
+  "seeds_saved": 3,
+  "editorial_plan_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890",
+  "replaced": false,
+  "review_url": "https://anomalia.so/app/mio-brand/plan"
+}
+```
+
+**Errori specifici**
+
+| Status | Body |
+|---|---|
+| `400` | `{"error":"invalid_input","details":[…]}` — `details[0].path` nomina il campo o la riga |
+| `400` | `{"error":"no_seeds"}` |
+| `403` | `{"error":"API key is read-only"}` |
+| `500` | `{"error":"save_failed"}` |
+
+**Esempio**:
+
+```bash
+curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/weekly-plan/seeds" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"week_index":0,"theme":"Il banco di lavoro","seeds":[{"platform":"instagram","angle":"Il primo switch che monti storto"}]}'
 ```
 
 ---

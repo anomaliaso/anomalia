@@ -70,7 +70,7 @@ export function sandboxCredits(seconds: number): number {
   return Math.max(1, Math.ceil(usd * CREDITS_PER_USD));
 }
 
-export type SandboxUse = 'motion_render' | 'motion_stills' | 'agent';
+export type SandboxUse = 'motion_render' | 'motion_stills' | 'graphic_still' | 'agent';
 
 /** Scrive l'addebito nel registro dei crediti. Fire-and-forget come ogni `logAiCall`. */
 export function chargeSandboxCredits(opts: {

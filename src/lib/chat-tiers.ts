@@ -1,7 +1,15 @@
 /**
  * User-selectable chat model.
- * Auto = pick per turn (today: Fast at full thinking), Fast = GPT 5.6 Luna via kie, Pro = Grok 4.6
- * via kie. Custom models are named explicitly — DeepSeek V4 Pro, GPT 5.6 Terra, GPT 5.6 Sol.
+ *
+ * I preset Auto/Fast/Pro NON esistono piu`. Non erano modelli: erano alias per due variabili
+ * d'ambiente — Auto e Fast risolvevano lo stesso `LLM_DEFAULT_MODEL`, Pro il *secondo* elemento
+ * di `LLM_MODELS`, scelto per posizione in una lista separata da virgole. Tre nomi nel menu per
+ * due valori, e nessuno dei due toccabile senza un deploy.
+ *
+ * Adesso una scelta e` un id del gateway e basta. Chi non sceglie prende il default globale
+ * (`chat_model_catalog.is_default`), che il brand puo` sovrascrivere nei Settings e la singola
+ * chat dal picker del prompt. Custom models are named explicitly — DeepSeek V4 Pro, GPT 5.6
+ * Terra, GPT 5.6 Sol.
  *
  * Billing is NEVER multiplied here. Credits = Σ ai_calls.cost_usd × 100, and cost_usd comes
  * from real token usage × RATES in ai-log.ts (or flatCostUsd when the provider bills that way).
@@ -10,7 +18,6 @@
  */
 import type { ModelFamilyId } from '@anomalia/agent-contracts/contracts';
 
-export type ChatPresetTier = 'auto' | 'fast' | 'pro';
 const CHAT_CUSTOM_MODEL_IDS = ['deepseek-pro', 'gpt-terra', 'gpt-sol'] as const satisfies readonly ModelFamilyId[];
 export type ChatCustomModel = (typeof CHAT_CUSTOM_MODEL_IDS)[number];
 /**
@@ -20,7 +27,7 @@ export type ChatCustomModel = (typeof CHAT_CUSTOM_MODEL_IDS)[number];
  * default invece di rompere il turno.
  */
 export type ChatGatewayModelTier = string;
-export type ChatTier = ChatPresetTier | ChatCustomModel | ChatGatewayModelTier;
+export type ChatTier = ChatCustomModel | ChatGatewayModelTier;
 
 const GATEWAY_MODEL_ID = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
 
@@ -28,12 +35,8 @@ export function isGatewayModelTier(v: unknown): boolean {
   return typeof v === 'string' && GATEWAY_MODEL_ID.test(v.trim());
 }
 
-export const CHAT_PRESET_TIERS: ChatPresetTier[] = ['auto', 'fast', 'pro'];
 export const CHAT_CUSTOM_MODELS: ChatCustomModel[] = [...CHAT_CUSTOM_MODEL_IDS];
-export const CHAT_TIERS: ChatTier[] = [...CHAT_PRESET_TIERS, ...CHAT_CUSTOM_MODELS];
-
-/** What a chat starts on when the brand has not set its own default. */
-export const DEFAULT_CHAT_TIER: ChatTier = 'auto';
+export const CHAT_TIERS: ChatTier[] = [...CHAT_CUSTOM_MODELS];
 
 /*
  * Il moltiplicatore "≈N× crediti" nel picker è stato ELIMINATO, non ricalcolato.
@@ -64,7 +67,10 @@ export function isGptCustomModel(v: unknown): v is 'gpt-terra' | 'gpt-sol' {
   return v === 'gpt-terra' || v === 'gpt-sol';
 }
 
-/** Normalise anything stored/sent as a tier, falling back to the default. */
-export function coerceChatTier(v: unknown): ChatTier {
-  return isChatTier(v) ? v : DEFAULT_CHAT_TIER;
+/**
+ * Normalise anything stored/sent as a tier. `null` = nessuna scelta, e chi risolve prende il
+ * default globale — non c'e` piu` una costante qui che possa dire il contrario del database.
+ */
+export function coerceChatTier(v: unknown): ChatTier | null {
+  return isChatTier(v) ? v : null;
 }

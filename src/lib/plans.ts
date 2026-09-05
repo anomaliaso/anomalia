@@ -28,9 +28,6 @@ export type FeatGroup = { label: string; items: FeatItem[] };
 export function featText(f: FeatItem): string {
   return typeof f === 'string' ? f : f.text;
 }
-export function featMissing(f: FeatItem): boolean {
-  return typeof f === 'object' && f.missing === true;
-}
 
 // Stima marketing per "fino a ~N video HD" sulla card: 100 crediti = $1 di budget AI, e una clip
 // HD a $0,38 costa 38 crediti. L'output reale varia con durata, risoluzione e altra spesa AI.

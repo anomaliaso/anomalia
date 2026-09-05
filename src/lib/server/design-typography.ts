@@ -1,13 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  ALL_SHORTLIST_FONTS,
-  DEFAULT_FONT,
-  FONT_SHORTLIST,
-  GraphicStyleSchema,
-  resolveTypography,
-  type GraphicStyle,
-  type ResolvedTypography
-} from '$lib/design/typography';
+import { ALL_SHORTLIST_FONTS, DEFAULT_FONT, FONT_SHORTLIST, GraphicStyleSchema, type GraphicStyle } from '$lib/design/typography';
 import { loadGraphicFont } from '$lib/server/design-render';
 import { structuredKie, KIE_MODEL } from '$lib/server/kie';
 
@@ -171,15 +163,3 @@ export async function ensureGraphicStyle(
   return style;
 }
 
-/** The typography in force for a brand — one query, for the render call sites. */
-export async function loadTypography(
-  supabase: SupabaseClient,
-  brandId: string
-): Promise<ResolvedTypography> {
-  const { data: kit } = await supabase
-    .from('brand_kit')
-    .select('graphic_style, fonts')
-    .eq('brand_id', brandId)
-    .maybeSingle();
-  return resolveTypography(kit);
-}

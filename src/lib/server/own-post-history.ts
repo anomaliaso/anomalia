@@ -55,12 +55,3 @@ export async function loadOwnPostHistory(
   return (data ?? []) as OwnHistoryRow[];
 }
 
-/** Total count of the brand's OWN history rows (source='zernio'), across all time. */
-export async function ownHistoryCount(supabase: SupabaseClient, brandId: string): Promise<number> {
-  const { count } = await supabase
-    .from('social_post_history')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .eq('source', OWN_SOURCE);
-  return count ?? 0;
-}

@@ -3,9 +3,18 @@ import type { PageServerLoad, Actions } from './$types';
 import {
   radarPrefsOf,
   radarPlatformEnabled,
+  radarSourceValue,
   type RadarPlatformKey
 } from '$lib/server/radar';
-import { RADAR_PLATFORM_KEYS } from '$lib/plans';
+import {
+  RADAR_BASE_KINDS,
+  RADAR_PLATFORM_KEYS,
+  RADAR_PRO_LEAD_KINDS,
+  type RadarSourceKind
+} from '$lib/plans';
+
+/** Un elenco solo dei tipi validi: quello ricopiato qui dentro era la quarta copia. */
+const RADAR_ALL_KINDS: readonly RadarSourceKind[] = [...RADAR_BASE_KINDS, ...RADAR_PRO_LEAD_KINDS];
 import { radarSourceLimit, isRadarKindAllowed, hasProRadarLeads } from '$lib/server/plans';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,12 +81,7 @@ export const actions: Actions = {
     const kind = String(fd.get('kind') ?? '');
     const value = String(fd.get('value') ?? '').trim();
     const lang = String(fd.get('lang') ?? 'auto').slice(0, 5) || 'auto';
-    if (
-      !['gnews_query', 'rss', 'subreddit', 'threads_query', 'x_community', 'reddit_query', 'linkedin_query'].includes(
-        kind
-      ) ||
-      !value
-    ) {
+    if (!RADAR_ALL_KINDS.includes(kind as RadarSourceKind) || !value) {
       return fail(400, { error: 'Invalid source' });
     }
     if (!isRadarKindAllowed(kind, brand.plan)) {
@@ -94,7 +98,7 @@ export const actions: Actions = {
       {
         brand_id: brand.id,
         kind,
-        value: kind === 'subreddit' ? value.replace(/^r\//, '').replace(/\/+$/, '') : value,
+        value: radarSourceValue(kind, value),
         lang
       },
       { onConflict: 'brand_id,kind,value', ignoreDuplicates: true }

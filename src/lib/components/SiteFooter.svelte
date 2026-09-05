@@ -103,62 +103,33 @@
         <div class="foot-col-title">{$_('marketing.footer.product')}</div>
         <a href={lp('/usecases')}>{$_('marketing.footer.useCases')}</a>
         <a href={lp('/autoposts')}>Autoposts</a>
-        <a href={lp('/ai-seo-agent')}>AI SEO Agent</a>
-        <a href={lp('/ai-blog-writer')}>AI Blog Writer</a>
         <a href={lp('/autoblog')}>Autoblog</a>
+        <a href={lp('/ai-seo-agent')}>AI SEO Agent</a>
         <a href={lp('/leads-finder')}>Leads Finder</a>
         <a href={lp('/news-radar')}>News Radar</a>
-        <a href={lp('/playbooks')}>Playbooks</a>
-        <a href={lp('/talents')}>AI Talents</a>
-        <a href={lp('/styles')}>Styles</a>
-        <a href={lp('/trending')}>{$_('wall.nav.trending')}</a>
-        <a href={lp('/design')}>{$_('wall.nav.design')}</a>
         <a href={lp('/pricing')}>{$_('marketing.footer.pricing')}</a>
-        <a href={lp('/faq')}>{$_('marketing.footer.faq')}</a>
-        <a href={lp('/docs')}>Docs</a>
-        <a href={lp('/insights')}>Insights</a>
-        <a href="https://blog.anomalia.so">Blog</a>
-        <a href={lp('/compare')}>Compare</a>
       </div>
       <div class="foot-col">
-        <div class="foot-col-title">{$_('marketing.footer.problems')}</div>
-        <a href={lp('/no-time')}>{$_('marketing.footer.painNoTime')}</a>
-        <a href={lp('/overwhelmed')}>{$_('marketing.footer.painOverwhelmed')}</a>
-        <a href={lp('/burnout')}>{$_('marketing.footer.painBurnout')}</a>
-        <a href={lp('/consistency')}>{$_('marketing.footer.painConsistency')}</a>
-        <a href={lp('/not-working')}>{$_('marketing.footer.painNotWorking')}</a>
-        <a href={lp('/no-results')}>{$_('marketing.footer.painNoResults')}</a>
-        <a href={lp('/cant-afford')}>{$_('marketing.footer.painCantAfford')}</a>
-        <a href={lp('/multiple-accounts')}>{$_('marketing.footer.painMultiple')}</a>
+        <div class="foot-col-title">{$_('marketing.footer.developers')}</div>
+        <a href={lp('/docs')}>Docs</a>
+        <a href={lp('/docs/mcp')}>MCP</a>
+        <a href={lp('/docs/cli')}>CLI</a>
+        <a href={lp('/docs/api')}>API</a>
+        <a href={lp('/agents')}>{$_('landing.nav.agentLibrary')}</a>
       </div>
       <div class="foot-col">
         <div class="foot-col-title">{$_('marketing.footer.company')}</div>
+        <a href={lp('/faq')}>{$_('marketing.footer.faq')}</a>
+        <a href={lp('/changelog')}>{$_('marketing.footer.changelog')}</a>
         <a href={lp('/privacy')}>{$_('marketing.footer.privacy')}</a>
         <a href={lp('/terms')}>{$_('marketing.footer.terms')}</a>
-        <a href={lp('/changelog')}>{$_('marketing.footer.changelog')}</a>
         <button type="button" class="foot-link-btn" onclick={() => openCookieSettings()}>{$_('marketing.footer.cookies')}</button>
       </div>
       <div class="foot-col">
-        <div class="foot-col-title">{$_('marketing.footer.freeTools')}</div>
-        <a href={lp('/tools/geo-audit')}>GEO Audit</a>
-        <a href={lp('/tools/conversation-gap')}>Conversation Gap</a>
-        <a href={lp('/tools/keyword-research')}>Keyword Research</a>
-        <a href={lp('/tools/sitemap-analyzer')}>Sitemap Analyzer</a>
-        <a href={lp('/tools/social-media-roi')}>ROI Calculator</a>
-        <a href={lp('/tools/best-time-to-post')}>Best Time to Post</a>
-        <a href={lp('/tools/llms-txt-generator')}>llms.txt Generator</a>
-        <a href={lp('/tools/llms-txt-validator')}>llms.txt Validator</a>
-        <a href={lp('/tools/caption-length')}>Caption Checker</a>
-      </div>
-      <div class="foot-col">
         <div class="foot-col-title">{$_('marketing.footer.resources')}</div>
-        <a href={lp('/cursor-mcp-motion-ads')}>Cursor + MCP</a>
-        <a href={lp('/insights')}>Insights</a>
         <a href="https://blog.anomalia.so">Blog</a>
-        <a href={lp('/compare')}>Compare</a>
+        <a href={lp('/tools')}>{$_('marketing.footer.freeTools')}</a>
         <a href="/llms.txt" target="_blank">{$_('marketing.footer.llm')}</a>
-        <a href={lp('/changelog')}>{$_('marketing.footer.changelog')}</a>
-        <a href="https://app.seline.com/share/anomalia.so" target="_blank" rel="noopener">Early stats</a>
         <a href="/status" class="status-pill {statusState}">
           <span class="status-dot {statusState}"></span>
           <span>Status</span>
@@ -301,7 +272,7 @@
   /* Right: columns */
   .foot-columns {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 24px;
   }
   .foot-col {

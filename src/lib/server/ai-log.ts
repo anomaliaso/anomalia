@@ -257,9 +257,32 @@ function planForVisualShare(explicit?: string | null): string | null | undefined
   return undefined;
 }
 
-// null = not computable (no usage, unknown model). A MISSING model on a gemini call means Flash;
-// `plan` is accepted for the call sites that still thread one, and no longer changes the price.
+/**
+ * Esente per costruzione: l'evento c'è stato ma non è una chiamata a un modello, e nessuno ce lo
+ * fattura. Vale `0`, che è un FATTO — non `null`, che ormai vuol dire una cosa sola.
+ */
+const COST_EXEMPT_PROVIDERS: ReadonlySet<AiCallLog['provider']> = new Set(['internal']);
+
+/**
+ * `null` significava DUE cose incompatibili: «esente, non addebitare» e «non siamo riusciti a
+ * prezzarla». `credits.ts` somma solo le righe non nulle, quindi il secondo significato non era
+ * prudente: era GRATIS, in silenzio. Misurato in produzione — 62 chiamate RIUSCITE e 6.099.353
+ * token fatturati a nessuno in 30 giorni, il 53% nei soli ultimi 7. Non un residuo storico: un
+ * buco che si allargava.
+ *
+ * Adesso i due significati sono due valori:
+ *   · `0`    → esente, per costruzione. Non sposta nessuna somma.
+ *   · `null` → NON siamo riusciti a prezzarla, e `ok` dice se il lavoro è avvenuto davvero.
+ *
+ * Da cui l'invariante che rende il buco interrogabile invece che invisibile:
+ * **`ok = true` e `cost_usd is null` è un guasto di prezzatura**, sempre, e si trova con una query.
+ *
+ * I FALLIMENTI restano `null` di proposito: `ok = false` li disambigua già senza aiuto, e portarli
+ * a `0` li renderebbe visibili al tetto orario della chat — che oggi scarta le righe nulle — cioè
+ * farebbe pagare all'utente i turni che gli sono andati storti.
+ */
 export function computeCostUsd(entry: AiCallLog, plan?: string | null): number | null {
+  if (COST_EXEMPT_PROVIDERS.has(entry.provider)) return 0;
   // Flat-fee providers: la richiesta fallita non ce la fatturano, quindi non la fatturiamo.
   // LA SANDBOX È L'ECCEZIONE: la microVM è stata accesa e ha consumato tempo macchina comunque.
   // Esentarla su `ok = false` rendeva gratis il percorso più caro (32,1% dei secondi misurati non

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { FREE_CREDITS, PLANS } from '$lib/plans';
+import { swallow } from '$lib/server/swallow';
 
 // ── AI Credits: consumption tracking per billing period ─────────────────────────
 // Every AI call logs cost_usd in ai_calls (tagged by brand_id via the AsyncLocalStorage
@@ -115,6 +116,120 @@ export async function fetchStripePeriodStart(
   return value;
 }
 
+// ── Org scope ────────────────────────────────────────────────────────────────────
+// One subscription belongs to an ORGANIZATION and covers every brand under it, so the pool a
+// brand spends from is the org's. The rollout is org-by-org: an org that has not had its turn
+// yet carries nothing, and its paying brand still holds the plan, the subscription and the
+// period — so every read is org-first and falls back to that brand. Both shapes answer the
+// same numbers, which is what lets the migration run one org at a time.
+
+export type OrgBilling = {
+  orgId: string;
+  /** organizations.plan, or the plan of whichever brand of the org still carries the subscription. */
+  plan: string | null;
+  activatedAt: string | null;
+  /** The org's brand holding a subscription — the period source until the org has its own. */
+  billingBrandId: string | null;
+  brandIds: string[];
+};
+
+type OrgBrandRow = {
+  id: string;
+  plan: string | null;
+  activated_at: string | null;
+  stripe_subscription_id: string | null;
+};
+
+type OrgRow = {
+  id: string;
+  plan: string | null;
+  activated_at: string | null;
+  stripe_subscription_id: string | null;
+  brands?: OrgBrandRow[];
+};
+
+const orgBillingByBrand = new Map<string, { value: OrgBilling | null; at: number }>();
+
+/** The org a brand bills through, with plan and period source resolved for both rollout states. */
+export async function resolveOrgBilling(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<OrgBilling | null> {
+  const hit = orgBillingByBrand.get(brandId);
+  if (hit && Date.now() - hit.at < STRIPE_PERIOD_TTL_MS) return hit.value;
+
+  const value = await readOrgBilling(supabase, brandId);
+  orgBillingByBrand.set(brandId, { value, at: Date.now() });
+  return value;
+}
+
+async function readOrgBilling(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<OrgBilling | null> {
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('org_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  const orgId = (brand as { org_id?: string } | null)?.org_id;
+  if (!orgId) return null;
+
+  const { data } = await supabase
+    .from('organizations')
+    .select(
+      'id, plan, activated_at, stripe_subscription_id, brands(id, plan, activated_at, stripe_subscription_id)'
+    )
+    .eq('id', orgId)
+    .maybeSingle();
+  const org = data as OrgRow | null;
+  if (!org) return null;
+
+  const brands = org.brands ?? [];
+  // At most one brand of an org pays (no customer holds two subscriptions), but pick by quota
+  // rather than by arrival order so a stray second one can never shrink the pool.
+  const paying = brands
+    .filter((b) => b.stripe_subscription_id && b.plan)
+    .sort((a, b) => creditQuota(b.plan) - creditQuota(a.plan))[0];
+
+  return {
+    orgId: org.id,
+    plan: org.plan ?? paying?.plan ?? null,
+    activatedAt: org.activated_at ?? paying?.activated_at ?? null,
+    billingBrandId: org.stripe_subscription_id ? null : (paying?.id ?? null),
+    brandIds: brands.map((b) => b.id)
+  };
+}
+
+/** The plan the org bills on, for a caller holding only a brand id. */
+export async function orgPlanForBrand(
+  supabase: SupabaseClient,
+  brandId: string
+): Promise<string | null> {
+  return (await resolveOrgBilling(supabase, brandId))?.plan ?? null;
+}
+
+const orgPeriodByOrg = new Map<string, { value: Date | null; at: number }>();
+
+/** Period anchor for the org: its own subscription first, its paying brand's while it waits. */
+async function fetchOrgPeriodStart(
+  supabase: SupabaseClient,
+  org: OrgBilling
+): Promise<Date | null> {
+  const hit = orgPeriodByOrg.get(org.orgId);
+  if (hit && Date.now() - hit.at < STRIPE_PERIOD_TTL_MS) return hit.value;
+
+  const { data, error } = await supabase
+    .rpc('org_billing_period', { _org_id: org.orgId })
+    .maybeSingle<{ period_start: string | null }>();
+  let value = !error && data?.period_start ? new Date(data.period_start) : null;
+  if (!value && org.billingBrandId) {
+    value = await fetchStripePeriodStart(supabase, org.billingBrandId);
+  }
+  orgPeriodByOrg.set(org.orgId, { value, at: Date.now() });
+  return value;
+}
+
 // ── Usage query ──────────────────────────────────────────────────────────────────
 
 const CREDITS_PER_USD = 100;
@@ -129,14 +244,58 @@ export async function getCreditsUsage(
   supabase: SupabaseClient,
   brand: Brand
 ): Promise<CreditsUsage> {
+  const org = await resolveOrgBilling(supabase, brand.id);
+  // No org in reach (a brand row that isn't there, or a read that failed): answer for the brand
+  // alone, exactly as before org-level billing. Never leave a caller without a budget.
+  if (!org) return brandCreditsUsage(supabase, brand);
+
+  const periodStart = await fetchOrgPeriodStart(supabase, org);
+  const { start, end } = currentBillingPeriod(
+    { activated_at: org.activatedAt ?? brand.activated_at },
+    periodStart
+  );
+  const planQuota = creditQuota(org.plan);
+
+  // Grants + spend don't depend on each other. Spend is summed in SQL (PostgREST
+  // aggregates are disabled — see 0158 / sum_org_ai_cost_usd).
+  const [bonus, { data: spentUsd, error }] = await Promise.all([
+    sumActiveCreditGrants(supabase, org),
+    supabase.rpc('sum_org_ai_cost_usd', {
+      p_org_id: org.orgId,
+      p_start: start.toISOString(),
+      p_end: end.toISOString()
+    })
+  ]);
+  const quota = planQuota + bonus;
+
+  if (error) {
+    console.warn('[credits] query failed:', error.message);
+    return { used: 0, quota, bonus, remaining: quota, periodStart: start, periodEnd: end, percent: 0 };
+  }
+
+  const used = Math.round(Number(spentUsd ?? 0) * CREDITS_PER_USD);
+  return {
+    used,
+    quota,
+    bonus,
+    remaining: Math.max(0, quota - used),
+    periodStart: start,
+    periodEnd: end,
+    percent: quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 0
+  };
+}
+
+/** The brand-only reading, kept whole for the case where no org can be resolved. */
+async function brandCreditsUsage(
+  supabase: SupabaseClient,
+  brand: Brand
+): Promise<CreditsUsage> {
   const periodStart = await fetchStripePeriodStart(supabase, brand.id);
   const { start, end } = currentBillingPeriod(brand, periodStart);
   const planQuota = creditQuota(brand.plan);
 
-  // Grants + spend don't depend on each other. Spend is summed in SQL (PostgREST
-  // aggregates are disabled — see 0158 / sum_brand_ai_cost_usd).
   const [bonus, { data: spentUsd, error }] = await Promise.all([
-    sumActiveCreditGrants(supabase, brand.id),
+    sumGrantRows(supabase, (q) => q.eq('brand_id', brand.id)),
     supabase.rpc('sum_brand_ai_cost_usd', {
       p_brand_id: brand.id,
       p_start: start.toISOString(),
@@ -162,24 +321,42 @@ export async function getCreditsUsage(
   };
 }
 
-/** Active grants: never-expiring, or expires_at still in the future. */
+/**
+ * Active grants for the whole org: the ones handed to the org itself, plus the ones handed to
+ * any of its brands. A grant names one or the other (migration 20260903190000's check
+ * constraint), and both land in the same shared pool.
+ */
 export async function sumActiveCreditGrants(
   supabase: SupabaseClient,
-  brandId: string
+  org: OrgBilling
+): Promise<number> {
+  const [orgGrants, brandGrants] = await Promise.all([
+    sumGrantRows(supabase, (q) => q.eq('org_id', org.orgId)),
+    org.brandIds.length
+      ? sumGrantRows(supabase, (q) => q.in('brand_id', org.brandIds))
+      : Promise.resolve(0)
+  ]);
+  return orgGrants + brandGrants;
+}
+
+/** Active: never-expiring, or expires_at still in the future. */
+async function sumGrantRows(
+  supabase: SupabaseClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  filter: (q: any) => any
 ): Promise<number> {
   const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('credit_grants')
-    .select('amount, expires_at')
-    .eq('brand_id', brandId);
+  const { data, error } = await filter(
+    supabase.from('credit_grants').select('amount, expires_at')
+  );
 
   if (error) {
     console.warn('[credits] grants query failed:', error.message);
     return 0;
   }
 
-  return (data ?? []).reduce((sum, row) => {
-    const exp = row.expires_at as string | null;
+  return ((data ?? []) as { amount: unknown; expires_at: string | null }[]).reduce((sum, row) => {
+    const exp = row.expires_at;
     if (exp && exp <= now) return sum;
     const n = Number(row.amount);
     return sum + (Number.isFinite(n) && n > 0 ? n : 0);
@@ -245,8 +422,10 @@ export async function grantCredits(
     expires_at: opts.expiresAt ?? null
   });
   if (error) throw new Error(`grantCredits failed: ${error.message}`);
-  // Invalidate the hard-gate cache so the gift is visible immediately.
-  gateCache.delete(opts.brandId);
+  // Invalidate the hard-gate cache so the gift is visible immediately. The gate keys on the org
+  // now, so the entry to drop is the org's — the gift lands in the pool all its brands share.
+  const org = await resolveOrgBilling(supabase, opts.brandId);
+  gateCache.delete(org?.orgId ?? opts.brandId);
 }
 
 /**
@@ -263,6 +442,15 @@ export async function gateCredits(brandId: string): Promise<void> {
 }
 
 /**
+ * Both fail-open paths below give up on the same thing — evaluating the ledger — and both let the
+ * action through on purpose: a transient Supabase error must not block a paying customer. Neither
+ * may do it silently. Unmetered AI nobody is told about is exactly how a week of it went unnoticed.
+ */
+function reportFailOpen(brandId: string, err: unknown): void {
+  swallow(`credits: allowed brand ${brandId} without evaluating its ledger`, err);
+}
+
+/**
  * The real enforcement, moved out of gateCredits() unchanged so the anomalia provider can call
  * it without gateCredits recursing back through itself. Not for direct use — call gateCredits().
  */
@@ -271,14 +459,30 @@ export async function gateCreditsCore(brandId: string): Promise<void> {
   // its own runaway watchdog. Dynamic import dodges any credits↔ai-log init-order cycle.
   const { isCreditExempt } = await import('./ai-log');
   if (isCreditExempt()) return;
-  const hit = gateCache.get(brandId);
+
+  // The pool is the org's, so the cache entry is too: every brand under an org reads and refreshes
+  // the same one, instead of each paying for its own copy of the same numbers.
+  let admin: SupabaseClient | null = null;
+  let cacheKey = brandId;
+  try {
+    admin = createAdminClient();
+    const org = await resolveOrgBilling(admin, brandId);
+    if (org) cacheKey = org.orgId;
+  } catch (e) {
+    reportFailOpen(brandId, e);
+    return;
+  }
+
+  // Outside the try on purpose: a denial here is the gate doing its job, and must not be
+  // swallowed by the fail-open catch below.
+  const hit = gateCache.get(cacheKey);
   if (hit && Date.now() - hit.at < GATE_TTL_MS) {
     assertCreditsAvailable(hit.usage);
     return;
   }
+
   let usage: CreditsUsage | null = null;
   try {
-    const admin = createAdminClient();
     const { data: brand } = await admin
       .from('brands')
       .select('id, plan, activated_at, status')
@@ -286,9 +490,10 @@ export async function gateCreditsCore(brandId: string): Promise<void> {
       .maybeSingle();
     if (!brand) return;
     usage = await getCreditsUsage(admin, brand as Brand);
-    gateCache.set(brandId, { usage, at: Date.now() });
-  } catch {
-    return; // fail-open: cannot evaluate → allow
+    gateCache.set(cacheKey, { usage, at: Date.now() });
+  } catch (e) {
+    reportFailOpen(brandId, e);
+    return;
   }
   assertCreditsAvailable(usage);
 }
@@ -308,19 +513,19 @@ import { creditWarningEmailSubject, creditWarningEmailHtml, creditWarningEmailTe
  */
 async function claimCreditWarning(
   supabase: SupabaseClient,
-  brandId: string,
+  orgId: string,
   monthKey: string,
   start: Date
 ): Promise<boolean> {
   const now = new Date().toISOString();
   const { error: insErr } = await supabase
-    .from('brand_usage')
-    .insert({ brand_id: brandId, month: monthKey, credits_warned_at: now });
+    .from('org_usage')
+    .insert({ org_id: orgId, month: monthKey, credits_warned_at: now });
   if (!insErr) return true; // la riga del mese non c'era: l'abbiamo creata noi
   const { data } = await supabase
-    .from('brand_usage')
+    .from('org_usage')
     .update({ credits_warned_at: now })
-    .eq('brand_id', brandId)
+    .eq('org_id', orgId)
     .eq('month', monthKey)
     .or(`credits_warned_at.is.null,credits_warned_at.lt.${start.toISOString()}`)
     .select('id');
@@ -329,7 +534,7 @@ async function claimCreditWarning(
 
 /**
  * Send a one-time email warning when credit usage exceeds 80% of the quota.
- * Uses brand_usage.credits_warned_at for anti-spam: one email per billing period.
+ * Uses org_usage.credits_warned_at for anti-spam: one email per billing period, per org.
  * Fire-and-forget: never throws, never blocks the caller.
  */
 export async function maybeSendCreditWarning(
@@ -340,22 +545,27 @@ export async function maybeSendCreditWarning(
   try {
     if (usage.percent < WARNING_THRESHOLD) return;
 
+    // One pool, one warning: the anti-spam flag lives on the org, so an org with five brands
+    // gets one email when the shared pool crosses the threshold, not five identical ones.
+    const orgId = brand.org_id ?? (await resolveOrgBilling(supabase, brand.id))?.orgId;
+    if (!orgId) return;
+
     // The billing window is already resolved inside `usage` — reuse it, don't recompute.
     const start = usage.periodStart;
-    const monthKey = start.toISOString().slice(0, 10); // YYYY-MM-DD, aligned to brand_usage.month
+    const monthKey = start.toISOString().slice(0, 10); // YYYY-MM-DD, aligned to org_usage.month
 
     // Anti-spam: already warned this period?
     const { data: u } = await supabase
-      .from('brand_usage')
+      .from('org_usage')
       .select('credits_warned_at')
-      .eq('brand_id', brand.id)
+      .eq('org_id', orgId)
       .eq('month', monthKey)
       .maybeSingle();
 
     if (u?.credits_warned_at && new Date(u.credits_warned_at as string) >= start) return; // already sent
 
     // Resolve recipients
-    const contacts = await brandContacts(supabase, brand.org_id ?? '', brand.id);
+    const contacts = await brandContacts(supabase, orgId, brand.id);
     if (!contacts.length) return;
 
     // Si prenota PRIMA di spedire, e solo chi vince la corsa spedisce. La lettura qui sopra da sola
@@ -363,7 +573,7 @@ export async function maybeSendCreditWarning(
     // che il layout interroga ogni 45s da ogni scheda aperta — due poll simultanei passavano
     // entrambi il controllo e mandavano due mail. Se poi l'invio fallisce si perde un avviso: è
     // esattamente il compromesso che questa funzione dichiara ("non critico"), al contrario dello spam.
-    if (!(await claimCreditWarning(supabase, brand.id, monthKey, start))) return;
+    if (!(await claimCreditWarning(supabase, orgId, monthKey, start))) return;
 
     const appBase = (publicEnv.PUBLIC_APP_URL || '').replace(/\/$/, '');
     const dashboardUrl = brand.slug ? `${appBase}/app/${brand.slug}` : appBase;

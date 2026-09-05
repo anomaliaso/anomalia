@@ -1,8 +1,9 @@
 /**
  * THE HOOK TACTIC TAXONOMY — eighteen named ways to open, and the coverage map they unlock.
  *
- * WHY EIGHTEEN AND NOT SEVEN. `video-review.ts` labelled hooks with seven loose strings and
- * `visual-meta.ts` with five shape buckets (question / stat / howto / myth / claim). Both are
+ * WHY EIGHTEEN AND NOT SEVEN. The video reviewer (gone on 29/8/2026) labelled hooks with seven
+ * loose strings and `visual-meta.ts` labels them with five shape buckets (question / stat / howto /
+ * myth / claim). Both are
  * usable as labels and useless as a map: with seven buckets a brand looks "covered" after a month,
  * so the planner keeps rewriting the same three openings and calls it variety.
  *
