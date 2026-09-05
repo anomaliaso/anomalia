@@ -33,6 +33,14 @@ LOGICA con i test (il caricamento si mocka) e nel browser verifica quello che il
 ### Il worktree nuovo ha bisogno di `npm ci` — e ancora dopo ogni rebase su dev
 Un worktree parte senza `node_modules`, e `vite.config.ts` muore subito (`Cannot find package '@sentry/sveltekit'`). Ma il caso insidioso è l'altro: dopo aver ribasato su dev che ha accolto PR nuove, il `node_modules` installato col vecchio lockfile produce guasti **deterministici e fuori posto** — v. `extractUserText is not a function` in un test di immagini: il codice era giusto, le dipendenze vecchie. Segnale: un errore `X is not a function` su codice mai toccato, in un worktree ribasato. Mossa: `npm ci` nel worktree, sempre, dopo il rebase.
 
+**E il worktree nuovo non ha nemmeno `.env`: `hooks.server.test.ts` fallisce da solo.** Con
+`node_modules` a posto resta un rosso che sembra tuo: `TypeError: Invalid URL` all'import, un file
+solo, in un test che la tua modifica non sfiora. Non è una regressione — è una variabile
+d'ambiente che manca, e il checkout principale ce l'ha. Segnale: quel test è l'UNICO rosso su
+~7.300 passati, e passa nel checkout principale. Mossa: rilancialo nel checkout principale prima
+di indagare; se lì è verde, è l'ambiente, non il tuo diff. Ha già fatto perdere tempo a due
+agenti lo stesso giorno.
+
 **E prima di credere a un rosso locale, guarda la CI.** Lo stesso `extractUserText`/
 `extractUserImages` è tornato il 4/9 su `dev`: quei simboli non erano codice nostro ma una patch
 `patch-package`, tolta perché non applicava più alla versione installata. In locale i test
