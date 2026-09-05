@@ -50,7 +50,50 @@ revoke execute on function public.tg_notify_new_user() from public, anon, authen
 
 -- `rls_auto_enable` restituisce `event_trigger`: Postgres rifiuta la chiamata diretta con 0A000
 -- ("trigger functions can only be called as triggers"). È un presidio, non un buco — accende la
--- RLS su ogni tabella nuova di `public` — e non è in nessuna migrazione: vive solo in produzione.
+-- RLS su ogni tabella nuova di `public`.
+--
+-- Viveva solo in produzione, creato a mano e in nessuna migrazione, e questo costava due volte:
+-- la `revoke` qui sotto uccideva `db:migrate` su un database pulito, e un ambiente nuovo nasceva
+-- senza il presidio — cioè con ogni tabella futura scoperta, in silenzio. Il corpo è quello di
+-- produzione, meno quattro condizioni che non potevano essere false una volta chiesto
+-- `schema_name = 'public'`; `create or replace` lo rende un nulla di fatto dove esiste già.
+create or replace function public.rls_auto_enable()
+returns event_trigger language plpgsql security definer set search_path = pg_catalog as $function$
+declare
+  cmd record;
+begin
+  for cmd in
+    select *
+    from pg_event_trigger_ddl_commands()
+    where command_tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+      and object_type in ('table', 'partitioned table')
+  loop
+    if cmd.schema_name = 'public' then
+      begin
+        execute format('alter table if exists %s enable row level security', cmd.object_identity);
+        raise log 'rls_auto_enable: enabled RLS on %', cmd.object_identity;
+      exception
+        when others then
+          raise log 'rls_auto_enable: failed to enable RLS on %', cmd.object_identity;
+      end;
+    else
+      raise log 'rls_auto_enable: skip % (schema %)', cmd.object_identity, cmd.schema_name;
+    end if;
+  end loop;
+end;
+$function$;
+
+-- `create event trigger` non ha `if not exists`, e il trigger si chiama `ensure_rls` in produzione.
+do $$
+begin
+  if not exists (select 1 from pg_event_trigger where evtname = 'ensure_rls') then
+    create event trigger ensure_rls on ddl_command_end
+      when tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+      execute function public.rls_auto_enable();
+  end if;
+end;
+$$;
+
 revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
 
 -- ── 4. Il grant serve, il controllo dentro no: si aggiunge il controllo, non si toglie il grant ──

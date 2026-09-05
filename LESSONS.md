@@ -786,6 +786,33 @@ dove non lo è: resta non fatale, smette di essere muto.
 vincolo nemmeno volendo: è gestione d'errore che non può funzionare. L'errore va letto dal valore
 risolto.
 
+## Un presidio creato a mano in produzione costa due volte, e la seconda non fa rumore
+
+**Segnale.** Una migrazione che gira da settimane in produzione uccide `db:migrate` su un database
+pulito, con un errore che nomina un oggetto che nessuno ha mai scritto in un file: qui
+`42883 — function public.rls_auto_enable() does not exist`, da una `revoke` su una funzione che
+esisteva solo in produzione perché era stata creata dalla dashboard.
+
+**Cosa succede.** Il primo costo si vede: la catena si ferma, e siccome ogni file gira nella sua
+transazione non si perde una riga, si perde tutto quello che viene dopo. Il secondo costo non si
+vede ed è più caro: **un ambiente nuovo nasce senza il presidio**. `ensure_rls` accende la row level
+security su ogni tabella nuova di `public`; senza, ogni tabella creata da lì in poi resta scoperta
+finché qualcuno non legge `pg_class`. Un controllo di sicurezza che esiste in un ambiente solo non
+è un controllo: è una coincidenza che regge finché non si ricrea il database.
+
+**Perché la suite non lo vede.** Gira su Supabase mockato, dove nessuna migrazione viene applicata
+davvero. A trovarlo è stato un agente che ricostruiva un database da zero per un altro lavoro — cioè
+l'unica cosa che esercita l'ordine reale di applicazione. Vale la regola generale già pagata qui: chi
+scrive la modifica la rilegge da autore, e la riga accanto la vede solo chi non ha una posta in gioco
+su quella modifica.
+
+**La mossa.** Quando `psql` o la dashboard creano qualcosa che deve esistere sempre — una funzione, un
+event trigger, una policy, un bucket — quella cosa entra in una migrazione **nello stesso giorno**, in
+forma idempotente: `create or replace` per una funzione, e per ciò che non ha un `if not exists`
+(gli event trigger non ce l'hanno) una guardia sul catalogo. E la prova che serve non è che il file
+gira in produzione, dove l'oggetto c'è già: è che gira su un database **vuoto**. Un database usa e
+getta e due `psql` sono dieci minuti, e sono l'unico posto dove il difetto è visibile.
+
 ## Il vocabolario di una colonna si deriva dal CODICE, non dalle righe che ci sono
 
 **Segnale.** Una correzione ovvia: un valore fuori dall'enum, sostituito con quello «giusto»
