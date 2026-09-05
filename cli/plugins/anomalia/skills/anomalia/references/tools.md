@@ -186,7 +186,12 @@ Animating and filming are two different jobs with two different model lists (`vi
 `videoModel`): a model valid for one is refused for the other with `model_not_for_slot` and the
 accepted list. Refusals: `source_not_found` (404) means the id is not this brand's or does not
 resolve to one asset; `source_not_an_image` (400) means it exists but is a video;
-`video_budget_exhausted` (400) counts the clips still rendering, not just the ones that landed.
+`video_budget_exhausted` (400) counts the clips still rendering, not just the ones that landed;
+`duration_out_of_range` (400) means the model cannot film the seconds you asked for and the message
+names the nearest it accepts. A refusal from the provider comes back as `render_failed` **with a
+`reason`** saying what it objected to — read it before retrying, because retrying the same request
+buys the same refusal. The success response carries `duration_seconds`, the seconds actually
+submitted: a clip is billed per second, so read it rather than assuming your number was taken.
 
 **Choosing the model.** Every generator takes an optional `model` that applies to **that call
 only** and changes no brand setting — that is the difference from `set_media_model`, which is "from

@@ -69,13 +69,15 @@ const run = async (over: Record<string, unknown> = {}) => {
 
 describe('animare un immagine della libreria', () => {
   it('la foto di partenza arriva al fornitore come copertina', async () => {
-    const out = await run({ baseMediaId: FULL_ID, durationSeconds: 5 });
+    // 12s e non 5: il modello non scende sotto i 10, e chiedere 5 ora viene RIFIUTATO invece di
+    // essere riportato in silenzio a 10 — vedi media-generate.video-errors.test.ts.
+    const out = await run({ baseMediaId: FULL_ID, durationSeconds: 12 });
 
     expect(out.ok).toBe(true);
     const sent = submitAndTrackVideoRender.mock.calls[0][0];
     // La riga che distingue «anima questa foto» da «filmami un gatto».
     expect(sent.render.imageUrl).toBe(COVER);
-    expect(sent.render.duration).toBe(5);
+    expect(sent.render.duration).toBe(12);
     expect(sent.postId).toBeNull();
   });
 

@@ -1179,7 +1179,10 @@ export async function submitVideoRender(
         opts.abortSignal
       );
       if (!out.jobId) {
+        // Il motivo esisteva gia' qui e moriva nel log: chi ha chiamato il tool riceveva
+        // `render_failed` nudo e non poteva sapere se riprovare o cambiare parametro.
         console.error(`[video] submit openrouter rifiutato: ${out.error}`);
+        if (out.error) opts.onSubmitError?.(String(out.error));
         return undefined;
       }
       return {
@@ -1211,10 +1214,15 @@ export async function submitVideoRender(
     );
   } catch (e) {
     if (e instanceof Error && e.name === 'CreditsExhaustedError') throw e;
-    console.error('[video] submit failed:', e instanceof Error ? e.message : e);
+    const why = e instanceof Error ? e.message : String(e);
+    console.error('[video] submit failed:', why);
+    opts.onSubmitError?.(why);
     return undefined;
   }
-  if (!taskId) return undefined;
+  if (!taskId) {
+    opts.onSubmitError?.('the provider accepted no task for this request');
+    return undefined;
+  }
 
   return {
     taskId,

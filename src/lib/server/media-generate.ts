@@ -21,6 +21,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertBrandMedia, storeBrandMediaBytes, probeImageDimensions } from '$lib/server/brand-media';
 import { mediaUrl } from '$lib/media-url';
+import { safeProviderReason } from '$lib/server/provider-reason';
 import { markImage, DIGITAL_SOURCE_TYPE } from '$lib/server/content-credentials';
 import type { AspectRatio } from '$lib/server/content-preview';
 
@@ -58,7 +59,16 @@ export type GenerateMediaResult =
       model: string | null;
       renders: number;
     }
-  | { ok: true; status: 'rendering'; media: []; jobId: string; model: string | null; renders: 0 }
+  | {
+      ok: true;
+      status: 'rendering';
+      media: [];
+      jobId: string;
+      model: string | null;
+      renders: 0;
+      /** I secondi DAVVERO mandati: il modello ha una sua finestra e non e' quella chiesta. */
+      durationSeconds: number | null;
+    }
   | {
       ok: false;
       error:
@@ -67,7 +77,10 @@ export type GenerateMediaResult =
         | 'video_budget_exhausted'
         | 'source_not_found'
         | 'source_not_an_image';
+      /** Cosa ha detto il fornitore. Assente quando non ha detto niente: non si inventa. */
+      reason?: string;
     }
+  | { ok: false; error: 'duration_out_of_range'; reason: string }
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
 const IMAGE_MIME = 'image/png';
@@ -334,6 +347,28 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     coverUrl = urls[0];
   }
 
+  // La durata si CONTRATTA prima di inviare. `clampVideoDuration` alzerebbe in silenzio 5 a 10 —
+  // e i video si pagano al secondo, quindi un riporto muto raddoppia il conto senza dirlo. Il
+  // pavimento di prodotto (MIN_DURATION) resta dov'e' per il percorso dei post: qui si rifiuta
+  // dichiarando la finestra, invece di consegnare qualcosa che nessuno ha chiesto.
+  const { resolveVideoModel, clampVideoDuration } = await import('$lib/server/video');
+  const effectiveModel = resolveVideoModel({
+    model: opts.model ?? null,
+    prefs,
+    hasCover: !!opts.baseMediaId
+  });
+  const wanted = opts.durationSeconds;
+  if (wanted != null) {
+    const achievable = clampVideoDuration(wanted, effectiveModel);
+    if (achievable !== wanted) {
+      return {
+        ok: false,
+        error: 'duration_out_of_range',
+        reason: `${effectiveModel} cannot film ${wanted}s — the nearest it accepts is ${achievable}s. Ask for that instead; a clip is billed per second.`
+      };
+    }
+  }
+
   const { remaining } = await import('$lib/server/usage');
   const budget = await remaining(admin, opts.brandId, brand?.plan, brand?.timezone ?? 'Europe/Rome');
 
@@ -342,8 +377,12 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
   const inFlight = await countOutstandingVideoRenders(admin, opts.brandId);
   if (budget.videos - inFlight <= 0) return { ok: false, error: 'video_budget_exhausted' };
 
+  let submitReason: string | undefined;
   const submitted = await submitAndTrackVideoRender({
     admin,
+    onSubmitError: (why: string) => {
+      submitReason = safeProviderReason(why);
+    },
     brandId: opts.brandId,
     userId: opts.userId,
     postId: null,
@@ -365,7 +404,7 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
         ((opts.baseMediaId ? prefs.videoImageModel : prefs.videoModel) as string | null | undefined)
     }
   });
-  if (!submitted) return { ok: false, error: 'render_failed' };
+  if (!submitted) return { ok: false, error: 'render_failed', ...(submitReason ? { reason: submitReason } : {}) };
 
   const { data: job } = await admin
     .from('video_renders')
@@ -380,7 +419,8 @@ async function startVideo(opts: GenerateMediaOpts): Promise<GenerateMediaResult>
     media: [],
     jobId: job.id as string,
     model: submitted.model ?? null,
-    renders: 0
+    renders: 0,
+    durationSeconds: submitted.durationSeconds ?? wanted ?? null
   };
 }
 
