@@ -14,6 +14,7 @@ import {
 } from './articles';
 import { CHECK_CONTENT } from './content';
 import { QUERY_DATABASE } from './query';
+import { INSERT_ROW, UPDATE_ROW } from './write';
 import { GET_CREATION_KIT } from './creation-kit';
 import {
   APPROVE_PLAN,
@@ -173,6 +174,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GET_MEDIA_MODELS,
   GET_WRITING_SKILLS,
   IMPORT_MEDIA_URL,
+  INSERT_ROW,
   MAKE_VIDEO,
   OPTIMIZE_ARTICLE,
   PLAN_WEEK,
@@ -215,6 +217,7 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   UPDATE_COMPETITOR,
   UPDATE_PERSON,
   UPDATE_PRODUCT,
+  UPDATE_ROW,
   UPDATE_VOICE,
 ];
 
@@ -442,3 +445,5 @@ export {
 export type { SavePlanInput, SavePlanResult, SaveWeekSeedsInput, SaveWeekSeedsResult } from './plans';
 export type { CreateProductInput, CreateProductResult } from './studio';
 export type { CreateShareInput, CreateShareResult, SharedViewType } from './shares';
+export { INSERT_ROW, UPDATE_ROW, UPDATE_MAX_ROWS } from './write';
+export { TABLE_CHECKS, WRITABLE_COLUMNS } from './write-rules';

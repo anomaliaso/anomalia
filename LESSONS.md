@@ -1571,3 +1571,37 @@ e un `with check` che ne nomina una sola. Il worker poi legge la seconda per `id
 E dove nessun percorso legittimo scrive quella coda col client dell'utente (`webhook_deliveries`: le
 uniche scritture sono l'ingress di Composio e il cron, tutte e due con `createAdminClient()`), il
 `revoke insert, update` toglie il problema invece di controllarlo.
+
+## Un errore di scrittura non ha lo stesso codice del suo gemello in lettura
+
+**Segnale.** Un ripiego copiato dal codice di lettura non scatta mai: il caso che doveva coprire
+arriva, e il tool risponde con l'errore grezzo invece che col rimedio. Qui: `insert_row` doveva
+riprovare senza `brand_id` sulle tabelle che non ce l'hanno, la condizione era `code === '42703'`
+copiata da `query`, e ogni insert su `profiles` moriva dicendo «la colonna brand_id non esiste».
+
+**Cosa succede.** PostgREST risolve i nomi di colonna in due posti diversi. In un **filtro** li
+manda a Postgres, che risponde **42703**. Nel **corpo di una scrittura** li cerca nella propria
+schema cache, e risponde **PGRST204** (`Could not find the 'x' column of 'y' in the schema cache`)
+senza aver mai interrogato il database. Sono lo stesso fatto per chi scrive il codice e due codici
+diversi sul filo, e il secondo non esiste affatto nel percorso di lettura da cui si copia.
+
+**La mossa.** La domanda «questa tabella ha quella colonna?» si scrive **una volta sola**, in una
+funzione che accetta entrambi i codici. Scritta due volte diverge alla prima, e diverge in silenzio:
+il ramo mai preso non fallisce, semplicemente non c'è. E il caso si prova col codice VERO — un client
+finto risponde quello che gli si dice, quindi un test scritto sul codice sbagliato è verde per
+costruzione.
+
+## `head: true` su una richiesta PostgREST si porta via anche il corpo dell'errore
+
+**Segnale.** Un rifiuto che non si riconosce: `{"error":"db_error","message":""}`, senza codice e
+senza testo, su una chiamata che poco prima funzionava.
+
+**Cosa succede.** `select('*', { count: 'exact', head: true })` è la forma ovvia per contare senza
+trasferire righe — PostgREST manda un `HEAD` e il conteggio sta in `Content-Range`. Ma un `HEAD`
+**non ha corpo**, e il corpo è dove PostgREST mette `{code, message, details, hint}` quando la
+richiesta fallisce: `supabase-js` consegna un errore con tutti i campi vuoti. Il conteggio riesce
+benissimo; è il fallimento a diventare muto, quindi la sonda sembra corretta finché tutto va bene.
+
+**La mossa.** Contare con `count: 'exact'` e `.limit(1)`. Una riga di traffico è il prezzo di un
+messaggio d'errore leggibile, e un rifiuto anonimo costa molto di più: non si riconosce, quindi non
+si spiega, quindi il giro dopo è identico al primo.
