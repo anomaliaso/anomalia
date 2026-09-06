@@ -451,7 +451,8 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/keywords" \
 
 ## `GET /api/v1/brands/:slug/backlinks`
 
-Tool MCP: `get_backlinks`.
+Nessun tool MCP: su MCP questa lettura è `query` su `brand_backlink_placements` e
+`brand_backlink_opportunities`. La rotta REST resta, e la CLI la chiama.
 
 Riepilogo della backlink network: piazzamenti in uscita/entrata, opportunità open e statistiche.
 
@@ -656,7 +657,8 @@ campi SEO, cover, categoria, tag, autore, lingua, schedule e stato. È la lettur
 modificare, e quella che serve dopo per vedere cos'è cambiato. Non chiama nessun modello e non
 consuma crediti; una API key di sola lettura la raggiunge.
 
-Tool MCP: `get_article`.
+Nessun tool MCP: su MCP un articolo si legge con `query({table:"brand_articles", …, limit:1})` —
+una riga sola torna intera, `body_md` compreso. La rotta REST resta, e la CLI la chiama.
 
 **Query params**
 
@@ -911,7 +913,8 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/gsc" \
 
 ## `GET /api/v1/brands/:slug/ranks`
 
-Tool MCP: `get_ranks`.
+Nessun tool MCP: su MCP questa lettura è `query` su `brand_tracked_keywords`, poi su
+`brand_rank_snapshots` filtrata per `tracked_keyword_id`. La rotta REST resta, e la CLI la chiama.
 
 Rank board: keyword tracciate attive con posizione attuale, precedente e delta.
 

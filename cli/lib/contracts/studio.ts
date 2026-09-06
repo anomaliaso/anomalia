@@ -207,27 +207,6 @@ export const UPDATE_COMPETITOR = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const GET_BIO = {
-  tool: 'get_bio',
-  title: 'Read link in bio',
-  description:
-    'Read the link in bio stored for the brand and the short link worth putting there — the one ' +
-    'with the most clicks in the last seven days.',
-  method: 'GET',
-  pathUnderBrand: '/bio',
-  input: z
-    .object({ platform: z.string().optional().describe('Defaults to the first active account') })
-    .strict(),
-  output: z.object({
-    bioUrl: z.string().nullable(),
-    suggested: z
-      .object({ code: z.string(), url: z.string(), clicks: z.number(), targetUrl: z.string() })
-      .nullable()
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_BIO = {
   tool: 'set_bio',
   title: 'Set link in bio',

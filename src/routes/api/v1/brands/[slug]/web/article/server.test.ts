@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GET_ARTICLE } from '@anomalia/api-contracts';
+import { GET_ARTICLE_READ } from '@anomalia/api-contracts';
 
 const structured = vi.fn();
 const gateCredits = vi.fn();
@@ -169,7 +169,7 @@ describe('GET /api/v1/brands/:slug/web/article', () => {
       const { res, body } = await read('art-1');
 
       expect(res.status).toBe(200);
-      expect(GET_ARTICLE.output.safeParse(body).success).toBe(true);
+      expect(GET_ARTICLE_READ.output.safeParse(body).success).toBe(true);
       expect(body.article).toMatchObject({
         id: 'art-1',
         status,

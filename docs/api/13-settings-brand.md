@@ -1,8 +1,10 @@
 # API — 13 · Impostazioni: come lavora il brand
 
-Due endpoint sotto `/api/v1/brands/:slug/settings/brand`, cioè i tool MCP `get_brand_settings` e
-`set_brand_settings`. Coprono quattro pagine di Settings che erano quattro form separati: fuso di
-pubblicazione, piattaforme bersaglio, hashtag per piattaforma, esempi di voce.
+Due endpoint sotto `/api/v1/brands/:slug/settings/brand`. Scriverli è il tool MCP
+`set_brand_settings`; leggerli su MCP è `query` su `brands` (`timezone`, `target_platforms`,
+`content_prefs`), perché `get_brand_settings` non esiste più come tool — la rotta `GET` resta,
+e la CLI la chiama. Coprono quattro pagine di Settings che erano quattro form separati: fuso
+di pubblicazione, piattaforme bersaglio, hashtag per piattaforma, esempi di voce.
 
 Errori comuni di auth: vedi [01-overview](01-overview.md).
 

@@ -31,30 +31,6 @@ const voiceExamples = z
   .array(z.string())
   .describe('Real past posts of the brand, one per entry, that the AI imitates for tone');
 
-export const GET_BRAND_SETTINGS = {
-  tool: 'get_brand_settings',
-  title: 'Brand settings',
-  description:
-    'How this brand works: posting timezone, the platforms it publishes to (with the ones that ' +
-    'actually have a connected account), the hashtags it allows per platform, and the past posts ' +
-    'the AI imitates for tone. Read it before set_brand_settings — it carries the platform ' +
-    'vocabulary and shows which targets have nowhere to publish yet.',
-  method: 'GET',
-  pathUnderBrand: '/settings/brand',
-  input: z.object({}).strict(),
-  output: z.object({
-    brand: z.string(),
-    timezone: z.string(),
-    platforms: z.array(z.string()),
-    platform_choices: z.array(z.string()),
-    connected_platforms: z.array(z.string()),
-    hashtags: z.record(z.string(), z.array(z.string())),
-    voice_examples: z.array(z.string())
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_BRAND_SETTINGS = {
   tool: 'set_brand_settings',
   title: 'Change how the brand works',

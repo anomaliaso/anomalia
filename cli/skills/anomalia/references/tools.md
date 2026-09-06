@@ -16,7 +16,7 @@ There is no sign-in tool. On remote HTTP the host walks the OAuth round itself; 
 session is the CLI's, so `anomalia login` in a terminal covers both. `list_brands` is how you
 confirm: brands come back, or nobody is signed in.
 
-## Database
+## Reading is one tool
 
 | MCP | CLI |
 |-----|-----|
@@ -28,36 +28,88 @@ is READ ONLY by construction — you name a table, columns and filters, it issue
 read, and a write has nowhere to go. No SQL string, no joins, no function calls. It calls no
 model and costs nothing.
 
-Optional `table` (omit it and you get the list of every table you can name), `columns` (omit them
-and you get real rows with every column — the keys of a row ARE the schema), `where` (filters
-ANDed together, each `column` / `op` / `value`, where `op` is one of `eq`, `neq`, `gt`, `gte`,
-`lt`, `lte`, `like`, `ilike`, `is`, `in`, `cs`, `cd`), `order` and `limit` (20 by default, 100 at
-most). One table per call: read two and match the ids yourself.
+Thirty-three reads that used to be tools of their own are this one call now. The REST endpoints
+and the CLI commands did NOT move — only the MCP tools did — so where a command still answers the
+question, the map below says so.
 
-Reach for it when the answer needs a count, a join you do by hand, or a table nothing else
-exposes — that is one call instead of three that approximate it. A refusal comes back as `200`
-with `error`, `message` and often `fix` inside, so you can read why and change move.
+### The whole shape
+
+- **`table`** — omit it and you get the list of every table you can name. Ask for a table with no
+  `columns` and you get real rows with every column: the keys of a row ARE the schema.
+- **`columns`** — **always name them.** Without them every column comes back, the character cap
+  drops whole rows to fit, and a long question gets a short answer: fifty posts asked for, nine
+  returned. The same read with five named columns returns all fifty.
+- **`where`** — filters ANDed together, each `column` / `op` / `value`, where `op` is one of
+  `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `like`, `ilike`, `is`, `in`, `cs`, `cd`. `in` takes an
+  array, `is` takes null / true / false. **`negate: true` inverts that one filter**, which is how
+  `is null` becomes `is not null`.
+- **`order`** — one column or an array of them, applied in that order. Descending unless
+  `ascending` is set, and `nullsFirst` decides where the empty values sit.
+- **`embed`** — a related table brought along through its foreign key, with its own `columns`.
+  RLS applies to it too: an article with its category and its author arrives in one call.
+- **`offset`** — the next page. When rows were dropped, `limits` in the reply names the offset
+  that resumes the read.
+- **`count`** — `"estimated"` (the planner's guess, the default) or `"exact"`, which counts the
+  matching rows for real and puts the number in `total`. Use it when the number IS the answer.
+- **`limit`** — 20 by default, **200 at most**.
+
+**One row is a document.** With `limit: 1` long text comes back whole — that is how you read an
+article before rewriting it. With many rows long values are cut at 2 000 characters and `limits`
+names the columns that were cut. Every cap that bites is named there; none of them is silent.
+
+One table per call plus whatever `embed` brings: read two unrelated tables and match the ids
+yourself. A refusal comes back as `200` with `error`, `message` and often `fix` inside, so you can
+read why and change move.
 
 It is also the read for questions no tool of its own answers. **What this brand sells** — its
 catalogue of products, offers and services — is the `products` table: one row per offer, with
 `title`, `kind`, `pricing`, `url`, `featured` and the `images` it carries.
 
+### Where the reads went
+
+| you want | how |
+|---|---|
+| posts, by status | `query` on `posts` — `id`, `status`, `platform`, `caption`, `scheduled_for`, `published_at`, `created_at`; CLI `anomalia content <slug> [--status …]` |
+| one post, whole | the same read with an `id` filter and `limit: 1`; CLI `anomalia post <slug> <id>` |
+| how many are waiting | `query` on `posts` with `status` `eq` `pending_user`, `count: "exact"`, `limit: 1` → read `total` |
+| the calendar | `query` on `posts` — `id`, `platform`, `caption`, `scheduled_for`, `slot`, `status`, filtered `scheduled_for` `is` null with `negate: true`, ordered ascending; CLI `anomalia calendar <slug> [--month YYYY-MM]` |
+| the brand at a glance | `anomalia dashboard <slug>` and `anomalia status <slug>` — no single table stands in for them |
+| what publishing achieved | `anomalia analytics <slug>` |
+| the media library | `query` on `brand_media` — `id`, `kind`, `mime`, `title`, `description`, `tags`, `short_code`, `created_at`; the link to hand out is `https://anomalia.so/a/<short_code>` |
+| did my clip land | `query` on `video_renders` — `id`, `status`, `error`, `submitted_at` — then `brand_media` filtered on `source_ref` with that id |
+| the editorial plan and its weeks | `query` on `editorial_plans` — `id`, `status`, `strategy`, `voice`, `cadence`, `platform_mix`, `weeks`, `created_at`, `activated_at`, filtered `status` `eq` `active`; CLI `anomalia plan <slug>` and `anomalia weekly-plan <slug>` |
+| the go-to-market | `anomalia gtm <slug>` |
+| how goal mode went | `GET /api/v1/brands/:slug/goals` — met on the first pass, laps spent, `stopped_by` |
+| how the brand is supposed to sound, and its settings | `query` on `brands` — `slug`, `name`, `plan`, `status`, `timezone`, `target_platforms`, `content_prefs`, `blog_config` with `limit: 1`; voice, hashtags, radar and blog settings all live in those two jsonb columns. CLI `anomalia voice <slug>` |
+| connected accounts | `query` on `social_accounts` — `platform`, `username`, `display_name`, `profile_url`, `status`, `connected_at`, `bio_url`; the link in bio is `bio_url` |
+| the studio | `query` on `products`, `people`, `competitors` and `brand_kit`; CLI `anomalia studio <slug>`, `anomalia products <slug>`, `anomalia people <slug>` |
+| is the knowledge indexed | `query` on `brand_doc_chunks` — `id`, filtered `embedding` `is` null with `negate: true`, `count: "exact"`, `limit: 1` → a `total` of 0 means nothing is searchable yet |
+| SEO / GEO audits | `query` on `brand_geo_audits` — `id`, `created_at`, `tech_score`, `tech`, `share_of_voice`, `citations`, newest first; CLI `anomalia seo <slug>` and `anomalia geo <slug>` |
+| the fixes those audits produced | `query` on `brand_geo_artifacts` — `id`, `kind`, `title`, `format`, `body`, `status`, `target_path`, `source_finding` |
+| keyword strategy | `query` on `brand_seo_keyword_strategy` — `strategy`, `citations`, `updated_at` with `limit: 1`; CLI `anomalia keywords <slug>` |
+| rank tracking | `query` on `brand_tracked_keywords` — `id`, `keyword`, `locale`, `device`, `active` — then `brand_rank_snapshots` filtered on `tracked_keyword_id` |
+| the backlink network | `GET /api/v1/brands/:slug/backlinks` |
+| articles | `query` on `brand_articles` — `id`, `slug`, `title`, `status`, `scheduled_for`, `published_at`, `created_at`; CLI `anomalia web <slug>` |
+| one article, whole, with its category and author | `query` on `brand_articles` with an `id` filter, `limit: 1` and `embed` on `blog_categories` and `blog_authors` — `body_md` arrives untruncated |
+| how the blog is configured | `query` on `brands` for `blog_config`, plus `blog_categories`, `blog_tags` and `blog_authors` for the three lists |
+| radar sources | `query` on `brand_news_sources` — `id`, `kind`, `value`, `lang`, `active`; which platforms are on is `brands.content_prefs.radar` |
+| what the recurring jobs have been doing | `query` on `loop_ticks` filtered on `loop` and `created_at`; `brand_job_optouts` says which are off |
+| share links you handed out | `query` on `shared_views` — `id`, `view_type`, `created_at`, `expires_at`, `revoked_at`; no token, it is shown once at creation |
+| what moves in the brand's field | `GET /api/v1/brands/:slug/market/field` |
+
+Nine reads are NOT a query, because not one of them is a select: `list_brands`, `diagnose_brand`,
+`diagnose_radar`, `search_knowledge`, `get_writing_skills`, `get_creation_kit`, `get_gsc`,
+`get_ads` and `get_media_models`. Each has its own section below. Anything else you remember
+calling is a `query`.
+
 ## Brand & posts
 
 | MCP | CLI |
 |-----|-----|
-| `get_dashboard` | `anomalia dashboard <slug>` |
-| `get_status` | `anomalia status <slug>` |
-| `get_analytics` | `anomalia analytics <slug>` |
-| `get_calendar` | `anomalia calendar <slug> [--month YYYY-MM]` |
 | `diagnose_brand` | (MCP only) |
-| `get_goals` | (MCP only) |
-| `get_gtm` | `anomalia gtm <slug>` |
-| `get_voice` / `update_voice` | `anomalia voice <slug>` |
-| `list_posts` | `anomalia content <slug> [--status …]` |
+| `update_voice` | `anomalia voice <slug>` |
 | `get_creation_kit` | (MCP only) |
 | `create_post` | (MCP only) |
-| `list_media` | (MCP only) |
 | `check_content` | (MCP only) |
 | `generate_captions` | (MCP only) |
 | `import_media_url` | (MCP only) |
@@ -66,9 +118,7 @@ catalogue of products, offers and services — is the `products` table: one row 
 | `refine_media` | (MCP only) |
 | `generate_video` | (MCP only) |
 | `generate_carousel` | (MCP only) |
-| `check_media_job` | (MCP only) |
 | `approve_posts` | `anomalia approve <slug> --all` |
-| `get_post` | `anomalia post <slug> <id>` |
 | `edit_post` | `anomalia post <slug> <id> edit …` |
 | `approve_post` / `publish_post` / `reject_post` | `anomalia post <slug> <id> approve\|publish\|reject` |
 | `reschedule_post` | `anomalia post <slug> <id> reschedule --scheduledFor …` |
@@ -84,11 +134,6 @@ data says (`detail`), what unblocks it (`fix`, present only on a failing gate), 
 recorded outcome. Read `notCovered` before concluding anything: it lists the cycles this
 diagnosis does not look at, so "no blocks" never means "the whole product is working". No model,
 no credits, no writes.
-
-`get_goals` is goal mode measured rather than described: `summary` says how many goals were met
-on the first pass, how many went back to the person, how many automatic laps were spent, and
-`stopped_by` says why the chains stopped. Each goal carries its criteria and its diary. `limit`
-is 20 by default and 100 at most; `thread` narrows to one conversation.
 
 `get_creation_kit` is what you read BEFORE writing. Required: `slug`, `goal` (one line saying
 what the post has to do), `platforms` (comma-separated) and `format` (`single_image`, `carousel`,
@@ -122,13 +167,13 @@ Past winners are evidence, not orders: they may suggest a direction, they never 
 fact or authorize copying. When two things conflict, platform constraints win, then the operator's
 instruction for this artifact, then brand facts and voice, then the rubric, then the template.
 
-`list_media` lists what is already in the brand library; an id from there goes into `create_post`
-as `media_ids` and costs no render. Pass the **full** id: unlike a post id, a media id is never
-resolved from a prefix. A media id that is not this brand's stops the creation — the post is
-never made without it.
+A `query` on `brand_media` lists what is already in the brand library; an id from there goes into
+`create_post` as `media_ids` and costs no render. Pass the **full** id: unlike a post id, a media
+id is never resolved from a prefix. A media id that is not this brand's stops the creation — the
+post is never made without it.
 
 The two media failures of `create_post` mean opposite things. `media_not_found` (400) is yours:
-the id is not this brand's, so check it against `list_media`. `media_unavailable` (502) is ours:
+the id is not this brand's, so check it against `brand_media`. `media_unavailable` (502) is ours:
 the media is this brand's and we could not attach it. Trying other ids, a shorter id or another
 platform changes nothing — retry later, or create the post without the media.
 
@@ -147,13 +192,13 @@ that the right file arrived.
 post, nothing in the calendar. Required: `slug`, `prompt`; optional `kind` (`image` default, or
 `video`), `count`, `aspect_ratio`, `title`. **This spends credits**, unlike `import_media_url`:
 every image is a paid render and every video a paid clip. `count` draws up to 4 alternatives in
-one call and bills each one, so generate a few, look at them with `list_media`, and pass only the
-id you keep to `create_post` as `media_ids` — the calendar stays clean either way.
+one call and bills each one, so generate a few, look at them with a `query` on `brand_media`, and
+pass only the id you keep to `create_post` as `media_ids` — the calendar stays clean either way.
 
 An image comes back finished: `status` is `ready` and `media` carries the rows, each with a
 `signed_url` you can open. A video cannot: it takes minutes, longer than any single call may
-last, so it comes back with `status` `rendering` and a `job_id`, and `check_media_job` says where
-it got to. Do not call `generate_media` again for the same clip while one is still rendering —
+last, so it comes back with `status` `rendering` and a `job_id`, and a `query` on `video_renders`
+says where it got to. Do not call `generate_media` again for the same clip while one is rendering —
 that bills a second one. Refusals: `credits_exhausted` (402) means the brand's pool is empty and
 nothing was drawn; `video_budget_exhausted` (400) means the monthly video allowance is used up,
 counting the clips still rendering; `render_failed` (502) is the model returning nothing, and
@@ -205,8 +250,8 @@ be switched off either; animating a library image takes its look from that image
 **`slug` is optional, and which way you call it is the only choice to make.** WITHOUT it this is a
 one-off drawing: no brand, nothing filed anywhere, `id` comes back `null` and there is nothing to
 hand to `create_post` — you get a `storage_path` and a signed `url` that expires in two hours, so
-save what you want to keep. WITH it the image lands in that brand's library, `list_media` finds it
-again, and its `id` is what `create_post` takes as `media_ids`: that is the path for anything that
+save what you want to keep. WITH it the image lands in that brand's library, a `query` on
+`brand_media` finds it again, and its `id` is what `create_post` takes as `media_ids`: that is the path for anything that
 belongs to a brand or is going to become a post.
 
 **Do NOT call `list_brands` to decide where to draw.** If nobody named a brand there is no brand.
@@ -230,7 +275,7 @@ What comes back is what was billed, however crooked. Judging it is YOUR job — 
 
 `refine_media` changes something that is already in the library — an image or a video — and files
 the result as a **new** asset, so the original is never overwritten and a refinement cannot destroy
-what it started from. Required: `slug`, `base_media_id` (from `list_media`, and it must belong to
+what it started from. Required: `slug`, `base_media_id` (from `brand_media`, and it must belong to
 this brand — anything else is `source_not_found`), `instruction`. Say what should CHANGE, not what
 the whole thing should be.
 
@@ -253,8 +298,9 @@ scene and style come from those pixels and the prompt directs the movement only.
 is filmed from the prompt alone. It creates nothing in the calendar; when the clip lands, pass its
 `media_id` to `create_post`.
 
-A clip takes minutes, so this returns `status: rendering` and a `job_id`, and `check_media_job` says
-when it is done — do not call it again for the same clip while one is rendering, that bills a second.
+A clip takes minutes, so this returns `status: rendering` and a `job_id`, and a `query` on
+`video_renders` says when it is done — do not call it again for the same clip while one is
+rendering, that bills a second.
 Animating and filming are two different jobs with two different model lists (`videoImageModel` and
 `videoModel`): a model valid for one is refused for the other with `model_not_for_slot` and the
 accepted list. Refusals: `source_not_found` (404) means the id is not this brand's or does not
@@ -285,10 +331,10 @@ does; anything else is refused as `model_not_for_slot`, and the refusal carries 
 that would have been taken. The choice moves the bill: a light image model and a heavy video model
 are two orders of magnitude apart, so read the list before spending.
 
-`check_media_job` reads those jobs back, newest first. Required: `slug`; optional `job_id` for
-one of them. Each row carries `status` (`rendering`, `done`, `failed` or `expired`), `error` when
-it failed, and `media_id` once the clip is in the library — that id is what `create_post` takes
-as `media_ids`. It calls no model and spends no credits, so poll it rather than guessing.
+Those jobs are read back with `query` on `video_renders` — `id`, `status`, `error`,
+`submitted_at`, newest first — and then `brand_media` filtered on `source_ref` with that id, whose
+row is what `create_post` takes as `media_ids`. A `done` render with no media row never reached
+the library. The read calls no model and spends no credits, so poll it rather than guessing.
 
 `create_post` stores copy **you** wrote: Anomalia calls no model and spends no credits. It does
 not publish and does not schedule — `scheduled_for` is the proposed calendar time and stays a
@@ -329,7 +375,6 @@ scoring them, and there is no paid action that will. Looking at the render is on
 | MCP | CLI |
 |-----|-----|
 | `create_share` | (MCP only) |
-| `list_shares` | (MCP only) |
 | `revoke_share` | (MCP only) |
 
 `create_share` freezes one view as a snapshot and returns a link a client opens with no account.
@@ -346,24 +391,26 @@ connectors, notes, prompts, costs, settings, member data or private identifiers,
 re-reads live data — what it shows is what the snapshot held the day it was created. The calendar
 shows `planned` / `published`, never the internal workflow state.
 
-`list_shares` shows what exists (`live`, `revoked`, `expired`) without any token.
-`revoke_share` turns one off by `id`: from then on it answers exactly like a link that never
-existed, and brand membership is untouched.
+A `query` on `shared_views` — `id`, `view_type`, `created_at`, `expires_at`, `revoked_at` — shows
+what exists, and no token is in it. `revoke_share` turns one off by `id`: from then on it answers
+exactly like a link that never existed, and brand membership is untouched.
 
-Both need the `shared_views` table. Until it is migrated the three tools answer
+Both writes need the `shared_views` table. Until it is migrated they answer
 `shares_not_migrated` and name the file to apply.
 
 ## Plans
 
 | MCP | CLI |
 |-----|-----|
-| `get_plan` | `anomalia plan <slug>` |
 | `propose_plan` / `revise_plan` / `approve_plan` / `discard_plan` | `anomalia plan <slug> propose\|revise\|approve\|discard` |
 | `save_brief` / `replan_week` | `anomalia plan <slug> save-brief\|replan --week N …` |
-| `get_weekly_plan` | `anomalia weekly-plan <slug>` |
 | `plan_week` / `produce_week` | `anomalia weekly-plan <slug> plan\|produce --week N` |
 | `save_plan` | (MCP only) |
 | `save_week_seeds` | (MCP only) |
+
+Reading the plan back is `query` on `editorial_plans` — `strategy`, `voice`, `cadence`,
+`platform_mix` and `weeks`, filtered `status` `eq` `active` — or `anomalia plan <slug>` and
+`anomalia weekly-plan <slug>`, which both still answer.
 
 `propose_plan` and `plan_week` ask Anomalia's model to write the strategy and the week's rows,
 and they bill it. `save_plan` and `save_week_seeds` are the other half: you wrote them, Anomalia
@@ -407,8 +454,8 @@ query({ table: "brand_memory",
 
 Those two filters are the ones `get_memory` used to impose before it was retired: no chat-session
 notes, no other agent's working notes. Drop them and both come back. `category` narrows with one
-more `eq` clause. `query` returns at most 100 rows where the old tool went to 200 — for a brand
-with more memory than that, filter by `category` instead of raising the limit.
+more `eq` clause. A brand with more memory than one page holds is read by `category`, or by
+walking `offset` — the reply names the one that resumes.
 
 **Reading is not using.** The read changes nothing and counts nothing. When an entry actually
 shaped what you produced, say so with `record_memory_used` and the ids you used — a handful, not
@@ -452,7 +499,6 @@ deck. No credits, no writes.
 
 | MCP | CLI |
 |-----|-----|
-| `get_studio` | `anomalia studio <slug>` |
 | `update_brand_kit` / `set_colors` | `anomalia studio <slug> kit-update\|colors …` |
 | `add_note` / `delete_document` | `anomalia studio <slug> add-note\|delete-doc …` |
 | `add_person` / `generate_person` / `delete_person` | `anomalia studio <slug> people-*` |
@@ -460,37 +506,36 @@ deck. No credits, no writes.
 | `add_competitor` / `delete_competitor` / `research_competitors` | `anomalia studio <slug> add-competitor\|…\|research` |
 | `update_competitor` | (MCP only) |
 | `create_product` / `update_product` / `delete_product` | (MCP only) |
-| `get_bio` / `set_bio` | (MCP only) |
+| `set_bio` | (MCP only) |
 | `sync_history` | `anomalia studio <slug> sync-history` |
 
-`get_studio` lists documents **without their text**. Each carries `status`, `chunkCount` and
-`textBytes`: the text exists, its size is stated, and it does not travel. To answer a question,
-call `search_knowledge` — it returns the passages that answer it with the document each came
-from. `documents: "full"` restores `content_text` on every document; it is there for callers
-that read it before and is almost never what you want.
+What the studio holds is read with `query`, one table at a time: `products`, `people`,
+`competitors` and `brand_kit`, each row with its id. `anomalia studio <slug>` still prints the
+same thing in one command. To answer a question from the brand's documents, do not read them —
+call `search_knowledge`, which returns the passages that answer it with the document each came
+from.
 
 `create_product` adds ONE offer. The e-commerce resync behind `sync_products` replaces the whole
 catalog and would erase a hand-made row.
 
 `update_product`, `update_person` and `update_competitor` change only the fields you send: every
 other column keeps the value it had. An id from another brand answers `not_found`, exactly like
-one that does not exist anywhere. The four deletes want the UUID in full, verbatim from
-`get_studio`, or `query` on the `products` table.
+one that does not exist anywhere. The four deletes want the UUID in full, verbatim from the
+`query` that listed the row.
 
 `update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
 real person's face stays withheld from every generator until the operator states the consent in
 their own words.
 
 `set_bio` records the link in bio; no publishing API writes a profile bio, so a person still
-pastes it on the profile by hand. `get_bio` also returns the short link worth putting there — the
-one with the most clicks in the last seven days.
+pastes it on the profile by hand. What is recorded now is `bio_url` on `social_accounts`, read
+with `query`.
 
 ## Knowledge
 
 | MCP | CLI |
 |-----|-----|
 | `search_knowledge` | (MCP only) |
-| `get_knowledge_status` | (MCP only) |
 
 `search_knowledge` asks the brand's OWN documents a question and returns the passages that answer
 it — not a list of files. Every hit carries where it came from (`documentId`, `title`,
@@ -503,30 +548,33 @@ default and 20 at most, so ask a narrow question several times rather than a wid
 `collection` narrows to a shelf: `brand`, `product`, `commercial`, `legal`, `operations`,
 `research`.
 
-Empty `hits` is not the same as "the brand does not know this": read `get_knowledge_status`
-before concluding anything.
+Empty `hits` is not the same as "the brand does not know this": count what is indexed before
+concluding anything.
 
-`get_knowledge_status` says whether the knowledge is USABLE, not just uploaded. `documents`
-counts the pipeline stage by stage — `pending` → `processing` → `ready` | `failed` — and
-`indexed` is the only number retrieval can see: a `ready` document with zero chunks is not
-searchable. `chunks.embedded` below `chunks.total` means retrieval is running on keywords alone,
-so a paraphrase misses. `failures` names each broken document and WHY it broke, `collections`
-says which shelves are worth narrowing to, and `sources` says which connected apps feed the
-corpus and when each last synced.
+```
+query({ table: "brand_doc_chunks",
+        columns: ["id"],
+        where: [{column:"embedding",op:"is",value:null,negate:true}],
+        count: "exact", limit: 1 })
+```
 
-So: `search_knowledge` empty + `searchable: true` → the brand does not know it, go add a
-document. Empty + `pending`/`failed` above zero → it may already know it and nobody has read the
-file yet. Two opposite situations, two opposite actions.
+`total` is the only number retrieval can see: a document that is stored but has no embedded chunk
+is not searchable, however ready it looks. A `total` of 0 means nothing is searchable yet.
+
+So: empty `hits` with chunks embedded → the brand does not know it, go add a document. Empty with
+`total` at 0 → it may already know it and nobody has indexed the file yet. Two opposite
+situations, two opposite actions.
 
 ## Brand settings
 
 | MCP | CLI |
 |-----|-----|
-| `get_brand_settings` | (MCP only) |
 | `set_brand_settings` | (MCP only) |
 
 How the brand works: posting `timezone`, target `platforms`, `hashtags` per platform, and
-`voice_examples` (real past posts the AI imitates for tone). `set_brand_settings` changes only the
+`voice_examples` (real past posts the AI imitates for tone). They are read with `query` on
+`brands` — `timezone`, `target_platforms`, `content_prefs`, with `limit: 1` — where hashtags and
+voice examples live inside that jsonb column. `set_brand_settings` changes only the
 fields you send; `hashtags` and `voice_examples` **replace** the whole list, so send the full list,
 not a delta — `{}` and `[]` clear one.
 
@@ -539,11 +587,10 @@ Two consequences to say out loud before you change either of the first two:
   Removing a platform does not cancel posts already scheduled on it: they still go out while their
   account is connected.
 
-`get_brand_settings` also returns `connected_platforms`, and the write answers with
-`without_account`. Targeting a platform with no connected account is allowed and silent otherwise:
-posts for it are produced and then sit unpublished until an account exists. Say so when it happens,
-and reach for `list_social_accounts` — it reads the same accounts and is the only place that says
-*why* a platform is missing.
+The write answers with `without_account`. Targeting a platform with no connected account is
+allowed and silent otherwise: posts for it are produced and then sit unpublished until an account
+exists. Say so when it happens, and read `social_accounts` with `query` — `platform`, `username`,
+`status` — which is where *why* a platform is missing becomes visible.
 
 An unknown IANA zone is refused (`unknown_timezone`), and so is a platform outside the list —
 `twitter` is not a name here, it is `x`. The post language lives on `update_brand_kit`, not here.
@@ -552,14 +599,13 @@ An unknown IANA zone is refused (`unknown_timezone`), and so is a platform outsi
 
 | MCP | CLI |
 |-----|-----|
-| `get_automations` | (MCP only) |
 | `set_automation` | (MCP only) |
 
 The nine jobs included with the product — `autopilot`, `analytics_review`, `weekly_recap`, `seo`,
-`geo`, `radar_recap`, `market_refs`, `strategy_review`, `library` — with what each does, its
-cadence, whether it is on, how it went last time, whether it is behind, and `runs_30d`: how many
-times it actually ran in the last 30 days (runs a gate stopped are not counted, because they spent
-nothing).
+`geo`, `radar_recap`, `market_refs`, `strategy_review`, `library` — are named in
+`set_automation`'s own schema. What each has been doing is `query` on `loop_ticks`, filtered on
+`loop` and `created_at`, which is how often it actually ran and how it went; `brand_job_optouts`
+says which are off. A tick a gate stopped spent nothing.
 
 **Turning one ON is a spending decision, not a preference.** From that moment the job runs by
 itself on its cadence, and every run calls AI models and spends the brand's credits, with nobody
@@ -567,19 +613,18 @@ looking. Before you turn one on, say which job it is, how often it will run, and
 to the person whose credits they are. Turning one OFF spends nothing, takes effect at the next
 tick, and destroys nothing: it is the safe direction, so do not make it hard.
 
-`get_automations` deliberately does **not** report a cost per job, and that is not an omission to
-work around: AI spend is logged per call with no column naming the job, and the same labels are
-shared between jobs, so any per-job figure would be invented. Use `runs_30d` with `cadence` to
-describe the commitment, and point at the usage page for the brand-wide bill.
+There is **no** cost per job anywhere, and that is not an omission to work around: AI spend is
+logged per call with no column naming the job, and the same labels are shared between jobs, so any
+per-job figure would be invented. Describe the commitment with the cadence and how many times it
+ran, and point at the usage page for the brand-wide bill.
 
-A brand without a paid plan runs none of them however many are on — `scheduled_work_allowed` says
-so. The calls themselves spend no credits.
+A brand without a paid plan runs none of them however many are on. The calls themselves spend no
+credits.
 
 ## Radar sources
 
 | MCP | CLI |
 |-----|-----|
-| `get_radar` | (MCP only) |
 | `set_radar_platform` | (MCP only) |
 | `add_radar_source` | (MCP only) |
 | `remove_radar_source` | (MCP only) |
@@ -588,10 +633,11 @@ Where Radar looks: which platforms are on (`gnews`, `reddit`, `threads`, `x`, `l
 which sources are configured (`gnews_query`, `rss`, `subreddit`, `reddit_query`, plus
 `threads_query`, `x_community`, `linkedin_query`).
 
-**Read `get_radar` first.** It carries the two things you cannot guess: `allowed_kinds` for this
-plan, and `source_limit` against `sources_used`. Threads, X and LinkedIn belong to the **Pro**
-plan — below it they read as `plan_locked` and both writes answer `plan_required` (403). Past the
-limit, `add_radar_source` answers `source_limit` (403) and names the ceiling.
+**Read the state first.** `query` on `brand_news_sources` — `id`, `kind`, `value`, `lang`,
+`active` — is what is configured, and `brands.content_prefs.radar` is which platforms are on. The
+two things you cannot read that way are the plan's: Threads, X and LinkedIn belong to the **Pro**
+plan, and below it both writes answer `plan_required` (403). Past the ceiling on how many sources
+a plan allows, `add_radar_source` answers `source_limit` (403) and names it.
 
 A source is identified by the pair **(kind, value)** — there is no id to remember, and it is what
 `remove_radar_source` takes. Adding one that is already there is not an error: nothing changes and
@@ -605,7 +651,6 @@ Removing one is permanent and stops Radar reading it; what it already found stay
 
 | MCP | CLI |
 |-----|-----|
-| `get_blog_settings` | (MCP only) |
 | `set_blog_settings` | (MCP only) |
 | `add_blog_term` | (MCP only) |
 | `remove_blog_term` | (MCP only) |
@@ -614,9 +659,10 @@ How the blog looks (name, colour, font, layout, nav links, whether it is live) a
 (style brief, articles per week, languages, humanising pass), plus the categories, tags and
 authors an article can be filed under.
 
-**Read `get_blog_settings` first.** It carries `choices` (the fonts, layouts and locales that are
-accepted) and `limits` (the plan's ceiling on articles per week, how many extra languages it
-allows, whether a custom domain is available).
+**Read the state first.** `query` on `brands` for `blog_config` is how it looks and how it writes;
+`blog_categories`, `blog_tags` and `blog_authors` are the three lists. The accepted fonts, layouts
+and locales — and the plan's ceiling on articles per week, extra languages and a custom domain —
+are carried by `set_blog_settings`'s own schema and by what it answers, not by a table.
 
 `set_blog_settings` changes only the fields you send. `articles_per_week` is **clamped** to the
 plan ceiling rather than refused, so read `config` back from the answer instead of assuming your
@@ -705,28 +751,21 @@ writes it.
 
 | MCP | CLI |
 |-----|-----|
-| `get_seo` / `seo_action` | `anomalia seo <slug> [run\|plan\|…]` |
-| `get_geo` / `geo_action` | `anomalia geo <slug> [run\|fix]` |
-| `list_web_audits` | (MCP only) |
-| `get_audit_findings` | (MCP only) |
-| `list_audit_citations` | (MCP only) |
-| `list_web_fixes` | (MCP only) |
-| `get_keywords` / `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
+| `seo_action` | `anomalia seo <slug> [run\|plan\|…]` |
+| `geo_action` | `anomalia geo <slug> [run\|fix]` |
+| `refresh_keywords` | `anomalia keywords <slug> [refresh]` |
 | `get_gsc` | (MCP only) |
-| `get_ranks` | (MCP only) |
-| `get_backlinks` | (MCP only) |
 | `generate_article` / `optimize_article` | `anomalia web <slug> …` |
-| `get_article` / `update_article` | (MCP only) |
+| `update_article` | (MCP only) |
 | `publish_article` / `unpublish_article` / `delete_article` | `anomalia web <slug> publish\|…` |
 | `get_ads` / `ads_action` | `anomalia ads <slug> [--propose\|--create\|--approve\|--pause\|--resume\|--duplicate\|--delete\|--reject] [--ad <adId>]` |
 | `ads_remix` | (MCP only) |
-| `get_market_field` | (MCP only) |
 | `diagnose_radar` | (MCP only) |
 
-`get_market_field` is what the brand's field is doing, not what the brand is doing: the topics
-being watched, the playbook distilled from them, and the catalogued posts each with a teardown —
-tone, format, hook, what made it spread, what is transferable and what to avoid. `limit` caps the
-posts (20 by default, 50 at most). A field never watched answers with `topics`, `playbook` and
+What the brand's FIELD is doing — not what the brand is doing — is
+`GET /api/v1/brands/:slug/market/field`: the topics being watched, the playbook distilled from
+them, and the catalogued posts each with a teardown (tone, format, hook, what made it spread,
+what is transferable, what to avoid). A field never watched answers with `topics`, `playbook` and
 `updatedAt` at `null`: that is a state, not an error, and it means the weekly pass has not run
 for this brand yet.
 
@@ -756,20 +795,20 @@ The list of articles is the same move — `query({ table: "brand_articles", colu
 "title","status","scheduled_for","published_at","created_at"] })`. Name those columns: without
 them the read drags `body_md` in and the character cap returns one article instead of twenty.
 
-`get_seo` and `get_geo` answer on the **latest** audit. The four web tools let you trace a claim
-back to what was actually measured, without paying for a new audit. All four are reads: they call
-no model, spend no credits and write nothing.
+`seo_action` and `geo_action` are the paid half: they run a new audit or write the fixes. Reading
+what a past audit already measured costs nothing and never needs a new one — that is the two
+queries below.
 
-`get_gsc`, `get_ranks` and `get_backlinks` are the measured side of the same brand. `get_gsc`
-reads Google Search Console over the last 28 days — clicks, impressions, top queries and top
-pages — and says whether the property is connected at all: `connected: false` means there is
-nothing to read yet, not that the brand ranks nowhere. `get_ranks` returns the tracked keywords
-with `position`, `prevPosition` and `delta` (positive = moved up), the ranking URL, and
-`hasAiOverview` for the ones where Google answered on its own. `get_backlinks` returns links
-given and received plus the open give/receive opportunities, and `unlocked` tells you whether
-the network is usable — it needs Starter or above **and** the brand's opt-in, so `planAllowed`
-and `enabled` say which of the two is missing. All three are reads: no model, no credits, no
-writes.
+`get_gsc` is the measured side of the same brand: Google Search Console over the last 28 days —
+clicks, impressions, top queries and top pages — and it says whether the property is connected at
+all, since `connected: false` means there is nothing to read yet, not that the brand ranks
+nowhere. No model, no credits, no writes.
+
+Rank tracking is a `query`: `brand_tracked_keywords` (`id`, `keyword`, `locale`, `device`,
+`active`) for what is watched, then `brand_rank_snapshots` filtered on `tracked_keyword_id` for
+where each one sits and where it sat. The backlinks network stayed on its endpoint,
+`GET /api/v1/brands/:slug/backlinks`: links given and received plus the open opportunities, and
+whether the network is usable at all — it needs Starter or above **and** the brand's opt-in.
 
 `ads_remix` is the opposite: it **spends credits**. It harvests the competitor and trending ads
 already collected for the brand, looks at them with vision, and returns ranked remix briefs in the
@@ -780,29 +819,28 @@ harvested yet — there is nothing to remix), `no_remix_briefs` (400, the pass p
 `ads_not_on_plan` (403) and `credits_exhausted` (402). Launching an ad is still `ads_action`; this
 only writes the briefs.
 
-`list_web_audits` is the index of every audit, newest first — `id`, `at`, `tech_score`,
-`share_of_voice`, `citability_score`, `binding_constraint`, and how many citations and findings
-the audit holds. Optional `limit` (12 by default, 24 at most) and `offset`.
+Tracing an audit back to what was actually measured is two tables:
 
-`get_audit_findings` opens one audit. `technical`, `search`, `backlinks` and `ai_overview` come
-back exactly as recorded. Without `audit_id` you get the newest audit, never an older one that
-happens to hold more data; an audit outside the brand answers `audit: null`.
+```
+query({ table: "brand_geo_audits",
+        columns: ["id","created_at","tech_score","tech","share_of_voice","citations"],
+        order: [{column:"created_at",ascending:false}], limit: 12 })
 
-`list_audit_citations` returns the probes behind the share of voice for one audit, paginated with
-`limit` (50 by default, 200 at most) and `offset`; each carries `observed_at`, `answer_engine`,
-`question`, `brand_mentioned`, `rank`, `competitors`, `source_domains` and `error`. Same rule on
-`audit_id`, and an audit outside the brand answers zero citations.
+query({ table: "brand_geo_artifacts",
+        columns: ["id","kind","title","format","body","status","target_path","source_finding"],
+        where: [{column:"status",op:"eq",value:"draft"}] })
+```
 
-`list_web_fixes` returns generated fixes **with the body verbatim** — what `get_seo` and `get_geo`
-only name. `surface` is `seo` for growth assets tied to a plan initiative, `geo` for citability
-fixes. Filter with `fix_id` or `status` (`draft` / `accepted` / `dismissed`); bodies are long, so
-`limit` defaults to 3 and stops at 10.
+`tech` holds what the crawl observed, and `citations` the probes behind the share of voice —
+engine, question asked, verdict, domains cited — which is how a claim is attributed instead of
+asserted. `brand_geo_artifacts.body` is the fix itself, `kind` and `target_path` say what it is
+and where it goes. Both reads are free: never run a new audit to see what a past one measured.
+Bodies are long, so read a fix with `limit: 1` when you need it whole.
 
-`get_article` returns one article **in full and in any state** — draft, planned, approved or
-published: `body_md`, `meta_title`, `meta_description`, `cover_image`, `category`, `tags`,
-`author`, `language`, `status`, `scheduled_for` (plus the brand-local reading) and
-`translation_of`. A `query` on `brand_articles` only summarises; read this one before editing and
-again after.
+To read ONE article in full — draft, planned, approved or published — is a `query` on
+`brand_articles` with `limit: 1`, which is the case where long text is not truncated: `body_md`,
+`meta_title`, `meta_description`, `status`, `language`, plus `embed` on `blog_categories` and
+`blog_authors` for its filing. Read it before editing and again after.
 
 `update_article` writes text and metadata you already have: `title`, `body_md` (the COMPLETE
 markdown, a replacement not a diff), `meta_title`, `meta_description`, `category_id`,
@@ -826,19 +864,17 @@ live is never edited in place. To correct a published article: `unpublish_articl
 
 | MCP | CLI |
 |-----|-----|
-| `list_social_accounts` | (MCP only) |
 | `create_social_connect_link` | (MCP only) |
 
 Where the brand actually publishes, and how a platform gets connected. This is **not**
 `connections` / `list_integrations_tools`: those are Composio (Drive, Notion, GitHub, Gmail).
-These two are the social accounts a post goes out on.
+This is the social accounts a post goes out on.
 
-`list_social_accounts` returns one row per account — `platform`, `username`, `status` — plus
-`connected_platforms` (at least one **active** account: the only ones a post leaves from),
-`broken_platforms` (an account exists but none is active — expired, revoked, disconnected),
-`can_connect`, `slots` (`used` / `limit` for the plan) and `manage_url`. `broken_platforms` is the
-one thing no other tool shows, and it is usually the answer to "why hasn't this published?": the
-post is scheduled, the platform is targeted, and the account stopped working weeks ago.
+`query` on `social_accounts` — `platform`, `username`, `display_name`, `profile_url`, `status`,
+`connected_at`, `bio_url` — returns one row per account. A post leaves only from an **active**
+one, so a platform whose rows are all expired, revoked or disconnected is usually the answer to
+"why hasn't this published?": the post is scheduled, the platform is targeted, and the account
+stopped working weeks ago. `status` is where that shows, and nowhere else does.
 
 `create_social_connect_link` takes a `platform` and answers with the **URL a person opens** to
 authorise it. You never run the OAuth, never see a token, never connect anything: you hand the URL

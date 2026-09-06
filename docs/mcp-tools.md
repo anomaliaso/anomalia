@@ -1,7 +1,11 @@
 # I tool MCP di Anomalia — inventario e piano di aggregazione
 
-**119 tool.** 111 dichiarati nel registro dei contratti, 8 registrati a mano.
-42 sono letture. 17 distruggono qualcosa.
+**86 tool.** 79 dichiarati nel registro dei contratti, 7 registrati a mano.
+9 sono letture. 17 distruggono qualcosa.
+
+**Le letture sono un tool solo, e `query` è quello.** Trentatré `get_*` / `list_*` sono uscite da
+`tools/list`; le nove che restano non sono `select`. **Qui è uscito il tool MCP, non l'endpoint:**
+le rotte REST ci sono tutte, la CLI le chiama come prima, e le API key le raggiungono come prima.
 
 Contati dal transport vero (`tools/list` dopo `initialize`), non dai sorgenti: prima di questa
 misura il documento diceva 127 e nessuno aveva mai visto quel numero.
@@ -36,7 +40,7 @@ interessante. Contati dai server MCP realmente collegati a questa sessione:
 | **Stripe** | 10 | di cui **4 sono un proxy generico**: `api_read`, `api_write`, `api_search`, `api_details` |
 | **Supabase** | 29 | di cui **1 (`execute_sql`) copre tutte le letture**; le altre 28 sono gestione progetto |
 | **Vercel** | 37 | deployment, log, domini, analytics — nessuna primitiva generica |
-| **Anomalia** | **119** | |
+| **Anomalia** | **86** | |
 
 **Quindi il punto non è che ne hanno pochi: è dove li hanno messi.**
 
@@ -49,16 +53,17 @@ Vercel invece ne ha 37 e nessuno se ne lamenta, perché sono **azioni** — disp
 compra un dominio. Un'azione non si comprime in un linguaggio: ha un costo e una conseguenza, e chi
 la chiama deve vederli prima.
 
-**È esattamente la nostra divisione.** Noi abbiamo già `query` — SQL in sola lettura coi permessi
-dell'utente. Il problema è che ci convivono 45 tool di lettura.
-Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/mcp/tools/`: `list_brands`, `get_status`, `approve_post`, `approve_posts`, `reject_post`, `publish_post`, `produce_week`, `generate_person`.
+**È esattamente la nostra divisione**, e ora è anche la nostra forma. `query` è una lettura
+PostgREST coi permessi di chi chiama — non c'è SQL, quindi una scrittura non ha dove andare — e le
+letture che gli convivevano accanto sono scese da 45 a 9.
+Estratto dal registro — **79 tool**. Altri 7 sono registrati a mano in `cli/mcp/tools/`: `list_brands`, `approve_post`, `approve_posts`, `reject_post`, `publish_post`, `produce_week`, `generate_person`.
 
 > Il numero si muove: fra la prima stesura di questo documento e la sua revisione, novanta minuti dopo,
 > `generate_captions` e `generate_carousel` sono entrati. Per questo l'inventario si rigenera invece
 > di mantenersi — e per questo porta il commit da cui è stato estratto.
 
 
-### `/studio` — 14 tool
+### `/studio` — 13 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
@@ -69,7 +74,6 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `delete_competitor` | DELETE | `id` | ⚠︎ |
 | `delete_document` | DELETE | `id` | ⚠︎ |
 | `delete_person` | DELETE | `id` | ⚠︎ |
-| `get_studio` | GET | `documents`? |  |
 | `research_competitors` | POST | — |  |
 | `set_appearance` | PUT | `logo_url`?, `favicon_url`?, `remove_logo`?, `display_font`?, `body_font`?, `graphic_instructions`?, `visual_style`? |  |
 | `set_colors` | PUT | `colors` |  |
@@ -77,17 +81,13 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `update_brand_kit` | PUT | `about`?, `category`?, `target_audience`?, `brand_style`?, `language`? |  |
 | `update_competitor` | PUT | `id`, `name`?, `website`?, `kind`?, `rationale`? |  |
 
-### `/settings` — 14 tool
+### `/settings` — 10 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `add_blog_term` | POST | `term`, `name`, `description`?, `bio`?, `role`? |  |
 | `add_radar_source` | POST | `kind`, `value`, `lang`? |  |
-| `get_automations` | GET | — |  |
-| `get_blog_settings` | GET | — |  |
-| `get_brand_settings` | GET | — |  |
 | `get_media_models` | GET | — |  |
-| `get_radar` | GET | — |  |
 | `remove_blog_term` | POST | `term`, `id` | ⚠︎ |
 | `remove_radar_source` | POST | `kind`, `value` | ⚠︎ |
 | `set_automation` | PUT | `job`, `enabled` |  |
@@ -96,30 +96,23 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `set_media_model` | PUT | `slot`, `model` |  |
 | `set_radar_platform` | PUT | `platform`, `enabled` |  |
 
-### `/web` — 11 tool
+### `/web` — 6 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `delete_article` | DELETE | `id` | ⚠︎ |
 | `generate_article` | POST | `topic` |  |
-| `get_article` | GET | `id` |  |
-| `get_audit_findings` | GET | `audit_id`? |  |
-| `list_audit_citations` | GET | `audit_id`?, `limit`?, `offset`? |  |
-| `list_web_audits` | GET | `limit`?, `offset`? |  |
-| `list_web_fixes` | GET | `fix_id`?, `status`?, `limit`?, `offset`? |  |
 | `optimize_article` | POST | — |  |
 | `publish_article` | POST | — | ⚠︎ |
 | `unpublish_article` | POST | — | ⚠︎ |
 | `update_article` | POST | `id`, `title`?, `body_md`?, `meta_title`?, `meta_description`?, `category_id`?, `author_id`?, `tag_ids`?, `language`?, `scheduled_for`? |  |
 
-### `/posts` — 10 tool
+### `/posts` — 8 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `create_post` | POST | `platforms`, `caption`, `platform_captions`?, `scheduled_for`?, `media_ids`?, `title`?, `subreddit`?, `link_url`? |  |
 | `edit_post` | PUT | `caption`?, `title`?, `link_url`?, `subreddit`?, `first_comment`?, `image_prompt`?, `format`?, `slot`?, `product_name`?, `platforms`?, `media_url`?, `platform_captions`? |  |
-| `get_post` | GET | — |  |
-| `list_posts` | GET | `status`? |  |
 | `make_video` | POST | `duration`?, `script`?, `instruction`? |  |
 | `regenerate_post_media` | POST | `instruction` |  |
 | `regenerate_slide` | POST | `index`, `instruction` |  |
@@ -127,30 +120,27 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `reorder_slides` | POST | `order` |  |
 | `reschedule_post` | POST | `scheduled_for` |  |
 
-### `/editorial-plan` — 8 tool
+### `/editorial-plan` — 7 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `approve_plan` | POST | — | ⚠︎ |
 | `discard_plan` | POST | — | ⚠︎ |
-| `get_plan` | GET | — |  |
 | `propose_plan` | POST | — |  |
 | `replan_week` | POST | `week`, `brief` |  |
 | `revise_plan` | POST | `feedback` |  |
 | `save_brief` | POST | `week`, `brief`, `products`? |  |
 | `save_plan` | POST | `strategy`, `voice`, `cadence`, `platform_mix`, `gtm`?, `weeks` |  |
 
-### `/media` — 8 tool
+### `/media` — 6 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `check_media_job` | GET | `job_id`? |  |
 | `generate_carousel` | POST | `brief`, `slides`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `generate_image` | POST | `prompt`, `count`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `generate_media` | POST | `prompt`, `kind`?, `count`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `generate_video` | POST | `prompt`, `base_media_id`?, `duration`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `import_media_url` | POST | `url`, `title`? |  |
-| `list_media` | GET | `query`?, `limit`? |  |
 | `refine_media` | POST | `base_media_id`, `instruction`, `count`?, `model`?, `brand_style`?, `title`? |  |
 
 ### `/ads` — 3 tool
@@ -161,20 +151,18 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `ads_remix` | POST | — |  |
 | `get_ads` | GET | — |  |
 
-### `/shares` — 3 tool
+### `/shares` — 2 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `create_share` | POST | `view`, `month`?, `expires_in_days`? |  |
-| `list_shares` | GET | — |  |
 | `revoke_share` | POST | `id` | ⚠︎ |
 
-### `/products` — 3 tool
+### `/products` — 2 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `delete_product` | DELETE | `id` | ⚠︎ |
-| `list_products` | GET | — |  |
 | `update_product` | PUT | `id`, `title`?, `description`?, `pricing`?, `url`?, `featured`? |  |
 
 ### `/memory` — 2 tool
@@ -184,11 +172,10 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `record_memory_used` | POST | `ids` |  |
 | `save_memory` | POST | `key`, `value`, `category` |  |
 
-### `/weekly-plan` — 3 tool
+### `/weekly-plan` — 2 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `get_weekly_plan` | GET | — |  |
 | `plan_week` | POST | `week` |  |
 | `save_week_seeds` | POST | `week_index`, `theme`, `rationale`?, `do_dont`?, `seeds` |  |
 
@@ -199,54 +186,47 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 | `create_billing_portal_link` | POST | — |  |
 | `create_checkout_link` | POST | `plan`? |  |
 
-### `/geo` — 2 tool
+### `/geo` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `geo_action` | POST | `action` |  |
-| `get_geo` | GET | — |  |
 
-### `/bio` — 2 tool
+### `/bio` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `get_bio` | GET | `platform`? |  |
 | `set_bio` | PUT | `bio_url`, `platform`? |  |
 
-### `/keywords` — 2 tool
+### `/keywords` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `get_keywords` | GET | — |  |
 | `refresh_keywords` | POST | — |  |
 
-### `/knowledge` — 2 tool
+### `/knowledge` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `get_knowledge_status` | GET | — |  |
 | `search_knowledge` | GET | `query`, `limit`?, `collection`? |  |
 
-### `/seo` — 2 tool
+### `/seo` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `get_seo` | GET | — |  |
 | `seo_action` | POST | `action`, `initiativeId`?, `guidance`? |  |
 
-### `/voice` — 2 tool
+### `/voice` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `get_voice` | GET | — |  |
 | `update_voice` | POST | `mood`?, `tone`?, `register`?, `emotion`?, `character`?, `syntax`?, `avoid`?, `platform_instructions`? |  |
 
-### `/social` — 2 tool
+### `/social` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `create_social_connect_link` | POST | `platform` |  |
-| `list_social_accounts` | GET | — |  |
 
 ### `/content` — 1 tool
 
@@ -272,65 +252,17 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 |---|---|---|---|
 | `generate_captions` | POST | `topic`, `platforms`?, `format`? |  |
 
-### `/analytics` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_analytics` | GET | — |  |
-
-### `/backlinks` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_backlinks` | GET | — |  |
-
-### `/calendar` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_calendar` | GET | `month`? |  |
-
 ### `/creation-kit` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `get_creation_kit` | GET | `goal`, `platforms`, `format` |  |
 
-### `/root` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_dashboard` | GET | — |  |
-
-### `/goals` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_goals` | GET | `limit`?, `thread`? |  |
-
 ### `/gsc` — 1 tool
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
 | `get_gsc` | GET | — |  |
-
-### `/gtm` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_gtm` | GET | — |  |
-
-### `/market` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_market_field` | GET | `limit`? |  |
-
-### `/ranks` — 1 tool
-
-| tool | metodo | parametri | dist. |
-|---|---|---|---|
-| `get_ranks` | GET | — |  |
 
 ### `/writing-skills` — 1 tool
 
@@ -342,7 +274,7 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 
 | tool | metodo | parametri | dist. |
 |---|---|---|---|
-| `query` | POST | `table`?, `columns`?, `where`?, `order`?, `limit`? |  |
+| `query` | POST | `table`?, `columns`?, `where`?, `order`?, `embed`?, `offset`?, `count`?, `limit`? |  |
 
 ### `/people` — 1 tool
 
@@ -354,66 +286,139 @@ Estratto dal registro — **111 tool**. Altri 8 sono registrati a mano in `cli/m
 
 ## Piano di aggregazione
 
-### 1. Le letture: quattro sparivano dentro `query`, non ventidue
+### 1. Le letture sono un tool solo, e `query` è quello
 
-Questa sezione diceva che 22 letture erano una tabella e un filtro. **Non è vero, ed è stato
-misurato invece che stimato**: aperti tutti i 44 handler GET del registro, 40 fanno lavoro che
-`query` non fa in una chiamata. Quattro erano davvero un `select`, e sono state tolte.
+Su `tools/list` c'erano **42 letture**. Ora sono **9**, e nessuna è un `select`: trentatré sono
+uscite, e a servirle è `query`.
 
-**Il criterio, e non è il nome.** Si toglie quando l'handler è un `select` su una tabella che
-`query` sa nominare, con filtri e ordinamenti che i suoi operatori esprimono. Si tiene quando
-aggrega o unisce tabelle a mano, chiama un servizio esterno, applica una regola di piano che la
-riga grezza non porta, o quando la riga grezza è più larga dei tetti di `query`.
+**Perché il tentativo precedente si era fermato a quattro.** Questa sezione diceva che dei 44
+handler GET solo 4 erano doppioni, e portava una misura a dimostrarlo — 60 post con didascalie da
+539 caratteri, la lunghezza vera:
 
-**I tetti sono la cosa che decide.** `query` taglia a 20.000 caratteri per risposta e 2.000 per
-valore singolo. Misurato sullo stack locale, 60 post con didascalie da 539 caratteri (la lunghezza
-vera, non inventata):
-
-| lettura | righe che tornano |
+| lettura | righe che tornano, col tetto a 20.000 caratteri |
 |---|---|
 | `list_posts`, 17 colonne, nessun tetto | **50 su 50** (63.471 caratteri) |
 | `query` con le stesse 17 colonne | **15 su 50** — il tetto morde |
 | `query` senza `columns` (`select *`, 54 colonne) | **9 su 50** |
 
-Su `brand_articles` lo stesso confronto dà **payload identico byte per byte, 20 righe su 20** — ma
-solo a colonne nominate: senza, `body_md` entra nella riga e ne sopravvive **una**. Da qui la
-regola che sta nelle `MCP_INSTRUCTIONS` e nella skill: **nomina le colonne, o il tetto si mangia la
-risposta senza dirlo.**
+La misura era giusta e la conclusione sbagliata, e la differenza sta in **chi aveva scritto quel
+tetto: noi**, in una costante di `query-tool.ts`. Averlo preso per un fatto del mondo è ciò che ha
+fermato due tentativi. La conclusione corretta è l'opposta: se `query` non serve bene una lettura,
+si sistema `query`.
 
-#### Tolte — 4
+**Il criterio, adesso, in un posto solo.** Una lettura resta quando la sua risposta **non si
+ricostruisce** con `query`: un calcolo su molte tabelle il cui risultato non è nelle righe (un
+verdetto, una diagnosi); una lettura che va in rete a prendere qualcosa che nel database non c'è;
+un catalogo che vive nel codice e in nessuna tabella. Un `select` con filtri e ordinamento non è
+mai quel caso — nemmeno su due tabelle da unire per id, perché `query` sa fare due chiamate e ora
+sa anche incorporare la seconda.
 
-| tool | cosa faceva l'handler | come si legge adesso |
-|---|---|---|
-| `get_appearance` | `select` di 6 colonne su `brand_kit`, 736 caratteri misurati; l'unica regola era scartare il logo `og-image`, che la riga dichiara da sé | `query({table:"brand_kit", columns:["logos","favicon_url","brand_colors","graphic_style","visual_style","visual_style_locked"]})` |
-| `list_articles` | `select` di 10 colonne di metadati su `brand_articles`, niente corpo, niente calcolo | `query({table:"brand_articles", columns:["id","slug","title","status","scheduled_for","published_at","created_at"]})` |
-| `list_ideas` | `select` su `disruptive_ideas` con `status in (new, shortlisted)` per difetto | `query({table:"disruptive_ideas", columns:["id","title","idea","device","score","status"], where:[{column:"status",op:"in",value:["new","shortlisted"]}], order:{column:"score",ascending:false}})` |
-| `get_memory` | `select` su `brand_memory` con `layer != session` e `agent is null` | `query({table:"brand_memory", columns:["id","key","value","category","confidence"], where:[{column:"layer",op:"neq",value:"session"},{column:"agent",op:"is",value:null}], order:{column:"confidence",ascending:false}})` |
+#### `query`, per intero
 
-Le **rotte REST restano tutte e quattro**: la CLI le chiama (`anomalia web`, `anomalia ideas`), e
-`resolveArticleId` risolve i prefissi degli id degli articoli passando da `GET /web`, quindi i
-prefissi continuano a funzionare anche senza il tool.
-
-**Due sono passate per un pelo, e la differenza va detta invece di nascosta:**
-
-- `list_ideas` — `query` ordina su **una** colonna sola. Il tool rompeva la parità di punteggio col
-  più recente; ora quelle idee tornano nell'ordine che sceglie il planner.
-- `get_memory` — `query` si ferma a **100 righe**, il tool arrivava a 200. E i suoi due filtri, che
-  l'handler imponeva, ora sono *dichiarati*: chi li omette rivede le note di sessione e quelle di
-  mestiere degli altri agenti. Non è una fuga — la RLS non è cambiata, sono righe dei brand di chi
-  legge — ma è rumore che prima non arrivava.
-
-#### Tenute — 40, e il motivo cambia per gruppo
-
-| perché resta | tool |
+| campo | cosa fa |
 |---|---|
-| **aggregano o uniscono tabelle a mano** | `get_dashboard` (10 conteggi in parallelo), `get_analytics`, `get_gtm`, `get_plan`, `get_weekly_plan`, `get_studio`, `get_seo`, `get_geo`, `get_goals`, `get_ranks`, `get_gsc`, `get_backlinks`, `get_market_field`, `get_knowledge_status`, `get_calendar`, `get_voice`, `check_media_job`, `list_web_audits`, `list_audit_citations`, `get_audit_findings`, `get_creation_kit`, `get_bio` |
-| **escono dall'edificio** — servizio esterno o sorgenti riprese dal vivo | `diagnose_radar`, `get_ads`, `search_knowledge` |
-| **applicano una regola che la riga nuda non porta** — tetti di piano, cataloghi definiti nel codice | `diagnose_brand`, `get_automations`, `get_media_models`, `get_radar`, `get_blog_settings`, `get_brand_settings`, `list_social_accounts`, `get_writing_skills` |
-| **`query` le taglierebbe** — corpo, jsonb o snapshot più larghi dei tetti | `list_posts`, `get_article`, `list_web_fixes`, `get_keywords`, `list_shares`, `get_post`, `list_media` |
+| `table` | la tabella da leggere. Omettila e torna l'elenco di quelle che puoi nominare; chiedila senza `columns` e le chiavi di una riga **sono** lo schema |
+| `columns` | **nominale sempre.** Senza, tornano tutte le colonne, il tetto sui caratteri butta via righe intere per starci dentro, e una domanda lunga riceve una risposta corta |
+| `where` | filtri in AND. Ognuno è `column`, `op`, `value`, più `negate: true` che inverte quel filtro e basta — `is null` diventa `is not null` |
+| `order` | un oggetto o un array di oggetti, ognuno con `ascending` e `nullsFirst` |
+| `embed` | array di `{table, columns}`: una tabella collegata portata dietro attraverso la sua foreign key, con la RLS applicata anche a quella |
+| `offset` | la pagina successiva. La stringa `limits` della risposta nomina l'offset che riprende esattamente dove si era fermata |
+| `count` | `"estimated"` (difetto: la stima del planner) oppure `"exact"`, quando **il numero è la risposta** |
+| `limit` | 20 per difetto, 200 al massimo |
 
-`list_media` e `get_post` restano anche per un motivo che la riga non dà: coniano l'indirizzo
-pubblico da `short_code` e risolvono l'origine di ogni slide. `get_appearance` era in questo
-gruppo per errore — i suoi logo sono `getPublicUrl`, già pubblici nella riga.
+**I tetti, e nessuno è muto.** La risposta intera si ferma a **60.000 caratteri**. Con `limit: 1`
+una riga sola è un documento: il testo lungo torna intero fino a **40.000 caratteri**, che è come
+si legge un articolo prima di riscriverlo. Con molte righe i valori lunghi si tagliano a **2.000
+caratteri**. **Ogni tetto che morde viene dichiarato in `limits`** — quali colonne ha tagliato, e
+da quale offset si riprende. Era questo il difetto peggiore di prima: nove righe su cinquanta,
+senza nessun segnale.
+
+Le due riserve che questa sezione portava sono cadute con l'allargamento: `order` prende più di
+una colonna, quindi la parità di punteggio di `list_ideas` si esprime; e il tetto sulle righe è
+passato da 100 a 200, quindi `get_memory` non perde più le ultime cento.
+
+#### Tolte — 33, e ognuna ha la sua `query`
+
+La skill (`cli/skills/anomalia/SKILL.md`, sezione «Reading is one tool») porta queste query già
+scritte, tabella e colonne incluse.
+
+| tool ritirato | come si legge adesso |
+|---|---|
+| `list_posts` | `query({table:"posts", columns:["id","status","platform","caption","scheduled_for","published_at","created_at"], where:[{column:"status",op:"eq",value:"pending_user"}], order:[{column:"created_at",ascending:false}], limit:50})` |
+| `get_post` | la stessa su `posts` con `limit: 1` — una riga sola è un documento, e `media_urls` porta le slide |
+| `get_calendar` | `query({table:"posts", columns:["id","platform","caption","scheduled_for","slot","status"], where:[{column:"scheduled_for",op:"is",value:null,negate:true}], order:[{column:"scheduled_for",ascending:true}], limit:100})` |
+| `get_status` | `query({table:"posts", columns:["id"], where:[{column:"status",op:"eq",value:"pending_user"}], count:"exact", limit:1})` → `total`, più `brands` per piano e stato |
+| `get_dashboard` | gli stessi conteggi con `count: "exact"`, uno per chiamata: dieci letture parallele il cui risultato era un istogramma di stati e sei conteggi |
+| `list_media` | `query({table:"brand_media", columns:["id","kind","mime","title","description","tags","short_code","created_at"], order:[{column:"created_at",ascending:false}], limit:100})` — il link da consegnare è `https://anomalia.so/a/<short_code>` |
+| `check_media_job` | `query({table:"video_renders", columns:["id","status","error","submitted_at"], order:[{column:"submitted_at",ascending:false}], limit:20})`, poi `brand_media` filtrata `source_ref` su quell'id |
+| `get_article` | `query({table:"brand_articles", columns:["id","title","body_md","meta_title","meta_description","status","language"], where:[{column:"id",op:"eq",value:"…"}], embed:[{table:"blog_categories",columns:["name","slug"]},{table:"blog_authors",columns:["name"]}], limit:1})` |
+| `get_plan` | `query({table:"editorial_plans", columns:["id","status","strategy","voice","cadence","platform_mix","weeks","created_at","activated_at"], where:[{column:"status",op:"eq",value:"active"}], limit:1})` |
+| `get_weekly_plan` | le `weeks` dello stesso piano, più `content_plans` e i `posts` della settimana |
+| `get_studio` | `brand_kit`, `products`, `people`, `competitors`, `brand_documents` — una chiamata per tabella |
+| `get_voice` | `query({table:"brands", columns:["content_prefs"], where:[{column:"slug",op:"eq",value:"<slug>"}], limit:1})` — mood, tono, registro e regole per piattaforma stanno lì |
+| `get_brand_settings` | la stessa riga di `brands`: `timezone`, `target_platforms`, `content_prefs` |
+| `get_blog_settings` | `brands.blog_config`, più le tre liste `blog_categories`, `blog_tags`, `blog_authors` |
+| `get_radar` | `query({table:"brand_news_sources", columns:["id","kind","value","lang","active"], order:[{column:"created_at",ascending:true}]})`, e `brands.content_prefs.radar` per le piattaforme accese |
+| `get_automations` | `query` su `loop_ticks` filtrata su `loop` e `created_at` per cosa hanno fatto, e `brand_job_optouts` per quali sono spenti |
+| `get_geo` | `query({table:"brand_geo_audits", columns:["id","created_at","tech_score","tech","share_of_voice","citations"], order:[{column:"created_at",ascending:false}], limit:12})` |
+| `list_web_audits` | la stessa lettura su `brand_geo_audits` |
+| `get_audit_findings` | la colonna `tech` di quell'audit: è ciò che il crawl ha osservato |
+| `list_audit_citations` | la colonna `citations` di quell'audit: engine, domanda posta, verdetto, domini citati |
+| `list_web_fixes` | `query({table:"brand_geo_artifacts", columns:["id","kind","title","format","body","status","target_path","source_finding"], where:[{column:"status",op:"eq",value:"draft"}]})` |
+| `get_seo` | `brand_seo_plans`, più `brand_geo_audits` e `brand_geo_artifacts` |
+| `get_keywords` | `query({table:"brand_seo_keyword_strategy", columns:["strategy","citations","updated_at"], limit:1})` |
+| `get_ranks` | `query({table:"brand_tracked_keywords", columns:["id","keyword","locale","device","active"], where:[{column:"active",op:"is",value:true}]})`, poi `brand_rank_snapshots` filtrata `tracked_keyword_id` |
+| `get_backlinks` | `brand_backlink_placements` e `brand_backlink_opportunities` |
+| `get_knowledge_status` | `query({table:"brand_doc_chunks", columns:["id"], where:[{column:"embedding",op:"is",value:null,negate:true}], count:"exact", limit:1})` → `total` a 0 vuol dire che non c'è ancora niente di cercabile |
+| `list_shares` | `query({table:"shared_views", columns:["id","view_type","created_at","expires_at","revoked_at"], order:[{column:"created_at",ascending:false}]})` — nessun token: si mostra una volta sola, alla creazione |
+| `list_social_accounts` | `query({table:"social_accounts", columns:["platform","username","display_name","profile_url","status","connected_at","bio_url"]})` |
+| `get_bio` | la colonna `bio_url` della stessa lettura |
+| `get_analytics` | `posts` per stato e pubblicazioni, più `publish_logs`, `social_post_history` e `social_accounts` |
+| `get_gtm` | `gtm_plans`, con `brand_kit` e `products` per il contesto |
+| `get_goals` | `chat_goals` e `chat_goal_events` |
+| `get_market_field` | `brand_field_posts`, `market_posts`, `market_teardowns`, `brand_market_references` |
+
+**`get_dashboard` è uscito**, e valeva la pena verificarlo invece di darlo per scontato: dieci
+letture parallele il cui risultato è un istogramma di stati e sei conteggi, cioè conteggi che
+`query` sa fare esatti con `count: "exact"`. `get_status` faceva le stesse due letture cucite
+insieme.
+
+#### Restano — 9, ognuna col suo motivo
+
+Stanno in `RESTANO` dentro `cli/mcp/read-tools.test.ts`, con la ragione scritta accanto: il test
+fallisce se un decimo tool di lettura compare senza averla.
+
+| tool | perché non è una `query` |
+|---|---|
+| `list_brands` | senza uno slug `query` non si chiama nemmeno: è da qui che arriva il primo |
+| `diagnose_brand` | nove tabelle → un verdetto per cancello, e quale blocca il ciclo |
+| `diagnose_radar` | interroga ogni fonte dal vivo: non è nel database |
+| `search_knowledge` | due funzioni SQL, un embedding e la fusione dei ranghi; `query` esclude `.rpc()` |
+| `get_writing_skills` | due sorgenti su tre sono markdown del repo e costanti di codice |
+| `get_creation_kit` | seleziona, pesa e taglia a budget; i template stanno in un file |
+| `get_gsc` | somma 28 giorni di righe senza tetto e legge un segreto via rpc |
+| `get_ads` | diagnosi di affaticamento su 500 righe di metriche per campagna |
+| `get_media_models` | il catalogo dei modelli ammessi sta nel codice, in nessuna tabella |
+
+#### Le rotte REST restano, e i comandi della CLI con loro
+
+**Qui è uscito il tool MCP, non l'endpoint.** `GET /api/v1/brands/:slug/posts`, `/media`,
+`/web/article`, `/settings/radar` e tutte le altre rispondono come prima: la CLI le chiama
+(`anomalia content`, `anomalia plan`, `anomalia seo`, `anomalia web`, …), le API key di sola
+lettura le raggiungono, e `resolveArticleId` continua a risolvere i prefissi degli id passando da
+`GET /web`.
+
+Nove letture conservano il proprio schema sotto un nome che dice cosa sono — `LIST_MEDIA_READ`,
+`GET_ARTICLE_READ`, … — con `input`, `output` e `failures`, e **senza `tool`**: la rotta continua a
+validare e a promettere una forma, ma nessun tool nasce da lì. Le altre sono dichiarate a mano in
+`REST_ONLY` dentro `registry.test.ts` — cinquanta voci, di cui ventotto già lì da prima — e quella
+lista esiste apposta: una rotta che nessuno può elencare è il modo in cui il percorso a chiave API
+diventa in silenzio l'unica strada per un pezzo di prodotto.
+
+**E la chiave API è la ragione per cui quelle rotte non sono ridondanti.** `query` la rifiuta:
+pretende un client con la RLS addosso, mentre `authenticate` sul percorso a chiave dà la service
+role. Chi legge con una `anomalia_…` legge dagli endpoint, non da `query` — togliere le rotte
+insieme ai tool avrebbe tolto a quei clienti la lettura e basta.
 
 ### 2. L'autenticazione non era un tool, e uno dei tre mentiva
 
@@ -547,18 +552,21 @@ niente, e va aspettato invece che forzato.
 |---|---|
 | prima di questo lavoro | **126** |
 | −4 letture che `query` diceva già | 122 |
-| −3 tool di autenticazione (`login`, `logout`, `whoami`) | **119** |
+| −3 tool di autenticazione (`login`, `logout`, `whoami`) | 119 |
+| −33 letture, servite da `query` | **86** |
 
 E finisce lì, salvo `generate_media` — l'unica cancellazione a cui questo documento si impegnava
 già, in corso su un altro ramo.
 
 Le due righe che stavano qui — «−9 se il CRUD va da 15 a 6», «−7/8 se le impostazioni vanno da 10 a
-2/3» — erano stime scritte prima di aprire gli handler, come lo era «−22 letture in
-`query`»: aperti i 44 handler di lettura, quelle davvero coperte erano quattro; aperti i 72 di
-scrittura, le famiglie da collassare sono zero.
+2/3» — erano stime scritte prima di aprire gli handler; aperti i 72 handler di scrittura, le
+famiglie da collassare sono zero. La stima «−22 letture in `query`» era invece **bassa**, e per la
+ragione detta in §1: il tetto che la contraddiceva era nostro.
 
-**Il numero non è il bersaglio.** I sette tolti non servivano o mentivano. I 119 che restano sono
-capacità, e una capacità nascosta in un enum resta nella lista: cambia solo che nessuno la trova.
+**Il numero non è il bersaglio.** I sette tolti allora non servivano o mentivano; le trentatré
+tolte ora sono la stessa capacità sotto un nome solo — nessuna riga è diventata irraggiungibile,
+e `tools/list` è sceso da 109.827 a 91.153 caratteri. Gli 86 che restano sono capacità, e una
+capacità nascosta in un enum resta nella lista: cambia solo che nessuno la trova.
 
 Non arriveremo mai a 1 come PostHog, e non dobbiamo: **metà del nostro prodotto sono azioni che
 costano soldi o pubblicano qualcosa.** Un `execute_action("publish", …)` sarebbe peggio, non meglio.

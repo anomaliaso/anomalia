@@ -45,7 +45,6 @@ describe('le scritture dello studio esposte dal registry', () => {
       'delete_product',
       'update_person',
       'update_competitor',
-      'get_bio',
       'set_bio',
     ]) {
       expect(names, name).toContain(name);
@@ -69,11 +68,11 @@ describe('le scritture dello studio esposte dal registry', () => {
     }
   });
 
-  test('get_bio è una lettura, set_bio no', async () => {
+  test('set_bio non è una lettura: la bio si legge da `social_accounts` con `query`', async () => {
     const all = await tools();
 
-    expect(find(all, 'get_bio').annotations?.readOnlyHint).toBe(true);
     expect(find(all, 'set_bio').annotations?.readOnlyHint).toBe(false);
+    expect(all.map((x) => x.name)).not.toContain('get_bio');
   });
 
   test('update_person non offre nessun campo con cui attestare un consenso', async () => {

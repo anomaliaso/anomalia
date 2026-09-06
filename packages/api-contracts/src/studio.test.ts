@@ -8,7 +8,6 @@ import {
   DELETE_DOCUMENT,
   DELETE_PERSON,
   DELETE_PRODUCT,
-  GET_BIO,
   SET_BIO,
   SET_COLORS,
   UPDATE_COMPETITOR,
@@ -25,7 +24,6 @@ const STUDIO_WRITES = [
   DELETE_PRODUCT,
   UPDATE_PERSON,
   UPDATE_COMPETITOR,
-  GET_BIO,
   SET_BIO
 ];
 
@@ -106,12 +104,10 @@ describe('i contratti dello studio', () => {
     expect(pathFor(UPDATE_COMPETITOR, 'demo', 'c1')).toBe(
       '/api/v1/brands/demo/studio/competitors/c1'
     );
-    expect(pathFor(GET_BIO, 'demo')).toBe('/api/v1/brands/demo/bio');
     expect(pathFor(SET_BIO, 'demo')).toBe('/api/v1/brands/demo/bio');
   });
 
-  it('il link in bio si legge senza argomenti e si svuota con la stringa vuota', () => {
-    expect(GET_BIO.input.safeParse({}).success).toBe(true);
+  it('il link in bio si svuota con la stringa vuota, e non si scrive a vuoto', () => {
     expect(SET_BIO.input.safeParse({ bio_url: '' }).success).toBe(true);
     expect(SET_BIO.input.safeParse({}).success).toBe(false);
   });

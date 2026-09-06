@@ -99,30 +99,6 @@ describe('i tool di brand derivati dal registry', () => {
     expect(createPost.description ?? '').toContain('does not publish');
   });
 
-  test('le letture migrate restano registrate e restano letture', async () => {
-    const all = await tools();
-
-    for (const name of ['list_posts', 'get_calendar']) {
-      expect(find(all, name).annotations?.readOnlyHint, name).toBe(true);
-    }
-    expect(Object.keys(find(all, 'get_calendar').inputSchema?.properties ?? {}).sort()).toEqual([
-      'month',
-      'slug',
-    ]);
-  });
-
-  test('list_media compare senza una riga di codice scritta a mano', async () => {
-    const listMedia = find(await tools(), 'list_media');
-
-    expect(listMedia.annotations?.readOnlyHint).toBe(true);
-    expect(Object.keys(listMedia.inputSchema?.properties ?? {}).sort()).toEqual([
-      'limit',
-      'query',
-      'slug',
-    ]);
-    expect((listMedia.inputSchema?.required ?? [])).toEqual(['slug']);
-  });
-
   test('create_post accetta i media della libreria', async () => {
     const createPost = find(await tools(), 'create_post');
 
@@ -167,14 +143,6 @@ describe('i tool di brand derivati dal registry', () => {
 });
 
 describe('i tool sul singolo post', () => {
-  test('get_post chiede lo slug e un id, e resta una lettura', async () => {
-    const getPost = find(await tools(), 'get_post');
-
-    expect(Object.keys(getPost.inputSchema?.properties ?? {}).sort()).toEqual(['id', 'slug']);
-    expect((getPost.inputSchema?.required ?? []).sort()).toEqual(['id', 'slug']);
-    expect(getPost.annotations?.readOnlyHint).toBe(true);
-  });
-
   test('reschedule_post chiede anche la data e non si dichiara distruttivo', async () => {
     const reschedule = find(await tools(), 'reschedule_post');
 
@@ -196,7 +164,7 @@ describe('i tool sul singolo post', () => {
   test('ogni tool sul post dice che l id accetta un prefisso, non solo la sua description', async () => {
     const all = await tools();
 
-    for (const name of ['get_post', 'reschedule_post', 'render_post']) {
+    for (const name of ['reschedule_post', 'render_post']) {
       const id = find(all, name).inputSchema?.properties?.id as { description?: string };
       expect(id?.description, name).toBe('Post id or unambiguous prefix');
     }
@@ -213,15 +181,15 @@ describe('i tool sul singolo post', () => {
   });
 
   test('un prefisso diventa l id intero prima che la rotta REST lo veda', async () => {
-    const { calls, structured } = await callTool('get_post', { slug: 'demo', id: '2b38abc5' }, (path) =>
-      path.endsWith('/media') ? { status: 'approved', caption: 'ciao' } : [{ id: FULL_ID }, { id: 'ffff0000-0000-0000-0000-000000000000' }],
+    const { calls, structured } = await callTool('render_post', { slug: 'demo', id: '2b38abc5' }, (path) =>
+      path.endsWith('/render') ? { ok: true } : [{ id: FULL_ID }, { id: 'ffff0000-0000-0000-0000-000000000000' }],
     );
 
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       'GET /api/v1/brands/demo/posts',
-      `GET /api/v1/brands/demo/posts/${FULL_ID}/media`,
+      `POST /api/v1/brands/demo/posts/${FULL_ID}/render`,
     ]);
-    expect(structured).toEqual({ id: FULL_ID, status: 'approved', caption: 'ciao' });
+    expect(structured).toEqual({ id: FULL_ID, ok: true });
   });
 
   test('reschedule_post manda la data al post risolto, e niente altro', async () => {
@@ -240,7 +208,7 @@ describe('i tool sul singolo post', () => {
   });
 
   test('un prefisso ambiguo non tocca nessun post', async () => {
-    const { calls } = await callTool('get_post', { slug: 'demo', id: 'aa' }, () => [
+    const { calls } = await callTool('render_post', { slug: 'demo', id: 'aa' }, () => [
       { id: 'aa11' },
       { id: 'aa22' },
     ]);

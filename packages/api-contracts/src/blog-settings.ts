@@ -72,51 +72,6 @@ const BlogConfig = z.object({
   analytics: z.array(z.object({ provider: z.string(), id: z.string() }))
 });
 
-export const GET_BLOG_SETTINGS = {
-  tool: 'get_blog_settings',
-  title: 'Blog settings',
-  description:
-    'How the brand\'s blog looks and how it writes: the public site\'s name, colour, font and ' +
-    'layout, the style brief the AI follows, how many articles a week it produces, the languages, ' +
-    'and the categories, tags and authors an article can be filed under. Read it before ' +
-    'set_blog_settings and before add_blog_term — it carries the fonts, layouts and locales that ' +
-    'are accepted, and the plan\'s ceiling on articles per week and on extra languages.',
-  method: 'GET',
-  pathUnderBrand: '/settings/blog',
-  input: z.object({}).strict(),
-  output: z.object({
-    brand: z.string(),
-    plan: z.string().nullable(),
-    config: BlogConfig,
-    limits: z.object({
-      articles_per_week_max: z.number(),
-      translation_languages: z.number(),
-      custom_domain: z.boolean()
-    }),
-    choices: z.object({
-      fonts: z.array(z.string()),
-      layouts: z.array(z.string()),
-      locales: z.array(z.string())
-    }),
-    categories: z.array(
-      z.object({ id: z.string(), name: z.string(), slug: z.string(), description: z.string().nullable() })
-    ),
-    tags: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
-    authors: z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        slug: z.string(),
-        role: z.string().nullable(),
-        bio: z.string().nullable(),
-        avatar_url: z.string().nullable()
-      })
-    )
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_BLOG_SETTINGS = {
   tool: 'set_blog_settings',
   title: 'Change the blog settings',

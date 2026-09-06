@@ -64,9 +64,9 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
     words: ['question', 'documents', 'answer']
   },
   {
-    tool: 'get_voice',
+    tool: 'query',
     question: 'how is this brand supposed to sound',
-    words: ['sound', 'tone', 'brand']
+    words: ['brand', 'settings']
   },
   {
     tool: 'geo_action',
@@ -123,12 +123,13 @@ const describing = (tool: string): string => {
  *
  * Serve corta: si paga a ogni sessione, come `tools/list`.
  *
- * 1.200 → 1.300 il 2026-09-05, per una riga sola e a scadenza: i nomi delle quattro letture
- * ritirate dentro `query`. Il protocollo risponde «tool not found» e non insegna niente, quindi
- * questa è l'unica superficie dove chi le aveva cablate ritrova cosa chiamare. Quando nessun
- * client le chiama più quella riga esce, e il tetto torna a 1.200.
+ * 1.300 → 1.700 il 2026-09-06, e stavolta non è un promemoria a scadenza: con trentatré letture
+ * ritirate dentro `query`, queste righe SONO il percorso principale. Un agente che qui non impara
+ * `columns`, `offset` e `count` chiama `query` male e conclude che il prodotto non risponde — che
+ * costa infinitamente più dei 400 caratteri. In cambio `tools/list` cala di 24.000 caratteri, e
+ * quello si paga una volta per sessione come questo.
  */
-const INSTRUCTIONS_MAX_CHARS = 1_300;
+const INSTRUCTIONS_MAX_CHARS = 1_700;
 
 describe('le istruzioni del server sono una mappa, non un ordine', () => {
   test('non dicono di partire SEMPRE da list_brands', () => {

@@ -1,8 +1,10 @@
 # API — 14 · Impostazioni: i lavori ricorrenti
 
-Due endpoint sotto `/api/v1/brands/:slug/settings/automations`, cioè i tool MCP
-`get_automations` e `set_automation`. Sono l'interruttore che la pagina `/agents` mostra nel
-browser, per tutti e nove i lavori del roster — non solo per l'autopilot.
+Due endpoint sotto `/api/v1/brands/:slug/settings/automations`. Scrivere è il tool MCP
+`set_automation`; leggere su MCP è `query` su `brand_job_optouts` (quali sono spenti) e su
+`loop_ticks` (cosa hanno fatto), perché `get_automations` non esiste più come tool — la rotta
+`GET` resta, e la CLI la chiama. Sono l'interruttore che la pagina `/agents` mostra nel browser,
+per tutti e nove i lavori del roster — non solo per l'autopilot.
 
 Errori comuni di auth: vedi [01-overview](01-overview.md).
 
@@ -61,9 +63,9 @@ Sola lettura: nessun modello, nessun credito.
 `scheduled_work_allowed` è `scheduledWorkAllowed(plan)`: senza piano a pagamento nessuno di questi
 parte, per quanti se ne accendano, e ogni tick registra `skipped/no_plan`.
 
-## Il costo per lavoro non esiste, e il tool lo dice
+## Il costo per lavoro non esiste, e la rotta lo dice
 
-`get_automations` **non** riporta dollari per lavoro. Non è una dimenticanza:
+La risposta **non** riporta dollari per lavoro. Non è una dimenticanza:
 
 - `ai_calls` non ha nessuna colonna che nomini il loop. Le colonne sono `label`, `provider`,
   `model`, `cost_usd`, `context`, `brand_id`, `thread_id`… e `context` è testo libero per call

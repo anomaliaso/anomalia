@@ -1,8 +1,10 @@
 # API — 16 · Impostazioni: il blog
 
-Quattro endpoint sotto `/api/v1/brands/:slug/settings/blog`, cioè i tool MCP `get_blog_settings`,
-`set_blog_settings`, `add_blog_term` e `remove_blog_term`. Coprono tre pagine di Settings:
-`blog-appearance`, `blog-categories`, `blog-authors`.
+Quattro endpoint sotto `/api/v1/brands/:slug/settings/blog`. Scriverli sono i tool MCP
+`set_blog_settings`, `add_blog_term` e `remove_blog_term`; leggerli su MCP è `query` su
+`brands.blog_config` e sulle tre liste `blog_categories`, `blog_tags`, `blog_authors`, perché
+`get_blog_settings` non esiste più come tool — la rotta `GET` resta, e la CLI la chiama. Coprono
+tre pagine di Settings: `blog-appearance`, `blog-categories`, `blog-authors`.
 
 Errori comuni di auth: vedi [01-overview](01-overview.md).
 
@@ -73,7 +75,8 @@ Errori: `invalid_input` (400), `field_not_for_term` (400), `empty_slug` (400), `
 
 ## `POST /api/v1/brands/:slug/settings/blog/terms/remove`
 
-**Body**: `{ "term": "...", "id": "..." }` — l'id verbatim da `get_blog_settings`.
+**Body**: `{ "term": "...", "id": "..." }` — l'id verbatim dalla `GET`, o da `query` sulla lista
+del termine (`blog_categories`, `blog_tags`, `blog_authors`).
 
 Nessun articolo viene cancellato, ma **ognuna delle tre lascia un segno diverso**, ed è la ragione
 per cui la tabella `BLOG_TERMS` esiste in un posto solo:

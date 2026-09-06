@@ -868,7 +868,8 @@ curl -s -X POST "https://anomalia.so/api/v1/brands/mio-brand/ideas" \
 
 ## `GET /api/v1/brands/:slug/market/field`
 
-Tool MCP: `get_market_field`.
+Nessun tool MCP: su MCP questa lettura è `query` su `brand_field_posts`, `market_posts`,
+`market_teardowns` e `brand_market_references`. La rotta REST resta, e la CLI la chiama.
 
 Cosa si muove nel **campo** del brand: i topic osservati, il playbook distillato da quello che
 gira, e i post catalogati con il loro teardown — perché quel post ha girato, e cosa se ne può
