@@ -129,6 +129,15 @@ Nine tools remain, and not one of them is a select. Reach for them by subject:
 `get_creation_kit`, `get_gsc`, `get_ads` (campaign fatigue), `get_media_models`.
 Anything else you remember calling is now a `query`.
 
+**A row in a table nothing else writes** → `insert_row` and `update_row`, `query` turned around.
+`insert_row({table, values})` adds one row and fills in `brand_id` for you; a row that already
+exists comes back naming the key you hit instead of replacing it. `update_row({table, where,
+values})` touches **only the columns you send** and leaves the rest of the row alone, needs a
+`where` that is never empty, and moves at most 50 rows a call — counted before writing, so
+"nothing matched" is a refusal and not a quiet success. Neither can delete: deleting has its own
+named tools. Prefer a named write when one exists — those also derive a field, attribute a source
+or set off the side effect that the bare row does not carry.
+
 **Ask what this brand already knows** → `search_knowledge` with the question. It reads the brand's
 own uploaded documents and returns the passages that answer it, each with the document it came
 from — not the whole corpus. Empty `hits` is not "the brand does not know": count the embedded

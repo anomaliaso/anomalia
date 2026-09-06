@@ -101,6 +101,38 @@ Nine reads are NOT a query, because not one of them is a select: `list_brands`, 
 `diagnose_radar`, `search_knowledge`, `get_writing_skills`, `get_creation_kit`, `get_gsc`,
 `get_ads` and `get_media_models`. Each has its own section below. Anything else you remember
 calling is a `query`.
+### Writing a row that has no tool of its own
+
+| MCP | CLI |
+|-----|-----|
+| `insert_row` | (MCP only) |
+| `update_row` | (MCP only) |
+
+`insert_row` and `update_row` are `query` turned around: the same session, the same tables, the
+same absence of SQL — and the same consequence, that what they cannot express does not happen.
+There is no delete here and no upsert. **Deleting keeps its own named tools**, because a wrong read
+hands you wrong rows while a wrong write takes yours away.
+
+`insert_row({ table, values })` adds one row. `brand_id` is filled in with the brand you are on;
+naming a different one is refused rather than quietly corrected. It never replaces anything: a row
+that is already there comes back as a collision naming the key you hit, and changing it is the
+other tool.
+
+`update_row({ table, where, values })` changes rows that exist. **Only the columns you send are
+touched** — everything else in the row is left exactly as it was, so you never resend a field you
+are not changing, and you cannot blank one by omitting it. `where` is required and may not be
+empty, at most 50 rows move per call, and the rows are counted before anything is written, so
+"nothing matched" comes back as a refusal instead of a cheerful success.
+
+Both refuse with `200` and an `error`, `message` and `fix` you can act on: a rejected value is
+answered with the constraint AND the values it admits, a collision with the key you hit, a denial
+with the columns this session may actually write. Read the row with `query` first when you are not
+sure what you are about to overwrite — the old values do not come back.
+
+Prefer a named tool when one exists. The named ones do more than the row: they derive a field,
+attribute a source, kick a side effect. `add_competitor` records that a person added it and not
+the AI; `add_note` rebuilds the brand context; `create_post` computes the slot from the calendar
+date and the brand timezone. Reach for these two when nothing else covers the table.
 
 ## Brand & posts
 

@@ -451,6 +451,33 @@ raggruppare», enuncia il costo — *«un agente che cerca "aggiungi un concorre
 righe dopo propone di pagarlo: *«le sei famiglie CRUD diventano `*_action`»*. È la ragione per cui
 il piano è stato scritto e mai eseguito.
 
+#### L'eccezione che è stata poi costruita, e che non contraddice quanto segue
+
+Il piano ritirato era «le sei famiglie CRUD diventano `competitor_action(op)`, `person_action(op)`,
+…». Quello resta ritirato, e i due argomenti qui sotto restano il perché.
+
+Ciò che è stato costruito è un'altra cosa: **`insert_row` e `update_row`**, la primitiva generica
+che sta a `query` come la scrittura sta alla lettura. Non collassa una famiglia dentro un enum —
+collassa il *livello*, che è la mossa di Supabase con `execute_sql`. E supera entrambi gli argomenti
+invece di aggirarli:
+
+- **`destructiveHint` torna a dire il vero**, perché i tool sono due e non uno. `insert_row` aggiunge
+  una riga e non toglie niente (`false`); `update_row` sostituisce valori che c'erano (`true`). Un
+  `write(op: 'insert' | 'update')` avrebbe avuto il difetto identico di `ads_action` — ed è
+  esattamente per questo che non esiste.
+- **Il verbo resta nel nome**, che è da dove un modello sceglie prima di aprire uno schema. Nessuna
+  capacità sparisce dentro un enum: c'è un nome per creare e un nome per modificare.
+
+E si ferma dove l'asimmetria comincia: **nessun delete, nessun upsert**. Le tredici cancellazioni
+tengono il proprio nome, per la regola in fondo a questo documento; l'upsert è escluso perché un
+insert che *può* sostituire rimette dentro esattamente la bugia che i due tool tolgono.
+
+Il censimento che l'ha accompagnato — aperti tutti i 71 handler del registro — conferma i verdetti
+qui sotto e ne aggiunge quattro: `create_product`, `update_product`, `update_person`,
+`update_competitor` sono un `insert`/`update` di una riga e nient'altro. Sono i soli quattro su 71,
+e valgono 3.794 caratteri contro i 2.952 che i due tool aggiungono a `tools/list`. Il motivo per
+ognuno degli altri sta in `changelog/2026-09-06-generic-write.md`.
+
 #### Primo argomento: collassare distrugge `destructiveHint`, e questo non è opinabile
 
 L'annotazione è **per tool** — `destructiveHint: endpoint.destructive` in
