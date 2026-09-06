@@ -3,6 +3,8 @@ import { z } from 'zod';
 import {
   BRAND_ENDPOINTS,
   BRAND_RESOURCES,
+  GET_ARTICLE_READ,
+  LIST_MEDIA_READ,
   RESOURCE_SEGMENT,
   pathFor,
   statusForFailure,
@@ -43,15 +45,13 @@ describe('il registry degli endpoint di brand', () => {
     expect(names).toEqual([...new Set(names)]);
   });
 
-  it('ogni path parte da / e resta sotto il brand, o è il brand stesso', () => {
+  it('ogni path parte da / e resta sotto il brand', () => {
     // Lo slash iniziale che manca incolla il segmento allo slug: `posts` darebbe
-    // `/api/v1/brands/demoposts`. L'unica eccezione è il path vuoto, che non incolla niente
-    // perché non c'è niente da incollare: è il brand, `GET /api/v1/brands/:slug`.
+    // `/api/v1/brands/demoposts`.
     for (const e of BRAND_ENDPOINTS) {
-      expect(e.pathUnderBrand === '' || e.pathUnderBrand.startsWith('/'), e.tool).toBe(true);
+      expect(e.pathUnderBrand.startsWith('/'), e.tool).toBe(true);
     }
     expect(pathFor(byTool('create_post'), 'demo')).toBe('/api/v1/brands/demo/posts');
-    expect(pathFor(byTool('get_dashboard'), 'demo')).toBe('/api/v1/brands/demo');
   });
 
   it('un endpoint di risorsa mette l id risolto al posto del segmento', () => {
@@ -137,12 +137,10 @@ describe('il registry degli endpoint di brand', () => {
     ).toBe(true);
   });
 
-  it('list_media è una lettura e non dichiara fallimenti propri', () => {
-    const listMedia = byTool('list_media');
-    expect(listMedia.method).toBe('GET');
-    expect(listMedia.destructive).toBe(false);
-    expect(listMedia.input.safeParse({ query: 'logo', limit: 10 }).success).toBe(true);
-    expect(listMedia.input.safeParse({ limit: 500 }).success).toBe(false);
+  it('la lettura dei media dichiara un tetto, e nessun fallimento proprio', () => {
+    expect(LIST_MEDIA_READ.failures).toEqual([]);
+    expect(LIST_MEDIA_READ.input.safeParse({ query: 'logo', limit: 10 }).success).toBe(true);
+    expect(LIST_MEDIA_READ.input.safeParse({ limit: 500 }).success).toBe(false);
   });
 
   it('import_media_url dichiara ogni rifiuto della guardia, e nessuno di essi resta un 500', () => {
@@ -207,13 +205,9 @@ describe('il registry degli endpoint di brand', () => {
     expect(output.safeParse({ ok: true, errors: [], warnings: [], scores: [] }).success).toBe(false);
   });
 
-  it('get_article è una lettura, quindi una API key di sola lettura la raggiunge', () => {
-    const get = byTool('get_article');
-    expect(get.method).toBe('GET');
-    expect(get.destructive).toBe(false);
-    expect(pathFor(get, 'demo')).toBe('/api/v1/brands/demo/web/article');
-    expect(get.input.safeParse({ id: 'art-1' }).success).toBe(true);
-    expect(get.input.safeParse({}).success).toBe(false);
+  it('leggere un articolo chiede il suo id, e non parte senza', () => {
+    expect(GET_ARTICLE_READ.input.safeParse({ id: 'art-1' }).success).toBe(true);
+    expect(GET_ARTICLE_READ.input.safeParse({}).success).toBe(false);
   });
 
   it('update_article dichiara ogni campo che si può scrivere senza un modello', () => {
@@ -247,8 +241,8 @@ describe('il registry degli endpoint di brand', () => {
     expect(statusForFailure(update, 'article_not_found')).toBe(404);
   });
 
-  it('leggere e scrivere un articolo passano dallo stesso indirizzo', () => {
-    expect(byTool('update_article').pathUnderBrand).toBe(byTool('get_article').pathUnderBrand);
+  it('scrivere un articolo è una POST sull indirizzo dell articolo', () => {
+    expect(byTool('update_article').pathUnderBrand).toBe('/web/article');
     expect(byTool('update_article').method).toBe('POST');
   });
 

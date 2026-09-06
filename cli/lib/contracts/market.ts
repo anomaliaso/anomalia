@@ -45,40 +45,6 @@ const FieldTeardown = z.object({
   avoid: z.string().nullable()
 });
 
-export const GET_MARKET_FIELD = {
-  tool: 'get_market_field',
-  title: 'Field watch',
-  description:
-    'What is moving in this brand\'s field right now: the topics being watched, the pattern ' +
-    'distilled from them, and the posts catalogued with a teardown of why each one spread. Free.',
-  method: 'GET',
-  pathUnderBrand: '/market/field',
-  input: z.object({ limit: limitUpTo(MARKET_FIELD_MAX, MARKET_FIELD_DEFAULT) }).strict(),
-  output: z.object({
-    topics: FieldTopics.nullable(),
-    playbook: FieldPlaybook.nullable(),
-    updatedAt: z.string().nullable(),
-    posts: z.array(
-      z.object({
-        id: z.string().optional(),
-        platform: z.string().nullable().optional(),
-        url: z.string().nullable().optional(),
-        account_key: z.string().nullable().optional(),
-        content: z.string().nullable().optional(),
-        media_type: z.string().nullable().optional(),
-        engagement: z.number().nullable().optional(),
-        published_at: z.string().nullable().optional(),
-        query: z.string().nullable(),
-        relevance: z.number().nullable(),
-        discoveredAt: z.string().nullable(),
-        teardown: FieldTeardown.nullable()
-      })
-    )
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const DIAGNOSE_RADAR = {
   tool: 'diagnose_radar',
   title: 'Radar diagnosis',

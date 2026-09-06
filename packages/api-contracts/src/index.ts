@@ -1,13 +1,12 @@
 import type { z } from 'zod';
 import { ADS_ACTION, ADS_REMIX } from './ads';
 import { SET_APPEARANCE } from './appearance';
-import { GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
+import { SET_AUTOMATION } from './automations';
 import { BILLING_PORTAL_LINK, CHECKOUT_LINK } from './billing';
 import { GENERATE_CAPTIONS } from './captions';
 import {
   DELETE_ARTICLE,
   GENERATE_ARTICLE,
-  GET_ARTICLE,
   OPTIMIZE_ARTICLE,
   PUBLISH_ARTICLE,
   UNPUBLISH_ARTICLE,
@@ -16,12 +15,6 @@ import {
 import { CHECK_CONTENT } from './content';
 import { QUERY_DATABASE } from './query';
 import { GET_CREATION_KIT } from './creation-kit';
-import {
-  GET_AUDIT_FINDINGS,
-  LIST_AUDIT_CITATIONS,
-  LIST_WEB_AUDITS,
-  LIST_WEB_FIXES,
-} from './evidence';
 import {
   APPROVE_PLAN,
   DISCARD_PLAN,
@@ -36,18 +29,13 @@ import {
   SAVE_WEEK_SEEDS,
 } from './plans';
 import {
-  CHECK_MEDIA_JOB,
   CREATE_POST,
   EDIT_POST,
   GENERATE_CAROUSEL,
   GENERATE_IMAGE,
   GENERATE_VIDEO,
   GENERATE_MEDIA,
-  GET_CALENDAR,
-  GET_POST,
   IMPORT_MEDIA_URL,
-  LIST_MEDIA,
-  LIST_POSTS,
   MAKE_VIDEO,
   REFINE_MEDIA,
   REGENERATE_POST_MEDIA,
@@ -56,44 +44,29 @@ import {
   REORDER_SLIDES,
   RESCHEDULE_POST,
 } from './posts';
-import {
-  GET_ADS,
-  GET_ANALYTICS,
-  GET_DASHBOARD,
-  GET_GEO,
-  GET_GTM,
-  GET_KEYWORDS,
-  GET_PLAN,
-  GET_SEO,
-  GET_STUDIO,
-  GET_VOICE,
-  GET_WEEKLY_PLAN
-} from './reads';
-import { DIAGNOSE_BRAND, GET_GOALS } from './brand-state';
+import { GET_ADS } from './reads';
+import { DIAGNOSE_BRAND } from './brand-state';
 import {
   ADD_BLOG_TERM,
-  GET_BLOG_SETTINGS,
   REMOVE_BLOG_TERM,
   SET_BLOG_SETTINGS
 } from './blog-settings';
-import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS } from './brand-settings';
-import { DIAGNOSE_RADAR, GET_MARKET_FIELD } from './market';
+import { SET_BRAND_SETTINGS } from './brand-settings';
+import { DIAGNOSE_RADAR } from './market';
 import { GET_MEDIA_MODELS, SET_MEDIA_MODEL } from './media-models';
 import { RECORD_MEMORY_USED, SAVE_MEMORY } from './memory';
-import { GET_KNOWLEDGE_STATUS, SEARCH_KNOWLEDGE } from './knowledge';
+import { SEARCH_KNOWLEDGE } from './knowledge';
 import {
   ADD_RADAR_SOURCE,
-  GET_RADAR,
   REMOVE_RADAR_SOURCE,
   SET_RADAR_PLATFORM
 } from './radar';
 import { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
-import { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
-import { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
+import { SOCIAL_CONNECT_LINK } from './social';
+import { GET_GSC } from './web-metrics';
 import { GET_WRITING_SKILLS } from './writing-skills';
 import {
   CREATE_SHARE,
-  LIST_SHARES,
   REVOKE_SHARE,
   SHARED_VIEW_TYPES,
 } from './shares';
@@ -106,7 +79,6 @@ import {
   DELETE_DOCUMENT,
   DELETE_PERSON,
   DELETE_PRODUCT,
-  GET_BIO,
   RESEARCH_COMPETITORS,
   SET_BIO,
   SET_COLORS,
@@ -176,7 +148,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   BILLING_PORTAL_LINK,
   CHECKOUT_LINK,
   CHECK_CONTENT,
-  CHECK_MEDIA_JOB,
   CREATE_POST,
   CREATE_PRODUCT,
   CREATE_SHARE,
@@ -197,42 +168,11 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GENERATE_MEDIA,
   GEO_ACTION,
   GET_ADS,
-  GET_ANALYTICS,
-  GET_ARTICLE,
-  GET_AUDIT_FINDINGS,
-  GET_AUTOMATIONS,
-  GET_BACKLINKS,
-  GET_BIO,
-  GET_BLOG_SETTINGS,
-  GET_BRAND_SETTINGS,
-  GET_CALENDAR,
   GET_CREATION_KIT,
-  GET_DASHBOARD,
-  GET_GEO,
-  GET_GOALS,
   GET_GSC,
-  GET_GTM,
-  GET_KEYWORDS,
-  GET_KNOWLEDGE_STATUS,
-  GET_MARKET_FIELD,
   GET_MEDIA_MODELS,
-  GET_PLAN,
-  GET_POST,
-  GET_RADAR,
-  GET_RANKS,
-  GET_SEO,
-  GET_STUDIO,
-  GET_VOICE,
-  GET_WEEKLY_PLAN,
   GET_WRITING_SKILLS,
   IMPORT_MEDIA_URL,
-  LIST_AUDIT_CITATIONS,
-  LIST_MEDIA,
-  LIST_POSTS,
-  LIST_SHARES,
-  LIST_SOCIAL_ACCOUNTS,
-  LIST_WEB_AUDITS,
-  LIST_WEB_FIXES,
   MAKE_VIDEO,
   OPTIMIZE_ARTICLE,
   PLAN_WEEK,
@@ -299,7 +239,10 @@ export function acceptsIdPrefix(endpoint: BrandEndpoint): endpoint is ResourceEn
   return endpoint.resource !== undefined && endpoint.method !== 'DELETE';
 }
 
-export function statusForFailure(endpoint: BrandEndpoint, error: string): number {
+export function statusForFailure(
+  endpoint: { readonly failures: readonly EndpointFailure[] },
+  error: string
+): number {
   return endpoint.failures.find((f) => f.error === error)?.status ?? 500;
 }
 
@@ -307,7 +250,6 @@ export {
   ADS_ACTION,
   ADS_REMIX,
   CHECK_CONTENT,
-  CHECK_MEDIA_JOB,
   CREATE_POST,
   GENERATE_CAPTIONS,
   GENERATE_CAROUSEL,
@@ -315,18 +257,9 @@ export {
   GENERATE_VIDEO,
   EDIT_POST,
   GENERATE_MEDIA,
-  GET_ARTICLE,
-  GET_AUDIT_FINDINGS,
-  GET_CALENDAR,
   GET_CREATION_KIT,
-  GET_POST,
   IMPORT_MEDIA_URL,
-  LIST_AUDIT_CITATIONS,
-  LIST_MEDIA,
   REFINE_MEDIA,
-  LIST_POSTS,
-  LIST_WEB_AUDITS,
-  LIST_WEB_FIXES,
   MAKE_VIDEO,
   REGENERATE_POST_MEDIA,
   REGENERATE_SLIDE,
@@ -335,6 +268,21 @@ export {
   RESCHEDULE_POST,
   UPDATE_ARTICLE,
 };
+/**
+ * Gli schemi delle letture ritirate da MCP. La rotta REST resta e continua a validare con questi;
+ * nessuno di essi e' un endpoint del registry, quindi nessuno diventa un tool.
+ */
+export { CHECK_MEDIA_JOB_READ, LIST_MEDIA_READ } from './posts';
+export { GET_ARTICLE_READ } from './articles';
+export {
+  GET_AUDIT_FINDINGS_READ,
+  LIST_AUDIT_CITATIONS_READ,
+  LIST_WEB_AUDITS_READ,
+  LIST_WEB_FIXES_READ
+} from './evidence';
+export { LIST_SHARES_READ } from './shares';
+export { LIST_SOCIAL_ACCOUNTS_READ } from './social';
+
 export { QUERY_DATABASE, QUERY_OPS, QUERY_TABLE_NAMES, QUERY_DEFAULT_ROWS, QUERY_MAX_ROWS } from './query';
 export { QUERY_TABLES } from './query-tables';
 export {
@@ -355,23 +303,10 @@ export {
   WEB_FIX_STATUSES,
   WEB_FIX_SURFACES
 } from './evidence';
-export {
-  GET_ADS,
-  GET_ANALYTICS,
-  GET_DASHBOARD,
-  GET_GEO,
-  GET_GTM,
-  GET_KEYWORDS,
-  GET_PLAN,
-  GET_SEO,
-  GET_STUDIO,
-  GET_VOICE,
-  GET_WEEKLY_PLAN
-};
+export { GET_ADS };
 export { STUDIO_DOCUMENT_MODES } from './reads';
 export type { StudioDocumentMode } from './reads';
 export {
-  GET_BRAND_SETTINGS,
   SET_BRAND_SETTINGS,
   TARGET_PLATFORMS
 } from './brand-settings';
@@ -380,13 +315,12 @@ export {
   DIAGNOSE_BRAND,
   DOCTOR_GATE_STATUSES,
   DOCTOR_LOOP_STATUSES,
-  GET_GOALS,
   GOALS_DEFAULT,
   GOALS_MAX,
   GOAL_CRITERION_STATUSES,
   GOAL_STATUSES
 } from './brand-state';
-export { DIAGNOSE_RADAR, GET_MARKET_FIELD, MARKET_FIELD_DEFAULT, MARKET_FIELD_MAX } from './market';
+export { DIAGNOSE_RADAR, MARKET_FIELD_DEFAULT, MARKET_FIELD_MAX } from './market';
 export {
   GET_MEDIA_MODELS,
   MEDIA_MODEL_JOBS,
@@ -396,7 +330,6 @@ export {
 export type { MediaModelSlotId } from './media-models';
 export {
   ADD_RADAR_SOURCE,
-  GET_RADAR,
   RADAR_BASE_SOURCE_KINDS,
   RADAR_PLATFORMS,
   RADAR_PRO_SOURCE_KINDS,
@@ -406,7 +339,6 @@ export {
 } from './radar';
 export type { RadarPlatform, RadarSourceKindName } from './radar';
 export {
-  GET_KNOWLEDGE_STATUS,
   KNOWLEDGE_COLLECTIONS,
   KNOWLEDGE_DOC_STATUSES,
   KNOWLEDGE_FAILURES_MAX,
@@ -428,7 +360,7 @@ export {
 } from './memory';
 export type { AgentMemoryCategory } from './memory';
 export { GEO_ACTION, REFRESH_KEYWORDS, SEO_ACTION } from './search';
-export { GET_BACKLINKS, GET_GSC, GET_RANKS } from './web-metrics';
+export { GET_GSC } from './web-metrics';
 export {
   GET_WRITING_SKILLS,
   WRITING_DECK_AGENTS,
@@ -445,7 +377,6 @@ export {
   DELETE_DOCUMENT,
   DELETE_PERSON,
   DELETE_PRODUCT,
-  GET_BIO,
   RESEARCH_COMPETITORS,
   SET_BIO,
   SET_COLORS,
@@ -458,7 +389,6 @@ export {
 } from './studio';
 export {
   CREATE_SHARE,
-  LIST_SHARES,
   REVOKE_SHARE,
   SHARED_VIEW_TYPES,
 };
@@ -466,11 +396,10 @@ export {
   AUTOMATION_CADENCES,
   AUTOMATION_JOBS,
   AUTOMATION_STATES,
-  GET_AUTOMATIONS,
   SET_AUTOMATION
 } from './automations';
 export type { AutomationJob } from './automations';
-export { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
+export { SOCIAL_CONNECT_LINK } from './social';
 export {
   ADD_BLOG_TERM,
   BLOG_ANALYTICS_ID_PATTERNS,
@@ -479,7 +408,6 @@ export {
   BLOG_LAYOUTS,
   BLOG_TERM_KINDS,
   blogAnalyticsIdOk,
-  GET_BLOG_SETTINGS,
   REMOVE_BLOG_TERM,
   SET_BLOG_SETTINGS
 } from './blog-settings';

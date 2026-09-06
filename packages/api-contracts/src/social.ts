@@ -41,20 +41,11 @@ const ManageUrlSchema = z
       'finché non manca un post, quindi è un passo che si attraversa, non si esegue'
   );
 
-export const LIST_SOCIAL_ACCOUNTS = {
-  tool: 'list_social_accounts',
-  title: 'Connected social accounts',
-  description:
-    'The social accounts this brand can publish to, one row each: platform, the handle it ' +
-    'actually posts as, and whether it still works. Read it before promising anything will go out ' +
-    '— a target platform with no active account produces posts that sit forever. It also says ' +
-    'whether the plan allows connecting at all and how many slots are left, which is what decides ' +
-    'if create_social_connect_link can help. get_brand_settings carries the same ' +
-    'connected_platforms summary; this is the account-level truth behind it, and the only place a ' +
-    'broken connection shows up. Free.',
-  method: 'GET',
-  pathUnderBrand: '/social/accounts',
-  input: z.object({}).strict(),
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const LIST_SOCIAL_ACCOUNTS_READ = {
   output: z.object({
     brand: z.string(),
     accounts: z.array(AccountSchema),
@@ -69,9 +60,9 @@ export const LIST_SOCIAL_ACCOUNTS = {
     slots: SlotsSchema,
     manage_url: ManageUrlSchema
   }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: z.object({}).strict(),
+  failures: []
+} as const;
 
 export const SOCIAL_CONNECT_LINK = {
   tool: 'create_social_connect_link',

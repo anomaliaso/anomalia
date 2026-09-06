@@ -3,80 +3,6 @@ import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
 import { MCP_INSTRUCTIONS } from './server.ts';
 
-const SLUG_PROPERTY = { type: 'string', minLength: 1 };
-
-const MIGRATED_READS = [
-  {
-    name: 'get_plan',
-    title: 'Editorial plan',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_weekly_plan',
-    title: 'Weekly plan',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_studio',
-    title: 'Studio',
-    // Cambiata di proposito, due volte: l'elenco dei documenti dice se sono stati digeriti, e il
-    // testo non viaggia più per difetto — `documents: "full"` lo restituisce a chi lo leggeva.
-    properties: {
-      slug: SLUG_PROPERTY,
-      documents: {
-        type: 'string',
-        enum: ['index', 'full'],
-        description: '`index` (default) lists documents without their text; `full` includes content_text',
-      },
-    },
-    required: ['slug'],
-  },
-  {
-    name: 'get_seo',
-    title: 'SEO overview',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_geo',
-    title: 'GEO overview',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_keywords',
-    title: 'Keywords',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_ads',
-    title: 'Ads overview',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_analytics',
-    title: 'Analytics',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_gtm',
-    title: 'GTM roadmap',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-  {
-    name: 'get_voice',
-    title: 'Voice rules',
-    properties: { slug: SLUG_PROPERTY },
-    required: ['slug'],
-  },
-] as const;
-
 type Tool = {
   name: string;
   title?: string;
@@ -112,40 +38,9 @@ const find = (all: Tool[], name: string): Tool => {
   return tool;
 };
 
-describe('le letture migrate sul registry', () => {
-  // La descrizione NON si confronta qui, e la copia in questo file non esiste piu`: sarebbe la
-  // stessa prosa scritta in due posti, che diverge alla prima riscrittura. Il confronto vero e`
-  // automatico e sta piu` sotto — `ogni endpoint del registry esiste in tools/list come lo
-  // dichiara` legge la descrizione DAL registry, quindi non puo` invecchiare. Qui resta la forma:
-  // titolo, campi, obbligatori, annotazioni, cioe` cio` che si rompe in silenzio.
-  test('restano identiche dall’esterno: titolo, campi, obbligatori', async () => {
-    const all = await tools();
-
-    for (const expected of MIGRATED_READS) {
-      const tool = find(all, expected.name);
-
-      expect(tool.title, expected.name).toBe(expected.title);
-      expect(tool.inputSchema?.properties, expected.name).toEqual(expected.properties);
-      expect(tool.inputSchema?.required ?? [], expected.name).toEqual([...expected.required]);
-    }
-  });
-
-  test('restano letture: readOnlyHint non si perde nella migrazione', async () => {
-    const all = await tools();
-
-    for (const { name } of MIGRATED_READS) {
-      expect(find(all, name).annotations?.readOnlyHint, name).toBe(true);
-    }
-  });
-
-  test('sono dichiarate nel registry, non registrate a mano', () => {
-    const declared = BRAND_ENDPOINTS.map((e) => e.tool);
-
-    for (const { name } of MIGRATED_READS) {
-      expect(declared, name).toContain(name);
-    }
-  });
-
+describe('i tool sono quello che il registry dichiara', () => {
+  // Il confronto legge titolo e descrizione DAL registry, quindi non puo` invecchiare: una tabella
+  // di forme copiate qui dentro sarebbe la stessa prosa scritta in due posti.
   test('ogni endpoint del registry esiste in tools/list come lo dichiara', async () => {
     const all = await tools();
 
@@ -167,45 +62,98 @@ describe('le letture migrate sul registry', () => {
 });
 
 /**
- * Le quattro letture il cui handler era un `select` che `query` sa già scrivere. Il criterio non è
- * il nome: `list_posts` si chiama come loro ed è rimasto, perché il tetto di 20.000 caratteri gli
- * taglia 35 righe su 50.
+ * Ogni lettura di tabella esce; `query` la serve. Il conteggio si misura QUI, sul transport, e non
+ * sui sorgenti: contando le `registerTool` si sbaglia, ed è già successo tre volte.
+ *
+ * Il criterio è uno solo, e sta scritto accanto ai nove che restano: una lettura resta quando la
+ * sua risposta non si ricostruisce con `query`. Un `select` con filtri e ordinamento — anche su
+ * due tabelle da unire per id — non è mai quel caso.
  */
-const RITIRATE = ['get_appearance', 'get_memory', 'list_articles', 'list_ideas'] as const;
+const RESTANO: ReadonlyArray<{ tool: string; perche: string }> = [
+  { tool: 'list_brands', perche: '`query` vive sotto uno slug: senza questo non c’è il primo slug' },
+  { tool: 'diagnose_brand', perche: 'nove tabelle → un verdetto per cancello, e quale blocca il ciclo' },
+  { tool: 'diagnose_radar', perche: 'interroga ogni fonte dal vivo: non è nel database' },
+  { tool: 'search_knowledge', perche: 'due funzioni SQL, un embedding e la fusione dei ranghi; `query` esclude `.rpc()`' },
+  { tool: 'get_writing_skills', perche: 'due sorgenti su tre sono markdown del repo e costanti di codice' },
+  { tool: 'get_creation_kit', perche: 'seleziona, pesa e taglia a budget; i template stanno in un file' },
+  { tool: 'get_gsc', perche: 'somma 28 giorni di righe senza tetto e legge un segreto via rpc' },
+  { tool: 'get_ads', perche: 'diagnosi di affaticamento su 500 righe di metriche per campagna' },
+  { tool: 'get_media_models', perche: 'il catalogo dei modelli ammessi sta nel codice, in nessuna tabella' }
+];
 
-/** Letture che `query` NON copre: la riga grezza è più larga dei tetti, o il tool aggrega. */
-const NON_COPERTE = ['list_posts', 'list_shares', 'get_article', 'list_web_fixes', 'get_dashboard'] as const;
+/**
+ * Le letture ritirate. Ognuna era un `select` con filtri e ordinamento, e per ognuna la skill
+ * porta la `query` equivalente già scritta.
+ */
+const RITIRATE = [
+  'check_media_job',
+  'get_analytics',
+  'get_article',
+  'get_audit_findings',
+  'get_automations',
+  'get_backlinks',
+  'get_bio',
+  'get_blog_settings',
+  'get_brand_settings',
+  'get_calendar',
+  'get_dashboard',
+  'get_geo',
+  'get_goals',
+  'get_gtm',
+  'get_keywords',
+  'get_knowledge_status',
+  'get_market_field',
+  'get_plan',
+  'get_post',
+  'get_radar',
+  'get_ranks',
+  'get_seo',
+  'get_status',
+  'get_studio',
+  'get_voice',
+  'get_weekly_plan',
+  'list_audit_citations',
+  'list_media',
+  'list_posts',
+  'list_shares',
+  'list_social_accounts',
+  'list_web_audits',
+  'list_web_fixes'
+] as const;
 
-describe('le letture che `query` copriva già', () => {
-  test('non sono più in tools/list', async () => {
+describe('le letture le serve `query`', () => {
+  test('ne restano nove, e sono quelle dichiarate', async () => {
+    const reads = (await tools())
+      .filter((t) => t.annotations?.readOnlyHint === true)
+      .map((t) => t.name)
+      .sort();
+
+    expect(reads).toEqual(RESTANO.map((r) => r.tool).sort());
+  });
+
+  test('ogni lettura ritirata è sparita da tools/list', async () => {
     const names = (await tools()).map((t) => t.name);
 
     for (const name of RITIRATE) expect(names, name).not.toContain(name);
   });
 
-  test('non sono più nel registry, quindi nemmeno sul percorso CLI', () => {
+  test('e dal registry, quindi non torna dalla porta della CLI', () => {
     const declared = BRAND_ENDPOINTS.map((e) => e.tool);
 
     for (const name of RITIRATE) expect(declared, name).not.toContain(name);
   });
 
-  test('quelle che `query` taglierebbe restano, e restano letture', async () => {
-    const all = await tools();
-
-    for (const name of NON_COPERTE) {
-      expect(find(all, name).annotations?.readOnlyHint, name).toBe(true);
-    }
+  /**
+   * «Tool not found» non insegna niente. Chi aveva cablato una di queste ritrova la strada solo
+   * qui — la mappa che il client mostra al handshake, prima di ogni descrizione.
+   */
+  test('le istruzioni del handshake mandano a `query`, e dicono la regola che la rende usabile', () => {
+    expect(MCP_INSTRUCTIONS).toContain('query');
+    expect(MCP_INSTRUCTIONS).toContain('columns');
+    expect(MCP_INSTRUCTIONS).toMatch(/offset/i);
   });
 
-  /**
-   * Il "tool not found" del protocollo non insegna niente. Chi aveva cablato una delle quattro
-   * ritrova il nome QUI, nella mappa che il client mostra al handshake prima di ogni descrizione —
-   * ed è anche l'unico posto dove sta la regola che le rende usabili: senza `columns` la lettura
-   * torna monca e nessuno lo dice.
-   */
-  test('le istruzioni del handshake dicono cosa si chiama al loro posto', () => {
-    for (const name of RITIRATE) expect(MCP_INSTRUCTIONS, name).toContain(name);
-
-    expect(MCP_INSTRUCTIONS).toContain('columns');
+  test('nessuna delle nove è un `select` travestito: ognuna porta il suo motivo', () => {
+    for (const { tool, perche } of RESTANO) expect(perche.length, tool).toBeGreaterThan(20);
   });
 });

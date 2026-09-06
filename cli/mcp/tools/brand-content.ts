@@ -68,38 +68,6 @@ export function registerBrandTools(server: McpServer) {
   registerDeclaredEndpoints(server);
 
   server.registerTool(
-    'get_status',
-    {
-      title: 'Brand status',
-      description:
-        'How this brand is doing right now, in one short answer: how many posts wait for someone to ' +
-        'approve them, whether the plan still has room, and how the last recurring jobs went. ' +
-        'get_dashboard is the fuller picture. Free.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) =>
-      withAuth(async (token) => {
-        const detail = await api.getBrand(token, slug);
-        const pending = await api.getPosts(token, slug, 'pending_user');
-        return {
-          brand: detail.brand,
-          pendingCount: detail.pendingCount,
-          pendingPreview: pending.slice(0, 10).map((p) => ({
-            id: p.id,
-            platform: p.platform,
-            status: p.status,
-            caption: (p.caption ?? '').slice(0, 80),
-            scheduled_for: p.scheduled_for,
-          })),
-          scheduledCount: detail.scheduledCount,
-          publishedCount: detail.publishedCount,
-          runs: detail.runs,
-        };
-      }),
-  );
-
-            server.registerTool(
     'approve_posts',
     {
       title: 'Approve all pending posts',

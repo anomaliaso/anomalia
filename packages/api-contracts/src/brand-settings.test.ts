@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { GET_BRAND_SETTINGS, SET_BRAND_SETTINGS, TARGET_PLATFORMS } from './brand-settings';
+import { SET_BRAND_SETTINGS, TARGET_PLATFORMS } from './brand-settings';
 import { BRAND_ENDPOINTS, statusForFailure } from './index';
 
 describe('le impostazioni di brand come contratto', () => {
-  it('stanno nel registry, o nessun agente le vede', () => {
-    for (const endpoint of [GET_BRAND_SETTINGS, SET_BRAND_SETTINGS]) {
-      expect(BRAND_ENDPOINTS, endpoint.tool).toContain(endpoint);
-    }
+  it('sta nel registry, o nessun agente le vede', () => {
+    expect(BRAND_ENDPOINTS).toContain(SET_BRAND_SETTINGS);
   });
 
   it('cambia solo i campi che nomini: sono tutti facoltativi', () => {
@@ -40,19 +38,6 @@ describe('le impostazioni di brand come contratto', () => {
     const ok = SET_BRAND_SETTINGS.input.safeParse({ hashtags: { instagram: ['#caffe'] } });
     expect(ok.success).toBe(true);
     expect(SET_BRAND_SETTINGS.input.safeParse({ hashtags: { myspace: ['#x'] } }).success).toBe(false);
-  });
-
-  it('la lettura porta le scelte ammesse e quelle che non hanno dove pubblicare', () => {
-    const parsed = GET_BRAND_SETTINGS.output.safeParse({
-      brand: 'demo',
-      timezone: 'Europe/Rome',
-      platforms: ['instagram', 'reddit'],
-      platform_choices: [...TARGET_PLATFORMS],
-      connected_platforms: ['instagram'],
-      hashtags: { instagram: ['#caffe'] },
-      voice_examples: ['Un post vero del brand.']
-    });
-    expect(parsed.success).toBe(true);
   });
 
   it('dice cosa succede a un fuso cambiato e a una piattaforma tolta, o l agente non lo sa', () => {

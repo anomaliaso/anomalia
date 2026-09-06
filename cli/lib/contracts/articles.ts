@@ -96,20 +96,15 @@ export type GetArticleInput = z.infer<typeof GetArticleInputSchema>;
 export type UpdateArticleInput = z.infer<typeof UpdateArticleInputSchema>;
 export type UpdateArticleResult = z.infer<typeof UpdateArticleResultSchema>;
 
-export const GET_ARTICLE = {
-  tool: 'get_article',
-  title: 'Read article',
-  description:
-    'One blog article in full, in any state — draft, planned, approved or published: body, SEO ' +
-    'fields, cover, category, tags, author, language, schedule and status. Read it before ' +
-    'editing, and after, to see what changed. Free.',
-  method: 'GET',
-  pathUnderBrand: '/web/article',
-  input: GetArticleInputSchema,
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const GET_ARTICLE_READ = {
   output: GetArticleResultSchema,
-  failures: [{ error: 'article_not_found', status: 404 }],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: GetArticleInputSchema,
+  failures: [{ error: 'article_not_found', status: 404 }]
+} as const;
 
 export const UPDATE_ARTICLE = {
   tool: 'update_article',

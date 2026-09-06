@@ -34,44 +34,6 @@ const value = z
 
 const PLAN_REQUIRED: { error: string; status: number } = { error: 'plan_required', status: 403 };
 
-export const GET_RADAR = {
-  tool: 'get_radar',
-  title: 'Radar sources',
-  description:
-    'Where Radar looks for this brand: which platforms are on, which sources are configured, ' +
-    'and — the part you cannot guess — which source kinds this plan is allowed to use and how ' +
-    'many sources are left. Threads, X and LinkedIn belong to the Pro plan: on a lower plan they ' +
-    'read as locked here and adding one comes back plan_required.',
-  method: 'GET',
-  pathUnderBrand: '/settings/radar',
-  input: z.object({}).strict(),
-  output: z.object({
-    brand: z.string(),
-    plan: z.string().nullable(),
-    platforms: z.array(
-      z.object({
-        platform: z.enum(RADAR_PLATFORMS),
-        enabled: z.boolean(),
-        plan_locked: z.boolean()
-      })
-    ),
-    sources: z.array(
-      z.object({
-        id: z.string(),
-        kind: z.enum(RADAR_SOURCE_KINDS),
-        value: z.string(),
-        lang: z.string().nullable(),
-        active: z.boolean()
-      })
-    ),
-    allowed_kinds: z.array(z.string()),
-    source_limit: z.number(),
-    sources_used: z.number()
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_RADAR_PLATFORM = {
   tool: 'set_radar_platform',
   title: 'Turn a Radar platform on or off',

@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { AUTOMATION_JOBS, GET_AUTOMATIONS, SET_AUTOMATION } from './automations';
+import { AUTOMATION_JOBS, SET_AUTOMATION } from './automations';
 import { BRAND_ENDPOINTS, statusForFailure } from './index';
 
 describe('i lavori ricorrenti come contratto', () => {
-  it('stanno nel registry, o nessun agente li vede', () => {
-    for (const endpoint of [GET_AUTOMATIONS, SET_AUTOMATION]) {
-      expect(BRAND_ENDPOINTS, endpoint.tool).toContain(endpoint);
-    }
+  it('sta nel registry, o nessun agente lo vede', () => {
+    expect(BRAND_ENDPOINTS).toContain(SET_AUTOMATION);
   });
 
   it('accetta solo i lavori che esistono', () => {
@@ -29,36 +27,6 @@ describe('i lavori ricorrenti come contratto', () => {
     expect(SET_AUTOMATION.description).toMatch(/spending decision/);
     expect(SET_AUTOMATION.description).toMatch(/every run calls AI models and spends/);
     expect(SET_AUTOMATION.description).toMatch(/Turning one OFF spends nothing/);
-  });
-
-  it('non promette un costo per lavoro che il database non sa attribuire', () => {
-    // `ai_calls` non ha nessuna colonna che nomini il loop, e le label sono condivise fra lavori
-    // (`director` sta sia in autopilot sia in radar_recap). Un numero inventato qui sarebbe
-    // peggio del silenzio: un agente deciderebbe su una cifra falsa.
-    expect(GET_AUTOMATIONS.description).toMatch(/no clean read attributes dollars/);
-    expect(Object.keys(GET_AUTOMATIONS.output.shape)).not.toContain('spend_usd');
-  });
-
-  it('porta invece quanto ha girato davvero, che è il dato che esiste', () => {
-    const parsed = GET_AUTOMATIONS.output.safeParse({
-      brand: 'demo',
-      plan: 'pro',
-      scheduled_work_allowed: true,
-      jobs: [
-        {
-          job: 'seo',
-          what: 'SEO agent — weekly site review.',
-          cadence: 'weekly',
-          enabled: true,
-          state: 'ok',
-          reason: null,
-          last_run_at: '2026-09-01T00:00:00.000Z',
-          behind: false,
-          runs_30d: 4
-        }
-      ]
-    });
-    expect(parsed.success).toBe(true);
   });
 
   it('la risposta di chi accende riscrive cosa è stato impegnato', () => {

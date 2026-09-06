@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 import { generateBrandMedia, listMediaJobs } from '$lib/server/media-generate';
-import { CHECK_MEDIA_JOB, GENERATE_MEDIA, statusForFailure } from '@anomalia/api-contracts';
+import { CHECK_MEDIA_JOB_READ, GENERATE_MEDIA, statusForFailure } from '@anomalia/api-contracts';
 
 // Quattro immagini di fila stanno sotto il minuto, ma non sotto il default.
 export const config = { maxDuration: 300 };
@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
 
-  const parsed = CHECK_MEDIA_JOB.input.safeParse(Object.fromEntries(url.searchParams));
+  const parsed = CHECK_MEDIA_JOB_READ.input.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
     return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }

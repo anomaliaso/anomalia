@@ -39,30 +39,6 @@ const Job = z.object({
   runs_30d: z.number()
 });
 
-export const GET_AUTOMATIONS = {
-  tool: 'get_automations',
-  title: 'Recurring jobs',
-  description:
-    'The recurring jobs included with the product and whether this brand runs them: what each ' +
-    'does, how often, whether it is on, how it went last time, and how many times it ran in the ' +
-    'last 30 days. Read it before set_automation — `runs_30d` with `cadence` is how you tell what ' +
-    'turning one on commits the brand to. What it CANNOT tell you is the money: AI spend is ' +
-    'recorded per call, with no column naming the job that made it, so no clean read attributes ' +
-    'dollars to one automation. The brand-wide bill is on the usage page.',
-  method: 'GET',
-  pathUnderBrand: '/settings/automations',
-  input: z.object({}).strict(),
-  output: z.object({
-    brand: z.string(),
-    plan: z.string().nullable(),
-    /** Senza un piano a pagamento nessuno di questi parte, per quanti se ne accendano. */
-    scheduled_work_allowed: z.boolean(),
-    jobs: z.array(Job)
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_AUTOMATION = {
   tool: 'set_automation',
   title: 'Turn a recurring job on or off',

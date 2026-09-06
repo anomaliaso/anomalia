@@ -4,14 +4,13 @@ import {
   BLOG_ANALYTICS_PROVIDERS,
   BLOG_FONTS,
   BLOG_TERM_KINDS,
-  GET_BLOG_SETTINGS,
   REMOVE_BLOG_TERM,
   SET_BLOG_SETTINGS,
   blogAnalyticsIdOk
 } from './blog-settings';
 import { BRAND_ENDPOINTS, statusForFailure } from './index';
 
-const ALL = [GET_BLOG_SETTINGS, SET_BLOG_SETTINGS, ADD_BLOG_TERM, REMOVE_BLOG_TERM];
+const ALL = [SET_BLOG_SETTINGS, ADD_BLOG_TERM, REMOVE_BLOG_TERM];
 
 describe('le impostazioni del blog come contratto', () => {
   it('stanno tutte nel registry, o nessun agente le vede', () => {
@@ -124,36 +123,5 @@ describe('le impostazioni del blog come contratto', () => {
   it('la descrizione dice dove gli script girano davvero, perché non è dove sembra', () => {
     expect(SET_BLOG_SETTINGS.description).toMatch(/verified custom domain/);
     expect(BLOG_ANALYTICS_PROVIDERS).toContain('ga4');
-  });
-
-  it('la lettura porta i limiti del piano, non solo la configurazione', () => {
-    const parsed = GET_BLOG_SETTINGS.output.safeParse({
-      brand: 'demo',
-      plan: 'starter',
-      config: {
-        enabled: true,
-        title: null,
-        description: null,
-        accent: '#111111',
-        font: 'sans',
-        layout: 'navbar',
-        show_blog_link: true,
-        humanizer_enabled: true,
-        backlink_network: true,
-        style_instructions: null,
-        articles_per_week: null,
-        default_locale: 'it',
-        locales: [],
-        navbar_links: [],
-        icon_url: null,
-        analytics: [{ provider: 'ga4', id: 'G-ABC1234567' }]
-      },
-      limits: { articles_per_week_max: 8, translation_languages: 0, custom_domain: true },
-      choices: { fonts: [...BLOG_FONTS], layouts: ['navbar', 'sidebar'], locales: ['it', 'en'] },
-      categories: [{ id: 'c1', name: 'Caffè', slug: 'caffe', description: null }],
-      tags: [{ id: 't1', name: 'Espresso', slug: 'espresso' }],
-      authors: [{ id: 'a1', name: 'Ada', slug: 'ada', role: 'writer', bio: null, avatar_url: null }]
-    });
-    expect(parsed.success).toBe(true);
   });
 });

@@ -26,7 +26,7 @@ Drive [Anomalia](https://anomalia.so) — social media AI autopilot — through 
 
 | Situation | Action |
 |-----------|--------|
-| Anomalia MCP is connected | Call MCP tools (`list_brands`, `list_posts`, …) |
+| Anomalia MCP is connected | Call MCP tools (`list_brands`, `query`, `create_post`, …) |
 | MCP not available | Shell: `anomalia …` after `anomalia login` |
 
 Never invent REST endpoints or API keys.
@@ -71,36 +71,68 @@ Setup details: [references/mcp.md](references/mcp.md).
 **The flow is linear**: generate the media → pass the id it returns to `create_post`. No post is
 needed to make an image or a clip, and nothing you generate reaches the calendar on its own.
 
-**Anything that is plain rows in a table** → `query`. It reads any table in the database **as
-you** — the request carries your own session, so Postgres returns exactly the rows the app would
-show you and nothing more. Read only, one table per call, no credits. Omit `table` to list what
-you can name; ask for a table with no `columns` and the keys of a row are the schema.
+## Reading is one tool
 
-**Always name `columns` once you know them.** Without them `query` returns every column, and the
-20 000-character cap then silently shortens the answer instead of the rows: fifty posts asked for,
-nine returned. The same read with five named columns returns all fifty. Discover the schema with
-one call, then read with the columns you need.
+**`query` is the read.** Every table in the database, **as you** — the request carries your own
+session, so Postgres returns exactly the rows the app would show you and nothing more. Read only,
+no credits, no model. Omit `table` to list what you can name; ask for a table with no `columns`
+and the keys of a row are the schema.
 
-The `get_*` and `list_*` tools that remain are the ones doing MORE than a select — they aggregate,
-join by hand, fetch a live source, or apply a plan rule — so pick a tool by subject and `query` by
-table. Four reads that were only a select are gone, and these are what replaces them:
+**Always name `columns`.** Without them `query` returns every column, the character cap then drops
+whole rows to fit, and a long question gets a short answer. Fifty posts asked for, nine returned;
+the same read with five named columns returns all fifty.
 
-| gone | read it with |
+**Nothing is out of reach.** `offset` is the next page — when rows were dropped, the reply tells
+you which offset resumes. `count: "exact"` when the number IS the answer. `negate: true` on a
+filter turns `is null` into `is not null`. `order` takes several columns and `nullsFirst`. `embed`
+brings a related table along through its foreign key, with RLS applied to it too. Every cap that
+bites is named in `limits` on the way back — none of them is silent.
+
+**One row is a document.** With `limit: 1` long text comes back whole, which is how you read an
+article before rewriting it. With many rows long values are cut at 2 000 chars and `limits` says
+in which columns.
+
+### The queries you will actually need
+
+| you want | call |
 |---|---|
-| `list_articles` | `query({table:"brand_articles", columns:["id","slug","title","status","scheduled_for","published_at","created_at"]})` |
-| `list_ideas` | `query({table:"disruptive_ideas", columns:["id","title","idea","device","score","status"], where:[{column:"status",op:"in",value:["new","shortlisted"]}], order:{column:"score",ascending:false}})` |
-| `get_memory` | `query({table:"brand_memory", columns:["id","key","value","category","confidence"], where:[{column:"layer",op:"neq",value:"session"},{column:"agent",op:"is",value:null}], order:{column:"confidence",ascending:false}})` |
-| `get_appearance` | `query({table:"brand_kit", columns:["logos","favicon_url","brand_colors","graphic_style","visual_style","visual_style_locked"]})` |
+| posts | `query({table:"posts", columns:["id","status","platform","caption","scheduled_for","published_at","created_at"], where:[{column:"status",op:"eq",value:"pending_user"}], order:[{column:"created_at",ascending:false}], limit:50})` |
+| how many are waiting | `query({table:"posts", columns:["id"], where:[{column:"status",op:"eq",value:"pending_user"}], count:"exact", limit:1})` → read `total` |
+| the calendar | `query({table:"posts", columns:["id","platform","caption","scheduled_for","slot","status"], where:[{column:"scheduled_for",op:"is",value:null,negate:true}], order:[{column:"scheduled_for",ascending:true}], limit:100})` |
+| media library | `query({table:"brand_media", columns:["id","kind","mime","title","description","tags","short_code","created_at"], order:[{column:"created_at",ascending:false}], limit:100})` — the link to hand out is `https://anomalia.so/a/<short_code>` |
+| articles | `query({table:"brand_articles", columns:["id","slug","title","status","scheduled_for","published_at","created_at"], order:[{column:"created_at",ascending:false}]})` |
+| one article, whole, with its category and author | `query({table:"brand_articles", columns:["id","title","body_md","meta_title","meta_description","status","language"], where:[{column:"id",op:"eq",value:"…"}], embed:[{table:"blog_categories",columns:["name","slug"]},{table:"blog_authors",columns:["name"]}], limit:1})` |
+| brand memory | `query({table:"brand_memory", columns:["id","key","value","category","confidence"], where:[{column:"layer",op:"neq",value:"session"},{column:"agent",op:"is",value:null}], order:[{column:"confidence",ascending:false}]})` |
+| competitors | `query({table:"competitors", columns:["id","name","website","kind","rationale","handles","source"], order:[{column:"created_at",ascending:false}]})` |
+| what the brand sells | `query({table:"products", columns:["id","title","kind","pricing","url","featured","images"]})` |
+| the brand kit and its look | `query({table:"brand_kit", columns:["about","target_audience","brand_colors","logos","favicon_url","fonts","graphic_style","visual_style","visual_style_locked","ai_character","content_pillars"]})` |
+| how the brand is supposed to sound, and its settings | `query({table:"brands", columns:["slug","name","plan","status","timezone","target_platforms","content_prefs","blog_config"], where:[{column:"slug",op:"eq",value:"<slug>"}], limit:1})` — voice, hashtags, radar and blog settings all live in those two jsonb columns |
+| connected accounts | `query({table:"social_accounts", columns:["platform","username","display_name","profile_url","status","connected_at","bio_url"]})` |
+| the editorial plan | `query({table:"editorial_plans", columns:["id","status","strategy","voice","cadence","platform_mix","weeks","created_at","activated_at"], where:[{column:"status",op:"eq",value:"active"}], limit:1})` |
+| SEO / GEO audits | `query({table:"brand_geo_audits", columns:["id","created_at","tech_score","tech","share_of_voice","citations"], order:[{column:"created_at",ascending:false}], limit:12})` |
+| the fixes those audits produced | `query({table:"brand_geo_artifacts", columns:["id","kind","title","format","body","status","target_path","source_finding"], where:[{column:"status",op:"eq",value:"draft"}]})` |
+| keyword strategy | `query({table:"brand_seo_keyword_strategy", columns:["strategy","citations","updated_at"], limit:1})` |
+| rank tracking | `query({table:"brand_tracked_keywords", columns:["id","keyword","locale","device","active"], where:[{column:"active",op:"is",value:true}]})` then `brand_rank_snapshots` filtered `tracked_keyword_id` |
+| radar sources | `query({table:"brand_news_sources", columns:["id","kind","value","lang","active"], order:[{column:"created_at",ascending:true}]})` |
+| share links you handed out | `query({table:"shared_views", columns:["id","view_type","created_at","expires_at","revoked_at"], order:[{column:"created_at",ascending:false}]})` — no token: it is shown once, at creation |
+| is the knowledge indexed | `query({table:"brand_doc_chunks", columns:["id"], where:[{column:"embedding",op:"is",value:null,negate:true}], count:"exact", limit:1})` → `total` of 0 means nothing is searchable yet |
+| did my clip land | `query({table:"video_renders", columns:["id","status","error","submitted_at"], order:[{column:"submitted_at",ascending:false}], limit:20})`, then `brand_media` filtered `source_ref` on that id — a `done` render with no media row never reached the library |
 
 Those two `where` clauses on `brand_memory` are not decoration: they are the filters the old tool
 imposed — no chat-session notes, no other agent's working notes. Drop them and you get both back.
-**What this brand sells** has no tool of its own either: its catalogue of products, offers and
-services is the `products` table, one row per offer, read with `query`.
+
+### The reads that are NOT a query
+
+Nine tools remain, and not one of them is a select. Reach for them by subject:
+`list_brands` (where slugs come from), `diagnose_brand` (what blocks this brand, gate by gate),
+`diagnose_radar` (asks every source live), `search_knowledge`, `get_writing_skills`,
+`get_creation_kit`, `get_gsc`, `get_ads` (campaign fatigue), `get_media_models`.
+Anything else you remember calling is now a `query`.
 
 **Ask what this brand already knows** → `search_knowledge` with the question. It reads the brand's
 own uploaded documents and returns the passages that answer it, each with the document it came
-from — not the whole corpus. Empty `hits` is not "the brand does not know": `get_knowledge_status`
-says whether anything has been indexed yet. No model, no credits.
+from — not the whole corpus. Empty `hits` is not "the brand does not know": count the embedded
+chunks with `query` (recipe above) to see whether anything has been indexed yet. No model, no credits.
 
 **Before you write anything** → two reads, and they answer different questions.
 
@@ -121,7 +153,7 @@ sections with nothing in them are absent. Reads only: no model, no credits.
 calendar time, and `approve_post` is what authorizes distribution. Hand the operator the
 `review_url` that comes back.
 
-**Reuse an asset instead of paying for a render** → `list_media` → pass its id to `create_post`
+**Reuse an asset instead of paying for a render** → `query` on `brand_media` → pass its id to `create_post`
 as `media_ids`. That is also how you post to Instagram or TikTok, which never accept text alone.
 
 **Use a visual you made elsewhere** → `import_media_url` with its public https URL → pass the id
@@ -154,7 +186,7 @@ already have and attaches the clip back to it — reach for it when you already 
 to get a video.
 
 **Film from nothing** → `generate_video` with a prompt and no `base_media_id`. A clip takes minutes,
-so it returns a `job_id`; `check_media_job` says when it landed. The model moves this bill by more
+so it returns a `job_id`; `query` on `video_renders` says when it landed. The model moves this bill by more
 than an order of magnitude, so read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
 spending. With a slug the clip follows this brand's visual direction, so you do not have to
 describe it — and there is no switch for it here.
@@ -192,35 +224,37 @@ there for when you want Anomalia to write one and bill it.
 No model call, no credits. The rows become the week draft the plan page shows; `produce_week` is
 the separate paid step that turns them into posts.
 
-**Keep the brand truth current from your own source** → `get_studio` returns every row with its
-id. `create_product` / `update_product` / `delete_product` maintain the catalog one offer at a
+**Keep the brand truth current from your own source** → `query` on `products`, `people`,
+`competitors` and `brand_kit` returns every row with its id. `create_product` / `update_product` / `delete_product` maintain the catalog one offer at a
 time; `update_person` and `update_competitor` fix a role or a wrong website. They change only the
 fields you send, leave every other column as it was, and cost nothing. `update_person` can never
 attest consent: a real person's face stays withheld from every generator until the operator
 states, in their own words, that they have it.
-**Change how the brand works** → `get_brand_settings` then `set_brand_settings`: posting
-timezone, target platforms, hashtags per platform, voice examples. Only the fields you send
+**Change how the brand works** → `query` on `brands` (`timezone`, `target_platforms`,
+`content_prefs`) then `set_brand_settings`: posting timezone, target platforms, hashtags per platform, voice examples. Only the fields you send
 change, and lists replace rather than merge. Two things to tell the person: changing the timezone
 does not move posts that already have a time (their local hour shifts instead), and removing a
 platform does not cancel posts already scheduled on it. If a target platform has no connected
 account the write says so in `without_account` — its posts will be produced and then wait.
 
-**Turn a recurring job on or off** → `get_automations` lists the nine included jobs with their
-cadence, state and `runs_30d`; `set_automation` flips one. Turning one ON commits the brand to
+**Turn a recurring job on or off** → `set_automation` flips one, and its schema names the nine
+included jobs. What each has been doing is `loop_ticks` read with `query`, filtered on `loop` and
+`created_at`; `brand_job_optouts` says which are off. Turning one ON commits the brand to
 recurring AI spend with nobody watching, so say which job, how often, and that it spends before
 you do it. Turning one OFF is free and safe. There is no per-job cost figure — spend is not
 attributable to one job — so describe the commitment with cadence and `runs_30d`, and never
 invent a number.
 
-**Point Radar at a new place** → `get_radar` shows the platforms, the configured sources, the
-kinds this plan allows and how many sources are left; `add_radar_source` / `remove_radar_source`
-change them, naming a source by its `(kind, value)` pair. Threads, X and LinkedIn are Pro-only and
-answer `plan_required` below it, so read before you write. A source already there comes back
+**Point Radar at a new place** → `query` on `brand_news_sources` shows what is configured, and
+`brands.content_prefs.radar` which platforms are on; `add_radar_source` / `remove_radar_source`
+change them, naming a source by its `(kind, value)` pair, and their schemas carry the kinds.
+Threads, X and LinkedIn are Pro-only and answer `plan_required`, so check the plan first. A source already there comes back
 `added: false` rather than failing.
 
-**Set up the blog** → `get_blog_settings` shows how it looks, how it writes, the accepted fonts,
-layouts and locales, the plan's ceilings, and the categories, tags and authors; `set_blog_settings`
-changes it, and `add_blog_term` / `remove_blog_term` maintain the three lists. `articles_per_week`
+**Set up the blog** → `query` on `brands.blog_config` shows how it looks and how it writes, and
+`blog_categories` / `blog_tags` / `blog_authors` the three lists; `set_blog_settings` changes it —
+its schema carries the accepted fonts, layouts and locales, and it clamps to the plan and reports
+back what was saved. and `add_blog_term` / `remove_blog_term` maintain the three lists. `articles_per_week`
 is clamped to the plan, so read back what was saved. Before removing a term, say what it leaves
 behind: a category leaves its articles unfiled, a tag comes off every article, an author leaves no
 byline. `analytics` takes a closed list of providers (`ga4`, `meta_pixel`, `plausible`, `hotjar`)
@@ -254,34 +288,34 @@ it to the account owner; they complete it on Stripe. Never pay, never switch a p
 on their behalf. The URL is a credential — hand it over once and keep no copy. Owner only, and it
 costs no credits, which is the point: whoever ran out is who needs it.
 
-**Approve pending posts** → `list_posts` (status pending) → optional `get_post` → `approve_posts`.
+**Approve pending posts** → `query` on `posts` (status `pending_user`) → `approve_posts`.
 
 **Send a client the calendar, the month at a glance, or the month's results** → `create_share`
 (`view`: `calendar`, `dashboard`, `monthly_report`, `strategy` or `workspace` — `workspace` puts all four behind one link). It returns a link they open with no account, showing a frozen snapshot of that
 view and nothing else. The token is in the response **once** — hand over the `url` immediately.
-`list_shares` shows what is out there, `revoke_share` turns one off without touching anyone's
+`query` on `shared_views` shows what is out there, `revoke_share` turns one off without touching anyone's
 access to the brand.
 
-**Fix one carousel slide** → `get_post` → `regenerate_slide` (`index`, instruction; 0 = cover).
+**Fix one carousel slide** → `query` on `posts` for its `media_urls` → `regenerate_slide` (`index`, instruction; 0 = cover).
 
 **Blog draft** → `generate_article` → optional `optimize_article` → `publish_article` when asked.
 
-**Make the copy sound like this brand** → `get_voice` for how it is supposed to sound — mood,
-tone, register, the words it avoids, the rules that change per platform — and `update_voice` to
-change any of them. This is the brand; `get_writing_skills` is the craft. Read both before writing.
+**Make the copy sound like this brand** → `query` on `brands.content_prefs` for how it is supposed
+to sound — mood, tone, register, the words it avoids, the rules that change per platform — and
+`update_voice` to change any of them. This is the brand; `get_writing_skills` is the craft. Read both before writing.
 
-**Do ChatGPT, Perplexity and Google's AI mention this brand?** → `get_geo` reads the last answer
-for free: share of voice, which answers cited the brand, and fixes already written. `geo_action`
-with `audit` asks the engines again and `fix` writes the pages that would get it cited — both
-spend credits. `list_audit_citations` is the question-by-question evidence behind the number.
+**Do ChatGPT, Perplexity and Google's AI mention this brand?** → `query` on `brand_geo_audits`
+reads the last answer for free: `share_of_voice`, and `citations` is the question-by-question
+evidence behind that number. `geo_action` with `audit` asks the engines again and `fix` writes the
+pages that would get it cited — both spend credits.
 
-**Back a SEO/GEO claim with the audit behind it** → `list_web_audits` to see every audit →
-`get_audit_findings` for what one of them observed → `list_audit_citations` for the probes behind
-the share of voice (engine, question asked, verdict, domains cited) → `list_web_fixes` for the fix
-body, verbatim. All four are free reads: never run a new audit just to see what a past one already
-measured.
+**Back a SEO/GEO claim with the audit behind it** → `query` on `brand_geo_audits`: `tech` holds
+what the crawl observed, `citations` the probes behind the share of voice (engine, question asked,
+verdict, domains cited), and `brand_geo_artifacts.body` the fix, verbatim. All free: never run a
+new audit just to see what a past one already measured.
 
-**Write or fix an article yourself** → `get_article` to read it whole, `update_article` to write
+**Write or fix an article yourself** → `query` on `brand_articles` with `limit: 1` to read it
+whole — one row is a document, so `body_md` is not truncated — then `update_article` to write
 your own title, markdown body, SEO fields, category, tags, author or schedule. No model, no
 credits, and a field you do not send is untouched. A published article is refused: `unpublish_article`
 first, then edit, then `publish_article`.

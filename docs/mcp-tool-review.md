@@ -1,5 +1,12 @@
 # Revisione dei tool MCP che restano
 
+> **Questa revisione è precedente al ritiro delle letture.** È stata scritta su una superficie di
+> 119 tool con 42 letture; oggi sono 86 con 9, perché trentatré letture sono rientrate dentro
+> `query`. I giudizi sulle **scritture** valgono ancora tutti — quelle non sono cambiate. Le righe
+> su un `get_*`/`list_*` che non esiste più valgono come storia, non come stato: cosa esiste
+> adesso e con quale `query` si legge sta in [`docs/mcp-tools.md`](mcp-tools.md), e il criterio
+> con la ragione per ognuno dei nove sopravvissuti in `cli/mcp/read-tools.test.ts`.
+
 Questo documento risponde a una domanda sola: **i tool che sopravvivono all'aggregazione, sono
 fatti bene?** Non è l'inventario e non è il piano di fusione — quelli stanno in
 [`docs/mcp-tools.md`](mcp-tools.md), che si rigenera dal registro. Questo è scritto a mano, porta

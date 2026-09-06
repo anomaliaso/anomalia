@@ -38,21 +38,44 @@ import { logAiCall } from '$lib/server/ai-log';
 
 /** Righe di default per chiamata quando il modello non chiede un `limit`. */
 export const QUERY_DEFAULT_ROWS = 20;
-/** Tetto duro sulle righe: nemmeno chiedendolo se ne ottengono di più. */
-export const QUERY_MAX_ROWS = 100;
+/**
+ * Tetto duro sulle righe. 200 e non 100 perché `list_media` ne serviva 200 e `list_posts` 50: un
+ * tetto sotto la lettura che sostituisce non è un tetto, è una perdita.
+ */
+export const QUERY_MAX_ROWS = 200;
 /**
  * Tetto sui caratteri del risultato. `select *` su `brand_documents` ha righe da centinaia di
  * migliaia di caratteri l'una: senza questo, UNA chiamata riempie la finestra di contesto e il
  * turno muore. Il taglio è per riga intera — mezza riga di JSON non è un dato, è spazzatura.
+ *
+ * 20.000 → 60.000: a 20.000 le 50 righe che `list_posts` restituiva ne tornavano nove, e da lì è
+ * nata la conclusione sbagliata che il tool non si potesse togliere. Il tetto era nostro.
+ *
+ * 60.000 è misurato, non scelto: la risposta di `list_posts` — 50 post con le loro 17 colonne e
+ * caption vere — pesa 45.781 caratteri contro il database locale. Il tetto sta sopra quel numero
+ * con margine, perché è esattamente il costo che il tool ritirato aveva già. È un SOFFITTO, non un
+ * default: con le colonne nominate una lettura normale ne usa una frazione, e quando morde lo dice
+ * e dà l'offset per riprendere.
  */
-export const QUERY_MAX_CHARS = 20_000;
+export const QUERY_MAX_CHARS = 60_000;
 /**
- * Tetto su UN SINGOLO valore: quello per riga non basta, perché una colonna sola può arrivare a
- * centinaia di migliaia di caratteri e la prima riga si prende sempre (o `select *` su quella tabella
- * non tornerebbe mai niente). Il taglio SI DICHIARA per nome di colonna: il modello deve sapere che
+ * Tetto su UN SINGOLO valore quando le righe sono TANTE: una colonna sola può arrivare a centinaia
+ * di migliaia di caratteri e la prima riga si prende sempre (o `select *` su quella tabella non
+ * tornerebbe mai niente). Il taglio SI DICHIARA per nome di colonna: il modello deve sapere che
  * quel campo l'ha visto monco, o costruirà una risposta su un testo che crede completo.
+ *
+ * UNA riga sola è un documento, non una tabella: lì il tetto per valore non si applica, perché
+ * `get_article` esisteva per leggere un articolo INTERO e riscriverlo, e un corpo tagliato a 2.000
+ * caratteri riscritto sopra l'originale è la peggiore delle perdite — silenziosa e distruttiva.
+ * Il tetto sui caratteri totali continua a valere: il contesto non può esplodere comunque.
  */
 export const QUERY_MAX_VALUE_CHARS = 2_000;
+/**
+ * Quanto può costare UNA riga letta come documento (`limit: 1`). Sta sotto `QUERY_MAX_CHARS` con
+ * margine perché la riga porta anche le altre colonne e la nota del taglio: un documento che
+ * sfonda il budget totale sarebbe di nuovo un troncamento non dichiarato, dall'altro lato.
+ */
+export const QUERY_MAX_DOC_CHARS = 40_000;
 /**
  * Il database molla da solo a 8s (`statement_timeout` sul ruolo `authenticated`). Questo è solo il
  * guinzaglio sulla connessione HTTP, per il caso in cui nessuna query stia girando e la risposta
@@ -114,7 +137,7 @@ export function explainDbError(code: string | undefined, message: string, hint?:
     case '57014':
       return `The database gave up: statement_timeout is ${DB_STATEMENT_TIMEOUT_MS / 1000}s on this role and the query took longer. Add a where filter on an indexed column (brand_id, created_at), lower the limit, or select fewer columns.`;
     case 'PGRST200':
-      return 'No foreign-key relationship there. `query` reads ONE table at a time — no embeds, no joins. Read the two tables separately and match the ids yourself.';
+      return 'No foreign-key relationship between those two tables, so `embed` cannot reach it — embedding follows declared foreign keys only. Read the second table with its own call and match the ids yourself.';
     case 'PGRST100':
       return 'PostgREST could not parse the filter. `op` must be one of: ' + OPS.join(', ') + '.';
     default:
@@ -122,7 +145,14 @@ export function explainDbError(code: string | undefined, message: string, hint?:
   }
 }
 
-type Filter = { column: string; op: Op; value: string | number | boolean | null | Array<string | number> };
+type Filter = {
+  column: string;
+  op: Op;
+  value: string | number | boolean | null | Array<string | number>;
+  negate?: boolean;
+};
+type Order = { column: string; ascending?: boolean; nullsFirst?: boolean };
+type Embed = { table: string; columns?: string[] };
 
 /**
  * `in` vuole `(a,b,c)` sul filo. Gli altri operatori vogliono lo scalare così com'è.
@@ -137,10 +167,21 @@ function wireValue(op: Op, value: Filter['value']): string {
   return String(value);
 }
 
+const wireOp = (f: Filter): string => (f.negate ? `not.${f.op}` : f.op);
+
+/** `[{table:'blog_categories',columns:['name']}]` → `blog_categories(name)`. Solo identificatori. */
+const wireEmbed = (e: Embed): string =>
+  `${e.table.trim()}(${e.columns?.length ? e.columns.map((c) => c.trim()).join(',') : '*'})`;
+
+const asList = <T,>(v: T | T[] | undefined): T[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+
 /**
  * Taglia i valori troppo lunghi e dice QUALI. Ritorna la riga nuova e i nomi delle colonne tagliate.
  */
-export function trimRow(row: Record<string, unknown>): {
+export function trimRow(
+  row: Record<string, unknown>,
+  cap: number = QUERY_MAX_VALUE_CHARS
+): {
   row: Record<string, unknown>;
   cut: string[];
 } {
@@ -149,8 +190,8 @@ export function trimRow(row: Record<string, unknown>): {
   for (const [k, v] of Object.entries(row)) {
     // Anche jsonb/array: si misurano serializzati, che è come pesano nel contesto.
     const text = typeof v === 'string' ? v : v && typeof v === 'object' ? JSON.stringify(v) : null;
-    if (text !== null && text.length > QUERY_MAX_VALUE_CHARS) {
-      out[k] = text.slice(0, QUERY_MAX_VALUE_CHARS) + `… [cut, ${text.length} chars total]`;
+    if (text !== null && text.length > cap) {
+      out[k] = text.slice(0, cap) + `… [cut, ${text.length} chars total]`;
       cut.push(k);
     } else out[k] = v;
   }
@@ -174,16 +215,21 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
         '',
         'DISCOVERY: call with no `table` to get every table name. Call with only `table` to get real rows back with all columns — the keys of a row ARE the schema.',
         '',
-        `CAPS, always reported back to you: ${QUERY_DEFAULT_ROWS} rows by default, ${QUERY_MAX_ROWS} max, ${QUERY_MAX_CHARS} chars max, and the database itself kills any statement over ${DB_STATEMENT_TIMEOUT_MS / 1000}s.`,
+        'NAME THE COLUMNS YOU NEED. Without `columns` every column comes back, the character cap then drops whole rows to fit, and you get a short answer to a long question. Five named columns return all the rows; `*` returns a fraction of them.',
+        '',
+        `CAPS, and every one that bites is named in \`limits\` on the way back: ${QUERY_DEFAULT_ROWS} rows by default, ${QUERY_MAX_ROWS} max, ${QUERY_MAX_CHARS} chars max, and the database kills any statement over ${DB_STATEMENT_TIMEOUT_MS / 1000}s. When rows were dropped, \`limits\` gives you the \`offset\` that resumes exactly where it stopped — nothing is unreachable, it is only on the next page.`,
         '',
         `RLS spans every brand this user belongs to, not just the current one. To stay on the brand in this conversation, filter on it: where: [{ column: "brand_id", op: "eq", value: "${brandId}" }].`,
         '',
         `VOCABOLARIO — ${POST_STATUS_VOCABULARY}`,
         '',
-        'Example — the five most recent published posts of this brand:',
-        `query({ table: "posts", columns: ["id","caption","status","published_at"], where: [{column:"brand_id",op:"eq",value:"${brandId}"},{column:"status",op:"eq",value:"published"}], order: {column:"published_at",ascending:false}, limit: 5 })`,
+        'Examples:',
+        `· latest published posts — query({ table: "posts", columns: ["id","caption","status","published_at"], where: [{column:"status",op:"eq",value:"published"}], order: [{column:"published_at",ascending:false}], limit: 50 })`,
+        '· how many are waiting — query({ table: "posts", columns: ["id"], where: [{column:"status",op:"eq",value:"pending_user"}], count: "exact", limit: 1 }) → read `total`',
+        '· only rows where a column is set — { column: "scheduled_for", op: "is", value: null, negate: true }',
+        '· an article with its category and author — query({ table: "brand_articles", columns: ["id","title","body_md"], where:[{column:"id",op:"eq",value:"…"}], embed: [{table:"blog_categories",columns:["name"]},{table:"blog_authors",columns:["name"]}], limit: 1 })',
         '',
-        'Prefer the purpose-built tools (read_posts, read_brand_kit, …) for the usual questions — they are cheaper and already shaped. Reach for `query` when the answer needs a table nothing else exposes, or a count, or a join you do by hand.'
+        'One row is a document: with `limit: 1` long text comes back whole, so an article can be read and rewritten. With many rows long values are cut at 2,000 chars and `limits` names the columns it cut.'
       ].join('\n'),
       inputSchema: z.object({
         table: z
@@ -199,15 +245,33 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
             z.object({
               column: z.string(),
               op: z.enum(OPS),
-              value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
+              value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))]),
+              negate: z.boolean().optional().describe('Invert this one filter: `is null` becomes `is not null`.')
             })
           )
           .optional()
           .describe('Filters, ANDed together. `in` takes an array; `is` takes null/true/false.'),
         order: z
-          .object({ column: z.string(), ascending: z.boolean().optional() })
+          .union([
+            z.object({ column: z.string(), ascending: z.boolean().optional(), nullsFirst: z.boolean().optional() }),
+            z.array(z.object({ column: z.string(), ascending: z.boolean().optional(), nullsFirst: z.boolean().optional() }))
+          ])
           .optional()
-          .describe('Sort. Defaults to descending when `ascending` is omitted.'),
+          .describe('Sort, one column or several in order. Descending unless `ascending` is true.'),
+        embed: z
+          .array(z.object({ table: z.string(), columns: z.array(z.string()).optional() }))
+          .optional()
+          .describe('Related tables to bring along, followed through their foreign key. RLS applies to each one.'),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Rows to skip. This is the next page: `limits` tells you the offset to resume at.'),
+        count: z
+          .enum(['estimated', 'exact'])
+          .optional()
+          .describe('`exact` counts the matching rows for real — ask for it when the number IS the answer.'),
         limit: z.number().int().positive().optional().describe(`Rows to return. Max ${QUERY_MAX_ROWS}.`)
       })
           // `.strict()` non è pedanteria: senza, zod scarta in SILENZIO una chiave che non conosce. Un
@@ -218,7 +282,10 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
         table?: string;
         columns?: string[];
         where?: Filter[];
-        order?: { column: string; ascending?: boolean };
+        order?: Order | Order[];
+        embed?: Embed[];
+        offset?: number;
+        count?: 'estimated' | 'exact';
         limit?: number;
       }) => {
         const t0 = Date.now();
@@ -287,15 +354,35 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
             'db_query:refused:bad_filter'
           );
         }
-        if (input.order && !IDENT.test(String(input.order.column).trim())) {
+        const orders = asList(input.order);
+        const badOrder = orders.find((o) => !IDENT.test(String(o.column).trim()));
+        if (badOrder) {
           return finish(
-            { error: 'not_an_identifier', message: `"${input.order.column}" is not a column name.`, fix: 'Order by a bare column name.' },
+            { error: 'not_an_identifier', message: `"${badOrder.column}" is not a column name.`, fix: 'Order by a bare column name.' },
             'db_query:refused:bad_order'
+          );
+        }
+        const embeds = input.embed ?? [];
+        const badEmbed = embeds.find(
+          (e) => !IDENT.test(String(e.table).trim()) || (e.columns ?? []).some((c) => !IDENT.test(String(c).trim()))
+        );
+        if (badEmbed) {
+          return finish(
+            {
+              error: 'not_an_identifier',
+              message: `"${badEmbed.table}" and its columns must be bare identifiers — an embed names a table, it does not carry an expression.`,
+              fix: 'Call query with no table to see the valid names.'
+            },
+            'db_query:refused:bad_embed'
           );
         }
 
         const limit = Math.min(input.limit ?? QUERY_DEFAULT_ROWS, QUERY_MAX_ROWS);
-        const cols = input.columns?.length ? input.columns.map((c) => c.trim()).join(',') : '*';
+        const offset = Math.max(input.offset ?? 0, 0);
+        const countMode = input.count ?? 'estimated';
+        const own = input.columns?.length ? input.columns.map((c) => c.trim()).join(',') : '*';
+        const withEmbeds = (base: string) => [base, ...embeds.map(wireEmbed)].join(',');
+        const cols = withEmbeds(own);
 
         // Da qui in giù SOLO `.select()`. Nessun .insert/.update/.upsert/.delete/.rpc in questo file,
         // e un test lo verifica leggendo il sorgente.
@@ -308,11 +395,13 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
         const brandGiaFiltrato = filtriModello.some((f) => f.column.trim() === 'brand_id');
         let forzaBrand = !brandGiaFiltrato && Boolean(brandId);
         const run = (selectCols: string, withBrand: boolean) => {
-          let q = supabase.from(table).select(selectCols, { count: 'estimated' });
-          for (const f of filtriModello) q = q.filter(f.column.trim(), f.op, wireValue(f.op, f.value));
+          let q = supabase.from(table).select(selectCols, { count: countMode });
+          for (const f of filtriModello) q = q.filter(f.column.trim(), wireOp(f), wireValue(f.op, f.value));
           if (withBrand) q = q.filter('brand_id', 'eq', brandId);
-          if (input.order) q = q.order(input.order.column.trim(), { ascending: input.order.ascending ?? false });
-          return q.limit(limit).abortSignal(AbortSignal.timeout(QUERY_ABORT_MS));
+          for (const o of orders) {
+            q = q.order(o.column.trim(), { ascending: o.ascending ?? false, nullsFirst: o.nullsFirst });
+          }
+          return q.range(offset, offset + limit - 1).abortSignal(AbortSignal.timeout(QUERY_ABORT_MS));
         };
 
         let { data, error, count } = await run(cols, forzaBrand);
@@ -354,7 +443,7 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
           if (available.length) {
             const usedInFilters = [
               ...filtriModello.map((f) => String(f.column).trim()),
-              ...(input.order ? [String(input.order.column).trim()] : [])
+              ...orders.map((o) => String(o.column).trim())
             ];
             const badFilterCol = usedInFilters.find((c) => !available.includes(c));
             if (badFilterCol) {
@@ -371,7 +460,7 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
             const missing = (input.columns ?? [])
               .map((c) => String(c).trim())
               .filter((c) => c !== '*' && !available.includes(c));
-            ({ data, error, count } = await run('*', forzaBrand));
+            ({ data, error, count } = await run(withEmbeds('*'), forzaBrand));
             if (!error) {
               schemaNote = `${missing.length ? `Column(s) ${missing.join(', ')} do not exist on ${table}` : 'A column you named does not exist'} — the read was redone with EVERY column instead, so these rows are wider than you asked for. Real columns: ${available.join(', ')}.`;
             }
@@ -391,12 +480,13 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
         }
 
         const all = (data ?? []) as unknown as Array<Record<string, unknown>>;
+        const valueCap = all.length === 1 ? QUERY_MAX_DOC_CHARS : QUERY_MAX_VALUE_CHARS;
         // Taglio per riga intera. Mezza riga di JSON non è un dato più piccolo, è un dato rotto.
         const rows: Array<Record<string, unknown>> = [];
         const cutCols = new Set<string>();
         let chars = 0;
         for (const r of all) {
-          const { row, cut } = trimRow(r);
+          const { row, cut } = trimRow(r, valueCap);
           const size = JSON.stringify(row).length;
           if (chars + size > QUERY_MAX_CHARS && rows.length > 0) break;
           rows.push(row);
@@ -404,24 +494,29 @@ export function createQueryTool({ supabase, brandId, userId, threadId }: QueryTo
           chars += size;
         }
         const total = count ?? all.length;
+        const exact = countMode === 'exact';
 
         // NIENTE STATO SILENZIOSO: ogni tetto che ha morso lo dice qui, in chiaro, nel risultato.
         const limits: string[] = [];
         limits.push(
-          `${rows.length} rows of ~${total} — narrow with a where filter or raise limit (max ${QUERY_MAX_ROWS}).`
+          `${rows.length} rows${offset ? ` from offset ${offset}` : ''} of ${exact ? '' : '~'}${total} — narrow with a where filter or raise limit (max ${QUERY_MAX_ROWS}).`
         );
+        // IL TRONCAMENTO NON È MUTO, E NON È UNA PERDITA: dice quante righe non ha mostrato e da
+        // quale offset si riprende. Prima taceva, e nove righe su cinquanta sembravano cinquanta.
         if (rows.length < all.length) {
           limits.push(
-            `Cut at ${QUERY_MAX_CHARS} chars: ${rows.length} of the ${all.length} rows the database returned are shown. Ask for fewer columns.`
+            `Cut at ${QUERY_MAX_CHARS} chars: ${rows.length} of the ${all.length} rows the database returned are shown. Read the rest with offset: ${offset + rows.length}, or ask for fewer columns and they will all fit.`
           );
+        } else if (total > offset + rows.length) {
+          limits.push(`More rows follow: read them with offset: ${offset + rows.length}.`);
         }
         if (cutCols.size) {
           limits.push(
-            `Values cut at ${QUERY_MAX_VALUE_CHARS} chars in: ${[...cutCols].join(', ')} — you are NOT seeing those fields in full. Read one row with read_file/the dedicated tool if you need the whole text.`
+            `Values cut at ${valueCap} chars in: ${[...cutCols].join(', ')} — you are NOT seeing those fields in full. Read that single row again with limit: 1 and it comes back whole.`
           );
         }
-        if (total > all.length) {
-          limits.push(`Row total is the planner estimate, not an exact count.`);
+        if (!exact && total > all.length) {
+          limits.push(`Row total is the planner estimate — pass count: "exact" when the number is the answer.`);
         }
         if (schemaNote) limits.push(schemaNote);
 

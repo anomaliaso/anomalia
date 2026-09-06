@@ -95,23 +95,6 @@ export const CREATE_POST = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const LIST_POSTS = {
-  tool: 'list_posts',
-  title: 'List posts',
-  description:
-    'The brand\'s posts, newest first. Filter by `status` to find what is waiting for a person to ' +
-    'approve it (`pending_user`), what is scheduled, or what already went out. get_post opens one ' +
-    'in full. Free.',
-  method: 'GET',
-  pathUnderBrand: '/posts',
-  input: z.object({
-    status: z.enum(POST_STATUSES).optional().describe('Optional status filter')
-  }).strict(),
-  output: z.array(PostRow),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 const PostStateRow = z.looseObject({
   status: z.string(),
   content_type: z.string().nullable(),
@@ -127,21 +110,6 @@ const PostStateRow = z.looseObject({
 });
 
 const NotFound = z.object({ error: z.string() });
-
-export const GET_POST = {
-  tool: 'get_post',
-  title: 'Get post',
-  description:
-    'Open one post in full: its copy, its status, and the state of its image, video or carousel ' +
-    'slides. Free.',
-  method: 'GET',
-  pathUnderBrand: '/posts/:id/media',
-  resource: 'post',
-  input: z.object({}).strict(),
-  output: z.union([PostStateRow, NotFound]),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
 
 export const RESCHEDULE_POST = {
   tool: 'reschedule_post',
@@ -184,34 +152,6 @@ export const RENDER_POST = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const GET_CALENDAR = {
-  tool: 'get_calendar',
-  title: 'Calendar',
-  description:
-    'What this brand is posting and when, for one month. Posts with a date appear in the month ' +
-    'they are dated for; drafts with no date come back flagged `isDraft`. Free.',
-  method: 'GET',
-  pathUnderBrand: '/calendar',
-  input: z.object({
-    month: z
-      .string()
-      .regex(/^\d{4}-\d{2}$/)
-      .optional()
-      .describe('Month YYYY-MM')
-  }).strict(),
-  output: z.object({
-    posts: z.array(z.record(z.string(), z.unknown())),
-    year: z.number(),
-    month: z.number(),
-    monthLabel: z.string(),
-    prevYM: z.string(),
-    nextYM: z.string(),
-    timezone: z.string()
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 const MediaRow = z.object({
   id: z.string(),
   kind: z.string(),
@@ -228,24 +168,20 @@ const MediaRow = z.object({
   created_at: z.string()
 });
 
-export const LIST_MEDIA = {
-  tool: 'list_media',
-  title: 'List brand media',
-  description:
-    'Assets already in the brand library, newest first, with a preview URL. Use an id from here ' +
-    'as media_ids on create_post to reuse an asset instead of paying for a new render.',
-  method: 'GET',
-  pathUnderBrand: '/media',
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const LIST_MEDIA_READ = {
+  output: z.object({ media: z.array(MediaRow) }),
   input: z
     .object({
       query: z.string().optional().describe('Free-text filter over title, description and tags'),
       limit: z.coerce.number().int().min(1).max(200).optional()
     })
     .strict(),
-  output: z.object({ media: z.array(MediaRow) }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  failures: []
+} as const;
 
 const ImportMediaUrlInputSchema = z
   .object({
@@ -373,21 +309,11 @@ export const GENERATE_MEDIA = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const CHECK_MEDIA_JOB = {
-  tool: 'check_media_job',
-  title: 'Check a media generation job',
-  description:
-    'Where a video you started has got to — the ones from generate_video or generate_media, ' +
-    'newest first. `status` is `rendering` while the clip is being made and `done` once it is in ' +
-    'the library; then `media_id` is the id create_post accepts as `media_ids`. `failed` says ' +
-    'why. `not_in_library` means the clip was rendered and paid for but never filed, so there is ' +
-    'no media_id and rendering it again buys a second copy. Poll this rather than starting the ' +
-    'clip again. Free.',
-  method: 'GET',
-  pathUnderBrand: '/media/generate',
-  input: z
-    .object({ job_id: z.string().optional().describe('One job; omit for the brand\'s recent ones') })
-    .strict(),
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const CHECK_MEDIA_JOB_READ = {
   output: z.object({
     jobs: z.array(
       z.object({
@@ -399,9 +325,11 @@ export const CHECK_MEDIA_JOB = {
       })
     )
   }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: z
+    .object({ job_id: z.string().optional().describe('One job; omit for the brand\'s recent ones') })
+    .strict(),
+  failures: []
+} as const;
 // Ogni azione sui media ha la sua rotta: il corpo dice con che cosa farla, mai quale fare.
 const RENDER_FAILURES = [
   { error: 'credits_exhausted', status: 402 },

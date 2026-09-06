@@ -82,53 +82,31 @@ export type WebAuditFindings = z.infer<typeof AuditFindings>;
 export type AuditCitationRow = z.infer<typeof CitationRow>;
 export type WebFixRow = z.infer<typeof FixRow>;
 
-export const LIST_WEB_AUDITS = {
-  tool: 'list_web_audits',
-  title: 'List web audits',
-  description:
-    "Every audit Anomalia has run on this brand's website and its visibility in AI answers, newest " +
-    'first, one line each: when it ran, the scores it measured, and how much it observed. Take an id ' +
-    'from here to open one audit instead of paying for a new one. Free.',
-  method: 'GET',
-  pathUnderBrand: '/web/audits',
-  input: z.object({ limit: limitUpTo(WEB_AUDITS_MAX, WEB_AUDITS_DEFAULT), offset }).strict(),
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const LIST_WEB_AUDITS_READ = {
   output: z.object({ audits: z.array(AuditIndexRow) }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: z.object({ limit: limitUpTo(WEB_AUDITS_MAX, WEB_AUDITS_DEFAULT), offset }).strict(),
+  failures: []
+} as const;
 
-export const GET_AUDIT_FINDINGS = {
-  tool: 'get_audit_findings',
-  title: 'Read one audit',
-  description:
-    'What one audit observed, exactly as recorded: the technical findings on the site, the search ' +
-    'and backlink figures, and the Google AI Overview sampling. Without audit_id you get the most ' +
-    'recent audit, never an older one that happens to hold more data. Free.',
-  method: 'GET',
-  pathUnderBrand: '/web/audits/findings',
-  input: z.object({ audit_id: auditId }).strict(),
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const GET_AUDIT_FINDINGS_READ = {
   output: z.object({ audit: AuditFindings.nullable() }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: z.object({ audit_id: auditId }).strict(),
+  failures: []
+} as const;
 
-export const LIST_AUDIT_CITATIONS = {
-  tool: 'list_audit_citations',
-  title: 'List citation checks',
-  description:
-    'The questions Anomalia put to answer engines during one audit, and what came back: which engine, ' +
-    'the question verbatim, whether the brand was named and in which position, the competitors named ' +
-    'instead, and the domains the answer cited. This is the evidence behind the share-of-voice number. ' +
-    'Without audit_id you get the most recent audit. Free.',
-  method: 'GET',
-  pathUnderBrand: '/web/audits/citations',
-  input: z
-    .object({
-      audit_id: auditId,
-      limit: limitUpTo(AUDIT_CITATIONS_MAX, AUDIT_CITATIONS_DEFAULT),
-      offset
-    })
-    .strict(),
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const LIST_AUDIT_CITATIONS_READ = {
   output: z.object({
     audit_id: z.string().nullable(),
     observed_at: z.string().nullable(),
@@ -137,19 +115,22 @@ export const LIST_AUDIT_CITATIONS = {
     limit: z.number(),
     citations: z.array(CitationRow)
   }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: z
+    .object({
+      audit_id: auditId,
+      limit: limitUpTo(AUDIT_CITATIONS_MAX, AUDIT_CITATIONS_DEFAULT),
+      offset
+    })
+    .strict(),
+  failures: []
+} as const;
 
-export const LIST_WEB_FIXES = {
-  tool: 'list_web_fixes',
-  title: 'Read generated fixes',
-  description:
-    'The fixes Anomalia wrote from its audits — FAQ blocks, structured data, llms.txt, landing copy — ' +
-    'with the body complete and ready to publish. Ask for one fix_id when you know which one you want: ' +
-    'bodies are long, so few come back per call. Free.',
-  method: 'GET',
-  pathUnderBrand: '/web/fixes',
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const LIST_WEB_FIXES_READ = {
+  output: z.object({ fixes: z.array(FixRow) }),
   input: z
     .object({
       fix_id: z.string().min(1).optional().describe('Return only this fix'),
@@ -158,7 +139,5 @@ export const LIST_WEB_FIXES = {
       offset
     })
     .strict(),
-  output: z.object({ fixes: z.array(FixRow) }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
+  failures: []
+} as const;
