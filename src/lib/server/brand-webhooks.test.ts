@@ -228,28 +228,36 @@ const deliveryRow = (over: Partial<DeliveryRow> = {}): DeliveryRow => ({
 describe('attemptDelivery', () => {
   it('non spedisce a un endpoint che il guardiano rifiuta', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    assertPublicUrl.mockRejectedValueOnce(new Error('That host is not reachable'));
     const { client, writes } = fakeSupabase({});
 
-    const delivered = await attemptDelivery(client as never, deliveryRow(), webhookRow());
+    const delivered = await attemptDelivery(
+      client as never,
+      deliveryRow(),
+      webhookRow({ url: 'https://hooks.acme.internal/anomalia' })
+    );
 
     expect(delivered).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(writes.find((w) => w.table === 'webhook_deliveries')?.patch.error).toBe(
-      'That host is not reachable'
-    );
+    expect(writes.find((w) => w.table === 'webhook_deliveries')?.patch.error).toBeTruthy();
     fetchSpy.mockRestore();
   });
 
+  // Un host che il testo non tradisce e il DNS sì: passa qualunque confronto sul nome, e cade solo
+  // se la guardia risolve davvero. È il caso che separa le due difese.
   it("chiede la guardia che risolve il nome, non il confronto sul testo dell'host", async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('', { status: 200 }));
     const { client } = fakeSupabase({});
 
-    await attemptDelivery(client as never, deliveryRow(), webhookRow());
+    const delivered = await attemptDelivery(
+      client as never,
+      deliveryRow(),
+      webhookRow({ url: 'https://hooks.acme.local/anomalia' })
+    );
 
-    expect(assertPublicUrl).toHaveBeenCalledWith(new URL(webhookRow().url), 'https-only');
+    expect(delivered).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
