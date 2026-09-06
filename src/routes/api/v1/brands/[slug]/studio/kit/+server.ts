@@ -3,6 +3,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 
+const KIT_COLUMNS = ['about', 'category', 'target_audience', 'brand_style'] as const;
+
 export const PUT: RequestHandler = async ({ request, params }) => {
   const { supabase, user, error, apiKey } = await authenticate(request);
   if (error) return error;
@@ -13,22 +15,20 @@ export const PUT: RequestHandler = async ({ request, params }) => {
   if (writeDenied) return writeDenied;
 
   const body = await request.json();
-  const { about, category, target_audience, brand_style, language } = body;
+  const { language } = body;
 
-  // Update brand_kit
-  const { error: kitError } = await supabase
-    .from('brand_kit')
-    .upsert({
-      brand_id: brand.id,
-      about: about ?? null,
-      category: category ?? null,
-      target_audience: target_audience ?? null,
-      brand_style: brand_style ?? null,
-    }, { onConflict: 'brand_id' });
+  const kit = Object.fromEntries(
+    KIT_COLUMNS.filter((column) => column in body).map((column) => [column, body[column] ?? null])
+  );
 
-  if (kitError) return json({ error: kitError.message }, { status: 500 });
+  if (Object.keys(kit).length > 0) {
+    const { error: kitError } = await supabase
+      .from('brand_kit')
+      .upsert({ brand_id: brand.id, ...kit }, { onConflict: 'brand_id' });
 
-  // Update language in content_prefs
+    if (kitError) return json({ error: kitError.message }, { status: 500 });
+  }
+
   if (language !== undefined) {
     const { data: brandData } = await supabase
       .from('brands').select('content_prefs').eq('id', brand.id).maybeSingle();
@@ -37,7 +37,6 @@ export const PUT: RequestHandler = async ({ request, params }) => {
     await supabase.from('brands').update({ content_prefs: prefs }).eq('id', brand.id);
   }
 
-  // Rebuild brand context (best-effort)
   try {
     const { rebuildBrandContext } = await import('$lib/server/brand-context');
     await rebuildBrandContext(supabase, brand.id);
