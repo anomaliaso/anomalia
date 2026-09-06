@@ -17,9 +17,15 @@ let server: Server;
 let origin: string;
 let hits: string[] = [];
 
-// Stands in for DNS: the allowlisted storage host has to reach a server we control, and only the
-// address is swapped — redirects, status and body come from real undici against a real socket.
 const realFetch = globalThis.fetch;
+
+function resolvingStorageHostToLocalServer(): typeof fetch {
+  return ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const target = url.origin === STORAGE_ORIGIN ? `${origin}${url.pathname}${url.search}` : String(input);
+    return realFetch(target, init);
+  }) as typeof fetch;
+}
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -47,11 +53,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
-  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(String(input));
-    const target = url.origin === STORAGE_ORIGIN ? `${origin}${url.pathname}${url.search}` : String(input);
-    return realFetch(target, init);
-  }) as typeof fetch;
+  globalThis.fetch = resolvingStorageHostToLocalServer();
 });
 
 afterAll(async () => {
