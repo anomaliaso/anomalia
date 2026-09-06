@@ -516,6 +516,17 @@ export async function processNextQueuedChatJob(
 	const jobId = job.id as string;
 	const threadId = job.thread_id as string;
 	const params = (job.input_params ?? {}) as Record<string, unknown>;
+
+	const { data: thread } = await admin
+		.from('chat_threads')
+		.select('brand_id')
+		.eq('id', threadId)
+		.maybeSingle();
+	if (!thread || thread.brand_id !== job.brand_id) {
+		await failChatJob(admin, jobId, 'thread_not_in_brand', params);
+		return { processed: true, jobId, error: 'thread_not_in_brand' };
+	}
+
 	const userMessageContent = String(params.user_message ?? '');
 	if (!userMessageContent) {
 		await failChatJob(admin, jobId, 'Missing user_message in params', params);

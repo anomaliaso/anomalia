@@ -1528,3 +1528,46 @@ un'asserzione: è un modulo che non si è caricato. Cercare l'asserzione rotta �
 **Mossa**: `cp <checkout-principale>/.env .env` nel worktree, come già si fa con `node_modules`
 (stessa famiglia di trappola, poco sopra in questo file). E prima di dare la colpa al proprio
 diff: `git diff --name-only origin/dev...HEAD` sul file incriminato — se non lo tocchi, non è tuo.
+## Un grant per colonna non separa niente se l'app scrive col client dell'utente
+
+Il registro dei grant (`20260905210000_self_write_columns.sql`) funziona perché le colonne che
+decide il sistema le scrive il **service role**: togliere il grant ad `authenticated` toglie
+l'attacco e lascia il percorso legittimo. Applicato a `brand_app_connections`,
+`brand_knowledge_sources`, `social_accounts` e `brand_triggers` la stessa mossa avrebbe spento la
+funzione insieme all'attacco: `upsertBrandConnection`, `upsertSource`, `syncBrandAccounts` e
+`syncBrandTriggers` ricevono il `supabase` di `locals`, cioè anon key più JWT, cioè `authenticated`.
+
+**Segnale**: la funzione che scrive la colonna prende un `SupabaseClient` come parametro invece di
+chiamare `createAdminClient()`. Il ruolo che attacca è il ruolo con cui gira l'app, e nessun grant
+li distingue. Si guarda in un colpo: `grep -n "supabase: SupabaseClient" <file>` sulla funzione che
+scrive, e poi da dove i chiamanti prendono quel client.
+
+**Mossa**: quando l'unicità è un fatto di dominio — un account connesso nasce sotto un solo
+`user_id` Composio, un account Zernio sotto un solo profilo, e un profilo è di un brand — l'indice
+unico globale sulla colonna la chiude senza toccare una riga di codice, e vale per ogni scrittore,
+ruolo compreso. La riga costruita per attaccare collide con quella della vittima, che esiste per
+definizione: se non esiste, non c'è niente da rubare. Quando invece l'unicità **non** è un fatto di
+dominio (`zernio_ad_accounts` ha l'upsert su `(brand_id, zernio_ad_account_id)` perché un'agenzia
+può far girare due brand sullo stesso account pubblicitario), l'indice romperebbe un caso vero e la
+difesa deve stare al punto d'uso.
+
+**La regola dietro**: prima di scegliere fra grant, indice e controllo nel codice, la domanda è
+«chi scrive questa colonna, e con quale ruolo?». Le tre difese non sono intercambiabili, e sceglierne
+una senza quella risposta dà la sensazione di aver chiuso qualcosa.
+
+## Due chiavi al tenant sulla stessa riga di coda, e il worker ne guarda una
+
+`webhook_deliveries` porta `brand_id` **e** `webhook_id`; `chat_jobs` porta `brand_id` **e**
+`thread_id`. Il `with check` della policy confronta col chiamante solo la prima, perché è quella che
+somiglia al tenant. La seconda è una chiave esterna verso una tabella di un altro brand possibile, e
+il worker — che gira col service role, cioè senza RLS — si fidava della coppia.
+
+**Segnale**: una riga di coda con due colonne che risalgono entrambe a un brand per strade diverse,
+e un `with check` che ne nomina una sola. Il worker poi legge la seconda per `id` e basta:
+`.eq('id', row.<altra_chiave>)` senza un `.eq('brand_id', row.brand_id)` accanto.
+
+**Mossa**: il confronto sta dentro la funzione dove le due chiavi si incontrano — `claimDueDeliveries`,
+`processNextQueuedChatJob` — non nei chiamanti, che sono tanti e divergerebbero al primo cambiamento.
+E dove nessun percorso legittimo scrive quella coda col client dell'utente (`webhook_deliveries`: le
+uniche scritture sono l'ingress di Composio e il cron, tutte e due con `createAdminClient()`), il
+`revoke insert, update` toglie il problema invece di controllarlo.

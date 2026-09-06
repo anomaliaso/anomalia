@@ -33,7 +33,45 @@ const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 const MIGRATIONS_DIR = join(fileURLToPath(new URL('..', import.meta.url)), 'supabase/migrations');
 const REGISTRY_MIGRATION = '20260905210000_self_write_columns.sql';
-const FIX_MIGRATIONS = [REGISTRY_MIGRATION, '20260905220000_secdef_run_and_spend_filters.sql'];
+const FIX_MIGRATIONS = [
+  REGISTRY_MIGRATION,
+  '20260905220000_secdef_run_and_spend_filters.sql',
+  '20260906120000_external_ids_one_tenant.sql'
+];
+
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * Lo specchio del registro che vive in `20260906120000_external_ids_one_tenant.sql`: la colonna che
+ * indirizza un sistema esterno, e la riga minima che serve a scriverla. Aggiungerne una qui è
+ * l'unico modo perché la domanda «e questo id, di chi è?» venga posta prima e non dopo.
+ */
+const EXTERNAL_IDS = [
+  {
+    table: 'brand_app_connections',
+    column: 'connected_account_id',
+    columns: 'brand_id, toolkit_slug, connected_account_id, kind',
+    values: "$1, 'GITHUB', $2, 'app'"
+  },
+  {
+    table: 'brand_knowledge_sources',
+    column: 'connected_account_id',
+    columns: 'brand_id, provider, connected_account_id, toolkit_slug',
+    values: "$1, 'notion', $2, 'NOTION'"
+  },
+  {
+    table: 'brand_triggers',
+    column: 'trigger_instance_id',
+    columns: 'brand_id, toolkit_slug, trigger_slug, trigger_instance_id',
+    values: "$1, 'GITHUB', 'GITHUB_PULL_REQUEST_EVENT', $2"
+  },
+  {
+    table: 'social_accounts',
+    column: 'zernio_account_id',
+    columns: 'brand_id, zernio_account_id',
+    values: '$1, $2'
+  }
+];
 
 /**
  * Lo specchio del registro che vive in `REGISTRY_MIGRATION`: `insert` e `update` sono le colonne
@@ -87,6 +125,7 @@ const RESTORED_GRANTS = [
   'public.agent_kit_wait_for_approval(uuid, text, text, text, jsonb, text, text, jsonb, jsonb)'
 ];
 
+const FOREIGN_ID = 'ca_id_della_vittima';
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const OUTSIDER = '22222222-2222-4222-8222-222222222222';
 const SPENT_USD = 7.25;
@@ -184,7 +223,110 @@ async function seed(client) {
     [brandId, threadId, OWNER]
   );
 
-  return { orgId, brandId, runId };
+  const outsiderOrgId = await scalar(
+    client,
+    `insert into public.organizations (name, owner_id) values ('Harness Org 2', $1) returning id`,
+    [OUTSIDER]
+  );
+  const outsiderBrandId = await scalar(
+    client,
+    `insert into public.brands (org_id, name, slug) values ($1, 'Harness Brand 2', 'harness-brand-2') returning id`,
+    [outsiderOrgId]
+  );
+
+  for (const { table, columns, values } of EXTERNAL_IDS) {
+    await client.query(`insert into public.${table} (${columns}) values (${values})`, [brandId, FOREIGN_ID]);
+  }
+
+  await client.query(
+    `insert into public.brand_webhooks (brand_id, url, secret) values ($1, 'https://hooks.vittima.test/x', 'whsec_v')`,
+    [brandId]
+  );
+
+  return { orgId, brandId, runId, outsiderBrandId };
+}
+
+/**
+ * La RLS protegge la riga, non il valore dentro la riga. Un id che indirizza un sistema esterno,
+ * scritto dall'utente e poi usato dal server con la credenziale che vale per tutti i clienti, è un
+ * confine che la RLS non vede: qui si prova a scrivere l'id della vittima nella propria riga.
+ */
+async function externalIdFacts(client, outsiderBrandId) {
+  const facts = [];
+
+  await becomes(client, 'authenticated', OUTSIDER);
+
+  for (const { table, column, columns, values } of EXTERNAL_IDS) {
+    const stolen = await attempt(
+      client,
+      `insert into public.${table} (${columns}) values (${values})`,
+      [outsiderBrandId, FOREIGN_ID]
+    );
+    facts.push({
+      what: `${table}.${column}: l'id di un altro brand non entra in una riga propria`,
+      ok: stolen.code === UNIQUE_VIOLATION,
+      got: stolen.accepted ? 'accettato' : stolen.code
+    });
+  }
+
+  const own = await attempt(
+    client,
+    `insert into public.brand_app_connections (brand_id, toolkit_slug, connected_account_id, kind)
+     values ($1, 'NOTION', 'ca_id_proprio', 'app')`,
+    [outsiderBrandId]
+  );
+  facts.push({
+    what: 'una connessione propria si salva come prima',
+    ok: own.accepted,
+    got: own.accepted ? 'accettata' : own.code
+  });
+
+  await becomesOwner(client);
+
+  return facts;
+}
+
+/**
+ * La coda delle consegne la scrivono solo l'ingress di Composio e il cron, col service role. Un
+ * `insert` da `authenticated` è una consegna su ordinazione, e con `webhook_id` scelto è la firma
+ * di un altro brand.
+ */
+async function deliveryQueueFacts(client, brandId, outsiderBrandId) {
+  const facts = [];
+
+  const webhookId = await scalar(client, 'select id from public.brand_webhooks where brand_id = $1', [brandId]);
+
+  await becomes(client, 'authenticated', OUTSIDER);
+
+  const forged = await attempt(
+    client,
+    `insert into public.webhook_deliveries (brand_id, webhook_id, event_id, trigger_slug, payload)
+     values ($1, $2, 'msg_finto', 'GITHUB_PULL_REQUEST_EVENT', '{}'::jsonb)`,
+    [outsiderBrandId, webhookId]
+  );
+  facts.push({
+    what: 'authenticated non mette in coda una consegna',
+    ok: forged.code === INSUFFICIENT_PRIVILEGE,
+    got: forged.accepted ? 'accettata' : forged.code
+  });
+
+  await becomesOwner(client);
+  await becomes(client, 'service_role', OWNER);
+  const real = await attempt(
+    client,
+    `insert into public.webhook_deliveries (brand_id, webhook_id, event_id, trigger_slug, payload)
+     values ($1, $2, 'msg_vero', 'GITHUB_PULL_REQUEST_EVENT', '{}'::jsonb)`,
+    [brandId, webhookId]
+  );
+  facts.push({
+    what: 'il service role mette in coda come prima',
+    ok: real.accepted,
+    got: real.accepted ? 'accettata' : real.code
+  });
+
+  await becomesOwner(client);
+
+  return facts;
 }
 
 async function billingFacts(client, orgId, brandId) {
@@ -515,12 +657,14 @@ async function main() {
   try {
     await applyFixes(client);
 
-    const { orgId, brandId, runId } = await seed(client);
+    const { orgId, brandId, runId, outsiderBrandId } = await seed(client);
 
     facts = facts.concat(await profileFacts(client));
     facts = facts.concat(await billingFacts(client, orgId, brandId));
     facts = facts.concat(await registryFacts(client));
     facts = facts.concat(await grantFacts(client));
+    facts = facts.concat(await externalIdFacts(client, outsiderBrandId));
+    facts = facts.concat(await deliveryQueueFacts(client, brandId, outsiderBrandId));
 
     for (const signature of RESTORED_GRANTS) {
       await client.query(`grant execute on function ${signature} to authenticated`);

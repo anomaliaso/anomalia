@@ -85,6 +85,7 @@ describe('processNextQueuedChatJob — crediti finiti', () => {
 					input_params: { user_message: 'fai il report', scheduled: true, locale: 'it' }
 				}
 			],
+			chat_threads: [{ id: 'thread-1', brand_id: 'brand-1', user_id: 'user-1' }],
 			brands: [{ id: 'brand-1', name: 'Brand', slug: 'brand', plan: 'pro', status: 'active' }],
 			ai_calls: [],
 			custom_agent_schedules: [
