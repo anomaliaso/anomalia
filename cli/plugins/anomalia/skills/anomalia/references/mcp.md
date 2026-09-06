@@ -14,7 +14,7 @@ Host (Cursor / Claude / …)
 
 | Mode | When | Endpoint / command | Auth |
 |------|------|--------------------|------|
-| **stdio** | Local agent on your machine | `bun run mcp` or `anomalia-mcp` | `login` tool or existing `anomalia login` session |
+| **stdio** | Local agent on your machine | `bun run mcp` or `anomalia-mcp` | existing `anomalia login` session |
 | **HTTP local** | Local Streamable HTTP | `bun run mcp:http` → `http://localhost:8787/mcp` | Bearer **or** session file |
 | **HTTP remote** | Shared / cloud host | `https://mcp.anomalia.so/mcp` | **Bearer required** |
 
@@ -82,13 +82,20 @@ bun run mcp:http     # http://localhost:8787/mcp
 
 **Local (stdio / local HTTP)**
 
-1. Call MCP tool `login` (opens browser), **or** run `anomalia login` in a terminal.
+1. Run `anomalia login` in a terminal — it opens the browser. There is no MCP tool for this: the
+   one that existed only worked on stdio, and its `logout` twin reported success after deleting
+   nothing.
 2. Session is stored at `~/.config/anomalia/session.json` and shared with the CLI.
-3. `whoami` / `list_brands` to confirm.
+3. `list_brands` to confirm — brands come back, or you are not signed in.
 
 **Remote HTTP**
 
-1. Obtain a Supabase access token via Anomalia OAuth (same token inside `session.json` after CLI login: field used as Bearer).
+Your host does this on its own: the server publishes `/.well-known/oauth-protected-resource` and
+answers an unauthenticated call with `401 WWW-Authenticate: Bearer`, which is the standard round
+Claude Code, Claude.ai and Cursor already know how to walk.
+
+1. If you are calling it by hand: obtain a Supabase access token via Anomalia OAuth (same token
+   inside `session.json` after CLI login: field used as Bearer).
 2. Send on every request: `Authorization: Bearer <access_token>`.
 3. Without it you get JSON-RPC **401** — that is expected, not a server crash.
 
@@ -106,10 +113,10 @@ Ids from list tools accept short unambiguous prefixes (same rule as the CLI).
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| 401 on `/mcp` | Missing/invalid Bearer on remote | Login locally and pass access token, or use stdio |
+| 401 on `/mcp` | Missing/invalid Bearer on remote | Let the host do the OAuth round, or pass the access token yourself, or use stdio |
 | 404 on `/health` | Wrong deploy root / path | Expect `/health` and `/mcp` on the MCP host |
 | Tools missing | MCP not connected in host | Check Cursor MCP panel; restart host |
-| Auth works in CLI but not MCP | Different machine / no session file | Run `login` in the MCP process environment |
+| Auth works in CLI but not MCP | Different machine / no session file | Run `anomalia login` on the machine running the MCP server |
 | `Not an https or loopback URI: cursor://anysphere.cursor-mcp/oauth/callback` | Cursor DCR uses a custom-scheme callback; Anomalia OAuth only allows https/loopback | Use **stdio** MCP, update Cursor (localhost `:8787` callback), or pass Bearer; see [docs/mcp.md](../../../docs/mcp.md#cursor--remote-http-oauth) |
 
 ## 6. More

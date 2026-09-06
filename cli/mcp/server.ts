@@ -14,13 +14,14 @@ import { registerStudioTools } from './tools/studio.ts';
  * un'organizzazione vera e scrivendo nella libreria di un cliente vero.
  */
 export const MCP_INSTRUCTIONS = [
-  'Anomalia runs social brands: posts, editorial plans, media, the brand’s own knowledge, SEO and its blog.',
-  'Most tools act on ONE brand and need its `slug`, and `list_brands` is where slugs come from — but when you do not know which brand, ASK the person. Never call `list_brands` to pick one yourself: guessing spends a real organisation’s credits and writes into a real client’s library.',
-  'Reads cost nothing and change nothing. When no `get_*` or `list_*` answers the question, `query` reads any table as the signed-in person — a count, a join you do by hand, a fact nothing else exposes.',
-  'Writing is explicit and separate: generating a picture or a clip creates nothing in the calendar, and nothing goes out until a post is approved. Whatever spends the brand’s credits says so in its own description; everything else is free.',
-  'Changing an asset that exists is `refine_media` — picture or clip — not a second generation, which buys a different subject.',
-  'Post and article ids accept short unambiguous prefixes from any list tool.',
-  'Sign in with `login` (browser OAuth) or send `Authorization: Bearer <access_token>`. There are no API keys; locally the session file is shared with the `anomalia` CLI.'
+  'Anomalia runs social brands: posts, editorial plans, media, knowledge, SEO, blog.',
+  'Most tools act on ONE brand and need its `slug`; `list_brands` is where slugs come from. When you do not know which brand, ASK — never call `list_brands` to pick one yourself: guessing spends a real organisation’s credits and writes into a real client’s library.',
+  'Reads cost nothing and change nothing. `query` reads any table as the signed-in person — plain rows; the `get_*`/`list_*` that remain aggregate, join or fetch live. Always pass `columns`; its description says why.',
+  'Retired into `query`: `list_articles`, `list_ideas`, `get_memory`, `get_appearance` — see the skill.',
+  'Writing is explicit and separate: generating a picture or clip creates nothing in the calendar, and nothing goes out until a post is approved. Whatever spends credits says so in its own description; everything else is free.',
+  'Changing an existing asset is `refine_media` — picture or clip — not a second generation, which buys a different subject.',
+  'Post and article ids accept short unambiguous prefixes — from a list tool, or from the ids `query` returns.',
+  'Signing in is not a tool: over HTTP the host does the OAuth round and sends the Bearer; locally run `anomalia login` once — the CLI and this server share one session file. No API keys.'
 ].join(' ');
 
 export function createAnomaliaMcpServer(): McpServer {

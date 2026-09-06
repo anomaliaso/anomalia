@@ -3,10 +3,6 @@ import type { BrandEndpoint } from './index';
 
 export const MARKET_FIELD_DEFAULT = 20;
 export const MARKET_FIELD_MAX = 50;
-export const IDEAS_DEFAULT = 50;
-export const IDEAS_MAX = 200;
-
-export const IDEA_STATUSES = ['new', 'shortlisted', 'used', 'archived'] as const;
 
 const limitUpTo = (max: number, fallback: number) =>
   z.coerce
@@ -121,53 +117,3 @@ export const DIAGNOSE_RADAR = {
   openWorld: true
 } satisfies BrandEndpoint;
 
-export const LIST_IDEAS = {
-  tool: 'list_ideas',
-  title: 'Idea bank',
-  description:
-    'Ideas saved for this brand that nobody has used yet — the sharp ones, kept so they are ' +
-    'not lost between conversations. Omit `status` for the ones still usable (new and ' +
-    'shortlisted); pass `all`, or one status, to see the rest. Reads only — no model, no ' +
-    'credits.',
-  method: 'GET',
-  pathUnderBrand: '/ideas',
-  input: z
-    .object({
-      status: z
-        .enum([...IDEA_STATUSES, 'all'])
-        .optional()
-        .describe('Omit for unused ideas only'),
-      limit: limitUpTo(IDEAS_MAX, IDEAS_DEFAULT)
-    })
-    .strict(),
-  output: z.object({
-    ideas: z.array(
-      z.object({
-        id: z.string(),
-        brand_id: z.string(),
-        user_id: z.string().nullable(),
-        title: z.string(),
-        idea: z.string(),
-        device: z.string().nullable(),
-        why_it_contrasts: z.string().nullable(),
-        who_it_annoys: z.string().nullable(),
-        format: z.string().nullable(),
-        score: z.number().nullable(),
-        surface: z.string().nullable(),
-        agent: z.string().nullable(),
-        thread_id: z.string().nullable(),
-        status: z.enum(IDEA_STATUSES),
-        used_post_id: z.string().nullable(),
-        used_at: z.string().nullable(),
-        last_shown_at: z.string().nullable(),
-        shown_count: z.number(),
-        tags: z.array(z.string()),
-        created_at: z.string(),
-        updated_at: z.string()
-      })
-    ),
-    count: z.number()
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;

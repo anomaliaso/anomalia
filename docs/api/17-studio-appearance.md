@@ -3,7 +3,7 @@
 `GET`/`PUT` `/api/v1/brands/:slug/studio/appearance` — logo, favicon, palette, i due font con cui
 le grafiche sono composte, e il brief visivo che ogni render segue. Tutto vive in `brand_kit`.
 
-Tool MCP: `get_appearance`, `set_appearance`. Nessun modello, nessun credito.
+Tool MCP: `set_appearance` (la lettura è `query` su `brand_kit`). Nessun modello, nessun credito.
 
 ## `GET`
 
