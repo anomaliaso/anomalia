@@ -15,15 +15,18 @@ vi.mock('node:dns/promises', () => ({
       : [{ address: '93.184.216.34', family: 4 }];
   })
 }));
-
 import {
+  attemptDelivery,
   backoffMs,
+  claimDueDeliveries,
   eventBody,
   MAX_DELIVERY_ATTEMPTS,
   newWebhookSecret,
   signDelivery,
   validateWebhookUrl,
-  wantsEvent
+  wantsEvent,
+  type BrandWebhookRow,
+  type DeliveryRow
 } from './brand-webhooks';
 import {
   brandIdFromComposioUser,
@@ -170,5 +173,134 @@ describe('eventBody', () => {
       created_at: '2026-01-01T00:00:00Z',
       data: { number: 7 }
     });
+  });
+});
+
+/**
+ * The endpoint is checked where it is saved, and the row it is saved in is writable straight from
+ * the browser: anon key + the user's JWT, `for all` on the brand's own rows. So the value the
+ * worker POSTs to is not the value a route ever validated — and a name that resolves private is
+ * something no check at save time could have seen anyway.
+ */
+function fakeSupabase(rows: Record<string, unknown[]>) {
+  const writes: { table: string; patch: Record<string, unknown> }[] = [];
+  const chain = (table: string) => {
+    const q: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'lte', 'order', 'limit', 'neq']) {
+      q[method] = () => q;
+    }
+    q.update = (patch: Record<string, unknown>) => {
+      writes.push({ table, patch });
+      return q;
+    };
+    q.maybeSingle = async () => ({ data: (rows[table] ?? [])[0] ?? null });
+    q.then = (resolve: (v: { data: unknown[] }) => unknown) => resolve({ data: rows[table] ?? [] });
+    return q;
+  };
+  return { client: { from: (table: string) => chain(table) }, writes };
+}
+
+const webhookRow = (over: Partial<BrandWebhookRow> = {}): BrandWebhookRow => ({
+  id: 'w1',
+  brand_id: 'brand-mio',
+  url: 'https://hooks.acme.com/anomalia',
+  secret: 'whsec_x',
+  events: [],
+  status: 'active',
+  failure_count: 0,
+  last_delivery_at: null,
+  last_error: null,
+  created_at: '2026-01-01T00:00:00Z',
+  ...over
+});
+
+const deliveryRow = (over: Partial<DeliveryRow> = {}): DeliveryRow => ({
+  id: 'd1',
+  brand_id: 'brand-mio',
+  webhook_id: 'w1',
+  event_id: 'msg_1',
+  trigger_slug: 'GITHUB_PULL_REQUEST_EVENT',
+  payload: {},
+  attempts: 0,
+  ...over
+});
+
+describe('attemptDelivery', () => {
+  it('non spedisce a un endpoint che il guardiano rifiuta', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { client, writes } = fakeSupabase({});
+
+    const delivered = await attemptDelivery(
+      client as never,
+      deliveryRow(),
+      webhookRow({ url: 'https://hooks.acme.internal/anomalia' })
+    );
+
+    expect(delivered).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(writes.find((w) => w.table === 'webhook_deliveries')?.patch.error).toBeTruthy();
+    fetchSpy.mockRestore();
+  });
+
+  // Un host che il testo non tradisce e il DNS sì: passa qualunque confronto sul nome, e cade solo
+  // se la guardia risolve davvero. È il caso che separa le due difese.
+  it("chiede la guardia che risolve il nome, non il confronto sul testo dell'host", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 200 }));
+    const { client } = fakeSupabase({});
+
+    const delivered = await attemptDelivery(
+      client as never,
+      deliveryRow(),
+      webhookRow({ url: 'https://hooks.acme.local/anomalia' })
+    );
+
+    expect(delivered).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('non segue un redirect: un host consentito che risponde 302 scavalcherebbe il controllo', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 200 }));
+    const { client } = fakeSupabase({});
+
+    await attemptDelivery(client as never, deliveryRow(), webhookRow());
+
+    expect((fetchSpy.mock.calls[0][1] as RequestInit).redirect).toBe('error');
+    fetchSpy.mockRestore();
+  });
+
+  it('spedisce a un endpoint valido', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('', { status: 200 }));
+    const { client } = fakeSupabase({});
+
+    expect(await attemptDelivery(client as never, deliveryRow(), webhookRow())).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('claimDueDeliveries', () => {
+  it('non consegna una riga il cui endpoint è di un altro brand', async () => {
+    const { client } = fakeSupabase({
+      webhook_deliveries: [deliveryRow({ webhook_id: 'w-altrui' })],
+      brand_webhooks: [webhookRow({ id: 'w-altrui', brand_id: 'brand-altrui' })]
+    });
+
+    expect(await claimDueDeliveries(client as never)).toEqual([]);
+  });
+
+  it('consegna una riga il cui endpoint è dello stesso brand', async () => {
+    const { client } = fakeSupabase({
+      webhook_deliveries: [deliveryRow()],
+      brand_webhooks: [webhookRow()]
+    });
+
+    expect(await claimDueDeliveries(client as never)).toHaveLength(1);
   });
 });

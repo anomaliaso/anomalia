@@ -178,32 +178,42 @@ export async function attemptDelivery(
   const attempt = delivery.attempts + 1;
   let responseStatus: number | null = null;
   let failure: string | null = null;
+  let endpoint: URL | null = null;
 
   try {
-    await assertPublicUrl(new URL(webhook.url), 'https-only');
-    const res = await fetch(webhook.url, {
-      method: 'POST',
-      redirect: 'error',
-      headers: {
-        'content-type': 'application/json',
-        'user-agent': 'Anomalia-Webhooks/1',
-        'anomalia-delivery-id': delivery.id,
-        'anomalia-event-type': delivery.trigger_slug,
-        'anomalia-timestamp': timestamp,
-        'anomalia-signature': `v1,${signDelivery({
-          secret: webhook.secret,
-          deliveryId: delivery.id,
-          timestamp,
-          body
-        })}`
-      },
-      body,
-      signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS)
-    });
-    responseStatus = res.status;
-    if (!res.ok) failure = `Endpoint answered ${res.status}`;
+    endpoint = new URL(webhook.url);
+    await assertPublicUrl(endpoint, 'https-only');
   } catch (e) {
+    endpoint = null;
     failure = e instanceof Error ? e.message : String(e);
+  }
+
+  if (endpoint) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'user-agent': 'Anomalia-Webhooks/1',
+          'anomalia-delivery-id': delivery.id,
+          'anomalia-event-type': delivery.trigger_slug,
+          'anomalia-timestamp': timestamp,
+          'anomalia-signature': `v1,${signDelivery({
+            secret: webhook.secret,
+            deliveryId: delivery.id,
+            timestamp,
+            body
+          })}`
+        },
+        body,
+        redirect: 'error',
+        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS)
+      });
+      responseStatus = res.status;
+      if (!res.ok) failure = `Endpoint answered ${res.status}`;
+    } catch (e) {
+      failure = e instanceof Error ? e.message : String(e);
+    }
   }
 
   const delivered = !failure;
@@ -244,8 +254,9 @@ export async function claimDueDeliveries(
       .select(WEBHOOK_COLUMNS)
       .eq('id', delivery.webhook_id)
       .maybeSingle();
+    if (!webhook || (webhook as BrandWebhookRow).brand_id !== delivery.brand_id) continue;
     // A paused endpoint stops consuming retries until someone re-enables it.
-    if (!webhook || (webhook as BrandWebhookRow).status === 'paused') continue;
+    if ((webhook as BrandWebhookRow).status === 'paused') continue;
     out.push({ delivery, webhook: webhook as BrandWebhookRow });
   }
   return out;
