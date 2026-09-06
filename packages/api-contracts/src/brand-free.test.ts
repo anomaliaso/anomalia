@@ -26,7 +26,7 @@ describe('generate_image senza un brand', () => {
   });
 
   it('un endpoint che non lo dichiara non ha una strada senza brand', () => {
-    const anchored = BRAND_ENDPOINTS.find((e) => e.tool === 'refine_image');
+    const anchored = BRAND_ENDPOINTS.find((e) => e.tool === 'refine_media');
 
     expect(pathWithoutBrand(anchored!)).toBeNull();
   });

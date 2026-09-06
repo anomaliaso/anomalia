@@ -61,7 +61,7 @@ catalogue of products, offers and services — is the `products` table: one row 
 | `import_media_url` | (MCP only) |
 | `generate_media` | (MCP only) |
 | `generate_image` | (MCP only) |
-| `refine_image` | (MCP only) |
+| `refine_media` | (MCP only) |
 | `generate_video` | (MCP only) |
 | `generate_carousel` | (MCP only) |
 | `check_media_job` | (MCP only) |
@@ -193,7 +193,7 @@ brand's look is applied, which with a slug is almost always what you want. Send 
 picture must take nothing from the brand: a plain UI screenshot, an illustration about somebody
 else, a neutral background — places where brand colours and fonts spoil the result. Without a slug
 there is no brand to apply or ignore, and sending it is refused as `brand_style_needs_a_brand`
-rather than quietly dropped: pass a slug, or drop `brand_style`. `refine_image` takes the same
+rather than quietly dropped: pass a slug, or drop `brand_style`. `refine_media` takes the same
 field, and the brand's look reaches a refinement the same way. `generate_carousel` and
 `generate_media` apply it too but take no `brand_style`: a series that is not the brand's is not a
 series, and `generate_media` is the old door — call `generate_image` when you need the switch. A
@@ -224,13 +224,25 @@ when no invoice came back, never `0`.
 **One prompt, one render, no safety net.** Nothing inspects the image after the model draws it:
 there is no quality control, no critic that rejects a bad frame, no retry you did not ask for.
 What comes back is what was billed, however crooked. Judging it is YOUR job — open the
-`signed_url`, look, and if it is wrong send it to `refine_image` rather than prompting again.
+`signed_url`, look, and if it is wrong send it to `refine_media` rather than prompting again.
 
-`refine_image` changes an image that is already in the library and files the result as a **new**
-asset — the original is never overwritten, so a refinement cannot destroy what it started from.
-Required: `slug`, `media_id` (from `list_media`, and it must belong to this brand — anything else
-is `source_not_found`), `instruction`. Say what should CHANGE, not what the whole picture should
-be. Refining has its own model slot, `imageRefineModel`.
+`refine_media` changes something that is already in the library — an image or a video — and files
+the result as a **new** asset, so the original is never overwritten and a refinement cannot destroy
+what it started from. Required: `slug`, `base_media_id` (from `list_media`, and it must belong to
+this brand — anything else is `source_not_found`), `instruction`. Say what should CHANGE, not what
+the whole thing should be.
+
+**You do not say what kind it is.** The asset's own kind, read from the library row, picks the
+engine: a picture goes to the image refiner, a clip to the video one, and the answer says which in
+`kind`. Logos and illustrations are images in the library, so they take the image path; the
+programmatic motion graphics (`motion_write`) are not generative renders and are not refined here.
+
+Each kind has its own model slot — `imageRefineModel` for a picture, `videoRefineModel` for a clip —
+and both are read from `get_media_models`. A brand that has never chosen a video refine model gets
+`no_refine_model` (400) on a clip rather than a newly filmed one: refusing is the point, because
+filming a new clip for someone who asked to correct theirs is the exact mistake this tool ends.
+`kind_not_refinable` (400) means the asset is neither. `count` draws alternatives for a picture; a
+clip always comes back as one.
 
 `generate_video` films a NEW clip into the library. Required: `slug`, `prompt`; optional
 `base_media_id`, `duration`, `aspect_ratio`, `model`, `title`. **`base_media_id` pointing at a
@@ -259,9 +271,9 @@ in that order.
 
 The response carries `continuity_tokens`: the 2-3 literal tokens — palette words, a recurring motif,
 a lighting phrase — repeated verbatim in every slide prompt. They are what makes it a series rather
-than N unrelated pictures. **To change one slide, use `refine_image` on that slide's id and put those
+than N unrelated pictures. **To change one slide, use `refine_media` on that slide's id and put those
 tokens back into the instruction**; an edit touching palette, light or the motif without them takes
-that slide out of the set, and nothing warns you. There is no separate slide tool: `refine_image`
+that slide out of the set, and nothing warns you. There is no separate slide tool: `refine_media`
 edits the pixels you already have, which holds continuity better than re-prompting from scratch.
 
 **Choosing the model.** Every generator takes an optional `model` that applies to **that call

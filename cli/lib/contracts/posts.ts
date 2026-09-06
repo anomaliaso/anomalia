@@ -325,7 +325,8 @@ export const GENERATE_MEDIA = {
     MAX_MEDIA_ALTERNATIVES + ' per call; a clip takes minutes and returns a job_id, and ' +
     'check_media_job says when it landed — calling this again for the same clip bills a second one.' +
     "With a slug, this brand's look is applied, and it cannot be switched off from this door: " +
-    'generate_image takes brand_style for that.',
+    'generate_image takes brand_style for that, and refine_media is the one that CHANGES an asset '
+    + 'you already made instead of drawing another.',
   method: 'POST',
   pathUnderBrand: '/media/generate',
   input: z
@@ -425,8 +426,8 @@ export const REGENERATE_POST_MEDIA = {
   description:
     'Change the image already on a post, in place — give an instruction like "make it ' +
     'warmer", not a whole new prompt. The old image is REPLACED. It spends credits: one ' +
-    'render. To change a library image and keep the original, use refine_image, which files ' +
-    'the result as a new asset instead. id accepts a short prefix.',
+    'render. To change a library image or clip and keep the original, use refine_media, which ' +
+    'files the result as a new asset instead. id accepts a short prefix.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/regenerate',
   resource: 'post',
@@ -618,7 +619,7 @@ const BrandStyleField = z
 /**
  * Un disegno chiesto senza brand non entra in nessuna libreria, quindi non ha un id da mostrare:
  * `null` è il fatto, e dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con
- * `list_media`. Non è la stessa forma di `refine_image` o `generate_media`, che un brand ce
+ * `list_media`. Non è la stessa forma di `refine_media` o `generate_media`, che un brand ce
  * l'hanno sempre e un id lo restituiscono sempre — allargare anche il loro schema significherebbe
  * togliere una promessa che quei due mantengono.
  */
@@ -671,7 +672,7 @@ export const GENERATE_IMAGE = {
     'spends credits: one render per image, renders in the answer says how many were billed and ' +
     'cost_usd what they actually cost. It creates nothing in the calendar and publishes nothing, ' +
     'so ask for two or three with count, look at them, keep one. To CHANGE a picture that ' +
-    'already exists use refine_image — correcting one drawing beats redrawing until it is ' +
+    'already exists use refine_media — correcting one drawing beats redrawing until it is ' +
     'right. To pick the model read get_media_models and pass model, for this call only; ' +
     'set_media_model is the one that changes the brand from now on.',
   method: 'POST',
@@ -698,39 +699,64 @@ export const GENERATE_IMAGE = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const REFINE_IMAGE = {
-  tool: 'refine_image',
-  title: 'Refine an image',
+/**
+ * Il tipo dell'asset NON si chiede: lo porta la riga di libreria che `base_media_id` nomina. Un
+ * `kind` in ingresso sarebbe un secondo posto in cui la stessa verità è scritta, e i due
+ * divergerebbero alla prima chiamata sbagliata — «rifiniscimi questo video», kind: image, e il
+ * motore delle immagini che riceve un mp4.
+ */
+export const REFINE_MEDIA = {
+  tool: 'refine_media',
+  title: 'Refine media you already made',
   description:
-    'To change a photo you already have — "make it red", "warmer background", "remove the cup on ' +
-    'the left" — instead of drawing a new one. base_media_id is any image in this brand’s ' +
-    'library; list_media finds it, and a short prefix works. Say what should CHANGE, not what ' +
-    'the whole picture should be. The result is filed as a NEW asset, so a wrong edit costs one ' +
-    'render and never your original. Do NOT reach for generate_image to alter something: that ' +
-    'draws a different picture from scratch. It spends credits, and the answer says how many ' +
-    'renders were billed. It creates nothing in the calendar and publishes nothing; pass the id ' +
-    'it returns to create_post as media_ids when you want a post. Changing has its own models — ' +
-    'get_media_models, slot imageRefineModel — and model here applies to this call only. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out.',
+    'To change a photo or a video you already have — "make it red", "warmer background", "remove ' +
+    'the cup on the left", "keep the movement but make it night" — instead of making a new one. ' +
+    'base_media_id is any asset in this brand’s library, image or video alike; list_media finds ' +
+    'it, and a short prefix works. It starts FROM that asset: the picture you already made comes ' +
+    'back changed, not redrawn. Say what should CHANGE, not what the whole thing should be. ' +
+    'The result is filed as a NEW asset, so a wrong edit costs one render and never your ' +
+    'original. Do NOT reach for generate_image, generate_video or generate_media to alter ' +
+    'something: those three start from nothing and give you a different subject, which is the ' +
+    'mistake this tool exists to end. It spends credits, and the answer says how many renders ' +
+    'were billed. It creates nothing in the calendar and publishes nothing; pass the id it ' +
+    'returns to create_post as media_ids when you want a post. Each kind has its own model — ' +
+    'get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and ' +
+    'model here applies to this call only. A clip has no refine model until the brand picks one, ' +
+    'and until then a video comes back no_refine_model rather than quietly redrawn. The brand ' +
+    'look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only.',
   method: 'POST',
-  pathUnderBrand: '/media/images/refine',
+  pathUnderBrand: '/media/refine',
   input: z
     .object({
       base_media_id: z
         .string()
         .min(1)
-        .describe('The library image to start from — an id from list_media, or an unambiguous prefix'),
+        .describe(
+          'The library asset to start from — an id from list_media, or an unambiguous prefix. Its ' +
+            'own kind decides how it is refined: you do not say whether it is a picture or a clip.'
+        ),
       instruction: z.string().min(1).describe('What should change about it'),
       count: AlternativesField,
-      model: modelField('imageRefineModel'),
+      model: modelField('imageRefineModel for a picture, videoRefineModel for a clip'),
       brand_style: BrandStyleField,
       title: z.string().optional().describe('The name the new asset carries in the library')
     })
     .strict(),
-  output: ImageResult,
+  output: z.object({
+    ok: z.literal(true),
+    kind: z
+      .enum(['image', 'video'])
+      .describe('What was refined, read from the source asset — never from what you asked for'),
+    media: z.array(GeneratedMediaSchema),
+    model: z.string().nullable().describe('The model that ACTUALLY made it'),
+    renders: z.number().describe('How many renders were BILLED')
+  }),
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
     { error: 'source_not_found', status: 404 },
+    { error: 'kind_not_refinable', status: 400 },
+    { error: 'no_refine_model', status: 400 },
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }
   ],
@@ -814,7 +840,7 @@ export const GENERATE_CAROUSEL = {
     'a 5-slide carousel is five renders — ask for the count you mean. It creates nothing in the ' +
     'calendar and publishes nothing: pass the ids to create_post as media_ids, in order. TO ' +
     'CHANGE ONE SLIDE use ' +
-    'refine_image on that slide id, and put the continuity_tokens this returns back into your ' +
+    'refine_media on that slide id, and put the continuity_tokens this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
     'light or the recurring motif without them takes that slide out of the set. ' +
     "With a slug, this brand's look is applied to every slide, and there is no way to switch it " +
@@ -835,7 +861,7 @@ export const GENERATE_CAROUSEL = {
     media: z.array(GeneratedMediaSchema).describe('The slides, in order — slide 1 first'),
     continuity_tokens: z
       .array(z.string())
-      .describe('The literal tokens repeated in every slide. Put them back into a refine_image instruction or that slide leaves the series.'),
+      .describe('The literal tokens repeated in every slide. Put them back into a refine_media instruction or that slide leaves the series.'),
     model: z.string().nullable(),
     renders: z.number().describe('How many renders were BILLED — one per slide attempted')
   }),

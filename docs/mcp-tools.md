@@ -15,7 +15,7 @@ fa scegliere peggio il modello.** Tre sessioni reali lo hanno dimostrato in un g
 | cosa è stato chiesto | cosa è successo |
 |---|---|
 | *«genera l'immagine di un gatto»* | *«non ho uno strumento di generazione immagini generico»* — `generate_image` era nella lista |
-| *«rendi rossa questa foto»* | ne ha **disegnata una nuova** — `refine_image` era nella lista |
+| *«rendi rossa questa foto»* | ne ha **disegnata una nuova** — `refine_media` era nella lista |
 | *«animalo con un video di 5s»* | ha rinunciato — `generate_video` era nella lista |
 
 In nessuno dei tre casi mancava la capacità. Mancava il fatto che l'agente la trovasse.
@@ -150,7 +150,7 @@ Estratto da `d099e02a` — **116 tool** nel registro, **247 parametri**. Altri 1
 | `generate_video` | POST | `prompt`, `base_media_id`?, `duration`?, `aspect_ratio`?, `model`?, `title`? |  |
 | `import_media_url` | POST | `url`, `title`? |  |
 | `list_media` | GET | `query`?, `limit`? |  |
-| `refine_image` | POST | `base_media_id`, `instruction`, `count`?, `model`?, `title`? |  |
+| `refine_media` | POST | `base_media_id`, `instruction`, `count`?, `model`?, `brand_style`?, `title`? |  |
 
 ### `/ads` — 3 tool
 
@@ -439,9 +439,9 @@ chiama il modello. Il modello da imitare va prima riparato.
 
 ## Come verificare che il taglio non abbia rotto niente
 
-`packages/api-contracts/src/findability.test.ts` esiste già: una tabella che mappa **la richiesta
-arrivata davvero in chat** → il tool che le deve una risposta → le parole che la descrizione deve
-contenere. Gira su descrizioni, skill e istruzioni del server.
+`cli/skills/findability.test.ts` esiste già: una tabella che mappa **la richiesta arrivata
+davvero in chat** → il tool che le deve una risposta → le parole che la descrizione deve contenere.
+Gira su descrizioni, skill e istruzioni del server.
 
 **Il piano di aggregazione va eseguito contro quel test.** Se dopo il raggruppamento «aggiungi un
 concorrente» non arriva più a destinazione, il guadagno non c'è: abbiamo solo spostato la confusione
@@ -453,14 +453,15 @@ da una lista lunga a un enum illeggibile.
 
 | | stato |
 |---|---|
-| `refine_video` | **non esiste su nessun branch.** Bloccato finché `transformVideo` non prende la forma del lavoro: oggi è sincrono da capo a fondo, con polling fino a 600s, e esporlo così terrebbe appeso un client MCP per dieci minuti |
+| `refine_video` | **fatto, ma dentro `refine_media` e non come tool suo.** Il blocco era il tempo: `transformVideo` è sincrono con polling fino a 600s contro un muro di funzione a 300. Ora il poll ha un tetto proprio (280s), quindi il client riceve un `render_failed` invece di una connessione che cade — un soffitto dichiarato, non risolto. Toglierlo vuol dire passare dalla coda `video_renders`, come fa `generate_video`, e restituire un `job_id` |
+| `motion_control` da MCP | `videoMotionModel` è pinnabile in `set_media_model` e **nessun tool dell'API lo chiama**: esiste solo come tool di chat (`motion_control_video`). Non è finito in `refine_media` di proposito — prendere il movimento da un video guida e applicarlo a un soggetto in una still non è «correggere questo asset», e infilarcelo renderebbe la descrizione ambigua proprio dove non deve esserlo |
 | `upscale_video` | progettato, non scritto. Tool suo e non parametro, perché l'ingrandimento di kie prende il `task_id` del lavoro originale e non tocca la libreria, mentre quello di OpenRouter prende un URL: **non sono la stessa capacità con due trasporti** |
 | `upscale_image` | **nessun modello lo fa su OpenRouter** — verificati tutti e 50. Chiedere a un modello di generazione di «rifare l'immagine più grande» è una rigenerazione, non un ingrandimento: torna un'immagine *diversa* a risoluzione maggiore |
 
 I tool per **modificare** un carosello non ci sono di proposito: `generate_carousel` vive sotto
 `/media/carousel` e restituisce la sequenza intera — N id di media più i `continuity_tokens` — senza
 creare nessun post. Quindi l'array è dell'agente: riordinare è l'ordine degli argomenti a
-`create_post`, togliere è ometterne uno, cambiare una slide è `refine_image` sul suo id, aggiungerne
+`create_post`, togliere è ometterne uno, cambiare una slide è `refine_media` sul suo id, aggiungerne
 una è `generate_image` con quei gettoni nell'istruzione.
 
 `regenerate_slide` e `reorder_slides` sono i vecchi, e restano perché **un post possiede le sue
@@ -494,3 +495,35 @@ Un caso però è netto: **`generate_media` oggi è un doppione.** La sua stessa 
 those two»*. Non aggiunge nessuna capacità, e mette due nomi davanti a chi cerca «genera
 un'immagine». Nessun cliente lo chiama — la superficie MCP remota ha ripreso a dispiegarsi solo
 oggi. **Quello si toglie**, e porta 127 a 126 togliendo un'ambiguità invece di una capacità.
+
+---
+
+## I quattro tool specifici, misurati contro `generate_media`
+
+La richiesta era: «metti `generate_media` e `refine_media` al posto degli altri». Prima di
+cancellare una riga, il confronto — perché **`generate_media` non copre per intero nemmeno uno dei
+quattro**, e il verso dell'aggregazione, guardando il codice, è l'opposto di come è stata posta.
+
+| tool | cosa fa che l'aggregatore non sa fare | esito |
+|---|---|---|
+| `generate_image` | funziona **senza brand** (`pathWithoutBrand: /images`): torna `id: null`, `storage_path`, `organization` e `cost_usd`. Ha `brand_style: apply\|ignore`. `generate_media` vive solo sotto un brand e la sua stessa descrizione dice che il look del brand «cannot be switched off from this door» | **resta** |
+| `refine_image` | `base_media_id` + `instruction`: parte da un asset esistente, con lo slot `imageRefineModel`. In `generate_media` il parametro **non esiste**: non sa rifinire | **diventa `refine_media`** |
+| `generate_video` | `base_media_id` (anima una foto) e `duration`, con la finestra per modello e `duration_out_of_range` invece di un arrotondamento muto. Restituisce `duration_seconds`, i secondi davvero mandati — e una clip si paga al secondo. `generate_media(kind:'video')` inoltra allo stesso `startVideo` ma **non ha né `base_media_id` né `duration`** | **resta** |
+| `generate_carousel` | pianifica la serie una volta (`planCarousel`) e restituisce i `continuity_tokens`, che sono ciò che tiene insieme le slide. `generate_media` non ha `brief`, non ha `slides`, non pianifica nulla: `count: 4` sono quattro immagini scorrelate, e il suo tetto è 4 mentre un carosello arriva a 8 | **resta** |
+
+Il fatto che decide: `generate_media` è **la porta più vecchia**, non l'aggregatore. È del commit
+`96dc587e` (17:04), i tool espliciti del `21c530d7` (18:17) un'ora dopo, e sia il contratto sia
+`media-generate.ts` dicono in chiaro *«non fa più il lavoro: lo inoltra a generate_image e
+generate_video»*. Aggregare verso `generate_media` significherebbe tornare indietro, non avanti —
+ed è esattamente ciò che la sezione qui sopra sconsiglia, con tre sessioni vere a dimostrarlo.
+
+**Quello che si è fatto**, quindi, è la sola metà che regge da sola: `refine_image` diventa
+`refine_media`. Non è un'aggregazione dentro un enum — il verbo resta nel nome, che è la proprietà
+che rendeva `refine_image` trovabile — ed è un allargamento vero: la stessa porta serve ora
+un'immagine **e** una clip, e il tipo lo decide la riga di libreria invece di chi chiama.
+`videoRefineModel` esisteva in `set_media_model` e nessun tool lo chiamava: era una preferenza che
+un brand poteva scegliere e che non faceva niente.
+
+Gli altri tre non si toccano: toglierli toglierebbe capacità, non ambiguità. Il doppione da
+togliere resta `generate_media`, come questo documento dice già sopra — ed è una decisione separata,
+perché rompe chiunque lo abbia cablato.
