@@ -10,8 +10,10 @@
  * letto una pagina web, o ricevuto l'output di un tool esterno, ha in mano stringhe che non ha
  * scelto lui: incorporarle significa far caricare al browser dell'utente una risorsa scelta da
  * terzi — nel caso benigno un pixel di tracciamento con IP e referrer. Quindi si mostra solo
- * quello che è NOSTRO: lo storage del progetto, `/storage/v1/object/...` sull'host di questo
- * progetto Supabase (pubblico o firmato, è lo stesso host). Tutto il resto si rifiuta, e
+ * quello che è NOSTRO: lo storage del progetto, `/storage/v1/object/...` sull'ORIGINE con cui
+ * questo progetto Supabase è configurato — schema compreso, perché un self-host servito in http
+ * ha quello come unico storage che esiste, e su un deployment pubblico l'origine è https e http
+ * resta rifiutato da solo (pubblico o firmato, è la stessa origine). Tutto il resto si rifiuta, e
  * all'agente si dice cosa fare invece — pubblicarlo come artefatto, che scarica i byte da noi.
  *
  * E non ci si fida dell'estensione per decidere se una cosa è sicura: l'estensione decide solo
@@ -32,21 +34,20 @@ export type ChatMediaItem = {
 /** Oltre questo un blocco non è più "guarda questo", è una galleria: il posto è la libreria. */
 export const MAX_CHAT_MEDIA = 8;
 
-const OWN_HOST = (() => {
+const OWN_ORIGIN = (() => {
   try {
-    return new URL(publicEnv.PUBLIC_SUPABASE_URL).host;
+    return new URL(publicEnv.PUBLIC_SUPABASE_URL).origin;
   } catch {
     return '';
   }
 })();
 
-/** Viene da noi? Host dello storage del progetto + un percorso di storage, e nient'altro. */
+/** Viene da noi? L'ORIGINE configurata dello storage + un percorso di storage, e nient'altro. */
 export function isOwnMediaUrl(url: unknown): boolean {
   if (typeof url !== 'string' || !url) return false;
   try {
     const u = new URL(url);
-    if (u.protocol !== 'https:') return false;
-    if (!OWN_HOST || u.host !== OWN_HOST) return false;
+    if (!OWN_ORIGIN || u.origin !== OWN_ORIGIN) return false;
     return u.pathname.startsWith('/storage/v1/object/');
   } catch {
     return false;

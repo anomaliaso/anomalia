@@ -38,9 +38,13 @@ describe('isShowableMediaUrl', () => {
     expect(isShowableMediaUrl(signed)).toBe(true);
   });
 
-  it('refuses anything that is not ours — including a lookalike host and a plain http url', () => {
+  it('refuses any origin that is not the configured one — a lookalike host, or our host on another scheme', () => {
     expect(isShowableMediaUrl('https://evil.example.com/pixel.png')).toBe(false);
     expect(isShowableMediaUrl('https://other-project.supabase.co/storage/v1/object/public/media/a.png')).toBe(false);
+    // Qui l'origine configurata è https, quindi http sullo stesso host è un'ALTRA origine. Il
+    // motivo del rifiuto è quello, non «http è vietato»: su un self-host configurato in http lo
+    // storage è http e deve passare — lo fissa chat-media.selfhost.test.ts. Non riscrivere questa
+    // riga come un divieto di schema: tornerebbe a rompere il self-host.
     expect(isShowableMediaUrl(`${HOST.replace('https', 'http')}/storage/v1/object/public/media/a.png`)).toBe(false);
     // Nostro host ma non uno storage path: l'API del progetto non è un media.
     expect(isShowableMediaUrl(`${HOST}/rest/v1/posts?select=*`)).toBe(false);
