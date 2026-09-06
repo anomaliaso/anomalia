@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { registerAuthTools } from './tools/auth.ts';
 import { registerBrandTools } from './tools/brand-content.ts';
 import { registerPlanTools } from './tools/plan.ts';
@@ -24,6 +25,39 @@ export const MCP_INSTRUCTIONS = [
   'Signing in is not a tool: over HTTP the host does the OAuth round and sends the Bearer; locally run `anomalia login` once — the CLI and this server share one session file. No API keys.'
 ].join(' ');
 
+type ListedTool = { inputSchema?: Record<string, unknown> };
+
+function withoutKeysNoClientReads(result: unknown): unknown {
+  const { tools } = result as { tools: ListedTool[] };
+
+  return {
+    tools: tools.map(({ inputSchema, ...tool }) => {
+      const { $schema, ...schema } = inputSchema ?? {};
+      return { ...tool, execution: undefined, inputSchema: schema };
+    }),
+  };
+}
+
+/**
+ * L'SDK aggiunge a ogni tool due chiavi che nessun client legge, e le paghiamo a ogni sessione:
+ * `$schema` dichiara il dialetto di uno schema che il protocollo dichiara già JSON Schema, e
+ * `execution.taskSupport: 'forbidden'` è esattamente ciò che l'assenza del campo significa.
+ * Erano 13.356 caratteri, il 10% di `tools/list`.
+ *
+ * Si decora l'unico punto in cui l'SDK installa il suo handler, prima che i tool lo creino.
+ */
+function trimListedTools(server: McpServer): void {
+  const inner = server.server;
+  const install = inner.setRequestHandler.bind(inner);
+
+  inner.setRequestHandler = ((schema: unknown, handler: (...args: unknown[]) => unknown) => {
+    if (schema !== ListToolsRequestSchema) return install(schema as never, handler as never);
+
+    return install(schema as never, (async (...args: unknown[]) =>
+      withoutKeysNoClientReads(await handler(...args))) as never);
+  }) as typeof inner.setRequestHandler;
+}
+
 export function createAnomaliaMcpServer(): McpServer {
   const server = new McpServer(
     {
@@ -34,6 +68,8 @@ export function createAnomaliaMcpServer(): McpServer {
     },
     { instructions: MCP_INSTRUCTIONS },
   );
+
+  trimListedTools(server);
 
   registerAuthTools(server);
   registerBrandTools(server);
