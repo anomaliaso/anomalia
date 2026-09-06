@@ -4,6 +4,7 @@
  */
 import { env } from '$env/dynamic/private';
 import { swallow } from '$lib/server/swallow';
+import { safeFetchBytes } from '$lib/server/tool-guard';
 import { loadDesignDoc } from '$lib/server/brand-design-doc';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { UIMessage } from 'ai';
@@ -36,17 +37,19 @@ export type MotionTurnAds = Array<{
 	libraryUrl?: string | null;
 }>;
 
+const LOGO_MAX_BYTES = 1_500_000;
+const LOGO_TIMEOUT_MS = 8000;
+
 async function logoDataUrl(url: string | null): Promise<string | null> {
 	if (!url) return null;
 	if (url.startsWith('data:image/') && !url.startsWith('data:image/svg')) return url;
 	try {
-		const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+		const res = await safeFetchBytes(url, { maxBytes: LOGO_MAX_BYTES, timeoutMs: LOGO_TIMEOUT_MS });
 		if (!res.ok) return null;
-		const mime = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+		const mime = res.mime;
 		if (!mime.startsWith('image/') || mime.includes('svg')) return null;
-		const buf = Buffer.from(await res.arrayBuffer());
-		if (!buf.length || buf.length > 1_500_000) return null;
-		return `data:${mime};base64,${buf.toString('base64')}`;
+		if (!res.bytes.length) return null;
+		return `data:${mime};base64,${res.bytes.toString('base64')}`;
 	} catch {
 		return null;
 	}

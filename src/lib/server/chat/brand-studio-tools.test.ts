@@ -1,4 +1,14 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+
+// `fetch` è finto, ma la guardia SSRF davanti a esso risolve l'host per davvero: senza dettare il
+// resolver, `cdn.example` non risolve e l'immagine sparisce — un rosso che parla della macchina su
+// cui gira la suite, non del codice.
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async (host: string) =>
+    /^[\d.]+$/.test(host) ? [{ address: host, family: 4 }] : [{ address: '93.184.216.34', family: 4 }]
+  )
+}));
+
 import { noteRead, resetReadReceipts } from './read-guards';
 
 /**

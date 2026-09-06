@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
+import { safeFetchUrl } from '$lib/server/tool-guard';
 
 // GET: list all products (title, category/kind, price, image count, featured).
 export const GET: RequestHandler = async ({ request, params }) => {
@@ -44,8 +45,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   try {
     const { isShopifySite, fetchShopifyProducts, isWooCommerceSite, fetchWooCommerceProducts } = await import('$lib/server/brand-analysis');
-    const res = await fetch(brandRow.website);
-    const html = await res.text();
+    const { body: html } = await safeFetchUrl(brandRow.website);
 
     let products: any[] = [];
     let platform = '';
