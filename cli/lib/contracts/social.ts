@@ -45,13 +45,13 @@ export const LIST_SOCIAL_ACCOUNTS = {
   tool: 'list_social_accounts',
   title: 'Connected social accounts',
   description:
-    'The social accounts this brand can publish to, one row each: platform, the handle it actually ' +
-    'posts as, and whether it still works. Read it before promising anything will go out — a ' +
-    'target platform with no active account produces posts that sit forever. It also says whether ' +
-    'the plan allows connecting at all and how many slots are left, which is what decides if ' +
-    'create_social_connect_link can help. get_brand_settings carries the same connected_platforms ' +
-    'summary for the platform vocabulary; this is the account-level truth behind it, and the only ' +
-    'place a broken connection shows up. Calls no model and spends no credits.',
+    'The social accounts this brand can publish to, one row each: platform, the handle it ' +
+    'actually posts as, and whether it still works. Read it before promising anything will go out ' +
+    '— a target platform with no active account produces posts that sit forever. It also says ' +
+    'whether the plan allows connecting at all and how many slots are left, which is what decides ' +
+    'if create_social_connect_link can help. get_brand_settings carries the same ' +
+    'connected_platforms summary; this is the account-level truth behind it, and the only place a ' +
+    'broken connection shows up. Free.',
   method: 'GET',
   pathUnderBrand: '/social/accounts',
   input: z.object({}).strict(),
@@ -80,13 +80,12 @@ export const SOCIAL_CONNECT_LINK = {
     'Mint the link a HUMAN opens to authorise one social platform for this brand, and stop there. ' +
     'You never run the OAuth, never see a token and never connect anything: the person clicks, ' +
     'signs in on that platform, and the account appears. The URL is a page of our own app behind ' +
-    'their login, not a credential — but it is useless to anyone who cannot already reach the ' +
-    'brand, so hand it over and let them go. Call list_social_accounts first: this refuses when ' +
-    'the plan connects no accounts (plan_cannot_connect) or every slot is taken (account_limit), ' +
-    'and those are two different problems with two different remedies. Minting a link for a ' +
-    'platform that is already connected is allowed and returns already_connected: it is how a ' +
-    'expired account gets re-authorised, or a second account added. Calls no model and spends no ' +
-    'credits: it works precisely when credits are gone.',
+    'their login, not a credential, but it is useless to anyone who cannot already reach the ' +
+    'brand. Call list_social_accounts first: this refuses when the plan connects no accounts ' +
+    '(plan_cannot_connect) or every slot is taken (account_limit), two different problems with ' +
+    'two different remedies. Minting a link for a platform already connected is allowed and ' +
+    'returns already_connected: it is how an expired account is re-authorised, or a second one ' +
+    'added. Free: it works precisely when credits are gone.',
   method: 'POST',
   pathUnderBrand: '/social/connect',
   input: z

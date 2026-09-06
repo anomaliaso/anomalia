@@ -3,7 +3,7 @@ import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
 import { MCP_INSTRUCTIONS } from './server.ts';
 
-const SLUG_PROPERTY = { type: 'string', minLength: 1, description: 'Brand URL slug' };
+const SLUG_PROPERTY = { type: 'string', minLength: 1 };
 
 const MIGRATED_READS = [
   {

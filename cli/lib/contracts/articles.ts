@@ -102,7 +102,7 @@ export const GET_ARTICLE = {
   description:
     'One blog article in full, in any state — draft, planned, approved or published: body, SEO ' +
     'fields, cover, category, tags, author, language, schedule and status. Read it before ' +
-    'editing, and read it after to see what changed. Calls no model and spends no credits.',
+    'editing, and after, to see what changed. Free.',
   method: 'GET',
   pathUnderBrand: '/web/article',
   input: GetArticleInputSchema,
@@ -116,10 +116,10 @@ export const UPDATE_ARTICLE = {
   title: 'Update article',
   description:
     'Write text and metadata you already have onto an article: title, markdown body, meta title, ' +
-    'meta description, category, tags, author, language, schedule. Anomalia calls no model and ' +
-    'spends no credits — nothing is rewritten, regenerated or reformatted. A field you do not ' +
-    'send is left exactly as it was, so changing the title never touches the body, the cover or ' +
-    'the description. A published article is refused: what is live is not edited in place.',
+    'meta description, category, tags, author, language, schedule. Nothing is rewritten, ' +
+    'regenerated or reformatted. A field you do not send is left exactly as it was, so changing ' +
+    'the title never touches the body, the cover or the description. A published article is ' +
+    'refused: what is live is not edited in place. Free.',
   method: 'POST',
   pathUnderBrand: '/web/article',
   input: UpdateArticleInputSchema,
@@ -167,8 +167,8 @@ export const OPTIMIZE_ARTICLE = {
   title: 'Optimize article',
   description:
     'Rewrite an article so it ranks better in search, meta title and description included. It ' +
-    'spends credits and REPLACES the text that is there; keep a copy if you might want it ' +
-    'back. It does not publish. id accepts a short prefix.',
+    'spends credits and REPLACES the text that is there; keep a copy if you might want it back. ' +
+    'It does not publish.',
   method: 'POST',
   pathUnderBrand: '/web/article/:id/optimize',
   resource: 'article',
@@ -182,8 +182,8 @@ export const PUBLISH_ARTICLE = {
   tool: 'publish_article',
   title: 'Publish article',
   description:
-    'Put a blog article live on the brand\'s site. unpublish_article takes it down again ' +
-    'without losing it. No model, no credits. id accepts a short prefix.',
+    'Put a blog article live on the brand\'s site. unpublish_article takes it down again without ' +
+    'losing it. Free.',
   method: 'POST',
   pathUnderBrand: '/web/article/:id/publish',
   resource: 'article',
@@ -197,9 +197,9 @@ export const UNPUBLISH_ARTICLE = {
   tool: 'unpublish_article',
   title: 'Unpublish article',
   description:
-    'Take a live article off the site while keeping it: it becomes a draft again and nothing ' +
-    'is deleted. This is also what you do before editing one — update_article refuses a ' +
-    'published article. id accepts a short prefix.',
+    'Take a live article off the site while keeping it: it becomes a draft again and nothing is ' +
+    'deleted. This is also what you do before editing one — update_article refuses a published ' +
+    'article.',
   method: 'POST',
   pathUnderBrand: '/web/article/:id/unpublish',
   resource: 'article',
@@ -213,8 +213,8 @@ export const DELETE_ARTICLE = {
   tool: 'delete_article',
   title: 'Delete article',
   description:
-    'Delete one blog article for good. It does not come back. To take a live article off the ' +
-    'site without losing it, use unpublish_article instead. id accepts a short prefix.',
+    'Delete one blog article for good. It does not come back. To take a live article off the site ' +
+    'without losing it, use unpublish_article instead.',
   method: 'DELETE',
   pathUnderBrand: '/web/article/:id',
   resource: 'article',

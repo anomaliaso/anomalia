@@ -102,14 +102,13 @@ export const GET_CREATION_KIT = {
   tool: 'get_creation_kit',
   title: 'Creation kit',
   description:
-    'The smallest brief you need before writing one post: what the platform allows, the ' +
-    'brand\'s own facts and its approved voice, the checklist your copy will be judged ' +
-    'against, ONE worked example chosen for this goal and format, the rewrites this brand\'s ' +
-    'own team wrote, what has already worked here, and which calendar minutes are taken. It ' +
-    'is a SELECTION, not the whole library: empty sections are absent, and the whole thing is ' +
-    'capped so it never floods your context. Reads only — no model, no credits, nothing ' +
-    'written. Pictures live in list_media; checking a draft before you create it is ' +
-    'check_content.',
+    'The smallest brief you need before writing one post: what the platform allows, the brand\'s ' +
+    'own facts and its approved voice, the checklist your copy will be judged against, ONE worked ' +
+    'example chosen for this goal and format, the rewrites this brand\'s own team wrote, what has ' +
+    'already worked here, and which calendar minutes are taken. It is a SELECTION, not the whole ' +
+    'library: empty sections are absent, and the whole thing is capped so it never floods your ' +
+    'context. Pictures live in list_media; checking a draft before you create it is ' +
+    'check_content. Free.',
   method: 'GET',
   pathUnderBrand: '/creation-kit',
   input: GetCreationKitInputSchema,

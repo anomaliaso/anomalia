@@ -54,10 +54,9 @@ export const GET_GOALS = {
   tool: 'get_goals',
   title: 'Chat goals',
   description:
-    'How the brand\'s goal chases have gone, measured: how many were met on the first pass, ' +
-    'how many came back to the person, how many automatic laps were spent, and the reason ' +
-    'each one stopped — plus the goals themselves with their diary. Reads only — no model, no ' +
-    'credits.',
+    'How the brand\'s goal chases have gone, measured: how many were met on the first pass, how ' +
+    'many came back to the person, how many automatic laps were spent, and the reason each one ' +
+    'stopped — plus the goals themselves with their diary. Free.',
   method: 'GET',
   pathUnderBrand: '/goals',
   input: z

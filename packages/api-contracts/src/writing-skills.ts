@@ -20,11 +20,13 @@ export const GET_WRITING_SKILLS = {
   tool: 'get_writing_skills',
   title: 'Writing skills',
   description:
-    'READ THIS BEFORE WRITING ANY COPY FOR THE BRAND — a caption, a carousel, a script, an article, a bio. ' +
-    'It returns the actual craft text Anomalia writes with: `humanizer` and `stop-slop` always (why the output must not read as a chatbot), plus `social` or `seo-audit` depending on `agent`. ' +
-    'It also returns the built-in production skills for that agent — the ones naming the gates that refuse a render — and this brand\'s OWN procedures, the ones its team wrote or the system distilled. `source` says product from brand, and a brand procedure overrules a product skill when they disagree. ' +
-    'Bodies come inline; each skill lists its `references` by path without sending them, and you fetch one by passing `reference: "<skill>/<path>"`, which then returns that file alone. ' +
-    'No credits, no writes. Reading it costs a few thousand tokens and is the difference between copy a person would publish and copy that reads as generated.',
+    'READ THIS BEFORE WRITING ANY COPY FOR THE BRAND — a caption, a carousel, a script, an ' +
+    'article, a bio. It returns the craft text Anomalia writes with: `humanizer` and `stop-slop` ' +
+    'always, plus `social` or `seo-audit` depending on `agent`. It also returns the built-in ' +
+    'production skills for that agent — the ones naming the gates that refuse a render — and this ' +
+    'brand\'s OWN procedures, and a brand procedure overrules a product skill when they disagree. ' +
+    'Bodies come inline; each skill lists its `references` by path without sending them, and ' +
+    '`reference: "<skill>/<path>"` returns that one file alone. Free.',
   method: 'GET',
   pathUnderBrand: '/writing-skills',
   input: z

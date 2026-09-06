@@ -43,13 +43,15 @@ describe('il contratto della ricerca nella conoscenza', () => {
   });
 
   /**
-   * La descrizione è l'unica documentazione che un modello esterno legge prima di chiamare.
-   * Se non dice il prezzo e il tetto, li scopre riempiendosi la finestra.
+   * `tools/list` è l'unica documentazione che un modello esterno legge prima di chiamare, e ci
+   * arriva intera: descrizione e schema nello stesso messaggio. Il prezzo e il taglio del passo
+   * stanno nella descrizione, il tetto sul numero di passi sta nel campo che lo impone — scriverlo
+   * in tutti e due i posti è la copia che diverge alla prima modifica, non una garanzia in più.
    */
-  it('la descrizione dice il prezzo e il tetto, perché è tutto ciò che il modello legge', () => {
-    expect(SEARCH_KNOWLEDGE.description).toContain('no credits');
+  it('il modello legge il prezzo, il taglio del passo e il tetto senza chiamare niente', () => {
+    expect(SEARCH_KNOWLEDGE.description).toMatch(/free/i);
     expect(SEARCH_KNOWLEDGE.description).toContain(String(KNOWLEDGE_EXCERPT_CHARS));
-    expect(SEARCH_KNOWLEDGE.description).toContain(String(KNOWLEDGE_HITS_MAX));
+    expect(SEARCH_KNOWLEDGE.input.shape.limit.description).toContain(String(KNOWLEDGE_HITS_MAX));
   });
 
   it('il campo di ogni passo dice da dove viene, o la citazione non è verificabile', () => {

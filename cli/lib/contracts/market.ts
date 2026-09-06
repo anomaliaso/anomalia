@@ -50,8 +50,7 @@ export const GET_MARKET_FIELD = {
   title: 'Field watch',
   description:
     'What is moving in this brand\'s field right now: the topics being watched, the pattern ' +
-    'distilled from them, and the posts catalogued with a teardown of why each one spread. ' +
-    'Reads what was already gathered — no model, no credits.',
+    'distilled from them, and the posts catalogued with a teardown of why each one spread. Free.',
   method: 'GET',
   pathUnderBrand: '/market/field',
   input: z.object({ limit: limitUpTo(MARKET_FIELD_MAX, MARKET_FIELD_DEFAULT) }).strict(),
@@ -84,7 +83,9 @@ export const DIAGNOSE_RADAR = {
   tool: 'diagnose_radar',
   title: 'Radar diagnosis',
   description:
-    'Why Radar finds nothing: fetches every configured source live and reports, per source, how many items came back or why it was skipped — source off, plan, platform toggle, endpoint error. Reads only, spends no credits, and can take seconds per source.',
+    'Why Radar finds nothing: fetches every configured source live and reports, per source, how ' +
+    'many items came back or why it was skipped — source off, plan, platform toggle, endpoint ' +
+    'error. It can take seconds per source. Free.',
   method: 'GET',
   pathUnderBrand: '/radar/diagnose',
   input: z.object({}).strict(),

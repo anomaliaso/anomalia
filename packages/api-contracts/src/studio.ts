@@ -50,9 +50,9 @@ export const CREATE_PRODUCT = {
   tool: 'create_product',
   title: 'Create product',
   description:
-    'Add one offer to the brand catalog. Deterministic: it calls no model and spends no ' +
-    'credits. Use it when the catalog does not come from a connected store — sync_products ' +
-    'replaces the whole catalog from Shopify or WooCommerce and would erase a hand-made row.',
+    'Add one offer to the brand catalog. Use it when the catalog does not come from a connected ' +
+    'store — sync_products replaces the whole catalog from Shopify or WooCommerce and would erase ' +
+    'a hand-made row. Free.',
   method: 'POST',
   pathUnderBrand: '/studio/products',
   input: CreateProductInputSchema,
@@ -77,7 +77,7 @@ export const UPDATE_PRODUCT = {
   title: 'Update product',
   description:
     'Correct one offer in place. Only the fields you send change; every other column keeps the ' +
-    'value it had. Calls no model and spends no credits.',
+    'value it had. Free.',
   method: 'PUT',
   pathUnderBrand: '/products/:id',
   resource: 'product',
@@ -169,7 +169,7 @@ export const UPDATE_PERSON = {
   description:
     'Correct the name, role, description or attributes of a person already registered on this ' +
     'brand. It cannot attest consent, turn a real person into an invented one, or touch their ' +
-    'photos — those stay with the person who owns the brand. No model, no credits.',
+    'photos — those stay with the person who owns the brand. Free.',
   method: 'PUT',
   pathUnderBrand: '/people/:id',
   resource: 'person',
@@ -196,9 +196,8 @@ export const UPDATE_COMPETITOR = {
   tool: 'update_competitor',
   title: 'Update competitor',
   description:
-    'Correct a company already on this brand\'s competitor list: a wrong website, a reason ' +
-    'that no longer holds, direct versus indirect. Only the fields you send change. No model, ' +
-    'no credits.',
+    'Correct a company already on this brand\'s competitor list: a wrong website, a reason that no ' +
+    'longer holds, direct versus indirect. Only the fields you send change. Free.',
   method: 'PUT',
   pathUnderBrand: '/studio/competitors/:id',
   resource: 'competitor',
@@ -258,8 +257,8 @@ export const UPDATE_BRAND_KIT = {
   title: 'Update brand kit',
   description:
     'Change what this brand IS: what it does, its category, who it speaks to, its style, its ' +
-    'language. These are the facts every generated post is written from, so a wrong one is ' +
-    'wrong everywhere. Only the fields you send change. No model, no credits.',
+    'language. These are the facts every generated post is written from, so a wrong one is wrong ' +
+    'everywhere. Only the fields you send change. Free.',
   method: 'PUT',
   pathUnderBrand: '/studio/kit',
   input: z
@@ -281,8 +280,8 @@ export const UPDATE_VOICE = {
   title: 'Update voice',
   description:
     'Change how this brand sounds: mood, tone, register, the words it must avoid, and the ' +
-    'instructions that differ per platform. Only the fields you send change. get_voice reads ' +
-    'it back. No model, no credits.',
+    'instructions that differ per platform. Only the fields you send change. get_voice reads it ' +
+    'back. Free.',
   method: 'POST',
   pathUnderBrand: '/voice/update',
   input: z
@@ -307,8 +306,8 @@ export const ADD_COMPETITOR = {
   title: 'Add competitor',
   description:
     'Add a company this brand competes with, so research and posts can take it into account. ' +
-    'update_competitor corrects one already there; research_competitors finds them for you ' +
-    'and spends credits. No model, no credits.',
+    'update_competitor corrects one already there; research_competitors finds them for you and ' +
+    'spends credits. Free.',
   method: 'POST',
   pathUnderBrand: '/studio/competitors',
   input: z
@@ -372,9 +371,8 @@ export const ADD_NOTE = {
   title: 'Add knowledge note',
   description:
     'Save something this brand knows — a note, a policy, a transcript, a document — so the AI ' +
-    'writes from it instead of guessing. It is indexed for search: search_knowledge is how it ' +
-    'comes back, and get_knowledge_status says when it is ready to be found. No model, no ' +
-    'credits.',
+    'writes from it instead of guessing. search_knowledge is how it comes back; ' +
+    'get_knowledge_status says when it is ready to be found. Free.',
   method: 'POST',
   pathUnderBrand: '/studio/documents',
   input: z.object({ text: z.string().min(1), title: z.string().optional() }).strict(),
@@ -392,7 +390,7 @@ export const SET_COLORS = {
   description:
     'Set the colours every graphic for this brand is drawn with, as hex values: ' +
     '["#7c5cff","#ffffff"]. Three or six digits, up to 8 colours. The list REPLACES the whole ' +
-    'palette, so send all the colours you want, not just the new one. No model, no credits.',
+    'palette, so send all the colours you want, not just the new one. Free.',
   method: 'PUT',
   pathUnderBrand: '/studio/colors',
   // Stessa forma che la rotta salva: un `#aabbccdd` che passa di qui e prende un 400 di là
@@ -420,9 +418,8 @@ export const ADD_PERSON = {
   title: 'Add person',
   description:
     'Register a real person who may appear in this brand\'s images and videos. Their face is ' +
-    'withheld from every generator until consent is attested, so `consent` must be true and ' +
-    'only the person\'s own operator can state it — never assume it on someone\'s behalf. No ' +
-    'model, no credits.',
+    'withheld from every generator until consent is attested, so `consent` must be true and only ' +
+    'the person\'s own operator can state it — never assume it on someone\'s behalf. Free.',
   method: 'POST',
   pathUnderBrand: '/studio/people',
   input: z

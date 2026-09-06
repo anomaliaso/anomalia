@@ -13,10 +13,9 @@ export const GET_GSC = {
   tool: 'get_gsc',
   title: 'Search Console',
   description:
-    'How this brand\'s website does in Google search over the last 28 days: clicks, ' +
-    'impressions, the queries people arrived on and the pages they landed on — and whether ' +
-    'the property is connected at all. This is website traffic, not post engagement; that one ' +
-    'is get_analytics. Reads only — no model, no credits.',
+    'How this brand\'s website does in Google search over the last 28 days: clicks, impressions, ' +
+    'the queries people arrived on, the pages they landed on, and whether the property is ' +
+    'connected at all. Website traffic, not post engagement — that one is get_analytics. Free.',
   method: 'GET',
   pathUnderBrand: '/gsc',
   input: NoInput,
@@ -39,9 +38,9 @@ export const GET_RANKS = {
   tool: 'get_ranks',
   title: 'Rank tracking',
   description:
-    'Where this brand actually sits in Google for the keywords it tracks: the current ' +
-    'position, the previous one, the move between them, the page that ranks, and whether an ' +
-    'AI Overview appeared above it. Reads only — no model, no credits.',
+    'Where this brand actually sits in Google for the keywords it tracks: the current position, ' +
+    'the previous one, the move between them, the page that ranks, and whether an AI Overview ' +
+    'appeared above it. Free.',
   method: 'GET',
   pathUnderBrand: '/ranks',
   input: NoInput,
@@ -85,8 +84,8 @@ export const GET_BACKLINKS = {
   title: 'Backlink network',
   description:
     'Who links to this brand\'s site and who it links to, plus the exchanges still open and ' +
-    'whether the network is unlocked for this brand at all (Starter plan or above, and opted ' +
-    'in). Reads only — no model, no credits.',
+    'whether the network is unlocked for this brand at all (Starter plan or above, and opted in). ' +
+    'Free.',
   method: 'GET',
   pathUnderBrand: '/backlinks',
   input: NoInput,

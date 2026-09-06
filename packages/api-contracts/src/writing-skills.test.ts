@@ -38,7 +38,7 @@ describe('il contratto delle skill di scrittura', () => {
    */
   it('dice quando va chiamato, o non verrà chiamato', () => {
     expect(GET_WRITING_SKILLS.description).toContain('BEFORE WRITING');
-    expect(GET_WRITING_SKILLS.description).toMatch(/no credits/i);
+    expect(GET_WRITING_SKILLS.description).toMatch(/free/i);
   });
 
   it('distingue una skill di prodotto da una procedura del brand', () => {

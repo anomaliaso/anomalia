@@ -137,7 +137,7 @@ describe('i tool di brand derivati dal registry', () => {
     );
     expect((check.inputSchema?.required ?? []).sort()).toEqual(['caption', 'platforms', 'slug']);
     expect(check.annotations?.destructiveHint).toBe(false);
-    expect(check.description ?? '').toContain('spends no credits');
+    expect(check.description ?? '').toMatch(/free/i);
   });
 
   test('import_media_url compare come scrittura, e chiede solo un URL', async () => {
@@ -156,7 +156,7 @@ describe('i tool di brand derivati dal registry', () => {
     expect(Object.keys(kit.inputSchema?.properties ?? {}).sort()).toEqual(['format', 'goal', 'platforms', 'slug']);
     expect((kit.inputSchema?.required ?? []).sort()).toEqual(['format', 'goal', 'platforms', 'slug']);
     expect(kit.annotations?.readOnlyHint).toBe(true);
-    expect(kit.description ?? '').toMatch(/no model, no credits/i);
+    expect(kit.description ?? '').toMatch(/free/i);
   });
 
   test('nessun tool è registrato due volte dopo la migrazione', async () => {
@@ -173,7 +173,6 @@ describe('i tool sul singolo post', () => {
     expect(Object.keys(getPost.inputSchema?.properties ?? {}).sort()).toEqual(['id', 'slug']);
     expect((getPost.inputSchema?.required ?? []).sort()).toEqual(['id', 'slug']);
     expect(getPost.annotations?.readOnlyHint).toBe(true);
-    expect(getPost.description ?? '').toContain('id accepts a short prefix');
   });
 
   test('reschedule_post chiede anche la data e non si dichiara distruttivo', async () => {

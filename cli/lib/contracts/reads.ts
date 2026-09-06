@@ -13,10 +13,9 @@ export const GET_PLAN = {
   tool: 'get_plan',
   title: 'Editorial plan',
   description:
-    'What this brand has decided to post about: the active editorial plan, plus any proposal ' +
-    'still waiting for someone to approve it. Read it before writing anything, so the copy ' +
-    'follows the plan already agreed. propose_plan writes a new one, approve_plan is what ' +
-    'makes a proposal active. Reads only — no model, no credits.',
+    'The active editorial plan, plus any proposal still waiting for approval. Read it before ' +
+    'writing copy, so what you write follows the plan already agreed. propose_plan writes a new ' +
+    'one, approve_plan activates a proposal. Free.',
   method: 'GET',
   pathUnderBrand: '/editorial-plan',
   input: NoInput,
@@ -35,9 +34,9 @@ export const GET_WEEKLY_PLAN = {
   tool: 'get_weekly_plan',
   title: 'Weekly plan',
   description:
-    'What is lined up for the coming weeks: the seeds planned for each week — one per ' +
-    'intended post — and the posts already made from them. plan_week generates seeds, ' +
-    'save_week_seeds stores ones you wrote yourself. Reads only — no model, no credits.',
+    'What is lined up for the coming weeks: the seeds planned for each week — one per intended ' +
+    'post — and the posts already made from them. plan_week generates seeds, save_week_seeds ' +
+    'stores ones you wrote yourself. Free.',
   method: 'GET',
   pathUnderBrand: '/weekly-plan',
   input: NoInput,
@@ -146,15 +145,12 @@ export const GET_STUDIO = {
   tool: 'get_studio',
   title: 'Studio',
   description:
-    'Everything the brand knows about itself, in one call: its own facts, the people who may ' +
-    'appear in its content, the documents it has uploaded, its competitors, its products, and ' +
-    'a summary of what it has posted before. Each document carries `status` and `chunkCount` ' +
-    '(one that is not `ready` with at least one chunk exists here but is invisible to ' +
-    '`search_knowledge`) and `textBytes`, which says how much text it holds. The text itself ' +
-    'is NOT included: to answer a question, ask `search_knowledge` — it returns the passages ' +
-    'that answer it with the document each came from, instead of the whole corpus. ' +
-    '`documents: "full"` restores the complete text of every document; it exists for callers ' +
-    'that were reading it before and is almost never what you want.',
+    'Everything the brand knows about itself: its own facts, the people who may appear in its ' +
+    'content, its uploaded documents, its competitors, its products, and a summary of what it has ' +
+    'posted. Document text is NOT included — search_knowledge returns the passages that answer a ' +
+    'question, with the document each came from. A document that is not `ready`, or whose ' +
+    '`chunkCount` is 0, is listed here and invisible to search_knowledge. `documents: "full"` ' +
+    'returns every document whole and is almost never what you want.',
   method: 'GET',
   pathUnderBrand: '/studio',
   input: z
@@ -195,9 +191,9 @@ export const GET_SEO = {
   tool: 'get_seo',
   title: 'SEO overview',
   description:
-    'How the brand\'s website is doing in Google: the technical score, the search performance, ' +
-    'an overall grade, and the improvements worth making. Reads what was already measured — ' +
-    'seo_action is what runs a fresh audit and spends credits. No model, no credits.',
+    'How the brand\'s website is doing in Google: the technical score, the search performance, an ' +
+    'overall grade, and the improvements worth making. Reads the last audit — seo_action runs a ' +
+    'fresh one and spends credits. Free.',
   method: 'GET',
   pathUnderBrand: '/seo',
   input: NoInput,
@@ -216,9 +212,8 @@ export const GET_GEO = {
   title: 'GEO overview',
   description:
     'Whether this brand gets named when someone asks ChatGPT, Perplexity or Google\'s AI: its ' +
-    'share of voice, the answers that cited it, and fixes already written and ready to ' +
-    'publish. Reads what was already measured — geo_action runs a fresh check and spends ' +
-    'credits. No model, no credits.',
+    'share of voice, the answers that cited it, and fixes already written and ready to publish. ' +
+    'Reads the last check — geo_action runs a fresh one and spends credits. Free.',
   method: 'GET',
   pathUnderBrand: '/geo',
   input: NoInput,
@@ -243,9 +238,9 @@ export const GET_KEYWORDS = {
   tool: 'get_keywords',
   title: 'Keywords',
   description:
-    'The search terms worth writing for: each one\'s monthly volume, how hard it is to rank ' +
-    'for, the opportunity it carries, and what to do about it. refresh_keywords redoes the ' +
-    'research and spends credits; this only reads. No model, no credits.',
+    'The search terms worth writing for: monthly volume, how hard each is to rank for, the ' +
+    'opportunity it carries, and what to do about it. refresh_keywords redoes the research and ' +
+    'spends credits. Free.',
   method: 'GET',
   pathUnderBrand: '/keywords',
   input: NoInput,
@@ -263,8 +258,7 @@ export const GET_ADS = {
   title: 'Ads overview',
   description:
     'The brand\'s paid campaigns: what is running, what has been proposed and is waiting, and ' +
-    'which advertising accounts are connected. ads_action is what changes any of it. Reads ' +
-    'only — no model, no credits.',
+    'which advertising accounts are connected. ads_action is what changes any of it. Free.',
   method: 'GET',
   pathUnderBrand: '/ads',
   input: NoInput,
@@ -284,9 +278,9 @@ export const GET_ANALYTICS = {
   tool: 'get_analytics',
   title: 'Analytics',
   description:
-    'How the brand\'s published posts are actually doing: totals, engagement, and recent ' +
-    'activity. This is what happened after publishing, not the website\'s search traffic — ' +
-    'that one is get_gsc. Reads only — no model, no credits.',
+    'How the brand\'s published posts are actually doing: totals, engagement, recent activity. ' +
+    'This is what happened after publishing, not the website\'s search traffic — that one is ' +
+    'get_gsc. Free.',
   method: 'GET',
   pathUnderBrand: '/analytics',
   input: NoInput,
@@ -311,8 +305,7 @@ export const GET_GTM = {
   tool: 'get_gtm',
   title: 'GTM roadmap',
   description:
-    'The go-to-market roadmap: what this brand plans to do to reach its market, in order. ' +
-    'Reads only — no model, no credits.',
+    'The go-to-market roadmap: what this brand plans to do to reach its market, in order. Free.',
   method: 'GET',
   pathUnderBrand: '/gtm',
   input: NoInput,
@@ -335,8 +328,7 @@ export const GET_VOICE = {
   description:
     'How this brand is supposed to sound: mood, tone, register, the words it avoids, and the ' +
     'rules that change from one platform to another. Read it before writing any copy — ' +
-    'get_writing_skills is the craft, this is the brand. update_voice changes it. Reads only ' +
-    '— no model, no credits.',
+    'get_writing_skills is the craft, this is the brand. update_voice changes it. Free.',
   method: 'GET',
   pathUnderBrand: '/voice',
   input: NoInput,
@@ -360,10 +352,9 @@ export const GET_DASHBOARD = {
   tool: 'get_dashboard',
   title: 'Brand dashboard',
   description:
-    'Where this brand stands right now, in one call: how many posts are waiting for approval, ' +
-    'the active plan, the products, the connected social accounts, the brand\'s own facts, and ' +
-    'how the recurring jobs went last time. Start here when you do not know what to look at. ' +
-    'Reads only — no model, no credits.',
+    'Where this brand stands right now, in one call: posts waiting for approval, the active plan, ' +
+    'the products, the connected social accounts, the brand\'s own facts, and how the recurring ' +
+    'jobs went last time. Start here when you do not know what to look at. Free.',
   method: 'GET',
   pathUnderBrand: '',
   input: z.object({}).strict(),
