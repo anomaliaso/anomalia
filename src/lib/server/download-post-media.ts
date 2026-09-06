@@ -1,11 +1,24 @@
 /**
  * Collect media URLs for social posts and package them into a ZIP download.
  */
+import { isOwnMediaUrl } from '$lib/chat-media';
 import { swallow } from '$lib/server/swallow';
 import { buildZip, safeZipName, type ZipEntry } from '$lib/server/zip';
 
 const MAX_POSTS = 40;
 const MAX_BYTES_TOTAL = 180 * 1024 * 1024; // ~180 MB hard cap for serverless
+
+const OUTSIDE_BRAND_STORAGE = "outside this brand's media storage";
+const COULD_NOT_BE_DOWNLOADED = 'could not be downloaded';
+const NOTHING_DOWNLOADABLE = `No downloadable media: every selected file is ${OUTSIDE_BRAND_STORAGE} or unreachable.`;
+const SKIPPED_ENTRY_NAME = 'SKIPPED.txt';
+
+type SkippedMedia = { url: string; reason: string };
+
+function skippedNote(skipped: SkippedMedia[]): Uint8Array {
+  const lines = skipped.map((s) => `${s.url}\n  ${s.reason}`);
+  return new TextEncoder().encode(`These files were left out of this archive:\n\n${lines.join('\n\n')}\n`);
+}
 
 function extFrom(url: string, contentType: string | null): string {
   const path = url.split('?')[0] ?? url;
@@ -43,6 +56,7 @@ export async function zipPostMedia(
   if (!slice.length) return { error: 'No posts selected', status: 400 };
 
   const entries: ZipEntry[] = [];
+  const skipped: SkippedMedia[] = [];
   let total = 0;
   let fileIdx = 0;
 
@@ -54,9 +68,18 @@ export async function zipPostMedia(
 
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
+
+      if (!isOwnMediaUrl(url)) {
+        skipped.push({ url, reason: OUTSIDE_BRAND_STORAGE });
+        continue;
+      }
+
       try {
-        const res = await fetch(url);
-        if (!res.ok) continue;
+        const res = await fetch(url, { redirect: 'error' });
+        if (!res.ok) {
+          skipped.push({ url, reason: COULD_NOT_BE_DOWNLOADED });
+          continue;
+        }
         const buf = new Uint8Array(await res.arrayBuffer());
         total += buf.byteLength;
         if (total > MAX_BYTES_TOTAL) {
@@ -70,10 +93,19 @@ export async function zipPostMedia(
           data: buf
         });
         fileIdx += 1;
-      } catch (error) { swallow('download post asset', error); }
+      } catch (error) {
+        swallow('download post asset', error);
+        skipped.push({ url, reason: COULD_NOT_BE_DOWNLOADED });
+      }
     }
   }
 
-  if (!entries.length) return { error: 'No media found on selected posts', status: 404 };
-  return { zip: buildZip(entries), count: entries.length };
+  if (!entries.length) {
+    return { error: skipped.length ? NOTHING_DOWNLOADABLE : 'No media found on selected posts', status: 404 };
+  }
+
+  const count = entries.length;
+  if (skipped.length) entries.push({ name: SKIPPED_ENTRY_NAME, data: skippedNote(skipped) });
+
+  return { zip: buildZip(entries), count };
 }

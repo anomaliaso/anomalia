@@ -1463,3 +1463,29 @@ lasciano il record intatto e l'ACL no — e `db:migrate` non ripasserà mai su q
 regge anche se il grant torna — la forma è in `20260905120000_secdef_least_privilege.sql`. E lo
 stato vero si guarda in `pg_proc.proacl`, non nell'elenco delle migration applicate;
 `npm run test:privileges` fa esattamente quella domanda contro un Postgres vero.
+
+## Un URL che viene dal database non viene «da noi»
+
+`zipPostMedia` faceva `fetch(url)` nudo su `posts.media_url`, e il ragionamento implicito era che
+quella colonna la scrive il prodotto. La scrive anche l'utente: `media_url` è nella allowlist di
+`PUT /api/v1/brands/:slug/posts/:id`. In questo repository la difesa SSRF esisteva già due volte —
+`safeFetchUrl` in `tool-guard.ts` per gli URL degli estranei, `isOwnMediaUrl` in `chat-media.ts`
+per lo storage del progetto — e nessuna delle due copriva questo percorso, perché il percorso non
+somigliava a un input: somigliava a una lettura.
+
+**Segnale**: una `fetch` il cui argomento risale a una `.select()`, e una colonna con lo stesso
+nome dentro l'elenco dei campi scrivibili di un endpoint di update. I due fatti stanno in file
+lontani e nessuno dei due, da solo, sembra un difetto. La domanda che li unisce è una sola: **chi
+può scrivere questa colonna?** — non «da dove arriva questo valore».
+
+**Mossa**: filtrare l'URL con la regola che esiste già (`isOwnMediaUrl`), non scriverne una nuova,
+e ricavare l'host da `PUBLIC_SUPABASE_URL` invece di cablarlo: cablato funziona solo sull'istanza
+di chi lo scrive e rompe in silenzio il self-host. E la allowlist da sola non basta finché `fetch`
+segue i redirect per conto suo: un host consentito che risponde `302` scavalca il controllo, che è
+metà del difetto. `redirect: 'error'` quando l'origine consentita non redirige (verificalo con una
+richiesta vera prima di deciderlo), `redirect: 'manual'` con ogni salto validato quando redirige.
+
+**La regola dietro**: una blacklist di indirizzi (`127.0.0.1`, `169.254.…`, `10.…`) si aggira con
+un nome DNS che risolve lì. Quando l'insieme legittimo è noto — qui era un host solo su 530 valori
+reali in produzione — la allowlist è insieme più corta da scrivere e più stretta di qualunque
+elenco di divieti.
