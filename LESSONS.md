@@ -1514,3 +1514,17 @@ che duplicavano peggio ciò che `assertPublicUrl` fa risolvendo il nome davvero.
 **La regola dietro**: quando un controllo e il suo uso stanno in due momenti diversi, il controllo
 è un suggerimento. Se una sola delle due posizioni può esistere, è quella accanto all'uso — un
 form senza validazione dà un errore brutto, una consegna senza validazione apre la rete interna.
+
+## `Test Files 1 failed` con `Tests 0 failed` è un worktree senza `.env`
+
+Un worktree nuovo si porta dietro il codice, non l'ambiente. Senza `.env`, `hooks.server.ts`
+esplode a tempo di import — `new URL(publicEnv.PUBLIC_SUPABASE_URL)` su una stringa vuota è
+`TypeError: Invalid URL` — e `src/hooks.server.test.ts` non arriva a collezionare un solo test.
+
+**Segnale**: il riepilogo si contraddice — `Test Files 1 failed | 681 passed` accanto a
+`Tests 7516 passed`, zero test rossi. Un file che fallisce senza test falliti non è
+un'asserzione: è un modulo che non si è caricato. Cercare l'asserzione rotta è tempo buttato.
+
+**Mossa**: `cp <checkout-principale>/.env .env` nel worktree, come già si fa con `node_modules`
+(stessa famiglia di trappola, poco sopra in questo file). E prima di dare la colpa al proprio
+diff: `git diff --name-only origin/dev...HEAD` sul file incriminato — se non lo tocchi, non è tuo.
