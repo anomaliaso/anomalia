@@ -50,12 +50,12 @@ export const BILLING_PORTAL_LINK = {
   tool: 'create_billing_portal_link',
   title: 'Billing portal link',
   description:
-    'Mint a one-time link to this organization Stripe billing portal and hand it to the account ' +
+    'Mint a one-time link to this organization\'s Stripe billing portal and hand it to the account ' +
     'owner. On that page THEY can read invoices, change the card, switch plan and CANCEL the ' +
-    'subscription — you never open it and never act inside it, you return the URL and stop. ' +
-    'Treat the URL as a credential: whoever holds it reaches that customer billing, so give it ' +
-    'to the owner once, in the reply, and never store or repeat it. Only the organization owner ' +
-    'can mint one. Calls no model and spends no credits: it works precisely when credits are gone.',
+    'subscription — you never open it and never act inside it. Treat the URL as a credential: ' +
+    'whoever holds it reaches that customer\'s billing, so give it to the owner once, in the ' +
+    'reply, and never store or repeat it. Only the organization owner can mint one. Free: it ' +
+    'works precisely when credits are gone.',
   method: 'POST',
   pathUnderBrand: '/billing/portal',
   input: PortalInputSchema,
@@ -68,13 +68,14 @@ export const CHECKOUT_LINK = {
   tool: 'create_checkout_link',
   title: 'Checkout link',
   description:
-    'Mint a one-time link where the human picks a paid plan and pays, on Stripe own hosted page. ' +
-    'You never pay, never change a plan and never apply a discount: you return the URL, they ' +
-    'complete it. The same page can also CANCEL the subscription, so treat the URL as the owner ' +
-    'credential — whoever holds it reaches that customer billing — and hand it over once, never ' +
-    'stored, never repeated. Only the organization owner can mint one. Calls no model and spends ' +
-    'no credits. An organization that never subscribed has no Stripe customer to check out ' +
-    'against: the refusal carries app_billing_url, which is where the human starts.',
+    'Mint a one-time link where the human picks a paid plan and pays, on Stripe\'s own hosted ' +
+    'page. You never pay, never change a plan and never apply a discount: you return the URL, ' +
+    'they complete it. The same page can also CANCEL the subscription, so treat the URL as the ' +
+    'owner credential — whoever holds it reaches that customer\'s billing — and hand it over once, ' +
+    'never stored, never repeated. Only the organization owner can mint one. Free: it works ' +
+    'precisely when credits are gone. An organization that never subscribed has no Stripe ' +
+    'customer to check out against: the refusal carries app_billing_url, which is where the human ' +
+    'starts.',
   method: 'POST',
   pathUnderBrand: '/billing/checkout',
   input: CheckoutInputSchema,

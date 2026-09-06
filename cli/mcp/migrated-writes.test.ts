@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
 
-const SLUG = { type: 'string', minLength: 1, description: 'Brand URL slug' };
+const SLUG = { type: 'string', minLength: 1 };
 
 const NOT_DESTRUCTIVE = { readOnlyHint: false, destructiveHint: false };
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true };

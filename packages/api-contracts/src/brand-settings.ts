@@ -61,15 +61,12 @@ export const SET_BRAND_SETTINGS = {
   description:
     'Change the posting timezone, the target platforms, the per-platform hashtags, or the voice ' +
     'examples. Only the fields you send change. `hashtags` and `voice_examples` REPLACE the whole ' +
-    'list, so send the full list you want, not a delta; `[]` and `{}` clear one. Calls no model ' +
-    'and spends no credits. ' +
-    'Two consequences worth knowing before you call it. Changing `timezone` does NOT move posts ' +
-    'that already have a time: they keep firing at the same absolute instant, so their local hour ' +
-    'shifts by the offset difference — a post set for 18:00 in Rome reads as 12:00 once the brand ' +
-    'moves to New York. Only new scheduling uses the new zone. Removing a platform from ' +
-    '`platforms` does NOT cancel posts already scheduled on it: the target list decides what NEW ' +
-    'posts are made for, never what publishes, and an existing post still goes out while its ' +
-    'account is connected.',
+    'list, so send the full list you want, not a delta; `[]` and `{}` clear one. Changing ' +
+    '`timezone` does NOT move posts that already have a time: they keep firing at the same ' +
+    'absolute instant, so their local hour shifts by the offset difference. Only new scheduling ' +
+    'uses the new zone. Removing a platform from `platforms` does NOT cancel posts already ' +
+    'scheduled on it: the target list decides what NEW posts are made for, never what publishes. ' +
+    'Free.',
   method: 'PUT',
   pathUnderBrand: '/settings/brand',
   input: z

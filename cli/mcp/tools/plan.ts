@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { api } from '../../lib/api.ts';
 import { withAuth } from '../util.ts';
 
-const slug = z.string().min(1).describe('Brand URL slug');
+const slug = z.string().min(1);
 
 export function registerPlanTools(server: McpServer) {
     server.registerTool(

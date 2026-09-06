@@ -69,14 +69,13 @@ export const CREATE_POST = {
   tool: 'create_post',
   title: 'Create post',
   description:
-    'Store copy you already wrote as one pending post for review. Anomalia calls no model and ' +
-    'spends no credits. It does not publish and does not schedule: `scheduled_for` is the ' +
-    'proposed calendar time, and approve_post remains the action that authorizes distribution. ' +
-    'Text-capable platforms only — instagram and tiktok need an image, youtube needs a video. ' +
-    'Two different media failures: `media_not_found` (400) means the id is not this brand — ' +
-    'check it with list_media, and pass the full id, never a prefix; `media_unavailable` (502) ' +
-    'means the id is yours and Anomalia could not attach it, so retrying other ids is wasted ' +
-    'work — retry later or leave the media out.',
+    'Store copy you already wrote as one pending post for review. It does not publish and does ' +
+    'not schedule: `scheduled_for` is the proposed calendar time, and approve_post remains the ' +
+    'action that authorizes distribution. Text-capable platforms only — instagram and tiktok need ' +
+    'an image, youtube needs a video. Two different media failures: `media_not_found` (400) means ' +
+    'the id is not this brand — check it with list_media, and pass the full id, never a prefix; ' +
+    '`media_unavailable` (502) means the id is yours and Anomalia could not attach it, so ' +
+    'retrying other ids is wasted work — retry later or leave the media out. Free.',
   method: 'POST',
   pathUnderBrand: '/posts',
   input: CreatePostInputSchema,
@@ -100,9 +99,9 @@ export const LIST_POSTS = {
   tool: 'list_posts',
   title: 'List posts',
   description:
-    'The brand\'s posts, newest first. Filter by `status` to find what is waiting for a person ' +
-    'to approve it (`pending_user`), what is scheduled, or what already went out. get_post ' +
-    'opens one in full. Reads only — no model, no credits.',
+    'The brand\'s posts, newest first. Filter by `status` to find what is waiting for a person to ' +
+    'approve it (`pending_user`), what is scheduled, or what already went out. get_post opens one ' +
+    'in full. Free.',
   method: 'GET',
   pathUnderBrand: '/posts',
   input: z.object({
@@ -133,8 +132,8 @@ export const GET_POST = {
   tool: 'get_post',
   title: 'Get post',
   description:
-    'Open one post in full: its copy, its status, and the state of its image, video or ' +
-    'carousel slides. Reads only — no model, no credits. id accepts a short prefix.',
+    'Open one post in full: its copy, its status, and the state of its image, video or carousel ' +
+    'slides. Free.',
   method: 'GET',
   pathUnderBrand: '/posts/:id/media',
   resource: 'post',
@@ -148,9 +147,8 @@ export const RESCHEDULE_POST = {
   tool: 'reschedule_post',
   title: 'Reschedule post',
   description:
-    'Move a post to a different date and time. `scheduled_for` is an ISO datetime. It does ' +
-    'not publish and does not approve — it only changes when. No model, no credits. id ' +
-    'accepts a short prefix.',
+    'Move a post to a different date and time. `scheduled_for` is an ISO datetime. It does not ' +
+    'publish and does not approve — it only changes when. Free.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/reschedule',
   resource: 'post',
@@ -171,9 +169,9 @@ export const RENDER_POST = {
   tool: 'render_post',
   title: 'Render post image',
   description:
-    'Draw the image a post is missing, from the prompt already written on it, and attach it. ' +
-    'It spends credits: one render. To draw a picture that is not tied to a post, use ' +
-    'generate_image. id accepts a short prefix.',
+    'Draw the image a post is missing, from the prompt already written on it, and attach it. It ' +
+    'spends credits: one render. To draw a picture that is not tied to a post, use ' +
+    'generate_image.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/render',
   resource: 'post',
@@ -190,9 +188,8 @@ export const GET_CALENDAR = {
   tool: 'get_calendar',
   title: 'Calendar',
   description:
-    'What this brand is posting and when, for one month. Posts with a date appear in the ' +
-    'month they are dated for; drafts with no date come back flagged `isDraft`. Reads only — ' +
-    'no model, no credits.',
+    'What this brand is posting and when, for one month. Posts with a date appear in the month ' +
+    'they are dated for; drafts with no date come back flagged `isDraft`. Free.',
   method: 'GET',
   pathUnderBrand: '/calendar',
   input: z.object({
@@ -277,10 +274,9 @@ export const IMPORT_MEDIA_URL = {
   title: 'Import media from a URL',
   description:
     'Copy an image or video you produced elsewhere into the brand media library, then use the id ' +
-    'it returns as media_ids on create_post. Anomalia calls no model and spends no credits: the ' +
-    'file is copied, not generated. The URL must be public https and stay public across every ' +
-    'redirect; jpeg, png, webp and gif up to 12MB, mp4, mov and webm up to 64MB. Anything else ' +
-    'is refused and nothing is stored.',
+    'it returns as media_ids on create_post. The file is copied, not generated. The URL must be ' +
+    'public https and stay public across every redirect; jpeg, png, webp and gif up to 12MB, mp4, ' +
+    'mov and webm up to 64MB. Anything else is refused and nothing is stored. Free.',
   method: 'POST',
   pathUnderBrand: '/media',
   input: ImportMediaUrlInputSchema,
@@ -319,14 +315,14 @@ export const GENERATE_MEDIA = {
   description:
     'To make a picture or a clip — the older door, kept working. Prefer generate_image or ' +
     'generate_video: they name what they do, and changing a picture or animating one has its own ' +
-    'tool. kind picks image (the default) or video, and everything here forwards to those two. ' +
-    'It spends credits. It creates nothing in the calendar and publishes nothing; pass the id ' +
-    'you keep to create_post as media_ids. Images come back ready, up to ' +
+    'tool. `kind` picks image (the default) or video, and everything here forwards to those two. ' +
+    'It spends credits. It creates nothing in the calendar and publishes nothing; pass the id you ' +
+    'keep to create_post as media_ids. Images come back ready, up to ' +
     MAX_MEDIA_ALTERNATIVES + ' per call; a clip takes minutes and returns a job_id, and ' +
-    'check_media_job says when it landed — calling this again for the same clip bills a second one.' +
-    "With a slug, this brand's look is applied, and it cannot be switched off from this door: " +
-    'generate_image takes brand_style for that, and refine_media is the one that CHANGES an asset '
-    + 'you already made instead of drawing another.',
+    'check_media_job says when it landed — calling this again for the same clip bills a second ' +
+    "one. With a slug this brand's look is applied and cannot be switched off from this door: " +
+    'generate_image takes brand_style for that, and refine_media CHANGES an asset you already ' +
+    'made instead of drawing another.',
   method: 'POST',
   pathUnderBrand: '/media/generate',
   input: z
@@ -349,9 +345,9 @@ export const GENERATE_MEDIA = {
         .min(1)
         .optional()
         .describe(
-          'Model id for THIS call only — it changes no brand setting. Omit to use the brand’s ' +
-            'choice. Accepted ids come from get_media_models (slot imageModel for an image, ' +
-            'videoModel for a video); anything else is refused as model_not_for_slot.'
+          'For THIS call only; it changes no brand setting. Omit for the brand’s choice. Ids from ' +
+            'get_media_models (slot imageModel for an image, videoModel for a video); anything ' +
+            'else is refused as model_not_for_slot.'
         ),
       title: z.string().optional().describe('The name the asset carries in the library')
     })
@@ -382,11 +378,11 @@ export const CHECK_MEDIA_JOB = {
   title: 'Check a media generation job',
   description:
     'Where a video you started has got to — the ones from generate_video or generate_media, ' +
-    'newest first. `status` is `rendering` while the clip is being made and `done` once it is ' +
-    'in the library; then `media_id` is the id create_post accepts as `media_ids`. `failed` ' +
-    'says why. `not_in_library` means the clip was rendered and paid for but never filed, so ' +
-    'there is no media_id and rendering it again buys a second copy. Poll this rather than ' +
-    'starting the clip again. No model, no credits.',
+    'newest first. `status` is `rendering` while the clip is being made and `done` once it is in ' +
+    'the library; then `media_id` is the id create_post accepts as `media_ids`. `failed` says ' +
+    'why. `not_in_library` means the clip was rendered and paid for but never filed, so there is ' +
+    'no media_id and rendering it again buys a second copy. Poll this rather than starting the ' +
+    'clip again. Free.',
   method: 'GET',
   pathUnderBrand: '/media/generate',
   input: z
@@ -424,10 +420,10 @@ export const REGENERATE_POST_MEDIA = {
   tool: 'regenerate_post_media',
   title: 'Regenerate post media',
   description:
-    'Change the image already on a post, in place — give an instruction like "make it ' +
-    'warmer", not a whole new prompt. The old image is REPLACED. It spends credits: one ' +
-    'render. To change a library image or clip and keep the original, use refine_media, which ' +
-    'files the result as a new asset instead. id accepts a short prefix.',
+    'Change the image already on a post, in place — give an instruction like "make it warmer", ' +
+    'not a whole new prompt. The old image is REPLACED. It spends credits: one render. To change ' +
+    'a library image or clip and keep the original, use refine_media, which files the result as ' +
+    'a new asset instead.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/regenerate',
   resource: 'post',
@@ -443,9 +439,8 @@ export const REGENERATE_SLIDE = {
   tool: 'regenerate_slide',
   title: 'Regenerate carousel slide',
   description:
-    'Redraw one slide of a carousel — index 0 is the cover. Only that slide changes. It ' +
-    'spends credits: one render. reorder_slides moves or drops slides for free. id accepts a ' +
-    'short prefix.',
+    'Redraw one slide of a carousel — index 0 is the cover. Only that slide changes. It spends ' +
+    'credits: one render. reorder_slides moves or drops slides for free.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/slide',
   resource: 'post',
@@ -471,7 +466,7 @@ export const REORDER_SLIDES = {
   description:
     'Change the order of a carousel\'s slides, or drop some, without redrawing anything and ' +
     'without spending credits. `order` lists the slides you want kept, in the order you want ' +
-    'them: [0,2,1]. Anything left out is dropped. id accepts a short prefix.',
+    'them: [0,2,1]. Anything left out is dropped.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/order',
   resource: 'post',
@@ -489,12 +484,11 @@ export const MAKE_VIDEO = {
   tool: 'make_video',
   title: 'Animate post to video',
   description:
-    'To turn a post you already have into a video: this animates that post’s cover image and ' +
-    'attaches the clip back to the same post (it also retries a video that fell back to a ' +
-    'photo). It needs an existing post. To animate a photo on its own, or make any clip that is ' +
-    'not going on a post, use generate_video — that one needs no post at all. It spends credits: ' +
-    'one clip. It does not publish, and the post keeps the status it had. id accepts a short ' +
-    'prefix.',
+    'To turn a post you already have into a video: this animates that post\'s cover image and ' +
+    'attaches the clip back to the same post (it also retries a video that fell back to a photo). ' +
+    'It needs an existing post. To animate a photo on its own, or make any clip that is not going ' +
+    'on a post, use generate_video — that one needs no post at all. It spends credits: one clip. ' +
+    'It does not publish, and the post keeps the status it had.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/media/video',
   resource: 'post',
@@ -586,9 +580,8 @@ function modelField(slot: string) {
     .min(1)
     .optional()
     .describe(
-      'Model id for THIS call only — it changes no brand setting. Omit to use the brand’s ' +
-        'choice. The ids this job accepts, and what each costs, come from get_media_models ' +
-        '(slot ' + slot + '); anything else is refused as model_not_for_slot.'
+      'For THIS call only; it changes no brand setting. Omit for the brand’s choice. Ids from ' +
+        'get_media_models (slot ' + slot + '); anything else is refused as model_not_for_slot.'
     );
 }
 
@@ -610,12 +603,10 @@ const BrandStyleField = z
   .enum(['apply', 'ignore'])
   .optional()
   .describe(
-    "Whether this brand's own look — its colours, its fonts, its visual direction — is applied. " +
-      'Leave it out and it is, which with a slug is almost always what you want. Send `ignore` ' +
-      'when the picture must take nothing from the brand: a plain UI screenshot, an illustration ' +
-      'about somebody else, a neutral background — places where brand colours and fonts spoil ' +
-      'the result. Without a slug there is no brand to apply or ignore, and sending this is ' +
-      'refused as brand_style_needs_a_brand: pass a slug, or drop brand_style.'
+    "Whether this brand's own look — colours, fonts, visual direction — is applied. Omit it and " +
+      'it is. Send `ignore` when the picture must take nothing from the brand: a UI screenshot, ' +
+      'an illustration about somebody else, a neutral background. Without a slug there is no ' +
+      'brand to apply or ignore: refused as brand_style_needs_a_brand.'
   );
 
 /**
@@ -660,23 +651,21 @@ export const GENERATE_IMAGE = {
   tool: 'generate_image',
   title: 'Generate an image',
   description:
-    'To draw a picture from a description — "an image of a cat", a product shot, a background ' +
-    "for a slide. With a slug, this brand's own look is applied by default — its colours, its " +
-    'fonts and the visual direction it has settled on — so you do not have to describe them; ' +
-    'brand_style: ignore leaves them out. Without a slug there is no brand and none of that ' +
-    'reaches the model, so name the style you want in the prompt. ' +
-    'WITHOUT slug this is a one-off drawing — no brand, ' +
-    'nothing filed anywhere, id comes back null and there is nothing to hand to create_post. ' +
-    "WITH slug the image lands in that brand's library and its id is what create_post takes as " +
-    'media_ids: use it when the picture belongs to a brand, or is going to become a post. Do ' +
+    'To draw a picture from a description — "an image of a cat", a product shot, a background for ' +
+    "a slide. With a slug, this brand's own look is applied by default — its colours, its fonts, " +
+    'its visual direction — so you do not have to describe them; brand_style: ignore leaves them ' +
+    'out. Without a slug there is no brand and none of that reaches the model, so name the style ' +
+    'you want in the prompt. WITHOUT slug this is a one-off drawing: no brand, nothing filed ' +
+    'anywhere, id comes back null and there is nothing to hand to create_post. WITH slug the ' +
+    "image lands in that brand's library and its id is what create_post takes as media_ids. Do " +
     'NOT call list_brands to decide where to draw — if nobody named a brand there is no brand, ' +
-    "and guessing one spends a real organisation's credits and litters a real library. It " +
-    'spends credits: one render per image, renders in the answer says how many were billed and ' +
-    'cost_usd what they actually cost. It creates nothing in the calendar and publishes nothing, ' +
-    'so ask for two or three with count, look at them, keep one. To CHANGE a picture that ' +
-    'already exists use refine_media — correcting one drawing beats redrawing until it is ' +
-    'right. To pick the model read get_media_models and pass model, for this call only; ' +
-    'set_media_model is the one that changes the brand from now on.',
+    "and guessing one spends a real organisation's credits and litters a real library. It spends " +
+    'credits: one render per image, and `renders` in the answer says how many were billed, ' +
+    'cost_usd what they cost. It creates nothing in the calendar and publishes nothing, so ask ' +
+    'for two or three with `count`, look at them, keep one. To CHANGE a picture that already ' +
+    'exists use refine_media — correcting one drawing beats redrawing until it is right. To pick ' +
+    'the model read get_media_models and pass `model`, for this call only; set_media_model ' +
+    'changes the brand from now on.',
   method: 'POST',
   pathUnderBrand: '/media/images',
   pathWithoutBrand: '/images',
@@ -781,15 +770,15 @@ export const GENERATE_VIDEO = {
   title: 'Generate a video',
   description:
     'To make a video: animate a photo you already have, or film a clip from a prompt alone. ' +
-    '"Animate this photo", "a 5 second video of this image" — that is base_media_id pointing at ' +
-    'a library image plus a prompt for the movement, and it needs NO post. It spends credits, ' +
-    'and the model moves that bill by more than an order of magnitude, so read get_media_models ' +
-    '(slot videoModel from a prompt, videoImageModel when animating an image) and pass model for ' +
-    'this call only. A clip takes minutes: this returns a job_id with status rendering, and ' +
+    '"Animate this photo", "a 5 second video of this image" — that is `base_media_id` pointing at ' +
+    'a library image plus a prompt for the movement, and it needs NO post. It spends credits, and ' +
+    'the model moves that bill by more than an order of magnitude, so read get_media_models (slot ' +
+    'videoModel from a prompt, videoImageModel when animating an image) and pass `model` for this ' +
+    'call only. A clip takes minutes: this returns a job_id with status rendering, and ' +
     'check_media_job says when it landed — calling this again for the same clip bills a second ' +
-    'one. It creates nothing in the calendar and publishes nothing; when the clip lands, pass ' +
-    'its media_id to create_post as media_ids. To animate the cover of a post you already have, ' +
-    'make_video does that in one step.',
+    'one. It creates nothing in the calendar and publishes nothing; when the clip lands, pass its ' +
+    'media_id to create_post as media_ids. To animate the cover of a post you already have, ' +
+    'make_video does it in one step.',
   method: 'POST',
   pathUnderBrand: '/media/videos',
   input: z
@@ -839,14 +828,12 @@ export const GENERATE_CAROUSEL = {
     'To make a carousel — a SERIES of images that read as one object, not N unrelated pictures. ' +
     'Slide 1 is the cover and must work at thumbnail size; every later slide advances the angle ' +
     'one concrete step and carries exactly one idea. It spends credits: one render per slide, so ' +
-    'a 5-slide carousel is five renders — ask for the count you mean. It creates nothing in the ' +
-    'calendar and publishes nothing: pass the ids to create_post as media_ids, in order. TO ' +
-    'CHANGE ONE SLIDE use ' +
-    'refine_media on that slide id, and put the continuity_tokens this returns back into your ' +
+    'a 5-slide carousel is five renders. It creates nothing in the calendar and publishes ' +
+    'nothing: pass the ids to create_post as media_ids, in order. TO CHANGE ONE SLIDE use ' +
+    'refine_media on that slide id, and put the `continuity_tokens` this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
-    'light or the recurring motif without them takes that slide out of the set. ' +
-    "With a slug, this brand's look is applied to every slide, and there is no way to switch it " +
-    "off here: a series that is not the brand's is not a series.",
+    'light or the recurring motif without them takes that slide out of the set. With a slug, this ' +
+    'brand\'s look is applied to every slide and there is no way to switch it off here.',
   method: 'POST',
   pathUnderBrand: '/media/carousel',
   input: z

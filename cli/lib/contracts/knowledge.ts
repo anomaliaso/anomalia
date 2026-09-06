@@ -32,10 +32,13 @@ export const SEARCH_KNOWLEDGE = {
   tool: 'search_knowledge',
   title: 'Search brand knowledge',
   description:
-    "Ask the brand's own documents a question and get back the passages that answer it, each with the document and heading it came from. " +
-    'Hybrid retrieval over what is already indexed: keywords first, and a single embedding of the question only when keywords come up short — no credits are spent and nothing is written. ' +
-    `Each passage is cut at ${KNOWLEDGE_EXCERPT_CHARS} characters (\`truncated\` says when there is more); \`limit\` is ${KNOWLEDGE_HITS_DEFAULT} by default and ${KNOWLEDGE_HITS_MAX} at most. ` +
-    'Narrow with `collection` when you know the shelf. An empty `hits` means the indexed corpus has no answer — which is not the same as the brand not knowing it, so read `get_knowledge_status` before concluding anything: a document still queued has nothing to find.',
+    "Ask the brand's own documents a question and get back the passages that answer it, each with " +
+    'the document and heading it came from. Hybrid retrieval over what is already indexed: keywords ' +
+    'first, one embedding of the question only when keywords come up short. ' +
+    `Each passage is cut at ${KNOWLEDGE_EXCERPT_CHARS} characters (\`truncated\` says when there is more). ` +
+    'Narrow with `collection` when you know the shelf. Empty `hits` means the INDEXED corpus has no ' +
+    'answer, which is not the same as the brand not knowing it — read `get_knowledge_status` before ' +
+    'concluding anything: a document still queued has nothing to find. Free.',
   method: 'GET',
   pathUnderBrand: '/knowledge/search',
   input: z
@@ -77,10 +80,15 @@ export const GET_KNOWLEDGE_STATUS = {
   tool: 'get_knowledge_status',
   title: 'Knowledge status',
   description:
-    'Whether the brand\'s knowledge is USABLE, not just uploaded. Read it whenever `search_knowledge` comes back empty: an indexed corpus with no answer means the brand does not know the thing, a queued or failed one means nobody has read it yet — opposite situations needing opposite actions. ' +
-    '`documents` counts the pipeline stage by stage (`pending` → `processing` → `ready` | `failed`) and `indexed` is the only number retrieval can see: a `ready` document with zero chunks is not searchable. ' +
-    '`chunks.embedded` below `chunks.total` means retrieval is running on keywords alone, so paraphrases miss. ' +
-    `\`failures\` names each broken document and WHY it broke (${KNOWLEDGE_FAILURES_MAX} at most), \`collections\` says which shelves \`search_knowledge\` can usefully narrow to, and \`sources\` says which connected apps feed the corpus and when each last synced. No credits, no writes.`,
+    "Whether the brand's knowledge is USABLE, not just uploaded. Read it whenever `search_knowledge` " +
+    'comes back empty: an indexed corpus with no answer means the brand does not know the thing, a ' +
+    'queued or failed one means nobody has read it yet — opposite situations needing opposite ' +
+    'actions. `documents` counts the pipeline stage by stage (`pending` → `processing` → `ready` | ' +
+    '`failed`) and `indexed` is the only number retrieval can see: a `ready` document with zero ' +
+    'chunks is not searchable. `chunks.embedded` below `chunks.total` means retrieval runs on ' +
+    'keywords alone, so paraphrases miss. `failures` names each broken document and why it broke, ' +
+    '`collections` says which shelves `search_knowledge` can narrow to, and `sources` says which ' +
+    'connected apps feed the corpus and when each last synced. Free.',
   method: 'GET',
   pathUnderBrand: '/knowledge',
   input: z.object({}).strict(),

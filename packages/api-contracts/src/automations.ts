@@ -44,11 +44,11 @@ export const GET_AUTOMATIONS = {
   title: 'Recurring jobs',
   description:
     'The recurring jobs included with the product and whether this brand runs them: what each ' +
-    'one does, how often, whether it is on, how it went last time, and how many times it ' +
-    'actually ran in the last 30 days. Read it before set_automation — `runs_30d` with `cadence` ' +
-    'is how you tell what turning one on commits the brand to. What it CANNOT tell you is the ' +
-    'money: AI spend is recorded per call, with no column naming the job that made it, so no ' +
-    'clean read attributes dollars to one automation. The brand-wide bill is on the usage page.',
+    'does, how often, whether it is on, how it went last time, and how many times it ran in the ' +
+    'last 30 days. Read it before set_automation — `runs_30d` with `cadence` is how you tell what ' +
+    'turning one on commits the brand to. What it CANNOT tell you is the money: AI spend is ' +
+    'recorded per call, with no column naming the job that made it, so no clean read attributes ' +
+    'dollars to one automation. The brand-wide bill is on the usage page.',
   method: 'GET',
   pathUnderBrand: '/settings/automations',
   input: z.object({}).strict(),
@@ -67,14 +67,13 @@ export const SET_AUTOMATION = {
   tool: 'set_automation',
   title: 'Turn a recurring job on or off',
   description:
-    'Turn one recurring job on or off for this brand. ' +
-    'Turning one ON is a spending decision, not a preference: from that moment the job runs BY ' +
-    'ITSELF on its cadence, and every run calls AI models and spends the brand’s credits, with ' +
-    'nobody looking. Say which job, how often it will run, and that it spends — before you turn ' +
-    'it on, and to the person whose credits they are. Turning one OFF spends nothing and is the ' +
-    'safe direction: it takes effect at the next tick and destroys nothing. ' +
-    'A brand without a paid plan runs none of them, however many are on. The call itself calls ' +
-    'no model and spends no credits.',
+    'Turn one recurring job on or off for this brand. Turning one ON is a spending decision, not ' +
+    'a preference: from that moment the job runs BY ITSELF on its cadence, and every run calls AI ' +
+    'models and spends the brand\'s credits, with nobody looking. Say which job, how often it will ' +
+    'run, and that it spends — before you turn it on, and to the person whose credits they are. ' +
+    'Turning one OFF spends nothing and is the safe direction: it takes effect at the next tick ' +
+    'and destroys nothing. A brand without a paid plan runs none of them, however many are on. ' +
+    'Free.',
   method: 'PUT',
   pathUnderBrand: '/settings/automations',
   input: z.object({ job, enabled: z.boolean().describe('true starts it running by itself') }).strict(),

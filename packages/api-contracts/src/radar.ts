@@ -78,7 +78,7 @@ export const SET_RADAR_PLATFORM = {
   description:
     'Switch one platform on or off for this brand’s Radar. Turning one off narrows what Radar ' +
     'finds; it deletes no source and no result already found. Threads, X and LinkedIn need the ' +
-    'Pro plan and answer plan_required below it. Calls no model and spends no credits.',
+    'Pro plan and answer plan_required below it. Free.',
   method: 'PUT',
   pathUnderBrand: '/settings/radar',
   input: z.object({ platform, enabled: z.boolean() }).strict(),
@@ -99,8 +99,7 @@ export const ADD_RADAR_SOURCE = {
     'Threads / X / LinkedIn search. A source already there is left as it is rather than ' +
     'duplicated — the pair (kind, value) is its identity, and it is what remove_radar_source ' +
     'takes. Read get_radar first: the plan decides which kinds are allowed (plan_required) and ' +
-    'how many sources fit (source_limit). Adding a source calls no model and spends no credits, ' +
-    'but Radar reads it on every run from then on.',
+    'how many sources fit (source_limit). Radar reads the source on every run from then on. Free.',
   method: 'POST',
   pathUnderBrand: '/settings/radar/sources',
   input: z

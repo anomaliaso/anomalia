@@ -149,6 +149,15 @@ describe('le istruzioni del server sono una mappa, non un ordine', () => {
     expect(MCP_INSTRUCTIONS).toMatch(/credits/i);
   });
 
+  /**
+   * Il prefisso corto valeva per una quindicina di tool e ognuno se lo ripeteva. È una regola del
+   * server, non di un tool: sta qui, dove si legge una volta per sessione, e le descrizioni non la
+   * pagano più quindici volte.
+   */
+  test('dicono che gli id accettano un prefisso corto', () => {
+    expect(MCP_INSTRUCTIONS).toMatch(/prefix/i);
+  });
+
   test('nessuna tariffa scritta a mano, come sulle altre due superfici', () => {
     expect(HAND_WRITTEN_TARIFF.test(MCP_INSTRUCTIONS)).toBe(false);
   });

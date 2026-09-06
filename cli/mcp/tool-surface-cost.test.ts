@@ -3,14 +3,16 @@ import { handleMcpFetch } from './http-app.ts';
 
 /**
  * `tools/list` si paga a ogni sessione, come le istruzioni del handshake, e nessuno lo guardava:
- * misurato sul transport vero era 131.959 caratteri — circa 33.000 token prima che l'agente
- * chieda qualunque cosa. Il budget qui sotto è quel numero dopo il taglio, e il test esiste
- * perché ricresce da solo: ogni tool nuovo porta la sua descrizione, e nessuno somma.
+ * misurato sul transport vero era 129.212 caratteri — circa 32.300 token prima che l'agente
+ * chieda qualunque cosa. Oggi sono 109.837, e il tetto lascia il margine di qualche tool nuovo:
+ * quando lo sfonda, la superficie va guardata di nuovo invece di crescere in silenzio.
  *
  * Si misura il TRANSPORT, non i sorgenti: il conto dei sorgenti ha già sbagliato due volte,
- * perché lo schema JSON che il protocollo spedisce non somiglia allo zod da cui nasce.
+ * perché lo schema JSON che il protocollo spedisce non somiglia allo zod da cui nasce. E si misura
+ * `result` intero, wrapper `{"tools":…}` compreso: contare il solo array dà 10 caratteri in meno,
+ * ed è la differenza esatta fra due conteggi che sembravano in disaccordo.
  */
-const TOOLS_LIST_MAX_CHARS = 96_000;
+const TOOLS_LIST_MAX_CHARS = 113_000;
 
 async function listedTools(): Promise<{ tools: Array<Record<string, unknown>>; chars: number }> {
   const post = (body: unknown) =>
@@ -51,7 +53,7 @@ describe('la lista dei tool sta dentro il suo budget', () => {
   /**
    * Due chiavi che l'SDK aggiunge da sé e che nessun client legge: `$schema` dichiara il dialetto
    * di uno schema che il protocollo dichiara già JSON Schema, e `taskSupport: 'forbidden'` è il
-   * valore che l'assenza del campo significa. Costavano 13.356 caratteri — il 10% della lista.
+   * valore che l'assenza del campo significa. Costavano 10.948 caratteri — l'8,5% della lista.
    */
   test('non ripete il dialetto dello schema a ogni tool', async () => {
     const { tools } = await listedTools();

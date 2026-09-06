@@ -25,18 +25,20 @@ export const QUERY_DATABASE = {
   tool: 'query',
   title: 'Query the database',
   description:
-    'Read ANY table in the database directly, AS YOU — the request runs with the anon key plus your ' +
-    'own session, so Postgres RLS returns exactly the rows you would see in the app, and nothing more. ' +
-    'READ ONLY: there is no SQL here. You name a table, columns and filters, and it issues one ' +
-    'PostgREST read, so a write has nowhere to go — no INSERT, no CTE, no function call, nothing to ' +
-    'attempt. Omit `table` to list every table you can name. Ask for a table with no `columns` to get ' +
-    'real rows with every column: the keys of a row ARE the schema. THEN NAME THE COLUMNS YOU NEED: a read with no `columns` carries every column, the 20,000-character cap cuts whole rows to fit, and you get a short answer with no sign that you asked for a long one — 50 rows of `posts` come back as nine, the same 50 rows come back whole with five columns named. One table per call — no joins, no ' +
-    'embeds; read two tables and match the ids yourself. Reach for it when the answer needs a table ' +
-    'nothing else exposes, a count, or a join you do by hand. ' +
-    'IT IS ALSO THE READ FOR QUESTIONS THAT HAVE NO TOOL OF THEIR OWN. What this brand SELLS — its ' +
-    'catalogue of products, offers and services — is the `products` table: one row per offer, with ' +
-    '`title`, `kind`, `pricing`, `url`, `featured` and the `images` it carries. ' +
-    'Costs nothing.',
+    'Read ANY table in the database directly, AS YOU — the request runs with the anon key plus ' +
+    'your own session, so Postgres RLS returns exactly the rows you would see in the app, and ' +
+    'nothing more. READ ONLY: there is no SQL here. You name a table, columns and filters, and it ' +
+    'issues one PostgREST read, so a write has nowhere to go. Omit `table` to list every table ' +
+    'you can name. Ask for a table with no `columns` to get real rows with every column: the keys ' +
+    'of a row ARE the schema. THEN NAME THE COLUMNS YOU NEED: a read with no `columns` carries ' +
+    'every column, the 20,000-character cap cuts whole rows to fit, and you get a short answer ' +
+    'with no sign that you asked for a long one — 50 rows of `posts` come back as nine, the same ' +
+    '50 rows come back whole with five columns named. One table per call — no joins, no embeds; ' +
+    'read two tables and match the ids yourself. Reach for it when the answer needs a table ' +
+    'nothing else exposes, a count, or a join you do by hand. IT IS ALSO THE READ FOR QUESTIONS ' +
+    'THAT HAVE NO TOOL OF THEIR OWN. What this brand SELLS — its catalogue of products, offers ' +
+    'and services — is the `products` table: one row per offer, with `title`, `kind`, `pricing`, ' +
+    '`url`, `featured` and the `images` it carries. Free.',
   method: 'POST',
   pathUnderBrand: '/query',
   input: z

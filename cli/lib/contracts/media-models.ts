@@ -63,11 +63,11 @@ export const SET_MEDIA_MODEL = {
   tool: 'set_media_model',
   title: 'Choose a media model',
   description:
-    'Pin the model that serves one job for this brand — image generation, image refinement, ' +
-    'video from text, animating a still, video refinement, motion transfer. Only the models ' +
-    'that job accepts are taken: anything else comes back as model_not_for_slot with the list ' +
-    'that would have been accepted. Send model: null to drop the choice and go back to the ' +
-    'platform default. Calls no model and spends no credits; it takes effect on the next render.',
+    'Pin the model that serves one job for this brand — image generation, image refinement, video ' +
+    'from text, animating a still, video refinement, motion transfer. Only the models that job ' +
+    'accepts are taken: anything else comes back as model_not_for_slot with the list that would ' +
+    'have been accepted. Send model: null to drop the choice and go back to the platform default. ' +
+    'Free; it takes effect on the next render.',
   method: 'PUT',
   pathUnderBrand: '/settings/models',
   input: z

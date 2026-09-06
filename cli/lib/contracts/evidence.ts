@@ -82,16 +82,13 @@ export type WebAuditFindings = z.infer<typeof AuditFindings>;
 export type AuditCitationRow = z.infer<typeof CitationRow>;
 export type WebFixRow = z.infer<typeof FixRow>;
 
-const COSTS_NOTHING =
-  'Reads what was already measured. It calls no model, spends no credits and writes nothing.';
-
 export const LIST_WEB_AUDITS = {
   tool: 'list_web_audits',
   title: 'List web audits',
   description:
     "Every audit Anomalia has run on this brand's website and its visibility in AI answers, newest " +
     'first, one line each: when it ran, the scores it measured, and how much it observed. Take an id ' +
-    `from here to open one audit instead of paying for a new one. ${COSTS_NOTHING}`,
+    'from here to open one audit instead of paying for a new one. Free.',
   method: 'GET',
   pathUnderBrand: '/web/audits',
   input: z.object({ limit: limitUpTo(WEB_AUDITS_MAX, WEB_AUDITS_DEFAULT), offset }).strict(),
@@ -104,9 +101,9 @@ export const GET_AUDIT_FINDINGS = {
   tool: 'get_audit_findings',
   title: 'Read one audit',
   description:
-    'What one audit observed, exactly as it was recorded: the technical findings on the site, the ' +
-    'search and backlink figures, and the Google AI Overview sampling. Without audit_id you get the ' +
-    `most recent audit, never an older one that happens to hold more data. ${COSTS_NOTHING}`,
+    'What one audit observed, exactly as recorded: the technical findings on the site, the search ' +
+    'and backlink figures, and the Google AI Overview sampling. Without audit_id you get the most ' +
+    'recent audit, never an older one that happens to hold more data. Free.',
   method: 'GET',
   pathUnderBrand: '/web/audits/findings',
   input: z.object({ audit_id: auditId }).strict(),
@@ -122,7 +119,7 @@ export const LIST_AUDIT_CITATIONS = {
     'The questions Anomalia put to answer engines during one audit, and what came back: which engine, ' +
     'the question verbatim, whether the brand was named and in which position, the competitors named ' +
     'instead, and the domains the answer cited. This is the evidence behind the share-of-voice number. ' +
-    `Without audit_id you get the most recent audit. ${COSTS_NOTHING}`,
+    'Without audit_id you get the most recent audit. Free.',
   method: 'GET',
   pathUnderBrand: '/web/audits/citations',
   input: z
@@ -150,7 +147,7 @@ export const LIST_WEB_FIXES = {
   description:
     'The fixes Anomalia wrote from its audits — FAQ blocks, structured data, llms.txt, landing copy — ' +
     'with the body complete and ready to publish. Ask for one fix_id when you know which one you want: ' +
-    `bodies are long, so few come back per call. ${COSTS_NOTHING}`,
+    'bodies are long, so few come back per call. Free.',
   method: 'GET',
   pathUnderBrand: '/web/fixes',
   input: z

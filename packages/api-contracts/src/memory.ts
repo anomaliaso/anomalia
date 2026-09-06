@@ -32,8 +32,9 @@ export const SAVE_MEMORY = {
   description:
     'Record something you learned about this brand so the next conversation starts from it. ' +
     `Writable categories: ${AGENT_MEMORY_CATEGORIES.join(', ')}. \`voice\` and \`constraint\` are NOT writable here — they govern everything downstream and only the brand's own people set them. ` +
-    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: you take it to the person, you do not win by arriving last. Sending the same value again reinforces it. ' +
-    'Entries land as brand knowledge, never scoped to a chat, and arrive with the confidence of something a model inferred rather than something a person stated.',
+    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: ' +
+    'take it to the person. Sending the same value again reinforces it. Entries land as brand ' +
+    'knowledge, never scoped to a chat.',
   method: 'POST',
   pathUnderBrand: '/memory',
   input: z

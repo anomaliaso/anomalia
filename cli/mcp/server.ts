@@ -42,7 +42,7 @@ function withoutKeysNoClientReads(result: unknown): unknown {
  * L'SDK aggiunge a ogni tool due chiavi che nessun client legge, e le paghiamo a ogni sessione:
  * `$schema` dichiara il dialetto di uno schema che il protocollo dichiara già JSON Schema, e
  * `execution.taskSupport: 'forbidden'` è esattamente ciò che l'assenza del campo significa.
- * Erano 13.356 caratteri, il 10% di `tools/list`.
+ * Erano 10.948 caratteri, l'8,5% di `tools/list`.
  *
  * Si decora l'unico punto in cui l'SDK installa il suo handler, prima che i tool lo creino.
  */

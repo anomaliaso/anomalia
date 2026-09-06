@@ -24,10 +24,9 @@ export function registerAuthTools(server: McpServer) {
     {
       title: 'List brands',
       description:
-        'Which brands this person can work on, and the slug each one is called by — every other ' +
-        'tool needs that slug. Each row says the plan it is on, how many posts wait for approval, ' +
-        'and whether its recurring jobs are running. Start here when you do not know the slug. ' +
-        'Reads only — no model, no credits.',
+        'Which brands this person can work on, and the slug each one is called by — every other tool ' +
+        'needs that slug. Each row says the plan it is on, how many posts wait for approval, and ' +
+        'whether its recurring jobs are running. Start here when you do not know the slug. Free.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
