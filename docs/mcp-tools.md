@@ -475,7 +475,7 @@ insert che *può* sostituire rimette dentro esattamente la bugia che i due tool 
 Il censimento che l'ha accompagnato — aperti tutti i 71 handler del registro — conferma i verdetti
 qui sotto e ne aggiunge quattro: `create_product`, `update_product`, `update_person`,
 `update_competitor` sono un `insert`/`update` di una riga e nient'altro. Sono i soli quattro su 71,
-e valgono 3.794 caratteri contro i 2.952 che i due tool aggiungono a `tools/list`. Il motivo per
+e valgono 3.794 caratteri contro i 3.052 che i due tool aggiungono a `tools/list`. Il motivo per
 ognuno degli altri sta in `changelog/2026-09-06-generic-write.md`.
 
 #### Primo argomento: collassare distrugge `destructiveHint`, e questo non è opinabile

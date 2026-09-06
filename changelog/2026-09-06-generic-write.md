@@ -84,10 +84,10 @@ Misurato sul transport (`tools/list` dopo `initialize`), non sui sorgenti:
 
 | | caratteri | tool |
 |---|---|---|
-| `dev` | 109.837 | 119 |
-| con `insert_row` e `update_row` | 112.789 | 121 |
+| `dev` | 91.163 | 86 |
+| con `insert_row` e `update_row` | 94.215 | 88 |
 
-**+2.952.** I due tool non si portano dietro l'enum delle 149 tabelle che `query` ha: là costa ~2.700
+**+3.052.** I due tool non si portano dietro l'enum delle 149 tabelle che `query` ha: là costa ~2.700
 caratteri e li vale, perché una lettura si scopre indovinando un nome, mentre chi sta per scrivere ha
 appena letto — e la descrizione rimanda a `query` per l'elenco. Il rientro è il censimento qui sotto.
 
