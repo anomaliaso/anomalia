@@ -1489,3 +1489,42 @@ richiesta vera prima di deciderlo), `redirect: 'manual'` con ogni salto validato
 un nome DNS che risolve lì. Quando l'insieme legittimo è noto — qui era un host solo su 530 valori
 reali in produzione — la allowlist è insieme più corta da scrivere e più stretta di qualunque
 elenco di divieti.
+
+## Validare alla creazione non è validare alla consegna
+
+`brand_webhooks.url` passava da `validateWebhookUrl` quando la riga nasceva, e da lì in poi da
+niente: `attemptDelivery` faceva `fetch(webhook.url)` mesi dopo, seguendo i redirect. Fra il
+controllo e l'uso può cambiare tutto ciò che il controllo aveva verificato — il record DNS di un
+nome pubblico può iniziare a rispondere `127.0.0.1`, e l'endpoint può rispondere `302` verso un
+indirizzo interno. Il valore controllato non è quello usato: è quello che *era* al momento del
+controllo.
+
+**Segnale**: una validazione che vive in un handler di form o in un `POST` di creazione, e un
+consumo dello stesso campo in un altro file — un cron, una coda, un retry. La distanza fra i due
+si misura in mesi, non in millisecondi, e nel mezzo c'è un resolver che nessuno di noi controlla.
+Il caso peggiore non è la riga scritta in malafede: è quella scritta in buona fede e diventata
+pericolosa dopo.
+
+**Mossa**: il controllo va **dove il valore viene usato**, dentro il `try` che già registra il
+fallimento, così un rifiuto diventa una consegna fallita e non un'eccezione che risale. Quello
+alla creazione si tiene solo per dare un errore immediato nel form, e deve **delegare alla stessa
+funzione** invece di tenersi una copia della regola: qui erano undici regex su intervalli privati
+che duplicavano peggio ciò che `assertPublicUrl` fa risolvendo il nome davvero.
+
+**La regola dietro**: quando un controllo e il suo uso stanno in due momenti diversi, il controllo
+è un suggerimento. Se una sola delle due posizioni può esistere, è quella accanto all'uso — un
+form senza validazione dà un errore brutto, una consegna senza validazione apre la rete interna.
+
+## `Test Files 1 failed` con `Tests 0 failed` è un worktree senza `.env`
+
+Un worktree nuovo si porta dietro il codice, non l'ambiente. Senza `.env`, `hooks.server.ts`
+esplode a tempo di import — `new URL(publicEnv.PUBLIC_SUPABASE_URL)` su una stringa vuota è
+`TypeError: Invalid URL` — e `src/hooks.server.test.ts` non arriva a collezionare un solo test.
+
+**Segnale**: il riepilogo si contraddice — `Test Files 1 failed | 681 passed` accanto a
+`Tests 7516 passed`, zero test rossi. Un file che fallisce senza test falliti non è
+un'asserzione: è un modulo che non si è caricato. Cercare l'asserzione rotta è tempo buttato.
+
+**Mossa**: `cp <checkout-principale>/.env .env` nel worktree, come già si fa con `node_modules`
+(stessa famiglia di trappola, poco sopra in questo file). E prima di dare la colpa al proprio
+diff: `git diff --name-only origin/dev...HEAD` sul file incriminato — se non lo tocchi, non è tuo.

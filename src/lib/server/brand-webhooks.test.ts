@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$env/dynamic/private', () => ({ env: { COMPOSIO_API_KEY: 'ak_test' } }));
 
+// È il resolver a decidere se un nome è interno, quindi il test lo detta invece di dipendere dal
+// DNS della macchina: un indirizzo letterale risponde se stesso, un nome risponde pubblico —
+// tranne quello che questi casi vogliono interno.
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async (host: string) => {
+    if (host.endsWith('.internal') || host.endsWith('.local') || host === 'localhost') {
+      return [{ address: '127.0.0.1', family: 4 }];
+    }
+    return /^[\d.]+$/.test(host)
+      ? [{ address: host, family: 4 }]
+      : [{ address: '93.184.216.34', family: 4 }];
+  })
+}));
+
 import {
   backoffMs,
   eventBody,
@@ -19,14 +33,14 @@ import {
 import { createHmac } from 'node:crypto';
 
 describe('validateWebhookUrl', () => {
-  it('accepts a public https endpoint', () => {
-    expect(validateWebhookUrl(' https://hooks.acme.com/anomalia ')).toEqual({
+  it('accepts a public https endpoint', async () => {
+    expect(await validateWebhookUrl(' https://hooks.acme.com/anomalia ')).toEqual({
       ok: true,
       url: 'https://hooks.acme.com/anomalia'
     });
   });
 
-  it('refuses anything we should not be POSTing to', () => {
+  it('refuses anything we should not be POSTing to', async () => {
     // http is a plaintext secret on the wire; the rest are our own network.
     for (const bad of [
       'http://hooks.acme.com',
@@ -39,7 +53,7 @@ describe('validateWebhookUrl', () => {
       'https://db.internal/hook',
       'not a url'
     ]) {
-      expect(validateWebhookUrl(bad).ok, bad).toBe(false);
+      expect((await validateWebhookUrl(bad)).ok, bad).toBe(false);
     }
   });
 });

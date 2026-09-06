@@ -5,6 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { JobCancellation } from '$lib/server/chat/job-cancel';
 import { hasWebHub, isPaidPlan } from '$lib/server/plans';
+import { safeFetchUrl } from '$lib/server/tool-guard';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRec = Record<string, any>;
@@ -272,8 +273,7 @@ export async function executeChatToolJob(
       if (!brand?.website) return { error: 'No website URL set.' };
 
       await cancel.assertActive();
-      const res = await fetch(brand.website, { signal: cancel.signal });
-      const html = await res.text();
+      const { body: html } = await safeFetchUrl(brand.website);
 
       let products: AnyRec[] = [];
       if (isShopifySite(html)) products = await fetchShopifyProducts(brand.website);

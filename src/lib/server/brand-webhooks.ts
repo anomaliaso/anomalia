@@ -7,6 +7,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ComposioTriggerEvent } from '$lib/server/composio';
+import { assertPublicUrl } from '$lib/server/tool-guard';
 
 export const MAX_DELIVERY_ATTEMPTS = 6;
 /** Consecutive failures before the endpoint is parked; a dead URL must stop costing us retries. */
@@ -66,8 +67,17 @@ export function wantsEvent(webhook: { events: string[] }, triggerSlug: string): 
   return webhook.events.length === 0 || webhook.events.includes(triggerSlug);
 }
 
-/** A URL we will actually POST to: https only, no loopback, no private space. */
-export function validateWebhookUrl(raw: string): { ok: true; url: string } | { ok: false; error: string } {
+/**
+ * A URL we will actually POST to: https only, no loopback, no private space.
+ *
+ * This runs when the row is saved, so it buys an immediate error in the form — not safety. What
+ * a name resolves to today it need not resolve to at delivery time, which is why `attemptDelivery`
+ * asks `assertPublicUrl` again, every time. Both ask the same function on purpose: a second copy
+ * of the private-range list here is a copy that drifts.
+ */
+export async function validateWebhookUrl(
+  raw: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   let parsed: URL;
   try {
     parsed = new URL(raw.trim());
@@ -77,19 +87,9 @@ export function validateWebhookUrl(raw: string): { ok: true; url: string } | { o
   if (parsed.protocol !== 'https:') {
     return { ok: false, error: 'The endpoint must be https.' };
   }
-  const host = parsed.hostname.toLowerCase();
-  const privateHost =
-    host === 'localhost' ||
-    host.endsWith('.localhost') ||
-    host === '::1' ||
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    host.endsWith('.internal') ||
-    host.endsWith('.local');
-  if (privateHost) {
+  try {
+    await assertPublicUrl(parsed, 'https-only');
+  } catch {
     return { ok: false, error: 'The endpoint must be reachable on the public internet.' };
   }
   return { ok: true, url: parsed.toString() };
@@ -180,8 +180,10 @@ export async function attemptDelivery(
   let failure: string | null = null;
 
   try {
+    await assertPublicUrl(new URL(webhook.url), 'https-only');
     const res = await fetch(webhook.url, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'content-type': 'application/json',
         'user-agent': 'Anomalia-Webhooks/1',

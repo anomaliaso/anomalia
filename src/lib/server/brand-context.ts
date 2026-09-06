@@ -1,4 +1,5 @@
 import { swallow } from '$lib/server/swallow';
+import { safeFetchBytes } from '$lib/server/tool-guard';
 import type { GoogleGenAI } from '@google/genai';
 import { structured } from '$lib/server/research';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -190,18 +191,18 @@ export async function synthesizeBrandContext(input: ContextInputs): Promise<stri
   }
 }
 
+const IMAGE_PART_MAX_BYTES = 6_000_000;
+
 // Download an image URL into a Gemini inlineData part. Best-effort: null on any failure / non-image
 // / oversized payload, so a bad thumbnail never breaks style synthesis. Also reused to feed a
 // product photo to the image generator as a reference.
 export async function fetchImagePart(url: string): Promise<{ inlineData: { mimeType: string; data: string } } | null> {
   try {
-    const res = await fetch(url);
+    const res = await safeFetchBytes(url, { maxBytes: IMAGE_PART_MAX_BYTES });
     if (!res.ok) return null;
-    const mimeType = (res.headers.get('content-type') ?? '').split(';')[0] || 'image/jpeg';
+    const mimeType = res.mime || 'image/jpeg';
     if (!mimeType.startsWith('image/')) return null;
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > 6_000_000) return null;
-    return { inlineData: { mimeType, data: Buffer.from(buf).toString('base64') } };
+    return { inlineData: { mimeType, data: res.bytes.toString('base64') } };
   } catch {
     return null;
   }

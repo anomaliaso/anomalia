@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
 import { fetchImagePart } from '$lib/server/brand-context';
+import { safeFetchBytes } from '$lib/server/tool-guard';
 import { getBrandContext, getOrgContext } from '$lib/server/ai-log';
 import { NANO_BANANA_2_LITE } from '$lib/server/google-models';
 import { GEMINI_NANO_BANANA_2, googleImageModel } from '$lib/image-models';
@@ -23,15 +24,18 @@ import { designWallDigestSection } from '$lib/server/wall-digest';
 // Image MIME types Gemini ingests directly (SVG is rasterised via svgToPng).
 const RASTER_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']);
 
+const LOGO_MAX_BYTES = 6_000_000;
+const LOGO_TIMEOUT_MS = 10_000;
+
 // Best-effort: un logo mancante o strano non deve mai rompere la generazione.
 export async function fetchLogoPart(url: string): Promise<ImagePart | null> {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const r = await safeFetchBytes(url, { maxBytes: LOGO_MAX_BYTES, timeoutMs: LOGO_TIMEOUT_MS });
     if (!r.ok) return null;
-    let mime = (r.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() || 'image/png';
+    let mime = r.mime || 'image/png';
     if (mime === 'image/jpg') mime = 'image/jpeg';
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (!buf.length || buf.length > 6_000_000) return null;
+    const buf = r.bytes;
+    if (!buf.length) return null;
     if (mime === 'image/svg+xml' || /\.svg(\?|$)/i.test(url)) {
       const png = await svgToPng(buf);
       return png ? { inlineData: { mimeType: 'image/png', data: png.toString('base64') } } : null;
