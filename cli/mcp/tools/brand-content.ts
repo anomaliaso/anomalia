@@ -3,8 +3,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { api, callEndpoint } from '../../lib/api.ts';
 import {
   acceptsIdPrefix,
-  BRAND_ENDPOINTS,
+  BRAND_FAMILIES,
   BRAND_RESOURCES,
+  familyCalls,
+  familyInput,
+  OWN_TOOL_ENDPOINTS,
   type BrandResource,
 } from '../../lib/contracts/index.ts';
 import { resolvePostId, resolveResourceId, withAuth } from '../util.ts';
@@ -24,8 +27,37 @@ const optionalSlug = slug
 const resourceId = (resource: BrandResource) =>
   z.string().min(1).describe(`${BRAND_RESOURCES[resource]} id or unambiguous prefix`);
 
+/**
+ * Le rotte di una famiglia si chiamano in fila, non in parallelo: scrivono la stessa riga, e
+ * `set_appearance` la rilegge per non perdere il font che non gli hai mandato.
+ */
+function registerFamilies(server: McpServer) {
+  for (const family of BRAND_FAMILIES) {
+    server.registerTool(
+      family.tool,
+      {
+        title: family.title,
+        description: family.description,
+        inputSchema: familyInput(family).extend({ slug }),
+        annotations: { readOnlyHint: false, destructiveHint: false },
+      },
+      async ({ slug: brandSlug, ...input }) =>
+        withAuth(async (token) => {
+          const calls = familyCalls(family, input);
+          if (calls.length === 0) throw new Error('no_fields: name at least one field to change');
+
+          let answer: Record<string, unknown> = {};
+          for (const { endpoint, body } of calls) {
+            answer = { ...answer, ...(await callEndpoint<Record<string, unknown>>(endpoint, token, brandSlug as string, body)) };
+          }
+          return answer;
+        }),
+    );
+  }
+}
+
 function registerDeclaredEndpoints(server: McpServer) {
-  for (const endpoint of BRAND_ENDPOINTS) {
+  for (const endpoint of OWN_TOOL_ENDPOINTS) {
     const byPrefix = acceptsIdPrefix(endpoint);
     server.registerTool(
       endpoint.tool,
@@ -66,6 +98,7 @@ function registerDeclaredEndpoints(server: McpServer) {
 
 export function registerBrandTools(server: McpServer) {
   registerDeclaredEndpoints(server);
+  registerFamilies(server);
 
   server.registerTool(
     'approve_posts',

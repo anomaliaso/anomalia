@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
+import { BRAND_ENDPOINTS, OWN_TOOL_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
 import { MCP_INSTRUCTIONS } from './server.ts';
 
@@ -44,7 +44,7 @@ describe('i tool sono quello che il registry dichiara', () => {
   test('ogni endpoint del registry esiste in tools/list come lo dichiara', async () => {
     const all = await tools();
 
-    for (const endpoint of BRAND_ENDPOINTS) {
+    for (const endpoint of OWN_TOOL_ENDPOINTS) {
       const tool = find(all, endpoint.tool);
 
       expect(tool.title, endpoint.tool).toBe(endpoint.title);

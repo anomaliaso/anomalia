@@ -139,13 +139,11 @@ date and the brand timezone. Reach for these two when nothing else covers the ta
 | MCP | CLI |
 |-----|-----|
 | `diagnose_brand` | (MCP only) |
-| `update_voice` | `anomalia voice <slug>` |
 | `get_creation_kit` | (MCP only) |
 | `create_post` | (MCP only) |
 | `check_content` | (MCP only) |
 | `generate_captions` | (MCP only) |
 | `import_media_url` | (MCP only) |
-| `generate_media` | (MCP only) |
 | `generate_image` | (MCP only) |
 | `refine_media` | (MCP only) |
 | `generate_video` | (MCP only) |
@@ -220,18 +218,17 @@ before a byte is stored, so a rejected import leaves nothing behind. The result 
 the resolved `source_url` kept as the asset's origin, and a `signed_url` you can open to check
 that the right file arrived.
 
-`generate_media` makes a NEW image or video and puts it straight into the brand library — no
-post, nothing in the calendar. Required: `slug`, `prompt`; optional `kind` (`image` default, or
-`video`), `count`, `aspect_ratio`, `title`. **This spends credits**, unlike `import_media_url`:
-every image is a paid render and every video a paid clip. `count` draws up to 4 alternatives in
+`generate_image` and `generate_video` make a NEW image or clip and put it straight into the brand
+library — no post, nothing in the calendar. **They spend credits**, unlike `import_media_url`:
+every image is a paid render and every clip a paid render. `count` draws up to 4 alternatives in
 one call and bills each one, so generate a few, look at them with a `query` on `brand_media`, and
 pass only the id you keep to `create_post` as `media_ids` — the calendar stays clean either way.
 
-An image comes back finished: `status` is `ready` and `media` carries the rows, each with a
-`signed_url` you can open. A video cannot: it takes minutes, longer than any single call may
-last, so it comes back with `status` `rendering` and a `job_id`, and a `query` on `video_renders`
-says where it got to. Do not call `generate_media` again for the same clip while one is rendering —
-that bills a second one. Refusals: `credits_exhausted` (402) means the brand's pool is empty and
+An image comes back finished: `media` carries the rows, each with a `signed_url` you can open. A
+video cannot: it takes minutes, longer than any single call may last, so it comes back with
+`status` `rendering` and a `job_id`, and a `query` on `video_renders` says where it got to. Do not
+call `generate_video` again for the same clip while one is rendering — that bills a second one.
+Refusals: `credits_exhausted` (402) means the brand's pool is empty and
 nothing was drawn; `video_budget_exhausted` (400) means the monthly video allowance is used up,
 counting the clips still rendering; `render_failed` (502) is the model returning nothing, and
 nothing is stored; `store_failed` (502) means it was drawn but could not be filed.
@@ -273,9 +270,9 @@ picture must take nothing from the brand: a plain UI screenshot, an illustration
 else, a neutral background — places where brand colours and fonts spoil the result. Without a slug
 there is no brand to apply or ignore, and sending it is refused as `brand_style_needs_a_brand`
 rather than quietly dropped: pass a slug, or drop `brand_style`. `refine_media` takes the same
-field, and the brand's look reaches a refinement the same way. `generate_carousel` and
-`generate_media` apply it too but take no `brand_style`: a series that is not the brand's is not a
-series, and `generate_media` is the old door — call `generate_image` when you need the switch. A
+field, and the brand's look reaches a refinement the same way. `generate_carousel` applies
+it too but takes no `brand_style`: a series that is not the brand's is not a series — call
+`generate_image` when you need the switch. A
 clip filmed by `generate_video` from a prompt alone follows the brand's visual direction and cannot
 be switched off either; animating a library image takes its look from that image's pixels instead.
 
@@ -531,7 +528,7 @@ deck. No credits, no writes.
 
 | MCP | CLI |
 |-----|-----|
-| `update_brand_kit` / `set_colors` | `anomalia studio <slug> kit-update\|colors …` |
+| `update_brand_identity` | `anomalia studio <slug> kit-update\|colors …`, `anomalia voice <slug>` |
 | `add_note` / `delete_document` | `anomalia studio <slug> add-note\|delete-doc …` |
 | `add_person` / `generate_person` / `delete_person` | `anomalia studio <slug> people-*` |
 | `update_person` | (MCP only) |
@@ -625,7 +622,7 @@ exists. Say so when it happens, and read `social_accounts` with `query` — `pla
 `status` — which is where *why* a platform is missing becomes visible.
 
 An unknown IANA zone is refused (`unknown_timezone`), and so is a platform outside the list —
-`twitter` is not a name here, it is `x`. The post language lives on `update_brand_kit`, not here.
+`twitter` is not a name here, it is `x`. The post language lives on `update_brand_identity`, not here.
 
 ## Recurring jobs
 
@@ -725,7 +722,7 @@ The blog icon and an author's avatar are images and cannot be set through these 
 
 | MCP | CLI |
 |-----|-----|
-| `set_appearance` | (MCP only) |
+| `update_brand_identity` | (MCP only) |
 
 The look every render follows: logo, favicon, colour palette, the two Google Fonts graphics are
 composed with, and the visual brief. It is one row of `brand_kit`, so it is read with `query`:
@@ -750,7 +747,10 @@ the two cannot be combined (`logo_conflict`). `display_font` and `body_font` go 
 which names the missing family). Setting `visual_style` **locks** it: the nightly rebuild stops
 rewriting the brand's visual brief until someone regenerates it from the browser.
 
-Colours stay with `set_colors` (three or six hex digits, up to 8 — the list replaces the palette).
+The colours live on the same tool: `colors`, three or six hex digits, up to 8, and the list
+REPLACES the palette. `update_brand_identity` took the place of `set_appearance`, `set_colors`,
+`update_brand_kit` and `update_voice` — the four wrote the same two rows, and the split is why
+"change the brand's colours" opened the tool called appearance and found no colour field.
 
 ## Media models
 

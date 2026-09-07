@@ -540,9 +540,9 @@ const BrandStyleField = z
 /**
  * Un disegno chiesto senza brand non entra in nessuna libreria, quindi non ha un id da mostrare:
  * `null` è il fatto, e dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con
- * `list_media`. Non è la stessa forma di `refine_media` o `generate_media`, che un brand ce
- * l'hanno sempre e un id lo restituiscono sempre — allargare anche il loro schema significherebbe
- * togliere una promessa che quei due mantengono.
+ * `list_media`. Non è la stessa forma di `refine_media`, che un brand ce l'ha sempre e un id
+ * lo restituisce sempre — allargare anche il suo schema significherebbe togliere una promessa
+ * che mantiene.
  */
 const DrawnMediaSchema = GeneratedMediaSchema.extend({
   id: z
@@ -634,9 +634,9 @@ export const REFINE_MEDIA = {
     'it, and a short prefix works. It starts FROM that asset: the picture you already made comes ' +
     'back changed, not redrawn. Say what should CHANGE, not what the whole thing should be. ' +
     'The result is filed as a NEW asset, so a wrong edit costs one render and never your ' +
-    'original. Do NOT reach for generate_image, generate_video or generate_media to alter ' +
-    'something: those three start from nothing and give you a different subject, which is the ' +
-    'mistake this tool exists to end. It spends credits, and the answer says how many renders ' +
+    'original. Do NOT reach for generate_image or generate_video to alter something: those two ' +
+    'start from nothing and give you a different subject, which is the mistake this tool ' +
+    'exists to end. It spends credits, and the answer says how many renders ' +
     'were billed. It creates nothing in the calendar and publishes nothing; pass the id it ' +
     'returns to create_post as media_ids when you want a post. Each kind has its own model — ' +
     'get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and ' +

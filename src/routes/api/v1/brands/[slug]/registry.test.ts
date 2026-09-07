@@ -158,6 +158,9 @@ const REST_ONLY = [
   'knowledge',
   'library/scan',
   'market/field',
+  // `generate_media` era la porta vecchia: inoltrava a `generate_image` e `generate_video` e la
+  // sua stessa descrizione diceva di preferirli. Il tool esce, la rotta resta per chi l'ha cablata.
+  'media/generate',
   'posts/[id]/approve',
   'posts/[id]/media',
   'posts/[id]/publish',
