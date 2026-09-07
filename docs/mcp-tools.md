@@ -504,6 +504,15 @@ toglie **i nomi**, che sono l'unica cosa che oggi funziona.
 
 #### Il verdetto, famiglia per famiglia
 
+**Rivisto il 2026-09-07 per una sola riga.** I due argomenti qui sopra restano interi, ma il primo
+— quello del `destructiveHint`, che non si discute — vale solo dove la famiglia CONTIENE un verbo
+che distrugge. Su 71 scritture le distruttive sono 13, e ci sono famiglie che non ne hanno nessuna:
+lì il primo argomento non dice niente, e resta solo il secondo, che è un costo da pesare invece di
+un divieto. Pesato famiglia per famiglia con tre criteri misurabili — forme di risposta compatibili,
+un nome non più vago di quelli che sostituisce, nessun membro che fallisce in un modo che gli altri
+non conoscono — una sola famiglia lo supera: l'identità del brand. La misura sta in
+`changelog/2026-09-07-write-families.md`.
+
 | famiglia | tool | collassare? |
 |---|---|---|
 | Piano editoriale | `propose_plan` `revise_plan` `save_plan` `approve_plan` `discard_plan` | **peggio, due volte.** `approve_plan` sostituisce il piano attivo, `discard_plan` butta la proposta e «non torna indietro»: due distruzioni permanenti **diverse** dietro un enum |
@@ -512,7 +521,7 @@ toglie **i nomi**, che sono l'unica cosa che oggi funziona.
 | Post, ciclo di vita | `approve_post` `approve_posts` `reject_post` `publish_post` | peggio. `approve_post(all: true)` è un booleano il cui valore sbagliato pubblica tutta la coda |
 | Articoli | `generate_article` `update_article` `optimize_article` `publish_article` `unpublish_article` `delete_article` | peggio. Tre verbi permanenti; sono i nomi migliori del repo |
 | Studio CRUD | 11 tool fra competitor, person, product, document | peggio — ed è qui che il documento si contraddiceva |
-| Identità del brand | `update_brand_kit` `update_voice` `set_colors` `set_appearance` | peggio. Una trappola vera c'è, ma si ripara con una descrizione |
+| Identità del brand | `update_brand_kit` `update_voice` `set_colors` `set_appearance` | **collassati, 2026-09-07.** Il verdetto qui sotto era sbagliato e il perché sta in `changelog/2026-09-07-write-families.md`: i due argomenti valgono, ma nessuno dei due morde una famiglia senza verbi distruttivi. Ora è `update_brand_identity`, e `set_bio` resta fuori perché scrive `social_accounts` |
 | Impostazioni | 6 × `set_*` | peggio. I nomi **sono già** il discriminante, e sono buoni |
 | blog_term · radar_source · share | coppie add/remove | peggio. Ogni coppia è una creazione più una distruzione |
 | seo · geo · ads | i tre `*_action` che esistono già | qui sta la misura che manca — sotto |
@@ -582,8 +591,12 @@ niente, e va aspettato invece che forzato.
 | −3 tool di autenticazione (`login`, `logout`, `whoami`) | 119 |
 | −33 letture, servite da `query` | **86** |
 
-E finisce lì, salvo `generate_media` — l'unica cancellazione a cui questo documento si impegnava
-già, in corso su un altro ramo.
+| −3 identità dentro `update_brand_identity` | 83 |
+| −1 `generate_media`, la porta vecchia | **82** |
+
+Il conto sopra è quello di allora e non conosce `insert_row`/`update_row` (#392, +2 tool e −4 CRUD
+di una riga). Sul transport, che è l'unica misura che vale, il 2026-09-07 si passa da **88 tool /
+94.215 caratteri** a **84 / 91.053**.
 
 Le due righe che stavano qui — «−9 se il CRUD va da 15 a 6», «−7/8 se le impostazioni vanno da 10 a
 2/3» — erano stime scritte prima di aprire gli handler; aperti i 72 handler di scrittura, le
