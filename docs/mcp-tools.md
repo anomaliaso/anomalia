@@ -513,11 +513,18 @@ un nome non più vago di quelli che sostituisce, nessun membro che fallisce in u
 non conoscono — una sola famiglia lo supera: l'identità del brand. La misura sta in
 `changelog/2026-09-07-write-families.md`.
 
+**E il flag non è la prova.** Pesate il 2026-09-08 le due famiglie che restavano — i media di un
+post e la settimana — il registro le dava additive entrambe, e su una mentiva: `reorder_slides`
+cancella le slide che `order` non nomina. Aprire gli handler è ciò che lo trova; leggere
+`destructive` no. Il verdetto e i due difetti che ne sono usciti stanno in
+`changelog/2026-09-08-two-families-stay-separate.md`.
+
 | famiglia | tool | collassare? |
 |---|---|---|
 | Piano editoriale | `propose_plan` `revise_plan` `save_plan` `approve_plan` `discard_plan` | **peggio, due volte.** `approve_plan` sostituisce il piano attivo, `discard_plan` butta la proposta e «non torna indietro»: due distruzioni permanenti **diverse** dietro un enum |
-| Settimana | `plan_week` `replan_week` `save_week_seeds` `save_brief` | peggio. Due spendono crediti e due no — il segnale di costo vive nel nome |
+| Settimana | `plan_week` `replan_week` `save_week_seeds` `save_brief` | **pesata il 2026-09-08, resta separata.** Non è il costo a decidere: sono due coppie su due tabelle — `plan_week`/`save_week_seeds` scrivono la bozza `content_plans`, `replan_week`/`save_brief` il piano ATTIVO — e `save_week_seeds` è l'unico che funziona senza un piano attivo, dove gli altri tre fanno 404 |
 | Post, contenuto | `create_post` `edit_post` `reschedule_post` `render_post` | peggio. Fondere `reschedule_post` in `edit_post` non costa un enum (è un campo in più) ma cancella un nome buono |
+| Media del post | `render_post` `regenerate_post_media` `regenerate_slide` `reorder_slides` | **pesata il 2026-09-08, resta separata.** I quattro si escludono a vicenda per la forma del post, non per il campo mandato: `render_post` rifiuta un post che ha già un'immagine, gli altri tre la pretendono. E `reorder_slides` DISTRUGGE — le slide fuori da `order` spariscono — mentre si dichiara additivo, quindi l'argomento del `destructiveHint` morde |
 | Post, ciclo di vita | `approve_post` `approve_posts` `reject_post` `publish_post` | peggio. `approve_post(all: true)` è un booleano il cui valore sbagliato pubblica tutta la coda |
 | Articoli | `generate_article` `update_article` `optimize_article` `publish_article` `unpublish_article` `delete_article` | peggio. Tre verbi permanenti; sono i nomi migliori del repo |
 | Studio CRUD | 11 tool fra competitor, person, product, document | peggio — ed è qui che il documento si contraddiceva |
