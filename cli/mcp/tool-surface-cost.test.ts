@@ -4,24 +4,24 @@ import { handleMcpFetch } from './http-app.ts';
 /**
  * `tools/list` si paga a ogni sessione, come le istruzioni del handshake, e nessuno lo guardava:
  * misurato sul transport vero era 129.212 caratteri — circa 32.300 token prima che l'agente
- * chieda qualunque cosa. Oggi sono 91.053 su 84 tool, e il tetto lascia il margine di qualche tool
+ * chieda qualunque cosa. Oggi sono 87.360 su 80 tool, e il tetto lascia il margine di qualche tool
  * nuovo: quando lo sfonda, la superficie va guardata di nuovo invece di crescere in silenzio. E
  * scende insieme al numero, o smette di essere una guardia: 19.000 caratteri di margine non
  * fermano nulla.
  *
- * Il rientro promesso qui è arrivato per un'altra strada. `insert_row` e `update_row` avevano
- * portato la lista a 94.215 su 88, e il censimento diceva che sarebbero rientrati togliendo i
- * quattro CRUD di una riga. Quelli sono usciti con #392; questi 3.162 in meno sono un'altra cosa:
- * `update_brand_identity` prende il posto di quattro tool che scrivevano le stesse due righe, e
- * `generate_media` — la porta vecchia che inoltrava a `generate_image` e `generate_video` — esce.
- * Quattro tool in meno, e nessuna capacità con loro.
+ * Il rientro promesso da `insert_row` e `update_row` è arrivato in due tempi. I due tool avevano
+ * portato la lista a 94.215 su 88; poi `update_brand_identity` ha preso il posto di quattro tool
+ * che scrivevano le stesse due righe e `generate_media` è uscito, 91.053 su 84. Ora escono i
+ * quattro CRUD di una riga che il censimento di #392 aveva già isolato — `create_product`,
+ * `update_product`, `update_person`, `update_competitor` — e il conto torna sotto quello di
+ * partenza: 87.360 su 80, senza nessuna capacità persa.
  *
  * Si misura il TRANSPORT, non i sorgenti: il conto dei sorgenti ha già sbagliato due volte,
  * perché lo schema JSON che il protocollo spedisce non somiglia allo zod da cui nasce. E si misura
  * `result` intero, wrapper `{"tools":…}` compreso: contare il solo array dà 10 caratteri in meno,
  * ed è la differenza esatta fra due conteggi che sembravano in disaccordo.
  */
-const TOOLS_LIST_MAX_CHARS = 93_000;
+const TOOLS_LIST_MAX_CHARS = 89_000;
 
 async function listedTools(): Promise<{ tools: Array<Record<string, unknown>>; chars: number }> {
   const post = (body: unknown) =>

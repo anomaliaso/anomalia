@@ -20,9 +20,9 @@ const HAND_REGISTERED_BECAUSE: Record<string, string> = {
 
 // Le soglie scendono con le trentatre letture ritirate dentro `query`: restano il guardiano
 // contro un estrattore che smette di estrarre, non una misura della superficie.
-const MIN_REGISTRY_TOOLS = 75;
+const MIN_REGISTRY_TOOLS = 71;
 const MIN_HAND_REGISTERED = 7;
-const MIN_NAMED_BY_THE_SKILL = 75;
+const MIN_NAMED_BY_THE_SKILL = 71;
 
 function names(pattern: RegExp, text: string): string[] {
   return [...text.matchAll(pattern)].map((match) => match[1]);
