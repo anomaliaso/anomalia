@@ -161,6 +161,11 @@ const REST_ONLY = [
   // `generate_media` era la porta vecchia: inoltrava a `generate_image` e `generate_video` e la
   // sua stessa descrizione diceva di preferirli. Il tool esce, la rotta resta per chi l'ha cablata.
   'media/generate',
+  // `create_product` e `update_person` erano un insert e un update di una riga e nient'altro:
+  // `insert_row` e `update_row` li fanno con la RLS di chi chiama. I tool escono, le rotte
+  // restano. Le altre due — `update_product` e `update_competitor` — non compaiono qui perché
+  // le loro cartelle le rivendica ancora la cancellazione che ci abita accanto.
+  'people/[id]',
   'posts/[id]/approve',
   'posts/[id]/media',
   'posts/[id]/publish',
@@ -176,6 +181,7 @@ const REST_ONLY = [
   'studio',
   'studio/memory',
   'studio/memory/[id]',
+  'studio/products',
   'tick',
   'voice',
   'web',

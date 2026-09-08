@@ -3,15 +3,15 @@
 > Generato da `node scripts/mcp-inventory.mjs --write`, leggendo `tools/list` dal server vero.
 > Non si modifica a mano: il prossimo che rigenera cancella le correzioni.
 
-**84 tool** — 9 in lettura, 57 in scrittura, 18 che distruggono.
-Il payload di `tools/list` pesa **90.920 caratteri**, circa **22.730 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
+**80 tool** — 9 in lettura, 53 in scrittura, 18 che distruggono.
+Il payload di `tools/list` pesa **87.350 caratteri**, circa **21.838 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
 
 | gruppo | tool |
 |---|---:|
-| Studio: chi e cosa | 13 |
 | Post | 13 |
 | Piano editoriale e settimana | 10 |
 | Blog e articoli | 9 |
+| Studio: chi e cosa | 9 |
 | SEO, GEO, ads | 7 |
 | Account, condivisione, fatturazione | 7 |
 | Media | 7 |
@@ -22,178 +22,6 @@ Il payload di `tools/list` pesa **90.920 caratteri**, circa **22.730 token**, ed
 | Altro | 2 |
 
 Legenda: **R** legge e non cambia niente · **W** scrive · **D** distrugge, e il client puo' chiedere conferma.
-
-## Studio: chi e cosa
-
-### `add_competitor` · W
-
-*Add competitor*
-
-Add a company this brand competes with, so research and posts can take it into account. update_competitor corrects one already there; research_competitors finds them for you and spends credits. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `name` | string |  |
-| `website`? | string |  |
-| `rationale`? | string |  |
-| `slug` | string |  |
-
-### `add_note` · W
-
-*Add knowledge note*
-
-Save something this brand knows — a note, a policy, a transcript, a document — so the AI writes from it instead of guessing. search_knowledge is how it comes back; get_knowledge_status says when it is ready to be found. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `text` | string |  |
-| `title`? | string |  |
-| `slug` | string |  |
-
-### `add_person` · W
-
-*Add person*
-
-Register a real person who may appear in this brand's images and videos. Their face is withheld from every generator until consent is attested, so `consent` must be true and only the person's own operator can state it — never assume it on someone's behalf. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `name` | string |  |
-| `role`? | string |  |
-| `description`? | string |  |
-| `consent` | boolean | true ONLY when the USER has stated, in their own words, that they have this person's consent to use their likeness. Never infer it. |
-| `slug` | string |  |
-
-### `create_product` · W
-
-*Create product*
-
-Add one offer to the brand catalog. Use it when the catalog does not come from a connected store — sync_products replaces the whole catalog from Shopify or WooCommerce and would erase a hand-made row. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `title` | string | What the offer is called |
-| `description`? | string | What it is, in the brand’s own words |
-| `pricing`? | string | Free text as the brand writes it, e.g. "18,50 €" or "Free" |
-| `url`? | string | Where the offer lives |
-| `kind`? | string | Catalog bucket, e.g. "product", "service", "feature" |
-| `featured`? | boolean | Whether the planner may lead with it |
-| `slug` | string |  |
-
-### `delete_competitor` · D
-
-*Delete competitor*
-
-Remove one company from this brand's competitor list. It does not come back. Nothing already written about it is deleted.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string |  |
-| `slug` | string |  |
-
-### `delete_document` · D
-
-*Delete studio document*
-
-Delete one uploaded document, so the AI stops writing from it. It does not come back, and search_knowledge stops returning its passages.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string |  |
-| `slug` | string |  |
-
-### `delete_person` · D
-
-*Delete person*
-
-Remove a real person from this brand, so no generator can use their face any more. It does not come back. Their photos go with them.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string |  |
-| `slug` | string |  |
-
-### `delete_product` · D
-
-*Delete product*
-
-Remove one offer from this brand's catalogue, so posts stop being written about it. It does not come back.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string |  |
-| `slug` | string |  |
-
-### `generate_person` · W
-
-*Generate AI person*
-
-Invent a face for this brand — a made-up spokesperson who can appear in its images and videos, with a name, a role and a look. It spends credits: the face is drawn. For a REAL person, use add_person instead, which needs their consent and costs nothing.
-
-| campo | tipo | |
-|---|---|---|
-| `slug` | string |  |
-| `name` | string |  |
-| `role`? | string |  |
-| `gender`? | string |  |
-| `vibe`? | string |  |
-| `description`? | string |  |
-
-### `research_competitors` · W
-
-*Research competitors*
-
-Find out who this brand competes with and file what comes back, without being told the names. It spends credits. add_competitor adds one you already know, for free.
-
-| campo | tipo | |
-|---|---|---|
-| `slug` | string |  |
-
-### `update_competitor` · W
-
-*Update competitor*
-
-Correct a company already on this brand's competitor list: a wrong website, a reason that no longer holds, direct versus indirect. Only the fields you send change. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string | Competitor id or unambiguous prefix |
-| `name`? | string | Competitor name |
-| `website`? | string | Site; a bare host is read as https |
-| `kind`? | `direct` \| `indirect` | The only two the database accepts |
-| `rationale`? | string | Why they belong in the competitive set |
-| `slug` | string |  |
-
-### `update_person` · W
-
-*Update person*
-
-Correct the name, role, description or attributes of a person already registered on this brand. It cannot attest consent, turn a real person into an invented one, or touch their photos — those stay with the person who owns the brand. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string | Person id or unambiguous prefix |
-| `name`? | string | How the person is called |
-| `role`? | string | What they do for the brand |
-| `description`? | string | Who they are, for the generators that may depict them |
-| `attributes`? | object | Descriptors of the persona, e.g. { "gender": "female", "ageRange": "30-40" } |
-| `slug` | string |  |
-
-### `update_product` · W
-
-*Update product*
-
-Correct one offer in place. Only the fields you send change; every other column keeps the value it had. Free.
-
-| campo | tipo | |
-|---|---|---|
-| `id` | string | Product id or unambiguous prefix |
-| `title`? | string | What the offer is called |
-| `description`? | string | What it is, in the brand’s own words |
-| `pricing`? | string | Free text as the brand writes it, e.g. "18,50 €" or "Free" |
-| `url`? | string | Where the offer lives |
-| `featured`? | boolean | Whether the planner may lead with it |
-| `slug` | string |  |
 
 ## Post
 
@@ -246,7 +74,7 @@ Change what a post says without redrawing anything: caption, title, link, platfo
 |---|---|---|
 | `caption`? | string |  |
 | `title`? | string |  |
-| `link_url`? | string,null |  |
+| `link_url`? | string \| null |  |
 | `subreddit`? | string |  |
 | `first_comment`? | string |  |
 | `image_prompt`? | string |  |
@@ -254,7 +82,7 @@ Change what a post says without redrawing anything: caption, title, link, platfo
 | `slot`? | string |  |
 | `product_name`? | string |  |
 | `platforms`? | string[] |  |
-| `media_url`? | string,null | Set null to clear image (text-only) |
+| `media_url`? | string \| null | Set null to clear image (text-only) |
 | `platform_captions`? | object \| null |  |
 | `slug` | string |  |
 | `id` | string | Post id or unambiguous prefix |
@@ -573,17 +401,17 @@ Change how the blog looks and how it writes. Only the fields you send change. `a
 | campo | tipo | |
 |---|---|---|
 | `enabled`? | boolean | Whether the public blog is live |
-| `title`? | string,null | Site name, 80 chars; null falls back to the brand name |
-| `description`? | string,null | Site description, 300 chars |
+| `title`? | string \| null | Site name, 80 chars; null falls back to the brand name |
+| `description`? | string \| null | Site description, 300 chars |
 | `accent`? | string | Six-digit hex, e.g. "#7c5cff" |
 | `font`? | `sans` \| `serif` \| `rounded` \| `mono` |  |
 | `layout`? | `navbar` \| `sidebar` |  |
 | `show_blog_link`? | boolean | Show the Blog link in the main site nav |
 | `humanizer_enabled`? | boolean | Run the humanising pass over generated articles |
 | `backlink_network`? | boolean | Take part in the cross-brand backlink network |
-| `style_instructions`? | string,null | Free-text brief the article generator follows, 1500 chars |
-| `articles_per_week`? | number,null | Cadence; clamped to the plan ceiling. null returns to the plan default |
-| `default_locale`? | string,null | Language the bare blog URL lands on, from choices.locales |
+| `style_instructions`? | string \| null | Free-text brief the article generator follows, 1500 chars |
+| `articles_per_week`? | number \| null | Cadence; clamped to the plan ceiling. null returns to the plan default |
+| `default_locale`? | string \| null | Language the bare blog URL lands on, from choices.locales |
 | `locales`? | string[] | Extra languages articles are translated into. Replaces the whole list |
 | `navbar_links`? | object[] | Up to 6 custom nav links. Replaces the whole list |
 | `analytics`? | object[] | Third-party analytics, one entry per provider. Replaces the whole list; [] removes them all, which is how a tracker is taken off a live site without us |
@@ -613,11 +441,121 @@ Write text and metadata you already have onto an article: title, markdown body, 
 | `body_md`? | string | The COMPLETE new markdown body: a replacement, not a diff. Stored exactly as sent — the public blog escapes any raw HTML in it, so markdown is the only markup that renders |
 | `meta_title`? | string \| null | null clears it |
 | `meta_description`? | string \| null | null clears it |
-| `category_id`? | string,null | A category of THIS brand. null clears it; a category of another brand is rejected |
-| `author_id`? | string,null | An author of THIS brand. null clears the byline; an author of another brand is rejected |
+| `category_id`? | string \| null | A category of THIS brand. null clears it; a category of another brand is rejected |
+| `author_id`? | string \| null | An author of THIS brand. null clears the byline; an author of another brand is rejected |
 | `tag_ids`? | string[] | The COMPLETE tag set of this brand — it replaces the current one. [] clears every tag |
 | `language`? | string | ISO 639-1 code, e.g. "it". Refused on a translation row: its locale is its identity |
-| `scheduled_for`? | string,null | Publication instant, ISO. Without an offset it is read on the brand clock. Dating a draft approves it, and an approved article auto-publishes at that time — this is the consequential half of the tool. null clears the schedule back to a plain draft |
+| `scheduled_for`? | string \| null | Publication instant, ISO. Without an offset it is read on the brand clock. Dating a draft approves it, and an approved article auto-publishes at that time — this is the consequential half of the tool. null clears the schedule back to a plain draft |
+| `slug` | string |  |
+
+## Studio: chi e cosa
+
+### `add_competitor` · W
+
+*Add competitor*
+
+Add a company this brand competes with, so research and posts can take it into account. update_competitor corrects one already there; research_competitors finds them for you and spends credits. Free.
+
+| campo | tipo | |
+|---|---|---|
+| `name` | string |  |
+| `website`? | string |  |
+| `rationale`? | string |  |
+| `slug` | string |  |
+
+### `add_note` · W
+
+*Add knowledge note*
+
+Save something this brand knows — a note, a policy, a transcript, a document — so the AI writes from it instead of guessing. search_knowledge is how it comes back; get_knowledge_status says when it is ready to be found. Free.
+
+| campo | tipo | |
+|---|---|---|
+| `text` | string |  |
+| `title`? | string |  |
+| `slug` | string |  |
+
+### `add_person` · W
+
+*Add person*
+
+Register a real person who may appear in this brand's images and videos. Their face is withheld from every generator until consent is attested, so `consent` must be true and only the person's own operator can state it — never assume it on someone's behalf. Free.
+
+| campo | tipo | |
+|---|---|---|
+| `name` | string |  |
+| `role`? | string |  |
+| `description`? | string |  |
+| `consent` | boolean | true ONLY when the USER has stated, in their own words, that they have this person's consent to use their likeness. Never infer it. |
+| `slug` | string |  |
+
+### `delete_competitor` · D
+
+*Delete competitor*
+
+Remove one company from this brand's competitor list. It does not come back. Nothing already written about it is deleted.
+
+| campo | tipo | |
+|---|---|---|
+| `id` | string |  |
+| `slug` | string |  |
+
+### `delete_document` · D
+
+*Delete studio document*
+
+Delete one uploaded document, so the AI stops writing from it. It does not come back, and search_knowledge stops returning its passages.
+
+| campo | tipo | |
+|---|---|---|
+| `id` | string |  |
+| `slug` | string |  |
+
+### `delete_person` · D
+
+*Delete person*
+
+Remove a real person from this brand, so no generator can use their face any more. It does not come back. Their photos go with them.
+
+| campo | tipo | |
+|---|---|---|
+| `id` | string |  |
+| `slug` | string |  |
+
+### `delete_product` · D
+
+*Delete product*
+
+Remove one offer from this brand's catalogue, so posts stop being written about it. It does not come back.
+
+| campo | tipo | |
+|---|---|---|
+| `id` | string |  |
+| `slug` | string |  |
+
+### `generate_person` · W
+
+*Generate AI person*
+
+Invent a face for this brand — a made-up spokesperson who can appear in its images and videos, with a name, a role and a look. It spends credits: the face is drawn. For a REAL person, use add_person instead, which needs their consent and costs nothing.
+
+| campo | tipo | |
+|---|---|---|
+| `slug` | string |  |
+| `name` | string |  |
+| `role`? | string |  |
+| `gender`? | string |  |
+| `vibe`? | string |  |
+| `description`? | string |  |
+
+### `research_competitors` · W
+
+*Research competitors*
+
+Find out who this brand competes with and file what comes back, without being told the names. It spends credits. add_competitor adds one you already know, for free.
+
+| campo | tipo | |
+|---|---|---|
 | `slug` | string |  |
 
 ## SEO, GEO, ads

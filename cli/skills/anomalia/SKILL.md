@@ -230,11 +230,12 @@ No model call, no credits. The rows become the week draft the plan page shows; `
 the separate paid step that turns them into posts.
 
 **Keep the brand truth current from your own source** → `query` on `products`, `people`,
-`competitors` and `brand_kit` returns every row with its id. `create_product` / `update_product` / `delete_product` maintain the catalog one offer at a
-time; `update_person` and `update_competitor` fix a role or a wrong website. They change only the
-fields you send, leave every other column as it was, and cost nothing. `update_person` can never
-attest consent: a real person's face stays withheld from every generator until the operator
-states, in their own words, that they have it.
+`competitors` and `brand_kit` returns every row with its id. `insert_row` adds an offer or a
+row, `update_row` fixes a role or a wrong website, `delete_product` and the other deletes take one
+away. A website wants its scheme — `example.com` is refused by `competitors_website_check`, not
+corrected — and consent for a real person is the operator's act: never write `consent`,
+`consent_at` or `consent_source` on `people`, because a real person's face stays withheld from
+every generator until the operator states, in their own words, that they have it.
 **Change how the brand works** → `query` on `brands` (`timezone`, `target_platforms`,
 `content_prefs`) then `set_brand_settings`: posting timezone, target platforms, hashtags per platform, voice examples. Only the fields you send
 change, and lists replace rather than merge. Two things to tell the person: changing the timezone

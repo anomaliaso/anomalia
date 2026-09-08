@@ -531,10 +531,8 @@ deck. No credits, no writes.
 | `update_brand_identity` | `anomalia studio <slug> kit-update\|colors …`, `anomalia voice <slug>` |
 | `add_note` / `delete_document` | `anomalia studio <slug> add-note\|delete-doc …` |
 | `add_person` / `generate_person` / `delete_person` | `anomalia studio <slug> people-*` |
-| `update_person` | (MCP only) |
 | `add_competitor` / `delete_competitor` / `research_competitors` | `anomalia studio <slug> add-competitor\|…\|research` |
-| `update_competitor` | (MCP only) |
-| `create_product` / `update_product` / `delete_product` | (MCP only) |
+| `delete_product` | (MCP only) |
 | `set_bio` | (MCP only) |
 | `sync_history` | `anomalia studio <slug> sync-history` |
 
@@ -544,17 +542,20 @@ same thing in one command. To answer a question from the brand's documents, do n
 call `search_knowledge`, which returns the passages that answer it with the document each came
 from.
 
-`create_product` adds ONE offer. The e-commerce resync behind `sync_products` replaces the whole
-catalog and would erase a hand-made row.
+An offer, a person's role, a competitor's website are rows: `insert_row({ table: "products",
+values })` adds one, `update_row({ table, where: [{ column: "id", op: "eq", value }], values })`
+corrects one. Only the columns you send are touched. The e-commerce resync behind `sync_products`
+replaces the whole catalog and would erase a hand-made row.
 
-`update_product`, `update_person` and `update_competitor` change only the fields you send: every
-other column keeps the value it had. An id from another brand answers `not_found`, exactly like
-one that does not exist anywhere. The four deletes want the UUID in full, verbatim from the
-`query` that listed the row.
+**A bare host is refused now, not corrected.** `competitors.website` is checked by
+`competitors_website_check` (`website ~ '^https?://'`) and `products.url` by `products_url_check`:
+`example.com` comes back as a refusal naming the constraint, where the retired `update_competitor`
+turned it into `https://example.com` without saying so. Send the scheme.
 
-`update_person` cannot attest consent, turn a real person into an AI persona, or touch photos. A
-real person's face stays withheld from every generator until the operator states the consent in
-their own words.
+**Consent for a real person is the operator's act, not yours.** Never write `consent`,
+`consent_at` or `consent_source` on `people`: a real person's face stays withheld from every
+generator until the operator states it in their own words. The deletes want the UUID in full,
+verbatim from the `query` that listed the row.
 
 `set_bio` records the link in bio; no publishing API writes a profile bio, so a person still
 pastes it on the profile by hand. What is recorded now is `bio_url` on `social_accounts`, read
