@@ -99,12 +99,12 @@ describe('le scritture dello studio esposte dal registry', () => {
  * prima di partire. E' che TUTTO cio' che il tool accetta, una volta normalizzato, la rotta lo
  * salvi. Niente puo' passare di qui per morire di la'.
  */
-describe('set_colors non accetta niente che la rotta rifiuti', () => {
+describe('i colori di update_brand_identity non accettano niente che la rotta rifiuti', () => {
   const ROUTE_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
   const normalize = (c: string) => (c.startsWith('#') ? c : `#${c}`);
 
   test('quello che il tool lascia passare, la rotta lo salva', async () => {
-    const schema = find(await tools(), 'set_colors').inputSchema as {
+    const schema = find(await tools(), 'update_brand_identity').inputSchema as {
       properties: { colors: { items: { pattern?: string } } };
     };
     const pattern = schema.properties.colors.items.pattern;

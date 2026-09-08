@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { inAFamily } from './families';
 import { ADS_ACTION, ADS_REMIX } from './ads';
 import { SET_APPEARANCE } from './appearance';
 import { SET_AUTOMATION } from './automations';
@@ -166,7 +167,6 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   GENERATE_CAROUSEL,
   GENERATE_IMAGE,
   GENERATE_VIDEO,
-  GENERATE_MEDIA,
   GEO_ACTION,
   GET_ADS,
   GET_CREATION_KIT,
@@ -220,6 +220,25 @@ export const BRAND_ENDPOINTS: readonly BrandEndpoint[] = [
   UPDATE_ROW,
   UPDATE_VOICE,
 ];
+
+export {
+  BRAND_FAMILIES,
+  familyCalls,
+  familyInput,
+  inAFamily,
+  UPDATE_BRAND_IDENTITY
+} from './families';
+export type { BrandFamily } from './families';
+
+/**
+ * Gli endpoint che diventano un tool per conto proprio: il registro meno chi e' finito in una
+ * famiglia. Sta scritto qui una volta perche' lo leggono il registrar e ogni test che confronta
+ * `tools/list` col registro — e una sottrazione ripetuta in cinque posti diverge al primo che
+ * qualcuno dimentica.
+ */
+export const OWN_TOOL_ENDPOINTS: readonly BrandEndpoint[] = BRAND_ENDPOINTS.filter(
+  (endpoint) => !inAFamily(endpoint)
+);
 
 export function pathFor(endpoint: ResourcelessEndpoint, slug: string): string;
 export function pathFor(endpoint: ResourceEndpoint, slug: string, id: string): string;

@@ -67,41 +67,6 @@ const MIGRATED_WRITES = [
     annotations: NOT_DESTRUCTIVE,
   },
   {
-    name: 'update_brand_kit',
-    title: 'Update brand kit',
-    properties: {
-      slug: SLUG,
-      about: { type: 'string' },
-      category: { type: 'string' },
-      target_audience: { type: 'string' },
-      brand_style: { type: 'string' },
-      language: { type: 'string' },
-    },
-    required: ['slug'],
-    annotations: NOT_DESTRUCTIVE,
-  },
-  {
-    name: 'update_voice',
-    title: 'Update voice',
-    properties: {
-      slug: SLUG,
-      mood: { type: 'string' },
-      tone: { type: 'string' },
-      register: { type: 'number' },
-      emotion: { type: 'string' },
-      character: { type: 'string' },
-      syntax: { type: 'string' },
-      avoid: { type: 'array', items: { type: 'string' } },
-      platform_instructions: {
-        type: 'object',
-        propertyNames: { type: 'string' },
-        additionalProperties: { type: 'string' },
-      },
-    },
-    required: ['slug'],
-    annotations: NOT_DESTRUCTIVE,
-  },
-  {
     name: 'add_competitor',
     title: 'Add competitor',
     properties: {

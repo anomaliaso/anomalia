@@ -39,7 +39,8 @@ describe('refine_media in tools/list', () => {
     // Il modello che aveva ridisegnato un gatto rosso invece di arrossare il suo aveva letto la
     // lista e non aveva trovato la rifinitura. Qui deve trovarla, e deve leggere che generare NON
     // e' la strada — nominato, non sottinteso.
-    expect(description).toMatch(/generate_media/);
+    expect(description).toMatch(/generate_image/);
+    expect(description).toMatch(/generate_video/);
     expect(description.toLowerCase()).toMatch(/video/);
     expect(description.toLowerCase()).toMatch(/new asset|nuovo/);
   });

@@ -4,25 +4,24 @@ import { handleMcpFetch } from './http-app.ts';
 /**
  * `tools/list` si paga a ogni sessione, come le istruzioni del handshake, e nessuno lo guardava:
  * misurato sul transport vero era 129.212 caratteri — circa 32.300 token prima che l'agente
- * chieda qualunque cosa. Oggi sono 94.215, e il tetto lascia il margine di qualche tool nuovo:
- * quando lo sfonda, la superficie va guardata di nuovo invece di crescere in silenzio. E scende
- * insieme al numero, o smette di essere una guardia: 19.000 caratteri di margine non fermano nulla.
+ * chieda qualunque cosa. Oggi sono 91.053 su 84 tool, e il tetto lascia il margine di qualche tool
+ * nuovo: quando lo sfonda, la superficie va guardata di nuovo invece di crescere in silenzio. E
+ * scende insieme al numero, o smette di essere una guardia: 19.000 caratteri di margine non
+ * fermano nulla.
  *
- * I 3.052 in più rispetto a `dev` (91.163) sono `insert_row` e `update_row`, e il conto va detto
- * per intero perché il tetto da solo lo nasconde: NON portano via l'enum delle 149 tabelle che
- * `query` si porta dietro — lì costa ~2.700 caratteri e li vale, perché una lettura si scopre
- * indovinando il nome, mentre chi sta per scrivere ha appena letto. Il rientro è il censimento dei
- * 71 handler di scrittura, che ne trova quattro — `create_product`, `update_product`,
- * `update_person`, `update_competitor`, 3.794 caratteri — che sono `insert`/`update` di una riga e
- * nient'altro. Toglierli è una decisione separata: quando atterra, questo numero scende sotto
- * quello di partenza.
+ * Il rientro promesso qui è arrivato per un'altra strada. `insert_row` e `update_row` avevano
+ * portato la lista a 94.215 su 88, e il censimento diceva che sarebbero rientrati togliendo i
+ * quattro CRUD di una riga. Quelli sono usciti con #392; questi 3.162 in meno sono un'altra cosa:
+ * `update_brand_identity` prende il posto di quattro tool che scrivevano le stesse due righe, e
+ * `generate_media` — la porta vecchia che inoltrava a `generate_image` e `generate_video` — esce.
+ * Quattro tool in meno, e nessuna capacità con loro.
  *
  * Si misura il TRANSPORT, non i sorgenti: il conto dei sorgenti ha già sbagliato due volte,
  * perché lo schema JSON che il protocollo spedisce non somiglia allo zod da cui nasce. E si misura
  * `result` intero, wrapper `{"tools":…}` compreso: contare il solo array dà 10 caratteri in meno,
  * ed è la differenza esatta fra due conteggi che sembravano in disaccordo.
  */
-const TOOLS_LIST_MAX_CHARS = 97_000;
+const TOOLS_LIST_MAX_CHARS = 93_000;
 
 async function listedTools(): Promise<{ tools: Array<Record<string, unknown>>; chars: number }> {
   const post = (body: unknown) =>

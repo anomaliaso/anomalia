@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
-import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
+import { BRAND_ENDPOINTS, BRAND_FAMILIES } from '../lib/contracts/index.ts';
 import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
 
 /**
@@ -43,11 +43,6 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
     words: ['animate', 'photo', 'video', 'clip']
   },
   { tool: 'make_video', question: 'turn this post into a video', words: ['post', 'video', 'animate'] },
-  {
-    tool: 'generate_media',
-    question: 'generate an image or a video',
-    words: ['image', 'video', 'generate_image', 'generate_video']
-  },
   {
     tool: 'render_post',
     question: 'this post has no image, draw it',
@@ -190,7 +185,7 @@ describe('una descrizione si legge cercando il proprio problema', () => {
   }
 
   test('nessuna descrizione scrive una tariffa a mano: il prezzo lo misura la risposta', () => {
-    for (const endpoint of BRAND_ENDPOINTS) {
+    for (const endpoint of [...BRAND_ENDPOINTS, ...BRAND_FAMILIES]) {
       expect(HAND_WRITTEN_TARIFF.test(endpoint.description), endpoint.tool).toBe(false);
     }
   });

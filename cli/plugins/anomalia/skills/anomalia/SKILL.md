@@ -179,10 +179,6 @@ a brand there is no brand, and guessing one spends a real organisation's credits
 render per image and creates nothing in the calendar, so ask for two or three with `count`, look
 at them, keep one.
 
-**If you reach for `generate_media`** — the older door — it still works and forwards to
-`generate_image` and `generate_video`. Prefer those two: they name what they do. And changing
-something that already exists is neither of them: that is `refine_media`.
-
 **Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
 returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
 To fix a single slide afterwards, `refine_media` on its id **with those tokens in the instruction** —
@@ -212,7 +208,7 @@ that post's image — one render, and the old one is gone. When you want to keep
 instruction ("make it red", "warmer background", "keep the movement but make it night"). One door
 for every kind: an image or a video from the brand's **library**, and the asset's own kind picks
 the engine — you never say which it is. It starts from that asset, so the result is that picture
-or that clip changed. Do NOT reach for `generate_image`, `generate_video` or `generate_media` to
+or that clip changed. Do NOT reach for `generate_image` or `generate_video` to
 alter something: a new prompt starts from nothing, pays for a fresh render, and gives you a
 different subject — the commonest and most expensive mistake on this surface. The original is
 never overwritten: refining files a new asset, so a wrong edit costs one render and not your
@@ -270,13 +266,19 @@ byline. `analytics` takes a closed list of providers (`ga4`, `meta_pixel`, `plau
 with their id — there is no field for arbitrary JavaScript, and those trackers load only on a
 verified custom domain, only after the visitor accepts cookies.
 
-**Change how the brand looks** → `set_appearance` changes the logo, favicon, graphic fonts and
-visual brief; read what they are now from `brand_kit` with `query` (recipe under Quick workflows —
-the real logo is the entry whose `type` is not `og-image`). A logo is
-given as a URL and is DOWNLOADED and re-hosted, so read back the address it answers with. Fonts go
-in pairs and are checked against Google Fonts before saving — a family it will not serve is refused
-rather than rendered as Inter. Setting `visual_style` locks it against the nightly rebuild.
-Colours stay with `set_colors`.
+**Change what the brand IS, how it SOUNDS, how it LOOKS** → `update_brand_identity`, one door for
+all of it: the facts every post is written from (`about`, `category`, `target_audience`,
+`brand_style`, `language`), the voice (`mood`, `tone`, `register`, `avoid`,
+`platform_instructions`), the `colors`, and the look — logo, favicon, graphic fonts, visual brief.
+It took four tools — `update_brand_kit`, `update_voice`, `set_colors`, `set_appearance` — and the
+split is why "change the brand's colours" opened the tool called appearance and found no colour
+field. Only the fields you send change. `colors` REPLACES the whole palette, so send every colour
+you want kept. A logo is given as a URL and is DOWNLOADED and re-hosted, so read back the address
+it answers with. Fonts go in pairs and are checked against Google Fonts before saving — a family
+it will not serve is refused rather than rendered as Inter. Setting `visual_style` locks it against
+the nightly rebuild. Read what they are now from `brand_kit` with `query` (recipe under Quick
+workflows — the real logo is the entry whose `type` is not `og-image`). The past posts the writer
+imitates are `voice_examples` on `set_brand_settings`, not here. Free.
 
 **Choose which model draws and which films** → `get_media_models` lists the six jobs (image
 generation, image refinement, video from text, animating a still, video refinement, motion
@@ -311,7 +313,7 @@ access to the brand.
 
 **Make the copy sound like this brand** → `query` on `brands.content_prefs` for how it is supposed
 to sound — mood, tone, register, the words it avoids, the rules that change per platform — and
-`update_voice` to change any of them. This is the brand; `get_writing_skills` is the craft. Read both before writing.
+`update_brand_identity` to change any of them. This is the brand; `get_writing_skills` is the craft. Read both before writing.
 
 **Do ChatGPT, Perplexity and Google's AI mention this brand?** → `query` on `brand_geo_audits`
 reads the last answer for free: `share_of_voice`, and `citations` is the question-by-question

@@ -2,10 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
+import { BRAND_ENDPOINTS, BRAND_FAMILIES, inAFamily } from '../lib/contracts/index.ts';
 
 const CLI = fileURLToPath(new URL('../', import.meta.url));
-const REPO = join(CLI, '..');
-const CONTRACTS = join(REPO, 'packages', 'api-contracts', 'src');
 const MCP_TOOLS = join(CLI, 'mcp', 'tools');
 const REFERENCE = join(CLI, 'skills', 'anomalia', 'references', 'tools.md');
 
@@ -36,8 +35,17 @@ function sourceOf(dir: string): string {
     .join('\n');
 }
 
+/**
+ * La superficie, non la dichiarazione: un contratto puo' restare nel registro senza essere un tool
+ * — perche' una famiglia lo ha assorbito, o perche' la sua rotta e' rimasta REST e basta — e un
+ * estrattore che legge `tool:` dai sorgenti pretenderebbe che la skill nomini un nome che nessun
+ * agente vedra' mai.
+ */
 function registryTools(): Set<string> {
-  return new Set(names(/tool:\s*'([a-z][a-z0-9_]*)'/g, sourceOf(CONTRACTS)));
+  return new Set([
+    ...BRAND_ENDPOINTS.filter((endpoint) => !inAFamily(endpoint)).map((endpoint) => endpoint.tool),
+    ...BRAND_FAMILIES.map((family) => family.tool)
+  ]);
 }
 
 function handRegisteredTools(): Set<string> {
