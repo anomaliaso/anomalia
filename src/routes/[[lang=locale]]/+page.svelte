@@ -3,8 +3,6 @@
   import { page } from '$app/stores';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import AskAiCta from '$lib/components/AskAiCta.svelte';
-  import WhyUs from '$lib/components/WhyUs.svelte';
-  import HomePricing from '$lib/components/HomePricing.svelte';
   import LandingFaq from '$lib/components/LandingFaq.svelte';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
@@ -121,9 +119,11 @@
 
   <StoryHosts />
 
-  <WhyUs />
-
-  <HomePricing startHref={startHref} />
+  <!-- Fuori dalla home, non cancellate: «Perche' noi» e il blocco dei piani vivono nelle loro
+       pagine, e qui arrivavano dopo che il racconto aveva gia' detto la sua. I componenti
+       restano dove sono, rimetterli e' una riga. -->
+  <!-- <WhyUs /> -->
+  <!-- <HomePricing startHref={startHref} /> -->
 
   <LandingFaq />
 

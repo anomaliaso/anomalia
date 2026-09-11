@@ -2108,7 +2108,8 @@
           "ask": "Écris la semaine prochaine pour Flashcamp",
           "l1": "Votre site vend des tentes pop-up pour le week-end, et les posts qui ont marché étaient tournés dehors, à la première lumière.",
           "l2": "Deux concurrents ont publié des carrousels de promos cette semaine. Personne ne montre la tente montée en quarante secondes — l'angle est là.",
-          "l3": "Trois posts là-dessus. On commence jeudi."
+          "l3": "Trois posts là-dessus. On commence jeudi.",
+          "preview": "Voici le premier — ouvrez-le pour voir le post entier."
         },
         "profile": {
           "posts": "publications",

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { siClaude } from 'simple-icons';
   import { PLATFORM_META } from '$lib/components/platform-meta';
@@ -9,7 +9,13 @@
    * La prima cosa dopo la hero e' l'artefatto, non una spiegazione. E i tre passi non sono lo
    * stesso oggetto con un'etichetta diversa: sono tre schermate diverse, perche' nel prodotto
    * sono tre posti diversi — la conversazione con la tua AI, la richiesta di approvazione, il
-   * feed pubblico. Cambiare solo un badge raccontava una bugia comoda.
+   * profilo pubblico.
+   *
+   * A tenerle insieme c'e' UNA sola immagine. Non tre copie che appaiono e spariscono: un solo
+   * elemento che vive sopra le schermate e si sposta nella casella che gli tocca — l'anteprima
+   * nella chat, la foto del post in attesa, la cella del profilo. Le caselle sono vuote e servono
+   * solo a dire dove: si misurano, e l'immagine ci va sopra. Cosi' il lettore segue lo stesso
+   * oggetto invece di guardare tre schede che si alternano, che e' anche cio' che succede davvero.
    */
   const TK = 'landing.story.output';
   const STEPS = ['s1', 's2', 's3'] as const;
@@ -34,10 +40,44 @@
   /** Una volta saliti, i numeri restano su: tornando indietro li si vedrebbe scendere, e un
    *  contatore che scende racconta il contrario di quello che e' appena successo. */
   let counted = $state(false);
+  /** L'anteprima nella chat non c'e' da subito: arriva verso la fine del primo passo, quando si
+   *  e' finito di leggere cosa sta facendo. E' da li' che parte il viaggio dell'immagine. */
+  let previewOut = $state(false);
+
+  let steps: HTMLElement[] = [];
+  let slots: HTMLElement[] = [];
+  let cue = $state<HTMLElement | null>(null);
+  let stack = $state<HTMLElement | null>(null);
+
+  let fly = $state({ x: 0, y: 0, w: 0, h: 0, r: 12 });
+  const flying = $derived(previewOut || active > 0);
+
+  const RADII = [14, 0, 0];
+
+  function place() {
+    const box = stack?.getBoundingClientRect();
+    const slot = slots[active]?.getBoundingClientRect();
+    if (!box || !slot) return;
+    fly = {
+      x: slot.left - box.left,
+      y: slot.top - box.top,
+      w: slot.width,
+      h: slot.height,
+      r: RADII[active]
+    };
+  }
+
+  $effect(() => {
+    // Le due letture sono le dipendenze: a ogni cambio di passo (o all'arrivo dell'anteprima) si
+    // rimisura la casella di destinazione, dopo che il DOM ha finito di aggiornarsi.
+    void active;
+    void previewOut;
+    void tick().then(place);
+  });
+
   $effect(() => {
     if (active === 2) counted = true;
   });
-  let steps: HTMLElement[] = [];
 
   onMount(() => {
     if (!('IntersectionObserver' in window)) return;
@@ -58,7 +98,26 @@
     for (const s of steps) {
       if (s) io.observe(s);
     }
-    return () => io.disconnect();
+
+    // Il segnale dell'anteprima sta in fondo al primo passo: entra nella meta' bassa dello schermo
+    // solo quando quel passo e' quasi finito di scorrere.
+    const cueIo = new IntersectionObserver(
+      ([e]) => {
+        previewOut = e.isIntersecting;
+      },
+      { rootMargin: '-58% 0px 0px 0px', threshold: 0 }
+    );
+    if (cue) cueIo.observe(cue);
+
+    const ro = new ResizeObserver(() => place());
+    if (stack) ro.observe(stack);
+    place();
+
+    return () => {
+      io.disconnect();
+      cueIo.disconnect();
+      ro.disconnect();
+    };
   });
 </script>
 
@@ -77,14 +136,15 @@
             <span class="so-n">{i + 1}</span>
             <h3>{$_(`${TK}.${s}.title`)}</h3>
             <p>{$_(`${TK}.${s}.body`)}</p>
+            {#if i === 0}
+              <span class="so-cue" bind:this={cue} aria-hidden="true"></span>
+            {/if}
           </li>
         {/each}
       </ol>
 
-      <!-- Le tre schermate stanno nella stessa cella di griglia: il riquadro prende l'altezza
-           della piu' alta e nessuna delle tre lo fa saltare quando entra. -->
       <div class="so-visual">
-        <div class="so-stack">
+        <div class="so-stack" bind:this={stack}>
           <article class="so-panel so-chat" class:is-on={active === 0} aria-hidden={active !== 0}>
             <header class="so-chat-head">
               <svg class="so-claude" viewBox="0 0 24 24" aria-hidden="true"><path d={siClaude.path} fill="currentColor" /></svg>
@@ -99,6 +159,10 @@
               <p class="so-line">{$_(`${TK}.chat.l1`)}</p>
               <p class="so-line">{$_(`${TK}.chat.l2`)}</p>
               <p class="so-line last">{$_(`${TK}.chat.l3`)}</p>
+              <div class="so-prev" class:is-out={previewOut}>
+                <span class="so-slot so-prev-slot" bind:this={slots[0]}></span>
+                <span class="so-prev-txt">{$_(`${TK}.chat.preview`)}</span>
+              </div>
             </div>
           </article>
 
@@ -110,7 +174,7 @@
               <b>@flashcamp</b>
               <span class="so-badge">{$_(`${TK}.state.approve`)}</span>
             </header>
-            <img class="so-rv-img" src={SHOT} alt="" loading="lazy" decoding="async" />
+            <span class="so-slot so-rv-slot" bind:this={slots[1]}></span>
             <p class="so-rv-cap">{$_(`${TK}.caption`)}</p>
             <footer class="so-rv-foot">
               <span class="so-act">{$_(`${TK}.meta.approve`)}</span>
@@ -140,16 +204,23 @@
               </div>
             </div>
 
-            <!-- La prima casella arriva ingrandita quanto la scheda del passo precedente e si
-                 richiude al suo posto: e' lo stesso post, visto da fuori. `overflow: hidden` del
-                 pannello fa il resto del lavoro mentre e' ancora grande. -->
             <div class="so-pf-grid">
-              <span class="so-cell is-new"><img src={SHOT} alt="" loading="lazy" decoding="async" /></span>
+              <span class="so-slot so-cell" bind:this={slots[2]}></span>
               {#each WALL as src (src)}
                 <span class="so-cell"><img {src} alt="" loading="lazy" decoding="async" /></span>
               {/each}
             </div>
           </article>
+
+          <!-- L'immagine, una sola, sopra tutte e tre. -->
+          <img
+            class="so-fly"
+            class:is-out={flying}
+            src={SHOT}
+            alt=""
+            decoding="async"
+            style="transform: translate3d({fly.x}px, {fly.y}px, 0); width: {fly.w}px; height: {fly.h}px; border-radius: {fly.r}px"
+          />
         </div>
       </div>
     </div>
@@ -178,6 +249,7 @@
     transition: opacity 420ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
   }
   .so-step.is-on { opacity: 1; }
+  .so-cue { margin-top: auto; display: block; height: 1px; }
   .so-n {
     display: inline-grid; place-items: center;
     width: 30px; height: 30px; border-radius: 50%;
@@ -195,11 +267,10 @@
      resta fermo mentre cambia schermata, ed e' anche il freno che impedisce alla foto di tirare
      la scheda oltre lo schermo. */
   .so-visual { position: sticky; top: 14vh; max-width: 430px; margin-inline: auto; }
-  .so-stack { display: grid; height: clamp(430px, 56vh, 540px); }
+  .so-stack { position: relative; display: grid; height: clamp(430px, 56vh, 540px); }
 
   /* Le tre schermate sono alte uguali — la riga della griglia le stira tutte alla piu' alta —
-     cosi' il riquadro non cambia forma mentre cambia contenuto. La chat riempie l'avanzo
-     lasciando respirare le sue righe invece di ammucchiarle in cima. */
+     cosi' il riquadro non cambia forma mentre cambia contenuto. */
   .so-panel {
     grid-area: 1 / 1;
     display: flex; flex-direction: column;
@@ -208,11 +279,28 @@
     border-radius: 26px;
     overflow: hidden;
     box-shadow: 0 40px 90px -60px rgba(0, 0, 0, 0.45);
-    opacity: 0; transform: translateY(14px) scale(0.985);
+    opacity: 0;
     pointer-events: none;
-    transition: opacity 480ms var(--ease, ease), transform 480ms var(--ease, ease);
+    transition: opacity 520ms var(--ease, ease);
   }
-  .so-panel.is-on { opacity: 1; transform: none; pointer-events: auto; }
+  .so-panel.is-on { opacity: 1; pointer-events: auto; }
+
+  /* Le caselle non disegnano niente: dicono dove va l'immagine, e la loro geometria e' l'unica
+     cosa che il codice legge. Restano visibili come vuoto grigio solo il tempo di un caricamento. */
+  .so-slot { display: block; background: var(--paper-2); }
+  .so-fly {
+    position: absolute; top: 0; left: 0; z-index: 2;
+    object-fit: cover; pointer-events: none;
+    opacity: 0;
+    transform-origin: top left;
+    transition:
+      transform 820ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+      width 820ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+      height 820ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
+      border-radius 820ms var(--ease, ease),
+      opacity 380ms ease;
+  }
+  .so-fly.is-out { opacity: 1; }
 
   /* 1 — la conversazione con la propria AI */
   .so-chat-head {
@@ -238,6 +326,16 @@
   .so-line { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
   .so-line.last { color: var(--ink); }
 
+  .so-prev {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 12px;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 420ms var(--ease, ease), transform 420ms var(--ease, ease);
+  }
+  .so-prev.is-out { opacity: 1; transform: none; }
+  .so-prev-slot { width: 78px; height: 98px; border-radius: 14px; flex: none; }
+  .so-prev-txt { font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); }
+
   /* 2 — la richiesta di approvazione */
   .so-rv-head { display: flex; align-items: center; gap: 9px; padding: 14px 16px; }
   .so-plat {
@@ -252,7 +350,7 @@
     padding: 4px 10px; border-radius: 999px;
     background: rgba(var(--accent-rgb), 0.13); color: var(--accent-ink);
   }
-  .so-rv-img { display: block; width: 100%; flex: 1; min-height: 0; object-fit: cover; }
+  .so-rv-slot { flex: 1; min-height: 0; width: 100%; }
   .so-rv-cap { margin: 0; padding: 15px 18px 4px; font-size: 14px; line-height: 1.5; color: var(--ink); }
   .so-rv-foot { display: flex; align-items: center; gap: 12px; padding: 12px 18px 18px; flex-wrap: wrap; flex: none; }
   .so-act {
@@ -288,23 +386,17 @@
   }
   .so-cell { display: block; overflow: hidden; min-height: 0; }
   .so-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .so-cell.is-new {
-    position: relative; z-index: 1;
-    transform: scale(3.02); transform-origin: top left;
-    transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .so-panel.is-on .so-cell.is-new { transform: none; }
 
   @media (max-width: 900px) {
     .so-grid { grid-template-columns: 1fr; gap: 28px; }
     /* Su una colonna la scheda va in cima e i passi le scorrono sotto: incollarla piu' in basso
        la farebbe uscire dallo schermo proprio mentre cambia. */
-    .so-visual { position: sticky; top: 72px; order: -1; max-width: 420px; margin: 0 auto; width: 100%; }
+    .so-visual { position: sticky; top: 72px; order: -1; width: 100%; }
     .so-step { min-height: 0; padding: 26px 0; opacity: 1; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .so-panel { transition: opacity 200ms linear; transform: none; }
-    .so-cell.is-new { transform: none; transition: none; }
+    .so-panel, .so-prev { transition: opacity 200ms linear; transform: none; }
+    .so-fly { transition: opacity 200ms linear; }
   }
 </style>
