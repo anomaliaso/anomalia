@@ -34,7 +34,7 @@
   .ct { padding: clamp(24px, 3vw, 44px) 0; }
 
   .ct-slab {
-    background: var(--accent);
+    background: var(--accent-2);
     color: rgba(0, 0, 0, 0.72);
     border-radius: clamp(26px, 3.4vw, 44px);
     padding: clamp(44px, 6vw, 86px) clamp(28px, 5vw, 76px);

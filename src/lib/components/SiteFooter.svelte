@@ -48,7 +48,7 @@
           rel="noopener"
         >{footCtaLabel}</a>
       {:else}
-        <HeroUrlCta tone="dark" {loggedIn} {waitlistActive} />
+        <HeroUrlCta {loggedIn} {waitlistActive} />
       {/if}
     </div>
   </div>
@@ -143,7 +143,7 @@
   /* Il piede vero prende l'accento; la fascia della CTA sopra resta sulla carta della pagina, cosi'
      l'invito finale non si stacca dal contenuto e il colore arriva solo quando la lettura e' finita. */
   footer {
-    background: var(--accent);
+    background: var(--accent-2);
     padding: 0 0 64px;
     color: rgba(0, 0, 0, 0.70);
     font-size: 13px;

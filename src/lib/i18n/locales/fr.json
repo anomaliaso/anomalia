@@ -2095,16 +2095,26 @@
           "body": "Anomalia garde le créneau et publie. Ce que ça rapporte revient dans le plan suivant."
         },
         "state": {
-          "draft": "Brouillon",
-          "approve": "En attente de vous",
-          "live": "Publié"
+          "approve": "En attente de vous"
         },
         "caption": "La saison du cold brew commence. Le nouveau single-origin arrive vendredi — petit premier lot.",
         "meta": {
-          "written": "Écrit pour Instagram · 4:5 · jeudi 09:00",
           "approve": "Approuver",
           "edit": "ou modifier la légende",
-          "live": "En ligne sur Instagram · jeudi 09:00"
+          "when": "jeudi 09:00"
+        },
+        "chat": {
+          "head": "Votre IA · Anomalia connectée",
+          "ask": "Écris la semaine prochaine pour Flashcamp",
+          "l1": "Votre site vend des tentes pop-up pour le week-end, et les posts qui ont marché étaient tournés dehors, à la première lumière.",
+          "l2": "Deux concurrents ont publié des carrousels de promos cette semaine. Personne ne montre la tente montée en quarante secondes — l'angle est là.",
+          "l3": "Trois posts là-dessus. On commence jeudi."
+        },
+        "profile": {
+          "posts": "publications",
+          "followers": "abonnés",
+          "views": "vues",
+          "bio": "Des tentes pop-up pour ceux qui partent le vendredi."
         }
       },
       "doors": {

@@ -16,9 +16,9 @@
     siRaycast,
     siZapier,
     siWebflow,
-    siMake,
-    siOllama
+    siMake
   } from 'simple-icons';
+  import { siOpenaiMark } from '$lib/marks';
 
   /**
    * L'ultima obiezione prima del prezzo: «funziona con la mia?». Un muro di marchi risponde in un
@@ -31,6 +31,7 @@
   const TK = 'landing.story.hosts';
   const MARKS = [
     { n: 'Claude', i: siClaude },
+    { n: 'ChatGPT', i: siOpenaiMark },
     { n: 'Cursor', i: siCursor },
     { n: 'Gemini', i: siGooglegemini },
     { n: 'Copilot', i: siGithubcopilot },
@@ -45,8 +46,7 @@
     { n: 'Raycast', i: siRaycast },
     { n: 'Zapier', i: siZapier },
     { n: 'Make', i: siMake },
-    { n: 'Webflow', i: siWebflow },
-    { n: 'Ollama', i: siOllama }
+    { n: 'Webflow', i: siWebflow }
   ];
 </script>
 

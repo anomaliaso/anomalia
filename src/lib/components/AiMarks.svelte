@@ -19,6 +19,7 @@
     siMake,
     siOllama
   } from 'simple-icons';
+  import { siOpenaiMark } from '$lib/marks';
 
   /**
    * I marchi che rendono concreto «la tua AI»: non stanno in posizioni decise a tavolino, cadono
@@ -35,6 +36,7 @@
 
   const MARKS: Mark[] = [
     siClaude,
+    siOpenaiMark,
     siCursor,
     siGooglegemini,
     siOpencode,
@@ -51,7 +53,6 @@
     siWebflow,
     siMake,
     siOllama
-    // { src: '/marks/openai.svg' },
     // { src: '/marks/grok.svg' },
     // { src: '/marks/lovable.svg' },
     // { src: '/marks/deepseek.svg' },

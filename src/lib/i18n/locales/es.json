@@ -2095,16 +2095,26 @@
           "body": "Anomalia guarda la franja y publica. Lo que rinde vuelve al plan siguiente."
         },
         "state": {
-          "draft": "Borrador",
-          "approve": "Te espera",
-          "live": "Publicado"
+          "approve": "Te espera"
         },
         "caption": "Empieza la temporada del cold brew. El nuevo single-origin llega el viernes — primer lote pequeño.",
         "meta": {
-          "written": "Escrito para Instagram · 4:5 · jueves 09:00",
           "approve": "Aprobar",
           "edit": "o edita el texto",
-          "live": "En línea en Instagram · jueves 09:00"
+          "when": "jueves 09:00"
+        },
+        "chat": {
+          "head": "Tu IA · Anomalia conectada",
+          "ask": "Escribe la semana que viene para Flashcamp",
+          "l1": "Tu web vende tiendas pop-up de fin de semana, y los posts que funcionaron estaban grabados fuera, con la primera luz.",
+          "l2": "Dos competidores han hecho carruseles de descuentos esta semana. Nadie enseña la tienda montándose en cuarenta segundos — ese es el ángulo.",
+          "l3": "Tres posts sobre eso. Empezamos el jueves."
+        },
+        "profile": {
+          "posts": "publicaciones",
+          "followers": "seguidores",
+          "views": "visualizaciones",
+          "bio": "Tiendas pop-up para quien se va el viernes."
         }
       },
       "doors": {

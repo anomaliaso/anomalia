@@ -2095,16 +2095,26 @@
           "body": "Anomalia tiene lo slot e pubblica. Quello che rende torna dentro al piano successivo."
         },
         "state": {
-          "draft": "Bozza",
-          "approve": "Aspetta te",
-          "live": "Pubblicato"
+          "approve": "Aspetta te"
         },
         "caption": "Inizia la stagione del cold brew. Il nuovo single-origin arriva venerdì — primo lotto piccolo.",
         "meta": {
-          "written": "Scritto per Instagram · 4:5 · giovedì 09:00",
           "approve": "Approva",
           "edit": "oppure modifica la didascalia",
-          "live": "Online su Instagram · giovedì 09:00"
+          "when": "giovedì 09:00"
+        },
+        "chat": {
+          "head": "La tua AI · Anomalia collegata",
+          "ask": "Scrivi la prossima settimana per Flashcamp",
+          "l1": "Il tuo sito vende tende pop-up per il weekend, e i post che hanno funzionato erano girati all'aperto alla prima luce.",
+          "l2": "Due competitor questa settimana hanno fatto caroselli di sconti. Nessuno mostra la tenda che si monta in quaranta secondi — l'angolo è quello.",
+          "l3": "Tre post su quello. Si parte giovedì."
+        },
+        "profile": {
+          "posts": "post",
+          "followers": "follower",
+          "views": "visualizzazioni",
+          "bio": "Tende pop-up per chi parte il venerdì."
         }
       },
       "doors": {
