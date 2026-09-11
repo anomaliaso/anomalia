@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
+import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 import { proposeFirstPlan } from '$lib/server/planner-inputs';
 
 export const POST: RequestHandler = async ({ request, params }) => {
@@ -9,6 +9,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
+
+  const gate = await gateAiAction(brand, apiKey);
+  if (gate) return gate;
 
   try {
     const result = await proposeFirstPlan(supabase, brand, null);
