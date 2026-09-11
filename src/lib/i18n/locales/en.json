@@ -58,7 +58,7 @@
       "urlLabel": "Your website URL",
       "urlSubmit": "Start",
       "urlSubmitAria": "Continue with your website",
-      "connectClaude": "Connect to Claude",
+      "connectClaude": "Connect your AI",
       "claudeConnect": {
         "title": "Connect Anomalia to Claude",
         "subtitle": "Three steps to plug Anomalia into Claude.",
@@ -100,6 +100,43 @@
             "body": "Restart Claude Code, then ask it to run your social media with Anomalia."
           }
         }
+      },
+      "titleAi": "Your AI",
+      "titleRest": " is your agency.",
+      "connect": {
+        "title": "Connect Anomalia to your AI",
+        "subtitle": "It works with any agent that speaks MCP. Pick the way that suits you.",
+        "close": "Close",
+        "copy": "Copy",
+        "copied": "Copied",
+        "tabs": {
+          "auto": "Automatic",
+          "mcp": "By app",
+          "cli": "Command line"
+        },
+        "auto": {
+          "s1": "Copy the text below.",
+          "s2": "Paste it into your AI — Claude, ChatGPT, Cursor, whichever you use.",
+          "s3": "It connects to Anomalia and asks you to sign in. That's it.",
+          "peek": "See what you're copying",
+          "note": "Nothing to install here: the sign-in happens in your agent, and no API key ever leaves this page."
+        },
+        "mcp": {
+          "lead": "One address for every host. Add it as a remote MCP server and complete the sign-in it opens.",
+          "docs": "Docs"
+        },
+        "cli": {
+          "lead": "For a terminal. Same account, same brands — useful for scripts and CI, not needed to use Anomalia from an agent.",
+          "note": "The CLI and the local MCP server share one session, so signing in once covers both."
+        },
+        "how": {
+          "oneCommand": "one command",
+          "configFile": "config file",
+          "connectors": "in the app's connector settings"
+        },
+        "easiest": "Easiest",
+        "copyBig": "Copy the setup prompt",
+        "copiedBig": "Copied — now paste it to your AI"
       }
     },
     "problems": {
@@ -2354,7 +2391,7 @@
     "footer": {
       "tagline": "From zero to one. An AI that runs your social media. · © 2026 Anomalia",
       "euHosting": "European? Your data are hosted safely in the EU.",
-      "ctaHeading": "Social, blog SEO & visibility on ChatGPT & Google: Anomalia plans, creates and publishes your content across every channel — you approve, it handles the rest.",
+      "ctaHeading": "One link. A whole marketing team.",
       "ctaButton": "Get started free",
       "product": "Product",
       "problems": "Problems we solve",

@@ -98,15 +98,18 @@
   /* Token reale per il codice in chat & co. — prima ogni file usava var(--mono, fallback)
      con un token mai definito (voce LEGACY_STRAYS in ui-tokens.test.ts, ora ripulita). */
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  /* Esperimento: togliere "Fraunces", da qui riporta ogni titolo su Inter. */
-  --serif: "Fraunces", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  /* L'esperimento Fraunces e' sospeso: i titoli tornano su Inter. Il token si chiama ancora
+     `--serif` perche' lo nominano `h1, h2` in due fogli — rinominarlo e' un'altra modifica. */
+  --serif: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* --serif: "Halant", Georgia, "Times New Roman", "Times", serif; */
   /* Con Fraunces 300 e' troppo esile: a 24px le aste si assottigliano e il caratterino anni 70
      si spegne proprio dove dovrebbe vedersi. Era 300 per Inter — togliendo l'esperimento questa
      riga torna a 300 insieme a quella sopra. */
   --heading-weight: 400;   /* single knob for all h1/h2 serif weight */
-  --heading-tracking: -0.04em;  /* single knob for all h1/h2 serif tracking */
+  /* Stretto: un bastone a corpo grande ha bisogno di meno aria fra le lettere di un grazie, o
+     il titolo si sfilaccia invece di leggersi come un blocco. */
+  --heading-tracking: -0.07em;  /* single knob for all h1/h2 heading tracking */
   /* Unified page / subpage title — compact in the global sticky top bar */
   --page-title-size: 0.95rem;
   --page-title-weight: 600;
@@ -144,7 +147,7 @@
   --ink-faint:  #666;
   --line:       #222;
   --line-2:     #333;
-  --paper:      #131313;
+  --paper:      #000000;
   --paper-2:    #181818;
   --paper-3:    #232323;
   --accent:     #c485fe;

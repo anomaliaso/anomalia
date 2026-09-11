@@ -50,10 +50,32 @@
        sets flex-direction:column, and this header also carries class "nav" — without this the
        bar stacks vertically and the logo stops centring. */
     display: flex; align-items: center; flex-direction: row;
-    background: var(--paper);
+    background: transparent;
   }
-  .nav .wrap { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; padding: 0 40px; }
+  /* Nessun velo: la barra e' trasparente e quello che la separa dalla pagina e' solo la sfocatura,
+     che si spegne scendendo. Due strati invece di uno perche' una sfocatura sola, tagliata da una
+     maschera, lascia il gradino dove la maschera finisce: sommandone due con raggio e corsa
+     diversi la sfocatura cresce verso l'alto e muore senza bordo. Niente ombra. */
+  header.nav::before,
+  header.nav::after {
+    content: ''; position: absolute; inset: 0 0 -26px 0; pointer-events: none;
+  }
+  header.nav::before {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    mask-image: linear-gradient(to bottom, #000 0, #000 58%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 58%, transparent 100%);
+  }
+  header.nav::after {
+    inset: 0 0 -13px 0;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    mask-image: linear-gradient(to bottom, #000 0, #000 34%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, transparent 100%);
+  }
+  .nav .wrap { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; padding: 0 40px; }
   .nav-wrap {
+    position: relative; z-index: 1;
     display: grid; grid-template-columns: 1fr auto 1fr;
     align-items: center; width: 100%; max-width: none; padding: 0 40px;
   }
@@ -260,8 +282,11 @@
   /* ---------- Grow-style hero (centered, gradient accent, two CTAs) ---------- */
   /* Le schede in parallasse vivono dentro la hero, quindi serve un contenitore posizionato. */
   .gr-hero {
-    position: relative; position: relative; padding: 150px 0 40px; text-align: center; overflow: hidden; }
-  .gr-hero-inner { display: flex; flex-direction: column; align-items: center; }
+    position: relative; padding: 150px 0 40px; text-align: center; overflow: hidden; }
+  /* Le schede in parallasse sono `position:absolute`, quindi si dipingono SOPRA un fratello
+     statico anche a z-index 0: senza queste due proprieta' finivano davanti al titolo. Alzare
+     l'inner e' cio' che le tiene dietro, non la loro trasparenza. */
+  .gr-hero-inner { display: flex; flex-direction: column; align-items: center; position: relative; z-index: 1; }
   /* Il titolo e' quattro parole: puo' respirare molto piu' di quando ne aveva otto, ed e' quello
      che gli da' il peso del riferimento invece di una riga lunga a corpo medio. */
   .gr-h1 {
@@ -1294,7 +1319,6 @@
 
   /* ---------- Dark mode overrides (data-theme only, JS handles OS detection) ---------- */
   :root[data-theme="dark"] body { background: var(--paper); }
-  :root[data-theme="dark"] header.nav { background: var(--paper); }
   :root[data-theme="dark"] .nav-pricing { color: var(--ink-soft); }
   /* Primary CTAs in dark mode: white pill, black text (not accent). */
   :root[data-theme="dark"] .nav-cta { background: var(--ink); color: var(--paper); }

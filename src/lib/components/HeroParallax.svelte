@@ -29,14 +29,41 @@
   /** I giorni con un post: fissi, non casuali — una griglia che cambia a ogni render distrae. */
   const FILLED = new Set([2, 3, 6, 9, 10, 14, 16, 17, 20, 23, 24, 27]);
 
+  /**
+   * Le immagini sono quelle vere del prodotto, da tre provenienze diverse: i post usciti dai
+   * modelli (`showcase-gen`), i template statici dei post (`hero`, `styles`) e i fermi delle clip
+   * (`showcase`). Tenerle mescolate e' il punto — chi guarda deve vedere che qui dentro passa
+   * roba prodotta, non tre volte lo stesso stock.
+   */
+  const GEN = [
+    '/showcase-gen/flashcamp-1.webp',
+    '/showcase-gen/mellon-1.webp',
+    '/showcase-gen/andrea-1.webp',
+    '/showcase-gen/flashcamp-2.webp',
+    '/showcase-gen/mellon-2.webp',
+    '/showcase-gen/andrea-2.webp',
+    '/showcase-gen/flashcamp-3.webp'
+  ];
+  const TPL = [
+    '/hero/post1.png',
+    '/styles/scene-a.jpg',
+    '/hero/post2.png',
+    '/styles/scene-b.jpg',
+    '/hero/post3.png',
+    '/styles/scene-c.jpg'
+  ];
+
   /** Miniature vere dalla libreria della landing: due sono fermi di video, e lo dicono col triangolo. */
   const TILES = [
-    { src: '/hero/post1.png', video: false },
+    { src: GEN[0], video: false },
     { src: '/showcase/macha-latte.jpg', video: true },
-    { src: '/hero/post2.png', video: false },
-    { src: '/showcase/lipstick.jpg', video: false },
-    { src: '/hero/post3.png', video: false },
-    { src: '/showcase/monitor.jpg', video: true }
+    { src: TPL[0], video: false },
+    { src: GEN[1], video: false },
+    { src: TPL[1], video: false },
+    { src: '/showcase/monitor.jpg', video: true },
+    { src: GEN[2], video: false },
+    { src: TPL[2], video: false },
+    { src: '/showcase/lipstick.jpg', video: true }
   ];
 
   /** Le reti su cui il prodotto pubblica davvero, col loro marchio: e' il segnale piu' immediato
@@ -45,7 +72,9 @@
 
   /** Le celle del calendario che portano una foto invece del solo colore. */
   const CAL_SHOTS: Record<number, string> = {
-    3: '/hero/post2.png', 9: '/showcase/lipstick.jpg', 16: '/hero/post3.png', 23: '/showcase/macha-latte.jpg'
+    2: GEN[3], 3: TPL[2], 6: GEN[4],
+    9: '/showcase/lipstick.jpg', 10: TPL[4], 14: GEN[5],
+    16: TPL[3], 20: GEN[6], 23: '/showcase/macha-latte.jpg', 27: TPL[5]
   };
 
   let mx = $state(0);
@@ -96,7 +125,7 @@
         </div>
       {:else if c.kind === 'post'}
         <div class="k-head"><span class="k-dot"></span>Pending approval</div>
-        <img class="k-thumb" src="/hero/post1.png" alt="" loading="lazy" decoding="async" />
+        <img class="k-thumb" src={GEN[1]} alt="" loading="lazy" decoding="async" />
         <div class="k-line w90"></div>
         <div class="k-line w70"></div>
         <div class="k-nets">
@@ -164,10 +193,12 @@
     border: 1px solid var(--line);
     border-radius: 18px;
     padding: 14px 16px;
-    /* L'ombra profonda e l'opacita' a 0,5 le rendevano un velo: si intuivano e non si leggevano.
-       Ora sono contenuto visibile dietro al testo, non una texture. */
-    box-shadow: 0 10px 26px -18px rgba(0, 0, 0, 0.22);
-    opacity: 0.88;
+    /* Ombra quasi assente e piena opacita': le schede sono contenuto vero, e l'ombra le velava
+       piu' di quanto le staccasse. A tenerle DIETRO al testo non e' la trasparenza — e' lo
+       z-index, che l'inner della hero alza a 1: cosi' si leggono senza mai coprire la parola
+       che conta. */
+    box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.12);
+    opacity: 1;
     display: flex; flex-direction: column; gap: 8px;
     will-change: transform;
     transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -243,7 +274,7 @@
      orizzontale che una scheda sporgente causerebbe. */
   @media (max-width: 1100px) {
     .px-card:not(.small) { display: none; }
-    .px-card { opacity: 0.62; }
+    .px-card { opacity: 0.9; }
     .px-card.small { --w: 190px; padding: 11px 12px; }
     .px-card.small:nth-child(1) { --t: 1%;  --l: auto; right: -66px; }
     .px-card.small:nth-child(3) { --t: auto; bottom: 2%; --l: -70px; }

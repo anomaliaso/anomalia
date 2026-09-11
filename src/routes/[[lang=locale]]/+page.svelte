@@ -1,7 +1,6 @@
 <script lang="ts">
   import { _, locale } from 'svelte-i18n';
   import { page } from '$app/stores';
-  import { siClaude } from 'simple-icons';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import AskAiCta from '$lib/components/AskAiCta.svelte';
   import WhyUs from '$lib/components/WhyUs.svelte';
@@ -12,7 +11,8 @@
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
   import HeroParallax from '$lib/components/HeroParallax.svelte';
-  import ConnectClaudeDialog from '$lib/components/ConnectClaudeDialog.svelte';
+  import AiMarks from '$lib/components/AiMarks.svelte';
+  import ConnectAgentDialog from '$lib/components/ConnectAgentDialog.svelte';
   import { marketingStartHref } from '$lib/start-href';
   import '$lib/styles/landing.css';
 
@@ -89,15 +89,15 @@
     <HeroParallax />
     <div class="wrap gr-hero-inner">
       <!-- Hero is paint-critical: no .reveal, no opacity:0, no letter-stagger on first paint. -->
-      <span class="eyebrow">{$_('landing.hero.eyebrow')}</span>
-      <h1 class="gr-h1">{$_('landing.hero.titleLead')}</h1>
+      <h1 class="gr-h1">
+        <span class="ai-word" tabindex="0">{$_('landing.hero.titleAi')}<AiMarks /></span>{$_('landing.hero.titleRest')}
+      </h1>
       <p class="gr-sub">{$_('landing.hero.subhead')}</p>
       <div class="gr-actions">
         <HeroUrlCta loggedIn={!!data.session} {waitlistActive} />
       </div>
       <p class="gr-note">{$_('landing.hero.note')}</p>
       <button class="connect-claude" type="button" onclick={() => (claudeOpen = true)}>
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={siClaude.path} /></svg>
         {$_('landing.hero.connectClaude')}
       </button>
     </div>
@@ -185,7 +185,7 @@
 
 </main>
 
-<ConnectClaudeDialog bind:open={claudeOpen} />
+<ConnectAgentDialog bind:open={claudeOpen} />
 
 <section class="featured-on" aria-label="Featured on">
   <div class="wrap">
@@ -394,6 +394,16 @@
 <LazyMarcoWidget />
 
 <style>
+  /* Le due parole sono la parte astratta della frase: l'hover ci mette sotto i marchi veri, ed e'
+     l'unico punto della hero dove «la tua AI» smette di essere un'idea. `tabindex` perche' chi
+     naviga da tastiera possa arrivarci: la rivelazione e' decorativa, ma escluderla di proposito
+     sarebbe una scelta e non una dimenticanza. */
+  .ai-word {
+    display: inline-block; position: relative; cursor: default;
+    border-radius: 0.08em; outline-offset: 0.12em;
+  }
+
+
 
   /* ---------- HERO: centrato nella viewport ----------
      Sta QUI e non in landing.css perche' `.gr-hero` lo usano altre otto pagine (autoblog,
