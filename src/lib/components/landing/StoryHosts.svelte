@@ -109,13 +109,15 @@
   .hs-cell svg { width: 26px; height: 26px; }
   .hs-cell span { font-size: 11.5px; font-weight: 550; color: var(--ink-soft); }
 
-  /* Le colonne sono sempre un divisore di 18: tre o due, mai quattro — altrimenti l'ultima riga
-     resta spaiata e i buchi si vedono, perche' i solchi della griglia sono lo sfondo. */
+  /* Le colonne sono sempre un divisore di 18: sei o tre, mai quattro o due — altrimenti l'ultima
+     riga resta spaiata e i buchi si vedono, perche' i solchi della griglia sono lo sfondo. Sul
+     telefono restano tre: a due, diciotto marchi diventano nove righe di elenco. */
   @media (max-width: 860px) {
     .hs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   @media (max-width: 520px) {
-    .hs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .hs-cell { padding: 20px 6px; }
+    .hs-cell { padding: 18px 4px; gap: 7px; }
+    .hs-cell svg { width: 22px; height: 22px; }
+    .hs-cell span { font-size: 10.5px; }
   }
 </style>
