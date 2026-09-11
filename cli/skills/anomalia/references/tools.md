@@ -320,6 +320,12 @@ filming a new clip for someone who asked to correct theirs is the exact mistake 
 `kind_not_refinable` (400) means the asset is neither. `count` draws alternatives for a picture; a
 clip always comes back as one.
 
+`source_too_large` (413) is not `source_not_found`: the asset is there, it is just heavier than a
+model can be handed, and the answer carries its `bytes` and the `limit`. An oversized source is
+shrunk before the model sees it, so this only reaches you for a file beyond even that — import a
+lighter copy. **Never answer it by generating a replacement**: the original is still the customer's
+and a fresh render is a different picture.
+
 `generate_video` films a NEW clip into the library. Required: `slug`, `prompt`; optional
 `base_media_id`, `duration`, `aspect_ratio`, `model`, `title`. **`base_media_id` pointing at a
 library IMAGE is how you animate a photo** — the image becomes the clip's first frame, so subject,

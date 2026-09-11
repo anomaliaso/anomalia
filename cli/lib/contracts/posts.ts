@@ -643,7 +643,10 @@ export const REFINE_MEDIA = {
     'get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and ' +
     'model here applies to this call only. A clip has no refine model until the brand picks one, ' +
     'and until then a video comes back no_refine_model rather than quietly redrawn. The brand ' +
-    'look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only.',
+    'look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only. ' +
+    'source_too_large means the file is heavier than a model can be handed — the answer names its ' +
+    'weight and the ceiling. The asset IS there: shrink it or import a lighter copy, never ' +
+    'generate a replacement.',
   method: 'POST',
   pathUnderBrand: '/media/refine',
   input: z
@@ -675,6 +678,7 @@ export const REFINE_MEDIA = {
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
     { error: 'source_not_found', status: 404 },
+    { error: 'source_too_large', status: 413 },
     { error: 'kind_not_refinable', status: 400 },
     { error: 'no_refine_model', status: 400 },
     { error: 'render_failed', status: 502 },

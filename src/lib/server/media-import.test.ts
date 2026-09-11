@@ -5,7 +5,8 @@ vi.mock('$env/dynamic/private', () => ({ env: {} }));
 vi.mock('node:dns/promises', () => ({ lookup: vi.fn() }));
 
 import { lookup } from 'node:dns/promises';
-import { importBrandMediaFromUrl } from './media-import';
+import { RASTER_SOURCE_MAX_BYTES } from '$lib/raster-image';
+import { importBrandMediaFromUrl, IMAGE_MAX_BYTES } from './media-import';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const OVER_IMAGE_CEILING = Buffer.alloc(13_000_000, 1);
@@ -259,6 +260,15 @@ describe('importare un media da un URL pubblico', () => {
 
     expect(result).toEqual({ ok: false, error: 'too_large' });
     expect(uploads).toEqual([]);
+  });
+
+  /**
+   * Il tool gemello deve saper leggere ciò che questo deposita. Quando non era così — 12 MB
+   * ammessi all'import, 6 MB leggibili dalla rifinitura — `refine_media` rispondeva
+   * `source_not_found` su una foto che c'era, e l'agente la rigenerava da zero.
+   */
+  it('ciò che l import ammette, la rifinitura lo sa ancora leggere', () => {
+    expect(IMAGE_MAX_BYTES).toBeLessThanOrEqual(RASTER_SOURCE_MAX_BYTES);
   });
 
   it('un video regge un peso che a un immagine sarebbe negato', async () => {
