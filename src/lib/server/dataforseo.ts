@@ -2,6 +2,7 @@
 // (the foundation AI engines pull from). Two DataForSEO Labs "live" calls per run: domain rank
 // overview (organic keyword count, estimated traffic, top-10 count) + ranked keywords (the table).
 // Basic-auth, plain fetch, no SDK. Best-effort: null on any failure or when creds aren't set.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { swallow } from '$lib/server/swallow';
 import { env } from '$env/dynamic/private';
 import { logAiCall } from '$lib/server/ai-log';
@@ -77,6 +78,29 @@ function market(lang?: string | null): { location_code: number; language_code: s
     : { location_code: 2840, language_code: 'en' };
 }
 
+const DFS_TASK_OK = 20000;
+
+function refusalOf(res: Response, task: any): string | null {
+  const message = String(task?.status_message ?? '').trim();
+  if (!res.ok) return `HTTP ${res.status}${message ? ` ${message}` : ''}`;
+  if (!task) return 'HTTP 200 without a task — unreadable response';
+  const code = Number(task.status_code ?? DFS_TASK_OK);
+  if (code === DFS_TASK_OK) return null;
+  return `task ${code}${message ? ` ${message}` : ''}`;
+}
+
+const refusals = new AsyncLocalStorage<string[]>();
+
+export async function declareUnavailable<T extends Record<string, unknown>>(read: () => Promise<T>): Promise<T & { unavailable?: string }> {
+  const seen: string[] = [];
+  const result = await refusals.run(seen, read);
+  if (!seen.length) return result;
+  return {
+    ...result,
+    unavailable: `DataForSEO refused ${seen.length} call(s) — ${seen.join('; ')}. Whatever is empty or zero above is missing because the provider did not answer, not because nothing was found: tell the user the SEO metrics are unavailable instead of reporting these numbers.`
+  };
+}
+
 async function post(path: string, body: unknown, costUsd = DFS_CALL_COST_USD): Promise<any> {
   const auth = Buffer.from(`${env.DATAFORSEO_USERNAME}:${env.DATAFORSEO_PASSWORD}`).toString('base64');
   const t0 = Date.now();
@@ -86,10 +110,17 @@ async function post(path: string, body: unknown, costUsd = DFS_CALL_COST_USD): P
     body: JSON.stringify([body]),
     signal: AbortSignal.timeout(45_000)
   });
-  logAiCall({ label: 'searchMetrics', provider: 'dataforseo', ms: Date.now() - t0, ok: res.ok, error: res.ok ? undefined : `HTTP ${res.status}`, context: path.slice(0, 120), flatCostUsd: costUsd });
-  if (!res.ok) throw new Error(`dataforseo ${path} ${res.status}`);
-  const json = await res.json();
-  return json?.tasks?.[0]?.result?.[0] ?? null;
+  const json = await res.json().catch(() => null);
+  const task = json?.tasks?.[0];
+  const refusal = refusalOf(res, task);
+
+  logAiCall({ label: 'searchMetrics', provider: 'dataforseo', ms: Date.now() - t0, ok: !refusal, error: refusal ?? undefined, context: path.slice(0, 120), flatCostUsd: costUsd });
+
+  if (refusal) {
+    refusals.getStore()?.push(`${path}: ${refusal}`);
+    throw new Error(`dataforseo ${path} ${refusal}`);
+  }
+  return task?.result?.[0] ?? null;
 }
 
 // Strip to the bare registrable host — DataForSEO wants the bare domain, not a URL with scheme/path.
@@ -112,6 +143,8 @@ export async function fetchSearchPerformance(url: string, lang?: string | null):
       }).catch((error) => { swallow('dataforseo call', error); return null; })
     ]);
 
+    if (!overview) return null;
+
     const org = overview?.items?.[0]?.metrics?.organic ?? {};
     const topKeywords = (ranked?.items ?? []).slice(0, 10).map((it: any) => {
       const kd = it?.keyword_data ?? {};
@@ -124,10 +157,6 @@ export async function fetchSearchPerformance(url: string, lang?: string | null):
         intent: String(kd?.search_intent_info?.main_intent ?? '')
       };
     }).filter((k: { keyword: string }) => k.keyword);
-
-    // Both calls failed (creds/network) → no panel. If they answered but the domain simply doesn't
-    // rank, keep the zeros: "you're invisible on Google" is exactly the diagnosis worth showing.
-    if (!overview && !ranked) return null;
 
     const organicKeywords = Number(org?.count ?? 0) || 0;
     const estMonthlyTraffic = Math.round(Number(org?.etv ?? 0) || 0);

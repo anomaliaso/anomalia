@@ -6,6 +6,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import {
   dataforseoConfigured,
+  declareUnavailable,
   fetchBacklinkHistory,
   fetchBacklinkSummary,
   fetchDomainOverview,
@@ -59,6 +60,17 @@ async function resolveLang(opts: DataForSeoToolsOpts): Promise<string | null> {
   if (opts.language) return opts.language;
   if (opts.resolveLanguage) return opts.resolveLanguage();
   return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function declaring<T extends Record<string, any>>(tools: T): T {
+  return Object.fromEntries(
+    Object.entries(tools).map(([key, t]) => [
+      key,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { ...t, execute: (args: any, opts: any) => declareUnavailable(async () => t.execute(args, opts)) }
+    ])
+  ) as T;
 }
 
 /**
@@ -199,9 +211,9 @@ export function createDataForSeoTools(opts: DataForSeoToolsOpts = {}) {
     })
   };
 
-  if (!opts.allowHistory) return tools;
+  if (!opts.allowHistory) return declaring(tools);
 
-  return {
+  return declaring({
     ...tools,
     dfs_traffic_history: tool({
       description:
@@ -236,5 +248,5 @@ export function createDataForSeoTools(opts: DataForSeoToolsOpts = {}) {
         return history ? { history } : { error: 'No backlink history' };
       }
     })
-  };
+  });
 }

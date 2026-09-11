@@ -1605,3 +1605,27 @@ benissimo; è il fallimento a diventare muto, quindi la sonda sembra corretta fi
 **La mossa.** Contare con `count: 'exact'` e `.limit(1)`. Una riga di traffico è il prezzo di un
 messaggio d'errore leggibile, e un rifiuto anonimo costa molto di più: non si riconosce, quindi non
 si spiega, quindi il giro dopo è identico al primo.
+
+## Un fornitore che risponde `200` può avere già detto di no
+
+**Segnale.** Le metriche di un fornitore mancano da settimane e `ai_calls` non mostra niente: la
+percentuale di successo è alta, il prodotto risponde, e il numero che arriva al cliente è uno zero
+che sembra una diagnosi. Oppure il contrario: `ai_calls` mostra il 96% di fallimenti su una label
+e nessuno se ne accorge, perché ogni chiamante traduce il rifiuto in `null` e ogni lettore traduce
+`null` in «non c'è nessun dato per questo dominio».
+
+**Cosa succede.** Due cose insieme, e si coprono a vicenda. La prima: leggere solo `res.ok` non
+basta. DataForSEO — ma è la norma nelle API a task — risponde `HTTP 200` con il verdetto vero
+dentro il task (`status_code: 40200 Payment Required.`), e quel caso viene loggato come successo
+mentre torna zero righe. La seconda: `catch { return null }` e `catch { return [] }` cancellano la
+differenza fra «ha risposto, non c'è niente» e «non ha risposto». Sono la stessa forma, e chi legge
+— soprattutto se chi legge è un modello che scrive l'analisi al cliente — sceglie la lettura
+sbagliata con la stessa sicurezza della giusta.
+
+**La mossa.** Leggere il verdetto **dove nasce** — una funzione sola, quella che fa la POST — e
+tenere dentro il log la frase del fornitore, non lo status: `Payment Required.` chiude la diagnosi,
+`HTTP 402` la comincia soltanto. Poi far arrivare il rifiuto a chi legge sotto forma di frase, come
+`truncated` dichiara una lista tagliata: un risultato vuoto che non dice perché è vuoto è una
+bugia con la stessa faccia della verità. E prima di dare la colpa al codice, chiedere il saldo:
+quasi ogni fornitore ha un endpoint gratuito che dice quanto credito resta (`appendix/user_data`),
+e un `402` non si debugga, si ricarica.
