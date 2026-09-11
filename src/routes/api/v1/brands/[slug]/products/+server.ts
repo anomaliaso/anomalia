@@ -55,8 +55,10 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
     if (!products.length) return json({ error: 'No products found on the site.' }, { status: 400 });
 
-    await supabase.from('products').delete().eq('brand_id', brand.id);
-    await supabase.from('products').insert(
+    const { replaceBrandCatalog } = await import('$lib/server/product-catalog');
+    await replaceBrandCatalog(
+      supabase,
+      brand.id,
       products.map((p: any) => ({
         brand_id: brand.id,
         title: p.name,

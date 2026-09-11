@@ -192,8 +192,10 @@ export async function executeChatToolJob(
       }, { onConflict: 'brand_id' });
 
       if (profile.products?.length) {
-        await supabase.from('products').delete().eq('brand_id', brandId);
-        await supabase.from('products').insert(
+        const { replaceBrandCatalog } = await import('$lib/server/product-catalog');
+        await replaceBrandCatalog(
+          supabase,
+          brandId,
           profile.products.map((p: AnyRec) => ({
             brand_id: brandId, title: p.name ?? p.title, description: p.description ?? '', pricing: p.pricing ?? null, kind: p.productType ?? p.kind ?? 'product', images: p.images ?? null, url: p.url ?? null
           }))
@@ -283,8 +285,10 @@ export async function executeChatToolJob(
       if (!products.length) return { error: 'No products found.' };
 
       await cancel.assertActive();
-      await supabase.from('products').delete().eq('brand_id', brandId);
-      await supabase.from('products').insert(
+      const { replaceBrandCatalog } = await import('$lib/server/product-catalog');
+      await replaceBrandCatalog(
+        supabase,
+        brandId,
         products.map((p) => ({
           brand_id: brandId, title: p.name, description: p.description ?? '', pricing: p.pricing ?? null, kind: p.productType ?? 'product', images: p.images ?? null, url: p.url ?? null
         }))
