@@ -110,16 +110,17 @@ describe('la nav del brand', () => {
   });
 
   /**
-   * La sidebar per intero: sei righe, in quest'ordine, più l'ingranaggio in fondo (che non è una
-   * voce e quindi non sta qui). È l'unica cosa che un test può tenere ferma di una barra —
+   * La sidebar per intero: sette righe, in quest'ordine, più l'ingranaggio in fondo (che non è
+   * una voce e quindi non sta qui). È l'unica cosa che un test può tenere ferma di una barra —
    * l'inventario lo sorveglia il caso qui sopra, l'aspetto nessuno.
    */
-  it('gli Spazi sono le sei voci della sidebar, in ordine', () => {
+  it('gli Spazi sono le sette voci della sidebar, in ordine', () => {
     expect(NAV_TEAM_SPACES.map((t) => [t.path, t.labelKey])).toEqual([
       ['', 'app.nav2.home'],
       ['/media', 'app.nav2.materials'],
       ['/strategy', 'app.hub.strategy.label'],
       ['/calendar', 'app.hub.publish.calendar'],
+      ['/site', 'app.nav2.site'],
       ['/radar', 'app.nav2.newsRadar'],
       ['/analytics', 'app.nav2.results']
     ]);
@@ -137,7 +138,6 @@ describe('la nav del brand', () => {
   it('sa esattamente quali destinazioni hanno perso la riga in sidebar', () => {
     expect(NAV_OFF_SIDEBAR.map((t) => t.path)).toEqual([
       '/leads',
-      '/site',
       '/seo',
       '/keywords',
       '/backlinks',

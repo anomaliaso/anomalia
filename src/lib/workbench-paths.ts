@@ -227,6 +227,9 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
     badge: 'content',
     also: ['/content', '/approvals', '/publish']
   },
+  // Il blog ha una riga sua: e' una superficie di pubblicazione come il calendario, e senza
+  // riga ci si arrivava solo da ⌘K — cioe' non ci arrivava nessuno.
+  { path: '/site', labelKey: 'app.nav2.site' },
   // News Radar sale fra gli Spazi: e' l'unica delle pagine-strumento che si guarda tutti i
   // giorni, ed e' la sola voce che la sidebar tiene fuori dalle cinque del mockup.
   { path: '/radar', labelKey: 'app.nav2.newsRadar' },
@@ -246,7 +249,6 @@ export const NAV_TEAM_SPACES: NavTeamItem[] = [
  */
 export const NAV_OFF_SIDEBAR: NavTeamItem[] = [
   { path: '/leads', labelKey: 'app.hub.automations.leads', badge: 'leads' },
-  { path: '/site', labelKey: 'app.nav2.site' },
   // SEO e GEO sono una voce sola: la ricerca e la citabilità dai modelli sono la stessa domanda
   // ("ci trovano?") fatta a due motori. `/geo`, `/seo-geo` e `/citations` restano rotte vere —
   // si aprono da qui dentro e da ⌘K, che elenca ogni pagina del brand — ma non hanno una riga
