@@ -21,10 +21,11 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
     if (!proposed) return json({ error: 'No proposed plan to approve' }, { status: 404 });
 
-    await activatePlan(supabase, brand.id, proposed.id, brand.timezone as string);
+    const activated = await activatePlan(supabase, brand.id, proposed.id, brand.timezone as string);
+    if (!activated) return json({ error: 'Proposed plan disappeared before activation' }, { status: 409 });
 
     return json({ ok: true });
   } catch (e) {
-    return json({ error: `Approve failed: ${String(e)}` }, { status: 500 });
+    return json({ error: `Approve failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 };

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createTestSupabase } from '$lib/testkit/supabase';
+import { createTestSupabase, type TestSupabase } from '$lib/testkit/supabase';
 import type { ApiKeyInfo } from '$lib/server/cli-auth';
 
 const gateCredits = vi.fn();
@@ -58,8 +58,9 @@ const READ_ONLY_KEY: ApiKeyInfo = {
   permissions: { brand_ids: '*', scopes: ['read'] }
 };
 
-function call(apiKey?: ApiKeyInfo) {
+function call(apiKey?: ApiKeyInfo, prepare?: (kit: TestSupabase) => void) {
   const kit = createTestSupabase({ posts: [{ ...POST_ROW }], brand_kit: [], products: [] });
+  prepare?.(kit);
   vi.mocked(authenticate).mockResolvedValue({
     supabase: kit.client,
     user: { id: 'user-1' },
@@ -114,5 +115,42 @@ describe('POST /api/v1/brands/:slug/posts/:id/render', () => {
     expect(gateCredits).toHaveBeenCalledWith('brand-1');
     expect(brandContexts).toEqual(['brand-1']);
     expect(kit.tables.get('posts')?.[0].media_url).toBe('https://cdn.test/a.png');
+  });
+
+  it('un render senza immagine non è ok: true, e dice che i crediti sono già usciti', async () => {
+    renderPreviewImages.mockImplementation(
+      async (_profile: unknown, _posts: unknown, opts: { onPost: (p: unknown) => Promise<void> }) => {
+        await opts.onPost({ imageUrl: null, __renderError: 'il modello ha rifiutato il prompt' });
+      }
+    );
+
+    const { res, body } = await call();
+
+    expect(res.ok).toBe(false);
+    expect(body.ok).not.toBe(true);
+    expect(body.error).toContain('il modello ha rifiutato il prompt');
+    expect(body.credits_spent).toBe(true);
+  });
+
+  it('un renderer che alza non è ok: true, e dice che i crediti sono già usciti', async () => {
+    renderPreviewImages.mockRejectedValue(new Error('il fornitore ha chiuso la connessione'));
+
+    const { res, body } = await call();
+
+    expect(res.ok).toBe(false);
+    expect(body.ok).not.toBe(true);
+    expect(body.error).toContain('il fornitore ha chiuso la connessione');
+    expect(body.credits_spent).toBe(true);
+  });
+
+  it('una scrittura fallita non è ok: true, e dice che i crediti sono già usciti', async () => {
+    const { res, body } = await call(undefined, (kit) =>
+      kit.failNext('posts', 'permission denied for table posts', 'update')
+    );
+
+    expect(res.ok).toBe(false);
+    expect(body.ok).not.toBe(true);
+    expect(body.error).toContain('permission denied for table posts');
+    expect(body.credits_spent).toBe(true);
   });
 });
