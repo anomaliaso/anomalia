@@ -273,6 +273,11 @@ primo cambiamento»: qui è scritta in ventinove, e ne mancano quindici.
 
 ## 4. `approve_plan` dichiara attivato un piano che può essere rimasto proposto
 
+> **Corretto in #399.** `activatePlan` alza su entrambe le scritture e sulla sincronizzazione
+> delle preferenze; la rotta ha perso le due scritture duplicate. Il vincolo che rendeva il
+> fallimento raggiungibile è provato in `scripts/constraint-harness.mjs`. La diagnosi qui sotto
+> resta per il metodo: il comportamento non è più questo.
+
 **Gravità: critica.** È il difetto della classe `logout`, sul tool che se lo può permettere meno —
 l'unico della famiglia piani annotato `destructive: true`.
 
@@ -386,6 +391,10 @@ passato, non un patch con tutte le colonne»*. Per `brand_kit` non c'è: **nessu
 ---
 
 ## 6. `render_post` fa pagare il render, fallisce, e risponde `ok: true`
+
+> **Corretto in #399.** Un render senza immagine è un `502` che nomina il motivo e porta
+> `credits_spent`, perché riprovare paga una seconda volta; anche l'errore della scrittura di
+> `media_url` viene letto. La descrizione lo dichiara.
 
 **Gravità: alta.**
 
