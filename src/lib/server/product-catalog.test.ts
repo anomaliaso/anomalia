@@ -65,6 +65,20 @@ describe('replaceBrandCatalog', () => {
     expect(ops[ops.length - 1].op).toBe('delete');
   });
 
+  it('toglie ogni riga vecchia anche quando non stanno in un blocco solo', async () => {
+    kit = createTestSupabase({
+      products: Array.from({ length: 250 }, (_, i) => ({
+        id: `old-${i}`,
+        brand_id: 'brand-1',
+        title: `Vecchio ${i}`
+      }))
+    });
+
+    await replaceBrandCatalog(kit.client, 'brand-1', SCRAPED);
+
+    expect(titles()).toEqual(['Filtro', 'Moka 3 tazze', 'Senza schema']);
+  });
+
   it('una cancellazione fallita si dichiara invece di sparire', async () => {
     kit.failNext('products', 'deadlock detected', 'delete');
 
