@@ -4,7 +4,7 @@
 > Non si modifica a mano: il prossimo che rigenera cancella le correzioni.
 
 **80 tool** — 9 in lettura, 53 in scrittura, 18 che distruggono.
-Il payload di `tools/list` pesa **87.502 caratteri**, circa **21.876 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
+Il payload di `tools/list` pesa **87.705 caratteri**, circa **21.926 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
 
 | gruppo | tool |
 |---|---:|
@@ -791,7 +791,7 @@ To turn a post you already have into a video: this animates that post's cover im
 
 *Refine media you already made*
 
-To change a photo or a video you already have — "make it red", "warmer background", "remove the cup on the left", "keep the movement but make it night" — instead of making a new one. base_media_id is any asset in this brand’s library, image or video alike; list_media finds it, and a short prefix works. It starts FROM that asset: the picture you already made comes back changed, not redrawn. Say what should CHANGE, not what the whole thing should be. The result is filed as a NEW asset, so a wrong edit costs one render and never your original. Do NOT reach for generate_image or generate_video to alter something: those two start from nothing and give you a different subject, which is the mistake this tool exists to end. It spends credits, and the answer says how many renders were billed. It creates nothing in the calendar and publishes nothing; pass the id it returns to create_post as media_ids when you want a post. Each kind has its own model — get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and model here applies to this call only. A clip has no refine model until the brand picks one, and until then a video comes back no_refine_model rather than quietly redrawn. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only.
+To change a photo or a video you already have — "make it red", "warmer background", "remove the cup on the left", "keep the movement but make it night" — instead of making a new one. base_media_id is any asset in this brand’s library, image or video alike; list_media finds it, and a short prefix works. It starts FROM that asset: the picture you already made comes back changed, not redrawn. Say what should CHANGE, not what the whole thing should be. The result is filed as a NEW asset, so a wrong edit costs one render and never your original. Do NOT reach for generate_image or generate_video to alter something: those two start from nothing and give you a different subject, which is the mistake this tool exists to end. It spends credits, and the answer says how many renders were billed. It creates nothing in the calendar and publishes nothing; pass the id it returns to create_post as media_ids when you want a post. Each kind has its own model — get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and model here applies to this call only. A clip has no refine model until the brand picks one, and until then a video comes back no_refine_model rather than quietly redrawn. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only. source_too_large means the file is heavier than a model can be handed — the answer names its weight and the ceiling. The asset IS there: shrink it or import a lighter copy, never generate a replacement.
 
 | campo | tipo | |
 |---|---|---|
