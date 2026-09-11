@@ -60,7 +60,11 @@
 
     <ul class="hs-grid">
       {#each MARKS as m, i (m.n)}
-        <li class="hs-cell reveal" data-d={(i % 3) + 1} style="--c:#{m.i.hex}">
+        <li
+          class="hs-cell reveal"
+          data-d={(i % 3) + 1}
+          style="--c:{'mono' in m.i && m.i.mono ? 'var(--ink)' : `#${m.i.hex}`}"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d={m.i.path} fill="currentColor" /></svg>
           <span>{m.n}</span>
         </li>

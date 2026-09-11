@@ -2073,9 +2073,7 @@
     "diy": {
       "kicker": "Or build it yourself",
       "titleLead": "You could build this yourself.",
-      "titleAccent": "You know what it costs.",
-      "body": "Your model already writes — that part you have. What’s missing is the plumbing: OAuth for nine platforms, the character limit each one enforces and changes without warning, image and video rendering, a publish queue, the retries for when a platform refuses a post, and the metrics coming back afterwards.",
-      "punch": "Weeks of that before one post goes out, and maintenance forever after. We don’t replace the thinking. We replace the plumbing, and it is already built."
+      "titleAccent": "You know what it costs."
     },
     "story": {
       "output": {

@@ -345,6 +345,10 @@
   .gr-note { margin-top: 30px; font-size: 13px; color: var(--ink-faint); }
   /* "Connect to Claude" — opens the MCP setup dialog. */
   .connect-claude {
+    /* Riferimento per gli adesivi che cadono al passaggio del cursore: senza, si posizionerebbero
+       rispetto alla sezione e finirebbero a mezzo schermo di distanza. Il clic non lo toccano —
+       il gruppo e' `pointer-events: none`. */
+    position: relative;
     margin-top: 14px;
     display: inline-flex; align-items: center; gap: 8px;
     padding: 9px 18px;
@@ -1373,3 +1377,18 @@
      every full-bleed section to the same --paper. Cards inside keep --paper-2 for depth. */
   :root[data-theme="dark"] .alt,
   :root[data-theme="dark"] .showcase { background: var(--paper); }
+
+  /* Il titolo della hero su schermo stretto: la misura la decide la larghezza, non un valore
+     fisso, perche' l'unica cosa che deve restare vera e' che stia in DUE righe. Il tetto di 14ch
+     decide dove va a capo, la dimensione in vw fa in modo che quelle 14 battute ci stiano sempre:
+     a 320px come a 700px il titolo occupa la riga e non ne inventa una terza. */
+  @media (max-width: 700px) {
+    .gr-h1 { font-size: clamp(1.8rem, 12vw, 3.6rem); }
+  }
+
+  /* Sul tablet la barra ha ancora tutti i link ma non la larghezza per reggerli: il nome scritto
+     accanto al simbolo e' la cosa che si puo' togliere senza perdere niente — il marchio resta,
+     e lo si riconosce. Sul desktop torna, e sotto i 640 la barra e' gia' solo logo, CTA e menu. */
+  @media (min-width: 641px) and (max-width: 1100px) {
+    .nav .logo-text { display: none; }
+  }

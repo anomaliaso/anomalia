@@ -95,7 +95,7 @@
       </div>
       <p class="gr-note">{$_('landing.hero.note')}</p>
       <button class="connect-claude" type="button" onclick={() => (claudeOpen = true)}>
-        {$_('landing.hero.connectClaude')}
+        {$_('landing.hero.connectClaude')}<AiMarks size="20px" step={17} />
       </button>
     </div>
   </section>

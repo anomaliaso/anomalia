@@ -228,7 +228,15 @@
 </section>
 
 <style>
-  .so { padding: clamp(80px, 10vw, 150px) 0 clamp(30px, 4vw, 60px); }
+  /* Expo in-out con un filo di resistenza in coda: parte piano, prende velocita' in mezzo e si
+     posa oltrepassando di un soffio la meta' prima di assestarsi. La stessa curva la usano il
+     viaggio dell'immagine, la dissolvenza delle schermate e l'arrivo dell'anteprima: tre tempi
+     diversi sulla stessa legge si leggono come un movimento solo, tre leggi diverse no. */
+  .so {
+    --fly-ease: cubic-bezier(0.82, 0, 0.12, 1.04);
+    --fly-time: 900ms;
+    padding: clamp(80px, 10vw, 150px) 0 clamp(30px, 4vw, 60px);
+  }
 
   .so-grid {
     display: grid;
@@ -267,7 +275,7 @@
      resta fermo mentre cambia schermata, ed e' anche il freno che impedisce alla foto di tirare
      la scheda oltre lo schermo. */
   .so-visual { position: sticky; top: 14vh; max-width: 430px; margin-inline: auto; }
-  .so-stack { position: relative; display: grid; height: clamp(430px, 56vh, 540px); }
+  .so-stack { position: relative; display: grid; height: clamp(440px, 58vh, 560px); }
 
   /* Le tre schermate sono alte uguali — la riga della griglia le stira tutte alla piu' alta —
      cosi' il riquadro non cambia forma mentre cambia contenuto. */
@@ -281,7 +289,7 @@
     box-shadow: 0 40px 90px -60px rgba(0, 0, 0, 0.45);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 520ms var(--ease, ease);
+    transition: opacity 620ms var(--fly-ease);
   }
   .so-panel.is-on { opacity: 1; pointer-events: auto; }
 
@@ -293,12 +301,13 @@
     object-fit: cover; pointer-events: none;
     opacity: 0;
     transform-origin: top left;
+    will-change: transform, width, height;
     transition:
-      transform 820ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
-      width 820ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
-      height 820ms var(--ease, cubic-bezier(0.22, 1, 0.36, 1)),
-      border-radius 820ms var(--ease, ease),
-      opacity 380ms ease;
+      transform var(--fly-time) var(--fly-ease),
+      width var(--fly-time) var(--fly-ease),
+      height var(--fly-time) var(--fly-ease),
+      border-radius var(--fly-time) var(--fly-ease),
+      opacity 420ms ease;
   }
   .so-fly.is-out { opacity: 1; }
 
@@ -330,7 +339,7 @@
     margin-top: auto;
     display: flex; align-items: center; gap: 12px;
     opacity: 0; transform: translateY(10px);
-    transition: opacity 420ms var(--ease, ease), transform 420ms var(--ease, ease);
+    transition: opacity 520ms var(--fly-ease), transform 520ms var(--fly-ease);
   }
   .so-prev.is-out { opacity: 1; transform: none; }
   .so-prev-slot { width: 78px; height: 98px; border-radius: 14px; flex: none; }
@@ -380,11 +389,11 @@
   .so-pf-stats span { font-size: 11.5px; color: var(--ink-faint); }
 
   .so-pf-grid {
-    flex: 1; min-height: 0;
-    display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
+    flex: 1; min-height: 0; overflow: hidden;
+    display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: min-content;
     gap: 2px; padding: 2px;
   }
-  .so-cell { display: block; overflow: hidden; min-height: 0; }
+  .so-cell { display: block; overflow: hidden; aspect-ratio: 4 / 5; }
   .so-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
   @media (max-width: 900px) {
@@ -396,6 +405,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .so { --fly-time: 0ms; }
     .so-panel, .so-prev { transition: opacity 200ms linear; transform: none; }
     .so-fly { transition: opacity 200ms linear; }
   }

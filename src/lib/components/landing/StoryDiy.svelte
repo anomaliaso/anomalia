@@ -17,7 +17,6 @@
       <div class="dy-copy reveal">
         <div class="kicker">{$_(`${TK}.kicker`)}</div>
         <h2>{$_(`${TK}.titleLead`)} <span class="gr-accent">{$_(`${TK}.titleAccent`)}</span></h2>
-        <p>{$_(`${TK}.body`)}</p>
       </div>
 
       <ul class="dy-list">
@@ -29,13 +28,11 @@
         {/each}
       </ul>
     </div>
-
-    <p class="dy-punch reveal">{$_(`${TK}.punch`)}</p>
   </div>
 </section>
 
 <style>
-  .dy { padding: clamp(80px, 10vw, 150px) 0 0; }
+  .dy { padding: clamp(80px, 10vw, 150px) 0 clamp(20px, 3vw, 40px); }
 
   .dy-grid {
     display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
@@ -48,11 +45,10 @@
     color: var(--accent); margin-bottom: 14px;
   }
   .dy-copy h2 {
-    margin: 0 0 20px;
+    margin: 0;
     font-size: clamp(2rem, 4.2vw, 3.1rem);
     font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking); line-height: 1.06;
   }
-  .dy-copy p { margin: 0; color: var(--ink-soft); font-size: 1.05rem; line-height: 1.6; }
 
   .dy-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .dy-list li {
@@ -72,13 +68,6 @@
   }
   .dy-x::before { transform: rotate(45deg); }
   .dy-x::after { transform: rotate(-45deg); }
-
-  .dy-punch {
-    max-width: 30ch; margin: clamp(44px, 6vw, 78px) auto 0; text-align: center;
-    font-size: clamp(1.3rem, 2.6vw, 1.9rem); line-height: 1.28;
-    font-weight: var(--heading-weight); letter-spacing: var(--heading-tracking);
-    color: var(--ink);
-  }
 
   @media (max-width: 860px) {
     .dy-grid { grid-template-columns: 1fr; gap: 34px; }

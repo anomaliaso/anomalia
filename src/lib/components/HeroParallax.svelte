@@ -7,22 +7,23 @@
    * muovono di piu', ed e' cio' che produce la parallasse invece di una traslazione unica.
    * Le posizioni sono in percentuale del riquadro, cosi' la composizione tiene a qualunque larghezza.
    */
-  type Card = { top: string; left: string; depth: number; w: number; kind: Kind; small?: true };
+  type Card = { depth: number; kind: Kind; tier: 1 | 2 };
   type Kind = 'calendar' | 'post' | 'metrics' | 'plan' | 'chat' | 'assets' | 'channels';
 
   /**
-   * `small` marca le tre che restano su schermo stretto. Nasconderle tutte lasciava il telefono —
-   * da cui arriva la maggior parte di chi legge — senza nessuna anteprima del prodotto: meglio
-   * mostrarne poche, spostate agli angoli, che nessuna.
+   * Il livello dice fin dove la scheda sopravvive restringendo: `1` sta anche sul telefono, `2`
+   * si ferma al tablet. Nasconderle quasi tutte lasciava lo schermo stretto — da cui arriva la
+   * maggior parte di chi legge — con un accenno di prodotto invece di un'anteprima. Sotto restano
+   * quattro e sei, disposte agli angoli e lasciate sporgere: girano attorno al testo, mai sopra.
    */
   const CARDS: Card[] = [
-    { top: '4%',  left: '-4%',  depth: 26, w: 300, kind: 'calendar', small: true },
-    { top: '54%', left: '2%',   depth: 16, w: 250, kind: 'metrics' },
-    { top: '30%', left: '-2%',  depth: 22, w: 200, kind: 'channels' },
-    { top: '78%', left: '18%',  depth: 34, w: 230, kind: 'chat',     small: true },
-    { top: '2%',  left: '74%',  depth: 20, w: 290, kind: 'post',     small: true },
-    { top: '46%', left: '82%',  depth: 30, w: 260, kind: 'plan' },
-    { top: '84%', left: '64%',  depth: 14, w: 240, kind: 'assets' }
+    { depth: 26, kind: 'calendar', tier: 1 },
+    { depth: 16, kind: 'metrics',  tier: 2 },
+    { depth: 22, kind: 'channels', tier: 1 },
+    { depth: 34, kind: 'chat',     tier: 1 },
+    { depth: 20, kind: 'post',     tier: 1 },
+    { depth: 30, kind: 'plan',     tier: 2 },
+    { depth: 14, kind: 'assets',   tier: 2 }
   ];
 
   const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -106,10 +107,9 @@
 <div class="px" aria-hidden="true" class:still>
   {#each CARDS as c}
     <div
-      class="px-card"
-      class:small={c.small}
-      style="--t:{c.top}; --l:{c.left}; --w:{c.w}px;
-             transform: translate3d({(-mx * c.depth).toFixed(2)}px, {(-my * c.depth).toFixed(2)}px, 0)"
+      class="px-card px-{c.kind}"
+      class:t1={c.tier === 1}
+      style="transform: translate3d({(-mx * c.depth).toFixed(2)}px, {(-my * c.depth).toFixed(2)}px, 0)"
     >
       {#if c.kind === 'calendar'}
         <div class="k-head"><span class="k-dot"></span>Calendar</div>
@@ -184,8 +184,18 @@
     z-index: 0;
   }
 
-  /* Posizione e larghezza arrivano come variabili e non come stile inline: uno stile inline batte
-     qualunque regola del foglio, e le media query sotto non potrebbero piu' spostare niente. */
+  /* Dove sta una scheda e quanto e' larga lo dice il foglio, non un attributo `style`: una
+     dichiarazione inline — variabili comprese — batte qualunque regola, e le media query sotto
+     non riuscirebbero piu' a spostare niente. Inline resta solo la traslazione della parallasse,
+     che cambia a ogni frame ed e' l'unica cosa che il foglio non puo' sapere. */
+  .px-calendar { --t: 4%;  --l: -4%; --w: 300px; }
+  .px-metrics  { --t: 54%; --l: 2%;  --w: 250px; }
+  .px-channels { --t: 30%; --l: -2%; --w: 200px; }
+  .px-chat     { --t: 78%; --l: 18%; --w: 230px; }
+  .px-post     { --t: 2%;  --l: 74%; --w: 290px; }
+  .px-plan     { --t: 46%; --l: 82%; --w: 260px; }
+  .px-assets   { --t: 84%; --l: 64%; --w: 240px; }
+
   .px-card {
     position: absolute;
     top: var(--t); left: var(--l); width: var(--w);
@@ -267,25 +277,37 @@
   }
   .k-tile.video .k-play { z-index: 1; }
 
-  /* Su schermo stretto la composizione a sei schede non ci sta, ma sparire del tutto lascerebbe il
-     telefono senza anteprima. Ne restano tre, piu' piccole e piu' sbiadite, agganciate agli angoli
-     e lasciate sporgere oltre il bordo: si leggono come un accenno di prodotto dietro al testo,
-     senza contendergli spazio. `overflow: hidden` sul contenitore impedisce lo scorrimento
-     orizzontale che una scheda sporgente causerebbe. */
+  /* Restringendo, la composizione non si svuota: cambia disposizione. Sul tablet restano tutte e
+     sette meno il piano, in due colonne ai lati del testo e sporgenti oltre il bordo; sul telefono
+     restano le quattro del livello 1, agli angoli. `overflow: hidden` sul contenitore impedisce lo
+     scorrimento orizzontale che una scheda sporgente causerebbe. */
   @media (max-width: 1100px) {
-    .px-card:not(.small) { display: none; }
-    .px-card { opacity: 0.9; }
-    .px-card.small { --w: 190px; padding: 11px 12px; }
-    .px-card.small:nth-child(1) { --t: 1%;  --l: auto; right: -66px; }
-    .px-card.small:nth-child(3) { --t: auto; bottom: 2%; --l: -70px; }
-    .px-card.small:nth-child(4) { --t: 44%; --l: auto; right: -74px; }
+    .px-card { --w: 200px; padding: 12px 13px; opacity: 0.92; }
+    .px-calendar { --t: 2%;  --l: -62px; }
+    .px-channels { --t: 36%; --l: -52px; --w: 172px; }
+    .px-metrics  { --t: 70%; --l: -44px; --w: 190px; }
+    .px-post     { --t: 5%;  --l: auto; right: -62px; }
+    .px-assets   { --t: 39%; --l: auto; right: -56px; --w: 190px; }
+    .px-chat     { --t: 73%; --l: auto; right: -48px; --w: 182px; }
+    /* Il piano e' l'unica che esce: e' quattro righe di linee, ed e' la meno leggibile piccola. */
+    .px-plan { display: none; }
   }
 
-  @media (max-width: 560px) {
-    .px-card.small { --w: 150px; padding: 9px 10px; border-radius: 14px; }
-    .px-card.small:nth-child(1) { right: -58px; }
-    .px-card.small:nth-child(3) { --l: -60px; }
-    /* Tre schede su 560px si accavallerebbero sul testo: la terza esce, le due agli angoli bastano. */
-    .px-card.small:nth-child(4) { display: none; }
+  @media (max-width: 700px) {
+    .px-card:not(.t1) { display: none; }
+    .px-card { --w: 158px; padding: 10px 11px; border-radius: 15px; opacity: 0.88; }
+    .px-calendar { --t: 1%;  --l: -58px; }
+    .px-post     { --t: 3%;  --l: auto; right: -58px; }
+    .px-channels { --t: auto; bottom: 13%; --l: -54px; --w: 140px; }
+    .px-chat     { --t: auto; bottom: 3%;  --l: auto; right: -52px; }
   }
+
+  @media (max-width: 420px) {
+    .px-card { --w: 134px; padding: 9px 10px; }
+    .px-calendar { --l: -52px; }
+    .px-post     { right: -52px; }
+    .px-channels { --l: -48px; --w: 120px; }
+    .px-chat     { right: -46px; }
+  }
+
 </style>

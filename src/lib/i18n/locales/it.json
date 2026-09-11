@@ -2073,9 +2073,7 @@
     "diy": {
       "kicker": "Oppure te lo costruisci",
       "titleLead": "Potresti costruirtelo da solo.",
-      "titleAccent": "Sai quanto costa.",
-      "body": "Il tuo modello scrive già — quella parte ce l’hai. Quello che manca è l’idraulica: OAuth per nove piattaforme, il limite di caratteri che ognuna impone e cambia senza avvisare, il rendering di immagini e video, una coda di pubblicazione, i tentativi da rifare quando una piattaforma rifiuta un post, e le metriche che tornano indietro.",
-      "punch": "Settimane, prima che esca un solo post, e poi manutenzione per sempre. Non sostituiamo il ragionamento. Sostituiamo l’idraulica, ed è già costruita."
+      "titleAccent": "Sai quanto costa."
     },
     "story": {
       "output": {

@@ -60,8 +60,15 @@
     // { src: '/marks/glm.svg' }
   ];
 
+  /**
+   * La misura dell'adesivo e la distanza fra uno e l'altro arrivano da fuori: le stesse regole
+   * valgono sul titolo (enormi, radi) e sul bottone (piccoli, fitti), e senza parametri servirebbe
+   * un secondo componente identico al primo tranne due numeri.
+   */
+  let { size = '0.52em', step = 38 }: { size?: string; step?: number } = $props();
+
   /** Quanto deve muoversi il puntatore prima che cada il prossimo: sotto, ne uscirebbe una colata. */
-  const STEP_PX = 38;
+  const STEP_PX = step;
   /** Quanti ne restano in vita insieme. Oltre, il DOM cresce mentre nessuno li guarda piu'. */
   const MAX = 10;
   const LIFE_MS = 1100;
@@ -114,7 +121,7 @@
   });
 </script>
 
-<span class="marks" bind:this={host} aria-hidden="true">
+<span class="marks" bind:this={host} aria-hidden="true" style="--mark:{size}">
   {#each stickers as s (s.id)}
     <span
       class="sticker"
@@ -139,8 +146,8 @@
 
   .sticker {
     position: absolute;
-    width: 0.52em; height: 0.52em;
-    margin: -0.26em 0 0 -0.26em; /* centrato sul punto in cui e' passato il cursore */
+    width: var(--mark); height: var(--mark);
+    margin: calc(var(--mark) / -2) 0 0 calc(var(--mark) / -2); /* centrato sul punto del cursore */
     display: grid; place-items: center;
     /* Bianco fisso e non `var(--paper)`: due marchi sono neri puri e in dark mode la carta e' nera,
        quindi sparirebbero. Un adesivo e' carta chiara appoggiata sopra: non segue il tema. */

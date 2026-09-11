@@ -51,10 +51,13 @@
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: clamp(18px, 2.4vw, 30px);
     max-width: 1000px; margin: 0 auto;
-    align-items: start;
   }
 
+  /* Le due colonne sono alte uguali anche se una ha una voce in piu': `1fr` sulla riga le stira
+     entrambe, e l'elenco si distribuisce invece di ammucchiarsi in cima. Due schede di altezza
+     diversa, affiancate, si leggono come un difetto e non come un confronto. */
   .sp-col {
+    display: flex; flex-direction: column;
     border: 1px solid var(--line); border-radius: 26px;
     padding: clamp(26px, 3.2vw, 40px);
     background: var(--paper-2);
@@ -71,7 +74,10 @@
   .sp-col:not(.is-ours) h3 { color: var(--ink-soft); }
   .sp-note { margin: 0 0 22px; font-size: 0.9rem; color: var(--ink-faint); }
 
-  .sp-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+  .sp-col ul {
+    flex: 1; list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+  }
   .sp-col li {
     display: flex; gap: 12px; align-items: flex-start;
     font-size: 0.98rem; line-height: 1.5; color: var(--ink-soft);
