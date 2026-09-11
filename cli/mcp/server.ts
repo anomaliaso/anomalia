@@ -69,12 +69,19 @@ function brandSlugOf(args: unknown[]): string | undefined {
 }
 
 /**
- * OGNI CHIAMATA A UN TOOL LASCIA IL SUO NOME. `mcp_logs` ha il campo `tool_name` da sempre e
- * nessuno lo riempiva: quarantadue letture tolte e i tool riscritti sono stati decisi ragionando,
- * perché la tabella non sapeva dire quale tool fosse stato chiamato nemmeno una volta.
+ * LE TRE COLONNE CHE ARRIVAVANO SEMPRE VUOTE. `observability.ts` scrive `tool_name`, `user_id` e
+ * `brand_slug` da sempre, e nessuno in `cli/mcp/` le passava. Il posto dove riempirle è uno solo —
+ * dove un tool viene eseguito — quindi è un lavoro solo, non tre. Senza, di una richiesta finita
+ * 401 non si sa dire se sia un cliente che non riesce a collegarsi o qualcuno che sta provando, e
+ * quelle due vogliono risposte opposte.
+ *
+ * `user_id` è l'IDENTIFICATORE e si ferma lì: l'identità arriva qui con l'email accanto, e la
+ * tabella la leggerà chi non ha motivo di vedere l'indirizzo di un cliente.
  *
  * Si decora `registerTool` una volta sola, prima che i quattro moduli registrino: un tool nuovo è
  * strumentato per il fatto di esistere, e la riga non dipende da chi si ricorda di scriverla.
+ * Niente qui può rovesciare la chiamata che sta descrivendo: `mcpLog` non torna mai un guasto a
+ * chi lo chiama, e i due campi letti dalla richiesta sono letture e basta.
  *
  * Lo stesso scope porta il nome fino alle chiamate HTTP che il tool fa (`asTool`), dove diventa
  * l'intestazione che lega la spesa in `ai_calls` al tool che l'ha causata.

@@ -73,9 +73,15 @@ function errorFields(error: unknown): { error_name?: string; error_stack?: strin
   return { error_name: typeof error, message: String(error) };
 }
 
-/** Fire-and-forget structured log to stderr + Sentry + Supabase mcp_logs. */
+/**
+ * Fire-and-forget structured log to stderr + Sentry + Supabase mcp_logs.
+ *
+ * Nessun guasto risale a chi ha chiamato: questo gira DENTRO il server MCP, e un'osservabilità che
+ * rompe ciò che osserva è peggio di una che tace. `void` su una promise respinta è una unhandled
+ * rejection, che in Node abbatte il processo — cioè la richiesta di un cliente.
+ */
 export function mcpLog(entry: McpLogEvent): void {
-  void mcpLogAsync(entry);
+  void mcpLogAsync(entry).catch((e) => console.error('[mcp] log failed', e));
 }
 
 export async function mcpLogAsync(entry: McpLogEvent): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mcpLogAsync } from './observability.ts';
+import { mcpLog, mcpLogAsync } from './observability.ts';
 import { routeMcpHttp } from './http-router.ts';
 
 async function logWithoutEnv(times: number): Promise<string[]> {
@@ -39,6 +39,33 @@ describe('mcp observability', () => {
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('SUPABASE_SERVICE_ROLE_KEY');
+  });
+
+  /**
+   * Questo gira DENTRO il server MCP, ora su ogni chiamata a un tool. Un `void` su una promise
+   * respinta è una unhandled rejection, che in Node abbatte il processo: l'osservabilità
+   * rovescerebbe la richiesta di un cliente per non essere riuscita a descriverla.
+   */
+  test('un guasto del log non rovescia la chiamata che stava descrivendo', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    const escaped: unknown[] = [];
+    const onEscape = (e: unknown) => void escaped.push(e);
+    process.on('unhandledRejection', onEscape);
+
+    const realError = console.error;
+    console.error = () => {};
+
+    try {
+      expect(() => mcpLog({ level: 'info', event: 'test.event', message: 'hi', context: circular })).not.toThrow();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      console.error = realError;
+      process.off('unhandledRejection', onEscape);
+    }
+
+    expect(escaped).toEqual([]);
   });
 });
 
