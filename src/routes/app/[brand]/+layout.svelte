@@ -10,6 +10,7 @@
   import Images from '@lucide/svelte/icons/images';
   import Target from '@lucide/svelte/icons/target';
   import CalendarDays from '@lucide/svelte/icons/calendar-days';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   import BarChart3 from '@lucide/svelte/icons/chart-column';
   import Radio from '@lucide/svelte/icons/radio';
   import { setCredits, refreshCredits } from '$lib/stores/credits';
@@ -208,7 +209,7 @@
             : undefined
     };
   }
-  const SPACE_ICONS = [House, Images, Target, CalendarDays, Radio, BarChart3];
+  const SPACE_ICONS = [House, Images, Target, CalendarDays, Newspaper, Radio, BarChart3];
   // Una sola sezione, senza intestazione: sei voci non hanno bisogno di essere raggruppate, e
   // «Impostazioni» non e' una riga — e' l'ingranaggio in fondo alla barra, che ha gia' il suo
   // nome accessibile (`aria-label` + `title` in DashboardSidebar).

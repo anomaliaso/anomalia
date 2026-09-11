@@ -8,6 +8,7 @@ import {
   RESOURCE_SEGMENT,
   pathFor,
   statusForFailure,
+  toolFromHeader,
   type BrandEndpoint
 } from './index';
 
@@ -347,5 +348,23 @@ describe('il registry degli endpoint di brand', () => {
       if (!(e.output instanceof z.ZodObject)) continue;
       expect(e.output.safeParse([]).success, e.tool).toBe(false);
     }
+  });
+});
+
+describe('il nome del tool che arriva per intestazione', () => {
+  it('riconosce ogni tool che il registry dichiara', () => {
+    for (const e of BRAND_ENDPOINTS) {
+      expect(toolFromHeader(e.tool), e.tool).toBe(e.tool);
+    }
+  });
+
+  it('scarta quello che un nome di tool non è, invece di scriverlo', () => {
+    expect(toolFromHeader(null)).toBeNull();
+    expect(toolFromHeader('')).toBeNull();
+    expect(toolFromHeader('Generate_Image')).toBeNull();
+    expect(toolFromHeader('generate image')).toBeNull();
+    expect(toolFromHeader("generate'; drop table ai_calls; --")).toBeNull();
+    expect(toolFromHeader('a'.repeat(65))).toBeNull();
+    expect(toolFromHeader('a'.repeat(64))).toBe('a'.repeat(64));
   });
 });

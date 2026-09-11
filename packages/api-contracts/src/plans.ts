@@ -173,6 +173,9 @@ export const SAVE_WEEK_SEEDS = {
 const NoInput = z.object({}).strict();
 const Ok = z.object({ ok: z.literal(true) });
 
+/** Le quattro strade che arrivano a un modello passano tutte dallo stesso cancello: `gateAiAction`. */
+const CREDITS_EXHAUSTED = { error: 'credits_exhausted', status: 402 };
+
 export const PROPOSE_PLAN = {
   tool: 'propose_plan',
   title: 'Propose editorial plan',
@@ -185,7 +188,7 @@ export const PROPOSE_PLAN = {
   pathUnderBrand: '/editorial-plan/propose',
   input: NoInput,
   output: z.object({ ok: z.literal(true), plan: z.unknown() }),
-  failures: [],
+  failures: [CREDITS_EXHAUSTED],
   destructive: false
 } satisfies BrandEndpoint;
 
@@ -200,7 +203,7 @@ export const REVISE_PLAN = {
   pathUnderBrand: '/editorial-plan/revise',
   input: z.object({ feedback: z.string().min(1) }).strict(),
   output: z.object({ ok: z.literal(true), plan: z.unknown() }),
-  failures: [],
+  failures: [CREDITS_EXHAUSTED],
   destructive: false
 } satisfies BrandEndpoint;
 
@@ -276,7 +279,8 @@ export const REPLAN_WEEK = {
     WEEK_REQUIRED,
     { error: 'brief is required', status: 400 },
     { error: 'no active editorial plan', status: 404 },
-    { error: 'invalid week_index', status: 400 }
+    { error: 'invalid week_index', status: 400 },
+    CREDITS_EXHAUSTED
   ],
   destructive: false
 } satisfies BrandEndpoint;
@@ -293,6 +297,6 @@ export const PLAN_WEEK = {
   pathUnderBrand: '/weekly-plan/plan',
   input: z.object({ week }).strict(),
   output: z.object({ ok: z.literal(true), draft: z.unknown() }),
-  failures: [WEEK_REQUIRED, NO_ACTIVE_PLAN],
+  failures: [WEEK_REQUIRED, NO_ACTIVE_PLAN, CREDITS_EXHAUSTED],
   destructive: false
 } satisfies BrandEndpoint;

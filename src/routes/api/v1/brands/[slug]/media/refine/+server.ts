@@ -34,7 +34,11 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   if (!result.ok) {
     return json(
-      { error: result.error, ...('allowed' in result ? { allowed: result.allowed } : {}) },
+      {
+        error: result.error,
+        ...('allowed' in result ? { allowed: result.allowed } : {}),
+        ...('limit' in result ? { bytes: result.bytes, limit: result.limit } : {})
+      },
       { status: statusForFailure(REFINE_MEDIA, result.error) }
     );
   }

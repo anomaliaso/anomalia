@@ -138,14 +138,15 @@ export const RENDER_POST = {
   title: 'Render post image',
   description:
     'Draw the image a post is missing, from the prompt already written on it, and attach it. It ' +
-    'spends credits: one render. To draw a picture that is not tied to a post, use ' +
-    'generate_image.',
+    'spends credits: one render. A render that produces no image FAILS instead of answering ok, ' +
+    'and says `credits_spent`: the charge happened before the failure, so a retry pays again. To ' +
+    'draw a picture that is not tied to a post, use generate_image.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/render',
   resource: 'post',
   input: z.object({}).strict(),
   output: z.union([
-    z.object({ ok: z.literal(true), url: z.string().nullable(), error: z.string().nullable() }),
+    z.object({ ok: z.literal(true), url: z.string(), error: z.null() }),
     z.object({ error: z.string(), url: z.string() })
   ]),
   failures: [{ error: 'credits_exhausted', status: 402 }],
@@ -527,6 +528,16 @@ const MODEL_FAILURE = { error: 'model_not_for_slot', status: 400 } as const;
 
 const BRAND_STYLE_FAILURE = { error: 'brand_style_needs_a_brand', status: 400 } as const;
 
+/**
+ * I due rifiuti che una strada senza brand porta con sé, ovunque esista. `brand_scoped_key` non è
+ * un permesso mancante da allargare: è una restrizione che l'utente ha scelto, e dove nessun brand
+ * si nomina non c'è niente da confrontarci.
+ */
+const BRAND_FREE_FAILURES = [
+  { error: 'brand_scoped_key', status: 403 },
+  { error: 'no_organization', status: 500 }
+] as const;
+
 const BrandStyleField = z
   .enum(['apply', 'ignore'])
   .optional()
@@ -538,12 +549,22 @@ const BrandStyleField = z
   );
 
 /**
- * Un disegno chiesto senza brand non entra in nessuna libreria, quindi non ha un id da mostrare:
- * `null` è il fatto, e dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con
- * `list_media`. Non è la stessa forma di `refine_media`, che un brand ce l'ha sempre e un id
- * lo restituisce sempre — allargare anche il suo schema significherebbe togliere una promessa
- * che mantiene.
+ * La forma di OGNI asset prodotto senza nominare un brand — disegno, slide di carosello,
+ * rifinitura. Non entra in nessuna libreria, quindi non ha un id da mostrare: `null` è il fatto, e
+ * dirlo qui è ciò che impedisce di passarlo a `create_post` e di cercarlo con `list_media`.
  */
+/**
+ * Chi ha pagato, per nome. Serve dove il chiamante NON ha scelto: senza slug l'organizzazione
+ * l'abbiamo risolta noi, e un addebito che nessuno ha nominato è un addebito che nessuno controlla.
+ * Con lo slug è `null`, perché il brand nomina il suo pagante da sé.
+ */
+const OrganizationField = z
+  .object({ id: z.string(), name: z.string().nullable() })
+  .nullable()
+  .describe(
+    'Whose credits paid, named — set when no brand was given, null when one was (the brand names its own payer).'
+  );
+
 const DrawnMediaSchema = GeneratedMediaSchema.extend({
   id: z
     .string()
@@ -563,12 +584,7 @@ const DrawnImageResult = z.object({
   media: z.array(DrawnMediaSchema),
   model: ImageResult.shape.model,
   renders: ImageResult.shape.renders,
-  organization: z
-    .object({ id: z.string(), name: z.string().nullable() })
-    .nullable()
-    .describe(
-      'Whose credits paid, named — set when no brand was given, null when one was (the brand names its own payer).'
-    ),
+  organization: OrganizationField,
   cost_usd: z
     .number()
     .nullable()
@@ -586,8 +602,8 @@ export const GENERATE_IMAGE = {
     'you want in the prompt. WITHOUT slug this is a one-off drawing: no brand, nothing filed ' +
     'anywhere, id comes back null and there is nothing to hand to create_post. WITH slug the ' +
     "image lands in that brand's library and its id is what create_post takes as media_ids. Do " +
-    'NOT call list_brands to decide where to draw — if nobody named a brand there is no brand, ' +
-    "and guessing one spends a real organisation's credits and litters a real library. It spends " +
+    "NOT call list_brands to find a slug: guessing a brand spends a real organisation's credits " +
+    'and litters a real library. It spends ' +
     'credits: one render per image, and `renders` in the answer says how many were billed, ' +
     'cost_usd what they cost. It creates nothing in the calendar and publishes nothing, so ask ' +
     'for two or three with `count`, look at them, keep one. To CHANGE a picture that already ' +
@@ -612,6 +628,7 @@ export const GENERATE_IMAGE = {
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
     BRAND_STYLE_FAILURE,
+    ...BRAND_FREE_FAILURES,
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }
   ],
@@ -642,17 +659,25 @@ export const REFINE_MEDIA = {
     'get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and ' +
     'model here applies to this call only. A clip has no refine model until the brand picks one, ' +
     'and until then a video comes back no_refine_model rather than quietly redrawn. The brand ' +
-    'look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only.',
+    'look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only. ' +
+    'source_too_large means the file is heavier than a model can be handed — the answer names its ' +
+    'weight and the ceiling. The asset IS there: shrink it or import a lighter copy, never ' +
+    'generate a replacement. WITHOUT slug base_media_id is instead the storage_path or url a ' +
+    'brand-free generate handed you — never a library id, never a web address (refused as ' +
+    'source_not_found). Nothing is filed, brand_style is refused, and a clip needs `model`. ' +
+    "Do NOT call list_brands to find a slug: guessing a brand spends someone else's credits.",
   method: 'POST',
   pathUnderBrand: '/media/refine',
+  pathWithoutBrand: '/refine',
   input: z
     .object({
       base_media_id: z
         .string()
         .min(1)
         .describe(
-          'The library asset to start from — an id from list_media, or an unambiguous prefix. Its ' +
-            'own kind decides how it is refined: you do not say whether it is a picture or a clip.'
+          'WITH slug: a library id from list_media, or an unambiguous prefix. WITHOUT slug: the ' +
+            'storage_path or url a brand-free generate handed back. Its own kind decides how it ' +
+            'is refined: you never say which.'
         ),
       instruction: z.string().min(1).describe('What should change about it'),
       count: AlternativesField,
@@ -666,14 +691,18 @@ export const REFINE_MEDIA = {
     kind: z
       .enum(['image', 'video'])
       .describe('What was refined, read from the source asset — never from what you asked for'),
-    media: z.array(GeneratedMediaSchema),
+    media: z.array(DrawnMediaSchema),
     model: z.string().nullable().describe('The model that ACTUALLY made it'),
-    renders: z.number().describe('How many renders were BILLED')
+    renders: z.number().describe('How many renders were BILLED'),
+    organization: OrganizationField
   }),
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
+    BRAND_STYLE_FAILURE,
+    ...BRAND_FREE_FAILURES,
     { error: 'source_not_found', status: 404 },
+    { error: 'source_too_large', status: 413 },
     { error: 'kind_not_refinable', status: 400 },
     { error: 'no_refine_model', status: 400 },
     { error: 'render_failed', status: 502 },
@@ -686,6 +715,7 @@ const VideoJobResult = z.object({
   ok: z.literal(true),
   status: z.literal('rendering'),
   job_id: z.string(),
+  organization: OrganizationField,
   model: z.string().nullable().describe('The model that is filming it; null when the platform default chose'),
   duration_seconds: z
     .number()
@@ -706,9 +736,13 @@ export const GENERATE_VIDEO = {
     'check_media_job says when it landed — calling this again for the same clip bills a second ' +
     'one. It creates nothing in the calendar and publishes nothing; when the clip lands, pass its ' +
     'media_id to create_post as media_ids. To animate the cover of a post you already have, ' +
-    'make_video does it in one step.',
+    'make_video does it in one step. WITHOUT slug the clip is filed nowhere and has no media_id: ' +
+    'it lands on the job itself, at GET /api/v1/videos (?job_id= for one), whose media_url is ' +
+    'the file. base_media_id is then the storage_path or url a brand-free generate handed back. ' +
+    "Do NOT call list_brands to find a slug: guessing a brand spends someone else's credits.",
   method: 'POST',
   pathUnderBrand: '/media/videos',
+  pathWithoutBrand: '/videos',
   input: z
     .object({
       prompt: z.string().min(1).describe('What the clip should show, or how the image should move'),
@@ -717,7 +751,9 @@ export const GENERATE_VIDEO = {
         .min(1)
         .optional()
         .describe(
-          'A library IMAGE to animate, from list_media — an id or an unambiguous prefix. Omit to film from the prompt alone.'
+          'An IMAGE to animate. WITH slug: a library id from list_media, or an unambiguous ' +
+            'prefix. WITHOUT slug: the storage_path or url a brand-free generate handed back. ' +
+            'Omit to film from the prompt alone.'
         ),
       duration: z.coerce
         .number()
@@ -739,6 +775,7 @@ export const GENERATE_VIDEO = {
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
+    ...BRAND_FREE_FAILURES,
     { error: 'video_budget_exhausted', status: 400 },
     { error: 'source_not_found', status: 404 },
     { error: 'source_not_an_image', status: 400 },
@@ -761,9 +798,13 @@ export const GENERATE_CAROUSEL = {
     'refine_media on that slide id, and put the `continuity_tokens` this returns back into your ' +
     'instruction — they are what holds the series together, and an edit that touches palette, ' +
     'light or the recurring motif without them takes that slide out of the set. With a slug, this ' +
-    'brand\'s look is applied to every slide and there is no way to switch it off here.',
+    'brand\'s look is applied to every slide and there is no way to switch it off here. WITHOUT ' +
+    'slug no brand look reaches the slides — name the style in the brief — and the ids come back ' +
+    "null. Do NOT call list_brands to find a slug: guessing a brand spends someone else's " +
+    "credits.",
   method: 'POST',
   pathUnderBrand: '/media/carousel',
+  pathWithoutBrand: '/carousel',
   input: z
     .object({
       brief: z.string().min(1).describe('What the carousel should say, as a whole'),
@@ -775,16 +816,18 @@ export const GENERATE_CAROUSEL = {
     .strict(),
   output: z.object({
     ok: z.literal(true),
-    media: z.array(GeneratedMediaSchema).describe('The slides, in order — slide 1 first'),
+    media: z.array(DrawnMediaSchema).describe('The slides, in order — slide 1 first'),
     continuity_tokens: z
       .array(z.string())
       .describe('The literal tokens repeated in every slide. Put them back into a refine_media instruction or that slide leaves the series.'),
     model: z.string().nullable(),
-    renders: z.number().describe('How many renders were BILLED — one per slide attempted')
+    renders: z.number().describe('How many renders were BILLED — one per slide attempted'),
+    organization: OrganizationField
   }),
   failures: [
     { error: 'credits_exhausted', status: 402 },
     MODEL_FAILURE,
+    ...BRAND_FREE_FAILURES,
     { error: 'plan_failed', status: 502 },
     { error: 'render_failed', status: 502 },
     { error: 'store_failed', status: 502 }

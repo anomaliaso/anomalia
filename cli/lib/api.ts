@@ -3,25 +3,40 @@
  * No Supabase, no DB access, no secrets — just HTTP calls to the Anomalia API.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { appUrl } from './config.ts';
 import {
   pathFor,
   pathWithoutBrand,
+  TOOL_HEADER,
   type BrandEndpoint,
   type ResourceEndpoint,
   type ResourcelessEndpoint,
 } from './contracts/index.ts';
+
+/**
+ * Quale tool sta chiamando, per le richieste che partono da qui dentro. Un comando della CLI non
+ * ne apre nessuno: l'intestazione parte solo quando c'è davvero un tool, e il server non si trova
+ * ad attribuire una spesa a un tool che nessuno ha chiamato.
+ */
+const toolCall = new AsyncLocalStorage<string>();
+
+export function asTool<T>(tool: string, fn: () => T): T {
+  return toolCall.run(tool, fn);
+}
 
 async function request<T>(path: string, token: string, opts?: RequestInit): Promise<T> {
   // Resolved per call, not at import time: loadEnv() sets PUBLIC_APP_URL after the module
   // graph is already loaded, so a module-level constant would freeze the production default
   // and ignore the local dev server.
   const url = `${appUrl()}${path}`;
+  const tool = toolCall.getStore();
   const res = await fetch(url, {
     ...opts,
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      ...(tool ? { [TOOL_HEADER]: tool } : {}),
       ...opts?.headers,
     },
   });
@@ -428,7 +443,12 @@ export const api = {
     get<{ products: { id: string; title: string; kind: string; pricing: string | null; imageCount: number; featured: boolean }[] }>(`/api/v1/brands/${slug}/products`, t),
 
   syncProducts: (t: string, slug: string) =>
-    post<{ ok: boolean; platform: string; synced: number }>(`/api/v1/brands/${slug}/products`, t),
+    post<{
+      ok: boolean;
+      platform: string;
+      synced: number;
+      rejected: { title: string; reason: string }[];
+    }>(`/api/v1/brands/${slug}/products`, t),
 
   deletePostsByStatus: (t: string, slug: string, status: string) =>
     request<{ ok: boolean; deleted: number }>(`/api/v1/brands/${slug}/posts?status=${encodeURIComponent(status)}`, t, { method: 'DELETE' }),

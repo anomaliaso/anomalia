@@ -88,7 +88,8 @@ export const TABLE_CHECKS: Record<string, string> = {
   "shared_views_view_type_check": "view_type in ('calendar', 'dashboard', 'monthly_report', 'strategy', 'workspace')",
   "talents_body_type_check": "body_type is null or body_type in ('slim', 'athletic', 'athletic_slim', 'average', 'curvy', 'plus', 'muscular')",
   "talents_gender_check": "gender is null or gender in ('man', 'woman', 'trans_man', 'trans_woman', 'nonbinary')",
-  "talents_height_band_check": "height_band is null or height_band in ('short', 'average', 'tall')"
+  "talents_height_band_check": "height_band is null or height_band in ('short', 'average', 'tall')",
+  "video_renders_one_payer": "num_nonnulls(brand_id, org_id) = 1"
 };
 
 export const WRITABLE_COLUMNS: Record<string, { insert: string[]; update: string[] }> = {

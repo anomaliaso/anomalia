@@ -4,7 +4,7 @@
 > Non si modifica a mano: il prossimo che rigenera cancella le correzioni.
 
 **80 tool** — 9 in lettura, 53 in scrittura, 18 che distruggono.
-Il payload di `tools/list` pesa **87.350 caratteri**, circa **21.838 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
+Il payload di `tools/list` pesa **88.948 caratteri**, circa **22.237 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
 
 | gruppo | tool |
 |---|---:|
@@ -104,7 +104,7 @@ Write captions — text only, no media, and NO post is created: pass a caption t
 
 *Generate a carousel*
 
-To make a carousel — a SERIES of images that read as one object, not N unrelated pictures. Slide 1 is the cover and must work at thumbnail size; every later slide advances the angle one concrete step and carries exactly one idea. It spends credits: one render per slide, so a 5-slide carousel is five renders. It creates nothing in the calendar and publishes nothing: pass the ids to create_post as media_ids, in order. TO CHANGE ONE SLIDE use refine_media on that slide id, and put the `continuity_tokens` this returns back into your instruction — they are what holds the series together, and an edit that touches palette, light or the recurring motif without them takes that slide out of the set. With a slug, this brand's look is applied to every slide and there is no way to switch it off here.
+To make a carousel — a SERIES of images that read as one object, not N unrelated pictures. Slide 1 is the cover and must work at thumbnail size; every later slide advances the angle one concrete step and carries exactly one idea. It spends credits: one render per slide, so a 5-slide carousel is five renders. It creates nothing in the calendar and publishes nothing: pass the ids to create_post as media_ids, in order. TO CHANGE ONE SLIDE use refine_media on that slide id, and put the `continuity_tokens` this returns back into your instruction — they are what holds the series together, and an edit that touches palette, light or the recurring motif without them takes that slide out of the set. With a slug, this brand's look is applied to every slide and there is no way to switch it off here. WITHOUT slug no brand look reaches the slides — name the style in the brief — and the ids come back null. Do NOT call list_brands to find a slug: guessing a brand spends someone else's credits.
 
 | campo | tipo | |
 |---|---|---|
@@ -113,7 +113,7 @@ To make a carousel — a SERIES of images that read as one object, not N unrelat
 | `aspect_ratio`? | `1:1` \| `4:5` \| `9:16` \| `16:9` |  |
 | `model`? | string | For THIS call only; it changes no brand setting. Omit for the brand’s choice. Ids from get_media_models (slot imageModel); anything else is refused as model_not_for_slot. |
 | `title`? | string | The name the slides carry in the library |
-| `slug` | string |  |
+| `slug`? | string | Brand URL slug. Optional here: omit it to run without a brand — the tool description says what changes. |
 
 ### `publish_post` · D
 
@@ -166,7 +166,7 @@ Throw away one post that has not gone out yet. It does not come back, and its co
 
 *Render post image*
 
-Draw the image a post is missing, from the prompt already written on it, and attach it. It spends credits: one render. To draw a picture that is not tied to a post, use generate_image.
+Draw the image a post is missing, from the prompt already written on it, and attach it. It spends credits: one render. A render that produces no image FAILS instead of answering ok, and says `credits_spent`: the charge happened before the failure, so a retry pays again. To draw a picture that is not tied to a post, use generate_image.
 
 | campo | tipo | |
 |---|---|---|
@@ -723,7 +723,7 @@ Import this brand's past social posts so the AI can imitate how it already write
 
 *Generate an image*
 
-To draw a picture from a description — "an image of a cat", a product shot, a background for a slide. With a slug, this brand's own look is applied by default — its colours, its fonts, its visual direction — so you do not have to describe them; brand_style: ignore leaves them out. Without a slug there is no brand and none of that reaches the model, so name the style you want in the prompt. WITHOUT slug this is a one-off drawing: no brand, nothing filed anywhere, id comes back null and there is nothing to hand to create_post. WITH slug the image lands in that brand's library and its id is what create_post takes as media_ids. Do NOT call list_brands to decide where to draw — if nobody named a brand there is no brand, and guessing one spends a real organisation's credits and litters a real library. It spends credits: one render per image, and `renders` in the answer says how many were billed, cost_usd what they cost. It creates nothing in the calendar and publishes nothing, so ask for two or three with `count`, look at them, keep one. To CHANGE a picture that already exists use refine_media — correcting one drawing beats redrawing until it is right. To pick the model read get_media_models and pass `model`, for this call only; set_media_model changes the brand from now on.
+To draw a picture from a description — "an image of a cat", a product shot, a background for a slide. With a slug, this brand's own look is applied by default — its colours, its fonts, its visual direction — so you do not have to describe them; brand_style: ignore leaves them out. Without a slug there is no brand and none of that reaches the model, so name the style you want in the prompt. WITHOUT slug this is a one-off drawing: no brand, nothing filed anywhere, id comes back null and there is nothing to hand to create_post. WITH slug the image lands in that brand's library and its id is what create_post takes as media_ids. Do NOT call list_brands to find a slug: guessing a brand spends a real organisation's credits and litters a real library. It spends credits: one render per image, and `renders` in the answer says how many were billed, cost_usd what they cost. It creates nothing in the calendar and publishes nothing, so ask for two or three with `count`, look at them, keep one. To CHANGE a picture that already exists use refine_media — correcting one drawing beats redrawing until it is right. To pick the model read get_media_models and pass `model`, for this call only; set_media_model changes the brand from now on.
 
 | campo | tipo | |
 |---|---|---|
@@ -739,17 +739,17 @@ To draw a picture from a description — "an image of a cat", a product shot, a 
 
 *Generate a video*
 
-To make a video: animate a photo you already have, or film a clip from a prompt alone. "Animate this photo", "a 5 second video of this image" — that is `base_media_id` pointing at a library image plus a prompt for the movement, and it needs NO post. It spends credits, and the model moves that bill by more than an order of magnitude, so read get_media_models (slot videoModel from a prompt, videoImageModel when animating an image) and pass `model` for this call only. A clip takes minutes: this returns a job_id with status rendering, and check_media_job says when it landed — calling this again for the same clip bills a second one. It creates nothing in the calendar and publishes nothing; when the clip lands, pass its media_id to create_post as media_ids. To animate the cover of a post you already have, make_video does it in one step.
+To make a video: animate a photo you already have, or film a clip from a prompt alone. "Animate this photo", "a 5 second video of this image" — that is `base_media_id` pointing at a library image plus a prompt for the movement, and it needs NO post. It spends credits, and the model moves that bill by more than an order of magnitude, so read get_media_models (slot videoModel from a prompt, videoImageModel when animating an image) and pass `model` for this call only. A clip takes minutes: this returns a job_id with status rendering, and check_media_job says when it landed — calling this again for the same clip bills a second one. It creates nothing in the calendar and publishes nothing; when the clip lands, pass its media_id to create_post as media_ids. To animate the cover of a post you already have, make_video does it in one step. WITHOUT slug the clip is filed nowhere and has no media_id: it lands on the job itself, at GET /api/v1/videos (?job_id= for one), whose media_url is the file. base_media_id is then the storage_path or url a brand-free generate handed back. Do NOT call list_brands to find a slug: guessing a brand spends someone else's credits.
 
 | campo | tipo | |
 |---|---|---|
 | `prompt` | string | What the clip should show, or how the image should move |
-| `base_media_id`? | string | A library IMAGE to animate, from list_media — an id or an unambiguous prefix. Omit to film from the prompt alone. |
+| `base_media_id`? | string | An IMAGE to animate. WITH slug: a library id from list_media, or an unambiguous prefix. WITHOUT slug: the storage_path or url a brand-free generate handed back. Omit to film from the prompt alone. |
 | `duration`? | integer | Seconds. Each model accepts its own window and most will not go below 10 — a duration outside it is refused as duration_out_of_range naming the nearest it accepts, rather than quietly rounded up, because a clip is billed per second. |
 | `aspect_ratio`? | `1:1` \| `9:16` \| `16:9` |  |
 | `model`? | string | For THIS call only; it changes no brand setting. Omit for the brand’s choice. Ids from get_media_models (slot videoModel, or videoImageModel when base_media_id is set); anything else is refused as model_not_for_slot. |
 | `title`? | string | The name the clip carries in the library |
-| `slug` | string |  |
+| `slug`? | string | Brand URL slug. Optional here: omit it to run without a brand — the tool description says what changes. |
 
 ### `get_media_models` · R
 
@@ -791,17 +791,17 @@ To turn a post you already have into a video: this animates that post's cover im
 
 *Refine media you already made*
 
-To change a photo or a video you already have — "make it red", "warmer background", "remove the cup on the left", "keep the movement but make it night" — instead of making a new one. base_media_id is any asset in this brand’s library, image or video alike; list_media finds it, and a short prefix works. It starts FROM that asset: the picture you already made comes back changed, not redrawn. Say what should CHANGE, not what the whole thing should be. The result is filed as a NEW asset, so a wrong edit costs one render and never your original. Do NOT reach for generate_image or generate_video to alter something: those two start from nothing and give you a different subject, which is the mistake this tool exists to end. It spends credits, and the answer says how many renders were billed. It creates nothing in the calendar and publishes nothing; pass the id it returns to create_post as media_ids when you want a post. Each kind has its own model — get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and model here applies to this call only. A clip has no refine model until the brand picks one, and until then a video comes back no_refine_model rather than quietly redrawn. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only.
+To change a photo or a video you already have — "make it red", "warmer background", "remove the cup on the left", "keep the movement but make it night" — instead of making a new one. base_media_id is any asset in this brand’s library, image or video alike; list_media finds it, and a short prefix works. It starts FROM that asset: the picture you already made comes back changed, not redrawn. Say what should CHANGE, not what the whole thing should be. The result is filed as a NEW asset, so a wrong edit costs one render and never your original. Do NOT reach for generate_image or generate_video to alter something: those two start from nothing and give you a different subject, which is the mistake this tool exists to end. It spends credits, and the answer says how many renders were billed. It creates nothing in the calendar and publishes nothing; pass the id it returns to create_post as media_ids when you want a post. Each kind has its own model — get_media_models, slot imageRefineModel for a picture and videoRefineModel for a clip — and model here applies to this call only. A clip has no refine model until the brand picks one, and until then a video comes back no_refine_model rather than quietly redrawn. The brand look is applied as it is on generate_image; brand_style: ignore leaves it out, pictures only. source_too_large means the file is heavier than a model can be handed — the answer names its weight and the ceiling. The asset IS there: shrink it or import a lighter copy, never generate a replacement. WITHOUT slug base_media_id is instead the storage_path or url a brand-free generate handed you — never a library id, never a web address (refused as source_not_found). Nothing is filed, brand_style is refused, and a clip needs `model`. Do NOT call list_brands to find a slug: guessing a brand spends someone else's credits.
 
 | campo | tipo | |
 |---|---|---|
-| `base_media_id` | string | The library asset to start from — an id from list_media, or an unambiguous prefix. Its own kind decides how it is refined: you do not say whether it is a picture or a clip. |
+| `base_media_id` | string | WITH slug: a library id from list_media, or an unambiguous prefix. WITHOUT slug: the storage_path or url a brand-free generate handed back. Its own kind decides how it is refined: you never say which. |
 | `instruction` | string | What should change about it |
 | `count`? | integer | How many alternatives to draw, 1-4. Each one bills a render. Defaults to 1. |
 | `model`? | string | For THIS call only; it changes no brand setting. Omit for the brand’s choice. Ids from get_media_models (slot imageRefineModel for a picture, videoRefineModel for a clip); anything else is refused as model_not_for_slot. |
 | `brand_style`? | `apply` \| `ignore` | Whether this brand's own look — colours, fonts, visual direction — is applied. Omit it and it is. Send `ignore` when the picture must take nothing from the brand: a UI screenshot, an illustration about somebody else, a neutral background. Without a slug there is no brand to apply or ignore: refused as brand_style_needs_a_brand. |
 | `title`? | string | The name the new asset carries in the library |
-| `slug` | string |  |
+| `slug`? | string | Brand URL slug. Optional here: omit it to run without a brand — the tool description says what changes. |
 
 ### `set_media_model` · W
 

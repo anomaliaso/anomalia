@@ -1,29 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * La rotta che non chiede un brand. Quello che conta qui sono i rifiuti e chi paga: un render che
- * parte quando non doveva è denaro speso, e un render che parte senza dire a chi è stato addebitato
- * è denaro speso in silenzio — che in una sessione vera voleva dire il gatto di qualcuno sul conto
- * di un cliente.
+ * La rotta che non chiede un brand. I rifiuti condivisi — nessuna organizzazione, chiave ristretta,
+ * crediti — vivono in `orgScopeFor` e si provano lì, una volta sola. Qui conta che questa rotta li
+ * metta PRIMA di spendere, e che dica chi ha pagato: un render che parte quando non doveva è denaro
+ * speso, e uno che parte senza dire a chi è stato addebitato è denaro speso in silenzio.
  */
 
 const generateImagesWithoutBrand = vi.fn();
+const openOrgScope = vi.fn();
 
-vi.mock('$lib/server/cli-auth', () => ({
-  authenticate: vi.fn(),
-  gateOrgAiAction: vi.fn(),
-  apiKeyIsBrandScoped: vi.fn()
-}));
-vi.mock('$lib/server/org', () => ({
-  ensureOrgForUser: vi.fn()
-}));
+vi.mock('$lib/server/cli-auth', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return { ...actual, openOrgScope: (...args: unknown[]) => openOrgScope(...args) };
+});
 vi.mock('$lib/server/media-generate', () => ({
   generateImagesWithoutBrand: (...args: unknown[]) => generateImagesWithoutBrand(...args)
 }));
 
 import { POST } from './+server';
-import { authenticate, gateOrgAiAction, apiKeyIsBrandScoped } from '$lib/server/cli-auth';
-import { ensureOrgForUser } from '$lib/server/org';
 
 const DRAWN = {
   id: null,
@@ -35,13 +30,7 @@ const DRAWN = {
   storage_path: 'user-1/media/generated-x.png'
 };
 
-function supabaseWithOrgName(name: string | null) {
-  return {
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'org-1', name }, error: null }) }) })
-    })
-  };
-}
+const ORG = { id: 'org-1', name: 'Acme' };
 
 async function generate(body: unknown) {
   const url = new URL('https://anomalia.test/api/v1/images');
@@ -55,15 +44,9 @@ async function generate(body: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(authenticate).mockResolvedValue({
-    supabase: supabaseWithOrgName('Acme'),
-    user: { id: 'user-1', email: 'andrea@teta.so' },
-    apiKey: undefined,
-    error: null
-  } as never);
-  vi.mocked(ensureOrgForUser).mockResolvedValue('org-1' as never);
-  vi.mocked(gateOrgAiAction).mockResolvedValue(undefined as never);
-  vi.mocked(apiKeyIsBrandScoped).mockReturnValue(false as never);
+  openOrgScope.mockResolvedValue({
+    scope: { supabase: {}, user: { id: 'user-1' }, orgId: 'org-1', organization: ORG }
+  });
   generateImagesWithoutBrand.mockResolvedValue({
     ok: true,
     media: [DRAWN],
@@ -81,25 +64,22 @@ describe('POST /api/v1/images — disegnare senza nominare un brand', () => {
     expect(body.media).toEqual([DRAWN]);
   });
 
-  /**
-   * Il test più importante dei due buchi nei pagamenti, e l'unico che si vede da TypeScript:
-   * senza crediti non si disegna nemmeno quando non c'è un brand da interrogare.
-   */
-  it('senza crediti non disegna, e il render non parte', async () => {
-    vi.mocked(gateOrgAiAction).mockResolvedValue(
-      new Response(JSON.stringify({ error: 'credits_exhausted' }), { status: 402 }) as never
-    );
+  it('dice da quale organizzazione sono stati presi i crediti', async () => {
+    const { body } = await generate({ prompt: 'un gatto' });
+
+    expect(body.organization).toEqual(ORG);
+  });
+
+  /** Il rifiuto dello scope arriva PRIMA del render: dopo, sarebbe già stato pagato. */
+  it('un rifiuto dello scope ferma la spesa invece di seguirla', async () => {
+    openOrgScope.mockResolvedValue({
+      error: new Response(JSON.stringify({ error: 'credits_exhausted' }), { status: 402 })
+    });
 
     const { res } = await generate({ prompt: 'un gatto' });
 
     expect(res.status).toBe(402);
     expect(generateImagesWithoutBrand).not.toHaveBeenCalled();
-  });
-
-  it('dice da quale organizzazione sono stati presi i crediti', async () => {
-    const { body } = await generate({ prompt: 'un gatto' });
-
-    expect(body.organization).toEqual({ id: 'org-1', name: 'Acme' });
   });
 
   it('addebita all organizzazione risolta, non a una passata dal chiamante', async () => {
@@ -129,20 +109,6 @@ describe('POST /api/v1/images — disegnare senza nominare un brand', () => {
     const { body } = await generate({ prompt: 'un gatto' });
 
     expect(body.cost_usd).toBeNull();
-  });
-
-  /**
-   * Una chiave ristretta a certi brand è una restrizione che l'utente ha scelto. Lasciarla spendere
-   * fuori da quei brand la allargherebbe in silenzio, proprio mentre si apre una strada nuova.
-   */
-  it('una chiave ristretta a certi brand non spende fuori da quelli', async () => {
-    vi.mocked(apiKeyIsBrandScoped).mockReturnValue(true as never);
-
-    const { res, body } = await generate({ prompt: 'un gatto' });
-
-    expect(res.status).toBe(403);
-    expect(body.error).toBe('brand_scoped_key');
-    expect(generateImagesWithoutBrand).not.toHaveBeenCalled();
   });
 
   it('il tetto sulle alternative è applicato senza spendere', async () => {

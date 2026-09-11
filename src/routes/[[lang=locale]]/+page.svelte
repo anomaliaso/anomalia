@@ -1,36 +1,30 @@
 <script lang="ts">
   import { _, locale } from 'svelte-i18n';
   import { page } from '$app/stores';
-  import { siClaude } from 'simple-icons';
   import SiteFooter from '$lib/components/SiteFooter.svelte';
   import AskAiCta from '$lib/components/AskAiCta.svelte';
-  import ServiceMockup from '$lib/components/ServiceMockup.svelte';
-  import TeamRoster from '$lib/components/TeamRoster.svelte';
-  import HomeChatMockup from '$lib/components/HomeChatMockup.svelte';
-  import WhyUs from '$lib/components/WhyUs.svelte';
-  import HomePricing from '$lib/components/HomePricing.svelte';
   import LandingFaq from '$lib/components/LandingFaq.svelte';
-  import { localePath, type Locale } from '$lib/i18n/locale';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
-  import YoutubeFacade from '$lib/components/YoutubeFacade.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
-  import ConnectClaudeDialog from '$lib/components/ConnectClaudeDialog.svelte';
+  import HeroParallax from '$lib/components/HeroParallax.svelte';
+  import AiMarks from '$lib/components/AiMarks.svelte';
+  import ConnectAgentDialog from '$lib/components/ConnectAgentDialog.svelte';
+  import StoryOutput from '$lib/components/landing/StoryOutput.svelte';
+  import StoryDoors from '$lib/components/landing/StoryDoors.svelte';
+  import StoryJobs from '$lib/components/landing/StoryJobs.svelte';
+  import StoryChannels from '$lib/components/landing/StoryChannels.svelte';
+  import StoryControl from '$lib/components/landing/StoryControl.svelte';
+  import StoryDiy from '$lib/components/landing/StoryDiy.svelte';
+  import StorySplit from '$lib/components/landing/StorySplit.svelte';
+  import StoryHosts from '$lib/components/landing/StoryHosts.svelte';
   import { marketingStartHref } from '$lib/start-href';
   import '$lib/styles/landing.css';
 
   let { data } = $props();
-  const lp = $derived((p: string) => localePath(p, (($locale as Locale) ?? 'en')));
   const waitlistActive = $derived(data.waitlistActive);
   const cta = $derived(waitlistActive ? $_('landing.cta.waitlist') : $_('landing.cta.getStarted'));
   const startHref = $derived(marketingStartHref({ loggedIn: Boolean(data.session), waitlistActive }));
-
-  let copied = $state(false);
-  function copyInstall() {
-    navigator.clipboard.writeText('curl -sSL https://anomalia.so/install.sh | bash');
-    copied = true;
-    setTimeout(() => (copied = false), 2000);
-  }
 
   let claudeOpen = $state(false);
 
@@ -80,7 +74,6 @@
   <meta property="og:description" content={$_('meta.landing.description')} />
   <meta name="twitter:title" content={$_('meta.landing.title')} />
   <meta name="twitter:description" content={$_('meta.landing.description')} />
-  <link rel="preload" as="image" href="/yt-uksgDRVZm6w.webp" fetchpriority="high" />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
@@ -90,12 +83,11 @@
 
   <!-- ============ HERO (centered, grow-style) ============ -->
   <section class="gr-hero">
+    <HeroParallax />
     <div class="wrap gr-hero-inner">
       <!-- Hero is paint-critical: no .reveal, no opacity:0, no letter-stagger on first paint. -->
-      <span class="eyebrow">{$_('landing.hero.eyebrow')}</span>
       <h1 class="gr-h1">
-        {$_('landing.hero.titleLead')}
-        <span class="gr-accent">{$_('landing.hero.titleEm')}</span>
+        <span class="ai-word" tabindex="0">{$_('landing.hero.titleAi')}<AiMarks /></span>{$_('landing.hero.titleRest')}
       </h1>
       <p class="gr-sub">{$_('landing.hero.subhead')}</p>
       <div class="gr-actions">
@@ -103,71 +95,41 @@
       </div>
       <p class="gr-note">{$_('landing.hero.note')}</p>
       <button class="connect-claude" type="button" onclick={() => (claudeOpen = true)}>
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={siClaude.path} /></svg>
-        {$_('landing.hero.connectClaude')}
+        {$_('landing.hero.connectClaude')}<AiMarks size="20px" step={17} />
       </button>
     </div>
   </section>
 
-  <TeamRoster />
+  <!-- Il racconto dopo la hero, in ordine di domanda: cosa esce, come si usa, cosa fa, che
+       pubblica davvero, chi comanda, perche' non fartelo da solo, perche' non un'agenzia, con
+       quale AI funziona. Poi il prezzo. -->
+  <StoryOutput />
 
-  <HomeChatMockup />
+  <StoryDoors onconnect={() => (claudeOpen = true)} appHref={startHref} />
 
-  <!-- ============ VIDEO ============ -->
-  <section class="video-sec">
-    <div class="wrap">
-      <div class="video-wrap">
-        <YoutubeFacade
-          videoId="uksgDRVZm6w"
-          title="YouTube video player"
-          poster="/yt-uksgDRVZm6w.webp"
-          priority
-        />
-      </div>
-    </div>
-  </section>
+  <StoryJobs />
 
-  <!-- ============ SERVICES 2×2 GRID ============ -->
-  <section class="services-sec">
-    <div class="wrap">
-        <div class="sec-head reveal">
-          <div class="kicker">{$_('landing.services.kicker')}</div>
-          <h2>{$_('landing.services.titleLead')} <span class="gr-accent">{$_('landing.services.titleAccent')}</span></h2>
-        </div>
-      <div class="services-grid">
-        <div class="svc-card reveal" data-d="1">
-          <h3>{$_('landing.services.social.title')}</h3>
-          <p>{$_('landing.services.social.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="content" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="2">
-          <h3>{$_('landing.services.seo.title')}</h3>
-          <p>{$_('landing.services.seo.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="seogeo" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="1">
-          <h3>{$_('landing.services.radar.title')}</h3>
-          <p>{$_('landing.services.radar.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="radar" /></div>
-        </div>
-        <div class="svc-card reveal" data-d="2">
-          <h3>{$_('landing.services.leads.title')}</h3>
-          <p>{$_('landing.services.leads.body')}</p>
-          <div class="svc-mockup"><ServiceMockup page="leads" /></div>
-        </div>
-      </div>
-    </div>
-  </section>
+  <StoryChannels />
 
-  <WhyUs />
+  <StoryControl />
 
-  <HomePricing startHref={startHref} />
+  <StoryDiy />
+
+  <StorySplit />
+
+  <StoryHosts />
+
+  <!-- Fuori dalla home, non cancellate: «Perche' noi» e il blocco dei piani vivono nelle loro
+       pagine, e qui arrivavano dopo che il racconto aveva gia' detto la sua. I componenti
+       restano dove sono, rimetterli e' una riga. -->
+  <!-- <WhyUs /> -->
+  <!-- <HomePricing startHref={startHref} /> -->
 
   <LandingFaq />
 
 </main>
 
-<ConnectClaudeDialog bind:open={claudeOpen} />
+<ConnectAgentDialog bind:open={claudeOpen} />
 
 <section class="featured-on" aria-label="Featured on">
   <div class="wrap">
@@ -376,6 +338,16 @@
 <LazyMarcoWidget />
 
 <style>
+  /* Le due parole sono la parte astratta della frase: l'hover ci mette sotto i marchi veri, ed e'
+     l'unico punto della hero dove «la tua AI» smette di essere un'idea. `tabindex` perche' chi
+     naviga da tastiera possa arrivarci: la rivelazione e' decorativa, ma escluderla di proposito
+     sarebbe una scelta e non una dimenticanza. */
+  .ai-word {
+    display: inline-block; position: relative; cursor: default;
+    border-radius: 0.08em; outline-offset: 0.12em;
+  }
+
+
 
   /* ---------- HERO: centrato nella viewport ----------
      Sta QUI e non in landing.css perche' `.gr-hero` lo usano altre otto pagine (autoblog,
@@ -404,16 +376,6 @@
   /* In un flex row l'inner sarebbe shrink-to-fit e la hero si stringerebbe sul testo piu'
      largo: 100% e poi ci pensa il max-width di .wrap. */
   .gr-hero-inner { width: 100%; }
-
-  /* ---------- VIDEO ----------
-     La homepage non ha UNA max-width: .wrap sta a --maxw (1440), .services-grid a 1200, il
-     mockup della chat e la comparativa a 940. Il video prende quella del mockup, che è la
-     sezione appena sopra e quindi l'unico confronto che l'occhio fa davvero. Il 16:9 resta
-     al player (aspect-ratio in YoutubeFacade), qui si tocca solo la larghezza.
-     Il cap va sul blocco interno e NON su .wrap: .wrap ha 16px di padding per lato, quindi
-     limitare lui darebbe 908px di video contro 940 di mockup — sbagliato di 32px proprio nel
-     confronto che si voleva sistemare. */
-  .video-wrap { max-width: 940px; margin-inline: auto; }
 
   /* ---------- FEATURED ON ---------- */
   .featured-on {

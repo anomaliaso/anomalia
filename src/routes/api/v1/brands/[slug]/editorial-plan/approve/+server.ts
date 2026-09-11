@@ -12,34 +12,20 @@ export const POST: RequestHandler = async ({ request, params }) => {
   if (writeDenied) return writeDenied;
 
   try {
-    const { loadActivePlan, activatePlan, syncPrefsFromPlan } = await import('$lib/server/editorial-plan');
+    const { activatePlan } = await import('$lib/server/editorial-plan');
 
-    // Find the proposed plan
     const { data: proposed } = await supabase
-      .from('editorial_plans').select('*')
+      .from('editorial_plans').select('id')
       .eq('brand_id', brand.id).eq('status', 'proposed')
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
     if (!proposed) return json({ error: 'No proposed plan to approve' }, { status: 404 });
 
-    // Load current active plan (if any) to get the old ID
-    const oldActive = await loadActivePlan(supabase, brand.id);
-
-    // Activate the proposed plan
-    await activatePlan(supabase, brand.id, proposed.id, brand.timezone as string);
-
-    // Supersede old plan
-    if (oldActive) {
-      await supabase.from('editorial_plans')
-        .update({ status: 'superseded' })
-        .eq('id', oldActive.id);
-    }
-
-    // Sync prefs
-    await syncPrefsFromPlan(supabase, brand.id, proposed);
+    const activated = await activatePlan(supabase, brand.id, proposed.id, brand.timezone as string);
+    if (!activated) return json({ error: 'Proposed plan disappeared before activation' }, { status: 409 });
 
     return json({ ok: true });
   } catch (e) {
-    return json({ error: `Approve failed: ${String(e)}` }, { status: 500 });
+    return json({ error: `Approve failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 };

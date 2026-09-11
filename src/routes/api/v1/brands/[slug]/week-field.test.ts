@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/server/cli-auth', () => ({
   authenticate: vi.fn(),
   loadBrandForUser: vi.fn(),
-  checkApiKeyWriteAccess: vi.fn(() => null)
+  checkApiKeyWriteAccess: vi.fn(() => null),
+  gateAiAction: vi.fn(async () => undefined)
 }));
 vi.mock('$lib/server/brand-context', () => ({ genaiClient: () => ({}) }));
 vi.mock('$lib/server/editorial-plan', () => ({

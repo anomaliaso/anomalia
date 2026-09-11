@@ -43,11 +43,21 @@ function ensureSentry() {
   });
 }
 
+/**
+ * Un sistema di osservabilità che non osserva e non lo dice è lo stesso difetto che sta misurando.
+ * Senza chiave `mcpLog` usciva di qui muto, e `mcp_logs` è rimasta vuota per mesi senza che niente
+ * lo segnalasse: l'unico modo di accorgersene era andare a guardare la tabella.
+ *
+ * Una volta sola, non a ogni chiamata: la memoizzazione qui sotto è ciò che glielo impedisce, e un
+ * avviso per ogni tool chiamato sarebbe rumore che si impara a saltare.
+ */
 function getSupabaseAdmin(): SupabaseClient | null {
   if (supabaseAdmin !== undefined) return supabaseAdmin;
   const url = process.env.PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
+    const missing = [!url && 'PUBLIC_SUPABASE_URL', !key && 'SUPABASE_SERVICE_ROLE_KEY'].filter(Boolean);
+    console.error(`[mcp] mcp_logs disabled: ${missing.join(' and ')} not set — no tool call is recorded`);
     supabaseAdmin = null;
     return null;
   }
@@ -63,9 +73,15 @@ function errorFields(error: unknown): { error_name?: string; error_stack?: strin
   return { error_name: typeof error, message: String(error) };
 }
 
-/** Fire-and-forget structured log to stderr + Sentry + Supabase mcp_logs. */
+/**
+ * Fire-and-forget structured log to stderr + Sentry + Supabase mcp_logs.
+ *
+ * Nessun guasto risale a chi ha chiamato: questo gira DENTRO il server MCP, e un'osservabilità che
+ * rompe ciò che osserva è peggio di una che tace. `void` su una promise respinta è una unhandled
+ * rejection, che in Node abbatte il processo — cioè la richiesta di un cliente.
+ */
 export function mcpLog(entry: McpLogEvent): void {
-  void mcpLogAsync(entry);
+  void mcpLogAsync(entry).catch((e) => console.error('[mcp] log failed', e));
 }
 
 export async function mcpLogAsync(entry: McpLogEvent): Promise<void> {

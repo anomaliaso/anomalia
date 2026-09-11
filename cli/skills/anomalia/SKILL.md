@@ -182,7 +182,9 @@ at them, keep one.
 **Make a carousel** → `generate_carousel` with a brief. It plans the series, draws every slide and
 returns them in order plus the `continuity_tokens` that hold them together. One render per slide.
 To fix a single slide afterwards, `refine_media` on its id **with those tokens in the instruction** —
-without them that slide drifts out of the series.
+without them that slide drifts out of the series. `slug` is OPTIONAL here too: without it the
+slides take nothing from any brand (name the look in the brief), are filed nowhere, and their
+`id`s come back `null`.
 
 **Animate an image you already have** → `generate_video` with its `base_media_id`. That is how
 "make a 5s clip of this photo" works, and it needs **no post**: the clip lands in the library and
@@ -195,6 +197,13 @@ so it returns a `job_id`; `query` on `video_renders` says when it landed. The mo
 than an order of magnitude, so read `get_media_models` (slot `videoModel`, or `videoImageModel` when animating an image) before
 spending. With a slug the clip follows this brand's visual direction, so you do not have to
 describe it — and there is no switch for it here.
+
+**Film without a brand** → `generate_video` with no `slug`. Same tool, and what changes is where
+the clip ends up: no brand, no library, no `media_id` and nothing for `create_post`. The finished
+clip lands on the job itself — `GET /api/v1/videos` (add `?job_id=` for one) and its `media_url`
+is where the file is. `query` cannot see it: that tool reads a brand. Without a slug
+`base_media_id` is the `storage_path` or `url` a brand-free generate handed you, never a library
+id and never a web address.
 
 **Give a post the image it is missing** → `render_post`. It draws from the prompt already written
 on that post and attaches it. One render. To draw a picture that is not tied to a post, use
@@ -214,6 +223,13 @@ different subject — the commonest and most expensive mistake on this surface. 
 never overwritten: refining files a new asset, so a wrong edit costs one render and not your
 source. A clip needs the brand to have chosen a video refine model; until it has, `refine_media`
 says `no_refine_model` instead of quietly filming a new one.
+
+`slug` is OPTIONAL on `refine_media` as well, and then `base_media_id` means something else: the
+`storage_path` (a picture) or the `url` (a clip) that a brand-free `generate_image`,
+`generate_carousel` or `generate_video` handed back. Nothing else resolves — a library id has no
+brand to be looked up in, and a web address is refused as `source_not_found` rather than fetched.
+The result is filed nowhere either, `brand_style` is refused because there is no brand to apply,
+and a clip has no brand preference to read, so pass `model` or it comes back `no_refine_model`.
 
 **Check your copy before you create it** → `check_content` with the same spec you would send to
 `create_post`. It returns blocking errors, warnings and a 0–100 score per platform, each naming

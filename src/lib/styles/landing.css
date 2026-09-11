@@ -50,10 +50,32 @@
        sets flex-direction:column, and this header also carries class "nav" — without this the
        bar stacks vertically and the logo stops centring. */
     display: flex; align-items: center; flex-direction: row;
-    background: var(--paper);
+    background: transparent;
   }
-  .nav .wrap { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; padding: 0 40px; }
+  /* Nessun velo: la barra e' trasparente e quello che la separa dalla pagina e' solo la sfocatura,
+     che si spegne scendendo. Due strati invece di uno perche' una sfocatura sola, tagliata da una
+     maschera, lascia il gradino dove la maschera finisce: sommandone due con raggio e corsa
+     diversi la sfocatura cresce verso l'alto e muore senza bordo. Niente ombra. */
+  header.nav::before,
+  header.nav::after {
+    content: ''; position: absolute; inset: 0 0 -26px 0; pointer-events: none;
+  }
+  header.nav::before {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    mask-image: linear-gradient(to bottom, #000 0, #000 58%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 58%, transparent 100%);
+  }
+  header.nav::after {
+    inset: 0 0 -13px 0;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    mask-image: linear-gradient(to bottom, #000 0, #000 34%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, transparent 100%);
+  }
+  .nav .wrap { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: none; padding: 0 40px; }
   .nav-wrap {
+    position: relative; z-index: 1;
     display: grid; grid-template-columns: 1fr auto 1fr;
     align-items: center; width: 100%; max-width: none; padding: 0 40px;
   }
@@ -258,12 +280,19 @@
   }
 
   /* ---------- Grow-style hero (centered, gradient accent, two CTAs) ---------- */
-  .gr-hero { position: relative; padding: 150px 0 40px; text-align: center; overflow: hidden; }
-  .gr-hero-inner { display: flex; flex-direction: column; align-items: center; }
+  /* Le schede in parallasse vivono dentro la hero, quindi serve un contenitore posizionato. */
+  .gr-hero {
+    position: relative; padding: 150px 0 40px; text-align: center; overflow: hidden; }
+  /* Le schede in parallasse sono `position:absolute`, quindi si dipingono SOPRA un fratello
+     statico anche a z-index 0: senza queste due proprieta' finivano davanti al titolo. Alzare
+     l'inner e' cio' che le tiene dietro, non la loro trasparenza. */
+  .gr-hero-inner { display: flex; flex-direction: column; align-items: center; position: relative; z-index: 1; }
+  /* Il titolo e' quattro parole: puo' respirare molto piu' di quando ne aveva otto, ed e' quello
+     che gli da' il peso del riferimento invece di una riga lunga a corpo medio. */
   .gr-h1 {
-    font-size: clamp(2.2rem, 5.5vw, 4.5rem);
+    font-size: clamp(2.8rem, 8vw, 6.5rem);
     font-weight: var(--heading-weight); line-height: 0.98;
-    letter-spacing: var(--heading-tracking); margin: 0; max-width: min(100%, 22ch);
+    letter-spacing: var(--heading-tracking); margin: 0; max-width: min(100%, 14ch);
     text-wrap: balance;
   }
   .gr-accent {
@@ -316,6 +345,10 @@
   .gr-note { margin-top: 30px; font-size: 13px; color: var(--ink-faint); }
   /* "Connect to Claude" — opens the MCP setup dialog. */
   .connect-claude {
+    /* Riferimento per gli adesivi che cadono al passaggio del cursore: senza, si posizionerebbero
+       rispetto alla sezione e finirebbero a mezzo schermo di distanza. Il clic non lo toccano —
+       il gruppo e' `pointer-events: none`. */
+    position: relative;
     margin-top: 14px;
     display: inline-flex; align-items: center; gap: 8px;
     padding: 9px 18px;
@@ -1290,7 +1323,6 @@
 
   /* ---------- Dark mode overrides (data-theme only, JS handles OS detection) ---------- */
   :root[data-theme="dark"] body { background: var(--paper); }
-  :root[data-theme="dark"] header.nav { background: var(--paper); }
   :root[data-theme="dark"] .nav-pricing { color: var(--ink-soft); }
   /* Primary CTAs in dark mode: white pill, black text (not accent). */
   :root[data-theme="dark"] .nav-cta { background: var(--ink); color: var(--paper); }
@@ -1345,3 +1377,18 @@
      every full-bleed section to the same --paper. Cards inside keep --paper-2 for depth. */
   :root[data-theme="dark"] .alt,
   :root[data-theme="dark"] .showcase { background: var(--paper); }
+
+  /* Il titolo della hero su schermo stretto: la misura la decide la larghezza, non un valore
+     fisso, perche' l'unica cosa che deve restare vera e' che stia in DUE righe. Il tetto di 14ch
+     decide dove va a capo, la dimensione in vw fa in modo che quelle 14 battute ci stiano sempre:
+     a 320px come a 700px il titolo occupa la riga e non ne inventa una terza. */
+  @media (max-width: 700px) {
+    .gr-h1 { font-size: clamp(1.8rem, 12vw, 3.6rem); }
+  }
+
+  /* Sul tablet la barra ha ancora tutti i link ma non la larghezza per reggerli: il nome scritto
+     accanto al simbolo e' la cosa che si puo' togliere senza perdere niente — il marchio resta,
+     e lo si riconosce. Sul desktop torna, e sotto i 640 la barra e' gia' solo logo, CTA e menu. */
+  @media (min-width: 641px) and (max-width: 1100px) {
+    .nav .logo-text { display: none; }
+  }

@@ -37,8 +37,8 @@
 </script>
 
 <footer>
-  <div class="wrap foot-cta">
-    <div class="foot-cta-inner">
+  <div class="foot-cta">
+    <div class="wrap foot-cta-inner">
       <h2 class="foot-cta-heading">{footCtaHeading}</h2>
       {#if ctaExternal}
         <a
@@ -48,7 +48,7 @@
           rel="noopener"
         >{footCtaLabel}</a>
       {:else}
-        <HeroUrlCta tone="dark" {loggedIn} {waitlistActive} />
+        <HeroUrlCta {loggedIn} {waitlistActive} />
       {/if}
     </div>
   </div>
@@ -137,24 +137,23 @@
       </div>
     </div>
   </div>
-  <div class="foot-brand-big" aria-hidden="true">
-    <BrandMark size="clamp(4.5rem, 14vw, 12rem)" tone="negative" />
-    <span>anomalia</span>
-  </div>
 </footer>
 
 <style>
+  /* Il piede vero prende l'accento; la fascia della CTA sopra resta sulla carta della pagina, cosi'
+     l'invito finale non si stacca dal contenuto e il colore arriva solo quando la lettura e' finita. */
   footer {
-    background: #111;
-    border-top: 1px solid rgba(255,255,255,0.08);
+    background: var(--accent-2);
     padding: 0 0 64px;
-    color: rgba(255,255,255,0.45);
+    color: rgba(0, 0, 0, 0.70);
     font-size: 13px;
   }
 
   /* CTA section */
   .foot-cta {
     padding: 104px 0 96px;
+    background: var(--paper);
+    color: var(--ink);
   }
   .foot-cta-inner {
     display: flex;
@@ -164,20 +163,20 @@
     gap: 24px;
   }
   .foot-cta-heading {
-    font-size: clamp(1.1rem, 2.2vw, 1.5rem);
-    font-weight: 500;
-    color: rgba(255,255,255,0.85);
+    font-size: clamp(1.9rem, 4.4vw, 3.2rem);
+    font-weight: var(--heading-weight);
+    color: var(--ink);
     margin: 0;
-    letter-spacing: -0.01em;
-    line-height: 1.35;
-    max-width: 680px;
+    letter-spacing: var(--heading-tracking);
+    line-height: 1.08;
+    max-width: 16ch;
   }
   .foot-cta-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: #fff;
-    color: #111;
+    background: var(--ink);
+    color: var(--paper);
     font-size: 15px;
     font-weight: 600;
     padding: 12px 28px;
@@ -188,11 +187,12 @@
     flex-shrink: 0;
   }
   .foot-cta-btn:hover {
-    background: rgba(255,255,255,0.88);
+    opacity: 0.88;
     transform: translateY(-1px);
   }
 
   .foot-grid {
+    padding-top: 96px;
     display: grid;
     grid-template-columns: 1fr 2fr;
     gap: 48px;
@@ -205,23 +205,25 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 14px;
-    color: #fff;
+    color: #000;
   }
   .foot-logo-text {
     font-size: 20px;
     font-weight: 500;
-    color: #fff;
+    color: #000;
     letter-spacing: -0.02em;
   }
   .foot-desc {
-    color: rgba(255,255,255,0.45);
+    color: rgba(0,0,0,0.70);
+    font-weight: 500;
     font-size: 14px;
     line-height: 1.5;
     margin: 0;
     max-width: 32ch;
   }
   .foot-eu {
-    color: rgba(255,255,255,0.55);
+    color: rgba(0,0,0,0.70);
+    font-weight: 500;
     font-size: 13px;
     line-height: 1.45;
     margin: 12px 0 0;
@@ -240,13 +242,13 @@
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    color: rgba(255,255,255,0.55);
-    background: rgba(255,255,255,0.06);
+    color: rgba(0,0,0,0.70);
+    background: rgba(0,0,0,0.07);
     transition: color 0.15s, background 0.15s;
   }
   .foot-social-link:hover {
-    color: #fff;
-    background: rgba(255,255,255,0.12);
+    color: #000;
+    background: rgba(0,0,0,0.14);
   }
   .foot-social-link svg {
     width: 18px;
@@ -282,20 +284,21 @@
   }
   .foot-col-title {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: rgba(255,255,255,0.7);
+    color: #000;
     margin-bottom: 4px;
   }
   .foot-col a, .foot-col .foot-link-btn {
-    color: rgba(255,255,255,0.45);
+    color: rgba(0,0,0,0.70);
     text-decoration: none;
+    font-weight: 500;
     font-size: 14px;
     transition: color 0.15s;
   }
   .foot-col a:hover, .foot-col .foot-link-btn:hover {
-    color: #fff;
+    color: #000;
   }
   .foot-link-btn {
     background: none;
@@ -312,12 +315,12 @@
     align-items: center;
     gap: 6px;
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 650;
   }
-  .status-pill.ok { color: #10b981 !important; }
-  .status-pill.degraded { color: #f59e0b !important; }
-  .status-pill.critical { color: #ef4444 !important; }
-  .status-pill.loading { color: #6b7280 !important; }
+  .status-pill.ok,
+  .status-pill.degraded,
+  .status-pill.critical,
+  .status-pill.loading { color: #000 !important; }
 
   .status-dot {
     width: 7px;
@@ -325,39 +328,10 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .status-dot.ok { background: #10b981; }
-  .status-dot.degraded { background: #f59e0b; }
-  .status-dot.critical { background: #ef4444; }
-  .status-dot.loading { background: #6b7280; }
-
-  .foot-brand-big {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.1em;
-    font-size: clamp(3rem, 10vw, 8rem);
-    font-weight: 500;
-    color: rgba(255,255,255,0.04);
-    letter-spacing: -0.04em;
-    line-height: 1;
-    padding: 88px 0 24px;
-    overflow: hidden;
-    user-select: none;
-    max-width: none;
-    width: 100%;
-  }
-  .foot-brand-big span {
-    padding-bottom: 8px;
-  }
-
-  .foot-brand-big :global(svg),
-  .foot-brand-big :global(svg *) {
-    color: rgba(255,255,255,0.04) !important;
-    fill: rgba(255,255,255,0.04) !important;
-    stroke: rgba(255,255,255,0.04) !important;
-    height: 0.85em;
-    width: auto;
-  }
+  .status-dot.ok { background: #046c4e; }
+  .status-dot.degraded { background: #92400e; }
+  .status-dot.critical { background: #991b1b; }
+  .status-dot.loading { background: #3f3f46; }
 
   @media (max-width: 1100px) {
     .foot-columns {
@@ -377,10 +351,6 @@
   }
 
   @media (max-width: 480px) {
-    .foot-cta {
-      padding-left: 16px;
-      padding-right: 16px;
-    }
     .foot-columns {
       grid-template-columns: 1fr 1fr;
       gap: 20px;

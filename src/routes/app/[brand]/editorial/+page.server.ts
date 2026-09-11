@@ -148,7 +148,11 @@ export const actions: Actions = {
         .eq('brand_id', brand.id)
         .eq('status', 'active');
       if (err) return fail(500, { error: err.message });
-      await syncPrefsFromPlan(supabase, brand.id, incoming);
+      try {
+        await syncPrefsFromPlan(supabase, brand.id, incoming);
+      } catch (e) {
+        return fail(500, { error: e instanceof Error ? e.message : 'prefs_sync_failed' });
+      }
       return { saved: true };
     });
   },
@@ -289,9 +293,13 @@ export const actions: Actions = {
     return withBrand(supabase, params.brand, async (brand) => {
       const data = await request.formData();
       const planId = String(data.get('plan_id') ?? '');
-      const activated = await activatePlan(supabase, brand.id, planId, brand.timezone);
-      if (!activated) return fail(404, { error: 'plan_not_found' });
-      return { approved: true };
+      try {
+        const activated = await activatePlan(supabase, brand.id, planId, brand.timezone);
+        if (!activated) return fail(404, { error: 'plan_not_found' });
+        return { approved: true };
+      } catch (e) {
+        return fail(500, { error: e instanceof Error ? e.message : 'approve_failed' });
+      }
     });
   },
 

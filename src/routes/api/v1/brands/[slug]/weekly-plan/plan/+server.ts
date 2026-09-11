@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
+import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 import { normalizeContentFormat } from '$lib/content-formats';
 
 export const POST: RequestHandler = async ({ request, params }) => {
@@ -10,6 +10,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
+
+  const gate = await gateAiAction(brand, apiKey);
+  if (gate) return gate;
 
   const body = await request.json();
   const week_index = body.week_index ?? body.week;

@@ -899,7 +899,11 @@ Return JSON.`;
 export async function syncPrefsFromPlan(supabase: SupabaseClient, brandId: string, plan: EditorialPlan): Promise<void> {
   const { data: brand } = await supabase.from('brands').select('content_prefs').eq('id', brandId).maybeSingle();
   const existing = (brand?.content_prefs as ContentPrefs) ?? {};
-  await supabase.from('brands').update({ content_prefs: prefsFromPlan(plan, existing) }).eq('id', brandId);
+  const { error } = await supabase
+    .from('brands')
+    .update({ content_prefs: prefsFromPlan(plan, existing) })
+    .eq('id', brandId);
+  if (error) throw new Error(`content_prefs sync failed: ${error.message}`);
 }
 
 export type ProposalSaved = { ok: true; id: string } | { ok: false; error: 'insert_failed'; message: string };
@@ -961,17 +965,20 @@ export async function activatePlan(
   };
   const weeks = stampWeekStarts(plan.weeks, tz, now);
 
-  // Supersede whatever is active first — the partial unique index allows only one 'active' row.
-  await supabase
+  const { error: supersedeError } = await supabase
     .from('editorial_plans')
     .update({ status: 'superseded', updated_at: new Date().toISOString() })
     .eq('brand_id', brandId)
     .eq('status', 'active')
     .neq('id', planId);
-  await supabase
+  if (supersedeError) throw new Error(`supersede failed: ${supersedeError.message}`);
+
+  const { error: activateError } = await supabase
     .from('editorial_plans')
     .update({ status: 'active', weeks, activated_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', planId);
+  if (activateError) throw new Error(`activation failed: ${activateError.message}`);
+
   const activated = { ...plan, weeks, status: 'active' };
   await syncPrefsFromPlan(supabase, brandId, activated);
   return activated;

@@ -23,7 +23,7 @@ import {
 } from '$lib/server/brand-media';
 import { mediaUrl } from '$lib/media-url';
 
-const IMAGE_MAX_BYTES = 12_000_000;
+export const IMAGE_MAX_BYTES = 12_000_000;
 /**
  * Il download è bufferizzato, quindi questo tetto è un vincolo reale sulla memoria della
  * funzione, non una preferenza: una clip social sta sotto, un master no.

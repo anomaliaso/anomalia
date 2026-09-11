@@ -1,7 +1,7 @@
 import { swallow } from '$lib/server/swallow';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { authenticate, loadBrandForUser } from '$lib/server/cli-auth';
+import { authenticate, loadBrandForUser, gateAiAction } from '$lib/server/cli-auth';
 import { cadenceAllowed, loadActivePlan, revisePlan } from '$lib/server/editorial-plan';
 import { activeGtmBrief } from '$lib/server/gtm';
 import { localeLanguageName } from '$lib/i18n/locale';
@@ -13,6 +13,9 @@ export const POST: RequestHandler = async ({ request, params }) => {
 
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
+
+  const gate = await gateAiAction(brand, apiKey);
+  if (gate) return gate;
 
   const { feedback } = await request.json();
   if (!feedback) return json({ error: 'feedback is required' }, { status: 400 });

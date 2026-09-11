@@ -18,7 +18,7 @@ vi.mock('$lib/server/content-preview', () => ({
   loadBrandVisualContext: (...args: unknown[]) => loadBrandVisualContext(...args)
 }));
 vi.mock('$lib/server/brand-media', () => ({
-  loadLibraryMediaParts: async () => [],
+  loadLibraryMediaPart: async () => ({ ok: false, reason: 'fetch_failed' }),
   insertBrandMedia: (...args: unknown[]) => insertBrandMedia(...args),
   storeBrandMediaBytes: (...args: unknown[]) => storeBrandMediaBytes(...args),
   probeImageDimensions: async () => ({ width: 1080, height: 1080 })

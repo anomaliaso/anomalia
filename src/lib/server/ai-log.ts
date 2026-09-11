@@ -187,6 +187,33 @@ export function isCreditExempt(): boolean {
 }
 
 /**
+ * QUALE TOOL HA CAUSATO LA SPESA. `ai_calls.label` dice quale funzione ha parlato al modello, e le
+ * etichette più care (`planStrategy`, `reviewSeeds`, `reviewCaptions`) le raggiungono tre
+ * superfici diverse — l'autopilot, la chat in-app e gli agenti esterni — quindi il totale di
+ * un'etichetta è un tetto, non un'attribuzione.
+ *
+ * Uno scope suo e non un campo dentro `BrandLogContext`: una rotta che rientra in
+ * `withBrandContext` per conto proprio ricomincia quel contesto da capo, e si porterebbe via il
+ * nome del tool senza che niente lo dica.
+ */
+const toolStorage = new AsyncLocalStorage<string>();
+
+/** Senza un tool non si apre nessuno scope: la riga resta com'era, e `context` non viene toccato. */
+export function withToolContext<T>(tool: string | null | undefined, fn: () => T): T {
+  return tool ? toolStorage.run(tool, fn) : fn();
+}
+
+/**
+ * Prefisso perché `context` è già una colonna di etichette prefissate (`music:pro:30s`,
+ * `sandbox:render:12s`): «quanto è costato ogni tool» si chiede con `context like 'tool:%'`, senza
+ * una seconda colonna e senza una migration che il deploy non esegue.
+ */
+function toolTag(): string | undefined {
+  const tool = toolStorage.getStore();
+  return tool ? `tool:${tool}` : undefined;
+}
+
+/**
  * Missing context is LOGGED, not thrown: pre-brand flows (onboarding website analysis) have no
  * brand yet, and an unattributed row (`brand_id is null` finds the gaps) beats a 500 at the user.
  */
@@ -408,6 +435,8 @@ export function logAiCall(entry: AiCallLog): void {
     // aprirebbe due risposte alla stessa domanda. Nessun brand: la riga se la porta scritta.
     const orgId = brandId ? null : getOrgContext();
     const planFromAls = getBrandPlanContext();
+    // Letto QUI, sincrono, come il brand: dopo il primo await lo scope è di chi ha aspettato.
+    const context = entry.context ?? toolTag() ?? null;
     void (async () => {
       const plan =
         planFromAls !== undefined ? planFromAls : brandId ? await resolveBrandPlan(brandId) : null;
@@ -439,7 +468,9 @@ export function logAiCall(entry: AiCallLog): void {
         org_id: orgId,
         user_id: entry.userId ?? null,
         thread_id: entry.threadId ?? null,
-        context: entry.context ?? null
+        // Il call site vince: sa più di noi su cosa fosse quella chiamata. Il tool riempie il
+        // silenzio, che è dove oggi la domanda «chi l'ha causata» non ha risposta.
+        context
       });
       if (error) console.warn('[ai-log] insert failed:', error.message);
     })();

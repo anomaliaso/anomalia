@@ -63,6 +63,14 @@ const CASES = [
   { what: 'products.images non array', sql: product('images', `'{}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'products.kind oltre il tetto', sql: product('kind', `repeat('x', 201)`), code: CHECK_VIOLATION },
   { what: 'products.description oltre il tetto', sql: product('description', `repeat('x', 50001)`), code: CHECK_VIOLATION },
+  // UNA riga malformata rifiuta l'INTERO lotto: `insert([...])` di supabase-js e` un solo INSERT,
+  // e un INSERT in Postgres e` atomico. E` il fatto che trasforma «un prodotto senza schema
+  // nell'URL» in «zero prodotti su quaranta», e non si deduce leggendo il client.
+  {
+    what: 'products: una riga malformata rifiuta tutto il lotto',
+    sql: `insert into public.products (brand_id, title, url) values ($1, 'Moka', 'https://shop.test/moka'), ($1, 'Senza schema', 'shop.test/rotto')`,
+    code: CHECK_VIOLATION
+  },
 
   { what: 'brand_kit.favicon_url non http ne data', sql: kit('favicon_url', `'nope'`), code: CHECK_VIOLATION },
   { what: 'brand_kit.source_url e un handle, non un sito', sql: kit('source_url', `'Mariopuggelli1939'`), code: CHECK_VIOLATION },
@@ -93,6 +101,13 @@ const CASES = [
   { what: 'brand_articles.version_seq negativo', sql: article('version_seq', '-1'), code: CHECK_VIOLATION },
   { what: 'brand_articles.cover_image non http', sql: article('cover_image', `'nope'`), code: CHECK_VIOLATION },
   { what: 'brand_articles.meta_title oltre il tetto', sql: article('meta_title', `repeat('x', 301)`), code: CHECK_VIOLATION },
+
+  {
+    what: 'editorial_plans: due piani attivi per lo stesso brand',
+    sql: `insert into public.editorial_plans (brand_id, status) select $1, 'active' from generate_series(1, 2)`,
+    code: UNIQUE_VIOLATION
+  },
+  { what: 'editorial_plans.status fuori vocabolario', sql: `insert into public.editorial_plans (brand_id, status) values ($1, 'nope')`, code: CHECK_VIOLATION },
 
   { what: 'content_plans.status fuori vocabolario', sql: plan('status', `'nope'`), code: CHECK_VIOLATION },
   { what: 'content_plans.source fuori vocabolario', sql: plan('source', `'nope'`), code: CHECK_VIOLATION },
