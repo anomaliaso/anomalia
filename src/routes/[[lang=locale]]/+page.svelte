@@ -11,6 +11,7 @@
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
+  import HeroParallax from '$lib/components/HeroParallax.svelte';
   import ConnectClaudeDialog from '$lib/components/ConnectClaudeDialog.svelte';
   import { marketingStartHref } from '$lib/start-href';
   import '$lib/styles/landing.css';
@@ -85,13 +86,11 @@
 
   <!-- ============ HERO (centered, grow-style) ============ -->
   <section class="gr-hero">
+    <HeroParallax />
     <div class="wrap gr-hero-inner">
       <!-- Hero is paint-critical: no .reveal, no opacity:0, no letter-stagger on first paint. -->
       <span class="eyebrow">{$_('landing.hero.eyebrow')}</span>
-      <h1 class="gr-h1">
-        {$_('landing.hero.titleLead')}
-        <span class="gr-accent">{$_('landing.hero.titleEm')}</span>
-      </h1>
+      <h1 class="gr-h1">{$_('landing.hero.titleLead')}</h1>
       <p class="gr-sub">{$_('landing.hero.subhead')}</p>
       <div class="gr-actions">
         <HeroUrlCta loggedIn={!!data.session} {waitlistActive} />

@@ -40,9 +40,9 @@
     },
     "hero": {
       "eyebrow": "Open source · Cloud o self-hosted",
-      "titleLead": "La tua agenzia di marketing ora è",
+      "titleLead": "La tua AI è la tua agenzia.",
       "titleMain": "",
-      "titleEm": "Claude, ChatGPT o Cursor.",
+      "titleEm": "",
       "titleCalm": "",
       "phrases": [
         "ovunque cercano quello che vendi.",
@@ -51,7 +51,7 @@
         "dove conta esserci davvero.",
         "dove ti trovano prima dei concorrenti."
       ],
-      "subhead": "Social organico, crescita del sito, ads — li fa l’AI che paghi già. Niente esce finché non lo approvi.",
+      "subhead": "Dalle il tuo sito. Pianifica, scrive, disegna e pubblica — tu approvi.",
       "seeHow": "Scopri come funziona",
       "note": "Oppure chiedi alla tua AI di iniziare a usare Anomalia",
       "ctaSecondary": "Prenota una call",
