@@ -7,6 +7,9 @@ export const RASTER_JPEG_MAX_EDGE = 4096;
 /** Ceiling for one image handed to a model inline. */
 export const IMAGE_PART_MAX_BYTES = 6_000_000;
 
+/** Longest edge a source is shrunk to before a model sees it. */
+export const IMAGE_PART_MAX_EDGE = 2048;
+
 /** File pickers that take photos (includes HEIC so desktop dialogs show iPhone files). */
 export const RASTER_IMAGE_ACCEPT = 'image/*,image/heic,image/heif,.heic,.heif';
 
