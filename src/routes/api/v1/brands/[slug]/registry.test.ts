@@ -119,7 +119,7 @@ describe('BRAND_ENDPOINTS', () => {
  * rotta resta viva, raggiungibile e senza più nessun posto dove è descritta — nessun tool, nessun
  * contratto, nessun rosso.
  *
- * Una volta è una curiosità. Le letture che stanno rientrando dentro `query` sono venti, e venti
+ * Una volta è una curiosità. Le letture rientrate dentro `query` sono trentatré, e trentatré
  * rotte che nessuno può elencare sono il modo in cui il percorso a chiave API diventa in silenzio
  * l'unica strada per un terzo del prodotto — perché `query` la chiave API la RIFIUTA
  * (`createQueryTool` pretende un client RLS-scoped, e `authenticate` sul percorso a chiave dà la
@@ -131,36 +131,69 @@ describe('BRAND_ENDPOINTS', () => {
  * la domanda giusta davanti — questa rotta cos'è adesso, se non è più un tool? Superficie REST
  * voluta, o codice morto da cancellare.
  */
+/** La rotta alla radice del brand: non ha un segmento da nominare, ma va dichiarata come le altre. */
+const BRAND_ROOT = '.';
+
 const REST_ONLY = [
+  BRAND_ROOT,
   'agent-sessions',
   'agent-sessions/[id]',
+  'analytics',
   'api-keys',
   'api-keys/[id]',
   'articles',
   'articles/[id]',
+  'backlinks',
+  'calendar',
   'connections',
   'connections/[id]',
   'connections/[id]/complete',
   'connections/catalog',
+  'editorial-plan',
   'editorial-plan/update',
+  'goals',
+  'gtm',
   'gtm/update',
+  'ideas',
+  'knowledge',
   'library/scan',
+  'market/field',
+  // `generate_media` era la porta vecchia: inoltrava a `generate_image` e `generate_video` e la
+  // sua stessa descrizione diceva di preferirli. Il tool esce, la rotta resta per chi l'ha cablata.
+  'media/generate',
+  // `create_product` e `update_person` erano un insert e un update di una riga e nient'altro:
+  // `insert_row` e `update_row` li fanno con la RLS di chi chiama. I tool escono, le rotte
+  // restano. Le altre due — `update_product` e `update_competitor` — non compaiono qui perché
+  // le loro cartelle le rivendica ancora la cancellazione che ci abita accanto.
+  'people/[id]',
   'posts/[id]/approve',
+  'posts/[id]/media',
   'posts/[id]/publish',
   'posts/[id]/revoke',
   'posts/approve-all',
   'products',
   'publishing',
+  'ranks',
   'rubrics',
   'rubrics/approve',
   'rubrics/propose',
+  'social/accounts',
+  'studio',
   'studio/memory',
   'studio/memory/[id]',
+  'studio/products',
   'tick',
+  'voice',
+  'web',
+  'web/audits',
+  'web/audits/citations',
+  'web/audits/findings',
+  'web/fixes',
   'webhook',
+  'weekly-plan',
   'weekly-plan/produce',
   'weekly-plan/render',
-  'weekly-plan/save'
+  'weekly-plan/save',
 ];
 
 const BRAND_ROUTES = 'src/routes/api/v1/brands/[slug]';
@@ -183,7 +216,9 @@ function serverFilesUnder(dir: string, sub = BRAND_ROUTES): string[] {
 
 describe('le rotte sotto [slug]', () => {
   const claimed = new Set(BRAND_ENDPOINTS.map(routeFile));
-  const declared = new Set(REST_ONLY.map((r) => `${BRAND_ROUTES}/${r}/+server.ts`));
+  const declared = new Set(
+    REST_ONLY.map((r) => (r === BRAND_ROOT ? `${BRAND_ROUTES}/+server.ts` : `${BRAND_ROUTES}/${r}/+server.ts`))
+  );
   const onDisk = serverFilesUnder(join(REPO_ROOT, BRAND_ROUTES));
 
   it('o le descrive un contratto, o si dichiarano', () => {

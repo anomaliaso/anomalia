@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { readArticle, updateArticle } from '$lib/server/article-editing';
-import { GET_ARTICLE, UPDATE_ARTICLE, statusForFailure } from '@anomalia/api-contracts';
+import { GET_ARTICLE_READ, UPDATE_ARTICLE, statusForFailure } from '@anomalia/api-contracts';
 
 const DEFAULT_TIMEZONE = 'Europe/Rome';
 
@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
 
-  const parsed = GET_ARTICLE.input.safeParse(Object.fromEntries(url.searchParams));
+  const parsed = GET_ARTICLE_READ.input.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
     return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }
@@ -22,7 +22,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
   const timezone = (brand.timezone as string) ?? DEFAULT_TIMEZONE;
   const article = await readArticle(supabase, brand.id, parsed.data.id, timezone);
   if (!article) {
-    return json({ error: 'article_not_found' }, { status: statusForFailure(GET_ARTICLE, 'article_not_found') });
+    return json({ error: 'article_not_found' }, { status: statusForFailure(GET_ARTICLE_READ, 'article_not_found') });
   }
 
   return json({ article });

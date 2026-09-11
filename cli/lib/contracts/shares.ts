@@ -65,19 +65,15 @@ export const CREATE_SHARE = {
   destructive: false
 } satisfies BrandEndpoint;
 
-export const LIST_SHARES = {
-  tool: 'list_shares',
-  title: 'List public client links',
-  description:
-    'Public links created for this brand, newest first, with their state. The tokens are not here: ' +
-    'only their hashes are stored, so a link that was not saved at creation can only be replaced.',
-  method: 'GET',
-  pathUnderBrand: '/shares',
-  input: z.object({}).strict(),
+/**
+ * La rotta REST resta e continua a validare con questo schema; il tool MCP non c'e' piu:
+ * la lettura la serve `query`. Qui vive solo cio che serve alla rotta.
+ */
+export const LIST_SHARES_READ = {
   output: z.object({ shares: z.array(SharedViewRow) }),
-  failures: [{ error: 'shares_not_migrated', status: 500 }],
-  destructive: false
-} satisfies BrandEndpoint;
+  input: z.object({}).strict(),
+  failures: [{ error: 'shares_not_migrated', status: 500 }]
+} as const;
 
 export const REVOKE_SHARE = {
   tool: 'revoke_share',

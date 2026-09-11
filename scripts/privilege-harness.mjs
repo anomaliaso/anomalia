@@ -33,7 +33,46 @@ const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 const MIGRATIONS_DIR = join(fileURLToPath(new URL('..', import.meta.url)), 'supabase/migrations');
 const REGISTRY_MIGRATION = '20260905210000_self_write_columns.sql';
-const FIX_MIGRATIONS = [REGISTRY_MIGRATION, '20260905220000_secdef_run_and_spend_filters.sql'];
+const FIX_MIGRATIONS = [
+  REGISTRY_MIGRATION,
+  '20260905220000_secdef_run_and_spend_filters.sql',
+  '20260906120000_external_ids_one_tenant.sql'
+];
+
+const UNIQUE_VIOLATION = '23505';
+const CHECK_VIOLATION = '23514';
+
+/**
+ * Lo specchio del registro che vive in `20260906120000_external_ids_one_tenant.sql`: la colonna che
+ * indirizza un sistema esterno, e la riga minima che serve a scriverla. Aggiungerne una qui è
+ * l'unico modo perché la domanda «e questo id, di chi è?» venga posta prima e non dopo.
+ */
+const EXTERNAL_IDS = [
+  {
+    table: 'brand_app_connections',
+    column: 'connected_account_id',
+    columns: 'brand_id, toolkit_slug, connected_account_id, kind',
+    values: "$1, 'GITHUB', $2, 'app'"
+  },
+  {
+    table: 'brand_knowledge_sources',
+    column: 'connected_account_id',
+    columns: 'brand_id, provider, connected_account_id, toolkit_slug',
+    values: "$1, 'notion', $2, 'NOTION'"
+  },
+  {
+    table: 'brand_triggers',
+    column: 'trigger_instance_id',
+    columns: 'brand_id, toolkit_slug, trigger_slug, trigger_instance_id',
+    values: "$1, 'GITHUB', 'GITHUB_PULL_REQUEST_EVENT', $2"
+  },
+  {
+    table: 'social_accounts',
+    column: 'zernio_account_id',
+    columns: 'brand_id, zernio_account_id',
+    values: '$1, $2'
+  }
+];
 
 /**
  * Lo specchio del registro che vive in `REGISTRY_MIGRATION`: `insert` e `update` sono le colonne
@@ -87,6 +126,7 @@ const RESTORED_GRANTS = [
   'public.agent_kit_wait_for_approval(uuid, text, text, text, jsonb, text, text, jsonb, jsonb)'
 ];
 
+const FOREIGN_ID = 'ca_id_della_vittima';
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const OUTSIDER = '22222222-2222-4222-8222-222222222222';
 const SPENT_USD = 7.25;
@@ -184,7 +224,233 @@ async function seed(client) {
     [brandId, threadId, OWNER]
   );
 
-  return { orgId, brandId, runId };
+  const outsiderOrgId = await scalar(
+    client,
+    `insert into public.organizations (name, owner_id) values ('Harness Org 2', $1) returning id`,
+    [OUTSIDER]
+  );
+  const outsiderBrandId = await scalar(
+    client,
+    `insert into public.brands (org_id, name, slug) values ($1, 'Harness Brand 2', 'harness-brand-2') returning id`,
+    [outsiderOrgId]
+  );
+
+  for (const { table, columns, values } of EXTERNAL_IDS) {
+    await client.query(`insert into public.${table} (${columns}) values (${values})`, [brandId, FOREIGN_ID]);
+  }
+
+  await client.query(
+    `insert into public.brand_webhooks (brand_id, url, secret) values ($1, 'https://hooks.vittima.test/x', 'whsec_v')`,
+    [brandId]
+  );
+
+  return { orgId, brandId, runId, outsiderBrandId };
+}
+
+/**
+ * La RLS protegge la riga, non il valore dentro la riga. Un id che indirizza un sistema esterno,
+ * scritto dall'utente e poi usato dal server con la credenziale che vale per tutti i clienti, è un
+ * confine che la RLS non vede: qui si prova a scrivere l'id della vittima nella propria riga.
+ */
+async function externalIdFacts(client, outsiderBrandId) {
+  const facts = [];
+
+  await becomes(client, 'authenticated', OUTSIDER);
+
+  for (const { table, column, columns, values } of EXTERNAL_IDS) {
+    const stolen = await attempt(
+      client,
+      `insert into public.${table} (${columns}) values (${values})`,
+      [outsiderBrandId, FOREIGN_ID]
+    );
+    facts.push({
+      what: `${table}.${column}: l'id di un altro brand non entra in una riga propria`,
+      ok: stolen.code === UNIQUE_VIOLATION,
+      got: stolen.accepted ? 'accettato' : stolen.code
+    });
+  }
+
+  const own = await attempt(
+    client,
+    `insert into public.brand_app_connections (brand_id, toolkit_slug, connected_account_id, kind)
+     values ($1, 'NOTION', 'ca_id_proprio', 'app')`,
+    [outsiderBrandId]
+  );
+  facts.push({
+    what: 'una connessione propria si salva come prima',
+    ok: own.accepted,
+    got: own.accepted ? 'accettata' : own.code
+  });
+
+  await becomesOwner(client);
+
+  return facts;
+}
+
+/**
+ * Il registro generato da cui `insert_row`/`update_row` pescano le loro spiegazioni, confrontato
+ * col CATALOGO VERO. Se divergono, il tool non sbaglia una scrittura: dice al modello «questa
+ * colonna la puoi scrivere» quando non la può scrivere, ed è un rifiuto che nessun giro successivo
+ * risolve. Un registro generato dalle migrazioni e mai confrontato col database è una speranza
+ * scritta in TypeScript.
+ */
+function generatedConstant(source, name) {
+  // `= {`, non la prima graffa: l'annotazione di tipo ne contiene una sua
+  // (`Record<string, { insert: string[] }>`), e chi parte da lì legge il tipo invece del valore.
+  const start = source.indexOf(`export const ${name}`);
+  const open = source.indexOf('= {', start) + 2;
+  let depth = 0;
+
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}' && --depth === 0) return JSON.parse(source.slice(open, i + 1));
+  }
+
+  throw new Error(`${name} non si legge da write-rules.ts`);
+}
+
+async function writeRegistryFacts(client) {
+  const source = readFileSync(join(MIGRATIONS_DIR, '..', '..', 'packages/api-contracts/src/write-rules.ts'), 'utf8');
+  const checks = generatedConstant(source, 'TABLE_CHECKS');
+  const writable = generatedConstant(source, 'WRITABLE_COLUMNS');
+  const facts = [];
+
+  const { rows: real } = await client.query(
+    `select conname from pg_constraint where contype = 'c' and connamespace = 'public'::regnamespace`
+  );
+  const known = new Set(real.map((r) => r.conname));
+  const invented = Object.keys(checks).filter((name) => !known.has(name));
+  facts.push({
+    what: 'ogni vincolo che il registro spiega esiste davvero nel catalogo',
+    ok: invented.length === 0,
+    got: invented.length ? `inventati: ${invented.join(', ')}` : `${Object.keys(checks).length} nomi`
+  });
+
+  const { rows: grants } = await client.query(
+    `select table_name, lower(privilege_type) as privilege, column_name
+       from information_schema.column_privileges
+      where grantee = 'authenticated' and table_schema = 'public'
+        and privilege_type in ('INSERT', 'UPDATE')
+        and table_name in (select unnest($1::text[]))`,
+    [Object.keys(writable)]
+  );
+
+  for (const [table, declared] of Object.entries(writable)) {
+    for (const privilege of ['insert', 'update']) {
+      const actual = grants
+        .filter((g) => g.table_name === table && g.privilege === privilege)
+        .map((g) => g.column_name)
+        .sort();
+      const said = [...declared[privilege]].sort();
+      facts.push({
+        what: `${table}: le colonne ${privilege} che il registro dichiara sono quelle che il database concede`,
+        ok: actual.join(',') === said.join(','),
+        got: actual.join(',') === said.join(',') ? said.length : `db [${actual}] vs registro [${said}]`
+      });
+    }
+  }
+
+  return facts;
+}
+
+/**
+ * LA SEMANTICA SU CUI POGGIA `update_row`, PROVATA INVECE CHE DATA PER BUONA. `update_brand_kit`
+ * mandava tutte le colonne con `?? null`, quindi `{category: "bakery"}` scriveva NULL sopra ciò che
+ * il brand dice di sé, del suo pubblico e del suo stile — con `ok: true` e nessuno schermo. Un
+ * update parziale tocca solo le colonne inviate: qui si guarda che le altre siano ancora lì.
+ */
+async function partialUpdateFacts(client, brandId) {
+  const facts = [];
+
+  await client.query(
+    `insert into public.brand_kit (brand_id, category, about, target_audience, brand_style)
+     values ($1, 'cafe', 'Chi siamo', 'Chi ci compra', 'Come parliamo')
+     on conflict (brand_id) do update set category = excluded.category, about = excluded.about,
+       target_audience = excluded.target_audience, brand_style = excluded.brand_style`,
+    [brandId]
+  );
+
+  await becomes(client, 'authenticated', OWNER);
+  const partial = await attempt(client, `update public.brand_kit set category = 'bakery' where brand_id = $1`, [
+    brandId
+  ]);
+  await becomesOwner(client);
+
+  const { rows } = await client.query(
+    'select category, about, target_audience, brand_style from public.brand_kit where brand_id = $1',
+    [brandId]
+  );
+  const row = rows[0] ?? {};
+
+  facts.push({
+    what: 'un update parziale non azzera le colonne che non ha nominato',
+    ok:
+      partial.accepted &&
+      row.category === 'bakery' &&
+      row.about === 'Chi siamo' &&
+      row.target_audience === 'Chi ci compra' &&
+      row.brand_style === 'Come parliamo',
+    got: partial.accepted ? JSON.stringify(row) : partial.code
+  });
+
+  await becomes(client, 'authenticated', OWNER);
+  const badUrl = await attempt(
+    client,
+    `insert into public.products (brand_id, title, url) values ($1, 'Espresso', 'example.com')`,
+    [brandId]
+  );
+  await becomesOwner(client);
+
+  facts.push({
+    what: 'il CHECK che il registro spiega è quello che morde davvero',
+    ok: badUrl.code === CHECK_VIOLATION && badUrl.message.includes('products_url_check'),
+    got: badUrl.accepted ? 'accettato' : `${badUrl.code} ${badUrl.message.slice(0, 60)}`
+  });
+
+  return facts;
+}
+
+/**
+ * La coda delle consegne la scrivono solo l'ingress di Composio e il cron, col service role. Un
+ * `insert` da `authenticated` è una consegna su ordinazione, e con `webhook_id` scelto è la firma
+ * di un altro brand.
+ */
+async function deliveryQueueFacts(client, brandId, outsiderBrandId) {
+  const facts = [];
+
+  const webhookId = await scalar(client, 'select id from public.brand_webhooks where brand_id = $1', [brandId]);
+
+  await becomes(client, 'authenticated', OUTSIDER);
+
+  const forged = await attempt(
+    client,
+    `insert into public.webhook_deliveries (brand_id, webhook_id, event_id, trigger_slug, payload)
+     values ($1, $2, 'msg_finto', 'GITHUB_PULL_REQUEST_EVENT', '{}'::jsonb)`,
+    [outsiderBrandId, webhookId]
+  );
+  facts.push({
+    what: 'authenticated non mette in coda una consegna',
+    ok: forged.code === INSUFFICIENT_PRIVILEGE,
+    got: forged.accepted ? 'accettata' : forged.code
+  });
+
+  await becomesOwner(client);
+  await becomes(client, 'service_role', OWNER);
+  const real = await attempt(
+    client,
+    `insert into public.webhook_deliveries (brand_id, webhook_id, event_id, trigger_slug, payload)
+     values ($1, $2, 'msg_vero', 'GITHUB_PULL_REQUEST_EVENT', '{}'::jsonb)`,
+    [brandId, webhookId]
+  );
+  facts.push({
+    what: 'il service role mette in coda come prima',
+    ok: real.accepted,
+    got: real.accepted ? 'accettata' : real.code
+  });
+
+  await becomesOwner(client);
+
+  return facts;
 }
 
 async function billingFacts(client, orgId, brandId) {
@@ -515,12 +781,16 @@ async function main() {
   try {
     await applyFixes(client);
 
-    const { orgId, brandId, runId } = await seed(client);
+    const { orgId, brandId, runId, outsiderBrandId } = await seed(client);
 
     facts = facts.concat(await profileFacts(client));
     facts = facts.concat(await billingFacts(client, orgId, brandId));
     facts = facts.concat(await registryFacts(client));
     facts = facts.concat(await grantFacts(client));
+    facts = facts.concat(await externalIdFacts(client, outsiderBrandId));
+    facts = facts.concat(await deliveryQueueFacts(client, brandId, outsiderBrandId));
+    facts = facts.concat(await writeRegistryFacts(client));
+    facts = facts.concat(await partialUpdateFacts(client, brandId));
 
     for (const signature of RESTORED_GRANTS) {
       await client.query(`grant execute on function ${signature} to authenticated`);

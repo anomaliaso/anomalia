@@ -72,67 +72,19 @@ const BlogConfig = z.object({
   analytics: z.array(z.object({ provider: z.string(), id: z.string() }))
 });
 
-export const GET_BLOG_SETTINGS = {
-  tool: 'get_blog_settings',
-  title: 'Blog settings',
-  description:
-    'How the brand’s blog looks and how it writes: the public site’s name, colour, font and ' +
-    'layout, the style brief the AI follows, how many articles a week it produces, the ' +
-    'languages, and the categories, tags and authors an article can be filed under. Read it ' +
-    'before set_blog_settings and before add_blog_term — it carries the fonts, layouts and ' +
-    'locales that are accepted, and the plan’s ceiling on articles per week and on extra ' +
-    'languages.',
-  method: 'GET',
-  pathUnderBrand: '/settings/blog',
-  input: z.object({}).strict(),
-  output: z.object({
-    brand: z.string(),
-    plan: z.string().nullable(),
-    config: BlogConfig,
-    limits: z.object({
-      articles_per_week_max: z.number(),
-      translation_languages: z.number(),
-      custom_domain: z.boolean()
-    }),
-    choices: z.object({
-      fonts: z.array(z.string()),
-      layouts: z.array(z.string()),
-      locales: z.array(z.string())
-    }),
-    categories: z.array(
-      z.object({ id: z.string(), name: z.string(), slug: z.string(), description: z.string().nullable() })
-    ),
-    tags: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
-    authors: z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        slug: z.string(),
-        role: z.string().nullable(),
-        bio: z.string().nullable(),
-        avatar_url: z.string().nullable()
-      })
-    )
-  }),
-  failures: [],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SET_BLOG_SETTINGS = {
   tool: 'set_blog_settings',
   title: 'Change the blog settings',
   description:
-    'Change how the blog looks and how it writes. Only the fields you send change; every other ' +
-    'one keeps its value. `articles_per_week` is CLAMPED to the plan’s ceiling rather than ' +
-    'refused, and the answer says what was actually saved — read it back instead of assuming ' +
-    'your number was taken. `locales`, `navbar_links` and `analytics` replace their whole list. ' +
-    'Turning `enabled` off takes the public blog down; it deletes no article. The blog icon and an ' +
-    'author’s avatar are images and cannot be set here. `analytics` takes a CLOSED list of ' +
-    'providers with their measurement id — there is no field for arbitrary JavaScript, and asking ' +
-    'for one is refused: a script tag here would run on every visitor’s page. Those trackers load ' +
-    'ONLY on a verified custom domain and ONLY after the visitor accepts cookies; on the default ' +
-    '/blog/<slug> address they are stored and never emitted, because that address is Anomalia’s ' +
-    'own origin. Calls no model and spends no credits.',
+    'Change how the blog looks and how it writes. Only the fields you send change. ' +
+    '`articles_per_week` is CLAMPED to the plan\'s ceiling rather than refused, and the answer ' +
+    'says what was actually saved — read it back instead of assuming your number was taken. ' +
+    '`locales`, `navbar_links` and `analytics` replace their whole list. Turning `enabled` off ' +
+    'takes the public blog down; it deletes no article. The blog icon and an author\'s avatar are ' +
+    'images and cannot be set here. `analytics` takes a CLOSED list of providers with their ' +
+    'measurement id — there is no field for arbitrary JavaScript, and asking for one is refused: ' +
+    'a script tag here would run on every visitor\'s page. Those trackers load ONLY on a verified ' +
+    'custom domain and ONLY after the visitor accepts cookies. Free.',
   method: 'PUT',
   pathUnderBrand: '/settings/blog',
   input: z

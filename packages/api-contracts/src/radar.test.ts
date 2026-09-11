@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADD_RADAR_SOURCE,
-  GET_RADAR,
   RADAR_PRO_SOURCE_KINDS,
   RADAR_SOURCE_KINDS,
   REMOVE_RADAR_SOURCE,
@@ -9,7 +8,7 @@ import {
 } from './radar';
 import { BRAND_ENDPOINTS, statusForFailure } from './index';
 
-const ALL = [GET_RADAR, SET_RADAR_PLATFORM, ADD_RADAR_SOURCE, REMOVE_RADAR_SOURCE];
+const ALL = [SET_RADAR_PLATFORM, ADD_RADAR_SOURCE, REMOVE_RADAR_SOURCE];
 
 describe('il Radar come contratto', () => {
   it('sta tutto nel registry, o nessun agente lo vede', () => {
@@ -62,18 +61,5 @@ describe('il Radar come contratto', () => {
     // Non c'è un id da ricordare: `(kind, value)` è già la chiave unica sul database, ed è
     // l'unica cosa che un agente ha in mano subito dopo aver aggiunto una fonte.
     expect(Object.keys(REMOVE_RADAR_SOURCE.input.shape).sort()).toEqual(['kind', 'value']);
-  });
-
-  it('la lettura dice cosa il piano permette, non solo cosa è già configurato', () => {
-    const parsed = GET_RADAR.output.safeParse({
-      brand: 'demo',
-      plan: 'starter',
-      platforms: [{ platform: 'threads', enabled: false, plan_locked: true }],
-      sources: [{ id: 's1', kind: 'subreddit', value: 'coffee', lang: 'auto', active: true }],
-      allowed_kinds: ['gnews_query', 'rss', 'subreddit', 'reddit_query'],
-      source_limit: 10,
-      sources_used: 1
-    });
-    expect(parsed.success).toBe(true);
   });
 });

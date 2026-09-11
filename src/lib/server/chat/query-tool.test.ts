@@ -7,6 +7,7 @@ import {
   NO_SESSION_ERROR,
   QUERY_MAX_CHARS,
   QUERY_MAX_VALUE_CHARS,
+  QUERY_MAX_DOC_CHARS,
   QUERY_MAX_ROWS,
   QUERY_TABLE_LIST
 } from './query-tool';
@@ -19,6 +20,47 @@ import { logAiCall } from '$lib/server/ai-log';
  * Un client finto che si comporta come PostgREST: registra COSA gli è stato chiesto (per poter
  * dimostrare che certe chiamate non partono mai) e restituisce quel che gli si dice.
  */
+type Call = {
+  table: string;
+  cols: string;
+  countMode?: string;
+  filters: string[][];
+  orders: Array<[string, { ascending?: boolean; nullsFirst?: boolean } | undefined]>;
+  range?: [number, number];
+  limit?: number;
+};
+
+const newCall = (table: string, cols: string, countMode?: string): Call => ({
+  table,
+  cols,
+  countMode,
+  filters: [],
+  orders: []
+});
+
+/** Registra ogni pezzo della richiesta, così un test può dimostrare cosa è arrivato al filo. */
+function recordingBuilder(rec: Call, answer: () => Promise<unknown>): Record<string, unknown> {
+  const b: Record<string, unknown> = {};
+  b.filter = (c: string, op: string, v: string) => {
+    rec.filters.push([c, op, v]);
+    return b;
+  };
+  b.order = (c: string, o?: { ascending?: boolean; nullsFirst?: boolean }) => {
+    rec.orders.push([c, o]);
+    return b;
+  };
+  b.range = (from: number, to: number) => {
+    rec.range = [from, to];
+    return b;
+  };
+  b.limit = (n: number) => {
+    rec.limit = n;
+    return b;
+  };
+  b.abortSignal = answer;
+  return b;
+}
+
 function fakeClient(opts: {
   authority?: 'user' | 'service';
   session?: { access_token: string } | null;
@@ -26,27 +68,17 @@ function fakeClient(opts: {
   count?: number;
   error?: { code: string; message: string; hint?: string | null; details?: string | null };
 }) {
-  const calls: Array<{ table: string; cols: string; filters: string[][]; limit?: number }> = [];
-  const builder = (table: string, cols: string) => {
-    const rec = { table, cols, filters: [] as string[][], limit: undefined as number | undefined };
+  const calls: Array<Call> = [];
+  const builder = (table: string, cols: string, countMode?: string) => {
+    const rec = newCall(table, cols, countMode);
     calls.push(rec);
-    const b: Record<string, unknown> = {};
-    b.filter = (c: string, op: string, v: string) => {
-      rec.filters.push([c, op, v]);
-      return b;
-    };
-    b.order = () => b;
-    b.limit = (n: number) => {
-      rec.limit = n;
-      return b;
-    };
-    b.abortSignal = () =>
-      Promise.resolve({ data: opts.error ? null : (opts.rows ?? []), error: opts.error ?? null, count: opts.count ?? null });
-    return b;
+    return recordingBuilder(rec, () =>
+      Promise.resolve({ data: opts.error ? null : (opts.rows ?? []), error: opts.error ?? null, count: opts.count ?? null })
+    );
   };
   const client = {
     auth: { getSession: async () => ({ data: { session: opts.session === undefined ? { access_token: 'jwt' } : opts.session } }) },
-    from: (table: string) => ({ select: (cols: string) => builder(table, cols) })
+    from: (table: string) => ({ select: (cols: string, o?: { count?: string }) => builder(table, cols, o?.count) })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
   // Il default è il client dell'utente, che è il caso di ogni test tranne quelli sul cancello:
@@ -104,7 +136,7 @@ describe('sola lettura: le scritture non sono rifiutate, sono inesprimibili', ()
       limit: 5
     });
     expect(out.rows).toEqual([{ id: 'p1' }]);
-    expect(calls[0]).toMatchObject({ table: 'posts', cols: 'id', limit: 5 });
+    expect(calls[0]).toMatchObject({ table: 'posts', cols: 'id', range: [0, 4] });
     expect(calls[0].filters).toEqual([['brand_id', 'eq', 'b1']]);
   });
 });
@@ -238,16 +270,18 @@ describe('i tetti sono dichiarati, mai silenziosi', () => {
   it('non si superano MAX_ROWS nemmeno chiedendolo', async () => {
     const { client, calls } = fakeClient({ rows: [], count: 0 });
     await run(client, { table: 'posts', limit: 9999 });
-    expect(calls[0].limit).toBe(QUERY_MAX_ROWS);
+    expect(calls[0].range).toEqual([0, QUERY_MAX_ROWS - 1]);
   });
 
   it('il taglio sui caratteri è per riga intera E viene dichiarato', async () => {
     // Ogni valore sta SOTTO il tetto per-valore (1.900 < 2.000): quello che morde qui è il tetto
     // per riga, e le due cose vanno viste separate o un test copre il buco dell'altro.
     const big = 'x'.repeat(1_900);
-    const { client } = fakeClient({ rows: Array.from({ length: 20 }, (_, i) => ({ id: i, body: big })), count: 20 });
-    const out = await run(client, { table: 'brand_documents' });
-    expect(out.returned).toBeLessThan(20);
+    // Quante bastino a sfondare il tetto qualunque esso sia: il numero si ricava, non si batte.
+    const troppe = Math.ceil(QUERY_MAX_CHARS / 1_900) + 5;
+    const { client } = fakeClient({ rows: Array.from({ length: troppe }, (_, i) => ({ id: i, body: big })), count: troppe });
+    const out = await run(client, { table: 'brand_documents', limit: troppe });
+    expect(out.returned).toBeLessThan(troppe);
     expect(JSON.stringify(out.rows).length).toBeLessThanOrEqual(QUERY_MAX_CHARS + 200);
     expect(out.limits).toContain(`Cut at ${QUERY_MAX_CHARS} chars`);
     // Righe intere: nessuna riga mutilata, e nessun valore toccato dal tetto per-valore.
@@ -268,7 +302,7 @@ describe('i tetti sono dichiarati, mai silenziosi', () => {
     expect(Object.keys(out.rows[0]).sort()).toEqual(['content', 'id', 'title']);
     // E il taglio è dichiarato PER NOME, o il modello crederebbe di avere il testo intero.
     expect(out.limits).toContain('content');
-    expect(out.limits).toContain(String(QUERY_MAX_VALUE_CHARS));
+    expect(out.limits).toContain(String(QUERY_MAX_DOC_CHARS));
     expect(out.limits).toMatch(/NOT seeing those fields in full/);
     expect(String(out.rows[0].content)).toContain('726007 chars total');
     // Il campo corto resta intatto: si taglia ciò che sfonda, non tutto.
@@ -310,9 +344,18 @@ describe("l'errore insegna", () => {
   it('colonna sbagliata e RLS negata portano entrambe un rimedio, non solo il messaggio SQL', () => {
     expect(explainDbError('42703', 'column x does not exist')).toMatch(/keys ARE the column list/);
     expect(explainDbError('42501', 'permission denied')).toMatch(/member of/);
-    expect(explainDbError('PGRST200', 'no relationship')).toMatch(/ONE table at a time/);
+    expect(explainDbError('PGRST200', 'no relationship')).toMatch(/foreign key/i);
   });
 });
+
+/**
+ * 2.000 → 3.000. `query` è ora la lettura del prodotto e non un ripiego: paginazione, conteggio
+ * esatto, negazione, embed e la regola sulle `columns` si spiegano QUI, dove il chiamante legge
+ * nel momento in cui gli serve. Il budget si alza perché il conto complessivo scende — le
+ * trentatré letture ritirate pesavano ~11.000 caratteri di descrizione, questa ne prende ~1.400.
+ * Se un giorno cresce senza portare via niente, questo numero è il posto dove ci si ferma.
+ */
+const DESCRIPTION_MAX_CHARS = 3_000;
 
 describe('scoperta dello schema', () => {
   it('senza tabella elenca le tabelle, e dichiara che la lista può invecchiare', async () => {
@@ -328,7 +371,7 @@ describe('scoperta dello schema', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const desc = (createQueryTool({ supabase: fakeClient({}).client, brandId: 'b1' }).query as any).description as string;
     expect(desc).not.toContain('brand_doc_chunks');
-    expect(desc.length).toBeLessThan(2_000);
+    expect(desc.length).toBeLessThan(DESCRIPTION_MAX_CHARS);
     // Ma dice come si scopre, e dichiara i tetti al modello.
     expect(desc).toMatch(/no `table`/);
     expect(desc).toContain(String(QUERY_MAX_ROWS));
@@ -411,32 +454,21 @@ describe('il confine del brand e imposto, non raccomandato', () => {
 function scriptedClient(
   script: Array<{ rows?: Array<Record<string, unknown>>; error?: { code: string; message: string } }>
 ) {
-  const calls: Array<{ table: string; cols: string; filters: string[][]; limit?: number }> = [];
+  const calls: Array<Call> = [];
   let i = 0;
-  const builder = (table: string, cols: string) => {
-    const rec = { table, cols, filters: [] as string[][], limit: undefined as number | undefined };
+  const builder = (table: string, cols: string, countMode?: string) => {
+    const rec = newCall(table, cols, countMode);
     calls.push(rec);
-    const b: Record<string, unknown> = {};
-    b.filter = (c: string, op: string, v: string) => {
-      rec.filters.push([c, op, v]);
-      return b;
-    };
-    b.order = () => b;
-    b.limit = (n: number) => {
-      rec.limit = n;
-      return b;
-    };
-    b.abortSignal = () => {
+    return recordingBuilder(rec, () => {
       const step = script[i++] ?? {};
       return Promise.resolve({ data: step.error ? null : (step.rows ?? []), error: step.error ?? null, count: null });
-    };
-    return b;
+    });
   };
   return {
     calls,
     client: markRlsScoped({
       auth: { getSession: async () => ({ data: { session: { access_token: 'jwt' } } }) },
-      from: (table: string) => ({ select: (cols: string) => builder(table, cols) })
+      from: (table: string) => ({ select: (cols: string, o?: { count?: string }) => builder(table, cols, o?.count) })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
   };
@@ -488,5 +520,142 @@ describe('una colonna inventata non brucia il giro', () => {
     expect(out.error).toBeUndefined();
     expect(out.rows).toHaveLength(1);
     expect(f.calls[1].filters.some((x) => x[0] === 'brand_id')).toBe(false);
+  });
+});
+
+/**
+ * Le capacità che rendono `query` la lettura del prodotto e non un ripiego. Ognuna esiste perché
+ * una lettura ritirata la richiedeva: senza, togliere quel tool sarebbe stato perdere una risposta.
+ */
+describe('`query` legge tutto quello che leggevano i tool ritirati', () => {
+  it('pagina: `offset` porta alla riga 51 di list_posts, che prima era irraggiungibile', async () => {
+    const { client, calls } = fakeClient({ rows: [{ id: 'p51' }], count: 120 });
+    const out = await run(client, { table: 'posts', columns: ['id'], limit: 50, offset: 50 });
+
+    expect(calls[0].range).toEqual([50, 99]);
+    expect(out.rows).toEqual([{ id: 'p51' }]);
+  });
+
+  it('conta esatto quando glielo chiedi: «quanti post in attesa» non è una stima', async () => {
+    const { client, calls } = fakeClient({ rows: [], count: 37 });
+    const out = await run(client, { table: 'posts', columns: ['id'], count: 'exact', limit: 1 });
+
+    expect(calls[0].countMode).toBe('exact');
+    expect(out.total).toBe(37);
+    expect(out.limits).not.toMatch(/estimate/i);
+  });
+
+  it('la stima resta il default: un conteggio esatto su una tabella enorme scade a 8s', async () => {
+    const { client, calls } = fakeClient({ rows: [{ id: 'p1' }], count: 9000 });
+    await run(client, { table: 'posts', columns: ['id'] });
+
+    expect(calls[0].countMode).toBe('estimated');
+  });
+
+  it('il troncamento NON è muto: dice quante righe ha tagliato e con che offset si prende il resto', async () => {
+    const wide = Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, caption: 'x'.repeat(3_000) }));
+    const { client } = fakeClient({ rows: wide, count: 40 });
+    const out = await run(client, { table: 'posts', columns: ['id', 'caption'], limit: 40 });
+
+    expect(out.returned).toBeLessThan(40);
+    expect(out.limits).toMatch(/offset/i);
+    expect(out.limits).toContain(String(out.returned));
+  });
+
+  it('una riga sola torna INTERA: un articolo si legge per riscriverlo, non per assaggiarlo', async () => {
+    const body = 'a'.repeat(QUERY_MAX_VALUE_CHARS * 3);
+    const { client } = fakeClient({ rows: [{ id: 'a1', body_md: body }], count: 1 });
+    const out = await run(client, { table: 'brand_articles', columns: ['id', 'body_md'], limit: 1 });
+
+    expect(out.rows[0].body_md).toBe(body);
+    expect(out.limits).not.toMatch(/Values cut/);
+  });
+
+  it('più righe: il tetto per valore torna a mordere, e dice in quale colonna', async () => {
+    const body = 'a'.repeat(QUERY_MAX_VALUE_CHARS * 3);
+    const { client } = fakeClient({ rows: [{ id: 'a1', body_md: body }, { id: 'a2', body_md: body }], count: 2 });
+    const out = await run(client, { table: 'brand_articles', columns: ['id', 'body_md'], limit: 2 });
+
+    expect(String(out.rows[0].body_md).length).toBeLessThan(body.length);
+    expect(out.limits).toContain('body_md');
+  });
+
+  it('nega un filtro: «scheduled_for non è nullo» era il calendario, e non si sapeva scrivere', async () => {
+    const { client, calls } = fakeClient({ rows: [{ id: 'p1' }], count: 1 });
+    await run(client, {
+      table: 'posts',
+      columns: ['id'],
+      where: [{ column: 'scheduled_for', op: 'is', value: null, negate: true }]
+    });
+
+    expect(calls[0].filters).toContainEqual(['scheduled_for', 'not.is', 'null']);
+  });
+
+  it('ordina su più colonne, e dice dove vanno i nulli', async () => {
+    const { client, calls } = fakeClient({ rows: [], count: 0 });
+    await run(client, {
+      table: 'posts',
+      columns: ['id'],
+      order: [
+        { column: 'slot', ascending: true, nullsFirst: false },
+        { column: 'created_at', ascending: false }
+      ]
+    });
+
+    expect(calls[0].orders).toEqual([
+      ['slot', { ascending: true, nullsFirst: false }],
+      ['created_at', { ascending: false, nullsFirst: undefined }]
+    ]);
+  });
+
+  it('un ordinamento singolo continua a funzionare come prima', async () => {
+    const { client, calls } = fakeClient({ rows: [], count: 0 });
+    await run(client, { table: 'posts', columns: ['id'], order: { column: 'created_at' } });
+
+    expect(calls[0].orders).toEqual([['created_at', { ascending: false, nullsFirst: undefined }]]);
+  });
+
+  it('incorpora una tabella collegata: l’articolo con la sua categoria, in una chiamata', async () => {
+    const { client, calls } = fakeClient({ rows: [{ id: 'a1', blog_categories: { name: 'Guide' } }], count: 1 });
+    const out = await run(client, {
+      table: 'brand_articles',
+      columns: ['id'],
+      embed: [{ table: 'blog_categories', columns: ['name'] }]
+    });
+
+    expect(calls[0].cols).toBe('id,blog_categories(name)');
+    expect(out.rows[0].blog_categories).toEqual({ name: 'Guide' });
+  });
+
+  it('l’embed passa dallo stesso setaccio: non è un buco per infilare SQL', async () => {
+    const { client, calls } = fakeClient({ rows: [] });
+    for (const embed of [
+      [{ table: 'blog_categories)' }],
+      [{ table: 'blog_categories', columns: ['name); drop table posts'] }]
+    ]) {
+      const out = await run(client, { table: 'brand_articles', columns: ['id'], embed });
+      expect(out.error).toBe('not_an_identifier');
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('un embed senza `columns` prende tutta la riga collegata', async () => {
+    const { client, calls } = fakeClient({ rows: [], count: 0 });
+    await run(client, { table: 'brand_articles', columns: ['id'], embed: [{ table: 'blog_authors' }] });
+
+    expect(calls[0].cols).toBe('id,blog_authors(*)');
+  });
+
+  it('il confine del brand resta imposto anche con offset, count ed embed', async () => {
+    const { client, calls } = fakeClient({ rows: [], count: 0 });
+    await run(client, {
+      table: 'posts',
+      columns: ['id'],
+      offset: 20,
+      count: 'exact',
+      embed: [{ table: 'brands', columns: ['name'] }]
+    });
+
+    expect(calls[0].filters).toContainEqual(['brand_id', 'eq', 'b1']);
   });
 });

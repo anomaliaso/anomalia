@@ -109,7 +109,7 @@ export const actions: Actions = {
     if (!brandId) return fail(404, { error: 'Brand not found' });
     const { user } = await locals.safeGetSession();
     const form = await request.formData();
-    const validated = validateWebhookUrl(String(form.get('url') ?? ''));
+    const validated = await validateWebhookUrl(String(form.get('url') ?? ''));
     if (!validated.ok) return fail(400, { error: validated.error });
 
     const existing = await loadBrandWebhook(supabase, brandId).catch((error) => { swallow('load brand webhook', error); return null; });

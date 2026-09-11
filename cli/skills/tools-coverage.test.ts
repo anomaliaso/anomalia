@@ -2,19 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
+import { BRAND_ENDPOINTS, BRAND_FAMILIES, inAFamily } from '../lib/contracts/index.ts';
 
 const CLI = fileURLToPath(new URL('../', import.meta.url));
-const REPO = join(CLI, '..');
-const CONTRACTS = join(REPO, 'packages', 'api-contracts', 'src');
 const MCP_TOOLS = join(CLI, 'mcp', 'tools');
 const REFERENCE = join(CLI, 'skills', 'anomalia', 'references', 'tools.md');
 
 const HAND_REGISTERED_BECAUSE: Record<string, string> = {
-  login: 'la sessione OAuth vive nel client, non dietro una rotta di brand',
-  logout: 'cancella il file di sessione locale, nessuna chiamata HTTP',
-  whoami: 'legge la sessione locale o il Bearer della richiesta',
   list_brands: 'GET /api/v1/brands non sta sotto un brand, e il registry e scoped sul brand',
-  get_status: 'compone due letture dell API in una risposta sola',
   approve_post: 'risolve un prefisso di id, poi chiama la rotta del singolo post',
   approve_posts: 'approva tutta la coda pending con una chiamata dedicata',
   publish_post: 'risolve un prefisso di id, poi pubblica il singolo post',
@@ -23,9 +18,11 @@ const HAND_REGISTERED_BECAUSE: Record<string, string> = {
   produce_week: 'legge il piano per trovare la bozza dei seed, poi la produce'
 };
 
-const MIN_REGISTRY_TOOLS = 100;
-const MIN_HAND_REGISTERED = 8;
-const MIN_NAMED_BY_THE_SKILL = 100;
+// Le soglie scendono con le trentatre letture ritirate dentro `query`: restano il guardiano
+// contro un estrattore che smette di estrarre, non una misura della superficie.
+const MIN_REGISTRY_TOOLS = 71;
+const MIN_HAND_REGISTERED = 7;
+const MIN_NAMED_BY_THE_SKILL = 71;
 
 function names(pattern: RegExp, text: string): string[] {
   return [...text.matchAll(pattern)].map((match) => match[1]);
@@ -38,8 +35,17 @@ function sourceOf(dir: string): string {
     .join('\n');
 }
 
+/**
+ * La superficie, non la dichiarazione: un contratto puo' restare nel registro senza essere un tool
+ * — perche' una famiglia lo ha assorbito, o perche' la sua rotta e' rimasta REST e basta — e un
+ * estrattore che legge `tool:` dai sorgenti pretenderebbe che la skill nomini un nome che nessun
+ * agente vedra' mai.
+ */
 function registryTools(): Set<string> {
-  return new Set(names(/tool:\s*'([a-z][a-z0-9_]*)'/g, sourceOf(CONTRACTS)));
+  return new Set([
+    ...BRAND_ENDPOINTS.filter((endpoint) => !inAFamily(endpoint)).map((endpoint) => endpoint.tool),
+    ...BRAND_FAMILIES.map((family) => family.tool)
+  ]);
 }
 
 function handRegisteredTools(): Set<string> {

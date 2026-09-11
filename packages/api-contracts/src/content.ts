@@ -64,9 +64,9 @@ export const CHECK_CONTENT = {
   description:
     'Run the checks Anomalia runs on its own copy against a spec you wrote, before you create ' +
     'anything. Returns blocking errors, warnings and a 0-100 quality score per platform, each ' +
-    'naming the field to repair. Deterministic: it calls no model, spends no credits, writes ' +
-    'nothing, and the same spec always returns the same verdict. Perceptual review of an image ' +
-    'or a video is a separate, explicitly paid action — this never looks at pixels.',
+    'naming the field to repair. Deterministic: it writes nothing, and the same spec always ' +
+    'returns the same verdict. Perceptual review of an image or a video is a separate, explicitly ' +
+    'paid action — this never looks at pixels. Free.',
   method: 'POST',
   pathUnderBrand: '/content/check',
   input: CheckContentInputSchema,

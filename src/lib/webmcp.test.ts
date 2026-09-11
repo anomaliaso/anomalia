@@ -64,7 +64,7 @@ describe('il registry alimenta anche Web MCP', () => {
  */
 describe('le annotazioni dicono la verita’ nel vocabolario giusto', () => {
   it('una lettura e’ readOnly, una scrittura no', () => {
-    expect(byName('get_blog_settings').annotations.readOnlyHint).toBe(true);
+    expect(byName('get_media_models').annotations.readOnlyHint).toBe(true);
     expect(byName('set_blog_settings').annotations.readOnlyHint).toBe(false);
   });
 
@@ -81,15 +81,16 @@ describe('le annotazioni dicono la verita’ nel vocabolario giusto', () => {
     const openWorld = BRAND_ENDPOINTS.find((e) => e.openWorld === true);
     if (!openWorld) throw new Error('il registry non ha piu’ endpoint openWorld');
     expect(byName(openWorld.tool).annotations.untrustedContentHint).toBe(true);
-    expect(byName('get_blog_settings').annotations.untrustedContentHint).toBe(false);
+    expect(byName('get_media_models').annotations.untrustedContentHint).toBe(false);
   });
 });
 
 /**
- * `login`, `logout` e `whoami` esistono nel server MCP perche' una CLI deve procurarsi un token e
- * dire di chi e'. In una pagina la sessione e' gia' quella di chi sta guardando: esporli darebbe a
- * un agente nel browser tre strumenti che non possono fare niente di utile — e uno di essi,
- * `logout`, farebbe un danno.
+ * In una pagina la sessione e' gia' quella di chi sta guardando: esporli darebbe a un agente nel
+ * browser tre strumenti che non possono fare niente di utile — e uno di essi, `logout`, farebbe un
+ * danno. Dal 2026-09-05 non esistono nemmeno sul server MCP, per ragioni parallele: su HTTP il giro
+ * OAuth lo fa l'host, e `logout` la' rispondeva `{ loggedOut: true }` dopo un unlink fallito e
+ * ingoiato. Questo test resta perche' misura QUESTA superficie, che non deve riacquistarli.
  */
 describe('l’autenticazione nel browser non e’ quella di una CLI', () => {
   it('non offre login, logout o whoami', () => {
@@ -109,9 +110,9 @@ describe('quello che l’esecuzione manda davvero in rete', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('porta la sessione di chi guarda, non una chiave API', async () => {
-    await byName('get_blog_settings').execute({});
+    await byName('get_media_models').execute({});
     const [path, init] = fetchMock.mock.calls[0];
-    expect(path).toBe('/api/v1/brands/demo/settings/blog');
+    expect(path).toBe('/api/v1/brands/demo/settings/models');
     expect(init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
     expect(init.method).toBe('GET');
     expect(init.body).toBeUndefined();
@@ -125,10 +126,13 @@ describe('quello che l’esecuzione manda davvero in rete', () => {
   });
 
   it('un id di risorsa entra nel percorso, non nel corpo', async () => {
-    await byName('get_post').execute({ id: 'post-1' });
+    const resource = BRAND_ENDPOINTS.find((e) => e.resource !== undefined);
+    if (!resource) throw new Error('il registry non ha piu’ endpoint su risorsa');
+
+    await byName(resource.tool).execute({ id: 'risorsa-1' });
     const [path, init] = fetchMock.mock.calls[0];
-    expect(path).toContain('post-1');
-    expect(init.body).toBeUndefined();
+    expect(path).toContain('risorsa-1');
+    expect(init.body ?? '').not.toContain('risorsa-1');
   });
 
   it('un errore dell’API diventa un errore, non un successo silenzioso', async () => {
@@ -137,14 +141,14 @@ describe('quello che l’esecuzione manda davvero in rete', () => {
   });
 
   it('il risultato viaggia nella busta che i client si aspettano', async () => {
-    const out = (await byName('get_blog_settings').execute({})) as { content: { type: string; text: string }[] };
+    const out = (await byName('get_media_models').execute({})) as { content: { type: string; text: string }[] };
     expect(out.content[0].type).toBe('text');
     expect(JSON.parse(out.content[0].text)).toEqual({ ok: true });
   });
 
   it('l’agente puo’ annullare: il segnale arriva fino alla fetch', async () => {
     const controller = new AbortController();
-    await byName('get_blog_settings').execute({}, { signal: controller.signal });
+    await byName('get_media_models').execute({}, { signal: controller.signal });
     expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
   });
 });

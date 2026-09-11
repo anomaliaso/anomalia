@@ -38,21 +38,44 @@ export const ADS_REMIX = {
   destructive: false
 } satisfies BrandEndpoint;
 
+/**
+ * I verbi che lo `switch` della rotta accetta, nell'ordine in cui si usano: si guarda, si propone,
+ * si crea, si approva (ed è l'approvazione che lancia), poi si governa quello che c'è.
+ *
+ * Sono un `enum` e non una stringa libera perché a valle l'elenco è già chiuso — tutto il resto
+ * prende `unknown_action` — e perché uno di questi dieci cancella una campagna vera: far scoprire
+ * l'elenco sbagliando è il modo più caro di documentarlo.
+ */
+export const ADS_ACTIONS = [
+  'sync',
+  'propose',
+  'create',
+  'approve',
+  'reject',
+  'pause',
+  'resume',
+  'toggle',
+  'duplicate',
+  'delete'
+] as const;
+
 export const ADS_ACTION = {
   tool: 'ads_action',
   title: 'Ads action',
   description:
-    'Change the brand\'s paid campaigns: `sync` pulls the current state from the advertising ' +
-    'account, `propose` has the AI draft new ads, then `create`, `reject`, `pause`, `resume`, ' +
-    '`toggle`, `duplicate` and `delete` act on what is there. Pass `campaignId`, and `adId` ' +
-    'in `extra` when it is one creative (`next` is active or paused for `toggle`). ' +
-    '`duplicate` makes a paused copy as a new proposal — approving it is what launches it. ' +
+    'Change the brand\'s paid campaigns. `sync` pulls the current state from the advertising ' +
+    'account and `propose` has the AI draft new ads; `create` adds one by hand. `approve` IS WHAT ' +
+    'SPENDS THE BRAND\'S MONEY — it launches the campaign for real — while `reject` turns a ' +
+    'proposal down. `pause`, `resume` and `toggle` govern what is already running, `duplicate` ' +
+    'makes a paused copy as a new proposal (approving that copy is what launches it), and ' +
+    '`delete` removes a campaign for good. Pass `campaignId`, and `adId` in `extra` when it is ' +
+    'one creative (`next` is active or paused for `toggle`). ' +
     'Read get_ads first: `ads_not_on_plan` means this brand\'s plan has no advertising at all.',
   method: 'POST',
   pathUnderBrand: '/ads',
   input: z
     .object({
-      action: z.string().min(1),
+      action: z.enum(ADS_ACTIONS),
       campaignId: z.string().optional(),
       extra: z
         .record(z.string(), z.unknown())

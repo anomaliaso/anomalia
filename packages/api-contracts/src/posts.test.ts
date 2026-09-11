@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pathFor } from './index';
 import { EDIT_POST } from './posts';
-import { GET_DASHBOARD } from './reads';
-
-describe('la dashboard del brand', () => {
-  it('sta sul brand stesso: nessun segmento sotto, e nessun secondo registro per arrivarci', () => {
-    expect(pathFor(GET_DASHBOARD, 'demo')).toBe('/api/v1/brands/demo');
-    expect(GET_DASHBOARD.method).toBe('GET');
-    expect(GET_DASHBOARD.input.safeParse({}).success).toBe(true);
-    expect(GET_DASHBOARD.input.safeParse({ slug: 'demo' }).success).toBe(false);
-  });
-});
 
 describe('la modifica di un post', () => {
   it('è una PUT sola sul post, e cambia solo i campi che le mandi', () => {

@@ -119,9 +119,9 @@ describe('GET /api/v1/brands/:slug/social/accounts', () => {
   });
 
   it('risponde esattamente quello che il contratto dichiara, niente di più', async () => {
-    const { LIST_SOCIAL_ACCOUNTS } = await import('@anomalia/api-contracts');
+    const { LIST_SOCIAL_ACCOUNTS_READ } = await import('@anomalia/api-contracts');
     const { body } = await read();
 
-    expect(LIST_SOCIAL_ACCOUNTS.output.strict().safeParse(body).success).toBe(true);
+    expect(LIST_SOCIAL_ACCOUNTS_READ.output.strict().safeParse(body).success).toBe(true);
   });
 });

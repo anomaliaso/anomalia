@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
 
-const SLUG = { type: 'string', minLength: 1, description: 'Brand URL slug' };
+const SLUG = { type: 'string', minLength: 1 };
 
 const NOT_DESTRUCTIVE = { readOnlyHint: false, destructiveHint: false };
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true };
@@ -64,41 +64,6 @@ const MIGRATED_WRITES = [
     title: 'GEO action',
     properties: { slug: SLUG, action: { type: 'string', enum: ['audit', 'fix'] } },
     required: ['slug', 'action'],
-    annotations: NOT_DESTRUCTIVE,
-  },
-  {
-    name: 'update_brand_kit',
-    title: 'Update brand kit',
-    properties: {
-      slug: SLUG,
-      about: { type: 'string' },
-      category: { type: 'string' },
-      target_audience: { type: 'string' },
-      brand_style: { type: 'string' },
-      language: { type: 'string' },
-    },
-    required: ['slug'],
-    annotations: NOT_DESTRUCTIVE,
-  },
-  {
-    name: 'update_voice',
-    title: 'Update voice',
-    properties: {
-      slug: SLUG,
-      mood: { type: 'string' },
-      tone: { type: 'string' },
-      register: { type: 'number' },
-      emotion: { type: 'string' },
-      character: { type: 'string' },
-      syntax: { type: 'string' },
-      avoid: { type: 'array', items: { type: 'string' } },
-      platform_instructions: {
-        type: 'object',
-        propertyNames: { type: 'string' },
-        additionalProperties: { type: 'string' },
-      },
-    },
-    required: ['slug'],
     annotations: NOT_DESTRUCTIVE,
   },
   {

@@ -3,13 +3,16 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { api, callEndpoint } from '../../lib/api.ts';
 import {
   acceptsIdPrefix,
-  BRAND_ENDPOINTS,
+  BRAND_FAMILIES,
   BRAND_RESOURCES,
+  familyCalls,
+  familyInput,
+  OWN_TOOL_ENDPOINTS,
   type BrandResource,
 } from '../../lib/contracts/index.ts';
 import { resolvePostId, resolveResourceId, withAuth } from '../util.ts';
 
-const slug = z.string().min(1).describe('Brand URL slug');
+const slug = z.string().min(1);
 
 /**
  * Il registro dichiara una strada che non passa da un brand: qui diventa un `slug` che si può
@@ -24,8 +27,37 @@ const optionalSlug = slug
 const resourceId = (resource: BrandResource) =>
   z.string().min(1).describe(`${BRAND_RESOURCES[resource]} id or unambiguous prefix`);
 
+/**
+ * Le rotte di una famiglia si chiamano in fila, non in parallelo: scrivono la stessa riga, e
+ * `set_appearance` la rilegge per non perdere il font che non gli hai mandato.
+ */
+function registerFamilies(server: McpServer) {
+  for (const family of BRAND_FAMILIES) {
+    server.registerTool(
+      family.tool,
+      {
+        title: family.title,
+        description: family.description,
+        inputSchema: familyInput(family).extend({ slug }),
+        annotations: { readOnlyHint: false, destructiveHint: false },
+      },
+      async ({ slug: brandSlug, ...input }) =>
+        withAuth(async (token) => {
+          const calls = familyCalls(family, input);
+          if (calls.length === 0) throw new Error('no_fields: name at least one field to change');
+
+          let answer: Record<string, unknown> = {};
+          for (const { endpoint, body } of calls) {
+            answer = { ...answer, ...(await callEndpoint<Record<string, unknown>>(endpoint, token, brandSlug as string, body)) };
+          }
+          return answer;
+        }),
+    );
+  }
+}
+
 function registerDeclaredEndpoints(server: McpServer) {
-  for (const endpoint of BRAND_ENDPOINTS) {
+  for (const endpoint of OWN_TOOL_ENDPOINTS) {
     const byPrefix = acceptsIdPrefix(endpoint);
     server.registerTool(
       endpoint.tool,
@@ -66,47 +98,16 @@ function registerDeclaredEndpoints(server: McpServer) {
 
 export function registerBrandTools(server: McpServer) {
   registerDeclaredEndpoints(server);
+  registerFamilies(server);
 
   server.registerTool(
-    'get_status',
-    {
-      title: 'Brand status',
-      description:
-        'How this brand is doing right now, in one short answer: how many posts wait for someone ' +
-        'to approve them, whether the plan still has room, and how the last recurring jobs went. ' +
-        'get_dashboard is the fuller picture. Reads only — no model, no credits.',
-      inputSchema: z.object({ slug }),
-      annotations: { readOnlyHint: true },
-    },
-    async ({ slug }) =>
-      withAuth(async (token) => {
-        const detail = await api.getBrand(token, slug);
-        const pending = await api.getPosts(token, slug, 'pending_user');
-        return {
-          brand: detail.brand,
-          pendingCount: detail.pendingCount,
-          pendingPreview: pending.slice(0, 10).map((p) => ({
-            id: p.id,
-            platform: p.platform,
-            status: p.status,
-            caption: (p.caption ?? '').slice(0, 80),
-            scheduled_for: p.scheduled_for,
-          })),
-          scheduledCount: detail.scheduledCount,
-          publishedCount: detail.publishedCount,
-          runs: detail.runs,
-        };
-      }),
-  );
-
-            server.registerTool(
     'approve_posts',
     {
       title: 'Approve all pending posts',
       description:
-        'Say yes to every post waiting for approval, in one go — they are published or scheduled ' +
-        'from that moment. This is the irreversible one: ask the person first unless they clearly ' +
-        'said "approve them all". approve_post takes one at a time. No model, no credits.',
+        'Say yes to every post waiting for approval, in one go — they are published or scheduled from ' +
+        'that moment. This is the irreversible one: ask the person first unless they clearly said ' +
+        '"approve them all". approve_post takes one at a time. Free.',
       inputSchema: z.object({ slug }),
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
@@ -119,8 +120,8 @@ export function registerBrandTools(server: McpServer) {
       title: 'Approve post',
       description:
         'Say yes to one post waiting for approval, so it goes out. Read it first with get_post — ' +
-        'approving is what authorises distribution, and it does not come back. edit_post changes ' +
-        'the copy before you do. id accepts a short prefix. No model, no credits.',
+        'approving is what authorises distribution, and it does not come back. edit_post changes the ' +
+        'copy before you do. Free.',
       inputSchema: z.object({
         slug,
         id: z.string().min(1),
@@ -140,8 +141,7 @@ export function registerBrandTools(server: McpServer) {
       title: 'Publish post',
       description:
         'Put one post out NOW, skipping its scheduled time. There is no undo from here: what a ' +
-        'platform has received is on the platform. reschedule_post moves it instead. id accepts a ' +
-        'short prefix. No model, no credits.',
+        'platform has received is on the platform. reschedule_post moves it instead. Free.',
       inputSchema: z.object({
         slug,
         id: z.string().min(1),
@@ -160,8 +160,8 @@ export function registerBrandTools(server: McpServer) {
     {
       title: 'Reject / delete post',
       description:
-        'Throw away one post that has not gone out yet. It does not come back, and its copy goes ' +
-        'with it. A post already published cannot be deleted from here. id accepts a short prefix.',
+        'Throw away one post that has not gone out yet. It does not come back, and its copy goes with ' +
+        'it. A post already published cannot be deleted from here.',
       inputSchema: z.object({
         slug,
         id: z.string().min(1),

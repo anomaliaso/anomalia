@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { authenticate, loadBrandForUser, checkApiKeyWriteAccess } from '$lib/server/cli-auth';
 import { listBrandMedia } from '$lib/server/brand-media';
 import { importBrandMediaFromUrl } from '$lib/server/media-import';
-import { IMPORT_MEDIA_URL, LIST_MEDIA, statusForFailure } from '@anomalia/api-contracts';
+import { IMPORT_MEDIA_URL, LIST_MEDIA_READ, statusForFailure } from '@anomalia/api-contracts';
 import { mediaUrl } from '$lib/media-url';
 
 export const GET: RequestHandler = async ({ request, params, url }) => {
@@ -13,7 +13,7 @@ export const GET: RequestHandler = async ({ request, params, url }) => {
   const { brand, error: brandError } = await loadBrandForUser(supabase, params.slug, apiKey);
   if (brandError) return brandError;
 
-  const parsed = LIST_MEDIA.input.safeParse(Object.fromEntries(url.searchParams));
+  const parsed = LIST_MEDIA_READ.input.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {
     return json({ error: 'invalid_input', details: parsed.error.issues }, { status: 400 });
   }

@@ -35,53 +35,63 @@ const find = (all: Tool[], name: string): Tool => {
   return tool;
 };
 
+/**
+ * `create_product`, `update_product`, `update_person` e `update_competitor` erano un insert o un
+ * update di UNA riga e nient'altro: aperti i quattro handler, nessun campo derivato, nessuna
+ * attribuzione, nessun effetto collaterale. `insert_row` e `update_row` — arrivati con #392
+ * proprio per assorbirli — fanno la stessa scrittura sulla stessa riga, con la RLS dell'utente.
+ *
+ * Una sola differenza di comportamento, e non è muta: `update_competitor` normalizzava
+ * `example.com` in `https://example.com`. Quella regola vive nel vincolo
+ * `competitors_website_check` (`website ~ '^https?://'`, validato in produzione), quindi ora il
+ * sito nudo è RIFIUTATO invece che corretto — con il nome del vincolo e i valori che ammette
+ * dentro la risposta. È scritto nella skill, dove un agente lo legge prima di provarci.
+ */
 describe('le scritture dello studio esposte dal registry', () => {
-  test('un agente esterno vede creare, correggere e togliere, non solo leggere', async () => {
+  const RETIRED = ['create_product', 'update_product', 'update_person', 'update_competitor'];
+
+  test('i quattro CRUD di una riga non sono più tool', async () => {
     const names = (await tools()).map((t) => t.name);
 
-    for (const name of [
-      'create_product',
-      'update_product',
-      'delete_product',
-      'update_person',
-      'update_competitor',
-      'get_bio',
-      'set_bio',
-    ]) {
+    for (const gone of RETIRED) {
+      expect(names, gone).not.toContain(gone);
+    }
+  });
+
+  test('la loro capacità resta raggiungibile: una riga si aggiunge e si corregge lo stesso', async () => {
+    const all = await tools();
+
+    const insert = find(all, 'insert_row');
+    expect(Object.keys(insert.inputSchema?.properties ?? {}).sort()).toEqual(['slug', 'table', 'values']);
+    expect(insert.annotations?.destructiveHint).toBe(false);
+
+    const update = find(all, 'update_row');
+    expect(Object.keys(update.inputSchema?.properties ?? {}).sort()).toEqual(['slug', 'table', 'values', 'where']);
+    expect(update.annotations?.destructiveHint).toBe(true);
+  });
+
+  test('creare, togliere e la bio restano dove stavano', async () => {
+    const names = (await tools()).map((t) => t.name);
+
+    for (const name of ['add_person', 'add_competitor', 'delete_product', 'delete_person', 'delete_competitor', 'set_bio']) {
       expect(names, name).toContain(name);
     }
   });
 
-  test('una modifica chiede lo slug e l’id della riga, senza prefissi da risolvere', async () => {
-    const all = await tools();
-
-    for (const name of ['update_product', 'update_person', 'update_competitor', 'delete_product']) {
-      expect(find(all, name).inputSchema?.required?.sort(), name).toEqual(['id', 'slug']);
-    }
-  });
-
-  test('solo delete_product si annuncia distruttivo', async () => {
+  test('solo le cancellazioni si annunciano distruttive', async () => {
     const all = await tools();
 
     expect(find(all, 'delete_product').annotations?.destructiveHint).toBe(true);
-    for (const name of ['create_product', 'update_product', 'update_person', 'update_competitor']) {
+    for (const name of ['add_person', 'add_competitor', 'set_bio']) {
       expect(find(all, name).annotations?.destructiveHint, name).toBe(false);
     }
   });
 
-  test('get_bio è una lettura, set_bio no', async () => {
+  test('set_bio non è una lettura: la bio si legge da `social_accounts` con `query`', async () => {
     const all = await tools();
 
-    expect(find(all, 'get_bio').annotations?.readOnlyHint).toBe(true);
     expect(find(all, 'set_bio').annotations?.readOnlyHint).toBe(false);
-  });
-
-  test('update_person non offre nessun campo con cui attestare un consenso', async () => {
-    const person = find(await tools(), 'update_person');
-
-    expect(Object.keys(person.inputSchema?.properties ?? {}).sort()).toEqual(
-      ['attributes', 'description', 'id', 'name', 'role', 'slug'].sort(),
-    );
+    expect(all.map((x) => x.name)).not.toContain('get_bio');
   });
 
   test('nessun tool è registrato due volte', async () => {
@@ -100,12 +110,12 @@ describe('le scritture dello studio esposte dal registry', () => {
  * prima di partire. E' che TUTTO cio' che il tool accetta, una volta normalizzato, la rotta lo
  * salvi. Niente puo' passare di qui per morire di la'.
  */
-describe('set_colors non accetta niente che la rotta rifiuti', () => {
+describe('i colori di update_brand_identity non accettano niente che la rotta rifiuti', () => {
   const ROUTE_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
   const normalize = (c: string) => (c.startsWith('#') ? c : `#${c}`);
 
   test('quello che il tool lascia passare, la rotta lo salva', async () => {
-    const schema = find(await tools(), 'set_colors').inputSchema as {
+    const schema = find(await tools(), 'update_brand_identity').inputSchema as {
       properties: { colors: { items: { pattern?: string } } };
     };
     const pattern = schema.properties.colors.items.pattern;

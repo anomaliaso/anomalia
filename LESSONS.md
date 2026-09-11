@@ -1463,3 +1463,145 @@ lasciano il record intatto e l'ACL no — e `db:migrate` non ripasserà mai su q
 regge anche se il grant torna — la forma è in `20260905120000_secdef_least_privilege.sql`. E lo
 stato vero si guarda in `pg_proc.proacl`, non nell'elenco delle migration applicate;
 `npm run test:privileges` fa esattamente quella domanda contro un Postgres vero.
+
+## Un URL che viene dal database non viene «da noi»
+
+`zipPostMedia` faceva `fetch(url)` nudo su `posts.media_url`, e il ragionamento implicito era che
+quella colonna la scrive il prodotto. La scrive anche l'utente: `media_url` è nella allowlist di
+`PUT /api/v1/brands/:slug/posts/:id`. In questo repository la difesa SSRF esisteva già due volte —
+`safeFetchUrl` in `tool-guard.ts` per gli URL degli estranei, `isOwnMediaUrl` in `chat-media.ts`
+per lo storage del progetto — e nessuna delle due copriva questo percorso, perché il percorso non
+somigliava a un input: somigliava a una lettura.
+
+**Segnale**: una `fetch` il cui argomento risale a una `.select()`, e una colonna con lo stesso
+nome dentro l'elenco dei campi scrivibili di un endpoint di update. I due fatti stanno in file
+lontani e nessuno dei due, da solo, sembra un difetto. La domanda che li unisce è una sola: **chi
+può scrivere questa colonna?** — non «da dove arriva questo valore».
+
+**Mossa**: filtrare l'URL con la regola che esiste già (`isOwnMediaUrl`), non scriverne una nuova,
+e ricavare l'host da `PUBLIC_SUPABASE_URL` invece di cablarlo: cablato funziona solo sull'istanza
+di chi lo scrive e rompe in silenzio il self-host. E la allowlist da sola non basta finché `fetch`
+segue i redirect per conto suo: un host consentito che risponde `302` scavalca il controllo, che è
+metà del difetto. `redirect: 'error'` quando l'origine consentita non redirige (verificalo con una
+richiesta vera prima di deciderlo), `redirect: 'manual'` con ogni salto validato quando redirige.
+
+**La regola dietro**: una blacklist di indirizzi (`127.0.0.1`, `169.254.…`, `10.…`) si aggira con
+un nome DNS che risolve lì. Quando l'insieme legittimo è noto — qui era un host solo su 530 valori
+reali in produzione — la allowlist è insieme più corta da scrivere e più stretta di qualunque
+elenco di divieti.
+
+## Validare alla creazione non è validare alla consegna
+
+`brand_webhooks.url` passava da `validateWebhookUrl` quando la riga nasceva, e da lì in poi da
+niente: `attemptDelivery` faceva `fetch(webhook.url)` mesi dopo, seguendo i redirect. Fra il
+controllo e l'uso può cambiare tutto ciò che il controllo aveva verificato — il record DNS di un
+nome pubblico può iniziare a rispondere `127.0.0.1`, e l'endpoint può rispondere `302` verso un
+indirizzo interno. Il valore controllato non è quello usato: è quello che *era* al momento del
+controllo.
+
+**Segnale**: una validazione che vive in un handler di form o in un `POST` di creazione, e un
+consumo dello stesso campo in un altro file — un cron, una coda, un retry. La distanza fra i due
+si misura in mesi, non in millisecondi, e nel mezzo c'è un resolver che nessuno di noi controlla.
+Il caso peggiore non è la riga scritta in malafede: è quella scritta in buona fede e diventata
+pericolosa dopo.
+
+**Mossa**: il controllo va **dove il valore viene usato**, dentro il `try` che già registra il
+fallimento, così un rifiuto diventa una consegna fallita e non un'eccezione che risale. Quello
+alla creazione si tiene solo per dare un errore immediato nel form, e deve **delegare alla stessa
+funzione** invece di tenersi una copia della regola: qui erano undici regex su intervalli privati
+che duplicavano peggio ciò che `assertPublicUrl` fa risolvendo il nome davvero.
+
+**La regola dietro**: quando un controllo e il suo uso stanno in due momenti diversi, il controllo
+è un suggerimento. Se una sola delle due posizioni può esistere, è quella accanto all'uso — un
+form senza validazione dà un errore brutto, una consegna senza validazione apre la rete interna.
+
+## `Test Files 1 failed` con `Tests 0 failed` è un worktree senza `.env`
+
+Un worktree nuovo si porta dietro il codice, non l'ambiente. Senza `.env`, `hooks.server.ts`
+esplode a tempo di import — `new URL(publicEnv.PUBLIC_SUPABASE_URL)` su una stringa vuota è
+`TypeError: Invalid URL` — e `src/hooks.server.test.ts` non arriva a collezionare un solo test.
+
+**Segnale**: il riepilogo si contraddice — `Test Files 1 failed | 681 passed` accanto a
+`Tests 7516 passed`, zero test rossi. Un file che fallisce senza test falliti non è
+un'asserzione: è un modulo che non si è caricato. Cercare l'asserzione rotta è tempo buttato.
+
+**Mossa**: `cp <checkout-principale>/.env .env` nel worktree, come già si fa con `node_modules`
+(stessa famiglia di trappola, poco sopra in questo file). E prima di dare la colpa al proprio
+diff: `git diff --name-only origin/dev...HEAD` sul file incriminato — se non lo tocchi, non è tuo.
+## Un grant per colonna non separa niente se l'app scrive col client dell'utente
+
+Il registro dei grant (`20260905210000_self_write_columns.sql`) funziona perché le colonne che
+decide il sistema le scrive il **service role**: togliere il grant ad `authenticated` toglie
+l'attacco e lascia il percorso legittimo. Applicato a `brand_app_connections`,
+`brand_knowledge_sources`, `social_accounts` e `brand_triggers` la stessa mossa avrebbe spento la
+funzione insieme all'attacco: `upsertBrandConnection`, `upsertSource`, `syncBrandAccounts` e
+`syncBrandTriggers` ricevono il `supabase` di `locals`, cioè anon key più JWT, cioè `authenticated`.
+
+**Segnale**: la funzione che scrive la colonna prende un `SupabaseClient` come parametro invece di
+chiamare `createAdminClient()`. Il ruolo che attacca è il ruolo con cui gira l'app, e nessun grant
+li distingue. Si guarda in un colpo: `grep -n "supabase: SupabaseClient" <file>` sulla funzione che
+scrive, e poi da dove i chiamanti prendono quel client.
+
+**Mossa**: quando l'unicità è un fatto di dominio — un account connesso nasce sotto un solo
+`user_id` Composio, un account Zernio sotto un solo profilo, e un profilo è di un brand — l'indice
+unico globale sulla colonna la chiude senza toccare una riga di codice, e vale per ogni scrittore,
+ruolo compreso. La riga costruita per attaccare collide con quella della vittima, che esiste per
+definizione: se non esiste, non c'è niente da rubare. Quando invece l'unicità **non** è un fatto di
+dominio (`zernio_ad_accounts` ha l'upsert su `(brand_id, zernio_ad_account_id)` perché un'agenzia
+può far girare due brand sullo stesso account pubblicitario), l'indice romperebbe un caso vero e la
+difesa deve stare al punto d'uso.
+
+**La regola dietro**: prima di scegliere fra grant, indice e controllo nel codice, la domanda è
+«chi scrive questa colonna, e con quale ruolo?». Le tre difese non sono intercambiabili, e sceglierne
+una senza quella risposta dà la sensazione di aver chiuso qualcosa.
+
+## Due chiavi al tenant sulla stessa riga di coda, e il worker ne guarda una
+
+`webhook_deliveries` porta `brand_id` **e** `webhook_id`; `chat_jobs` porta `brand_id` **e**
+`thread_id`. Il `with check` della policy confronta col chiamante solo la prima, perché è quella che
+somiglia al tenant. La seconda è una chiave esterna verso una tabella di un altro brand possibile, e
+il worker — che gira col service role, cioè senza RLS — si fidava della coppia.
+
+**Segnale**: una riga di coda con due colonne che risalgono entrambe a un brand per strade diverse,
+e un `with check` che ne nomina una sola. Il worker poi legge la seconda per `id` e basta:
+`.eq('id', row.<altra_chiave>)` senza un `.eq('brand_id', row.brand_id)` accanto.
+
+**Mossa**: il confronto sta dentro la funzione dove le due chiavi si incontrano — `claimDueDeliveries`,
+`processNextQueuedChatJob` — non nei chiamanti, che sono tanti e divergerebbero al primo cambiamento.
+E dove nessun percorso legittimo scrive quella coda col client dell'utente (`webhook_deliveries`: le
+uniche scritture sono l'ingress di Composio e il cron, tutte e due con `createAdminClient()`), il
+`revoke insert, update` toglie il problema invece di controllarlo.
+
+## Un errore di scrittura non ha lo stesso codice del suo gemello in lettura
+
+**Segnale.** Un ripiego copiato dal codice di lettura non scatta mai: il caso che doveva coprire
+arriva, e il tool risponde con l'errore grezzo invece che col rimedio. Qui: `insert_row` doveva
+riprovare senza `brand_id` sulle tabelle che non ce l'hanno, la condizione era `code === '42703'`
+copiata da `query`, e ogni insert su `profiles` moriva dicendo «la colonna brand_id non esiste».
+
+**Cosa succede.** PostgREST risolve i nomi di colonna in due posti diversi. In un **filtro** li
+manda a Postgres, che risponde **42703**. Nel **corpo di una scrittura** li cerca nella propria
+schema cache, e risponde **PGRST204** (`Could not find the 'x' column of 'y' in the schema cache`)
+senza aver mai interrogato il database. Sono lo stesso fatto per chi scrive il codice e due codici
+diversi sul filo, e il secondo non esiste affatto nel percorso di lettura da cui si copia.
+
+**La mossa.** La domanda «questa tabella ha quella colonna?» si scrive **una volta sola**, in una
+funzione che accetta entrambi i codici. Scritta due volte diverge alla prima, e diverge in silenzio:
+il ramo mai preso non fallisce, semplicemente non c'è. E il caso si prova col codice VERO — un client
+finto risponde quello che gli si dice, quindi un test scritto sul codice sbagliato è verde per
+costruzione.
+
+## `head: true` su una richiesta PostgREST si porta via anche il corpo dell'errore
+
+**Segnale.** Un rifiuto che non si riconosce: `{"error":"db_error","message":""}`, senza codice e
+senza testo, su una chiamata che poco prima funzionava.
+
+**Cosa succede.** `select('*', { count: 'exact', head: true })` è la forma ovvia per contare senza
+trasferire righe — PostgREST manda un `HEAD` e il conteggio sta in `Content-Range`. Ma un `HEAD`
+**non ha corpo**, e il corpo è dove PostgREST mette `{code, message, details, hint}` quando la
+richiesta fallisce: `supabase-js` consegna un errore con tutti i campi vuoti. Il conteggio riesce
+benissimo; è il fallimento a diventare muto, quindi la sonda sembra corretta finché tutto va bene.
+
+**La mossa.** Contare con `count: 'exact'` e `.limit(1)`. Una riga di traffico è il prezzo di un
+messaggio d'errore leggibile, e un rifiuto anonimo costa molto di più: non si riconosce, quindi non
+si spiega, quindi il giro dopo è identico al primo.

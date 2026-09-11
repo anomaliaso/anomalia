@@ -70,7 +70,7 @@ export const PUT: RequestHandler = async ({ request, params }) => {
     return json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const validated = validateWebhookUrl(String(body.url ?? ''));
+  const validated = await validateWebhookUrl(String(body.url ?? ''));
   if (!validated.ok) return json({ error: validated.error }, { status: 400 });
   const events = Array.isArray(body.events)
     ? body.events.map((e) => String(e).trim().toUpperCase()).filter(Boolean)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
+import { OWN_TOOL_ENDPOINTS } from '../lib/contracts/index.ts';
 import { handleMcpFetch } from './http-app.ts';
 
 /**
@@ -55,8 +55,8 @@ describe('slug opzionale, e solo dove il registro lo dichiara', () => {
     expect(tool.inputSchema?.properties?.slug?.description).toMatch(/omit/i);
   });
 
-  test('refine_image continua a pretendere il brand: la sorgente vive nella sua libreria', async () => {
-    const tool = find(await tools(), 'refine_image');
+  test('refine_media continua a pretendere il brand: la sorgente vive nella sua libreria', async () => {
+    const tool = find(await tools(), 'refine_media');
 
     expect(tool.inputSchema?.required ?? []).toContain('slug');
   });
@@ -64,7 +64,7 @@ describe('slug opzionale, e solo dove il registro lo dichiara', () => {
   test('ogni altro endpoint del registro tiene slug obbligatorio', async () => {
     const all = await tools();
 
-    for (const endpoint of BRAND_ENDPOINTS) {
+    for (const endpoint of OWN_TOOL_ENDPOINTS) {
       const required = find(all, endpoint.tool).inputSchema?.required ?? [];
 
       expect(required.includes('slug'), endpoint.tool).toBe(!endpoint.pathWithoutBrand);

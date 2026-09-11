@@ -1,7 +1,8 @@
 # API — 10 · Shares (viste pubbliche per il cliente)
 
 Endpoint per consegnare a un cliente **un link a una vista sola**, senza dargli un account.
-Sono gli endpoint dietro i tool MCP `create_share` / `list_shares` / `revoke_share`.
+Sono gli endpoint dietro i tool MCP `create_share` / `revoke_share`. Elencare i link consegnati
+non ha più un tool: su MCP è `query` su `shared_views` — l'endpoint `GET` resta e la CLI lo chiama.
 
 Il link non è una sessione ridotta: è uno **snapshot congelato**. Alla creazione l'app copia,
 campo per campo, i soli campi dichiarati per quella vista dentro `shared_views.snapshot`. La

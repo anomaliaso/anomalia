@@ -27,11 +27,10 @@ export const GENERATE_CAPTIONS = {
     'Write captions — text only, no media, and NO post is created: pass a caption to create_post ' +
     'when you want to publish it. By default every platform gets its own caption, written for ' +
     'that platform and inside its character limit, instead of one text cut nine ways. Pass ' +
-    'platforms to get only those, each written to its own limit with no extra shortening. ' +
-    'format "thread" lets X and Threads come back as a numbered sequence of posts rather than ' +
-    'one — good to paste by hand, but create_post publishes a single post per platform, so a ' +
-    'sequence is not publishable from here. It writes in the brand\'s voice. It spends credits, ' +
-    'and cost_usd in the answer says what the model actually cost.',
+    '`platforms` to get only those. `format: "thread"` lets X and Threads come back as a numbered ' +
+    'sequence of posts rather than one — good to paste by hand, but create_post publishes a ' +
+    'single post per platform, so a sequence is not publishable from here. It writes in the ' +
+    'brand\'s voice. It spends credits.',
   method: 'POST',
   pathUnderBrand: '/captions/generate',
   input: z

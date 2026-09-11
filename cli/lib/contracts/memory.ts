@@ -26,58 +26,15 @@ export const AGENT_MEMORY_CATEGORIES = ['fact', 'preference', 'insight', 'skill'
 
 export type AgentMemoryCategory = (typeof AGENT_MEMORY_CATEGORIES)[number];
 
-const MemoryEntry = z.object({
-  id: z.string(),
-  key: z.string(),
-  value: z.string(),
-  category: z.enum(MEMORY_CATEGORIES),
-  source: z.string(),
-  confidence: z.number(),
-  timesUsed: z.number(),
-  lastUsedAt: z.string().nullable(),
-  pinned: z.boolean(),
-  createdAt: z.string()
-});
-
-export const GET_MEMORY = {
-  tool: 'get_memory',
-  title: 'Brand memory',
-  description:
-    "What this brand already knows, so you do not rebuild it every conversation: its voice, the constraints it works under, the facts it has confirmed, the preferences it has stated, and what previous work learned. " +
-    'Read it before asking the person something the brand has already answered. ' +
-    `\`category\` narrows (${MEMORY_CATEGORIES.join(', ')}); \`limit\` is ${MEMORY_ENTRIES_DEFAULT} by default and ${MEMORY_ENTRIES_MAX} at most. ` +
-    'Chat-session notes and other agents\' working notes are never returned — only what belongs to the brand. ' +
-    'Reading changes nothing and counts nothing: when an entry actually shaped what you produced, say so with `record_memory_used`, or the entry decays as if it had never helped.',
-  method: 'GET',
-  pathUnderBrand: '/memory',
-  input: z
-    .object({
-      category: z.enum(MEMORY_CATEGORIES).optional().describe('Restrict to one kind of knowledge'),
-      limit: z.coerce
-        .number()
-        .int()
-        .min(1)
-        .max(MEMORY_ENTRIES_MAX)
-        .optional()
-        .describe(`How many entries, ${MEMORY_ENTRIES_DEFAULT} by default, ${MEMORY_ENTRIES_MAX} at most`)
-    })
-    .strict(),
-  output: z.object({
-    entries: z.array(MemoryEntry),
-    count: z.number()
-  }),
-  failures: [{ error: 'unknown_category', status: 400 }],
-  destructive: false
-} satisfies BrandEndpoint;
-
 export const SAVE_MEMORY = {
   tool: 'save_memory',
   title: 'Save to brand memory',
   description:
     'Record something you learned about this brand so the next conversation starts from it. ' +
     `Writable categories: ${AGENT_MEMORY_CATEGORIES.join(', ')}. \`voice\` and \`constraint\` are NOT writable here — they govern everything downstream and only the brand's own people set them. ` +
-    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: you take it to the person, you do not win by arriving last. Sending the same value again reinforces it. ' +
-    'Entries land as brand knowledge, never scoped to a chat, and arrive with the confidence of something a model inferred rather than something a person stated.',
+    'A `key` that already holds a DIFFERENT value answers 409 with both values and writes nothing: ' +
+    'take it to the person. Sending the same value again reinforces it. Entries land as brand ' +
+    'knowledge, never scoped to a chat.',
   method: 'POST',
   pathUnderBrand: '/memory',
   input: z
@@ -119,7 +76,7 @@ export const RECORD_MEMORY_USED = {
   tool: 'record_memory_used',
   title: 'Report memory you used',
   description:
-    'Say which memory entries actually shaped what you just produced. Call it after acting, with the ids from `get_memory` — a handful, not everything you read. ' +
+    'Say which memory entries actually shaped what you just produced. Call it after acting, with the ids you actually read — a handful, not everything. Read what the brand knows with query({ table: "brand_memory", columns: ["id","key","value","category","confidence"], where: [{column:"layer",op:"neq",value:"session"},{column:"agent",op:"is",value:null}], order: {column:"confidence",ascending:false} }). ' +
     'This is what keeps a working entry alive: entries that are never reported decay out of the prompts they were helping. ' +
     `Ids that do not belong to this brand are ignored. At most ${MEMORY_USED_MAX} per call.`,
   method: 'POST',

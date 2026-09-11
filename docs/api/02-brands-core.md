@@ -518,7 +518,8 @@ curl -s "https://anomalia.so/api/v1/brands/mio-brand/doctor" -H "Authorization: 
 
 ## `GET /api/v1/brands/:slug/goals`
 
-Tool MCP: `get_goals`.
+Nessun tool MCP: su MCP questa lettura è `query` su `chat_goals` e `chat_goal_events`. La rotta
+REST resta, e la CLI la chiama.
 
 La storia della modalità obiettivo, e il riepilogo che risponde alla domanda vera su una funzione
 nuova: **funziona?** Non quanti obiettivi ci sono, ma quanti si chiudono al primo colpo, quanti

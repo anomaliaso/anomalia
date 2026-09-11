@@ -80,10 +80,10 @@ export const SAVE_PLAN = {
   tool: 'save_plan',
   title: 'Save an editorial plan',
   description:
-    'Store an editorial plan you wrote yourself. Anomalia calls no model and spends no credits. ' +
-    'It lands as the pending proposal, exactly where propose_plan leaves a generated one: the ' +
-    'brand active plan is left untouched and approve_plan remains the step that activates it. ' +
-    'Saving replaces an earlier pending proposal.',
+    'Store an editorial plan you wrote yourself. It lands as the pending proposal, exactly where ' +
+    'propose_plan leaves a generated one: the brand active plan is left untouched and ' +
+    'approve_plan remains the step that activates it. Saving replaces an earlier pending ' +
+    'proposal. Free.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/save',
   input: SavePlanInputSchema,
@@ -154,11 +154,10 @@ export const SAVE_WEEK_SEEDS = {
   tool: 'save_week_seeds',
   title: 'Save weekly content seeds',
   description:
-    'Store the week rows you planned yourself — one per post, no copy and no image yet. ' +
-    'Anomalia calls no model and spends no credits. The rows land as the week draft, exactly ' +
-    'where plan_week leaves generated ones: the plan page shows them, they are editable, and ' +
-    'produce_week is the separate (paid) step that turns them into posts. A brand keeps one ' +
-    'draft, so saving replaces the one in review.',
+    'Store the week rows you planned yourself — one per post, no copy and no image yet. The rows ' +
+    'land as the week draft, exactly where plan_week leaves generated ones: the plan page shows ' +
+    'them, they are editable, and produce_week is the separate (paid) step that turns them into ' +
+    'posts. A brand keeps one draft, so saving replaces the one in review. Free.',
   method: 'POST',
   pathUnderBrand: '/weekly-plan/seeds',
   input: SaveWeekSeedsInputSchema,
@@ -209,9 +208,9 @@ export const APPROVE_PLAN = {
   tool: 'approve_plan',
   title: 'Approve editorial plan',
   description:
-    'Make the proposed editorial plan the one this brand actually follows, replacing the ' +
-    'active one. Ask the person before doing it unless they clearly asked. discard_plan ' +
-    'throws the proposal away instead. No model, no credits.',
+    'Make the proposed editorial plan the one this brand actually follows, replacing the active ' +
+    'one. Ask the person before doing it unless they clearly asked. discard_plan throws the ' +
+    'proposal away instead. Free.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/approve',
   input: NoInput,
@@ -224,8 +223,8 @@ export const DISCARD_PLAN = {
   tool: 'discard_plan',
   title: 'Discard editorial plan',
   description:
-    'Throw away the proposed editorial plan and leave the active one exactly as it is. It ' +
-    'does not come back. No model, no credits.',
+    'Throw away the proposed editorial plan and leave the active one exactly as it is. It does ' +
+    'not come back. Free.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/discard',
   input: NoInput,
@@ -245,9 +244,9 @@ export const SAVE_BRIEF = {
   tool: 'save_brief',
   title: 'Save week brief',
   description:
-    'Write down what one week should be about, so whoever produces it works from your ' +
-    'direction instead of guessing. `week` is 0 for the current week; name the products to ' +
-    'feature if some matter. No model, no credits.',
+    'Write down what one week should be about, so whoever produces it works from your direction ' +
+    'instead of guessing. `week` is 0 for the current week; name the products to feature if some ' +
+    'matter. Free.',
   method: 'POST',
   pathUnderBrand: '/editorial-plan/save-brief',
   input: z

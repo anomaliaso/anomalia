@@ -1,7 +1,8 @@
 # API — 15 · Impostazioni: le fonti del Radar
 
-Quattro endpoint sotto `/api/v1/brands/:slug/settings/radar`, cioè i tool MCP `get_radar`,
-`set_radar_platform`, `add_radar_source` e `remove_radar_source`.
+Quattro endpoint sotto `/api/v1/brands/:slug/settings/radar`. Scriverli sono i tool MCP
+`set_radar_platform`, `add_radar_source` e `remove_radar_source`; `get_radar` non esiste più come
+tool — la rotta `GET` resta, e la CLI la chiama.
 
 Errori comuni di auth: vedi [01-overview](01-overview.md).
 
@@ -17,13 +18,15 @@ Nessuna migration: sono la colonna e la tabella che la pagina Settings → Radar
 ## Il piano decide, e la lettura lo dice prima
 
 `threads`, `x` e `linkedin` (piattaforme) e `threads_query`, `x_community`, `linkedin_query`
-(tipi di fonte) appartengono al piano **Pro** (`hasProRadarLeads`). Sotto, `get_radar` li segna
+(tipi di fonte) appartengono al piano **Pro** (`hasProRadarLeads`). Sotto, la `GET` li segna
 `plan_locked` e i due write rispondono `plan_required` (403).
 
-Il numero di fonti ha un tetto per piano (`radarSourceLimit`): `get_radar` porta `source_limit` e
+Il numero di fonti ha un tetto per piano (`radarSourceLimit`): la `GET` porta `source_limit` e
 `sources_used`, e `add_radar_source` risponde `source_limit` (403) nominando il tetto.
 
-Sono le due cose che un agente non può indovinare, ed è la ragione per cui la lettura esiste.
+Sono le due cose che un agente non può indovinare, e nessuna delle due sta in una riga: chi legge
+le fonti con `query` su `brand_news_sources` le trova solo qui, o in `add_radar_source` che le
+dichiara nel rifiuto.
 
 ## `GET /api/v1/brands/:slug/settings/radar`
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CREATE_SHARE, LIST_SHARES, REVOKE_SHARE, SHARED_VIEW_TYPES } from './shares';
+import { CREATE_SHARE, LIST_SHARES_READ, REVOKE_SHARE, SHARED_VIEW_TYPES } from './shares';
 
 describe('il contratto delle viste pubbliche', () => {
   it('dichiara solo le viste che esistono davvero', () => {
@@ -28,7 +28,7 @@ describe('il contratto delle viste pubbliche', () => {
     expect(CREATE_SHARE.input.safeParse({ view: 'calendar', expires_in_days: 400 }).success).toBe(false);
   });
 
-  it('promette il token solo alla creazione: la lista non ha dove metterlo', () => {
+  it('promette il token solo a chi crea la vista', () => {
     expect(
       CREATE_SHARE.output.safeParse({
         ok: true,
@@ -40,19 +40,6 @@ describe('il contratto delle viste pubbliche', () => {
         expires_at: null
       }).success
     ).toBe(true);
-
-    const listed = {
-      id: 'share-1',
-      view: 'calendar',
-      month: '2026-09',
-      status: 'live',
-      created_at: '2026-09-01T00:00:00.000Z',
-      expires_at: null,
-      revoked_at: null
-    };
-    expect(LIST_SHARES.output.safeParse({ shares: [listed] }).success).toBe(true);
-    expect(LIST_SHARES.output.safeParse({ shares: [{ ...listed, token: 'abc' }] }).success).toBe(true);
-    expect(Object.keys(LIST_SHARES.output.shape.shares.element.shape)).not.toContain('token');
   });
 
   it('la revoca è dichiarata distruttiva e sa già che una share può non esserci', () => {
@@ -61,8 +48,8 @@ describe('il contratto delle viste pubbliche', () => {
   });
 
   it('ogni endpoint sa dire che la tabella non è stata migrata', () => {
-    for (const endpoint of [CREATE_SHARE, LIST_SHARES, REVOKE_SHARE]) {
-      expect(endpoint.failures.map((f) => f.error), endpoint.tool).toContain('shares_not_migrated');
+    for (const { failures } of [CREATE_SHARE, LIST_SHARES_READ, REVOKE_SHARE]) {
+      expect(failures.map((f) => f.error)).toContain('shares_not_migrated');
     }
   });
 });

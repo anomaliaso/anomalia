@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
-import { BRAND_ENDPOINTS } from '../lib/contracts/index.ts';
+import { BRAND_ENDPOINTS, BRAND_FAMILIES } from '../lib/contracts/index.ts';
 import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
 
 /**
@@ -12,7 +12,7 @@ import { MCP_INSTRUCTIONS } from '../mcp/server.ts';
  * Se la descrizione non contiene quelle parole il modello scorre `tools/list` e non lo riconosce:
  * è così che «puoi generare la img di un gatto?» ha ricevuto «non ho uno strumento di generazione
  * immagini» con `generate_image` nella lista, e «rendi rossa questa foto» ha prodotto un disegno
- * nuovo con `refine_image` nella stessa lista.
+ * nuovo con `refine_media` nella stessa lista.
  *
  * IL CONTROLLO VALE SU DUE SUPERFICI, non una. La skill si legge PRIMA dei contratti, quindi non
  * sono «il lavoro e il suo allineamento»: sono due prompt in concorrenza, e vince quello che
@@ -33,18 +33,16 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
   // risposto di non avere lo strumento. Le parole stanno nella prima riga della descrizione e in
   // apertura di entrambe le superfici della skill, perche' e' li' che un modello scorre.
   { tool: 'generate_image', question: 'generate an image of a cat', words: ['image', 'cat', 'draw'] },
-  { tool: 'refine_image', question: 'make this photo red', words: ['change', 'photo', 'red'] },
+  { tool: 'refine_media', question: 'make this photo red', words: ['change', 'photo', 'red'] },
+  // Un video gia' in libreria si CORREGGE, non si rifilma: e' la meta' che mancava, e la sola
+  // superficie su cui un agente puo' scoprirlo e' questa.
+  { tool: 'refine_media', question: 'change this video I already made', words: ['change', 'video', 'library'] },
   {
     tool: 'generate_video',
     question: 'animate this photo with a 5 second video',
     words: ['animate', 'photo', 'video', 'clip']
   },
   { tool: 'make_video', question: 'turn this post into a video', words: ['post', 'video', 'animate'] },
-  {
-    tool: 'generate_media',
-    question: 'generate an image or a video',
-    words: ['image', 'video', 'generate_image', 'generate_video']
-  },
   {
     tool: 'render_post',
     question: 'this post has no image, draw it',
@@ -53,7 +51,7 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
   {
     tool: 'regenerate_post_media',
     question: 'change the image on this post',
-    words: ['change', 'image', 'post', 'refine_image']
+    words: ['change', 'image', 'post', 'refine_media']
   },
   {
     tool: 'search_knowledge',
@@ -61,9 +59,9 @@ const ASKED_FOR: ReadonlyArray<{ tool: string; question: string; words: readonly
     words: ['question', 'documents', 'answer']
   },
   {
-    tool: 'get_voice',
+    tool: 'query',
     question: 'how is this brand supposed to sound',
-    words: ['sound', 'tone', 'brand']
+    words: ['brand', 'settings']
   },
   {
     tool: 'geo_action',
@@ -119,8 +117,14 @@ const describing = (tool: string): string => {
  * scrivendo nella libreria di un cliente vero. Per un gatto.
  *
  * Serve corta: si paga a ogni sessione, come `tools/list`.
+ *
+ * 1.300 → 1.700 il 2026-09-06, e stavolta non è un promemoria a scadenza: con trentatré letture
+ * ritirate dentro `query`, queste righe SONO il percorso principale. Un agente che qui non impara
+ * `columns`, `offset` e `count` chiama `query` male e conclude che il prodotto non risponde — che
+ * costa infinitamente più dei 400 caratteri. In cambio `tools/list` cala di 24.000 caratteri, e
+ * quello si paga una volta per sessione come questo.
  */
-const INSTRUCTIONS_MAX_CHARS = 1_200;
+const INSTRUCTIONS_MAX_CHARS = 1_700;
 
 describe('le istruzioni del server sono una mappa, non un ordine', () => {
   test('non dicono di partire SEMPRE da list_brands', () => {
@@ -139,6 +143,15 @@ describe('le istruzioni del server sono una mappa, non un ordine', () => {
   test('dicono che cosa non costa, non solo che cosa costa', () => {
     expect(MCP_INSTRUCTIONS).toMatch(/reads cost nothing/i);
     expect(MCP_INSTRUCTIONS).toMatch(/credits/i);
+  });
+
+  /**
+   * Il prefisso corto valeva per una quindicina di tool e ognuno se lo ripeteva. È una regola del
+   * server, non di un tool: sta qui, dove si legge una volta per sessione, e le descrizioni non la
+   * pagano più quindici volte.
+   */
+  test('dicono che gli id accettano un prefisso corto', () => {
+    expect(MCP_INSTRUCTIONS).toMatch(/prefix/i);
   });
 
   test('nessuna tariffa scritta a mano, come sulle altre due superfici', () => {
@@ -172,7 +185,7 @@ describe('una descrizione si legge cercando il proprio problema', () => {
   }
 
   test('nessuna descrizione scrive una tariffa a mano: il prezzo lo misura la risposta', () => {
-    for (const endpoint of BRAND_ENDPOINTS) {
+    for (const endpoint of [...BRAND_ENDPOINTS, ...BRAND_FAMILIES]) {
       expect(HAND_WRITTEN_TARIFF.test(endpoint.description), endpoint.tool).toBe(false);
     }
   });

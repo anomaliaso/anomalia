@@ -7,12 +7,19 @@ export const QUERY_TABLE_NAMES = QUERY_TABLES.split(' ') as [string, ...string[]
 export const QUERY_OPS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in', 'cs', 'cd'] as const;
 
 export const QUERY_DEFAULT_ROWS = 20;
-export const QUERY_MAX_ROWS = 100;
+export const QUERY_MAX_ROWS = 200;
 
 const Filter = z.object({
   column: z.string().describe('A bare column name'),
   op: z.enum(QUERY_OPS),
-  value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
+  value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))]),
+  negate: z.boolean().optional().describe('Invert this one filter: `is null` becomes `is not null`')
+});
+
+const Order = z.object({
+  column: z.string(),
+  ascending: z.boolean().optional(),
+  nullsFirst: z.boolean().optional()
 });
 
 /**
@@ -25,18 +32,25 @@ export const QUERY_DATABASE = {
   tool: 'query',
   title: 'Query the database',
   description:
-    'Read ANY table in the database directly, AS YOU — the request runs with the anon key plus your ' +
-    'own session, so Postgres RLS returns exactly the rows you would see in the app, and nothing more. ' +
+    'READ THE BRAND: this is the read tool. Posts, media, articles, memory, competitors, products, ' +
+    'plans, settings, audits — every table, AS YOU. The request runs with the anon key plus your own ' +
+    'session, so Postgres RLS returns exactly the rows you would see in the app, and nothing more. ' +
     'READ ONLY: there is no SQL here. You name a table, columns and filters, and it issues one ' +
-    'PostgREST read, so a write has nowhere to go — no INSERT, no CTE, no function call, nothing to ' +
-    'attempt. Omit `table` to list every table you can name. Ask for a table with no `columns` to get ' +
-    'real rows with every column: the keys of a row ARE the schema. One table per call — no joins, no ' +
-    'embeds; read two tables and match the ids yourself. Reach for it when the answer needs a table ' +
-    'nothing else exposes, a count, or a join you do by hand. ' +
-    'IT IS ALSO THE READ FOR QUESTIONS THAT HAVE NO TOOL OF THEIR OWN. What this brand SELLS — its ' +
-    'catalogue of products, offers and services — is the `products` table: one row per offer, with ' +
-    '`title`, `kind`, `pricing`, `url`, `featured` and the `images` it carries. ' +
-    'Costs nothing.',
+    'PostgREST read, so a write has nowhere to go. Omit `table` to list every table you can name. ' +
+    'Ask for a table with no `columns` to get real rows with every column: the keys of a row ARE the ' +
+    'schema. THEN NAME THE COLUMNS YOU NEED — the one rule that decides whether the answer is whole. ' +
+    'Without `columns` every column comes back, the character cap drops whole rows to fit, and a long ' +
+    'question gets a short answer; with five columns named the same read returns every row. ' +
+    'NOTHING IS OUT OF REACH: `offset` is the next page and the reply tells you which offset resumes ' +
+    'where it stopped, `count: \"exact\"` counts the matching rows for real when the number IS the ' +
+    'answer, `negate` on a filter turns `is null` into `is not null`, `order` takes several columns ' +
+    'with `nullsFirst`, and `embed` brings a related table along through its foreign key (RLS applies ' +
+    'to it too) — an article with its category, author and tags in one call. Every cap that bites is ' +
+    'named in `limits` on the way back; none of them is silent. ONE ROW IS A DOCUMENT: with ' +
+    '`limit: 1` long text comes back whole, which is how you read an article before rewriting it. ' +
+    'With many rows long values are cut at 2,000 chars and `limits` says in which columns. ' +
+    'What this brand SELLS is the `products` table: one row per offer, with `title`, `kind`, ' +
+    '`pricing`, `url`, `featured` and the `images` it carries. Free.',
   method: 'POST',
   pathUnderBrand: '/query',
   input: z
@@ -54,9 +68,23 @@ export const QUERY_DATABASE = {
         .optional()
         .describe('Filters, ANDed together. `in` takes an array; `is` takes null/true/false.'),
       order: z
-        .object({ column: z.string(), ascending: z.boolean().optional() })
+        .union([Order, z.array(Order)])
         .optional()
-        .describe('Sort. Descending when `ascending` is omitted.'),
+        .describe('Sort, one column or several in order. Descending when `ascending` is omitted.'),
+      embed: z
+        .array(z.object({ table: z.string(), columns: z.array(z.string()).optional() }))
+        .optional()
+        .describe('Related tables to bring along, followed through their foreign key. RLS applies to each.'),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe('Rows to skip — the next page. `limits` tells you the offset that resumes the read.'),
+      count: z
+        .enum(['estimated', 'exact'])
+        .optional()
+        .describe('`exact` counts the matching rows for real. Default is the planner estimate.'),
       limit: z.number().int().positive().optional().describe(`Rows to return. ${QUERY_MAX_ROWS} at most.`)
     })
     .strict(),

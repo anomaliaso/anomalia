@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TARGET_PLATFORMS } from './brand-settings';
-import { LIST_SOCIAL_ACCOUNTS, SOCIAL_CONNECT_LINK } from './social';
+import { LIST_SOCIAL_ACCOUNTS_READ, SOCIAL_CONNECT_LINK } from './social';
 
 describe('il vocabolario delle piattaforme', () => {
   it('è quello del prodotto, non una copia scritta qui', () => {
@@ -27,25 +27,19 @@ describe('il vocabolario delle piattaforme', () => {
   });
 });
 
-describe('la coppia leggi-e-conia', () => {
-  it('la lettura è una GET e non è distruttiva', () => {
-    expect(LIST_SOCIAL_ACCOUNTS.method).toBe('GET');
-    expect(LIST_SOCIAL_ACCOUNTS.destructive).toBe(false);
-  });
-
+describe('il link che si conia', () => {
   it('coniare un link non è distruttivo: non collega e non scollega niente', () => {
     expect(SOCIAL_CONNECT_LINK.method).toBe('POST');
     expect(SOCIAL_CONNECT_LINK.destructive).toBe(false);
   });
 
   it('non vive sotto /connections, che è Composio e non ha niente a che vedere', () => {
-    expect(LIST_SOCIAL_ACCOUNTS.pathUnderBrand.startsWith('/social/')).toBe(true);
     expect(SOCIAL_CONNECT_LINK.pathUnderBrand.startsWith('/social/')).toBe(true);
   });
 
   it('non accetta campi non dichiarati invece di scartarli in silenzio', () => {
     expect(SOCIAL_CONNECT_LINK.input.safeParse({ platform: 'x', token: 'abc' }).success).toBe(false);
-    expect(LIST_SOCIAL_ACCOUNTS.input.safeParse({ platform: 'x' }).success).toBe(false);
+    expect(LIST_SOCIAL_ACCOUNTS_READ.input.safeParse({ platform: 'x' }).success).toBe(false);
   });
 });
 
@@ -53,12 +47,12 @@ describe('nessun segreto attraversa il confine', () => {
   const forbidden = /token|secret|credential|access|refresh|password|cookie|zernio/i;
 
   it('la lettura non dichiara un solo campo che somigli a una credenziale', () => {
-    const account = LIST_SOCIAL_ACCOUNTS.output.shape.accounts.element.shape;
+    const account = LIST_SOCIAL_ACCOUNTS_READ.output.shape.accounts.element.shape;
 
     for (const field of Object.keys(account)) {
       expect(forbidden.test(field), field).toBe(false);
     }
-    for (const field of Object.keys(LIST_SOCIAL_ACCOUNTS.output.shape)) {
+    for (const field of Object.keys(LIST_SOCIAL_ACCOUNTS_READ.output.shape)) {
       expect(forbidden.test(field), field).toBe(false);
     }
   });
@@ -70,7 +64,7 @@ describe('nessun segreto attraversa il confine', () => {
   });
 
   it('scarta ogni chiave in più che una rotta si lasciasse sfuggire', () => {
-    const leaked = LIST_SOCIAL_ACCOUNTS.output.safeParse({
+    const leaked = LIST_SOCIAL_ACCOUNTS_READ.output.safeParse({
       brand: 'demo',
       accounts: [
         {
