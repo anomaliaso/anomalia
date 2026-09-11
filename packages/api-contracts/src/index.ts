@@ -107,6 +107,23 @@ export type BrandResource = keyof typeof BRAND_RESOURCES;
 
 export const RESOURCE_SEGMENT = ':id';
 
+/**
+ * L'intestazione con cui un client dice QUALE tool sta chiamando. `ai_calls` registra la chiamata
+ * al modello, non chi l'ha causata, e le sue etichette (`planStrategy`, `seoAgent`) sono condivise
+ * fra l'autopilot, la chat in-app e gli agenti esterni: senza questo nome la spesa di un tool non
+ * è separabile da quella di nessun altro, e «questo tool vale quello che costa» resta senza
+ * risposta.
+ */
+export const TOOL_HEADER = 'x-anomalia-tool';
+
+/**
+ * Il nome arriva dalla rete, quindi non è un nome finché non lo si guarda: si accetta solo la
+ * forma che un tool ha davvero (tutti e ottanta) e si scarta il resto invece di scriverlo.
+ */
+export function toolFromHeader(value: string | null | undefined): string | null {
+  return value && /^[a-z][a-z0-9_]{0,63}$/.test(value) ? value : null;
+}
+
 type EndpointShape = {
   readonly tool: string;
   readonly title: string;

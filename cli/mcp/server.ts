@@ -1,5 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { asTool } from '../lib/api.ts';
+import { getRequestAuth } from './context.ts';
+import { mcpLog } from './observability.ts';
 import { registerAuthTools } from './tools/auth.ts';
 import { registerBrandTools } from './tools/brand-content.ts';
 import { registerPlanTools } from './tools/plan.ts';
@@ -58,6 +61,62 @@ function trimListedTools(server: McpServer): void {
   }) as typeof inner.setRequestHandler;
 }
 
+type ToolHandler = (...args: unknown[]) => unknown;
+
+function brandSlugOf(args: unknown[]): string | undefined {
+  const input = args[0] as { slug?: unknown } | undefined;
+  return typeof input?.slug === 'string' ? input.slug : undefined;
+}
+
+/**
+ * OGNI CHIAMATA A UN TOOL LASCIA IL SUO NOME. `mcp_logs` ha il campo `tool_name` da sempre e
+ * nessuno lo riempiva: quarantadue letture tolte e i tool riscritti sono stati decisi ragionando,
+ * perché la tabella non sapeva dire quale tool fosse stato chiamato nemmeno una volta.
+ *
+ * Si decora `registerTool` una volta sola, prima che i quattro moduli registrino: un tool nuovo è
+ * strumentato per il fatto di esistere, e la riga non dipende da chi si ricorda di scriverla.
+ *
+ * Lo stesso scope porta il nome fino alle chiamate HTTP che il tool fa (`asTool`), dove diventa
+ * l'intestazione che lega la spesa in `ai_calls` al tool che l'ha causata.
+ */
+function recordToolCalls(server: McpServer): void {
+  const register = server.registerTool.bind(server);
+
+  server.registerTool = ((name: string, config: unknown, handler: ToolHandler) =>
+    register(name as never, config as never, (async (...args: unknown[]) => {
+      const started = Date.now();
+      const common = {
+        event: 'tool.call',
+        toolName: name,
+        brandSlug: brandSlugOf(args),
+        userId: getRequestAuth()?.user.id,
+      } as const;
+
+      try {
+        const result = (await asTool(name, () => handler(...args))) as { isError?: boolean };
+        const failed = result?.isError === true;
+
+        mcpLog({
+          ...common,
+          level: failed ? 'warn' : 'info',
+          message: failed ? `${name} returned an error` : name,
+          durationMs: Date.now() - started,
+        });
+
+        return result;
+      } catch (e) {
+        mcpLog({
+          ...common,
+          level: 'error',
+          message: e instanceof Error ? e.message : String(e),
+          durationMs: Date.now() - started,
+          error: e,
+        });
+        throw e;
+      }
+    }) as never)) as typeof server.registerTool;
+}
+
 export function createAnomaliaMcpServer(): McpServer {
   const server = new McpServer(
     {
@@ -70,6 +129,7 @@ export function createAnomaliaMcpServer(): McpServer {
   );
 
   trimListedTools(server);
+  recordToolCalls(server);
 
   registerAuthTools(server);
   registerBrandTools(server);
