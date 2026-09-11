@@ -443,7 +443,12 @@ export const api = {
     get<{ products: { id: string; title: string; kind: string; pricing: string | null; imageCount: number; featured: boolean }[] }>(`/api/v1/brands/${slug}/products`, t),
 
   syncProducts: (t: string, slug: string) =>
-    post<{ ok: boolean; platform: string; synced: number }>(`/api/v1/brands/${slug}/products`, t),
+    post<{
+      ok: boolean;
+      platform: string;
+      synced: number;
+      rejected: { title: string; reason: string }[];
+    }>(`/api/v1/brands/${slug}/products`, t),
 
   deletePostsByStatus: (t: string, slug: string, status: string) =>
     request<{ ok: boolean; deleted: number }>(`/api/v1/brands/${slug}/posts?status=${encodeURIComponent(status)}`, t, { method: 'DELETE' }),

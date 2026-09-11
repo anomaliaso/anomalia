@@ -50,4 +50,8 @@ async function syncProducts(token: string, slug: string) {
   console.log(c.yellow('Reimportazione prodotti dal sito…'));
   const result = await api.syncProducts(token, slug);
   ok(`${result.synced} prodotti importati da ${result.platform}.`);
+
+  for (const { title, reason } of result.rejected ?? []) {
+    console.log(c.red(`  scartato: ${title || '(senza titolo)'} — ${reason}`));
+  }
 }

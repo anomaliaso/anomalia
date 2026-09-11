@@ -1629,3 +1629,55 @@ tenere dentro il log la frase del fornitore, non lo status: `Payment Required.` 
 bugia con la stessa faccia della verità. E prima di dare la colpa al codice, chiedere il saldo:
 quasi ogni fornitore ha un endpoint gratuito che dice quanto credito resta (`appendix/user_data`),
 e un `402` non si debugga, si ricarica.
+## Un vincolo nuovo rende raggiungibile ogni `catch` muto sulla stessa tabella
+
+**Segnale.** Una funzione che ha sempre funzionato comincia a perdere dati, e nel diff del giorno
+in cui è cambiata non c'è. Il commit che l'ha rotta è quello che ha aggiunto un `CHECK` a una
+tabella che quella funzione scrive — e quel commit, da solo, era corretto.
+
+**Cosa succede.** `sync_products` cancellava il catalogo del brand e poi inseriva quello nuovo,
+senza leggere l'`error` di nessuna delle due scritture:
+
+```ts
+await supabase.from('products').delete().eq('brand_id', brand.id);
+await supabase.from('products').insert(products.map(...));
+return json({ ok: true, platform, synced: products.length });
+```
+
+Per mesi è stato un difetto **latente**: l'insert passava quasi sempre, quindi il `delete` senza
+rete non si vedeva. Poi sono arrivati i `CHECK` su `products` — `products_title_check`,
+`products_url_check`, `products_images_shape`, `products_text_len` — e i titoli e gli URL li
+prende uno scraper da un sito che non controlliamo. Un prodotto senza titolo, o con `example.com`
+invece di `https://example.com`, adesso fa fallire l'insert; ed è un INSERT solo con tutte le
+righe, che in Postgres è atomico: **una riga malformata su quaranta e non ne entra nessuna**. Il
+catalogo è già cancellato, e la risposta dice `synced: 47`.
+
+Nessuna delle due PR poteva vederlo. Quella dei vincoli guardava se i valori erano validi, non chi
+leggeva l'errore quando non lo erano. Quella della sincronizzazione è di mesi prima, quando quel
+fallimento non esisteva. **Le due cose si scrivono in PR diverse, da persone diverse, e la
+combinazione non è il diff di nessuna delle due.**
+
+**La mossa, in tre parti.**
+
+1. **Quando aggiungi un vincolo a una tabella, cerca chi ci scrive senza leggere l'`error`.** È
+   un `grep` sulla tabella, non una revisione: `from('<tabella>')` seguito da `insert`, `update`,
+   `upsert` o `delete` di cui nessuno guarda l'esito. Quella lista è l'elenco dei difetti che il
+   tuo vincolo ha appena reso raggiungibili, e va nella stessa PR o in quella subito dopo.
+2. **Cancellare e riscrivere non si fa in quest'ordine.** PostgREST non ha transazioni, quindi
+   `delete` + `insert` sono due viaggi e il fallimento del secondo lascia fatto il primo. Si
+   inserisce prima e si cancella il vecchio dopo: un insert che fallisce lascia il catalogo di
+   prima esattamente dov'era. Per un istante esistono entrambi gli insiemi — va verificato che
+   nessun vincolo unico lo vieti e che i lettori siano `select`, ma un conteggio doppio per una
+   frazione di secondo non si paragona a un catalogo perso.
+3. **La riga malformata non deve far cadere le altre, e non si scarta in silenzio.** Il lotto che
+   fallisce si ritenta riga per riga: chi passa entra, chi no torna al chiamante **col motivo che
+   ha dato il database**. I vincoli non si riscrivono in TypeScript per filtrare prima — una
+   regola scritta in due posti diverge al primo cambiamento della migration, e qui il posto giusto
+   è uno solo: la migration li dichiara, Postgres giudica.
+
+**Perché il test non è in vitest.** La suite mocka Supabase e un insert finto accetta qualunque
+cosa, quindi il vincolo lì è verde per costruzione. Che i `CHECK` mordano davvero lo prova
+`scripts/constraint-harness.mjs` contro un Postgres vero. Quello che invece vitest **può** provare,
+ed è il difetto vero, è l'**ordine**: con la scrittura che fallisce, il catalogo di prima deve
+essere ancora in tabella e la risposta non deve dire `synced`. Un test del solo percorso felice non
+vede niente di tutto questo — è per quello che il difetto è arrivato fin qui con la suite verde.

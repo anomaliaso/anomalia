@@ -63,6 +63,14 @@ const CASES = [
   { what: 'products.images non array', sql: product('images', `'{}'::jsonb`), code: CHECK_VIOLATION },
   { what: 'products.kind oltre il tetto', sql: product('kind', `repeat('x', 201)`), code: CHECK_VIOLATION },
   { what: 'products.description oltre il tetto', sql: product('description', `repeat('x', 50001)`), code: CHECK_VIOLATION },
+  // UNA riga malformata rifiuta l'INTERO lotto: `insert([...])` di supabase-js e` un solo INSERT,
+  // e un INSERT in Postgres e` atomico. E` il fatto che trasforma «un prodotto senza schema
+  // nell'URL» in «zero prodotti su quaranta», e non si deduce leggendo il client.
+  {
+    what: 'products: una riga malformata rifiuta tutto il lotto',
+    sql: `insert into public.products (brand_id, title, url) values ($1, 'Moka', 'https://shop.test/moka'), ($1, 'Senza schema', 'shop.test/rotto')`,
+    code: CHECK_VIOLATION
+  },
 
   { what: 'brand_kit.favicon_url non http ne data', sql: kit('favicon_url', `'nope'`), code: CHECK_VIOLATION },
   { what: 'brand_kit.source_url e un handle, non un sito', sql: kit('source_url', `'Mariopuggelli1939'`), code: CHECK_VIOLATION },
