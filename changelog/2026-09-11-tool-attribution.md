@@ -1,21 +1,49 @@
-# Quale tool ha causato la spesa
+# Chi ha chiamato quale tool, su quale brand, e quanto è costato
 
-`mcp_logs` ha zero righe in produzione. I motivi erano due, distinti, e questo ne chiude uno: il
-campo `tool_name` esiste da sempre e **nessuno in `cli/mcp/` lo riempiva** — `grep -rn toolName
-cli/mcp/` fuori da `observability.ts` non trovava niente. L'altro motivo è una variabile
-d'ambiente mancante al progetto Vercel dell'MCP, che non sta qui dentro; ma il **silenzio** con cui
-`mcpLog` usciva quando manca, quello sì.
+`mcp_logs` aveva zero righe in produzione, per due motivi distinti. Il secondo — una variabile
+d'ambiente mancante al progetto Vercel dell'MCP — l'ha messa Andrea a mano, e dopo il deploy la
+tabella è passata da zero a 162 righe. Solo che quelle righe raccontano il **transport** e non cosa
+succede dentro:
+
+```
+09:00   11 richieste   11 non autorizzate    0 ok
+10:00   58 richieste   15 non autorizzate   40 ok
+```
+
+Alle nove non passava nessuno — un client configurato male che non completava l'OAuth. Alle dieci,
+quaranta risposte a buon fine. Quello che manca è **chi**, **quale tool**, **su quale brand**: tre
+colonne che `observability.ts` scrive già fra le sue quindici e che arrivavano sempre `null`,
+perché nessuno in `cli/mcp/` le passava. `grep -rn toolName cli/mcp/` fuori da `observability.ts`
+non trovava niente, e lo stesso valeva per `userId` e `brandSlug`.
+
+Ventisei richieste su sessantanove finiscono 401. Con `user_id` quel numero si separa in «un
+cliente non riesce a collegarsi» e «qualcuno sta sperimentando», che vogliono risposte opposte. Con
+`brand_slug` un errore diventa attribuibile al brand, che è l'unità su cui questo prodotto ragiona.
+Con `tool_name` si risponde a «questo tool vale quello che costa».
 
 ## Una riga per chiamata, e non è il tool a scriverla
 
 `recordToolCalls` decora `registerTool` una volta sola, prima che i quattro moduli registrino —
-lo stesso punto e la stessa tecnica di `trimListedTools`, che già stava lì. Quindi un tool nuovo è
-strumentato per il fatto di esistere, e la riga non dipende da chi si ricorda di scriverla. La
-riga porta nome del tool, brand, utente, durata, ed è `warn` quando il tool torna un errore: un
+lo stesso punto e la stessa tecnica di `trimListedTools`, che già stava lì. Le tre colonne si
+riempiono dove il tool viene eseguito, che è un posto solo: un lavoro solo, non tre. E un tool
+nuovo è strumentato per il fatto di esistere, non perché qualcuno si ricorda di scrivere la riga.
+La riga porta nome del tool, brand, utente, durata, ed è `warn` quando il tool torna un errore: un
 tool che fallisce è quello che più di tutti si vuole nei log, e prima non lasciava niente.
 
+**`user_id` è l'identificatore, e si ferma lì.** L'identità arriva a questo punto con l'email
+accanto — `getRequestAuth()` la porta entrambe — e il percorso comodo la infilerebbe nella riga
+senza che nessuno se ne accorga. La tabella la leggerà chi non ha motivo di vedere l'indirizzo di
+un cliente, quindi un test verifica che nella riga non compaia nemmeno una chiocciola.
+
+**E niente di tutto questo può rovesciare la chiamata che sta descrivendo.** Gira dentro il server
+MCP, adesso su *ogni* tool: `mcpLog` faceva `void mcpLogAsync(entry)`, e una promise respinta
+lasciata così è una unhandled rejection — in Node abbatte il processo, cioè la richiesta di un
+cliente, per non essere riuscita a descriverla. Ora il rifiuto finisce in un `console.error`, come
+tutto il resto di quel file. Il test lo riproduce con un `context` circolare, che fa fallire il
+`JSON.stringify` prima di qualunque rete.
+
 Il test guarda la riga che arriva a PostgREST — un server HTTP vero, alzato dal test — e non la
-funzione che la chiama. `mcpLog` invocato col nome giusto ma senza destinazione non prova niente,
+funzione che la chiama. `mcpLog` invocato coi campi giusti ma senza destinazione non prova niente,
 ed era esattamente il caso che ci ha portati fin qui.
 
 ## E il collegamento con la spesa, che è la parte che serviva davvero
