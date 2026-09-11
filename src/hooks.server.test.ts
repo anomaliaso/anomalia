@@ -28,7 +28,21 @@ vi.mock('@sveltejs/kit/hooks', () => ({
 		}
 }));
 
+const aiCalls: Record<string, unknown>[] = [];
+
+vi.mock('$lib/server/supabase-admin', () => ({
+	createAdminClient: () => ({
+		from: () => ({
+			insert: async (row: Record<string, unknown>) => {
+				aiCalls.push(row);
+				return { error: null };
+			}
+		})
+	})
+}));
+
 const { handle } = await import('./hooks.server');
+const { logAiCall } = await import('$lib/server/ai-log');
 
 describe('server session recovery', () => {
 	it('serves the request when the session cookie is invalid Base64-URL', async () => {
@@ -52,5 +66,46 @@ describe('server session recovery', () => {
 		} as any);
 
 		expect(response.status).toBe(200);
+	});
+});
+
+/**
+ * Lo stesso posto in cui si stabilisce a quale brand addebitare la spesa stabilisce anche chi
+ * l'ha causata: una rotta non può dimenticarsene. Il nome arriva dalla rete, quindi si convalida
+ * qui — chiunque può spedire quell'intestazione, e una riga di `ai_calls` attribuita a un tool
+ * inventato è peggio di una riga senza nessun tool.
+ */
+describe('il tool che ha chiesto il lavoro', () => {
+	const spendUnder = async (headers: Record<string, string>) => {
+		aiCalls.length = 0;
+		await handle({
+			event: {
+				request: new Request('http://localhost/api/v1/brands/demo/weekly-plan/plan', { headers }),
+				url: new URL('http://localhost/api/v1/brands/demo/weekly-plan/plan'),
+				route: { id: '/api/v1/brands/[slug]/weekly-plan/plan' },
+				params: {},
+				cookies: { getAll: () => [], get: () => undefined, set: vi.fn() },
+				locals: {}
+			},
+			resolve: async () => {
+				logAiCall({ label: 'planStrategy', provider: 'internal', ms: 1, ok: true });
+				return new Response('ok');
+			}
+		} as any);
+
+		await vi.waitFor(() => expect(aiCalls).toHaveLength(1));
+		return aiCalls[0];
+	};
+
+	it('finisce sulla riga della spesa che ha causato', async () => {
+		expect((await spendUnder({ 'x-anomalia-tool': 'plan_week' })).context).toBe('tool:plan_week');
+	});
+
+	it('non scrive quello che un nome di tool non è', async () => {
+		expect((await spendUnder({ 'x-anomalia-tool': 'DROP TABLE ai_calls' })).context).toBeNull();
+	});
+
+	it('senza intestazione la riga resta com’era', async () => {
+		expect((await spendUnder({})).context).toBeNull();
 	});
 });

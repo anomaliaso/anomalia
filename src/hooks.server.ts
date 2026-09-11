@@ -7,7 +7,8 @@ import { env as publicEnv } from '$env/dynamic/public';
 import type { Handle } from '@sveltejs/kit';
 import { pickLocale } from '$lib/i18n/locale';
 import { retiredPageTarget } from '$lib/seo';
-import { withBrandContext } from '$lib/server/ai-log';
+import { withBrandContext, withToolContext } from '$lib/server/ai-log';
+import { TOOL_HEADER, toolFromHeader } from '@anomalia/api-contracts';
 import { createAdminClient } from '$lib/server/supabase-admin';
 import { captureReferralCookie } from '$lib/server/referrals';
 import { isCsrfForbidden } from '$lib/server/csrf';
@@ -221,10 +222,16 @@ export const handle: Handle = sequence(csrf, Sentry.sentryHandle(), async ({ eve
     invalidateBrandPages(slug);
   }
 
+  // Chi ha causato la spesa, quando a chiamare è un agente esterno: lo stesso posto in cui si
+  // stabilisce a quale brand addebitarla. Una rotta non può dimenticarsene, e il nome si convalida
+  // qui — arriva dalla rete, non dal nostro codice.
+  const inTool = <T>(fn: () => T): T =>
+    withToolContext(toolFromHeader(event.request.headers.get(TOOL_HEADER)), fn);
+
   if (slug) {
     const brandId = await brandIdFromSlug(slug);
-    if (brandId) return withBrandContext(brandId, doResolve);
+    if (brandId) return inTool(() => withBrandContext(brandId, doResolve));
   }
-  return doResolve();
+  return inTool(doResolve);
 });
 export const handleError = Sentry.handleErrorWithSentry();
