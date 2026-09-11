@@ -191,9 +191,10 @@ export async function executeChatToolJob(
         images: profile.images ?? null
       }, { onConflict: 'brand_id' });
 
+      let catalog = { inserted: 0, rejected: [] as { title: string; reason: string }[], replaced: false };
       if (profile.products?.length) {
         const { replaceBrandCatalog } = await import('$lib/server/product-catalog');
-        await replaceBrandCatalog(
+        catalog = await replaceBrandCatalog(
           supabase,
           brandId,
           profile.products.map((p: AnyRec) => ({
@@ -210,6 +211,8 @@ export async function executeChatToolJob(
         name: profile.name,
         category: profile.category,
         products_found: profile.products?.length ?? 0,
+        products_saved: catalog.inserted,
+        products_rejected: catalog.rejected,
         site_type: profile.site_type,
         studio_approved: studio.approved || studio.already,
         instruction: studio.approved
@@ -286,7 +289,7 @@ export async function executeChatToolJob(
 
       await cancel.assertActive();
       const { replaceBrandCatalog } = await import('$lib/server/product-catalog');
-      await replaceBrandCatalog(
+      const catalog = await replaceBrandCatalog(
         supabase,
         brandId,
         products.map((p) => ({
@@ -294,7 +297,16 @@ export async function executeChatToolJob(
         }))
       );
 
-      return { success: true, platform: isShopifySite(html) ? 'Shopify' : 'WooCommerce', products_synced: products.length };
+      if (!catalog.replaced) {
+        return { error: 'No product could be saved. The catalog you had is untouched.', rejected: catalog.rejected };
+      }
+
+      return {
+        success: true,
+        platform: isShopifySite(html) ? 'Shopify' : 'WooCommerce',
+        products_synced: catalog.inserted,
+        products_rejected: catalog.rejected
+      };
     }
 
     case 'generate_video': {

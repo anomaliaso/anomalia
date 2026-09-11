@@ -56,7 +56,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     if (!products.length) return json({ error: 'No products found on the site.' }, { status: 400 });
 
     const { replaceBrandCatalog } = await import('$lib/server/product-catalog');
-    await replaceBrandCatalog(
+    const { inserted, rejected, replaced } = await replaceBrandCatalog(
       supabase,
       brand.id,
       products.map((p: any) => ({
@@ -69,8 +69,15 @@ export const POST: RequestHandler = async ({ request, params }) => {
       }))
     );
 
-    return json({ ok: true, platform, synced: products.length });
+    if (!replaced) {
+      return json(
+        { error: 'No product could be saved. The catalog you had is untouched.', rejected },
+        { status: 502 }
+      );
+    }
+
+    return json({ ok: true, platform, synced: inserted, rejected });
   } catch (e) {
-    return json({ error: `Sync failed: ${String(e)}` }, { status: 500 });
+    return json({ error: `Sync failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 });
   }
 };
