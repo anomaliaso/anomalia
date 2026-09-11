@@ -76,7 +76,7 @@ export function buildCarouselPlanPrompt(opts: { brief: string; slides: number })
 
 export async function planCarousel(
   supabase: SupabaseClient,
-  opts: { brandId: string; brief: string; slides: number }
+  opts: { brandId: string | null; brief: string; slides: number }
 ): Promise<CarouselPlan | { error: 'plan_failed' }> {
   const { aiStructured } = await import('$lib/server/ai-text');
   void supabase;

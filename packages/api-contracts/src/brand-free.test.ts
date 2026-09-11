@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { BRAND_ENDPOINTS, GENERATE_IMAGE, pathFor, pathWithoutBrand } from './index';
+import {
+  BRAND_ENDPOINTS,
+  GENERATE_CAROUSEL,
+  GENERATE_IMAGE,
+  GENERATE_VIDEO,
+  REFINE_MEDIA,
+  pathFor,
+  pathWithoutBrand
+} from './index';
 
 /**
  * Un generatore raggiungibile solo sotto un brand è un generatore che, per disegnare un gatto,
@@ -10,26 +18,93 @@ import { BRAND_ENDPOINTS, GENERATE_IMAGE, pathFor, pathWithoutBrand } from './in
  * Le due metà si tengono. Un `slug` opzionale che la descrizione non spiega viene riempito lo
  * stesso — con un brand a caso, i cui crediti sono di qualcun altro.
  */
-describe('generate_image senza un brand', () => {
-  it('dichiara una strada che non passa da nessun brand', () => {
+describe('generare senza un brand', () => {
+  it('ogni motore dichiara una strada che non passa da nessun brand', () => {
     expect(pathWithoutBrand(GENERATE_IMAGE)).toBe('/api/v1/images');
+    expect(pathWithoutBrand(GENERATE_VIDEO)).toBe('/api/v1/videos');
+    expect(pathWithoutBrand(GENERATE_CAROUSEL)).toBe('/api/v1/carousel');
+    expect(pathWithoutBrand(REFINE_MEDIA)).toBe('/api/v1/refine');
   });
 
-  it('tiene la strada del brand esattamente dov era', () => {
+  it('tiene le strade del brand esattamente dov erano', () => {
     expect(pathFor(GENERATE_IMAGE, 'demo')).toBe('/api/v1/brands/demo/media/images');
+    expect(pathFor(GENERATE_VIDEO, 'demo')).toBe('/api/v1/brands/demo/media/videos');
+    expect(pathFor(GENERATE_CAROUSEL, 'demo')).toBe('/api/v1/brands/demo/media/carousel');
+    expect(pathFor(REFINE_MEDIA, 'demo')).toBe('/api/v1/brands/demo/media/refine');
   });
 
-  it('è l unico endpoint che dichiara di saperne fare a meno', () => {
+  /**
+   * I quattro motori, e soltanto loro. Un `slug` opzionale sparso altrove toglierebbe il confine
+   * invece di aprire una porta: `pathWithoutBrand` è ciò che rende opzionale lo slug su MCP.
+   */
+  it('sono i quattro motori a saperne fare a meno, e nessun altro', () => {
     const brandFree = BRAND_ENDPOINTS.filter((e) => e.pathWithoutBrand);
 
-    expect(brandFree.map((e) => e.tool)).toEqual(['generate_image']);
+    expect(brandFree.map((e) => e.tool).sort()).toEqual([
+      'generate_carousel',
+      'generate_image',
+      'generate_video',
+      'refine_media'
+    ]);
   });
 
-  it('un endpoint che non lo dichiara non ha una strada senza brand', () => {
-    const anchored = BRAND_ENDPOINTS.find((e) => e.tool === 'refine_media');
+  /**
+   * Gli editor di un post restano ancorati, e non per dimenticanza: lavorano su una riga di
+   * `posts`, che appartiene a un brand. Senza brand non c'è il post da modificare, quindi non c'è
+   * niente da aprire — dichiararli sarebbe una porta su una stanza che non esiste.
+   */
+  it('chi lavora su un post resta ancorato al brand del post', () => {
+    for (const tool of ['regenerate_slide', 'reorder_slides', 'regenerate_post_media', 'make_video']) {
+      const anchored = BRAND_ENDPOINTS.find((e) => e.tool === tool);
 
-    expect(pathWithoutBrand(anchored!)).toBeNull();
+      expect(pathWithoutBrand(anchored!), tool).toBeNull();
+    }
   });
+});
+
+/**
+ * La descrizione è metà del lavoro: uno slug reso opzionale senza dirlo nel campo è il difetto già
+ * pagato — un modello lo riempie comunque, scegliendo un brand a caso, con i crediti di qualcun
+ * altro. Ogni motore deve dire che cosa cambia quando lo slug non c'è.
+ */
+describe('le descrizioni dicono che cosa cambia senza slug', () => {
+  for (const endpoint of [GENERATE_IMAGE, GENERATE_VIDEO, GENERATE_CAROUSEL, REFINE_MEDIA]) {
+    it(`${endpoint.tool} dice che senza slug non c e un brand`, () => {
+      expect(endpoint.description).toMatch(/WITHOUT slug/);
+    });
+
+    it(`${endpoint.tool} vieta di cercare un brand per decidere dove generare`, () => {
+      expect(endpoint.description).toMatch(/Do NOT call list_brands/);
+    });
+  }
+
+  it('generate_video dice dove si ritrova un clip che nessuna libreria reclama', () => {
+    expect(GENERATE_VIDEO.description).toMatch(/GET \/api\/v1\/videos/);
+  });
+
+  it('refine_media dice che la sorgente è la maniglia consegnata, non un indirizzo', () => {
+    expect(REFINE_MEDIA.input.shape.base_media_id.description).toMatch(/storage_path/);
+    expect(REFINE_MEDIA.description).toMatch(/never a web address/);
+  });
+});
+
+/**
+ * Chi paga viene DETTO, su ogni strada senza brand: il chiamante non l'ha scelto, e un addebito
+ * che nessuno ha nominato è un addebito che nessuno controlla.
+ */
+describe('chi paga è nominato in ogni risposta', () => {
+  for (const endpoint of [GENERATE_IMAGE, GENERATE_VIDEO, GENERATE_CAROUSEL, REFINE_MEDIA]) {
+    it(`${endpoint.tool} porta l organizzazione nella risposta`, () => {
+      expect((endpoint.output as { shape: Record<string, unknown> }).shape.organization).toBeDefined();
+    });
+
+    it(`${endpoint.tool} dichiara i rifiuti della strada senza brand`, () => {
+      const errors = endpoint.failures.map((f) => f.error);
+
+      expect(errors).toContain('brand_scoped_key');
+      expect(errors).toContain('no_organization');
+    });
+  }
 });
 
 /**

@@ -55,10 +55,24 @@ describe('slug opzionale, e solo dove il registro lo dichiara', () => {
     expect(tool.inputSchema?.properties?.slug?.description).toMatch(/omit/i);
   });
 
-  test('refine_media continua a pretendere il brand: la sorgente vive nella sua libreria', async () => {
-    const tool = find(await tools(), 'refine_media');
+  test('anche gli altri motori si chiamano senza nominare un brand', async () => {
+    const all = await tools();
 
-    expect(tool.inputSchema?.required ?? []).toContain('slug');
+    for (const name of ['generate_video', 'generate_carousel', 'refine_media']) {
+      expect(find(all, name).inputSchema?.required ?? [], name).not.toContain('slug');
+    }
+  });
+
+  /**
+   * Un post appartiene a un brand, quindi chi lo modifica resta ancorato. Non è una dimenticanza:
+   * senza brand non c'è il post da modificare.
+   */
+  test('chi lavora su un post continua a pretendere il brand', async () => {
+    const all = await tools();
+
+    for (const name of ['regenerate_slide', 'reorder_slides', 'regenerate_post_media']) {
+      expect(find(all, name).inputSchema?.required ?? [], name).toContain('slug');
+    }
   });
 
   test('ogni altro endpoint del registro tiene slug obbligatorio', async () => {

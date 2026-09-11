@@ -2,7 +2,7 @@ import { UGC_AD_SECONDS, UGC_ORGANIC_SECONDS } from '$lib/ugc-formats';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { videoModel } from '$lib/server/model-routing';
-import { getBrandContext, logAiCall } from '$lib/server/ai-log';
+import { getBrandContext, getOrgContext, logAiCall } from '$lib/server/ai-log';
 import { isVideoUrl } from '$lib/content-formats';
 import { KIE_CREDIT_USD } from '$lib/server/kie';
 // Il polling dei job di kie, l'estrazione dei crediti e la lettura dell'errore stanno in un file
@@ -316,6 +316,23 @@ const POLL_TIMEOUT_MS = 600000;
 // ponytail: bounded by wall-clock inside the request; if bulk approves with many clips start
 // timing out, move the upscale to a `videos/work` cron like radar/knowledge already use.
 const UPSCALE_TIMEOUT_MS = 60000;
+
+/**
+ * Il cancello dei crediti di CHI paga questo scope: il brand quando c'è, l'organizzazione quando
+ * nessun brand è stato nominato. Scritto una volta perché i tre punti che spendono qui sotto
+ * facevano la stessa domanda, e uno solo dei tre che dimentica l'organizzazione è una clip pagata
+ * da un saldo che nessuno ha guardato.
+ *
+ * L'import dinamico evita il ciclo crediti↔ai-log.
+ */
+async function gateScopedCredits(): Promise<void> {
+  const brandId = getBrandContext();
+  const orgId = brandId ? null : getOrgContext();
+  if (!brandId && !orgId) return;
+
+  const { gateCredits, gateOrgCredits } = await import('$lib/server/credits');
+  await (brandId ? gateCredits(brandId) : gateOrgCredits(orgId as string));
+}
 
 export type RenderVideoOpts = {
   // Desired clip length in seconds. Clamped into the CHOSEN model's supported window.
@@ -853,15 +870,10 @@ async function prepareVideoRender(
     throw new Error('KIE_API_KEY not configured');
   }
 
-  // Una clip è la cosa più cara che il motore possa comprare: un brand a crediti esauriti non deve
-  // poterci spendere da NESSUN percorso. L'import dinamico evita il ciclo crediti↔ai-log, e
-  // `CreditsExhaustedError` si propaga — l'utente deve sapere che è a secco, non vedere una cover
-  // come se il modello avesse fallito.
-  const gateBrand = getBrandContext();
-  if (gateBrand) {
-    const { gateCredits } = await import('$lib/server/credits');
-    await gateCredits(gateBrand);
-  }
+  // Una clip è la cosa più cara che il motore possa comprare: chi ha i crediti esauriti non deve
+  // poterci spendere da NESSUN percorso. `CreditsExhaustedError` si propaga — l'utente deve sapere
+  // che è a secco, non vedere una cover come se il modello avesse fallito.
+  await gateScopedCredits();
 
   // `image_urls` / `first_frame_url` accettano solo still: un post che porta già una clip non deve
   // finire lì dentro come riferimento immagine.
@@ -1074,11 +1086,7 @@ export async function transformVideo(opts: {
   const model = opts.model?.trim() || videoModelForRole(opts.prefs, opts.role);
   if (!model) return undefined;
 
-  const gateBrand = getBrandContext();
-  if (gateBrand) {
-    const { gateCredits } = await import('$lib/server/credits');
-    await gateCredits(gateBrand);
-  }
+  await gateScopedCredits();
 
   const spec = videoModelSpec(model);
   const input = buildTransformInput(model, opts.role, {
@@ -1405,17 +1413,13 @@ export async function upscaleVideo(
   // have no matching upscale path — skip rather than burn a round-trip that will fail.
   if (!videoModelCaps(envModelI2V()).supportsUpscale) return undefined;
 
-  // Same runaway-spend gate as generation: an exhausted brand must not buy pixels either.
-  const gateBrand = getBrandContext();
-  if (gateBrand) {
-    try {
-      const { gateCredits } = await import('$lib/server/credits');
-      await gateCredits(gateBrand);
-    } catch {
-      // Unlike generation, an exhausted quota here is NOT worth failing the publish over — the
-      // draft-resolution clip is already a complete, publishable post. Degrade silently.
-      return undefined;
-    }
+  // Same runaway-spend gate as generation: an exhausted payer must not buy pixels either.
+  try {
+    await gateScopedCredits();
+  } catch {
+    // Unlike generation, an exhausted quota here is NOT worth failing the publish over — the
+    // draft-resolution clip is already a complete, publishable post. Degrade silently.
+    return undefined;
   }
 
   const t0 = Date.now();

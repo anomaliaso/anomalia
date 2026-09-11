@@ -302,11 +302,21 @@ there is no quality control, no critic that rejects a bad frame, no retry you di
 What comes back is what was billed, however crooked. Judging it is YOUR job — open the
 `signed_url`, look, and if it is wrong send it to `refine_media` rather than prompting again.
 
-`refine_media` changes something that is already in the library — an image or a video — and files
-the result as a **new** asset, so the original is never overwritten and a refinement cannot destroy
-what it started from. Required: `slug`, `base_media_id` (from `brand_media`, and it must belong to
-this brand — anything else is `source_not_found`), `instruction`. Say what should CHANGE, not what
+`refine_media` changes something you already made — an image or a video — and files the result as a
+**new** asset, so the original is never overwritten and a refinement cannot destroy what it started
+from. Required: `base_media_id`, `instruction`; optional `slug`. Say what should CHANGE, not what
 the whole thing should be.
+
+**`slug` decides what `base_media_id` means, and there is no overlap.** WITH it: an id from
+`brand_media` that belongs to that brand — anything else is `source_not_found`. WITHOUT it: the
+`storage_path` (a picture) or the `url` (a clip) that a brand-free `generate_image`,
+`generate_carousel` or `generate_video` handed back. A library id cannot be resolved without a
+brand to look it up in, and a web address of your own choosing is refused as `source_not_found`
+rather than fetched — the source is always something we handed you, from our own storage. Without
+a slug nothing is filed anywhere either (`id` comes back `null`), `brand_style` is refused as
+`brand_style_needs_a_brand`, and a clip has no brand preference to read so you must pass `model`
+or it comes back `no_refine_model`. The credits come from your organisation, named in
+`organization`.
 
 **You do not say what kind it is.** The asset's own kind, read from the library row, picks the
 engine: a picture goes to the image refiner, a clip to the video one, and the answer says which in
@@ -324,10 +334,12 @@ clip always comes back as one.
 model can be handed, and the answer carries its `bytes` and the `limit`. An oversized source is
 shrunk before the model sees it, so this only reaches you for a file beyond even that — import a
 lighter copy. **Never answer it by generating a replacement**: the original is still the customer's
-and a fresh render is a different picture.
+and a fresh render is a different picture. Without a slug the same applies to a `storage_path` you
+were handed, and `bytes` comes back `null` there — no library row carries the weight — while the
+`limit` still does.
 
-`generate_video` films a NEW clip into the library. Required: `slug`, `prompt`; optional
-`base_media_id`, `duration`, `aspect_ratio`, `model`, `title`. **`base_media_id` pointing at a
+`generate_video` films a NEW clip. Required: `prompt`; optional `slug`, `base_media_id`,
+`duration`, `aspect_ratio`, `model`, `title`. **`base_media_id` pointing at a
 library IMAGE is how you animate a photo** — the image becomes the clip's first frame, so subject,
 scene and style come from those pixels and the prompt directs the movement only. Without it the clip
 is filmed from the prompt alone. It creates nothing in the calendar; when the clip lands, pass its
@@ -336,6 +348,15 @@ is filmed from the prompt alone. It creates nothing in the calendar; when the cl
 A clip takes minutes, so this returns `status: rendering` and a `job_id`, and a `query` on
 `video_renders` says when it is done — do not call it again for the same clip while one is
 rendering, that bills a second.
+
+**Without `slug` the clip has nowhere to be filed, so it lands on the job itself.** No brand, no
+library, no `media_id`, nothing for `create_post`: `GET /api/v1/videos` (add `?job_id=` for one)
+returns the job and its `media_url` is where the file is. `query` will not find it — that tool
+reads a brand. `base_media_id` without a slug is the `storage_path` or `url` a brand-free generate
+handed you; a web address is refused as `source_not_found`. The monthly video allowance belongs to
+a brand's plan, so it is not checked here: the only ceiling is the organisation's credit balance,
+and `organization` in the answer names who paid. Do NOT call `list_brands` to find a slug — if
+nobody named a brand there is no brand, and guessing one spends someone else's credits.
 Animating and filming are two different jobs with two different model lists (`videoImageModel` and
 `videoModel`): a model valid for one is refused for the other with `model_not_for_slot` and the
 accepted list. Refusals: `source_not_found` (404) means the id is not this brand's or does not
@@ -347,8 +368,10 @@ names the nearest it accepts. A refusal from the provider comes back as `render_
 buys the same refusal. The success response carries `duration_seconds`, the seconds actually
 submitted: a clip is billed per second, so read it rather than assuming your number was taken.
 
-`generate_carousel` draws a SERIES that reads as one object. Required: `slug`, `brief`; optional
-`slides` (3-8), `aspect_ratio`, `model`, `title`. **It bills a render per slide** — five slides is
+`generate_carousel` draws a SERIES that reads as one object. Required: `brief`; optional `slug`,
+`slides` (3-8), `aspect_ratio`, `model`, `title`. Without a slug nothing of a brand look reaches
+the slides — name the style you want in the brief — nothing is filed anywhere, the `id`s come back
+`null`, and `organization` names whose credits paid. Do NOT call `list_brands` to find a slug. **It bills a render per slide** — five slides is
 five renders — and files them in order, slide 1 first. Pass the ids to `create_post` as `media_ids`
 in that order.
 
