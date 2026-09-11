@@ -1,5 +1,6 @@
 import { swallow } from '$lib/server/swallow';
-import { safeFetchBytes } from '$lib/server/tool-guard';
+import { safeFetchBytes, SafeFetchError } from '$lib/server/tool-guard';
+import { IMAGE_PART_MAX_BYTES } from '$lib/raster-image';
 import type { GoogleGenAI } from '@google/genai';
 import { structured } from '$lib/server/research';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -191,21 +192,38 @@ export async function synthesizeBrandContext(input: ContextInputs): Promise<stri
   }
 }
 
-const IMAGE_PART_MAX_BYTES = 6_000_000;
+export type ImagePart = { inlineData: { mimeType: string; data: string } };
 
-// Download an image URL into a Gemini inlineData part. Best-effort: null on any failure / non-image
-// / oversized payload, so a bad thumbnail never breaks style synthesis. Also reused to feed a
-// product photo to the image generator as a reference.
-export async function fetchImagePart(url: string): Promise<{ inlineData: { mimeType: string; data: string } } | null> {
+export type ImagePartRefusal = 'too_large' | 'not_an_image' | 'fetch_failed';
+
+export type ImagePartOutcome =
+  | { ok: true; part: ImagePart }
+  | { ok: false; reason: ImagePartRefusal };
+
+function inlinePart(mimeType: string, bytes: Buffer): ImagePart {
+  return { inlineData: { mimeType, data: bytes.toString('base64') } };
+}
+
+export async function imagePartFor(url: string): Promise<ImagePartOutcome> {
+  let fetched;
   try {
-    const res = await safeFetchBytes(url, { maxBytes: IMAGE_PART_MAX_BYTES });
-    if (!res.ok) return null;
-    const mimeType = res.mime || 'image/jpeg';
-    if (!mimeType.startsWith('image/')) return null;
-    return { inlineData: { mimeType, data: res.bytes.toString('base64') } };
-  } catch {
-    return null;
+    fetched = await safeFetchBytes(url, { maxBytes: IMAGE_PART_MAX_BYTES });
+  } catch (e) {
+    const tooLarge = e instanceof SafeFetchError && e.reason === 'too_large';
+    return { ok: false, reason: tooLarge ? 'too_large' : 'fetch_failed' };
   }
+  if (!fetched.ok) return { ok: false, reason: 'fetch_failed' };
+
+  const mimeType = fetched.mime || 'image/jpeg';
+  if (!mimeType.startsWith('image/')) return { ok: false, reason: 'not_an_image' };
+
+  return { ok: true, part: inlinePart(mimeType, fetched.bytes) };
+}
+
+export async function fetchImagePart(url: string): Promise<ImagePart | null> {
+  const outcome = await imagePartFor(url);
+
+  return outcome.ok ? outcome.part : null;
 }
 
 // Synthesise a VISUAL STYLE brief by actually looking at brand imagery (multimodal). Normally fed

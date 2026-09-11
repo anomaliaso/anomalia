@@ -10,10 +10,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * E il negativo che conta: un id che non esiste, o di un altro brand, deve FERMARSI. Ricadere
  * sulla generazione sarebbe il difetto travestito da rimedio — l'agente pagherebbe un disegno
  * nuovo credendo di aver modificato il suo.
+ *
+ * E il negativo che MENTIVA: una sorgente troppo pesante tornava `source_not_found`. L'agente
+ * leggeva «non c'e'» e rigenerava da zero — lo stesso danno, per una ragione diversa.
  */
 
 const renderPostImage = vi.fn();
-const loadLibraryMediaParts = vi.fn();
+const loadLibraryMediaPart = vi.fn();
 const insertBrandMedia = vi.fn();
 const storeBrandMediaBytes = vi.fn();
 
@@ -32,7 +35,7 @@ vi.mock('$lib/server/content-preview', () => ({
   loadBrandVisualContext: async () => ({})
 }));
 vi.mock('$lib/server/brand-media', () => ({
-  loadLibraryMediaParts: (...args: unknown[]) => loadLibraryMediaParts(...args),
+  loadLibraryMediaPart: (...args: unknown[]) => loadLibraryMediaPart(...args),
   insertBrandMedia: (...args: unknown[]) => insertBrandMedia(...args),
   storeBrandMediaBytes: (...args: unknown[]) => storeBrandMediaBytes(...args),
   probeImageDimensions: async () => ({ width: 1080, height: 1080 })
@@ -49,15 +52,19 @@ vi.mock('$lib/server/ai-log', () => ({
   withBrandContext: <T>(_brandId: string, fn: () => T) => fn()
 }));
 
+import { IMAGE_PART_MAX_BYTES } from '$lib/raster-image';
 import { refineBrandMedia, generateBrandImages } from './media-generate';
 
 const REFINE_MODEL = 'gemini-3.1-flash-image';
 
 const FULL_ID = '11111111-2222-3333-4444-555555555555';
 
+/** Il peso dell'asset che in produzione e' tornato «non trovato»: 7,47 MB. */
+const REAL_CASE_BYTES = 7_836_963;
+
 function supabaseWith(
   prefs: Record<string, unknown>,
-  media: Array<{ id: string; kind?: string }> = [{ id: FULL_ID, kind: 'image' }]
+  media: Array<{ id: string; kind?: string; bytes?: number | null }> = [{ id: FULL_ID, kind: 'image' }]
 ) {
   return {
     from: (table: string) => ({
@@ -74,7 +81,7 @@ function supabaseWith(
 beforeEach(() => {
   vi.clearAllMocks();
   renderPostImage.mockResolvedValue(PNG_DATA_URL);
-  loadLibraryMediaParts.mockResolvedValue([ORIGINAL]);
+  loadLibraryMediaPart.mockResolvedValue({ ok: true, part: ORIGINAL });
   storeBrandMediaBytes.mockResolvedValue({});
   insertBrandMedia.mockResolvedValue({ row: { id: 'media-new', kind: 'image' } });
 });
@@ -89,12 +96,7 @@ describe('rifinire un asset della libreria', () => {
     });
 
     expect(out.ok).toBe(true);
-    expect(loadLibraryMediaParts).toHaveBeenCalledWith(
-      expect.anything(),
-      'brand-1',
-      [FULL_ID],
-      1
-    );
+    expect(loadLibraryMediaPart).toHaveBeenCalledWith(expect.anything(), 'brand-1', FULL_ID);
 
     const opts = renderPostImage.mock.calls[0][1];
     // Questa è la riga che distingue «rendilo rosso» da «disegna un gatto rosso».
@@ -112,7 +114,7 @@ describe('rifinire un asset della libreria', () => {
   });
 
   it('un asset che non esiste FERMA la richiesta invece di disegnarne uno nuovo', async () => {
-    loadLibraryMediaParts.mockResolvedValue([]);
+    loadLibraryMediaPart.mockResolvedValue({ ok: false, reason: 'fetch_failed' });
 
     const out = await refineBrandMedia(supabaseWith({}, []), {
       brandId: 'brand-1',
@@ -126,6 +128,36 @@ describe('rifinire un asset della libreria', () => {
     expect(renderPostImage).not.toHaveBeenCalled();
   });
 
+  it('una sorgente troppo pesante non si traveste da «non trovata»', async () => {
+    loadLibraryMediaPart.mockResolvedValue({ ok: false, reason: 'too_large' });
+
+    const out = await refineBrandMedia(
+      supabaseWith({}, [{ id: FULL_ID, kind: 'image', bytes: REAL_CASE_BYTES }]),
+      { brandId: 'brand-1', userId: 'user-1', instruction: 'più caldo', baseMediaId: FULL_ID }
+    );
+
+    expect(out).toEqual({
+      ok: false,
+      error: 'source_too_large',
+      bytes: REAL_CASE_BYTES,
+      limit: IMAGE_PART_MAX_BYTES
+    });
+    expect(renderPostImage).not.toHaveBeenCalled();
+  });
+
+  it('un asset senza peso registrato dichiara comunque il tetto', async () => {
+    loadLibraryMediaPart.mockResolvedValue({ ok: false, reason: 'too_large' });
+
+    const out = await refineBrandMedia(supabaseWith({}, [{ id: FULL_ID, kind: 'image', bytes: null }]), {
+      brandId: 'brand-1',
+      userId: 'user-1',
+      instruction: 'più caldo',
+      baseMediaId: FULL_ID
+    });
+
+    expect(out).toEqual({ ok: false, error: 'source_too_large', bytes: null, limit: IMAGE_PART_MAX_BYTES });
+  });
+
   it('generare senza sorgente non tocca il ramo di rifinitura', async () => {
     await generateBrandImages(supabaseWith({ imageRefineModel: REFINE_MODEL }), {
       brandId: 'brand-1',
@@ -135,7 +167,7 @@ describe('rifinire un asset della libreria', () => {
 
     const opts = renderPostImage.mock.calls[0][1];
     expect(opts.baseImage).toBeUndefined();
-    expect(loadLibraryMediaParts).not.toHaveBeenCalled();
+    expect(loadLibraryMediaPart).not.toHaveBeenCalled();
   });
 
   it('accetta un prefisso corto, come gli id dei post', async () => {
@@ -146,7 +178,7 @@ describe('rifinire un asset della libreria', () => {
       baseMediaId: '1111'
     });
 
-    expect(loadLibraryMediaParts).toHaveBeenCalledWith(expect.anything(), 'brand-1', [FULL_ID], 1);
+    expect(loadLibraryMediaPart).toHaveBeenCalledWith(expect.anything(), 'brand-1', FULL_ID);
   });
 
   it('un prefisso che combacia con due asset non ne sceglie uno a caso', async () => {

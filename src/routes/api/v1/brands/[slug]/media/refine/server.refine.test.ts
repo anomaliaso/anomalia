@@ -118,6 +118,20 @@ describe('POST /media/refine — refine_media', () => {
     expect(body.error).toBe('source_not_found');
   });
 
+  it('una sorgente troppo pesante porta il peso e il tetto, e non e\' un 404', async () => {
+    refineBrandMedia.mockResolvedValue({
+      ok: false,
+      error: 'source_too_large',
+      bytes: 7_836_963,
+      limit: 6_000_000
+    });
+
+    const { res, body } = await refine({ base_media_id: 'media-0', instruction: 'x' });
+
+    expect(res.status).toBe(413);
+    expect(body).toEqual({ error: 'source_too_large', bytes: 7_836_963, limit: 6_000_000 });
+  });
+
   it('una clip senza modello di refine si rifiuta con 400, non con un render', async () => {
     refineBrandMedia.mockResolvedValue({ ok: false, error: 'no_refine_model' });
 

@@ -27,7 +27,7 @@ vi.mock('$lib/server/video', () => ({
 }));
 vi.mock('$lib/server/brand-media', () => ({
   saveRenderedVideoToLibrary: (...args: unknown[]) => saveRenderedVideoToLibrary(...args),
-  loadLibraryMediaParts: async () => [],
+  loadLibraryMediaPart: async () => ({ ok: false, reason: 'fetch_failed' }),
   insertBrandMedia: async () => ({ row: null }),
   storeBrandMediaBytes: async () => ({}),
   probeImageDimensions: async () => ({ width: null, height: null })

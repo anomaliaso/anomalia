@@ -22,6 +22,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertBrandMedia, storeBrandMediaBytes, probeImageDimensions } from '$lib/server/brand-media';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { mediaUrl } from '$lib/media-url';
+import { IMAGE_PART_MAX_BYTES } from '$lib/raster-image';
+import type { ImagePart, ImagePartRefusal } from '$lib/server/brand-context';
 import { safeProviderReason } from '$lib/server/provider-reason';
 import { markImage, DIGITAL_SOURCE_TYPE } from '$lib/server/content-credentials';
 import type { AspectRatio } from '$lib/server/content-preview';
@@ -96,8 +98,33 @@ const IMAGE_MIME = 'image/png';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Quanti asset si guardano per sciogliere un prefisso: gli id soltanto, quindi una lettura corta. */
+/** Quanti asset si guardano per sciogliere un prefisso: id, tipo e peso, quindi una lettura corta. */
 const PREFIX_SCAN = 500;
+
+type LibrarySource = { id: string; kind: string; bytes: number | null };
+
+export type SourceTooLarge = {
+  ok: false;
+  error: 'source_too_large';
+  bytes: number | null;
+  limit: number;
+};
+
+const SOURCE_REFUSAL: Record<ImagePartRefusal, 'source_too_large' | 'source_not_found'> = {
+  too_large: 'source_too_large',
+  not_an_image: 'source_not_found',
+  fetch_failed: 'source_not_found'
+};
+
+function refusedSource(
+  reason: ImagePartRefusal,
+  source: LibrarySource
+): SourceTooLarge | { ok: false; error: 'source_not_found' } {
+  const error = SOURCE_REFUSAL[reason];
+  if (error === 'source_not_found') return { ok: false, error };
+
+  return { ok: false, error, bytes: source.bytes, limit: IMAGE_PART_MAX_BYTES };
+}
 
 /**
  * Un prefisso corto come lo accettano gli id dei post, ma risolto QUI e non nel livello MCP: li'
@@ -111,7 +138,7 @@ async function resolveLibraryId(
   supabase: SupabaseClient,
   brandId: string,
   idOrPrefix: string
-): Promise<{ id: string; kind: string } | null> {
+): Promise<LibrarySource | null> {
   const want = idOrPrefix.trim().toLowerCase();
   if (!want) return null;
 
@@ -120,13 +147,14 @@ async function resolveLibraryId(
   // «non e' tua» — e un id di un altro inquilino tornava con l'errore sbagliato.
   const { data } = await supabase
     .from('brand_media')
-    .select('id, kind')
+    .select('id, kind, bytes')
     .eq('brand_id', brandId)
     .limit(PREFIX_SCAN);
-  const rows = (data ?? []) as Array<{ id: string; kind: string }>;
+  const rows = (data ?? []) as Array<{ id: string; kind: string; bytes: number | null }>;
   const hits = rows.filter((r) => String(r.id).toLowerCase().startsWith(want));
+  if (hits.length !== 1) return null;
 
-  return hits.length === 1 ? { id: String(hits[0].id), kind: String(hits[0].kind) } : null;
+  return { id: String(hits[0].id), kind: String(hits[0].kind), bytes: hits[0].bytes ?? null };
 }
 
 function dataUrlBytes(dataUrl: string): { bytes: Buffer; mime: string } | null {
@@ -278,6 +306,7 @@ export type ImageJobResult =
       costUsd: number | null;
     }
   | { ok: false; error: 'render_failed' | 'store_failed' | 'source_not_found' }
+  | SourceTooLarge
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
 async function brandContentPrefs(
@@ -301,7 +330,7 @@ async function runImageJob(
     { renderPostImage, buildImageRequest, loadBrandVisualContext },
     { imageModelFor, imageRefineModelFor },
     { mediaModelSlot, slotAccepts, slotChoices },
-    { loadLibraryMediaParts }
+    { loadLibraryMediaPart }
   ] = await Promise.all([
     import('$lib/server/content-preview'),
     import('$lib/image-models'),
@@ -323,16 +352,16 @@ async function runImageJob(
   // racconta che questo percorso un brand ce l'ha ancora.
   const prefs = job.brandId ? await brandContentPrefs(supabase, job.brandId) : {};
 
-  // `loadLibraryMediaParts` filtra per brand_id: l'id di un altro inquilino non risolve nulla, e
+  // `loadLibraryMediaPart` filtra per brand_id: l'id di un altro inquilino non risolve nulla, e
   // il confine resta nella query invece che in un controllo che qualcuno dimenticherà.
-  let baseImage: { inlineData: { mimeType: string; data: string } } | undefined;
+  let baseImage: ImagePart | undefined;
   if (job.baseMediaId && job.brandId) {
     const source = await resolveLibraryId(supabase, job.brandId, job.baseMediaId);
     if (!source) return { ok: false, error: 'source_not_found' };
 
-    const parts = await loadLibraryMediaParts(supabase, job.brandId, [source.id], 1);
-    if (!parts.length) return { ok: false, error: 'source_not_found' };
-    baseImage = parts[0];
+    const outcome = await loadLibraryMediaPart(supabase, job.brandId, source.id);
+    if (!outcome.ok) return refusedSource(outcome.reason, source);
+    baseImage = outcome.part;
   }
 
   const brandVisuals =
@@ -423,6 +452,7 @@ export type RefineMediaResult =
       ok: false;
       error: 'source_not_found' | 'kind_not_refinable' | 'no_refine_model' | 'render_failed' | 'store_failed';
     }
+  | SourceTooLarge
   | { ok: false; error: 'model_not_for_slot'; allowed: string[] };
 
 type Refiner = (

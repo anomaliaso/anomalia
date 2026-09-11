@@ -5,7 +5,7 @@
 import { swallow } from '$lib/server/swallow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
-import { fetchImagePart } from '$lib/server/brand-context';
+import { fetchImagePart, imagePartFor, type ImagePartOutcome } from '$lib/server/brand-context';
 import { signKnowledgePaths } from '$lib/server/media-archive';
 import { structured } from '$lib/server/research';
 
@@ -828,6 +828,17 @@ export async function saveRenderedVideoToLibrary(
     return { error: error ?? 'could not register the clip in the library' };
   }
   return { mediaId: row.id };
+}
+
+export async function loadLibraryMediaPart(
+  supabase: SupabaseClient,
+  brandId: string,
+  mediaId: string
+): Promise<ImagePartOutcome> {
+  const [url] = await resolveBrandImageIds(supabase, brandId, [mediaId]);
+  if (!url) return { ok: false, reason: 'fetch_failed' };
+
+  return imagePartFor(url);
 }
 
 /** Load library images as Gemini inline parts (for composite / reference mode). */
