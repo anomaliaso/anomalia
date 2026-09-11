@@ -273,6 +273,85 @@ export function apiKeyIsBrandScoped(apiKey: ApiKeyInfo | undefined): boolean {
   return !!apiKey && apiKey.permissions.brand_ids !== '*';
 }
 
+export type OrgScope = {
+  supabase: SupabaseClient;
+  user: { id: string; email?: string };
+  orgId: string;
+  /** Chi ha pagato, per nome: il chiamante non l'ha scelto, quindi la risposta glielo dice. */
+  organization: { id: string; name: string | null };
+  apiKey?: ApiKeyInfo;
+};
+
+/**
+ * L'ingresso di OGNI rotta che genera senza un brand, in un posto solo — perché le domande che una
+ * strada senza brand solleva hanno una risposta sola, e scritta quattro volte divergerebbe al
+ * primo cambio:
+ *
+ *   chi paga         →  l'organizzazione dell'utente, con la stessa regola con cui atterra un
+ *                       brand nuovo (pagante prima, poi la più vecchia). Nessuna → ci si ferma.
+ *                       Andrea ha visto agenti scegliere un brand a caso pur di avere un addebito
+ *                       che nessuno controlla: è il motivo per cui questa strada esiste.
+ *   chiave ristretta →  si RIFIUTA, non si allarga: è una restrizione che l'utente ha scelto.
+ *   crediti          →  lo stesso cancello del brand, sul saldo dell'organizzazione.
+ */
+export async function openOrgScope(
+  request: Request
+): Promise<{ scope: OrgScope; error?: undefined } | { scope?: undefined; error: Response }> {
+  return orgScopeFor(await authenticate(request));
+}
+
+/**
+ * La parte che DECIDE, separata da quella che autentica. Sono due mestieri, e tenerli insieme
+ * rendeva i rifiuti raggiungibili solo passando da una chiave API vera: qui si provano per quello
+ * che sono, uno per uno.
+ */
+export async function orgScopeFor(
+  caller: Caller
+): Promise<{ scope: OrgScope; error?: undefined } | { scope?: undefined; error: Response }> {
+  const { supabase, user, error, apiKey } = caller;
+  if (error) return { error };
+
+  if (apiKeyIsBrandScoped(apiKey)) {
+    return { error: json({ error: 'brand_scoped_key' }, { status: 403 }) };
+  }
+
+  const { ensureOrgForUser } = await import('./org');
+  const orgId = await ensureOrgForUser(supabase, user as never);
+  if (!orgId) return { error: json({ error: 'no_organization' }, { status: 500 }) };
+
+  const gate = await gateOrgAiAction(orgId, apiKey);
+  if (gate) return { error: gate };
+
+  const { data } = await supabase.from('organizations').select('id, name').eq('id', orgId).maybeSingle();
+
+  return {
+    scope: {
+      supabase,
+      user,
+      orgId,
+      organization: { id: orgId, name: (data?.name as string | null | undefined) ?? null },
+      apiKey
+    }
+  };
+}
+
+/**
+ * Lo stile di un brand chiesto dove un brand non c'è. Un default silenzioso consegnerebbe qualcosa
+ * che nessuno ha chiesto: qui si dice la mossa, identica su ogni rotta che accetta il campo.
+ */
+export function brandStyleRefusal(brandStyle: string | undefined): Response | undefined {
+  if (!brandStyle) return undefined;
+
+  return json(
+    {
+      error: 'brand_style_needs_a_brand',
+      reason:
+        'brand_style governs a brand look, and no brand was named — pass a slug, or drop brand_style.'
+    },
+    { status: 400 }
+  );
+}
+
 /** The columns loadBrandForUser selects — typed, so callers don't get `unknown` everywhere. */
 export type CliBrand = {
   id: string;
