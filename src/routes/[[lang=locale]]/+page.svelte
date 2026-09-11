@@ -6,13 +6,20 @@
   import WhyUs from '$lib/components/WhyUs.svelte';
   import HomePricing from '$lib/components/HomePricing.svelte';
   import LandingFaq from '$lib/components/LandingFaq.svelte';
-  import { PLATFORM_KEYS, PLATFORM_META } from '$lib/components/platform-meta';
   import SiteNav from '$lib/components/SiteNav.svelte';
   import LazyMarcoWidget from '$lib/components/LazyMarcoWidget.svelte';
   import HeroUrlCta from '$lib/components/HeroUrlCta.svelte';
   import HeroParallax from '$lib/components/HeroParallax.svelte';
   import AiMarks from '$lib/components/AiMarks.svelte';
   import ConnectAgentDialog from '$lib/components/ConnectAgentDialog.svelte';
+  import StoryOutput from '$lib/components/landing/StoryOutput.svelte';
+  import StoryDoors from '$lib/components/landing/StoryDoors.svelte';
+  import StoryJobs from '$lib/components/landing/StoryJobs.svelte';
+  import StoryChannels from '$lib/components/landing/StoryChannels.svelte';
+  import StoryControl from '$lib/components/landing/StoryControl.svelte';
+  import StoryDiy from '$lib/components/landing/StoryDiy.svelte';
+  import StorySplit from '$lib/components/landing/StorySplit.svelte';
+  import StoryHosts from '$lib/components/landing/StoryHosts.svelte';
   import { marketingStartHref } from '$lib/start-href';
   import '$lib/styles/landing.css';
 
@@ -22,14 +29,6 @@
   const startHref = $derived(marketingStartHref({ loggedIn: Boolean(data.session), waitlistActive }));
 
   let claudeOpen = $state(false);
-
-  // The channel strip reads the same table the publisher does, so it cannot promise a platform
-  // the product can't post to.
-  const channels = PLATFORM_KEYS.map((k) => PLATFORM_META[k].label);
-
-  const JOBS = ['social', 'web', 'ads'];
-  const BEFORE = ['i1', 'i2', 'i3', 'i4'];
-  const AFTER = ['i1', 'i2', 'i3', 'i4', 'i5'];
 
   const siteUrl = $derived($page.url.origin);
   const jsonLd = $derived(
@@ -103,79 +102,24 @@
     </div>
   </section>
 
-  <!-- ============ THE THREE JOBS AN AGENCY DOES ============ -->
-  <section class="jobs-sec">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="kicker">{$_('landing.jobs.kicker')}</div>
-        <h2>{$_('landing.jobs.titleLead')} <span class="gr-accent">{$_('landing.jobs.titleAccent')}</span></h2>
-      </div>
-      <div class="jobs-cols">
-        {#each JOBS as job, i (job)}
-          <div class="job reveal" data-d={i + 1}>
-            <h3>{$_(`landing.jobs.${job}.title`)}</h3>
-            <p>{$_(`landing.jobs.${job}.body`)}</p>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </section>
+  <!-- Il racconto dopo la hero, in ordine di domanda: cosa esce, come si usa, cosa fa, che
+       pubblica davvero, chi comanda, perche' non fartelo da solo, perche' non un'agenzia, con
+       quale AI funziona. Poi il prezzo. -->
+  <StoryOutput />
 
-  <!-- ============ OR BUILD IT YOURSELF ============ -->
-  <section class="diy-sec">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="kicker">{$_('landing.diy.kicker')}</div>
-        <h2>{$_('landing.diy.titleLead')} <span class="gr-accent">{$_('landing.diy.titleAccent')}</span></h2>
-      </div>
-      <p class="diy-body reveal">{$_('landing.diy.body')}</p>
-      <p class="diy-punch reveal">{$_('landing.diy.punch')}</p>
-    </div>
-  </section>
+  <StoryDoors onconnect={() => (claudeOpen = true)} appHref={startHref} />
 
-  <!-- ============ BEFORE / AFTER ============ -->
-  <section class="split-sec">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <div class="kicker">{$_('landing.split.kicker')}</div>
-        <h2>{$_('landing.split.titleLead')} <span class="gr-accent">{$_('landing.split.titleAccent')}</span></h2>
-      </div>
-      <div class="split-cols">
-        <div class="split-col reveal" data-d="1">
-          <h3>{$_('landing.split.before.title')}</h3>
-          <p class="split-note">{$_('landing.split.before.note')}</p>
-          <ul>
-            {#each BEFORE as k (k)}
-              <li>{$_(`landing.split.before.${k}`)}</li>
-            {/each}
-          </ul>
-        </div>
-        <div class="split-col is-ours reveal" data-d="2">
-          <h3>{$_('landing.split.after.title')}</h3>
-          <p class="split-note">{$_('landing.split.after.note')}</p>
-          <ul>
-            {#each AFTER as k (k)}
-              <li>{$_(`landing.split.after.${k}`)}</li>
-            {/each}
-          </ul>
-        </div>
-      </div>
-      <p class="split-punch reveal">{$_('landing.split.punch')}</p>
-    </div>
-  </section>
+  <StoryJobs />
 
-  <!-- ============ CHANNELS ============ -->
-  <section class="channels-sec">
-    <div class="wrap">
-      <p class="channels-label">{$_('landing.channels.label')}</p>
-      <ul class="channels-list">
-        {#each channels as name (name)}
-          <li>{name}</li>
-        {/each}
-      </ul>
-      <p class="channels-note">{$_('landing.channels.note')}</p>
-    </div>
-  </section>
+  <StoryChannels />
+
+  <StoryControl />
+
+  <StoryDiy />
+
+  <StorySplit />
+
+  <StoryHosts />
 
   <WhyUs />
 
@@ -432,113 +376,6 @@
   /* In un flex row l'inner sarebbe shrink-to-fit e la hero si stringerebbe sul testo piu'
      largo: 100% e poi ci pensa il max-width di .wrap. */
   .gr-hero-inner { width: 100%; }
-
-  /* ---------- THE THREE JOBS ----------
-     Type only, no cards: this section has to read as one breath — the three things an agency
-     is paid for — and a border around each one would make them look like three products. */
-  .jobs-sec { padding-block: 100px 0; }
-  .jobs-cols {
-    display: flex; gap: 48px; align-items: flex-start;
-    max-width: 940px; margin-inline: auto;
-  }
-  .job { flex: 1 1 0; min-width: 0; }
-  .job h3 {
-    font-size: 1.15rem; font-weight: 600; letter-spacing: -0.03em;
-    margin: 0 0 10px;
-  }
-  .job p { margin: 0; font-size: 0.98rem; line-height: 1.55; color: var(--ink-soft); }
-
-  @media (max-width: 760px) {
-    .jobs-sec { padding-block: 64px 0; }
-    .jobs-cols { flex-direction: column; gap: 30px; }
-  }
-
-  /* ---------- OR BUILD IT YOURSELF ----------
-     Prose, deliberately: the objection is answered by the length of one sentence listing the
-     plumbing, and a bulleted list would read as a feature tour instead of an accumulation. */
-  .diy-sec { padding-block: 100px 0; }
-  .diy-body, .diy-punch {
-    max-width: 54ch; margin-inline: auto; text-align: center;
-    font-size: 1.15rem; line-height: 1.6;
-  }
-  .diy-body { color: var(--ink-soft); }
-  .diy-punch { margin-top: 26px; color: var(--ink); text-wrap: balance; }
-
-  @media (max-width: 760px) {
-    .diy-sec { padding-block: 64px 0; }
-    .diy-body, .diy-punch { font-size: 1.05rem; }
-  }
-
-  /* ---------- BEFORE / AFTER ----------
-     What you pay an agency for, against what replaces it. Flex and not grid: app.css owns a
-     global `.grid` (1.7fr 1fr) that hijacks anything carrying that class. 940px is the same
-     cap as the three jobs above, so the page keeps one vertical spine. */
-  .split-sec { padding-block: 100px 72px; }
-  .split-cols {
-    display: flex; gap: 24px; align-items: stretch;
-    max-width: 940px; margin-inline: auto;
-  }
-  .split-col {
-    flex: 1 1 0; min-width: 0;
-    border: 1px solid var(--line); border-radius: 22px;
-    padding: 30px 28px;
-    background: var(--paper-2);
-  }
-  /* The right column is the product. It carries the weight so the eye lands there first. */
-  .split-col.is-ours { background: var(--paper); border-color: rgba(var(--accent-rgb), 0.32); }
-  .split-col h3 {
-    font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em;
-    margin: 0 0 4px;
-  }
-  .split-col.is-ours h3 { color: var(--accent); }
-  .split-note { margin: 0 0 20px; font-size: 13px; color: var(--ink-faint); }
-  .split-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-  .split-col li {
-    font-size: 1rem; line-height: 1.45; color: var(--ink-soft);
-    padding-left: 20px; position: relative;
-  }
-  .split-col li::before {
-    content: ''; position: absolute; left: 0; top: 0.55em;
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--ink-faint);
-  }
-  .split-col.is-ours li { color: var(--ink); }
-  .split-col.is-ours li::before { background: var(--accent); }
-  .split-punch {
-    max-width: 44ch; margin: 48px auto 0; text-align: center;
-    font-size: 1.15rem; line-height: 1.5; color: var(--ink-soft);
-    text-wrap: balance;
-  }
-
-  @media (max-width: 760px) {
-    .split-sec { padding-block: 64px; }
-    .split-cols { flex-direction: column; }
-    .split-punch { margin-top: 32px; font-size: 1.05rem; }
-  }
-
-  /* ---------- CHANNELS ----------
-     Names, not logos: the list is generated from PLATFORM_KEYS, so nine words cost nothing
-     to ship and cannot drift away from what the publisher actually supports. */
-  .channels-sec { padding-bottom: 40px; }
-  .channels-sec .wrap {
-    display: flex; flex-direction: column; align-items: center; gap: 16px;
-    max-width: 720px; text-align: center;
-  }
-  .channels-label {
-    margin: 0;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
-    text-transform: uppercase; color: var(--ink-faint);
-  }
-  .channels-list {
-    list-style: none; margin: 0; padding: 0;
-    display: flex; flex-wrap: wrap; justify-content: center;
-    gap: 8px 20px;
-  }
-  .channels-list li {
-    font-size: 1rem; font-weight: 500; letter-spacing: -0.02em;
-    color: var(--ink);
-  }
-  .channels-note { margin: 0; font-size: 13px; color: var(--ink-faint); }
 
   /* ---------- FEATURED ON ---------- */
   .featured-on {

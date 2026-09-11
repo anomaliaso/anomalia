@@ -2053,10 +2053,6 @@
         "i5": "The numbers come straight back to the same AI"
       }
     },
-    "channels": {
-      "label": "Publishes to",
-      "note": "Nothing goes live until you approve it."
-    },
     "jobs": {
       "kicker": "What you were paying for",
       "titleLead": "An agency does three jobs.",
@@ -2080,6 +2076,95 @@
       "titleAccent": "You know what it costs.",
       "body": "Your model already writes — that part you have. What’s missing is the plumbing: OAuth for nine platforms, the character limit each one enforces and changes without warning, image and video rendering, a publish queue, the retries for when a platform refuses a post, and the metrics coming back afterwards.",
       "punch": "Weeks of that before one post goes out, and maintenance forever after. We don’t replace the thinking. We replace the plumbing, and it is already built."
+    },
+    "story": {
+      "output": {
+        "kicker": "Ce qui en sort",
+        "title": "Un vrai post, de votre site à votre fil.",
+        "sub": "Pas un brouillon dans un document. La chose finie, sur votre compte.",
+        "s1": {
+          "title": "Écrit à partir de votre marque",
+          "body": "Il lit votre site, vos produits et ce que vous avez déjà publié, puis écrit pour le canal visé — pas une légende collée neuf fois."
+        },
+        "s2": {
+          "title": "Vous approuvez",
+          "body": "Rien ne sort tant que vous ne l'avez pas dit. Changez les mots, l'image, le créneau."
+        },
+        "s3": {
+          "title": "Publié sur votre compte",
+          "body": "Anomalia garde le créneau et publie. Ce que ça rapporte revient dans le plan suivant."
+        },
+        "state": {
+          "draft": "Brouillon",
+          "approve": "En attente de vous",
+          "live": "Publié"
+        },
+        "caption": "La saison du cold brew commence. Le nouveau single-origin arrive vendredi — petit premier lot.",
+        "meta": {
+          "written": "Écrit pour Instagram · 4:5 · jeudi 09:00",
+          "approve": "Approuver",
+          "edit": "ou modifier la légende",
+          "live": "En ligne sur Instagram · jeudi 09:00"
+        }
+      },
+      "doors": {
+        "kicker": "Deux portes",
+        "title": "Votre IA, ou l'application.",
+        "sub": "Même marque, mêmes posts, mêmes approbations. Prenez celle que vous avez déjà ouverte.",
+        "mcp": {
+          "title": "Depuis votre IA",
+          "body": "Anomalia est un serveur MCP. Votre agent — Claude, ChatGPT, Cursor, celui que vous payez déjà — reçoit les outils pour planifier, écrire, approuver et publier. Le modèle est à vous ; la marque, c'est nous qui la tenons.",
+          "ask": "Planifie la semaine prochaine pour Flashcamp",
+          "reply": "7 posts prêts sur Instagram, LinkedIn et TikTok. Vous les regardez ?",
+          "cta": "Connectez votre IA"
+        },
+        "app": {
+          "title": "Depuis l'application",
+          "body": "Un calendrier, une médiathèque, la file d'approbation et le blog. Tout ce que fait l'agent apparaît ici, et vous pouvez aussi le faire à la main.",
+          "bar": "Cette semaine",
+          "approve": "3 vous attendent",
+          "cta": "Ouvrir Anomalia"
+        },
+        "note": "Les deux portes écrivent sur la même marque. Aucun doublon, rien à synchroniser."
+      },
+      "channels": {
+        "label": "Publie sur",
+        "note": "Rien ne part en ligne avant votre approbation."
+      },
+      "control": {
+        "kicker": "Qui décide",
+        "title": "Il ne publie jamais dans votre dos.",
+        "approve": {
+          "title": "L'approbation est la porte",
+          "body": "Chaque post vous attend. Le pilote automatique planifie et prépare ; publier demande un oui."
+        },
+        "voice": {
+          "title": "Votre voix, pas une voix générique",
+          "body": "Il écrit depuis votre site, vos documents et vos posts passés. Il n'invente pas un positionnement que vous ne lui avez pas donné."
+        },
+        "accounts": {
+          "title": "Vos comptes restent les vôtres",
+          "body": "Les canaux se connectent en OAuth et se révoquent en un clic. Aucun mot de passe ne passe par nous."
+        },
+        "eu": {
+          "title": "Hébergement européen",
+          "body": "Les données restent dans l'UE, et une marque s'exporte ou s'efface quand vous voulez."
+        }
+      },
+      "hosts": {
+        "kicker": "Fonctionne avec",
+        "title": "L'IA que vous payez déjà.",
+        "sub": "Anomalia parle MCP : cette liste est un exemple, pas une limite — tout ce qui sait ajouter un serveur MCP distant peut la piloter.",
+        "more": "tout le reste"
+      },
+      "diy": {
+        "i1": "L'OAuth de neuf plateformes, et ses renouvellements",
+        "i2": "La limite de caractères que chacune impose, et change",
+        "i3": "Le rendu des images et des vidéos, format par format",
+        "i4": "Une file de publication qui survit à un redémarrage",
+        "i5": "Les reprises quand une plateforme refuse un post",
+        "i6": "Les métriques qui reviennent, rattachées au bon post"
+      }
     }
   },
   "usecases": {
