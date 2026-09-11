@@ -18,7 +18,7 @@ import {
 	type SubmittedVideoRender,
 	type VideoPersistOpts
 } from '$lib/server/video';
-import { withBrandContext } from '$lib/server/ai-log';
+import { withBrandContext, withOrgContext } from '$lib/server/ai-log';
 
 /** Give up on a task kie never resolves. Generous: each check costs one cheap HTTP call. */
 export const VIDEO_RENDER_MAX_AGE_MS = 60 * 60_000;
@@ -44,7 +44,9 @@ export const VIDEO_RENDER_MAX_ATTEMPTS = 8;
 
 export type VideoRenderRow = {
 	id: string;
-	brand_id: string;
+	/** `null` su un clip chiesto senza nominare un brand: allora paga `org_id`, e la libreria non c'è. */
+	brand_id: string | null;
+	org_id: string | null;
 	user_id: string;
 	post_id: string | null;
 	thread_id: string | null;
@@ -66,7 +68,9 @@ export type VideoRenderRow = {
 export async function enqueueVideoRender(
 	admin: SupabaseClient,
 	opts: {
-		brandId: string;
+		brandId: string | null;
+		/** Chi paga quando non c'è un brand. `video_renders_one_payer` esige esattamente uno dei due. */
+		orgId?: string | null;
 		userId: string;
 		postId?: string | null;
 		threadId?: string | null;
@@ -78,6 +82,7 @@ export async function enqueueVideoRender(
 		.from('video_renders')
 		.insert({
 			brand_id: opts.brandId,
+			org_id: opts.brandId ? null : (opts.orgId ?? null),
 			user_id: opts.userId,
 			post_id: opts.postId ?? null,
 			thread_id: opts.threadId ?? null,
@@ -111,7 +116,8 @@ export async function enqueueVideoRender(
  */
 export async function submitAndTrackVideoRender(opts: {
 	admin: SupabaseClient;
-	brandId: string;
+	brandId: string | null;
+	orgId?: string | null;
 	userId: string;
 	postId?: string | null;
 	threadId?: string | null;
@@ -135,6 +141,7 @@ export async function submitAndTrackVideoRender(opts: {
 
 	const id = await enqueueVideoRender(opts.admin, {
 		brandId: opts.brandId,
+		orgId: opts.orgId,
 		userId: opts.userId,
 		postId: opts.postId ?? null,
 		threadId: opts.threadId ?? null,
@@ -172,6 +179,16 @@ export async function countOutstandingVideoRenders(
 		return Number.MAX_SAFE_INTEGER;
 	}
 	return count ?? 0;
+}
+
+/**
+ * Chi paga questa riga. Esattamente uno dei due è scritto — `video_renders_one_payer` lo impone —
+ * e un brand nomina la sua organizzazione da sé, mentre una riga senza brand la porta addosso.
+ */
+function inPayerScope<T>(row: VideoRenderRow, fn: () => Promise<T>): Promise<T> {
+	if (row.brand_id) return withBrandContext(row.brand_id, fn);
+
+	return withOrgContext(String(row.org_id), fn);
 }
 
 function rowToSubmitted(row: VideoRenderRow): SubmittedVideoRender {
@@ -225,7 +242,7 @@ async function applyToLibrary(
 ): Promise<string | null> {
 	const { saveRenderedVideoToLibrary } = await import('$lib/server/brand-media');
 	const saved = await saveRenderedVideoToLibrary(admin, {
-		brandId: row.brand_id,
+		brandId: String(row.brand_id),
 		userId: row.user_id,
 		url,
 		title: row.prompt?.trim().slice(0, 80) || 'Generated clip',
@@ -245,6 +262,10 @@ async function applyToLibrary(
  * lascerebbe che dieci render rifiutati si mangino il margine di un mese.
  */
 async function chargeMonthlyVideo(admin: SupabaseClient, row: VideoRenderRow): Promise<void> {
+	// L'allocazione è del PIANO di un brand. Una riga senza brand non ha un piano da consumare: la
+	// paga il saldo crediti dell'organizzazione, che il cancello ha già guardato prima dell'invio.
+	if (!row.brand_id) return;
+
 	try {
 		const { addUsage, monthKey } = await import('$lib/server/usage');
 		const { data: brand } = await admin
@@ -260,13 +281,18 @@ async function chargeMonthlyVideo(admin: SupabaseClient, row: VideoRenderRow): P
 	}
 }
 
+/**
+ * Dove si reclama un clip atterrato, una riga per padrone. Senza brand non c'è una libreria in cui
+ * depositarlo — `brand_media` dice `brand_id in (select auth_brand_ids())`, e `NULL in (…)` vale
+ * NULL — quindi il clip si ritrova sulla riga stessa, che `settle` chiude con `media_url`.
+ */
 async function landClip(
 	admin: SupabaseClient,
 	row: VideoRenderRow,
 	url: string,
 	thumbnailUrl?: string
 ): Promise<string | null> {
-	if (!row.post_id) return applyToLibrary(admin, row, url);
+	if (!row.post_id) return row.brand_id ? applyToLibrary(admin, row, url) : null;
 	// `.select('id')` so a zero-row match is visible: an UPDATE that hits nothing reports no error,
 	// so without this an orphaned render — post insert rolled back, post since deleted — would be
 	// billed, settled `done`, and reported to the user as attached to a post that does not exist.
@@ -307,7 +333,9 @@ async function notifyThread(
 	outcome: string,
 	origin: string
 ) {
-	if (!row.thread_id) return;
+	// Un thread appartiene a un brand: senza brand non c'è una conversazione a cui riportare, e
+	// questo percorso non ne apre una.
+	if (!row.thread_id || !row.brand_id) return;
 	try {
 		const { data: thread } = await admin
 			.from('chat_threads')
@@ -378,7 +406,7 @@ export async function reconcileVideoRenders(
 	const { data: rows } = await admin
 		.from('video_renders')
 		.select(
-			'id, brand_id, user_id, post_id, thread_id, task_id, model, status, duration_seconds, resolution, cover_url, prompt, persist_opts, submitted_at, attempts, error'
+			'id, brand_id, org_id, user_id, post_id, thread_id, task_id, model, status, duration_seconds, resolution, cover_url, prompt, persist_opts, submitted_at, attempts, error'
 		)
 		.eq('status', 'rendering')
 		.order('submitted_at', { ascending: true })
@@ -427,9 +455,9 @@ export async function reconcileVideoRenders(
 
 		checked += 1;
 		try {
-			// Brand scope so the billing inside finishVideoRender lands on the right ledger — the
-			// AsyncLocalStorage context every other AI entry point establishes.
-			const outcome = await withBrandContext(raw.brand_id, () =>
+			// Lo scope di chi paga, così la fattura dentro finishVideoRender atterra sul suo registro.
+			// Sbagliarlo scrive una riga in `ai_calls` che nessuna somma trova: spesa vera, invisibile.
+			const outcome = await inPayerScope(raw, () =>
 				finishVideoRender(admin, raw.user_id, rowToSubmitted(raw))
 			);
 
