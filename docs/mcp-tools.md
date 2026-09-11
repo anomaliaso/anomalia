@@ -4,7 +4,7 @@
 > Non si modifica a mano: il prossimo che rigenera cancella le correzioni.
 
 **80 tool** — 9 in lettura, 53 in scrittura, 18 che distruggono.
-Il payload di `tools/list` pesa **87.350 caratteri**, circa **21.838 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
+Il payload di `tools/list` pesa **87.502 caratteri**, circa **21.876 token**, ed e' il costo che ogni sessione paga prima di dire una parola.
 
 | gruppo | tool |
 |---|---:|
@@ -166,7 +166,7 @@ Throw away one post that has not gone out yet. It does not come back, and its co
 
 *Render post image*
 
-Draw the image a post is missing, from the prompt already written on it, and attach it. It spends credits: one render. To draw a picture that is not tied to a post, use generate_image.
+Draw the image a post is missing, from the prompt already written on it, and attach it. It spends credits: one render. A render that produces no image FAILS instead of answering ok, and says `credits_spent`: the charge happened before the failure, so a retry pays again. To draw a picture that is not tied to a post, use generate_image.
 
 | campo | tipo | |
 |---|---|---|

@@ -94,6 +94,13 @@ const CASES = [
   { what: 'brand_articles.cover_image non http', sql: article('cover_image', `'nope'`), code: CHECK_VIOLATION },
   { what: 'brand_articles.meta_title oltre il tetto', sql: article('meta_title', `repeat('x', 301)`), code: CHECK_VIOLATION },
 
+  {
+    what: 'editorial_plans: due piani attivi per lo stesso brand',
+    sql: `insert into public.editorial_plans (brand_id, status) select $1, 'active' from generate_series(1, 2)`,
+    code: UNIQUE_VIOLATION
+  },
+  { what: 'editorial_plans.status fuori vocabolario', sql: `insert into public.editorial_plans (brand_id, status) values ($1, 'nope')`, code: CHECK_VIOLATION },
+
   { what: 'content_plans.status fuori vocabolario', sql: plan('status', `'nope'`), code: CHECK_VIOLATION },
   { what: 'content_plans.source fuori vocabolario', sql: plan('source', `'nope'`), code: CHECK_VIOLATION },
   { what: 'content_plans.editorial_week negativa', sql: plan('editorial_week', '-1'), code: CHECK_VIOLATION },

@@ -100,14 +100,20 @@ export const POST: RequestHandler = async ({ request, params }) => {
         }
       });
 
-      // Reload to get the image URL
       const { data: updated } = await supabase
         .from('posts').select('media_url')
         .eq('id', post.id).maybeSingle();
 
-      return json({ ok: true, url: updated?.media_url ?? null, error: updated?.media_url ? null : renderError });
+      if (!updated?.media_url) {
+        return json({ error: renderError ?? 'no image produced', credits_spent: true }, { status: 502 });
+      }
+
+      return json({ ok: true, url: updated.media_url, error: null });
     } catch (e) {
-      return json({ error: `Render failed: ${String(e)}` }, { status: 500 });
+      return json(
+        { error: `Render failed: ${e instanceof Error ? e.message : String(e)}`, credits_spent: true },
+        { status: 500 }
+      );
     }
   });
 };

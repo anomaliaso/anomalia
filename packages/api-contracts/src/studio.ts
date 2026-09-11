@@ -259,8 +259,9 @@ export const UPDATE_VOICE = {
   title: 'Update voice',
   description:
     'Change how this brand sounds: mood, tone, register, the words it must avoid, and the ' +
-    'instructions that differ per platform. Only the fields you send change. get_voice reads it ' +
-    'back. Free.',
+    'instructions that differ per platform. Only the fields you send change. Sending ANY of them ' +
+    'switches the brand OFF automatic voice: from then on nobody rewrites it for you. get_voice ' +
+    'reads it back. Free.',
   method: 'POST',
   pathUnderBrand: '/voice/update',
   input: z

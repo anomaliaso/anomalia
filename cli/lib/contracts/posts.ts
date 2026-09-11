@@ -138,14 +138,15 @@ export const RENDER_POST = {
   title: 'Render post image',
   description:
     'Draw the image a post is missing, from the prompt already written on it, and attach it. It ' +
-    'spends credits: one render. To draw a picture that is not tied to a post, use ' +
-    'generate_image.',
+    'spends credits: one render. A render that produces no image FAILS instead of answering ok, ' +
+    'and says `credits_spent`: the charge happened before the failure, so a retry pays again. To ' +
+    'draw a picture that is not tied to a post, use generate_image.',
   method: 'POST',
   pathUnderBrand: '/posts/:id/render',
   resource: 'post',
   input: z.object({}).strict(),
   output: z.union([
-    z.object({ ok: z.literal(true), url: z.string().nullable(), error: z.string().nullable() }),
+    z.object({ ok: z.literal(true), url: z.string(), error: z.null() }),
     z.object({ error: z.string(), url: z.string() })
   ]),
   failures: [{ error: 'credits_exhausted', status: 402 }],
