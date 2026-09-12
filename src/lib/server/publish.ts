@@ -4,10 +4,12 @@ import { publishPost, getPostStatus, deletePost } from './zernio';
 import { nextOccurrence } from './schedule';
 import { markPageUsed } from './content-library';
 import { withBrandContext } from './ai-log';
+import { buildMemoryContext } from './brand-memory';
 import { platformLimit, platformLabel, captionFor, ensureShortNetworkCuts, mediaUrlsForPublish, VIDEO_ONLY_PLATFORMS, youtubeTitleFrom, type PlatformCaptions } from '$lib/platform-limits';
 import { isVideoUrl } from '$lib/content-formats';
 import { mediaUrlsForCheck, requiresVisualMedia } from './prepublish-check';
 import { recordPostVerdict } from './post-verdict';
+import { extractBrandConstraints } from './image-constraint-review';
 
 const PROVIDER_REFUSAL = 'No social publishing provider is configured on this instance.';
 
@@ -20,6 +22,7 @@ export type ApprovablePost = {
   caption: string | null;
   // Per-platform caption overrides ({"x": ..., "threads": ...}); absent → same caption everywhere.
   platform_captions?: PlatformCaptions;
+  image_prompt?: string | null;
   media_url: string | null;
   // Ordered carousel slide URLs (media_urls column). Optional so legacy selects keep compiling:
   // when absent/empty the publish falls back to the single media_url (first slide only).
@@ -191,9 +194,10 @@ export async function publishApprovedPost(
   // whose migration may be pending, and a failure here must not block ordinary publishing.
   const { data: renderState } = await supabase
     .from('posts')
-    .select('video_render_status, status')
+    .select('video_render_status, status, image_prompt')
     .eq('id', post.id)
     .maybeSingle();
+  post.image_prompt ??= (renderState as { image_prompt?: string | null } | null)?.image_prompt ?? null;
   const wasDraft = (renderState as { status?: string | null } | null)?.status === 'pending_user';
   if ((renderState as { video_render_status?: string | null } | null)?.video_render_status === 'rendering') {
     return {
@@ -293,7 +297,9 @@ export async function publishApprovedPost(
   if (post.prepublish_ok !== true) {
     const { shouldGatePrepublish, inspectPostForRelease } = await import('./prepublish-check');
     if (shouldGatePrepublish(scheduledFor, { now: opts.now })) {
-      const verdict = await withBrandContext(post.brand_id, () => inspectPostForRelease(post));
+      const memory = await buildMemoryContext(supabase, post.brand_id);
+      const reviewPost = { ...post, brand_rules: extractBrandConstraints(memory) };
+      const verdict = await withBrandContext(post.brand_id, () => inspectPostForRelease(reviewPost));
       if (verdict.decision === 'hold') {
         const attention = `Pre-publish hold: ${verdict.reason}`.slice(0, 500);
         await supabase

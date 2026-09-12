@@ -171,6 +171,7 @@ Generated images follow (cover + carousel slides when present). Labels mark POST
             await renderPreviewImages(opts.profile, [post], {
               supabase: opts.supabase,
               userId: opts.userId,
+              brandId: opts.brandId,
               onProgress: () => {},
               onPost: () => {}
             });

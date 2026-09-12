@@ -27,6 +27,10 @@ vi.mock('$lib/server/brand-notify', () => ({
   notifyBrandContacts: vi.fn(async () => 0)
 }));
 
+vi.mock('$lib/server/brand-memory', () => ({
+  buildMemoryContext: vi.fn(async () => '')
+}));
+
 const POST = (overrides: Partial<PrepublishPost> = {}): PrepublishPost => ({
   id: 'post-1',
   brand_id: 'brand-1',
@@ -161,12 +165,35 @@ describe('inspectPostForRelease', () => {
     expect(verdict.reason).toBe('Overlay text is garbled');
   });
 
-  it('skips (fail-open) when Gemini is down', async () => {
+  it('gives the reviewer the original image brief for apparel branding checks', async () => {
+    const judge = vi.fn(async (input) => {
+      expect(input.imagePrompt).toBe('A Tajima machine beside a plain polo shirt.');
+      expect(input.brandRules).toBe('Tajima is allowed only on embroidery machines, never on garments.');
+      return { ok: false, reasons: ['TAJIMA is embroidered on the polo shirt.'] };
+    });
+
+    const verdict = await inspectPostForRelease(
+      POST({
+        image_prompt: 'A Tajima machine beside a plain polo shirt.',
+        brand_rules: 'Tajima is allowed only on embroidery machines, never on garments.'
+      }),
+      { probeMedia: async () => ({ ok: true, kind: 'other' }), judge }
+    );
+
+    expect(verdict.decision).toBe('hold');
+    expect(verdict.reason).toBe('TAJIMA is embroidered on the polo shirt.');
+  });
+
+  it('holds a visual post when its reviewer is down', async () => {
     const verdict = await inspectPostForRelease(POST(), {
       probeMedia: async () => ({ ok: true, kind: 'other' }),
       judge: async () => ({ error: 'model_failed' })
     });
-    expect(verdict.decision).toBe('skip');
+    expect(verdict).toEqual({
+      decision: 'hold',
+      reason: 'Image constraint reviewer could not verify the visual',
+      reasons: ['Image constraint reviewer could not verify the visual']
+    });
   });
 });
 

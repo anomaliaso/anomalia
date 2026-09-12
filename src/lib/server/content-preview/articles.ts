@@ -4,6 +4,9 @@ import { BLOG_IMAGE_MODEL, PRODUCT_REF_IMAGES, aspectRatioFor, brandVisualDirect
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchImagePart } from '$lib/server/brand-context';
 import { structured } from '$lib/server/research';
+import { withBrandContext } from '$lib/server/ai-log';
+import { buildMemoryContext } from '$lib/server/brand-memory';
+import { extractBrandConstraints } from '$lib/server/image-constraint-review';
 
 // Perché le cover del blog restino fedeli a prodotti VERI invece di inventarli.
 async function pickArticleProductRefs(
@@ -65,9 +68,10 @@ export async function generateArticleCover(
     .select('visual_style, ai_context, brand_colors, fonts').eq('brand_id', brand.id).maybeSingle();
   const moodUrls = await loadBrandMoodImageUrls(admin, brand.id).catch((error) => { swallow('load mood image urls', error); return []; });
   const products = await pickArticleProductRefs(admin, brand.id, `${opts.title} ${opts.summary ?? ''}`, 2).catch((error) => { swallow('pick product references', error); return []; });
-  const [moodImages, referenceImages] = await Promise.all([
+  const [moodImages, referenceImages, memory] = await Promise.all([
     loadMoodRefs(moodUrls),
-    loadProductRefs(products.flatMap((p) => p.images).slice(0, PRODUCT_REF_IMAGES))
+    loadProductRefs(products.flatMap((p) => p.images).slice(0, PRODUCT_REF_IMAGES)),
+    buildMemoryContext(admin, brand.id)
   ]);
   const fontNames = (Array.isArray(kit?.fonts) ? (kit!.fonts as AnyRec[]) : []).map((f) => f?.name).filter(Boolean) as string[];
   const productHint = products.length
@@ -75,7 +79,7 @@ export async function generateArticleCover(
     : '';
 
   const prompt = `A striking editorial COVER / hero image for a blog article titled "${opts.title}".${opts.summary ? ` The article is about: ${String(opts.summary).slice(0, 220)}.` : ''}${productHint} Evocative, magazine-quality, a clear focal point with room to breathe. Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
-  const dataUrl = await renderPostImage(prompt, {
+  const dataUrl = await withBrandContext(brand.id, () => renderPostImage(prompt, {
     aspectRatio: '16:9',
     model: BLOG_IMAGE_MODEL,
     visualStyle: (kit?.visual_style as string | undefined) || undefined,
@@ -83,8 +87,9 @@ export async function generateArticleCover(
     brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fontNames) || undefined,
     moodImages,
     referenceImages,
+    brandRules: extractBrandConstraints(memory) || undefined,
     referenceMode: referenceImages?.length ? 'product' : undefined
-  }).catch((error) => { swallow('render article cover', error); return undefined; });
+  })).catch((error) => { swallow('render article cover', error); return undefined; });
   if (!dataUrl) return null;
   return (await uploadPostImage(admin, brand.id, dataUrl, '16:9')) ?? null;
 }
@@ -104,9 +109,10 @@ export async function editArticleImage(
   const { data: kit } = await admin.from('brand_kit')
     .select('visual_style, ai_context, brand_colors, fonts').eq('brand_id', brand.id).maybeSingle();
   const moodUrls = await loadBrandMoodImageUrls(admin, brand.id).catch((error) => { swallow('load mood image urls', error); return []; });
-  const [moodImages, baseImage] = await Promise.all([
+  const [moodImages, baseImage, memory] = await Promise.all([
     loadMoodRefs(moodUrls),
-    fetchImagePart(opts.baseImageUrl)
+    fetchImagePart(opts.baseImageUrl),
+    buildMemoryContext(admin, brand.id)
   ]);
   if (!baseImage) return null;
 
@@ -117,14 +123,15 @@ User request: ${feedback}
 Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
 
   // Nessun override: `baseImage` seleziona da sé il modello di fedeltà in buildImageRequest.
-  const dataUrl = await renderPostImage(prompt, {
+  const dataUrl = await withBrandContext(brand.id, () => renderPostImage(prompt, {
     aspectRatio: '16:9',
     visualStyle: (kit?.visual_style as string | undefined) || undefined,
     visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
     brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fontNames) || undefined,
     moodImages,
+    brandRules: extractBrandConstraints(memory) || undefined,
     baseImage
-  }).catch((error) => { swallow('render edited cover', error); return undefined; });
+  })).catch((error) => { swallow('render edited cover', error); return undefined; });
   if (!dataUrl) return null;
   return (await uploadPostImage(admin, brand.id, dataUrl, '16:9')) ?? null;
 }
@@ -177,7 +184,7 @@ export async function generateArticleImages(
   const { data: kit } = await admin.from('brand_kit')
     .select('visual_style, ai_context, brand_colors, fonts').eq('brand_id', brand.id).maybeSingle();
   const moodUrls = await loadBrandMoodImageUrls(admin, brand.id).catch((error) => { swallow('load mood image urls', error); return []; });
-  const [moodImages] = await Promise.all([loadMoodRefs(moodUrls)]);
+  const [moodImages, memory] = await Promise.all([loadMoodRefs(moodUrls), buildMemoryContext(admin, brand.id)]);
   const fontNames = (Array.isArray(kit?.fonts) ? (kit!.fonts as AnyRec[]) : []).map((f) => f?.name).filter(Boolean) as string[];
   const baseOpts = {
     aspectRatio: '16:9' as const,
@@ -185,7 +192,8 @@ export async function generateArticleImages(
     visualStyle: (kit?.visual_style as string | undefined) || undefined,
     visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
     brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fontNames) || undefined,
-    moodImages
+    moodImages,
+    brandRules: extractBrandConstraints(memory) || undefined
   };
 
   const rendered = await Promise.all(
@@ -196,11 +204,11 @@ export async function generateArticleImages(
         ? ` Show the brand's REAL product from the attached reference: ${products.map((p) => p.name).join(', ')}. Keep it pixel-faithful — restyle only scene/lighting.`
         : '';
       const prompt = `An editorial image illustrating the section "${t.heading}" of a blog article titled "${opts.title}".${productHint} Evocative, magazine-quality, a clear focal point. Absolutely NO text, letters, words, captions or logos anywhere in the image.`;
-      const dataUrl = await renderPostImage(prompt, {
+      const dataUrl = await withBrandContext(brand.id, () => renderPostImage(prompt, {
         ...baseOpts,
         referenceImages,
         referenceMode: referenceImages?.length ? 'product' : undefined
-      }).catch((error) => { swallow('render section image', error); return undefined; });
+      })).catch((error) => { swallow('render section image', error); return undefined; });
       if (!dataUrl) return null;
       const url = await uploadPostImage(admin, brand.id, dataUrl, '16:9');
       return url ? { line: t.line, md: `\n![${t.heading}](${url})\n` } : null;

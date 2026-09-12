@@ -1011,6 +1011,7 @@ async function processPlanPosts(
   if (Array.isArray(input.people) && input.people.length) profile.people = input.people;
 
   const userId = job.user_id as string;
+  const reviewBrandId = (job.brand_id as string | null) ?? undefined;
   let lastStep = 'start';
 
   try {
@@ -1102,6 +1103,7 @@ async function processPreviewImages(
     await renderPreviewImages(profile, posts, {
       supabase: admin,
       userId,
+      reviewBrandId,
       onProgress: (step, message) => {
         lastStep = step;
         void note(admin, jobId, step, message);

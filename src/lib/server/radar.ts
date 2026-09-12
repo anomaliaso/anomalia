@@ -1024,7 +1024,7 @@ export async function radarProduce(
     brandId: brand.id,
     userId: brand.id
   });
-  await renderPreviewImages(profile, posts, { supabase: admin, userId: brand.id, onProgress: () => {}, onPost: () => {} });
+  await renderPreviewImages(profile, posts, { supabase: admin, userId: brand.id, brandId: brand.id, onProgress: () => {}, onPost: () => {} });
 
   // Skip Director when produce agent already approved (single quality gate).
   const director = isProduceApproved(posts)

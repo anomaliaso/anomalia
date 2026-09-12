@@ -11,12 +11,15 @@ import { normalizeBeats, type AnyRec, type BrandProfile, type ContentPrefs, type
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { synthesizeVisualStyle } from '$lib/server/brand-context';
+import { buildMemoryContext } from '$lib/server/brand-memory';
+import { withBrandContext } from '$lib/server/ai-log';
 import { route } from '$lib/server/model-routing';
 import { upcomingTimelyHooks } from '$lib/server/thematic-calendar';
 import { normalizeContentFormat } from '$lib/content-formats';
 import { type LadderContext } from '$lib/server/production-ladder';
 import { type Rubric } from '$lib/server/rubrics';
 import { loadKnownSubreddits } from '$lib/server/platform-hygiene';
+import { extractBrandConstraints } from '$lib/server/image-constraint-review';
 
 // Options shared by the planning and rendering halves. Splitting them lets a caller run the cheap
 // text planning in one request and the heavy image rendering in another (see onboarding), so no
@@ -73,6 +76,7 @@ type RenderPreviewOpts = {
   supabase: SupabaseClient;
   userId: string;
   brandId?: string;
+  reviewBrandId?: string;
   // Force one image model for the whole batch, ahead of the brand's own preference. Absent → the
   // brand's Settings choice, and absent that too, buildImageRequest picks as it always has. The
   // guest preview passes the cheapest model here; a UGC cover still overrides everything, because
@@ -391,6 +395,16 @@ export async function renderPreviewImages(
   // settimana, e sette posti da ricordare sono sette posti da dimenticare. Un `imageModel`
   // esplicito (l'anteprima ospite) vince comunque.
   const brandImageModel = opts.imageModel ?? (await brandPreferredImageModel(opts));
+  const reviewBrandId = opts.reviewBrandId ?? opts.brandId;
+  const memory = reviewBrandId ? await buildMemoryContext(opts.supabase, reviewBrandId) : profile.ai_context;
+  const brandRules = extractBrandConstraints(memory) || undefined;
+
+  function renderForBrand<T>(fn: () => T): T {
+    if (reviewBrandId) {
+      return withBrandContext(reviewBrandId, fn);
+    }
+    return fn();
+  }
 
   opts.onProgress?.('generating', `Generating images for ${posts.length} posts…`);
 
@@ -525,6 +539,7 @@ export async function renderPreviewImages(
             visualPlaybook: isUgc ? undefined : visualPlaybook,
             referenceMode,
             brandLook: isUgc ? undefined : brandLook,
+            brandRules,
             // No logo on a candid selfie — it is the single clearest "this is an ad" signal.
             logoImage: isUgc ? undefined : logoImage,
             aspectRatio
@@ -557,7 +572,7 @@ export async function renderPreviewImages(
               })
             : post.image_prompt;
 
-          const dataUrl = await renderBrandImage(framePrompt, renderOpts);
+          const dataUrl = await renderForBrand(() => renderBrandImage(framePrompt, renderOpts));
           const qc = undefined;
           // Expose the verdict so callers can surface it (CLI --verbose).
           if (qc) (post as AnyRec).__qc = qc;
@@ -574,12 +589,14 @@ export async function renderPreviewImages(
               const total = post.image_prompts!.length;
               const rest = await Promise.all(
                 post.image_prompts!.slice(1).map((slidePrompt, idx) =>
-                  renderCarouselSlide(opts.supabase, opts.userId, slidePrompt, idx + 1, total, renderOpts, anchor, {
-                    productName: post.product,
-                    productKind: featured?.kind,
-                    referenceImages,
-                    visualStyle
-                  })
+                  renderForBrand(() =>
+                    renderCarouselSlide(opts.supabase, opts.userId, slidePrompt, idx + 1, total, renderOpts, anchor, {
+                      productName: post.product,
+                      productKind: featured?.kind,
+                      referenceImages,
+                      visualStyle
+                    })
+                  )
                 )
               );
               const urls = [cover, ...rest.filter((u): u is string => !!u)];

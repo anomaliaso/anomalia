@@ -84,6 +84,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
       await renderPreviewImages(profile, [previewPost], {
         supabase,
         userId: brand.id,
+        brandId: brand.id,
         onProgress: () => {},
         onPost: async (p) => {
           if (p.imageUrl) {

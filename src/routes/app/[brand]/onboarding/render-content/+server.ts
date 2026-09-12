@@ -72,6 +72,7 @@ export const POST: RequestHandler = async ({ params, locals: { supabase, safeGet
   await renderPreviewImages(profile, previews as unknown as PreviewPost[], {
     supabase,
     userId: user.id,
+    reviewBrandId: brand.id,
     onPost: (post: AnyRec) => {
       if (post.imageUrl) {
         rendered += 1;
