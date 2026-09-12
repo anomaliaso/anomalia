@@ -4,6 +4,7 @@
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
   import { homeTodos } from '$lib/home-todos';
+  import { upcomingFeed } from '$lib/home-upcoming';
   import { webGauges } from '$lib/home-gauges';
 
   let {
@@ -30,8 +31,7 @@
     Math.max(overview.blog.pending, overview.blog.articles.length)
   );
   const scheduledPostCount = $derived(overview.queue.scheduled);
-  const upcomingPosts = $derived(overview.queue.upcoming ?? []);
-  const upcomingBlogs = $derived(overview.blog.upcoming ?? []);
+  const upcoming = $derived(upcomingFeed(overview.queue.upcoming ?? [], overview.blog.upcoming ?? []));
   const auto = $derived(
     overview.automations ?? {
       radarEnabled: false,
@@ -178,83 +178,37 @@
   </section>
 
 
-  <!-- Coming up -->
+  <!-- Cosa esce, in ordine di orologio. La SELEZIONE e l'ORDINE stanno in `$lib/home-upcoming`,
+       sotto test; qui si disegna e si traduce. -->
   <section class="ov-section">
     <div class="ov-section-head">
-      <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionSchedule')}</span>
-        <h3>{$_('app.home.overview.comingUp')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.comingUpDesc')}</p>
-      </div>
+      <h3>{$_('app.home.overview.comingUp')}</h3>
       <a class="ov-link" href={`${base}/calendar`}>{$_('app.home.overview.openCalendar')} →</a>
     </div>
 
-    {#if upcomingPosts.length === 0 && upcomingBlogs.length === 0}
+    {#if upcoming.length === 0}
       <p class="ov-empty quiet">{$_('app.home.overview.nothingScheduled')}</p>
     {:else}
-      {#if upcomingPosts.length > 0}
-        <div class="ov-panel compact">
-          <div class="ov-panel-head">
-            <div class="ov-panel-title-wrap">
-              <span class="ov-kind">{$_('app.home.overview.kindSocial')}</span>
-              <span class="ov-panel-title">{$_('app.home.overview.nextSocial')}</span>
-            </div>
-            <a class="ov-link" href={`${base}/calendar`}>{$_('app.home.overview.seeAll')} →</a>
-          </div>
-          <ul class="upcoming-list">
-            {#each upcomingPosts as post (post.id)}
-              <li>
-                <a href={`${base}/calendar?status=scheduled`}>
-                  <span class="up-thumb">
-                    {#if post.media_url}
-                      <img src={post.media_url} alt="" loading="lazy" />
-                    {:else}
-                      <span class="up-ph">{(post.platform ?? '?').slice(0, 2).toUpperCase()}</span>
-                    {/if}
-                  </span>
-                  <span class="up-body">
-                    <span class="up-meta"
-                      >{post.platform ?? 'social'} · {formatWhen(post.scheduled_for)}</span
-                    >
-                    <span class="up-title">{captionPreview(post.caption, 90) || '—'}</span>
-                  </span>
-                </a>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if upcomingBlogs.length > 0}
-        <div class="ov-panel compact">
-          <div class="ov-panel-head">
-            <div class="ov-panel-title-wrap">
-              <span class="ov-kind">{$_('app.home.overview.kindBlog')}</span>
-              <span class="ov-panel-title">{$_('app.home.overview.nextBlogs')}</span>
-            </div>
-            <a class="ov-link" href={`${base}/site`}>{$_('app.home.overview.seeAll')} →</a>
-          </div>
-          <ul class="upcoming-list">
-            {#each upcomingBlogs as art (art.id)}
-              <li>
-                <a href={`${base}/site/edit/${art.id}`}>
-                  <span class="up-thumb">
-                    {#if art.cover_url}
-                      <img src={art.cover_url} alt="" loading="lazy" />
-                    {:else}
-                      <span class="up-ph">B</span>
-                    {/if}
-                  </span>
-                  <span class="up-body">
-                    <span class="up-meta">{formatWhen(art.scheduled_for)}</span>
-                    <span class="up-title">{art.title || '—'}</span>
-                  </span>
-                </a>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
+      <ul class="upcoming-list">
+        {#each upcoming as item (item.kind + item.id)}
+          <li>
+            <a href={`${base}${item.path}`}>
+              <span class="up-thumb">
+                {#if item.thumb}
+                  <img src={item.thumb} alt="" loading="lazy" />
+                {:else}
+                  <span class="up-ph">{item.fallback}</span>
+                {/if}
+              </span>
+              <span class="up-body">
+                <span class="up-meta">{formatWhen(item.when)}</span>
+                <span class="up-title">{item.title ?? '—'}</span>
+              </span>
+              <span class="up-kind">{$_(`app.home.overview.kind${item.kind === 'blog' ? 'Blog' : 'Social'}`)}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </section>
 
@@ -262,9 +216,7 @@
   <section class="ov-section">
     <div class="ov-section-head">
       <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionWeb')}</span>
         <h3>{$_('app.home.overview.webTitle')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.webDesc')}</p>
       </div>
       <a class="ov-link" href={`${base}/web`}>{$_('app.home.overview.openWeb')} →</a>
     </div>
@@ -397,9 +349,7 @@
   <section class="ov-section">
     <div class="ov-section-head">
       <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionPerformance')}</span>
         <h3>{$_('app.home.overview.analysisTitle')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.analysisDesc')}</p>
         {#if overview.analysis.statsUpdatedAt}
           <p class="ov-stats-updated">
             {$_('app.home.overview.statsUpdated', {
@@ -443,17 +393,6 @@
           {/each}
         </div>
       </a>
-
-      <div class="perf-kpis">
-        <a class="metric-card" href={`${base}/analytics`}>
-          <span class="metric-n"><AnimatedNum value={overview.analysis.published} /></span>
-          <span class="metric-l">{$_('app.home.overview.published')}</span>
-        </a>
-        <a class="metric-card" href={`${base}/calendar`}>
-          <span class="metric-n"><AnimatedNum value={scheduledPostCount} /></span>
-          <span class="metric-l">{$_('app.home.overview.scheduled')}</span>
-        </a>
-      </div>
     </div>
 
   </section>
@@ -594,25 +533,12 @@
     gap: 12px;
     margin-bottom: 12px;
   }
-  .ov-kicker {
-    display: block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 2px;
-  }
+  .ov-section-head h3,
   .ov-section-copy h3 {
     margin: 0;
     font-size: 1.05rem;
     font-weight: 650;
     letter-spacing: -0.02em;
-  }
-  .ov-section-desc {
-    margin: 4px 0 0;
-    font-size: 13px;
-    color: var(--ink-soft);
   }
   .ov-stats-updated {
     margin: 6px 0 0;
@@ -641,47 +567,6 @@
     background: var(--paper);
   }
 
-  .ov-panel {
-    margin-top: 10px;
-    padding: 14px;
-    border-radius: 16px;
-    border: 1px solid var(--line);
-    background: var(--paper);
-  }
-  .ov-panel.compact {
-    padding: 12px 14px;
-  }
-  .ov-panel + .ov-panel {
-    margin-top: 10px;
-  }
-  .ov-panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-  }
-  .ov-panel-title-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .ov-kind {
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 10%, var(--paper));
-    padding: 3px 7px;
-    border-radius: 6px;
-  }
-  .ov-panel-title {
-    font-size: 14px;
-    font-weight: 650;
-  }
   .upcoming-list {
     list-style: none;
     margin: 0;
@@ -729,6 +614,14 @@
     flex-direction: column;
     gap: 1px;
     overflow: hidden;
+  }
+  .up-kind {
+    flex: none;
+    font-size: 10.5px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
   }
   .up-meta {
     font-size: 11.5px;
@@ -938,13 +831,6 @@
     opacity: 1;
     background: var(--accent);
   }
-  .perf-kpis {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .spark-line {
       animation: none;
