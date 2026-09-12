@@ -2,108 +2,24 @@
   import { _ } from 'svelte-i18n';
   import type { HomeOverview } from '$lib/server/hub-overview';
   import AnimatedNum from '$lib/components/AnimatedNum.svelte';
-  import GrowthReadiness from '$lib/components/GrowthReadiness.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
   import { homeTodos } from '$lib/home-todos';
+  import { upcomingFeed } from '$lib/home-upcoming';
   import { webGauges } from '$lib/home-gauges';
-
-  type Extras = {
-    pendingCount?: number;
-    leadsPendingCount?: number;
-    radarReviewCount?: number;
-    socialAccountCount?: number;
-    studioPct?: number;
-    strategySetup?: { gtm?: boolean; plan?: boolean };
-    radarEnabled?: boolean;
-    hasGeoAudit?: boolean;
-    gscConnected?: boolean;
-  };
 
   let {
     brandSlug,
-    extras = null,
     overview,
     launchedAt = null,
   }: {
     brandSlug: string;
-    extras?: Extras | null;
     overview: HomeOverview;
     launchedAt?: string | null;
   } = $props();
 
   const base = $derived(`/app/${brandSlug}`);
 
-  // Merge deferred extras into setup flags when they arrive.
-  const setup = $derived({
-    studioPct: extras?.studioPct ?? overview.setup.studioPct,
-    hasStrategy: extras?.strategySetup?.gtm ?? overview.setup.hasStrategy,
-    hasEditorialPlan: extras?.strategySetup?.plan ?? overview.setup.hasEditorialPlan,
-    blogEnabled: overview.setup.blogEnabled,
-    radarEnabled: extras?.radarEnabled ?? overview.setup.radarEnabled,
-    hasGeoAudit: extras?.hasGeoAudit ?? overview.setup.hasGeoAudit,
-    gscConnected: extras?.gscConnected ?? overview.setup.gscConnected ?? true,
-    socialAccounts: extras?.socialAccountCount ?? overview.setup.socialAccounts
-  });
-
-  const setupSteps = $derived([
-    { key: 'studio', done: setup.studioPct >= 80, href: `${base}/settings/brand` },
-    { key: 'strategy', done: setup.hasStrategy, href: `${base}/gtm` },
-    { key: 'plan', done: setup.hasEditorialPlan, href: `${base}/plan` },
-    { key: 'social', done: setup.socialAccounts > 0, href: `${base}/settings/connected-accounts` },
-    { key: 'blog', done: setup.blogEnabled, href: `${base}/site` },
-    { key: 'radar', done: setup.radarEnabled, href: `${base}/radar` },
-    { key: 'seo', done: setup.hasGeoAudit, href: `${base}/seo` },
-    { key: 'gsc', done: setup.gscConnected, href: `${base}/settings/search-console` }
-  ]);
-
-  const doneCount = $derived(setupSteps.filter((s) => s.done).length);
-  const setupPct = $derived(setupSteps.length ? (doneCount / setupSteps.length) * 100 : 0);
-  const allSetupDone = $derived(doneCount === setupSteps.length);
-
-  const dismissKey = $derived(`home-setup-dismissed-${brandSlug}`);
-  let setupDismissed = $state(false);
-  let setupOpen = $state(true);
-
-  // Re-read prefs when brandSlug changes (component may be reused across project switches).
-  // Only sync FROM localStorage — writing setupDismissed/setupOpen while also reading them
-  // in the same effect is a classic effect_update_depth_exceeded footgun.
-  $effect(() => {
-    const dismissed = `home-setup-dismissed-${brandSlug}`;
-    const collapsedKey = `home-setup-collapsed-${brandSlug}`;
-    if (typeof localStorage === 'undefined') {
-      setupDismissed = false;
-      setupOpen = true;
-      return;
-    }
-    try {
-      setupDismissed = localStorage.getItem(dismissed) === '1';
-      const collapsed = localStorage.getItem(collapsedKey);
-      setupOpen = collapsed !== '1';
-    } catch {
-      setupDismissed = false;
-      setupOpen = true;
-    }
-  });
-
-  function toggleSetup() {
-    setupOpen = !setupOpen;
-    try {
-      localStorage.setItem(`home-setup-collapsed-${brandSlug}`, setupOpen ? '0' : '1');
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function dismissSetup() {
-    setupDismissed = true;
-    try {
-      localStorage.setItem(dismissKey, '1');
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const showSetup = $derived(!allSetupDone && !setupDismissed);
+  const socialAccounts = $derived(overview.setup.socialAccounts);
 
   function captionPreview(text: string | null, n = 80) {
     if (!text) return '';
@@ -111,16 +27,11 @@
     return t.length > n ? `${t.slice(0, n)}…` : t;
   }
 
-  const pendingPosts = $derived(overview.queue.posts);
-  const pendingPostCount = $derived(
-    Math.max(overview.queue.pending, extras?.pendingCount ?? 0, pendingPosts.length)
+  const pendingBlogCount = $derived(
+    Math.max(overview.blog.pending, overview.blog.articles.length)
   );
-  const pendingBlogs = $derived(overview.blog.articles);
-  const pendingBlogCount = $derived(Math.max(overview.blog.pending, pendingBlogs.length));
   const scheduledPostCount = $derived(overview.queue.scheduled);
-  const scheduledBlogCount = $derived(overview.blog.scheduled);
-  const upcomingPosts = $derived(overview.queue.upcoming ?? []);
-  const upcomingBlogs = $derived(overview.blog.upcoming ?? []);
+  const upcoming = $derived(upcomingFeed(overview.queue.upcoming ?? [], overview.blog.upcoming ?? []));
   const auto = $derived(
     overview.automations ?? {
       radarEnabled: false,
@@ -144,22 +55,13 @@
 
   const todos = $derived(
     homeTodos({
-      queue: { pending: pendingPostCount },
-      blog: { pending: pendingBlogCount },
       automations: {
         radarEnabled: auto.radarEnabled,
         radarReview: auto.radarReview,
         leadsPending: auto.leadsPending
       },
-      setup: { socialAccounts: setup.socialAccounts }
+      setup: { socialAccounts }
     })
-  );
-
-  const socialPipeMax = $derived(
-    Math.max(1, pendingPostCount, scheduledPostCount, overview.analysis.published)
-  );
-  const blogPipeMax = $derived(
-    Math.max(1, pendingBlogCount, scheduledBlogCount, overview.blog.published)
   );
 
   const viewsByDay = $derived(
@@ -231,58 +133,18 @@
 
 <div class="home-wb">
 
-  {#if showSetup}
-    <section class="setup-box">
-      <button type="button" class="setup-head" onclick={toggleSetup} aria-expanded={setupOpen}>
-        <div class="setup-head-text">
-          <span class="setup-title">{$_('app.home.setup.title')}</span>
-          <span class="setup-progress"
-            >{$_('app.home.setup.progress', { values: { done: doneCount, tot: setupSteps.length } })}</span
-          >
-        </div>
-        <div class="setup-bar" aria-hidden="true"><span style={`width:${setupPct}%`}></span></div>
-        <span class="setup-chevron" class:open={setupOpen} aria-hidden="true">▾</span>
-      </button>
+  <!-- Il setup a scalini, i tredici controlli della crescita e la pipeline a tre numeri non stanno
+       piu' qui: la testa della pagina (`HomeHead`) dice la stessa cosa in quattro numeri e una
+       pastiglia, e i tredici controlli hanno gia' una casa propria in /plan, dove si agisce su di
+       loro. Tenerne due copie voleva dire due posti che dicono la stessa cosa e divergono al primo
+       cambiamento — e la prima cosa che vedeva chi entrava era quanto gli mancava. -->
 
-      {#if setupOpen}
-        <ul class="setup-list">
-          {#each setupSteps as step (step.key)}
-            <li class:done={step.done}>
-              <span class="setup-check">
-                {#if step.done}
-                  <svg viewBox="0 0 20 20" fill="currentColor"
-                    ><path
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                    /></svg
-                  >
-                {/if}
-              </span>
-              {#if step.done}
-                <span class="setup-label done">{$_(`app.home.setup.items.${step.key}`)}</span>
-              {:else}
-                <a class="setup-label" href={step.href}>{$_(`app.home.setup.items.${step.key}`)}</a>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-        <div class="setup-footer">
-          <button type="button" class="setup-dismiss" onclick={dismissSetup}
-            >{$_('app.home.setup.dismiss')}</button
-          >
-        </div>
-      {/if}
-    </section>
-  {/if}
 
   {#if !overview.paid}
     <div class="upgrade-banner">
       <p>{$_('app.home.upgrade.banner')}</p>
       <a href={`${base}/activate?plan=starter`}>{$_('app.home.upgrade.cta')}</a>
     </div>
-  {/if}
-
-  {#if overview.growth?.checks?.length}
-    <GrowthReadiness checks={overview.growth.checks} compact={overview.growth.ready} />
   {/if}
 
   <!-- IL BLOCCO DEL MOCKUP: ciò che richiede attenzione sta in cima, con quante sono. Il resto
@@ -315,131 +177,38 @@
     {/if}
   </section>
 
-  <section class="ov-section">
-    <div class="ov-section-head">
-      <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionSchedule')}</span>
-        <h3>{$_('app.home.overview.pipelineTitle')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.pipelineDesc')}</p>
-      </div>
-    </div>
-    <div class="pipe-grid">
-      <a class="pipe-card" href={`${base}/calendar`}>
-        <span class="pipe-kind">{$_('app.home.overview.kindSocial')}</span>
-        <div class="pipe-row">
-          <span class="pipe-l">{$_('app.home.overview.pipelinePending')}</span>
-          <span class="pipe-n"><AnimatedNum value={pendingPostCount} /></span>
-        </div>
-        <div class="pipe-track"><span class="pipe-fill warn" style={`width:${(pendingPostCount / socialPipeMax) * 100}%`}></span></div>
-        <div class="pipe-row">
-          <span class="pipe-l">{$_('app.home.overview.pipelineScheduled')}</span>
-          <span class="pipe-n"><AnimatedNum value={scheduledPostCount} /></span>
-        </div>
-        <div class="pipe-track"><span class="pipe-fill" style={`width:${(scheduledPostCount / socialPipeMax) * 100}%`}></span></div>
-        <div class="pipe-row">
-          <span class="pipe-l">{$_('app.home.overview.pipelinePublished')}</span>
-          <span class="pipe-n"><AnimatedNum value={overview.analysis.published} /></span>
-        </div>
-        <div class="pipe-track"><span class="pipe-fill ok" style={`width:${(overview.analysis.published / socialPipeMax) * 100}%`}></span></div>
-      </a>
-      <a class="pipe-card" href={`${base}/site`}>
-        <span class="pipe-kind">{$_('app.home.overview.kindBlog')}</span>
-        <div class="pipe-row">
-          <span class="pipe-l">{$_('app.home.overview.pipelinePending')}</span>
-          <span class="pipe-n"><AnimatedNum value={pendingBlogCount} /></span>
-        </div>
-        <div class="pipe-track"><span class="pipe-fill warn" style={`width:${(pendingBlogCount / blogPipeMax) * 100}%`}></span></div>
-        <div class="pipe-row">
-          <span class="pipe-l">{$_('app.home.overview.pipelineScheduled')}</span>
-          <span class="pipe-n"><AnimatedNum value={scheduledBlogCount} /></span>
-        </div>
-        <div class="pipe-track"><span class="pipe-fill" style={`width:${(scheduledBlogCount / blogPipeMax) * 100}%`}></span></div>
-        <div class="pipe-row">
-          <span class="pipe-l">{$_('app.home.overview.pipelinePublished')}</span>
-          <span class="pipe-n"><AnimatedNum value={overview.blog.published} /></span>
-        </div>
-        <div class="pipe-track"><span class="pipe-fill ok" style={`width:${(overview.blog.published / blogPipeMax) * 100}%`}></span></div>
-      </a>
-    </div>
-  </section>
 
-  <!-- Coming up -->
+  <!-- Cosa esce, in ordine di orologio. La SELEZIONE e l'ORDINE stanno in `$lib/home-upcoming`,
+       sotto test; qui si disegna e si traduce. -->
   <section class="ov-section">
     <div class="ov-section-head">
-      <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionSchedule')}</span>
-        <h3>{$_('app.home.overview.comingUp')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.comingUpDesc')}</p>
-      </div>
+      <h3>{$_('app.home.overview.comingUp')}</h3>
       <a class="ov-link" href={`${base}/calendar`}>{$_('app.home.overview.openCalendar')} →</a>
     </div>
 
-    {#if upcomingPosts.length === 0 && upcomingBlogs.length === 0}
+    {#if upcoming.length === 0}
       <p class="ov-empty quiet">{$_('app.home.overview.nothingScheduled')}</p>
     {:else}
-      {#if upcomingPosts.length > 0}
-        <div class="ov-panel compact">
-          <div class="ov-panel-head">
-            <div class="ov-panel-title-wrap">
-              <span class="ov-kind">{$_('app.home.overview.kindSocial')}</span>
-              <span class="ov-panel-title">{$_('app.home.overview.nextSocial')}</span>
-            </div>
-            <a class="ov-link" href={`${base}/calendar`}>{$_('app.home.overview.seeAll')} →</a>
-          </div>
-          <ul class="upcoming-list">
-            {#each upcomingPosts as post (post.id)}
-              <li>
-                <a href={`${base}/calendar?status=scheduled`}>
-                  <span class="up-thumb">
-                    {#if post.media_url}
-                      <img src={post.media_url} alt="" loading="lazy" />
-                    {:else}
-                      <span class="up-ph">{(post.platform ?? '?').slice(0, 2).toUpperCase()}</span>
-                    {/if}
-                  </span>
-                  <span class="up-body">
-                    <span class="up-meta"
-                      >{post.platform ?? 'social'} · {formatWhen(post.scheduled_for)}</span
-                    >
-                    <span class="up-title">{captionPreview(post.caption, 90) || '—'}</span>
-                  </span>
-                </a>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if upcomingBlogs.length > 0}
-        <div class="ov-panel compact">
-          <div class="ov-panel-head">
-            <div class="ov-panel-title-wrap">
-              <span class="ov-kind">{$_('app.home.overview.kindBlog')}</span>
-              <span class="ov-panel-title">{$_('app.home.overview.nextBlogs')}</span>
-            </div>
-            <a class="ov-link" href={`${base}/site`}>{$_('app.home.overview.seeAll')} →</a>
-          </div>
-          <ul class="upcoming-list">
-            {#each upcomingBlogs as art (art.id)}
-              <li>
-                <a href={`${base}/site/edit/${art.id}`}>
-                  <span class="up-thumb">
-                    {#if art.cover_url}
-                      <img src={art.cover_url} alt="" loading="lazy" />
-                    {:else}
-                      <span class="up-ph">B</span>
-                    {/if}
-                  </span>
-                  <span class="up-body">
-                    <span class="up-meta">{formatWhen(art.scheduled_for)}</span>
-                    <span class="up-title">{art.title || '—'}</span>
-                  </span>
-                </a>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
+      <ul class="upcoming-list">
+        {#each upcoming as item (item.kind + item.id)}
+          <li>
+            <a href={`${base}${item.path}`}>
+              <span class="up-thumb">
+                {#if item.thumb}
+                  <img src={item.thumb} alt="" loading="lazy" />
+                {:else}
+                  <span class="up-ph">{item.fallback}</span>
+                {/if}
+              </span>
+              <span class="up-body">
+                <span class="up-meta">{formatWhen(item.when)}</span>
+                <span class="up-title">{item.title ?? '—'}</span>
+              </span>
+              <span class="up-kind">{$_(`app.home.overview.kind${item.kind === 'blog' ? 'Blog' : 'Social'}`)}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </section>
 
@@ -447,9 +216,7 @@
   <section class="ov-section">
     <div class="ov-section-head">
       <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionWeb')}</span>
         <h3>{$_('app.home.overview.webTitle')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.webDesc')}</p>
       </div>
       <a class="ov-link" href={`${base}/web`}>{$_('app.home.overview.openWeb')} →</a>
     </div>
@@ -582,9 +349,7 @@
   <section class="ov-section">
     <div class="ov-section-head">
       <div class="ov-section-copy">
-        <span class="ov-kicker">{$_('app.home.overview.sectionPerformance')}</span>
         <h3>{$_('app.home.overview.analysisTitle')}</h3>
-        <p class="ov-section-desc">{$_('app.home.overview.analysisDesc')}</p>
         {#if overview.analysis.statsUpdatedAt}
           <p class="ov-stats-updated">
             {$_('app.home.overview.statsUpdated', {
@@ -628,17 +393,6 @@
           {/each}
         </div>
       </a>
-
-      <div class="perf-kpis">
-        <a class="metric-card" href={`${base}/analytics`}>
-          <span class="metric-n"><AnimatedNum value={overview.analysis.published} /></span>
-          <span class="metric-l">{$_('app.home.overview.published')}</span>
-        </a>
-        <a class="metric-card" href={`${base}/calendar`}>
-          <span class="metric-n"><AnimatedNum value={scheduledPostCount} /></span>
-          <span class="metric-l">{$_('app.home.overview.scheduled')}</span>
-        </a>
-      </div>
     </div>
 
   </section>
@@ -744,118 +498,6 @@
     overflow-x: clip;
   }
 
-  .setup-box {
-    margin: 0 0 20px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: var(--paper);
-    overflow: hidden;
-  }
-  .setup-head {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
-    gap: 8px 12px;
-    width: 100%;
-    padding: 14px 16px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
-    color: inherit;
-    font: inherit;
-  }
-  .setup-head:hover {
-    background: var(--paper-2);
-  }
-  .setup-head-text {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .setup-title {
-    font-size: 14px;
-    font-weight: 650;
-  }
-  .setup-progress {
-    font-size: 12px;
-    color: var(--ink-faint);
-  }
-  .setup-bar {
-    grid-column: 1 / -1;
-    height: 6px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--ink) 6%, transparent);
-    overflow: hidden;
-  }
-  .setup-bar span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--accent);
-    transition: width 0.5s ease;
-  }
-  .setup-chevron {
-    align-self: start;
-    color: var(--ink-faint);
-    transition: transform 0.2s ease;
-  }
-  .setup-chevron.open {
-    transform: rotate(180deg);
-  }
-  .setup-list {
-    list-style: none;
-    margin: 0;
-    padding: 0 8px 8px;
-  }
-  .setup-list li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-  }
-  .setup-check {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 1.5px solid var(--line);
-    display: grid;
-    place-items: center;
-    flex: none;
-  }
-  .setup-list li.done .setup-check {
-    background: color-mix(in srgb, var(--accent) 18%, var(--paper));
-    border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-    color: var(--accent);
-  }
-  .setup-check svg {
-    width: 12px;
-    height: 12px;
-  }
-  .setup-label {
-    font-size: 13px;
-    color: var(--ink);
-    text-decoration: none;
-  }
-  .setup-label.done {
-    color: var(--ink-faint);
-  }
-  .setup-footer {
-    padding: 0 16px 14px;
-  }
-  .setup-dismiss {
-    appearance: none;
-    border: none;
-    background: none;
-    color: var(--ink-faint);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    text-decoration: underline;
-  }
-
   .upgrade-banner {
     display: flex;
     align-items: center;
@@ -881,72 +523,6 @@
   }
 
   /* ── Pipeline ─────────────────────────────────────────────── */
-  .pipe-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .pipe-card {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 14px 14px 12px;
-    border-radius: 14px;
-    border: 1px solid var(--line);
-    background: var(--paper);
-    text-decoration: none;
-    color: inherit;
-  }
-  .pipe-card:hover {
-    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-    background: var(--paper-2);
-  }
-  .pipe-kind {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 4px;
-  }
-  .pipe-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .pipe-l {
-    font-size: 12.5px;
-    color: var(--ink-soft);
-  }
-  .pipe-n {
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-  }
-  .pipe-track {
-    height: 7px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--ink) 7%, transparent);
-    overflow: hidden;
-    margin-bottom: 4px;
-  }
-  .pipe-fill {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: var(--accent);
-    transition: width 0.55s ease;
-    min-width: 0;
-  }
-  .pipe-fill.warn {
-    background: color-mix(in srgb, #c9782a 80%, var(--accent));
-  }
-  .pipe-fill.ok {
-    background: color-mix(in srgb, #2a9a5c 70%, var(--accent));
-  }
-
   .ov-section {
     margin: 0 0 64px;
   }
@@ -957,25 +533,12 @@
     gap: 12px;
     margin-bottom: 12px;
   }
-  .ov-kicker {
-    display: block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 2px;
-  }
+  .ov-section-head h3,
   .ov-section-copy h3 {
     margin: 0;
     font-size: 1.05rem;
     font-weight: 650;
     letter-spacing: -0.02em;
-  }
-  .ov-section-desc {
-    margin: 4px 0 0;
-    font-size: 13px;
-    color: var(--ink-soft);
   }
   .ov-stats-updated {
     margin: 6px 0 0;
@@ -1002,60 +565,6 @@
   .ov-empty.quiet {
     border-style: solid;
     background: var(--paper);
-  }
-
-  .ov-panel {
-    margin-top: 10px;
-    padding: 14px;
-    border-radius: 16px;
-    border: 1px solid var(--line);
-    background: var(--paper);
-  }
-  .ov-panel.compact {
-    padding: 12px 14px;
-  }
-  .ov-panel + .ov-panel {
-    margin-top: 10px;
-  }
-  .ov-panel-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-  }
-  .ov-panel-title-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .ov-kind {
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 10%, var(--paper));
-    padding: 3px 7px;
-    border-radius: 6px;
-  }
-  .ov-panel-title {
-    font-size: 14px;
-    font-weight: 650;
-  }
-  .ov-panel-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .ov-ai-strong {
-    background: color-mix(in srgb, var(--accent) 12%, var(--paper));
-    border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
   }
 
   .upcoming-list {
@@ -1105,6 +614,14 @@
     flex-direction: column;
     gap: 1px;
     overflow: hidden;
+  }
+  .up-kind {
+    flex: none;
+    font-size: 10.5px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
   }
   .up-meta {
     font-size: 11.5px;
@@ -1314,40 +831,20 @@
     opacity: 1;
     background: var(--accent);
   }
-  .perf-kpis {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .spark-line {
       animation: none;
     }
-    .pipe-fill,
     .mini-bar span,
     .likes-bars span,
-    .setup-bar span,
     .mini-ring {
       transition: none;
     }
   }
 
   @container workbench (max-width: 640px) {
-    .pipe-grid {
-      grid-template-columns: 1fr;
-    }
     .perf-layout {
       grid-template-columns: 1fr;
-    }
-    .ov-panel-actions {
-      width: 100%;
-    }
-    .ov-panel-actions .ov-ai {
-      flex: 1 1 auto;
-      text-align: center;
-      white-space: normal;
     }
     .up-title {
       white-space: normal;

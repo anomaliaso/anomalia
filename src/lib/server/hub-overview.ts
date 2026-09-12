@@ -24,6 +24,15 @@ export type PendingBlogPreview = {
   cover_url: string | null;
 };
 
+/** Un post gia' uscito, con la sua foto: e' cio' che la home mostra per dire che il lavoro esiste. */
+export type PublishedPostPreview = {
+  id: string;
+  platform: string | null;
+  caption: string | null;
+  media_url: string | null;
+  published_at: string | null;
+};
+
 export type ScheduledPostPreview = {
   id: string;
   platform: string | null;
@@ -161,6 +170,8 @@ export type HomeOverview = {
     scheduled: number;
     posts: PendingPostPreview[];
     upcoming: ScheduledPostPreview[];
+    /** Gli ultimi usciti davvero. La home apre su questi: e' l'unica prova che il prodotto lavora. */
+    published: PublishedPostPreview[];
   };
   blog: {
     pending: number;
@@ -781,7 +792,8 @@ export async function loadHomeOverview(
     { data: kwRow },
     { count: radarRecentCount },
     { data: leadRows },
-    growth
+    growth,
+    { data: publishedPosts }
   ] = await Promise.all([
     // One index-only read answers every post COUNT this page shows (pending, scheduled,
     // published, radar-needs-review). It replaces four separate head:true counts: each was
@@ -883,7 +895,16 @@ export async function loadHomeOverview(
       : Promise.resolve({ data: [] as { status: string }[] }),
     // `brand` is the layout's brand embed, so growth readiness reuses it instead of
     // re-reading the same row.
-    loadGrowthReadiness(supabase, brand.id, brand)
+    loadGrowthReadiness(supabase, brand.id, brand),
+    // Gli ultimi post usciti, con la foto. Sei e non di piu': la striscia della home ne mostra
+    // quattro e i due di scorta coprono quelli senza immagine, che nella striscia non entrano.
+    supabase
+      .from('posts')
+      .select('id, platform, caption, media_url, published_at')
+      .eq('brand_id', brand.id)
+      .eq('status', 'published')
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .limit(6)
   ]);
 
   const postCounts = derivePostCounts(postFacts as PostFactRow[] | null);
@@ -922,6 +943,14 @@ export async function loadHomeOverview(
       media_url: p.media_url ? String(p.media_url) : null,
       scheduled_for: String(p.scheduled_for)
     }));
+
+  const publishedPostPreviews: PublishedPostPreview[] = (publishedPosts ?? []).map((p) => ({
+    id: p.id as string,
+    platform: p.platform ? String(p.platform) : null,
+    caption: p.caption ? String(p.caption) : null,
+    media_url: p.media_url ? String(p.media_url) : null,
+    published_at: p.published_at ? String(p.published_at) : null
+  }));
 
   // Exclude already-approved+scheduled articles from the review queue.
   // Return the full pending set — Overview shows a 5-item preview, then paginates on expand.
@@ -992,7 +1021,8 @@ export async function loadHomeOverview(
       pending: postCounts.pending,
       scheduled: postCounts.scheduled,
       posts,
-      upcoming: upcomingPostPreviews
+      upcoming: upcomingPostPreviews,
+      published: publishedPostPreviews
     },
     blog: {
       pending: pendingBlogs.length,

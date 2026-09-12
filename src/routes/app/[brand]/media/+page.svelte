@@ -204,6 +204,16 @@
     }
   }
 
+  const RATIO_MIN = 0.6;
+  const RATIO_MAX = 1.7;
+
+  // Un pannello 5000x200 spaccherebbe la colonna: la forma vera, ma dentro due estremi.
+  function tileRatio(m: MediaItem): string {
+    if (!m.width || !m.height) return '1';
+    const r = m.width / m.height;
+    return String(Math.min(RATIO_MAX, Math.max(RATIO_MIN, r)).toFixed(3));
+  }
+
   function openItem(m: MediaItem) {
     selectedId = m.id;
   }
@@ -265,37 +275,46 @@
         </label>
       </div>
     {:else}
-      <div class="grid">
+      <!-- Una bacheca, non una griglia di schede. Ogni materiale tiene la SUA forma: un verticale
+           resta verticale, un panorama resta panorama, e le colonne si incastrano da sole. Prima
+           erano tutti ritagliati quadrati con una targhetta sotto — la targhetta occupava quanto
+           l'immagine e il ritaglio buttava via metà di ciò che c'era da riconoscere. Il nome e i
+           tag scendono in sovrimpressione al passaggio; tutto il resto è a un clic, nel drawer. -->
+      <div class="board">
         {#each filtered as m (m.id)}
-          <button type="button" class="tile" class:active={selectedId === m.id} onclick={() => openItem(m)}>
-            <div class="thumb">
-              {#if m.kind === 'video'}
-                {#if m.signed_url}
-                  <video src={m.signed_url} muted playsinline preload="metadata"></video>
-                {:else}
-                  <span class="ph">▶</span>
-                {/if}
-                <span class="badge vid">video</span>
-              {:else if m.signed_url}
-                <img src={m.signed_url} alt={m.title ?? m.file_name ?? ''} loading="lazy" />
+          <button
+            type="button"
+            class="pin"
+            class:active={selectedId === m.id}
+            style={`aspect-ratio:${tileRatio(m)}`}
+            aria-label={m.title || m.file_name || 'Untitled'}
+            onclick={() => openItem(m)}
+          >
+            {#if m.kind === 'video'}
+              {#if m.signed_url}
+                <video src={m.signed_url} muted playsinline preload="metadata"></video>
               {:else}
-                <span class="ph">img</span>
+                <span class="ph">▶</span>
               {/if}
-              {#if m.catalog_status === 'pending'}
-                <span class="badge st">…</span>
-              {:else if m.catalog_status === 'failed'}
-                <span class="badge fail">!</span>
-              {/if}
-            </div>
-            <div class="meta">
+              <span class="badge vid">video</span>
+            {:else if m.signed_url}
+              <img src={m.signed_url} alt="" loading="lazy" decoding="async" />
+            {:else}
+              <span class="ph">img</span>
+            {/if}
+
+            {#if m.catalog_status === 'pending'}
+              <span class="badge st">…</span>
+            {:else if m.catalog_status === 'failed'}
+              <span class="badge fail">!</span>
+            {/if}
+
+            <span class="pin-cap">
               <strong>{m.title || m.file_name || 'Untitled'}</strong>
               <span class="dim">
-                {#if m.width && m.height}{m.width}×{m.height} · {/if}{formatBytes(m.bytes)}
+                {#if m.width && m.height}{m.width}×{m.height} · {/if}{formatBytes(m.bytes)}{#if m.tags?.length} · {m.tags.slice(0, 2).join(' · ')}{/if}
               </span>
-              {#if m.tags?.length}
-                <span class="tags">{m.tags.slice(0, 3).join(' · ')}</span>
-              {/if}
-            </div>
+            </span>
           </button>
         {/each}
       </div>
@@ -486,32 +505,63 @@
   .empty h3 { margin: 0; font-size: 18px; }
   .empty p { margin: 0 0 8px; color: var(--ink-soft); max-width: 420px; line-height: 1.5; }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 14px;
+  /* Le colonne CSS sono la bacheca piu' economica che esista: nessuna misurazione, nessun
+     ricalcolo a ogni resize, nessuna libreria. In cambio riempiono colonna per colonna invece
+     che riga per riga — che e' esattamente come si legge una bacheca. */
+  .board { columns: 5 200px; column-gap: 12px; }
+  .pin {
+    position: relative; display: block; width: 100%; break-inside: avoid; margin: 0 0 12px;
+    padding: 0; border: 0; border-radius: 14px; overflow: hidden; cursor: pointer;
+    background: var(--paper-2); color: inherit;
   }
-  .tile {
-    text-align: left; border: 1px solid var(--line); background: var(--paper);
-    border-radius: 14px; padding: 0; overflow: hidden; cursor: pointer; color: inherit;
+  .pin img, .pin video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pin::after {
+    content: ''; position: absolute; inset: 0; border-radius: 14px; pointer-events: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 9%, transparent);
   }
-  .tile:hover, .tile.active { border-color: var(--ink-soft); }
-  .thumb {
-    position: relative; aspect-ratio: 1; background: var(--paper-2);
-    display: grid; place-items: center; overflow: hidden;
+  .pin.active::after { box-shadow: inset 0 0 0 2px var(--ink); }
+  .ph {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em;
   }
-  .thumb img, .thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .ph { font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
   .badge {
     position: absolute; top: 8px; left: 8px; font-size: 10px; font-weight: 700;
-    padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff;
+    padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff;
   }
   .badge.st, .badge.fail { left: auto; right: 8px; }
   .badge.fail { background: #b91c1c; }
-  .meta { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; }
-  .meta strong { font-size: 13px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .dim, .tags { font-size: 11px; color: var(--ink-faint); }
-  .tags { color: var(--ink-soft); }
+
+  /* Il nome sta sull'immagine e si alza al passaggio: su una bacheca lo spazio e' dell'immagine,
+     e il nome serve nel momento in cui si decide se aprirla. */
+  .pin-cap {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 11px 9px;
+    display: flex; flex-direction: column; gap: 2px; text-align: left; color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+    opacity: 0; transition: opacity 160ms ease;
+  }
+  .pin:hover .pin-cap, .pin:focus-visible .pin-cap, .pin.active .pin-cap { opacity: 1; }
+  .pin-cap strong {
+    font-size: 12.5px; font-weight: 600; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .pin-cap .dim { font-size: 10.5px; color: rgba(255, 255, 255, 0.72); }
+
+  /* Senza puntatore il passaggio del mouse non esiste: la didascalia resta scritta. */
+  @media (hover: none) {
+    .pin-cap { opacity: 1; }
+  }
+
+  /* Stretta, la bacheca resta una bacheca: due colonne, non una colonna di cartelloni. Il minimo
+     di 200px da solo la farebbe collassare a una sola sotto i 412px. `@container`, non `@media`,
+     perche' lo spazio vero lo decide la sidebar, che si apre e si chiude. */
+  @container workbench (max-width: 620px) {
+    .board { columns: 2 auto; column-gap: 8px; }
+    .pin { margin-bottom: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pin-cap { transition: none; }
+  }
 
   .drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.28); z-index: 40; }
   .drawer {

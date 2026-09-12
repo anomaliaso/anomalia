@@ -1,7 +1,10 @@
 /**
- * LE COSE DA FARE, in cima alla home del brand.
+ * LE COSE DA FARE, sotto la testa della home del brand.
  *
- * La regola del mockup: ciò che richiede attenzione sta sopra, con quante sono; il resto scende.
+ * La coda di approvazione non è più qui: la apre la testa della pagina, con la foto del post e il
+ * bottone che lo approva. Qui resta ciò che aspetta senza scadere — il radar da rivedere, i lead
+ * da contattare, l'account che non c'è — e che la testa non racconta.
+ *
  * Qui c'è solo la SELEZIONE e l'ORDINE — nessun testo, come per la nav: le etichette sono chiavi
  * i18n, e la pagina le traduce. Così questo si può far fallire per la ragione giusta.
  *
@@ -9,8 +12,6 @@
  */
 
 export type TodoSource = {
-  queue: { pending: number };
-  blog: { pending: number };
   automations: { radarEnabled: boolean; radarReview: number; leadsPending: number };
   setup: { socialAccounts: number };
 };
@@ -29,28 +30,6 @@ export type TodoItem = {
 export function homeTodos(overview: TodoSource): TodoItem[] {
   const todos: TodoItem[] = [];
 
-  // Prima ciò che ha una scadenza vera: un post approvato in ritardo è un post che non esce.
-  if (overview.queue.pending > 0) {
-    todos.push({
-      key: 'posts',
-      labelKey: 'app.home.overview.postsToAccept',
-      count: overview.queue.pending,
-      hintKey: 'app.hub.publish.calendar',
-      path: '/calendar?status=pending_user'
-    });
-  }
-
-  if (overview.blog.pending > 0) {
-    todos.push({
-      key: 'articles',
-      labelKey: 'app.home.overview.blogsToAccept',
-      count: overview.blog.pending,
-      hintKey: 'app.nav2.site',
-      path: '/site'
-    });
-  }
-
-  // Poi ciò che aspetta senza scadere.
   if (overview.automations.radarEnabled && overview.automations.radarReview > 0) {
     todos.push({
       key: 'radar',
