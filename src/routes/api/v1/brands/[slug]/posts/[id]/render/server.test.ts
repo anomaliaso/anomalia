@@ -114,6 +114,7 @@ describe('POST /api/v1/brands/:slug/posts/:id/render', () => {
     expect(body.url).toBe('https://cdn.test/a.png');
     expect(gateCredits).toHaveBeenCalledWith('brand-1');
     expect(brandContexts).toEqual(['brand-1']);
+    expect(renderPreviewImages.mock.calls[0][2]).toEqual(expect.objectContaining({ brandId: 'brand-1' }));
     expect(kit.tables.get('posts')?.[0].media_url).toBe('https://cdn.test/a.png');
   });
 

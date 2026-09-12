@@ -96,6 +96,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
     await renderPreviewImages(profile, previewPosts as any, {
       supabase,
       userId: brand.id,
+      brandId: brand.id,
       onProgress: () => {},
       onPost: async (p: any) => {
         const id = p.__postId;

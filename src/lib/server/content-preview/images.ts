@@ -19,6 +19,8 @@ import { svgToPng } from '$lib/server/brand-analysis';
 import { normalizeContentFormat } from '$lib/content-formats';
 import { firstLogoUrl } from '$lib/brand-fields';
 import { designWallDigestSection } from '$lib/server/wall-digest';
+import { buildMemoryContext } from '$lib/server/brand-memory';
+import { APPAREL_BRANDING_DIRECTIVE, extractBrandConstraints, reviewImageConstraints } from '$lib/server/image-constraint-review';
 
 
 // Image MIME types Gemini ingests directly (SVG is rasterised via svgToPng).
@@ -151,6 +153,7 @@ export type RenderImageOpts = {
   aspectRatio?: AspectRatio;
   model?: string;
   craftFloor?: string;
+  brandRules?: string;
 };
 
 /**
@@ -218,7 +221,8 @@ export function buildImageRequest(imagePrompt: string, opts: RenderImageOpts = {
   const userRefSuffix = opts.userRefImages?.length
     ? '\n\nThe user attached the following image(s) as REFERENCES for this specific edit — use them to guide the change described above: match the look, composition, colours or subject they show, as the feedback implies. Let the user\'s instruction decide exactly what to take from them.'
     : '';
-  const text = `${cleanPrompt}\n\n${ASPECT_LABEL[aspectRatio]}, high quality, social-media ready. No text overlays unless natural.\n\n${HOUSE_LOOK}${opts.craftFloor ?? ''}${styleSuffix}${brandSuffix}${playbookSuffix}${baseSuffix}${logoSuffix}${personSuffix}${refSuffix}${userRefSuffix}${moodSuffix}`;
+  const brandRulesSuffix = opts.brandRules ? `\n\nBRAND APPAREL RULES:\n${opts.brandRules}` : '';
+  const text = `${cleanPrompt}\n\n${ASPECT_LABEL[aspectRatio]}, high quality, social-media ready. No text overlays unless natural.\n\n${HOUSE_LOOK}\n\n${APPAREL_BRANDING_DIRECTIVE}${brandRulesSuffix}${opts.craftFloor ?? ''}${styleSuffix}${brandSuffix}${playbookSuffix}${baseSuffix}${logoSuffix}${personSuffix}${refSuffix}${userRefSuffix}${moodSuffix}`;
   // L'immagine base va per PRIMA: il prompt la chiama "the FIRST attached image". I mood per ultimi.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parts: any[] = [{ text }, ...(opts.baseImage ? [opts.baseImage] : []), ...(opts.logoImage ? [opts.logoImage] : []), ...(opts.personImages ?? []), ...(opts.referenceImages ?? []), ...(opts.userRefImages ?? []), ...(opts.moodImages ?? [])];
@@ -248,6 +252,23 @@ export async function renderPostImage(
     const { gateCredits, gateOrgCredits } = await import('$lib/server/credits');
     await (gateBrand ? gateCredits(gateBrand) : gateOrgCredits(gateOrg as string));
   }
+
+  const review = async (dataUrl: string): Promise<string | undefined> => {
+    if (!gateBrand) {
+      return dataUrl;
+    }
+    const verdict = await reviewImageConstraints({
+      image: dataUrl,
+      brief: imagePrompt,
+      brandRules: opts.brandRules
+    });
+    if (verdict.pass) {
+      return dataUrl;
+    }
+    console.warn(`[image constraints] rejected render: ${verdict.issues.join('; ')}`);
+    return undefined;
+  };
+
   const req = buildImageRequest(imagePrompt, opts);
   const imageModel = req.model;
   // OpenRouter serve lo STESSO modello Google in una richiesta sincrona: 3,4s di media contro 25,0s
@@ -256,10 +277,11 @@ export async function renderPostImage(
   // Nessun ritentativo qui: un fallimento sincrono torna già diagnosticato, e `generateImageOnOpenrouter`
   // alza l'eccezione invece di restituire un successo vuoto.
   if (route('image').endpoint === 'openrouter') {
-    return await generateImageOnOpenrouter(
+    const dataUrl = await generateImageOnOpenrouter(
       { ...req, model: googleImageModel(req.model, NANO_BANANA_2_LITE) },
       { context: `image:${imageModel}` }
     );
+    return await review(dataUrl);
   }
   // Nano Banana gira su kie: stesso modello, −33%/−40% per immagine (misurato sui crediti
   // addebitati). È l'UNICO punto da cambiare perché ogni render del prodotto passa di qui.
@@ -277,7 +299,9 @@ export async function renderPostImage(
       context: `image:${imageModel}`,
       resumeTaskId
     });
-    if (viaKie.dataUrl) return viaKie.dataUrl;
+    if (viaKie.dataUrl) {
+      return await review(viaKie.dataUrl);
+    }
     resumeTaskId = viaKie.timedOutTaskId;
   }
   throw new Error(
@@ -650,7 +674,7 @@ export async function loadMoodRefs(urls: string[] | undefined): Promise<ImagePar
 
 export type BrandVisualContext = Pick<
   RenderImageOpts,
-  'visualStyle' | 'visualPlaybook' | 'brandLook' | 'logoImage' | 'moodImages'
+  'visualStyle' | 'visualPlaybook' | 'brandLook' | 'logoImage' | 'moodImages' | 'brandRules'
 >;
 
 export async function loadBrandVisualContext(
@@ -667,7 +691,8 @@ export async function loadBrandVisualContext(
     .map((f) => f?.name)
     .filter(Boolean) as string[];
 
-  const [logoImage, moodImages] = await Promise.all([
+  const [memory, logoImage, moodImages] = await Promise.all([
+    buildMemoryContext(supabase, brandId),
     loadBrandLogoImagePart(kit?.logos).catch((error) => {
       swallow('load brand logo part', error);
       return null;
@@ -684,6 +709,7 @@ export async function loadBrandVisualContext(
     visualStyle: (kit?.visual_style as string | null) || undefined,
     visualPlaybook: extractVisualPlaybook(kit?.ai_context) || undefined,
     brandLook: brandVisualDirective(kit?.brand_colors as string[] | null, fonts) || undefined,
+    brandRules: extractBrandConstraints(memory) || undefined,
     logoImage: logoImage ?? undefined,
     moodImages
   };

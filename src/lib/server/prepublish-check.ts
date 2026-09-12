@@ -16,7 +16,9 @@ import { env as publicEnv } from '$env/dynamic/public';
 import { isImageUrl, isVideoUrl } from '$lib/content-formats';
 import { withBrandContext } from '$lib/server/ai-log';
 import { isUrlSafe } from '$lib/server/brand-analysis';
+import { buildMemoryContext } from '$lib/server/brand-memory';
 import { llmConfigured, llmImagesFromInline, llmStructured } from '$lib/server/llm';
+import { APPAREL_BRANDING_DIRECTIVE, extractBrandConstraints } from '$lib/server/image-constraint-review';
 import {
   prepublishHeldEmailHtml,
   prepublishHeldEmailSubject,
@@ -41,6 +43,8 @@ export type PrepublishPost = {
   platforms?: string[] | null;
   caption: string | null;
   platform_captions?: Record<string, string> | null;
+  image_prompt?: string | null;
+  brand_rules?: string | null;
   media_url: string | null;
   media_urls?: string[] | null;
   content_type?: string | null;
@@ -72,6 +76,8 @@ export type MediaProbe =
 
 export type PrepublishJudge = (input: {
   caption: string;
+  imagePrompt: string;
+  brandRules: string;
   contentType: string;
   imageParts: ImagePart[];
   mediaNotes: string[];
@@ -236,6 +242,8 @@ export async function probeMediaUrl(url: string): Promise<MediaProbe> {
 
 async function geminiJudge(input: {
   caption: string;
+  imagePrompt: string;
+  brandRules: string;
   contentType: string;
   imageParts: ImagePart[];
   mediaNotes: string[];
@@ -251,6 +259,7 @@ Reject ONLY for defects like:
 - obvious generation failure (error screen, "image not available", empty template, lorem ipsum on the image)
 - placeholder or empty caption
 - carousel slide that is blank or clearly unfinished
+- an unrequested logo, label, wordmark, patch or readable brand name on a garment or other wearable item
 
 Approve:
 - any finished post, even if the copy is mediocre or the design is not your taste
@@ -258,9 +267,17 @@ Approve:
 - text or link posts with no image (that is valid — judge caption/URL only)
 - videos whose file is reachable even if you only see a thumbnail or no still
 
+${APPAREL_BRANDING_DIRECTIVE}
+
 content_type: ${input.contentType || 'unknown'}
 CAPTION:
 ${input.caption || '(empty)'}
+
+ORIGINAL IMAGE BRIEF:
+${input.imagePrompt || '(none)'}
+
+BRAND RULES:
+${input.brandRules || '(none)'}
 ${notes}
 
 Return JSON { "ok": boolean, "reasons": string[] }. reasons empty when ok is true. English, one line each.`;
@@ -340,11 +357,16 @@ export async function inspectPostForRelease(
   const judge = deps.judge ?? geminiJudge;
   const judged = await judge({
     caption: String(post.caption ?? ''),
+    imagePrompt: String(post.image_prompt ?? ''),
+    brandRules: String(post.brand_rules ?? ''),
     contentType: String(post.content_type ?? ''),
     imageParts,
     mediaNotes
   });
   if ('error' in judged) {
+    if (requiresVisualMedia(post.content_type)) {
+      return holdVerdict(['Image constraint reviewer could not verify the visual']);
+    }
     console.warn(`[prepublish] skip (infra): ${judged.error} post=${post.id}`);
     return { decision: 'skip', reason: judged.error, reasons: [] };
   }
@@ -486,7 +508,7 @@ export async function runPrepublishTick(
   let q = supabase
     .from('posts')
     .select(
-      'id, brand_id, platform, platforms, caption, platform_captions, media_url, media_urls, content_type, title, link_url, video_thumbnail_url, youtube_thumbnail_url, scheduled_for, prepublish_ok, prepublish_checked_at, status'
+      'id, brand_id, platform, platforms, caption, platform_captions, image_prompt, media_url, media_urls, content_type, title, link_url, video_thumbnail_url, youtube_thumbnail_url, scheduled_for, prepublish_ok, prepublish_checked_at, status'
     )
     .eq('status', 'scheduled')
     .not('scheduled_for', 'is', null)
@@ -517,7 +539,9 @@ export async function runPrepublishTick(
       continue;
     }
     result.checked++;
-    const verdict = await withBrandContext(row.brand_id, () => inspectPostForRelease(row, opts.deps));
+    const memory = await buildMemoryContext(supabase, row.brand_id);
+    const post = { ...row, brand_rules: extractBrandConstraints(memory) };
+    const verdict = await withBrandContext(row.brand_id, () => inspectPostForRelease(post, opts.deps));
     if (verdict.decision === 'hold') {
       try {
         await holdBrokenScheduledPost(supabase, row, verdict.reason);
