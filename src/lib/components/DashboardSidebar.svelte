@@ -3,6 +3,7 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { cn } from '$lib/utils.js';
+  import BrandMark from '$lib/components/BrandMark.svelte';
   // Il menu utente è PORTALATO da bits-ui e si smonta alla selezione: per le voci che portano
   // ai settings si chiama l'API del modal invece di affidarsi al click dell'<a>.
   import { locale, _ } from 'svelte-i18n';
@@ -378,12 +379,27 @@
          bordi sono una riga sola che attraversa la finestra invece di due tratti sfalsati.
          Nessun padding orizzontale sul guscio — il filo va da lato a lato; il rientro se lo
          tiene la riga dentro, dove serve a incolonnare l'etichetta con la nav. -->
-    <!-- Resta il guscio, non la voce: «Panoramica» portava a `/app/<slug>`, che e' dove porta
-         «Home» due righe sotto — la stessa destinazione elencata due volte. Quello che l'header
-         faceva oltre a quello serve ancora: tiene l'altezza della top bar delle pagine
-         (`--shell-top-h`) e lo stesso filo, cosi' i due bordi sono una riga sola che attraversa
-         la finestra invece di due tratti sfalsati. -->
-    <Sidebar.Header class="shell-top-header shell-top-divider p-0" />
+    <!-- Al posto di «Panoramica» c'e' il marchio. Quella voce portava a `/app/<slug>`, che e' dove
+         porta «Home» due righe sotto — la stessa destinazione elencata due volte — e lasciava un
+         header vuoto. Il marchio lo riempie e porta ai brand, che e' l'unico posto che da qui non
+         si raggiungeva piu': stessa riga, stesso simbolo e stessa destinazione della barra di
+         `/app` accanto, perche' due barre della stessa applicazione non devono avere due teste
+         diverse.
+
+         L'header resta un header e non la prima voce della lista: tiene l'altezza della top bar
+         delle pagine (`--shell-top-h`) e lo stesso filo, cosi' i due bordi sono una riga sola che
+         attraversa la finestra invece di due tratti sfalsati. -->
+    <Sidebar.Header class="shell-top-header shell-top-divider justify-center p-0">
+      <a
+        href="/app"
+        class="flex w-full items-center px-5 no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        style="color: inherit"
+        aria-label={$_('landing.nav.brandAria')}
+        title={$_('landing.nav.brandAria')}
+      >
+        <BrandMark size={mobile ? 32 : 30} />
+      </a>
+    </Sidebar.Header>
   {/if}
 
   <Sidebar.Content class="flex-1 gap-0 overflow-y-auto px-2.5 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2.5 group-data-[collapsible=icon]:overflow-visible">
