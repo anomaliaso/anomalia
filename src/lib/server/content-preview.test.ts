@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { brandVisualDirective, platformPlaybook, normalizeWeeklyStrategy, attachBrandMoodImages, extractVisualPlaybook, carouselMaxPerBatch, carouselMaxSlides, clampCarousels, resolveSeedWithRubrics, faceBrandMode, scrubPersonAppearance, aspectRatioFor, seedToPost, buildImageRequest, enforceHookComponents, detectSceneCollapse, detectCaptionTells, detectCtaEcho, findJudgeDuplicates, ownerCaptionEditPairs, ownerEditPairsBlock, postQcPayload, sealOnImageText, applySeedFix, BLOG_IMAGE_MODEL, type PostSeed, type PreviewPost } from './content-preview';
+import { defaultImageModel } from './content-preview/default-image-model';
 
 import type { Rubric } from './rubrics';
 
@@ -508,28 +509,31 @@ describe('aspectRatioFor', () => {
 });
 
 describe('buildImageRequest (image model tier)', () => {
-  const LITE = 'gemini-3.1-flash-lite-image';
   const img = { inlineData: { mimeType: 'image/png', data: 'x' } };
+  // Non un id scritto a mano: il default lo decide la famiglia dello slot, e un id copiato qui
+  // dentro sarebbe la seconda voce in capitolo — esattamente cio' che `defaultImageModel` toglie
+  // di mezzo. Il test dice la REGOLA, che non e' cambiata: un ramo solo, per tutti.
+  const DEFAULT = defaultImageModel();
 
-  it('default render model is Nano Banana 2 Lite, also with reproduction refs', () => {
-    expect(buildImageRequest('p', { personImages: [img] }).model).toBe(LITE);
-    expect(buildImageRequest('p', { referenceImages: [img] }).model).toBe(LITE);
-    expect(buildImageRequest('p', { userRefImages: [img] }).model).toBe(LITE);
-    expect(buildImageRequest('p', { baseImage: img }).model).toBe(LITE);
+  it('un default solo, con o senza riferimenti da riprodurre', () => {
+    expect(buildImageRequest('p', { personImages: [img] }).model).toBe(DEFAULT);
+    expect(buildImageRequest('p', { referenceImages: [img] }).model).toBe(DEFAULT);
+    expect(buildImageRequest('p', { userRefImages: [img] }).model).toBe(DEFAULT);
+    expect(buildImageRequest('p', { baseImage: img }).model).toBe(DEFAULT);
   });
 
   // Il nome vecchio di questo test diceva "half-price tier" e asseriva BLOG_IMAGE_MODEL, che e' il
   // modello PIENO: la convinzione era rovesciata, e intanto la maggioranza delle immagini — un
-  // prompt e nessun riferimento — pagava $0,06 a chiamata. Ora Lite vale anche qui.
-  it('senza riferimenti da riprodurre disegna con Lite — mood e logo non contano', () => {
-    expect(buildImageRequest('p', {}).model).toBe(LITE);
-    expect(buildImageRequest('p', { moodImages: [img], logoImage: img }).model).toBe(LITE);
+  // prompt e nessun riferimento — pagava $0,06 a chiamata.
+  it('senza riferimenti da riprodurre usa lo stesso — mood e logo non contano', () => {
+    expect(buildImageRequest('p', {}).model).toBe(DEFAULT);
+    expect(buildImageRequest('p', { moodImages: [img], logoImage: img }).model).toBe(DEFAULT);
   });
 
   it('il blog resta sul modello pieno, perche' + "'" + ' lo chiede esplicitamente', () => {
     // La batch API del blog vuole quel modello e lo passa a mano: cambiare il default non lo
     // tocca, ed e' esattamente cio' che questo cambio NON doveva spostare.
-    expect(BLOG_IMAGE_MODEL).not.toBe(LITE);
+    expect(BLOG_IMAGE_MODEL).not.toBe(DEFAULT);
     expect(buildImageRequest('p', { model: BLOG_IMAGE_MODEL }).model).toBe(BLOG_IMAGE_MODEL);
   });
 

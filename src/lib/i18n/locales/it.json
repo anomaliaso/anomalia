@@ -5358,7 +5358,7 @@
         "recommended": "consigliata",
         "slots": {
           "imageGenerate": "Generazione immagini",
-          "imageGenerateDesc": "Quale modello disegna una foto nuova da un prompt. Il default lascia scegliere al renderer immagine per immagine. I modelli fuori dalla famiglia Nano Banana girano solo su kie e inquadrano i post Instagram a 3:4 invece che a 4:5.",
+          "imageGenerateDesc": "Quale modello disegna una foto nuova da un prompt. Il default è GPT Image 2.5 Sunburst, che costa circa un decimo di prima a parità di tempo. Nano Banana, Seedream e Qwen girano su kie: più lenti, e Seedream e Qwen inquadrano i post Instagram a 3:4 invece che a 4:5.",
           "imageRefine": "Modifica immagini",
           "imageRefineDesc": "Quale modello modifica una foto che esiste già — aggiungere il logo, cambiare stile, correggere un dettaglio. Riprodurre fedelmente un’immagine è un mestiere diverso dall’inventarne una, e chi è più bravo in uno non lo è sempre nell’altro. Vuoto segue il modello di generazione.",
           "videoGenerate": "Generazione video",

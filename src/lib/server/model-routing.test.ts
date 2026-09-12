@@ -164,10 +164,13 @@ describe('il registro delle rotte', () => {
   });
 
   it('le immagini vanno su openrouter per default, senza nessuna variabile', async () => {
-    // Non e` il prezzo: kie ha il 3,5% di fallimenti e un p95 di 142,9s contro i 3,4s di
-    // OpenRouter. Il default e` la disponibilita`, non il risparmio.
+    // L'endpoint non si e` mai mosso da qui: kie ha il 3,5% di fallimenti e un p95 di 142,9s
+    // contro i 3,4s di OpenRouter, e quella era disponibilita`, non risparmio.
+    //
+    // La FAMIGLIA invece e` cambiata, e quella volta e` il prezzo: $0,0053 contro $0,0748 per
+    // immagine, misurati il 2026-09-12 sull'endpoint vero, a parita` di tempo e di formato.
     const { route } = await import('./model-routing');
-    expect(route('image')).toMatchObject({ family: 'nano-banana', endpoint: 'openrouter' });
+    expect(route('image')).toMatchObject({ family: 'gpt-image', endpoint: 'openrouter' });
   });
 
   it('la voce si sposta col resto, e kie resta il ripiego', async () => {
@@ -400,5 +403,51 @@ describe('restano solo openrouter e kie', () => {
     expect(can('openrouter', 'tts')).toBe(true);
     expect(can('kie', 'tts')).toBe(true);
     expect(missingCapabilities('openrouter')).not.toContain('tts');
+  });
+});
+
+/**
+ * I GPT Image 2.5 vivono su UN endpoint solo — l'API immagini di OpenRouter — e sono i primi del
+ * registro a essere così. Il ripiego per famiglia (`HOME`, poi kie) non può funzionare per loro:
+ * kie non li serve, e una rotta `gpt-image@kie` si leggerebbe come rispettata mentre atterra
+ * altrove, che è il guasto che questo file esiste per impedire. Quando la famiglia scelta non è
+ * servibile da nessuna parte, si cambia FAMIGLIA — e la riserva dello slot è scritta, non dedotta.
+ */
+describe('una famiglia con un endpoint solo', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    for (const k of Object.keys(M.env)) delete M.env[k];
+  });
+
+  it('le immagini le disegna GPT Image 2.5 su openrouter, di default', async () => {
+    setEnv({ KIE_API_KEY: 'k', OPENROUTER_API_KEY: 'o' });
+    const { route } = await import('./model-routing');
+    expect(route('image')).toMatchObject({
+      family: 'gpt-image',
+      endpoint: 'openrouter',
+      provider: 'openrouter'
+    });
+  });
+
+  it('senza openrouter non finisce su una rotta che nessuno serve: torna a nano-banana su kie', async () => {
+    setEnv({ KIE_API_KEY: 'k' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { route } = await import('./model-routing');
+    expect(route('image')).toMatchObject({
+      family: 'nano-banana',
+      endpoint: 'kie',
+      provider: 'kie'
+    });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('chiederla su kie a mano non la manda su kie in silenzio', async () => {
+    setEnv({ KIE_API_KEY: 'k', OPENROUTER_API_KEY: 'o', AI_ROUTE_IMAGE: 'gpt-image@kie' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { route } = await import('./model-routing');
+    expect(route('image').endpoint).toBe('openrouter');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

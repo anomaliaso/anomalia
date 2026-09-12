@@ -43,6 +43,8 @@ export type ModelFamily =
   | 'grok'
   | 'gpt'
   | 'nano-banana'
+  /** I GPT Image 2.5, che esistono solo sull'API immagini di OpenRouter. */
+  | 'gpt-image'
   | 'gemini-tts'
   | 'grok-imagine'
   | 'seedance'
@@ -126,6 +128,8 @@ const HOME: Record<ModelFamily, Endpoint> = {
   // Come `nano-banana` e `grok-imagine`: openrouter è il DEFAULT dello slot, kie è dove si ripiega.
   'gemini-tts': 'kie',
   'nano-banana': 'kie',
+  // L'unica famiglia senza casa su kie: l'API immagini di OpenRouter è il suo unico posto.
+  'gpt-image': 'openrouter',
   grok: 'kie',
   gpt: 'kie',
   'grok-imagine': 'kie',
@@ -147,6 +151,7 @@ const SERVED_BY: Record<ModelFamily, Endpoint[]> = {
   gemini: ['kie', 'openrouter'],
   'gemini-tts': ['kie', 'openrouter'],
   'nano-banana': ['kie', 'openrouter'],
+  'gpt-image': ['openrouter'],
   grok: ['kie'],
   gpt: ['kie'],
   'grok-imagine': ['kie', 'openrouter'],
@@ -183,8 +188,12 @@ const SLOT_DEFAULT: Record<Slot, Route> = {
   // Il testo su OpenRouter: `structuredGemini` e `groundedGemini` ci passavano gia` da `llm.ts`,
   // e il carico su Google si era fermato da solo il 30 agosto. Qui il default dice la verita`.
   text: r('gemini', 'openrouter'),
-  // Non il prezzo: kie fallisce il 3,5% dei render con un p95 di 142,9s contro i 3,4s di OpenRouter.
-  image: r('nano-banana', 'openrouter'),
+  // Stavolta È il prezzo, e di parecchio. Misurato il 2026-09-12 contro l'endpoint vero:
+  // $0,0053 per un'immagine disegnata da zero e $0,017 per una modificata, contro i $0,0748 medi
+  // del Gemini su OpenRouter negli ultimi 30 giorni — 14× e 4×. Il tempo non peggiora (10-15s
+  // contro 13,3s) e il formato regge, 4:5 compreso, che su questo endpoint va chiesto in pixel.
+  // La riserva resta nano-banana su kie: vedi SLOT_RESERVE.
+  image: r('gpt-image', 'openrouter'),
   // Stessa famiglia Gemini servita da openrouter: le voci sono le stesse (Kore, Puck, Charon,
   // Aoede, Fenrir tutte accettate), quindi per il cliente non cambia nulla. Il costo nemmeno —
   // stesso copione, kie 1,19 crediti = $0,00595 contro $0,005772. Cambia il ripiego, che ora c'e'.
@@ -203,6 +212,22 @@ const SLOT_DEFAULT: Record<Slot, Route> = {
   // `HOME` resta kie ed e` la RISERVA — le due tabelle non devono coincidere, o il ripiego finisce
   // sulla cosa che non funziona.
   video: r('grok-imagine', 'openrouter')
+};
+
+/**
+ * Dove va lo slot quando la famiglia scelta non è servibile da NESSUN endpoint.
+ *
+ * Finché ogni famiglia aveva due endpoint, il ripiego per endpoint bastava: `HOME`, poi kie. Con
+ * `gpt-image`, che vive solo su OpenRouter, quella catena produrrebbe `gpt-image@kie` — una rotta
+ * che nessuno serve e che si leggerebbe come rispettata mentre atterra altrove, cioè il guasto che
+ * questo file esiste per impedire. Qui si cambia FAMIGLIA, e la riserva è scritta invece che
+ * dedotta: quella di casa, su kie, che è dove si va quando OpenRouter non c'è.
+ */
+const SLOT_RESERVE: Record<Slot, Route> = {
+  text: { family: 'gemini', endpoint: 'kie', provider: 'kie' },
+  image: { family: 'nano-banana', endpoint: 'kie', provider: 'kie' },
+  tts: { family: 'gemini-tts', endpoint: 'kie', provider: 'kie' },
+  video: { family: 'grok-imagine', endpoint: 'kie', provider: 'kie' }
 };
 
 function r(family: ModelFamily, endpoint: Endpoint): Route {
@@ -306,11 +331,19 @@ export function route(slot: Slot): Route {
   const why = unroutable(chosen);
   if (!why) return chosen;
   const home = HOME[chosen.family];
-  const fallback = unroutable(r(chosen.family, home)) ? 'kie' : home;
+  if (!unroutable(r(chosen.family, home))) {
+    console.warn(
+      `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint}: ${why}. Ripiego su ${home}.`
+    );
+    return r(chosen.family, home);
+  }
+  // Nemmeno la casa della famiglia la serve: si cambia famiglia, non endpoint.
+  const reserve = SLOT_RESERVE[slot];
   console.warn(
-    `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint}: ${why}. Ripiego su ${fallback}.`
+    `[AI] ${SLOT_ENV[slot]} chiede ${chosen.family}@${chosen.endpoint}: ${why}, e ${chosen.family} ` +
+      `non ha altro endpoint. Ripiego su ${reserve.family}@${reserve.endpoint}.`
   );
-  return r(chosen.family, fallback);
+  return reserve;
 }
 
 /** True quando quell'endpoint sa fare quella cosa. */
