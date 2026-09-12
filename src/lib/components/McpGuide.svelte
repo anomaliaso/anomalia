@@ -54,13 +54,13 @@ anomalia login`;
   </summary>
 
   <div class="body">
-    {#each STEPS as step (step.id)}
+    {#each STEPS as step, i (step.id)}
       <section>
-        <h3>{$_(`app.mcpGuide.${step.key}Title`)}</h3>
+        <h3><span class="n">{i + 1}</span>{$_(`app.mcpGuide.${step.key}Title`)}</h3>
         <p class="muted">{$_(`app.mcpGuide.${step.key}Note`)}</p>
         <div class="snippet">
           <pre><code>{step.snippet}</code></pre>
-          <button type="button" onclick={() => copy(step.id, step.snippet)}>
+          <button type="button" class:done={copied === step.id} onclick={() => copy(step.id, step.snippet)}>
             {copied === step.id ? $_('app.mcpGuide.copied') : $_('app.mcpGuide.copy')}
           </button>
         </div>
@@ -76,10 +76,15 @@ anomalia login`;
 
 <style>
   /* La palette è quella del guscio (`--paper`, `--ink`, `--line`): la guida arriva da /v2, che
-     aveva i suoi token, e due palette nella stessa pagina si vedono. */
+     aveva i suoi token, e due palette nella stessa pagina si vedono. L'accento entra solo dove
+     serve a leggere — il numero del passo, il filo in testa, il bottone che ha copiato — perché
+     tre blocchi di codice in scala di grigio si guardano tutti uguali e non si legge nessuno. */
   .mcp {
+    /* La home è una colonna flex: senza questo la guida veniva schiacciata dallo shimmer sotto e
+       si vedeva un terzo del primo comando, come se fosse chiusa. */
+    flex: none;
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 16px;
     background: var(--paper);
     overflow: hidden;
     margin-bottom: 20px;
@@ -87,8 +92,8 @@ anomalia login`;
   summary {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 14px;
+    gap: 9px;
+    padding: 13px 16px;
     cursor: pointer;
     list-style: none;
     font-size: 13.5px;
@@ -99,9 +104,22 @@ anomalia login`;
   summary:hover {
     background: var(--paper-2);
   }
+  summary strong {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
   .chev {
-    color: var(--ink-faint);
-    transition: transform 140ms ease;
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border-radius: 6px;
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent);
+    font-size: 13px;
+    transition: transform 160ms ease;
   }
   .mcp[open] .chev {
     transform: rotate(90deg);
@@ -112,35 +130,55 @@ anomalia login`;
   .body {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
     border-top: 1px solid var(--line);
-    padding: 16px 14px;
+    padding: 18px 16px 16px;
   }
   section {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
   }
   h3 {
+    display: flex;
+    align-items: center;
+    gap: 9px;
     margin: 0;
     font-size: 13.5px;
-    font-weight: 600;
+    font-weight: 650;
     color: var(--ink);
+  }
+  /* Il numero dice che i tre blocchi sono strade alternative in ordine di comodità, non tre
+     passaggi da fare tutti: è l'unica gerarchia che mancava per capirci qualcosa al primo sguardo. */
+  .n {
+    display: inline-grid;
+    place-items: center;
+    width: 19px;
+    height: 19px;
+    flex: none;
+    border-radius: 50%;
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
   }
   p {
     margin: 0;
     font-size: 12.5px;
     line-height: 1.5;
   }
+  section > .muted {
+    padding-left: 28px;
+  }
   .snippet {
     display: flex;
     align-items: flex-start;
     gap: 8px;
+    margin: 5px 0 0 28px;
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: 12px;
     background: var(--paper-2);
-    padding: 8px;
-    margin-top: 3px;
+    padding: 10px 10px 10px 12px;
   }
   /* Il blocco scorre da solo: la pagina non deve mai scorrere in orizzontale per un comando. */
   pre {
@@ -148,23 +186,34 @@ anomalia login`;
     min-width: 0;
     margin: 0;
     overflow-x: auto;
+    font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.6;
+    color: var(--ink);
   }
   button {
     flex: none;
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 999px;
     background: var(--paper);
     color: var(--ink-soft);
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: 5px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
     cursor: pointer;
+    transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
   }
   button:hover {
     color: var(--ink);
+    border-color: var(--line-2);
+  }
+  button.done {
+    color: var(--accent);
+    border-color: rgba(var(--accent-rgb), 0.4);
+    background: rgba(var(--accent-rgb), 0.1);
   }
   .foot {
+    padding-left: 28px;
     font-size: 11.5px;
   }
   .foot a {
