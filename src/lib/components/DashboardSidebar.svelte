@@ -4,6 +4,7 @@
   import { Badge } from '$lib/components/ui/badge/index.js';
   import { cn } from '$lib/utils.js';
   import BrandMark from '$lib/components/BrandMark.svelte';
+  import ConnectAgentDialog from '$lib/components/ConnectAgentDialog.svelte';
   // Il menu utente è PORTALATO da bits-ui e si smonta alla selezione: per le voci che portano
   // ai settings si chiama l'API del modal invece di affidarsi al click dell'<a>.
   import { locale, _ } from 'svelte-i18n';
@@ -29,6 +30,7 @@
     Sparkles,
     Plus,
     Bell,
+    Plug2,
   } from '@lucide/svelte';
   import { paletteOpen } from '$lib/shortcuts';
   import {
@@ -176,6 +178,17 @@
   /** Vertical spacing between sidebar nav rows. */
   const navMenuGapClass = $derived(mobile ? 'gap-1.5' : 'gap-2');
   const activateHref = $derived(brandSlug ? `/app/${brandSlug}/activate` : '');
+  /**
+   * Le istruzioni per collegare il proprio agente. Stanno in fondo alla barra e non nella home
+   * perché servono DUE volte: il giorno che si comincia, e il giorno che si cambia macchina o si
+   * aggiunge un secondo agente. Sulla home la guida si legge una volta e poi occupa il primo
+   * terzo della pagina per sempre; qui è una riga, sempre allo stesso posto, e non si vede finché
+   * non la si cerca.
+   *
+   * È lo STESSO dialogo della landing: chi arriva dal sito e chi arriva da dentro leggono le
+   * stesse istruzioni, e quando cambiano cambiano per entrambi.
+   */
+  let installOpen = $state(false);
   const showUpgrade = $derived(!!brandSlug && !isPaidPlan(brandPlan));
   /** Path of in-flight navigation — highlights the destination row immediately. */
   const pendingPath = $derived(navigating.to?.url.pathname ?? null);
@@ -407,6 +420,26 @@
   </Sidebar.Content>
 
   <Sidebar.Footer class="gap-2 border-t border-sidebar-border px-2.5 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2.5">
+    <button
+      type="button"
+      onclick={() => (installOpen = true)}
+      class={cn(
+        'flex items-center border-0 bg-transparent text-sidebar-foreground/70 transition-colors cursor-pointer touch-manipulation',
+        'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-sidebar-foreground',
+        mobile ? 'gap-2 rounded-lg px-2.5 py-2.5' : 'gap-2 rounded-lg px-2.5 py-2',
+        'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0'
+      )}
+      aria-label={$_('app.nav.install')}
+      title={$_('app.nav.install')}
+    >
+      <Plug2 class={cn('shrink-0', mobile ? 'size-4' : 'size-3.5')} strokeWidth={1.7} />
+      <span
+        class={cn(
+          'font-medium leading-tight group-data-[collapsible=icon]:hidden',
+          mobile ? 'text-[14px]' : 'text-[12.5px]'
+        )}>{$_('app.nav.install')}</span
+      >
+    </button>
     {#if showUpgrade}
       <a
         href={activateHref}
@@ -697,6 +730,8 @@
     <Sidebar.Rail />
   </Sidebar.Root>
 {/if}
+
+<ConnectAgentDialog bind:open={installOpen} />
 
 <style>
   .dashboard-mobile-map {

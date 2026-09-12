@@ -3991,7 +3991,8 @@
       "radar": "Radar",
       "postsLeft": "{n} posts restants ce mois-ci",
       "campaigns": "Campagnes",
-      "sectionBrand": "Marque"
+      "sectionBrand": "Marque",
+      "install": "Installer"
     },
     "strategyTabs": {
       "gtm": "Plan de croissance",
