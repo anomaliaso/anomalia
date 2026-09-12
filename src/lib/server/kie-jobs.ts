@@ -233,7 +233,17 @@ export const KIE_IMAGE_INPUT_MAX = 8;
  */
 export function kieImageModel(model: string | undefined, refCount = 0): string {
   const spec = imageModelSpec(model);
-  if (spec) return refCount > 0 ? spec.kie.refs : spec.kie.text;
+  // Un modello che kie NON serve (i GPT Image 2.5 vivono solo sull'API immagini di OpenRouter)
+  // finisce qui quando OpenRouter è irraggiungibile. Mandarci il suo nome sarebbe un 400 su ogni
+  // immagine del brand: si rende col modello di casa e lo si dice, come fa `googleImageModel`.
+  if (spec && !spec.kie) {
+    console.warn(
+      `[kie-image] ${spec.id} esiste solo sull'API immagini di OpenRouter e questo render sta ` +
+        `andando su kie: uso nano-banana-2. La preferenza del brand non è stata applicata.`
+    );
+    return 'nano-banana-2';
+  }
+  if (spec?.kie) return refCount > 0 ? spec.kie.refs : spec.kie.text;
   // Un id che il catalogo non conosce è un id Gemini di prima del registro: la regola vale ancora.
   if (/pro/i.test(model ?? '')) return 'nano-banana-pro';
   if (/lite/i.test(model ?? '')) return 'nano-banana-2-lite';
@@ -258,7 +268,10 @@ export function buildKieImageInput(opts: {
   resolution?: KieResolution;
   model?: string;
 }): Record<string, unknown> {
-  const spec = imageModelSpec(opts.model) ?? imageModelSpec(NANO_BANANA_2_MODEL)!;
+  // Stessa ragione di `kieImageModel`: su kie un modello senza dialetto kie non ha un payload, e
+  // quello di casa è l'unico che ne ha uno.
+  const asked_spec = imageModelSpec(opts.model);
+  const spec = (asked_spec?.kie ? asked_spec : imageModelSpec(NANO_BANANA_2_MODEL))!;
   const aspect = kieAspectRatio(spec, opts.aspectRatio);
   if (opts.aspectRatio && aspect !== opts.aspectRatio) {
     console.warn(`[kie-image] ${spec.id} non serve aspect_ratio "${opts.aspectRatio}" — uso ${aspect}`);

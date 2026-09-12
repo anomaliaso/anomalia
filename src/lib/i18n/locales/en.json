@@ -5357,7 +5357,7 @@
         "recommended": "recommended",
         "slots": {
           "imageGenerate": "Image generation",
-          "imageGenerateDesc": "Which model draws a new photo from a prompt. Platform default lets the renderer pick per image. Models outside the Nano Banana family run only on kie and frame Instagram posts at 3:4 instead of 4:5.",
+          "imageGenerateDesc": "Which model draws a new photo from a prompt. The default is GPT Image 2.5 Sunburst, about a tenth of the previous cost at the same speed. Nano Banana, Seedream and Qwen run on kie: slower, and Seedream and Qwen frame Instagram posts at 3:4 instead of 4:5.",
           "imageRefine": "Image refine",
           "imageRefineDesc": "Which model edits a photo that already exists — adding a logo, restyling, changing one detail. Reproducing an image faithfully is a different job from inventing one, and the best family at one is not always the best at the other. Empty follows the generation model.",
           "videoGenerate": "Video generation",

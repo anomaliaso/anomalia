@@ -4,7 +4,11 @@ import {
   NANO_BANANA_PRO_MODEL,
   SEEDREAM_5_PRO_MODEL,
   GPT_IMAGE_2_MODEL,
+  GPT_IMAGE_25_SUNBURST_MODEL,
+  GPT_IMAGE_25_FLARE_MODEL,
+  NANO_BANANA_2_MODEL,
   QWEN3_PRO_MODEL,
+  openrouterImagesSize,
   imageModelSpec,
   imageRefineModelFor,
   isKnownImageModelId,
@@ -112,5 +116,62 @@ describe('the refine model', () => {
 
   it('ignores a refine model the catalogue no longer serves', () => {
     expect(imageRefineModelFor({ imageRefineModel: 'seedream-4-legacy' })).toBeUndefined();
+  });
+});
+
+/**
+ * I modelli che vivono SOLO sull'API immagini di OpenRouter.
+ *
+ * Misurato il 2026-09-12 su `GET /api/v1/images/models` e con render veri: `openai/gpt-image-2.5-*`
+ * non esiste su kie né su Google, e il suo endpoint non è `chat/completions` — è `POST /images`,
+ * con `input_references` per le modifiche e `aspect_ratio` da un elenco chiuso che NON contiene
+ * 4:5, cioè il formato di un post Instagram. Quel buco si copre con `size`, che l'endpoint onora
+ * al pixel (1024x1280 chiesto, 1024x1280 tornato) pur non essendo documentato.
+ */
+describe('i modelli dell’API immagini di OpenRouter', () => {
+  it('GPT Image 2.5 Sunburst e Flare sono nel catalogo del brand', () => {
+    expect(isKnownImageModelId(GPT_IMAGE_25_SUNBURST_MODEL)).toBe(true);
+    expect(isKnownImageModelId(GPT_IMAGE_25_FLARE_MODEL)).toBe(true);
+    const ids = IMAGE_MODEL_CHOICES.map((c) => c.id);
+    expect(ids).toContain(GPT_IMAGE_25_SUNBURST_MODEL);
+    expect(ids).toContain(GPT_IMAGE_25_FLARE_MODEL);
+  });
+
+  it('portano l’id con cui OpenRouter li chiama, e gli altri no', () => {
+    expect(imageModelSpec(GPT_IMAGE_25_SUNBURST_MODEL)?.openrouterImages).toBe(
+      'openai/gpt-image-2.5-sunburst'
+    );
+    expect(imageModelSpec(NANO_BANANA_2_MODEL)?.openrouterImages).toBeNull();
+  });
+
+  it('si riconoscono anche dall’id di OpenRouter, non solo dal nostro', () => {
+    expect(imageModelSpec('openai/gpt-image-2.5-flare')?.id).toBe(GPT_IMAGE_25_FLARE_MODEL);
+  });
+
+  it('non esistono su kie né su Google: chi ci finisce lo scopre, non lo indovina', () => {
+    const spec = imageModelSpec(GPT_IMAGE_25_SUNBURST_MODEL)!;
+    expect(spec.google).toBeNull();
+    expect(spec.kie).toBeNull();
+  });
+
+  it('4:5 lo servono, perché è il formato di un post', () => {
+    expect(imageModelSpec(GPT_IMAGE_25_SUNBURST_MODEL)!.aspectRatios).toContain('4:5');
+  });
+});
+
+describe('openrouterImagesSize', () => {
+  it('i rapporti che l’elenco chiuso di OpenRouter ha non passano da size', () => {
+    expect(openrouterImagesSize('1:1')).toBeUndefined();
+    expect(openrouterImagesSize('9:16')).toBeUndefined();
+  });
+
+  it('4:5 e 5:4 non sono in quell’elenco: si chiedono in pixel, o tornerebbe un 400', () => {
+    expect(openrouterImagesSize('4:5')).toBe('1024x1280');
+    expect(openrouterImagesSize('5:4')).toBe('1280x1024');
+  });
+
+  it('un rapporto che non si capisce non inventa una dimensione', () => {
+    expect(openrouterImagesSize(undefined)).toBeUndefined();
+    expect(openrouterImagesSize('banana')).toBeUndefined();
   });
 });
