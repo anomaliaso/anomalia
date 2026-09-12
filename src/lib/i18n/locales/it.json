@@ -3905,7 +3905,8 @@
       "radar": "Radar",
       "campaigns": "Campagne",
       "postsLeft": "{n} post rimasti questo mese",
-      "sectionBrand": "Brand"
+      "sectionBrand": "Brand",
+      "install": "Installa"
     },
     "hub": {
       "strategy": {
