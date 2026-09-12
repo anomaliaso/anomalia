@@ -2,40 +2,37 @@ import { describe, expect, it } from 'vitest';
 import { homeTodos, type TodoSource } from './home-todos';
 
 const nothing: TodoSource = {
-  queue: { pending: 0 },
-  blog: { pending: 0 },
   automations: { radarEnabled: true, radarReview: 0, leadsPending: 0 },
   setup: { socialAccounts: 1 }
 };
 
 const src = (patch: Partial<TodoSource>): TodoSource => ({ ...nothing, ...patch });
 
-describe('le cose da fare in cima alla home', () => {
+describe('le cose da fare, sotto la testa della home', () => {
   it('non inventa righe quando non c’è niente da fare', () => {
     expect(homeTodos(nothing)).toEqual([]);
   });
 
   /**
-   * L'ordine è la gerarchia del mockup: prima ciò che ha una scadenza vera — un post approvato
-   * in ritardo è un post che non esce — poi ciò che aspetta senza scadere, poi il setup, che
-   * non scade mai.
+   * La coda di approvazione NON sta qui. La testa della pagina già apre su quella — «un post
+   * aspetta la tua approvazione», con la sua foto e il bottone — e ripeterla come riga di elenco
+   * due centimetri sotto era la duplicazione che il redesign è venuto a togliere. Qui resta ciò
+   * che aspetta senza una scadenza, e che la testa non racconta.
    */
-  it('mette per prime le approvazioni, che sono le uniche con una scadenza', () => {
+  it('non ripete la coda di approvazione, che è già la testa della pagina', () => {
     const todos = homeTodos({
-      queue: { pending: 4 },
-      blog: { pending: 2 },
       automations: { radarEnabled: true, radarReview: 7, leadsPending: 3 },
       setup: { socialAccounts: 0 }
     });
 
-    expect(todos.map((t) => t.key)).toEqual(['posts', 'articles', 'radar', 'leads', 'social']);
+    expect(todos.map((t) => t.key)).toEqual(['radar', 'leads', 'social']);
   });
 
-  it('porta il conteggio, perché «4 da approvare» dice più di «da approvare»', () => {
-    const [posts] = homeTodos(src({ queue: { pending: 4 } }));
+  it('porta il conteggio, perché «7 da rivedere» dice più di «da rivedere»', () => {
+    const [radar] = homeTodos(src({ automations: { radarEnabled: true, radarReview: 7, leadsPending: 0 } }));
 
-    expect(posts.count).toBe(4);
-    expect(posts.path).toBe('/calendar?status=pending_user');
+    expect(radar.count).toBe(7);
+    expect(radar.path).toBe('/radar');
   });
 
   it('non offre il radar da rivedere se il radar è spento', () => {
@@ -60,8 +57,6 @@ describe('le cose da fare in cima alla home', () => {
 
   it('ogni riga sa dove porta e come si chiama, senza testo scritto dentro', () => {
     const todos = homeTodos({
-      queue: { pending: 1 },
-      blog: { pending: 1 },
       automations: { radarEnabled: true, radarReview: 1, leadsPending: 1 },
       setup: { socialAccounts: 0 }
     });

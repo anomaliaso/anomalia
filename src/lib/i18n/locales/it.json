@@ -4482,21 +4482,6 @@
         "leads": "lead da contattare",
         "radar": "post radar da vedere"
       },
-      "setup": {
-        "title": "Completa setup del progetto",
-        "progress": "{done} di {tot} completati",
-        "dismiss": "Nascondi",
-        "items": {
-          "studio": "Completa il Brand Studio",
-          "strategy": "Genera la strategia",
-          "plan": "Genera il piano editoriale",
-          "social": "Collega i social",
-          "blog": "Personalizza il blog",
-          "radar": "Attiva il Radar per notizie e lead",
-          "seo": "Analisi SEO/GEO per il tuo sito",
-          "gsc": "Collega Google Search Console"
-        }
-      },
       "todo": {
         "title": "Da fare",
         "count": "{n, plural, one {# cosa richiede la tua attenzione} other {# cose richiedono la tua attenzione}}",
@@ -4504,7 +4489,6 @@
         "noSocial": "Nessun account ancora collegato"
       },
       "overview": {
-        "title": "Panoramica",
         "subtitle": "Cosa richiede la tua attenzione, cosa è in programma, come sta andando il web e come performano i contenuti.",
         "sectionAttention": "Attenzione",
         "sectionSchedule": "Programmazione",
@@ -4517,11 +4501,6 @@
         "setupGauge": "Setup",
         "seoGauge": "SEO",
         "geoGauge": "GEO",
-        "pipelineTitle": "Pipeline contenuti",
-        "pipelineDesc": "Da approvare, schedulati e pubblicati — social e blog.",
-        "pipelinePending": "Da approvare",
-        "pipelineScheduled": "Schedulati",
-        "pipelinePublished": "Pubblicati",
         "toReview": "Da rivedere",
         "toReviewDesc": "Bozze in attesa della tua approvazione prima di andare online.",
         "showAllReview": "Mostra tutti ({n})",
@@ -4531,7 +4510,6 @@
         "kindSocial": "Social",
         "kindBlog": "Blog",
         "postsToAccept": "{n, plural, one {# post da accettare} other {# post da accettare}}",
-        "blogsToAccept": "{n, plural, one {# articolo blog da accettare} other {# articoli blog da accettare}}",
         "review": "Rivedi",
         "postsAiCta": "Chiedi all'AI di rivedere e schedulare",
         "postsAiPrompt": "Ho {n} post social in attesa di approvazione. Rivedi ciascuno, migliora le caption dove serve, poi approva e schedulali in orari sensati senza conflitti.",
@@ -4586,6 +4564,30 @@
       "upgrade": {
         "banner": "Fai upgrade per sbloccare SEO, GEO, Radar, blog e pubblicazione in autopilot.",
         "cta": "Upgrade ora"
+      },
+      "head": {
+        "approveOne": "Un post aspetta la tua approvazione.",
+        "approveMany": "{n} cose aspettano la tua approvazione.",
+        "approveBlog": "La coda è di articoli del blog.",
+        "openBlog": "Aprili",
+        "publishedTitle": "Nessuno aspetta te. L’ultimo è già uscito.",
+        "emptyTitle": "Non c’è ancora niente da approvare.",
+        "emptyBody": "Quando il piano produce, i post arrivano qui e aspettano il tuo sì.",
+        "openPost": "Apri e approva",
+        "openPost2": "Apri il post",
+        "openQueue": "Vedi la coda",
+        "openResults": "Vedi i risultati",
+        "figPublished": "pubblicati",
+        "figWaiting": "aspettano te",
+        "figScheduled": "in programma",
+        "figViews": "visualizzazioni",
+        "fixPill": "cose da sistemare",
+        "fixTail": "prima di produrre la prossima settimana",
+        "state": {
+          "wait": "Aspetta te",
+          "plan": "In programma",
+          "live": "Pubblicato"
+        }
       }
     },
     "manualPosting": {

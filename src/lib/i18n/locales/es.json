@@ -4142,21 +4142,6 @@
         "leads": "leads para contactar",
         "radar": "publicaciones del radar para revisar"
       },
-      "setup": {
-        "title": "Completa la configuración del proyecto",
-        "progress": "{done} de {tot} completados",
-        "dismiss": "Ocultar",
-        "items": {
-          "studio": "Completa el Brand Studio",
-          "strategy": "Genera la estrategia",
-          "plan": "Genera el plan editorial",
-          "social": "Conecta las redes sociales",
-          "blog": "Personaliza el blog",
-          "radar": "Activa el Radar de noticias y leads",
-          "seo": "Análisis SEO/GEO de tu sitio",
-          "gsc": "Conecta Google Search Console"
-        }
-      },
       "todo": {
         "title": "Por hacer",
         "count": "{n, plural, one {# cosa necesita tu atención} other {# cosas necesitan tu atención}}",
@@ -4164,7 +4149,6 @@
         "noSocial": "Aún no hay ninguna cuenta conectada"
       },
       "overview": {
-        "title": "Resumen",
         "subtitle": "Qué necesita tu atención, qué está programado, cómo va la web y cómo rinden los contenidos.",
         "sectionAttention": "Atención",
         "sectionSchedule": "Programación",
@@ -4177,11 +4161,6 @@
         "setupGauge": "Setup",
         "seoGauge": "SEO",
         "geoGauge": "GEO",
-        "pipelineTitle": "Pipeline de contenidos",
-        "pipelineDesc": "Pendientes, programados y publicados — social y blog.",
-        "pipelinePending": "Por aprobar",
-        "pipelineScheduled": "Programados",
-        "pipelinePublished": "Publicados",
         "toReview": "Por revisar",
         "toReviewDesc": "Borradores pendientes de tu aprobación antes de publicarse.",
         "showAllReview": "Mostrar todos ({n})",
@@ -4191,7 +4170,6 @@
         "kindSocial": "Social",
         "kindBlog": "Blog",
         "postsToAccept": "{n, plural, one {# post por aprobar} other {# posts por aprobar}}",
-        "blogsToAccept": "{n, plural, one {# artículo de blog por aprobar} other {# artículos de blog por aprobar}}",
         "review": "Revisar",
         "postsAiCta": "Pedir a la IA revisar y programar",
         "postsAiPrompt": "Tengo {n} posts sociales pendientes de aprobación. Revisa cada uno, mejora los captions donde haga falta, luego apruébalos y prográmalos en horarios sensatos sin conflictos.",
@@ -4246,6 +4224,30 @@
       "upgrade": {
         "banner": "Haz upgrade para desbloquear SEO, GEO, Radar, blog y publicación en autopilot.",
         "cta": "Upgrade ahora"
+      },
+      "head": {
+        "approveOne": "Un post te espera.",
+        "approveMany": "{n} cosas te esperan.",
+        "approveBlog": "Lo que espera son artículos del blog.",
+        "openBlog": "Ábrelos",
+        "publishedTitle": "Nadie te espera. El último ya salió.",
+        "emptyTitle": "Todavía no hay nada que aprobar.",
+        "emptyBody": "Cuando el plan produzca, los posts llegan aquí y esperan tu sí.",
+        "openPost": "Abrir y aprobar",
+        "openPost2": "Abrir el post",
+        "openQueue": "Ver la cola",
+        "openResults": "Ver los resultados",
+        "figPublished": "publicados",
+        "figWaiting": "te esperan",
+        "figScheduled": "programados",
+        "figViews": "visualizaciones",
+        "fixPill": "cosas por arreglar",
+        "fixTail": "antes de producir la próxima semana",
+        "state": {
+          "wait": "Te espera",
+          "plan": "Programado",
+          "live": "Publicado"
+        }
       }
     },
     "manualPosting": {

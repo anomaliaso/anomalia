@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
+  import HomeHead from '$lib/components/HomeHead.svelte';
   import HomeWorkbench from '$lib/components/HomeWorkbench.svelte';
-  import McpGuide from '$lib/components/McpGuide.svelte';
   import WorkbenchPageShimmer from '$lib/components/WorkbenchPageShimmer.svelte';
 
   let { data } = $props();
@@ -9,10 +9,9 @@
 
 <svelte:head><title>Anomalia — {$_('app.home.workbench.title')}</title></svelte:head>
 
-<!-- Sopra il blocco `{#await}`, non dentro: collegare il proprio agente è la prima cosa da fare,
-     e non dipende dalle ~30 query della panoramica. Aspettarle vorrebbe dire mostrarla al
-     secondo giro d'occhio, quando la pagina si è già riempita d'altro. -->
-<McpGuide />
+<!-- La guida per collegare un agente non è più qui. Si leggeva una volta e poi occupava il primo
+     terzo della pagina per sempre; ora è «Installa», in fondo alla barra, sempre allo stesso posto
+     e sempre raggiungibile — anche il secondo giorno, che è quello in cui la si cerca davvero. -->
 
 <!-- `extras` non si passa di proposito: erano i badge differiti del layout, e qui dentro
      non ci sono. Servivano solo come sovrascrittura anticipata — `overview` porta già
@@ -25,6 +24,7 @@
 {#await data.overview}
   <WorkbenchPageShimmer variant="home" />
 {:then overview}
+  <HomeHead {overview} brandSlug={data.brand.slug} />
   <HomeWorkbench
     brandSlug={data.brand.slug}
     {overview}

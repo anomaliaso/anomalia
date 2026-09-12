@@ -4481,21 +4481,6 @@
         "leads": "leads to contact",
         "radar": "radar posts to review"
       },
-      "setup": {
-        "title": "Complete project setup",
-        "progress": "{done} of {tot} completed",
-        "dismiss": "Dismiss",
-        "items": {
-          "studio": "Complete Brand Studio",
-          "strategy": "Generate strategy",
-          "plan": "Generate editorial plan",
-          "social": "Connect social accounts",
-          "blog": "Customize the blog",
-          "radar": "Activate Radar for news and leads",
-          "seo": "Run SEO/GEO analysis",
-          "gsc": "Connect Google Search Console"
-        }
-      },
       "todo": {
         "title": "To do",
         "count": "{n, plural, one {# thing needs you} other {# things need you}}",
@@ -4503,7 +4488,6 @@
         "noSocial": "No account connected yet"
       },
       "overview": {
-        "title": "Overview",
         "subtitle": "What needs your attention, what's coming up, how the web is performing, and how content is doing.",
         "sectionAttention": "Attention",
         "sectionSchedule": "Schedule",
@@ -4516,11 +4500,6 @@
         "setupGauge": "Setup",
         "seoGauge": "SEO",
         "geoGauge": "GEO",
-        "pipelineTitle": "Content pipeline",
-        "pipelineDesc": "Pending, scheduled and published — social and blog.",
-        "pipelinePending": "To approve",
-        "pipelineScheduled": "Scheduled",
-        "pipelinePublished": "Published",
         "toReview": "To review",
         "toReviewDesc": "Drafts waiting for your approval before they go live.",
         "showAllReview": "Show all ({n})",
@@ -4530,7 +4509,6 @@
         "kindSocial": "Social",
         "kindBlog": "Blog",
         "postsToAccept": "{n, plural, one {# post to approve} other {# posts to approve}}",
-        "blogsToAccept": "{n, plural, one {# blog article to approve} other {# blog articles to approve}}",
         "review": "Review",
         "postsAiCta": "Ask AI to review & schedule",
         "postsAiPrompt": "I have {n} social posts waiting for approval. Please review each one, improve captions where needed, then approve and schedule them at sensible times without conflicts.",
@@ -4585,6 +4563,30 @@
       "upgrade": {
         "banner": "Upgrade to unlock SEO, GEO, Radar, blog and autopilot publishing.",
         "cta": "Upgrade now"
+      },
+      "head": {
+        "approveOne": "One post is waiting for you.",
+        "approveMany": "{n} things are waiting for you.",
+        "approveBlog": "What’s waiting are blog articles.",
+        "openBlog": "Open them",
+        "publishedTitle": "Nothing is waiting for you. The last one is out.",
+        "emptyTitle": "Nothing to approve yet.",
+        "emptyBody": "Once the plan produces, posts land here and wait for your yes.",
+        "openPost": "Open and approve",
+        "openPost2": "Open the post",
+        "openQueue": "See the queue",
+        "openResults": "See the results",
+        "figPublished": "published",
+        "figWaiting": "waiting for you",
+        "figScheduled": "scheduled",
+        "figViews": "views",
+        "fixPill": "things to fix",
+        "fixTail": "before producing next week",
+        "state": {
+          "wait": "Waiting for you",
+          "plan": "Scheduled",
+          "live": "Published"
+        }
       }
     },
     "manualPosting": {
