@@ -30,6 +30,8 @@
    */
   type Tile = { id: string; url: string; state: 'live' | 'wait' | 'plan'; when: string | null };
 
+  const STRIP_MAX = 10;
+
   const tiles = $derived.by<Tile[]>(() => {
     const out: Tile[] = [];
     for (const p of overview.queue.posts) {
@@ -41,7 +43,7 @@
     for (const p of overview.queue.published) {
       if (p.media_url) out.push({ id: p.id, url: p.media_url, state: 'live', when: p.published_at });
     }
-    return out.slice(0, 4);
+    return out.slice(0, STRIP_MAX);
   });
 
   const blocking = $derived(overview.growth?.blocking?.length ?? 0);
@@ -74,7 +76,7 @@
     </h2>
 
     {#if head.post}
-      <div class="hh-card">
+      <div class="hh-card" class:nomedia={!head.post.media_url}>
         {#if head.post.media_url}
           <img src={head.post.media_url} alt="" loading="lazy" decoding="async" />
         {/if}
@@ -132,7 +134,7 @@
 </section>
 
 <style>
-  .hh { display: flex; flex-direction: column; gap: 22px; }
+  .hh { display: flex; flex-direction: column; gap: 22px; margin-bottom: 44px; }
 
   .hh-ask { display: flex; flex-direction: column; gap: 14px; }
   .hh-ask h2 {
@@ -143,12 +145,16 @@
   }
 
   /* La foto è grande quanto serve a riconoscere il post, non quanto serve a riempire la riga:
-     è un invito ad aprirlo, non il posto dove lo si guarda. */
+     è un invito ad aprirlo, non il posto dove lo si guarda. Centrata, perché il testo è più corto
+     di lei e allineare in alto lasciava mezza card vuota sotto i bottoni. */
   .hh-card {
-    display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px;
-    align-items: start;
+    display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 16px;
+    align-items: center;
     background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
   }
+  /* Senza foto la colonna della foto non esiste: riservarla lasciava un rettangolo di vuoto
+     larghissimo accanto a una riga di testo. */
+  .hh-card.nomedia { grid-template-columns: minmax(0, 1fr); }
   .hh-card img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 10px; display: block; }
   .hh-card-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .hh-cap {
@@ -170,9 +176,16 @@
   .hh-empty { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); max-width: 56ch; }
   .hh-empty a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 
-  .hh-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  /* Una striscia, non un muro. A quattro colonne piene ogni piastrella diventava alta trecento
+     pixel e la prima schermata era soltanto lei; a larghezza fissa ne entrano sei o sette, le
+     altre scorrono, e nessuna riga resta spaiata a fine corsa. */
+  .hh-strip {
+    display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity;
+    padding-bottom: 2px; scrollbar-width: thin;
+  }
   .hh-tile {
-    position: relative; display: block; border-radius: 12px; overflow: hidden;
+    position: relative; display: block; flex: 0 0 148px; scroll-snap-align: start;
+    border-radius: 12px; overflow: hidden;
     background: var(--paper-2); text-decoration: none;
   }
   .hh-tile img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; display: block; }
@@ -216,9 +229,12 @@
   }
   .hh-fix-x { color: var(--ink-faint); }
 
-  @media (max-width: 720px) {
-    .hh-card { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
-    .hh-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* `@container`, non `@media`: la home vive dentro il contenitore `workbench` dichiarato dal
+     layout del brand, e la sidebar si apre e si chiude. A finestra larga con la sidebar aperta
+     lo spazio vero è duecentotrenta pixel in meno di quello che una media query vede. */
+  @container workbench (max-width: 640px) {
+    .hh-card { grid-template-columns: 92px minmax(0, 1fr); gap: 12px; }
+    .hh-tile { flex-basis: 128px; }
     .hh-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 14px; }
     .hh-fix-x { display: none; }
   }
