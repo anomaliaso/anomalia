@@ -5,6 +5,7 @@
   import GrowthReadiness from '$lib/components/GrowthReadiness.svelte';
   import { fmtCompactNum } from '$lib/fmt-num';
   import { homeTodos } from '$lib/home-todos';
+  import { webGauges } from '$lib/home-gauges';
 
   type Extras = {
     pendingCount?: number;
@@ -135,6 +136,12 @@
   // traduzione. Ha preso il posto di tre gauge (setup, SEO, GEO) e di una coda paginata dei
   // singoli post: i primi erano ornamento, la seconda diceva la stessa cosa della riga
   // «N da approvare» con un clic in più e una paginazione da mantenere.
+  /* I due anelli della sezione Web. Le loro variabili stavano insieme ai tre gauge grandi e sono
+     sparite con quelli, ma gli anelli erano rimasti nel markup: il componente moriva a
+     `seoGauge is not defined`, il ramo che disegna la home non veniva mai creato e la pagina
+     restava sullo shimmer per sempre. Il calcolo ora sta in `$lib/home-gauges`, sotto test. */
+  const gauges = $derived(webGauges(overview.web));
+
   const todos = $derived(
     homeTodos({
       queue: { pending: pendingPostCount },
@@ -449,8 +456,8 @@
     <div class="metric-grid metric-grid-wide">
       <a class="metric-card has-viz" href={`${base}/seo`}>
         <div class="metric-top">
-          <div class="mini-ring" style={`--v:${Math.round(seoGauge)}`} aria-hidden="true">
-            <span>{seoGaugeLabel}</span>
+          <div class="mini-ring" style={`--v:${gauges.seoFill}`} aria-hidden="true">
+            <span>{gauges.seoLabel}</span>
           </div>
           <div class="metric-text">
             <span class="metric-l">{$_('app.home.overview.seo')}</span>
@@ -490,8 +497,8 @@
         href={`${base}/geo`}
       >
         <div class="metric-top">
-          <div class="mini-ring" style={`--v:${Math.round(geoGauge)}`} aria-hidden="true">
-            <span>{geoGaugeLabel}</span>
+          <div class="mini-ring" style={`--v:${gauges.geoFill}`} aria-hidden="true">
+            <span>{gauges.geoLabel}</span>
           </div>
           <div class="metric-text">
             <span class="metric-l">{$_('app.home.overview.geo')}</span>

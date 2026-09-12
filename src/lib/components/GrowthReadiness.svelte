@@ -59,7 +59,11 @@
               {#if c.ok}<Check size={13} />{:else if c.blocking}<AlertTriangle size={13} />{:else}<Minus size={13} />{/if}
             </span>
             <span class="txt">
-              <span class="lb">{$_(`app.growthReadiness.checks.${c.key}.label`)}</span>
+              <!-- Anche l'etichetta ha il suo `{detail}` (`Storico post ({detail})`): senza i valori
+                   la parentesi restava con il segnaposto dentro, in chiaro, sotto gli occhi di tutti. -->
+              <span class="lb"
+                >{$_(`app.growthReadiness.checks.${c.key}.label`, { values: { detail: c.detail ?? '' } })}</span
+              >
               <span class="ds">
                 {$_(`app.growthReadiness.checks.${c.key}.${c.ok ? 'ok' : 'todo'}`, {
                   values: { detail: c.detail ?? '' }

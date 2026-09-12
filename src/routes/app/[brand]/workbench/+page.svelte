@@ -16,7 +16,12 @@
 
 <!-- `extras` non si passa di proposito: erano i badge differiti del layout, e qui dentro
      non ci sono. Servivano solo come sovrascrittura anticipata — `overview` porta già
-     ognuno di quei numeri, quindi il workbench è identico, appena meno impaziente. -->
+     ognuno di quei numeri, quindi il workbench è identico, appena meno impaziente.
+
+     Se un giorno questo shimmer non finisce più, il sospettato NON è la promessa: è
+     `HomeWorkbench` che esplode mentre si disegna. Il ramo `:then` muore a metà, `{#await}`
+     resta su quello in attesa e l'errore finisce solo in console — visto una volta, con una
+     variabile rimasta nel markup dopo che la sua dichiarazione era stata tolta. -->
 {#await data.overview}
   <WorkbenchPageShimmer variant="home" />
 {:then overview}

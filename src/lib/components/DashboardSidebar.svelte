@@ -21,7 +21,6 @@
     Sun,
     Moon,
     LogOut,
-    UserPlus,
     LayoutGrid,
     Key,
     ArrowUpRight,
@@ -175,16 +174,11 @@
     'font-semibold data-[active=true]:bg-[color:var(--nav-on)] data-[active=true]:hover:bg-[color:var(--nav-on-hover)] active:bg-[var(--paper)]';
   /** Vertical spacing between sidebar nav rows. */
   const navMenuGapClass = $derived(mobile ? 'gap-1.5' : 'gap-2');
-  const overviewHref = $derived(brandSlug ? `/app/${brandSlug}` : '');
   const activateHref = $derived(brandSlug ? `/app/${brandSlug}/activate` : '');
   const showUpgrade = $derived(!!brandSlug && !isPaidPlan(brandPlan));
-  const overviewActive = $derived(
-    !!overviewHref &&
-      ($page.url.pathname === overviewHref || $page.url.pathname === `${overviewHref}/`)
-  );
   /** Path of in-flight navigation — highlights the destination row immediately. */
   const pendingPath = $derived(navigating.to?.url.pathname ?? null);
-  /** Exact for brand-root Overview (`/app/{slug}`); prefix for nested hub routes. */
+  /** Esatto per la home del brand (`/app/{slug}`); a prefisso per le rotte annidate. */
   function isNavPending(href: string, exact = false) {
     if (!pendingPath || !href) return false;
     if (exact) return pendingPath === href || pendingPath === `${href}/`;
@@ -384,41 +378,12 @@
          bordi sono una riga sola che attraversa la finestra invece di due tratti sfalsati.
          Nessun padding orizzontale sul guscio — il filo va da lato a lato; il rientro se lo
          tiene la riga dentro, dove serve a incolonnare l'etichetta con la nav. -->
-    <Sidebar.Header class="shell-top-header shell-top-divider justify-center gap-0 p-0">
-      <Sidebar.Group class="w-full p-0 px-2.5 group-data-[collapsible=icon]:px-2">
-        <Sidebar.Menu class={navMenuGapClass}>
-          <Sidebar.MenuItem>
-            {@const overviewPending = isNavPending(overviewHref, true)}
-            {@const overviewOn = overviewPending || (overviewActive && !pendingPath)}
-            <Sidebar.MenuButton
-              isActive={overviewOn}
-              tooltipContent={$_('app.nav.homeOverview')}
-              size={mobile ? 'default' : 'sm'}
-              class={cn(
-                overviewOn ? navOnClass : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] active:bg-[var(--paper)]',
-                menuBtnMobileClass
-              )}
-              style={overviewOn ? 'color: var(--accent-ink)' : undefined}
-            >
-              {#snippet child({ props })}
-                <a
-                  href={overviewHref}
-                  {...props}
-                  onclick={() => {
-                    if (sidebar.isMobile && sidebar.openMobile) {
-                      sidebar.setOpenMobile(false);
-                    }
-                  }}
-                >
-                  <UserPlus class={iconClass} strokeWidth={1.7} />
-                  <span class={cn(labelClass, 'group-data-[collapsible=icon]:hidden')}>{$_('app.nav.homeOverview')}</span>
-                </a>
-              {/snippet}
-            </Sidebar.MenuButton>
-          </Sidebar.MenuItem>
-        </Sidebar.Menu>
-      </Sidebar.Group>
-    </Sidebar.Header>
+    <!-- Resta il guscio, non la voce: «Panoramica» portava a `/app/<slug>`, che e' dove porta
+         «Home» due righe sotto — la stessa destinazione elencata due volte. Quello che l'header
+         faceva oltre a quello serve ancora: tiene l'altezza della top bar delle pagine
+         (`--shell-top-h`) e lo stesso filo, cosi' i due bordi sono una riga sola che attraversa
+         la finestra invece di due tratti sfalsati. -->
+    <Sidebar.Header class="shell-top-header shell-top-divider p-0" />
   {/if}
 
   <Sidebar.Content class="flex-1 gap-0 overflow-y-auto px-2.5 py-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-2.5 group-data-[collapsible=icon]:overflow-visible">
@@ -761,6 +726,31 @@
     --nav-on-hover: color-mix(in srgb, var(--accent) 24%, transparent);
   }
 
+
+  /* Un cerchio, non un numero grande su una striscia colorata: qui non c'era nessuna regola base
+     — solo i tre fondi per severita' — quindi la cifra usciva a 16px senza raggio ne' padding.
+     `min-width` pari all'altezza tiene il cerchio a una cifra e lo allunga in pillola a due; il
+     bordo della barra laterale lo stacca dal campanello che gli sta sotto. */
+  .um-bell-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--sidebar-bg, var(--paper));
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .um-bell-count.mobile {
+    min-width: 18px;
+    height: 18px;
+    font-size: 11px;
+  }
 
   .um-bell-count.sev-error {
     background: #ef4444;
