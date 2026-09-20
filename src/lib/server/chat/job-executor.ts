@@ -53,9 +53,6 @@ export const EXECUTABLE_TOOL_JOBS = [
   'subagent_run'
 ] as const;
 
-/** Job che il drain serverless di Vercel non deve reclamare: solo il worker process. */
-export const WORKER_ONLY_TOOL_JOBS = ['run_autopilot'] as const;
-
 export async function executeChatToolJob(
   supabase: SupabaseClient,
   brandId: string,
@@ -431,8 +428,11 @@ export async function executeChatToolJob(
       if (!brand) return { error: 'Brand not found' };
       await cancel.assertActive();
       const { runAutopilotForBrand } = await import('$lib/server/scheduler');
+      const { AUTOPILOT_RUN_BUDGET_MS } = await import('$lib/server/autopilot-thresholds');
       const deadlineMs =
-        typeof params.deadline_ms === 'number' && params.deadline_ms > 0 ? params.deadline_ms : 3_600_000;
+        typeof params.deadline_ms === 'number' && params.deadline_ms > 0
+          ? params.deadline_ms
+          : AUTOPILOT_RUN_BUDGET_MS;
       const res = await runAutopilotForBrand(supabase, brand, { deadlineMs });
       await cancel.assertActive();
       if (res.ran) {

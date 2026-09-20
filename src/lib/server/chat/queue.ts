@@ -1344,22 +1344,14 @@ const MIN_TURN_SLICE_MS = 90_000;
 export async function processNextPendingToolJob(
 	admin: SupabaseClient,
 	/** Dove accodare il turno di rientro. Vuoto = si usa quello salvato nei params del job. */
-	origin: string = '',
-	opts?: { mode?: 'serverless' | 'worker' }
+	origin: string = ''
 ): Promise<{ processed: boolean; jobId?: string; error?: string }> {
 	// Allowlist, never "everything that isn't a chat turn": chat_jobs is shared with the designer,
 	// whose motion_video / ugc_batch continuations sit pending for a worker of their own. Claiming
 	// one would run it into the executor's default case and mark a row `done` whose work never
 	// happened. reapStaleChatJobs skips those two names for the same reason.
-	const { executeChatToolJob, EXECUTABLE_TOOL_JOBS, WORKER_ONLY_TOOL_JOBS } = await import(
-		'$lib/server/chat/job-executor'
-	);
-	const allow =
-		opts?.mode === 'worker'
-			? (EXECUTABLE_TOOL_JOBS as unknown as string[])
-			: (EXECUTABLE_TOOL_JOBS as unknown as string[]).filter(
-					(name) => !(WORKER_ONLY_TOOL_JOBS as readonly string[]).includes(name)
-				);
+	const { executeChatToolJob, EXECUTABLE_TOOL_JOBS } = await import('$lib/server/chat/job-executor');
+	const allow = EXECUTABLE_TOOL_JOBS as unknown as string[];
 	const { data: candidates } = await admin
 		.from('chat_jobs')
 		.select('id, brand_id, user_id, thread_id, tool_name, input_params, created_at')
@@ -1532,7 +1524,7 @@ export async function drainChatQueue(opts: {
 			moreToolWork = true;
 			break;
 		}
-		const r = await processNextPendingToolJob(admin, opts.origin, { mode: opts.mode ?? 'serverless' }).catch((e) => {
+		const r = await processNextPendingToolJob(admin, opts.origin).catch((e) => {
 			console.error('[Chat Queue] tool job drain failed', e);
 			return { processed: false };
 		});

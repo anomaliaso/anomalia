@@ -195,20 +195,14 @@ describe('processNextPendingToolJob', () => {
 		expect(table[0].status).toBe('pending');
 	});
 
-	it('il drain serverless non reclama run_autopilot (solo il worker)', async () => {
-		const { table, client } = makeDb([pendingToolJob({ tool_name: 'run_autopilot' })]);
-		const { processNextPendingToolJob } = await import('./queue');
-		const r = await processNextPendingToolJob(client as never, '', { mode: 'serverless' });
-		expect(r.processed).toBe(false);
-		expect(executeChatToolJob).not.toHaveBeenCalled();
-		expect(table[0].status).toBe('pending');
-	});
-
-	it('il worker reclama run_autopilot', async () => {
+	// Un job riservato a un processo che non esiste non parte mai: resta `pending` finche' il
+	// reaper lo chiude come «never picked up». `run_autopilot` lo era, e il giorno in cui il
+	// worker non c'era l'autopilot di quella mattina non e' partito per nessun brand.
+	it('reclama run_autopilot: nessun job e` riservato a un worker', async () => {
 		const { table, client } = makeDb([pendingToolJob({ tool_name: 'run_autopilot' })]);
 		const { processNextPendingToolJob } = await import('./queue');
 		executeChatToolJob.mockResolvedValue({ ran: true, postsCreated: 0 });
-		const r = await processNextPendingToolJob(client as never, '', { mode: 'worker' });
+		const r = await processNextPendingToolJob(client as never, '');
 		expect(r.processed).toBe(true);
 		expect(executeChatToolJob).toHaveBeenCalledWith(
 			expect.anything(),

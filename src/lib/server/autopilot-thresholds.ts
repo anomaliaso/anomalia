@@ -22,3 +22,16 @@ export const PENDING_BACKLOG_CAP = 15;
  * un brand fermo: contare anche i pending freschi bloccherebbe proprio i brand che funzionano.
  */
 export const PENDING_BACKLOG_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Quanto può durare un run, dal momento in cui il drain lo reclama.
+ *
+ * Il tetto non lo decide l'autopilot: lo decide il muro della funzione serverless che lo esegue
+ * (`CHAT_MAX_DURATION_MS`, 1800s su Vercel), meno il tempo di chiudere la riga e concatenare il
+ * drain successivo. Era un'ora, scritta a mano nel tick quando a eseguirlo era un processo
+ * long-lived senza muri — su Vercel un'ora non allunga il run, lo fa uccidere a metà.
+ *
+ * Un test lo tiene agganciato al muro: qui non si importa `turn-limits`, che si porterebbe dietro
+ * mezza chat dentro la route del doctor.
+ */
+export const AUTOPILOT_RUN_BUDGET_MS = 1_700_000;

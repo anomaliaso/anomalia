@@ -192,7 +192,7 @@ async function runTick(request: Request): Promise<Response> {
         brand_id: brand.id,
         user_id: owner.userId,
         tool_name: 'run_autopilot',
-        input_params: { deadline_ms: 3_600_000 },
+        input_params: {},
         status: 'pending',
         thread_id: null
       });
